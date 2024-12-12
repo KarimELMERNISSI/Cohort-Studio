@@ -1,0 +1,11 @@
+class MultipleDataTypesError(Exception):
+    """Raised when any column of the input argument `x` has more than one
+    datatype when calling the function `_validate_single_datatype_features`.
+    """
+    pass
+
+
+class NotFittedError(Exception):
+    """Raised when attempting to call the class method `transform` before the
+     `MissForest` model has been trained."""
+    pass

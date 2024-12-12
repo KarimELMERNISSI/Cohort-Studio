@@ -1,0 +1,373 @@
+{
+    "mask_families": {
+        "outliers_masks": {
+            "age_at_B0_fr": {
+                "numeric": false, 
+                "expression": "((pd.to_datetime(df['B0 VISIT DATE'], format='%d/%m/%Y') - pd.to_datetime(df['birthdate'], format='%d/%m/%Y')) < pd.Timedelta(days=40*365)) | ((pd.to_datetime(df['B0 VISIT DATE'], format='%d/%m/%Y') - pd.to_datetime(df['birthdate'], format='%d/%m/%Y')) > pd.Timedelta(days=80*365))"
+            },
+            "age_at_B0_en": {
+                "numeric": false, 
+                "expression": "((pd.to_datetime(df['B0 VISIT DATE']) - pd.to_datetime(df['birthdate'])) < pd.Timedelta(days=40*365)) | ((pd.to_datetime(df['B0 VISIT DATE'], format='%d/%m/%Y') - pd.to_datetime(df['birthdate'], format='%d/%m/%Y')) > pd.Timedelta(days=80*365))"
+            },
+            "Haematocrit": {
+                "numeric": true, 
+                "lower_bound": 30, 
+                "upper_bound": 60, 
+                "strategy": "exclude"
+            },
+            "GFR": {
+                "numeric": true, 
+                "upper_bound": 30
+            },
+            "Cholesterol total.1": {
+                "numeric": true, 
+                "upper_bound": 0.9
+            },
+            "Creatinine": {
+                "numeric": true, 
+                "upper_bound": 10
+            },
+            "Fasting HbA1c": {
+                "numeric": true, 
+                "lower_bound": 20
+            },
+            "Total mass": {
+                "numeric": false, 
+                "expression": "abs(df['Total mass'] - (df['Lean mass'] + df['Fat mass'])) > 0.10 * df['Total mass']"
+            },
+            "Skeletal muscle index": {
+                "numeric": true, 
+                "upper_bound": 0
+            },
+            "EFsimpson": {
+                "numeric": true, 
+                "upper_bound": 50
+            },
+            "Height": {
+                "numeric": false, 
+                "expression": "df['Height'] < df['Weight']"
+            },
+            "Waist": {
+                "numeric": true, 
+                "lower_bound": 200
+            },
+            "Hip": {
+                "numeric": true, 
+                "lower_bound": 200
+            },
+            "blood_pressure": {
+                "numeric": false, 
+                "expression": "df['Systolic blood pressure'] < df['Diastolic blood pressure']"
+            },
+            "Heart rate": {
+                "numeric": true, 
+                "lower_bound": 180
+            },
+            "BMI": {
+                "numeric": false, 
+                "expression": "(df['Weight'] / ((df['Height']/100) ** 2)) > 60"
+            },
+            "dt2_CARDIATEAM_group": {
+                "numeric": false, 
+                "expression": "(df['Type 2 diabetes'] == 1) & ((df['CARDIATEAM group'] == '1-no T2DM AND no HFpEF') | (df['CARDIATEAM group'] == '2-no T2DM AND with HFpEF') | (df['CARDIATEAM group'] == '5-no T2DM AND with HCM'))"
+            },
+            "no_dt2_CARDIATEAM_group": {
+                "numeric": false, 
+                "expression": "(df['Type 2 diabetes'] == 0) & ((df['CARDIATEAM group'] == '3-T2DM AND no HFpEF') | (df['CARDIATEAM group'] == '4-T2DM AND HFpEF'))"
+            }
+        },
+
+        "sick_masks": {
+            "young_not_so_young": {
+                "numeric": false, 
+                "expression": "((pd.to_datetime(df['B0 VISIT DATE'], format='%d/%m/%Y') - pd.to_datetime(df['birthdate'], format='%d/%m/%Y')) < pd.Timedelta(days=45*365))"
+            },
+            "Female": {
+                "numeric": false, 
+                "expression": "df['sex']!='male'"
+            }
+        },
+
+        "T2DM_group": {
+            "T2DM AND no HFpEF": {
+                "numeric": false, 
+                "expression": "df['CARDIATEAM group'] == '3-T2DM AND no HFpEF'"
+            },
+            "T2DM AND HFpEF": {
+                "numeric": false, 
+                "expression": "df['CARDIATEAM group'] == '4-T2DM AND HFpEF'"
+            }
+        },
+
+        "no_T2DM_young_group": {
+            "no T2DM": {
+                "numeric": false, 
+                "expression": "df['Type 2 diabetes'] == 0"
+            },
+            "age_at_B0": {
+                "numeric": true, 
+                "upper_bound": 60
+            }
+        },
+        "T2DM_old_group": {
+            "no T2DM": {
+                "numeric": false, 
+                "expression": "df['Type 2 diabetes'] == 1"
+            },
+            "age_at_B0": {
+                "numeric": true, 
+                "lower_bound": 60
+            }
+        }
+    },
+
+    "transformations": [
+        {
+            "condition_column": "Cholesterol total.2",
+            "condition_source_expr": "df['Cholesterol total.2'] == 'g/L'",
+            "condition_target_expr": "df['Cholesterol total.2'] == 'mmol/L'",
+            "source_column": "Cholesterol total.1",
+            "target_column": "Cholesterol total",
+            "conversion_rate": 0.3867,
+            "transformation_source": "df.loc[condition, parameter_column] * conversion_rate",
+            "transformation_target": "df.loc[condition, parameter_column] / conversion_rate"
+        },
+        {
+            "condition_column": "HDLc.2",
+            "condition_source_expr": "df['HDLc.2'] == 'g/L'",
+            "condition_target_expr": "df['HDLc.2'] == 'mmol/L'",
+            "source_column": "HDLc.1",
+            "target_column": "HDLc",
+            "conversion_rate": 0.3867,
+            "transformation_source": "df.loc[condition, parameter_column] * conversion_rate",
+            "transformation_target": "df.loc[condition, parameter_column] / conversion_rate"
+        },
+        {
+            "condition_column": "LDLc.2",
+            "condition_source_expr": "df['LDLc.2'] == 'g/L'",
+            "condition_target_expr": "df['LDLc.2'] == 'mmol/L'",
+            "source_column": "LDLc.1",
+            "target_column": "LDLc",
+            "conversion_rate": 0.3867,
+            "transformation_source": "df.loc[condition, parameter_column] * conversion_rate",
+            "transformation_target": "df.loc[condition, parameter_column] / conversion_rate"
+        },
+        {
+            "condition_column": "Triglycerides.2",
+            "condition_source_expr": "df['Triglycerides.2'] == 'g/L'",
+            "condition_target_expr": "df['Triglycerides.2'] == 'mmol/L'",
+            "source_column": "Triglycerides.1",
+            "target_column": "Triglycerides",
+            "conversion_rate": 0.8857,
+            "transformation_source": "df.loc[condition, parameter_column] * conversion_rate",
+            "transformation_target": "df.loc[condition, parameter_column] / conversion_rate"
+        }
+    ],
+
+    "computed_columns": {
+        "age_fr": {
+            "expression": "((pd.to_datetime(df['B0 VISIT DATE'], format='%d/%m/%Y') - pd.to_datetime(df['birthdate'], format='%d/%m/%Y')).dt.days / 365.25).round()"
+        },
+        "age_en": {
+            "expression": "((pd.to_datetime(df['B0 VISIT DATE']) - pd.to_datetime(df['birthdate'])).dt.days / 365.25).round()"
+        },
+        "isMale": {
+            "expression": "df['sex']=='male'"
+        },
+        "BMI": {
+            "expression": "(df['Weight'] / ((df['Height']/100) ** 2))"
+        }
+    },
+        
+    "thresholds": {
+        "ZSCORE_THRESHOLD": 6,
+        "IQR_TOLERANCE": 3,
+        "CATEGORICAL_OUTLIER_THRESHOLD": 1.13
+    },
+    "comparisons": {
+        "comparison_1": {
+            "INPUT_FILES_FOLDER": "./data/outliers/",
+            "COMMON_ROW_IDENTIFIER": "subject_id",
+            "INPUT_FILE_1": "cardiateam_extraction_1_outliers.xlsx",
+            "INPUT_FILE_2": "cardiateam_extraction_2_outliers.xlsx",
+            "OUTPUT_FILE": "cardiateam_data_comparison_1.xlsx"
+        },
+        "comparison_mai_juillet": {
+            "INPUT_FILES_FOLDER": "./data/outliers/",
+            "COMMON_ROW_IDENTIFIER": "subject_id",
+            "INPUT_FILE_1": "data_extraction_cardiateam_db_INSERM_cohort-16_variables-1_2024-05-14_09-03-39_outliers.xlsx",
+            "INPUT_FILE_2": "data_extraction_cardiateam_db_INSERM_cohort-16_variables-1_2024-07-01_08-53-06_outliers.xlsx",
+            "OUTPUT_FILE": "cardiateam_data_comparison_mai_juillet.xlsx"
+        },
+        "comparison_2": {
+            "INPUT_FILES_FOLDER": "./data/outliers/",
+            "COMMON_ROW_IDENTIFIER": "visit_id",
+            "INPUT_FILE_1": "cardiateam_data_extraction_inserm_outliers.xlsx",
+            "INPUT_FILE_2": "cardiateam_data_extraction_inserm_2024-02-20_14-00-39_outliers.xlsx",
+            "OUTPUT_FILE": "cardiateam_data_comparison_2.xlsx"
+        },
+        "comparison_3": {
+            "INPUT_FILES_FOLDER": "./data/outliers/",
+            "COMMON_ROW_IDENTIFIER": "visit_id",
+            "INPUT_FILE_1": "cardiateam_data_extraction_inserm_outliers.xlsx",
+            "INPUT_FILE_2": "errorrrrrr.csv",
+            "OUTPUT_FILE": "errorr_test.xlsx"
+        }
+    },
+
+    "data_enrichments": {
+        "add_data_1": {
+            "INPUT_FILES_FOLDER": "./data/enrichment/",
+            "INPUT_FILE": "cardiateam_add.xlsx",
+            "COMMON_ROW_IDENTIFIER": "full_id",
+            "ADDITIONAL_COLUMNS": ["Fasting HbA1c_added","Albumin to creatinine ratio_added", "Other addictive behaviors_added", "Haematocrit_added", "Cholesterol total_added", "sex_added"],
+            "STRATEGY": "left",
+            "CONFLICT_RESOLUTION":"ignore"
+        },
+        "add_data_2": {
+            "INPUT_FILES_FOLDER": "./data/enrichment/",
+            "INPUT_FILE": "data_extraction_cardiateam_db_INSERM_cohort-16_variables-1_2024-05-14_09-03-39_trunc.xlsx",
+            "LEFT_ROW_IDENTIFIER": "full_id",
+            "RIGHT_ROW_IDENTIFIER": "patient_id",
+            "STRATEGY": "left"
+        }
+    },
+
+    "output_format": {
+        "CSV": false,
+        "XLSX": true,
+        "PDF": true,
+        "PNG":true
+    },
+    "folder_names": {
+        "DATA_FOLDER":"./data/",
+        "ENRICHMENT_FOLDER": "./data/enrichment/",
+        "ENRICHED_FOLDER": "./data/enriched/",
+        "DESCRIPTIVE_FOLDER": "./data/descriptive/",
+        "HYPOTHESIS_TESTING_FOLDER": "./data/descriptive/hypothesis_testing/",
+        "OUTLIERS_FOLDER": "./data/outliers/",
+        "COMPARISONS_FOLDER":"./data/comparisons/"
+    },
+    "statistical_tests": {
+        "t1": {
+            "TEST_TYPE":"t-test",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Smoking", "age_at_B0","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "GROUP_1": {"family_mask":"T2DM_group","operator":"UNION"},
+            "GROUP_2": {"family_mask":"no_T2DM_young_group","operator":"INTER"},
+            "MISSING_STRATEGY": "mean",
+            "DESCRIBE_GROUPS": true
+        },
+        "w1": {
+            "TEST_TYPE":"wilcoxon",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Cholesterol total", "sex", "age_at_B0", "gamma-GT","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "GROUP_1": {"family_mask":"T2DM_old_group","operator":"UNION"},
+            "GROUP_2": {"family_mask":"no_T2DM_young_group","operator":"UNION"},
+            "MISSING_STRATEGY": "mean"
+        },
+        "chi2": {
+            "TEST_TYPE":"chi2",
+            "VARIABLES": ["Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Smoking", "Alcohol consumption", "HDLc", "HDLc.1", "hsTnT", "Albumin to creatinine ratio", "gamma-GT", "ALAT", "ALP", "CPK", "NT-proBNP", "LDLc", "LDLc.1", "Triglycerides", "Triglycerides.1", "ASAT", "Creatinine", "Fasting insulinemia", "Fasting glycemia", "Fasting HbA1c", "us-CRP", "Total mass", "Lean mass", "Fat mass", "Skeletal muscle index", "LVOT", "EFsimpson", "LVEDV", "LVESV", "COsimpson", "sex", "age_at_B0"],
+            "TARGET_VARIABLE": "isMale",
+            "MISSING_STRATEGY": "knn"
+        },
+        "w2": {
+            "TEST_TYPE":"wilcoxon",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Cholesterol total", "sex", "age_at_B0", "gamma-GT","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "TARGET_VARIABLE": "isMale",
+            "MISSING_STRATEGY": "knn",
+            "DESCRIBE_GROUPS": true
+        },
+        "kw": {
+            "TEST_TYPE":"kruskal-wallis",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Cholesterol total", "sex", "age_at_B0", "gamma-GT","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "GROUP_1": {"family_mask":"T2DM_old_group","operator":"INTER"},
+            "GROUP_2": {"family_mask":"T2DM_group","operator":"UNION"},
+            "GROUP_3": {"family_mask":"no_T2DM_young_group","operator":"INTER"},
+            "MISSING_STRATEGY": "knn",
+            "DESCRIBE_GROUPS": true
+        },
+        "f": {
+            "TEST_TYPE":"anova",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Cholesterol total", "sex", "age_at_B0", "gamma-GT","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "GROUP_1": {"family_mask":"T2DM_old_group","operator":"INTER"},
+            "GROUP_2": {"family_mask":"T2DM_group","operator":"UNION"},
+            "GROUP_3": {"family_mask":"no_T2DM_young_group","operator":"INTER"},
+            "MISSING_STRATEGY": "knn",
+            "DESCRIBE_GROUPS": true
+        },
+        "t2": {
+            "TEST_TYPE":"t-test",
+            "VARIABLES": ["Fasting HbA1c","Albumin to creatinine ratio", "Other addictive behaviors", "Haematocrit", "GFR", "LDH", "Cholesterol total", "sex", "age_at_B0", "gamma-GT","Total mass", "Lean mass", "Fat mass", "Skeletal muscle index"],
+            "TARGET_VARIABLE": "isMale",
+            "MISSING_STRATEGY": "knn",
+            "DESCRIBE_GROUPS": true
+        }  
+    },
+    "unicode_latex_mapping": {
+        "𝛼": "$\\alpha$",
+        "𝛽": "$\\beta$",
+        "𝛾": "$\\gamma$",
+        "ð›¾": "$\\gamma$",
+        "𝛿": "$\\delta$",
+        "𝜀": "$\\varepsilon$",
+        "𝜂": "$\\eta$",
+        "𝜅": "$\\kappa$",
+        "𝜆": "$\\lambda$",
+        "𝜇": "$\\mu$",
+        "𝜈": "$\\nu$",
+        "𝜉": "$\\xi$",
+        "𝜌": "$\\rho$",
+        "𝜎": "$\\sigma$",
+        "𝜏": "$\\tau$",
+        "𝜐": "$\\upsilon$",
+        "𝜑": "$\\phi$",
+        "𝜒": "$\\chi$",
+        "𝜓": "$\\psi$",
+        "𝜔": "$\\omega$",
+        "∞": "$\\infty$",
+        "≠": "$\\neq$",
+        "≈": "$\\approx$",
+        "≡": "$\\equiv$",
+        "≤": "$\\leq$",
+        "≥": "$\\geq$",
+        "⊂": "$\\subset$",
+        "⊃": "$\\supset$",
+        "⊆": "$\\subseteq$",
+        "⊇": "$\\supseteq$",
+        "∪": "$\\cup$",
+        "∩": "$\\cap$",
+        "∂": "$\\partial$",
+        "∆": "$\\Delta$",
+        "√": "$\\sqrt{}$",
+        "∈": "$\\in$",
+        "∉": "$\\notin$",
+        "∅": "$\\emptyset$",
+        "±": "$\\pm$",
+        "∓": "$\\mp$",
+        "∥": "$\\parallel$",
+        "∠": "$\\angle$",
+        "∟": "$\\measuredangle$",
+        "⊥": "$\\perp$",
+        "°": "$^\\circ$",
+        "∛": "$\\sqrt[3]$",
+        "∜": "$\\sqrt[4]$",
+        "∵": "$\\because$",
+        "∴": "$\\therefore$",
+        "ℂ": "$\\mathbb{C}$",
+        "ℕ": "$\\mathbb{N}$",
+        "ℙ": "$\\mathbb{P}$",
+        "ℚ": "$\\mathbb{Q}$",
+        "ℝ": "$\\mathbb{R}$",
+        "ℤ": "$\\mathbb{Z}$",
+        "ℵ": "$\\aleph$",
+        "∇": "$\\nabla$",
+        "∏": "$\\prod$",
+        "∑": "$\\sum$",
+        "∫": "$\\int$",
+        "∬": "$\\iint$",
+        "∭": "$\\iiint$",
+        "∮": "$\\oint$",
+        "∯": "$\\oiint$",
+        "∰": "$\\oiiint$"
+    }
+}
