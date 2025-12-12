@@ -1292,3 +1292,288 @@ def create_correlation_matrix_streamlit(
     return fig
 
 
+import plotly.graph_objects as go
+import plotly.figure_factory as ff
+import pandas as pd
+import numpy as np
+import streamlit as st
+
+def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=False, show_dendrograms=False, show_row_labels=True, show_col_labels=True, figsize=None):
+    """
+    Generates a Nullity Matrix (Clustermap style).
+    - Adapts figure size and font size to data density for readability.
+    - Zero gaps between components.
+    - Missing Count bar in %.
+    """
+    # 1. Create Boolean Matrix (1=Missing, 0=Present)
+    nullity_df = df.isnull().astype(int)
+    
+    # 2. Handle Row Labels
+    if row_id_col != "Index" and row_id_col in df.columns:
+        display_labels = df[row_id_col].astype(str).reset_index(drop=True)
+    else:
+        display_labels = df.index.astype(str).to_series().reset_index(drop=True)
+    
+    # 3. Reset Index for Internal Processing
+    nullity_df = nullity_df.reset_index(drop=True)
+    
+    row_order = nullity_df.index.tolist()
+    col_order = nullity_df.columns.tolist()
+    
+    row_dendro_traces = []
+    col_dendro_traces = []
+    col_dendro_x_vals = None
+    y_sequential = list(range(len(nullity_df))) 
+    
+    # --- CLUSTERING ---
+    # 1. Column Clustering (Variables)
+    if cluster_cols and len(col_order) > 1:
+        try:
+            dendro_top = ff.create_dendrogram(nullity_df.T, orientation='bottom', labels=col_order)
+            col_order = dendro_top['layout']['xaxis']['ticktext']
+            col_dendro_x_vals = dendro_top['layout']['xaxis']['tickvals']
+            if show_dendrograms:
+                col_dendro_traces = dendro_top['data']
+        except Exception as e:
+            st.warning(f"Column clustering failed: {e}")
+
+    # 2. Row Clustering (Samples)
+    if cluster_rows and len(row_order) > 1:
+        try:
+            dendro_side = ff.create_dendrogram(nullity_df, orientation='left', labels=list(map(str, row_order)))
+            reordered_indices_str = dendro_side['layout']['yaxis']['ticktext']
+            row_order = [int(i) for i in reordered_indices_str]
+            y_sequential = dendro_side['layout']['yaxis']['tickvals']
+            if show_dendrograms:
+                row_dendro_traces = dendro_side['data']
+        except Exception as e:
+            st.warning(f"Row clustering failed: {e}")
+
+    # Reorder DataFrame
+    nullity_df = nullity_df.iloc[row_order]
+    nullity_df = nullity_df[col_order]
+    final_row_labels = display_labels.iloc[row_order]
+    
+    # --- LAYOUT DOMAIN CALCULATION (Right-to-Left, Zero Gaps) ---
+    
+    # Settings
+    w_row_dendro = 0.11 if (show_dendrograms and cluster_rows) else 0.0
+    w_missing = 0.025
+    w_gap = 0.0
+    
+    h_col_dendro = 0.12 if (show_dendrograms and cluster_cols) else 0.0
+    
+    # 1. Horizontal Domains (X-Axis)
+    current_x = 1.0
+    
+    if w_row_dendro > 0:
+        dendro_domain_x = [current_x - w_row_dendro, current_x]
+        current_x -= w_row_dendro
+    else:
+        dendro_domain_x = [1.0, 1.0] 
+    
+    missing_col_domain_x = [current_x - w_missing, current_x]
+    current_x -= w_missing
+    
+    heatmap_end_x = max(0, current_x)
+    heatmap_domain_x = [0, heatmap_end_x]
+    
+    # 2. Vertical Domains (Y-Axis)
+    current_y = 1.0
+    
+    if h_col_dendro > 0:
+        col_dendro_domain_y = [current_y - h_col_dendro, current_y]
+        current_y -= h_col_dendro
+    else:
+        col_dendro_domain_y = [1.0, 1.0]
+        
+    heatmap_domain_y = [0, max(0, current_y)]
+
+    # --- SIZING & FONTS LOGIC ---
+    n_rows = len(row_order)
+    n_cols = len(col_order)
+
+    # 1. Calculate Pixels
+    if figsize is None:
+        # Dynamic Auto-Size
+        # Base overhead (margins, legends)
+        overhead_h = 200
+        overhead_w = 300
+        
+        # Pixels per cell
+        px_per_row_ideal = 15  # Minimum height for readable row label
+        px_per_col_ideal = 25  # Minimum width for readable col label
+        
+        ideal_height = (n_rows * px_per_row_ideal) + overhead_h
+        ideal_width = (n_cols * px_per_col_ideal) + overhead_w
+        
+        # Adjust for Dendrograms (they need space too)
+        if show_dendrograms:
+            ideal_height += 150
+            ideal_width += 150
+            
+        height_px = max(600, ideal_height)
+        width_px = max(900, ideal_width)
+    else:
+        # User defined fixed size
+        width_px = figsize[0] * 50
+        height_px = figsize[1] * 50
+
+    # 2. Calculate Adaptive Font Sizes
+    # How many pixels are actually allocated to the heatmap area?
+    hm_pixel_height = height_px * (heatmap_domain_y[1] - heatmap_domain_y[0])
+    hm_pixel_width = width_px * (heatmap_domain_x[1] - heatmap_domain_x[0])
+    
+    # Pixels available per row/col
+    px_per_row_actual = hm_pixel_height / max(1, n_rows)
+    px_per_col_actual = hm_pixel_width / max(1, n_cols)
+    
+    # Clamp font sizes (Min 6px, Max 12px)
+    # We subtract a small buffer (e.g. 2px) to prevent touching
+    font_size_row = max(6, min(12, int(px_per_row_actual - 2)))
+    font_size_col = max(6, min(12, int(px_per_col_actual)))
+
+    # --- FIGURE CONSTRUCTION ---
+    fig_matrix = go.Figure()
+    
+    # Ranges
+    hm_x_range = None
+    if cluster_cols and col_dendro_x_vals is not None:
+        vals = sorted(col_dendro_x_vals)
+        step = (vals[1] - vals[0]) if len(vals) > 1 else 10.0
+        hm_x_range = [min(vals) - step/2, max(vals) + step/2]
+
+    hm_y_range = None
+    if cluster_rows and len(y_sequential) > 0:
+        vals = sorted(y_sequential)
+        step = (vals[1] - vals[0]) if len(vals) > 1 else 1.0
+        hm_y_range = [min(vals) - step/2, max(vals) + step/2]
+    
+    row_dendro_range = None
+    if show_dendrograms and cluster_rows and len(row_dendro_traces) > 0:
+        max_d = max([max(t['x']) for t in row_dendro_traces if 'x' in t and len(t['x']) > 0], default=0)
+        row_dendro_range = [0, max_d]
+    
+    col_dendro_range = None
+    if show_dendrograms and cluster_cols and len(col_dendro_traces) > 0:
+        max_d = max([max(t['y']) for t in col_dendro_traces if 'y' in t and len(t['y']) > 0], default=0)
+        col_dendro_range = [0, max_d]
+
+    # 1. Main Heatmap
+    x_vals = col_dendro_x_vals if (cluster_cols and col_dendro_x_vals is not None) else col_order
+    
+    fig_matrix.add_trace(go.Heatmap(
+        z=nullity_df.values,
+        x=x_vals,
+        y=y_sequential, 
+        colorscale=[[0, '#eeeeee'], [1, '#444444']], 
+        showscale=False,
+        xaxis='x',
+        yaxis='y',
+        hovertemplate='Variable: %{x}<br>Row: %{text}<br>Missing: %{z}<extra></extra>',
+        text=[[str(l) for _ in col_order] for l in final_row_labels]
+    ))
+    
+    # 2. Missingness Percentage Column
+    total_cols = nullity_df.shape[1]
+    row_missing_pct = (nullity_df.sum(axis=1) / total_cols * 100).values.reshape(-1, 1)
+    
+    fig_matrix.add_trace(go.Heatmap(
+        z=row_missing_pct,
+        x=[0],
+        y=y_sequential,
+        colorscale='RdYlGn_r', 
+        showscale=True,
+        colorbar=dict(
+            title=dict(text="Missing %", side="top"),
+            thickness=10, 
+            len=0.4,
+            yanchor="bottom", y=0.0,
+            xanchor="left", x=1.005
+        ),
+        xaxis='x4',
+        yaxis='y', 
+        hovertemplate='Row: %{text}<br>Missing: %{z:.1f}%<extra></extra>',
+        text=[[str(l)] for l in final_row_labels]
+    ))
+    
+    # 3. Dendrograms
+    if show_dendrograms and cluster_cols:
+        for trace in col_dendro_traces:
+            trace['xaxis'] = 'x'
+            trace['yaxis'] = 'y2'
+            trace['showlegend'] = False
+            trace['hoverinfo'] = 'none'
+            fig_matrix.add_trace(trace)
+        
+    if show_dendrograms and cluster_rows:
+        for trace in row_dendro_traces:
+            trace['xaxis'] = 'x3'
+            trace['yaxis'] = 'y'
+            trace['showlegend'] = False
+            trace['hoverinfo'] = 'none'
+            fig_matrix.add_trace(trace)
+    
+    # --- LAYOUT CONFIG ---
+    layout_args = dict(
+        width=width_px,
+        height=height_px,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        margin=dict(l=20, r=20, t=20, b=80), 
+        
+        # Main X (Bottom)
+        xaxis=dict(
+            domain=heatmap_domain_x,
+            title="",
+            side='bottom',
+            tickangle=45,
+            tickmode='array' if (cluster_cols and col_dendro_x_vals is not None) else 'auto',
+            tickvals=col_dendro_x_vals if (cluster_cols and col_dendro_x_vals is not None) else None,
+            ticktext=col_order if (cluster_cols and col_dendro_x_vals is not None) else None,
+            showticklabels=show_col_labels,
+            tickfont=dict(size=font_size_col), # DYNAMIC FONT
+            showgrid=False, zeroline=False,
+            range=hm_x_range,
+            automargin=True
+        ),
+        
+        # Main Y (Left)
+        yaxis=dict(
+            domain=heatmap_domain_y,
+            title=row_id_col,
+            side='left',
+            tickmode='array',
+            tickvals=y_sequential,
+            ticktext=final_row_labels,
+            showticklabels=show_row_labels,
+            tickfont=dict(size=font_size_row), # DYNAMIC FONT
+            showgrid=False, zeroline=False,
+            range=hm_y_range,
+        ),
+        
+        # Top Dendrogram
+        yaxis2=dict(
+            domain=col_dendro_domain_y,
+            showgrid=False, showticklabels=False, zeroline=False,
+            range=col_dendro_range,
+        ),
+        
+        # Right Dendrogram
+        xaxis3=dict(
+            domain=dendro_domain_x,
+            showgrid=False, showticklabels=False, zeroline=False,
+            range=row_dendro_range,
+        ),
+        
+        # Missing Bar (Middle)
+        xaxis4=dict(
+            domain=missing_col_domain_x,
+            showgrid=False, showticklabels=False, zeroline=False, title="",
+            range=[-0.5, 0.5], 
+            side='top'
+        )
+    )
+    
+    fig_matrix.update_layout(**layout_args)
+    return fig_matrix

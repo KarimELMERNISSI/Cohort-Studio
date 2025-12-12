@@ -1,4 +1,6 @@
 from typing import Any, List, Optional, Dict
+import time
+import random
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
@@ -94,24 +96,37 @@ class CustomGeminiChat(BaseChatModel):
             system_instruction=system_instruction
         )
 
-        # 3. Call the Google API
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=google_contents,
-                config=config
-            )
-            
-            # 4. Extract Text
-            generated_text = response.text
-            
-            # 5. Return as LangChain Result
-            generation = ChatGeneration(message=AIMessage(content=generated_text))
-            return ChatResult(generations=[generation])
-            
-        except Exception as e:
-            # Handle API errors gracefully
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {str(e)}"))])
+        # 3. Call the Google API with Retry Logic
+        max_retries = 5
+        base_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=google_contents,
+                    config=config
+                )
+                
+                # 4. Extract Text
+                generated_text = response.text
+                
+                # 5. Return as LangChain Result
+                generation = ChatGeneration(message=AIMessage(content=generated_text))
+                return ChatResult(generations=[generation])
+                
+            except Exception as e:
+                error_str = str(e)
+                is_last_attempt = attempt == max_retries - 1
+                
+                if is_last_attempt:
+                    # Handle API errors gracefully on final failure
+                    return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {error_str}"))])
+                else:
+                    # Exponential backoff with jitter
+                    delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
+                    print(f"Gemini API Error (Attempt {attempt+1}/{max_retries}): {error_str}. Retrying in {delay:.2f}s...")
+                    time.sleep(delay)
 
     # Required Pydantic configuration to allow arbitrary types (the client)
     model_config = {

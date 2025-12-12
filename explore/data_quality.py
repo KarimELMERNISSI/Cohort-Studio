@@ -19,6 +19,15 @@ class DataQualityAuditor:
         self.metrics = {}
         self.advice = []
 
+    def compute_completeness(self):
+        """Calculates the percentage of non-missing values."""
+        total_cells = self.df.size
+        if total_cells == 0:
+            return 0.0
+        missing_cells = self.df.isnull().sum().sum()
+        score = (1 - (missing_cells / total_cells)) * 100
+        return round(score, 2)
+
     def compute_uniqueness(self):
         """Calculates the percentage of unique rows."""
         total_rows = len(self.df)
@@ -214,6 +223,115 @@ class DataQualityAuditor:
             
         score = (1 - (issues_count / total_checks)) * 100
         return round(score, 2)
+
+    # --- Advanced Completeness Analysis ---
+
+    def compute_nullity_correlation(self):
+        """
+        Calculates the correlation between the missingness of variables.
+        Returns a DataFrame where 1 means variables tend to be missing together.
+        """
+        return self.df.isnull().corr()
+
+    def check_mar_dependency(self, target_col):
+        """
+        Checks if missingness in `target_col` is dependent on other observed variables (MAR).
+        Returns a list of dependencies found.
+        """
+        from scipy import stats
+        
+        dependencies = []
+        if target_col not in self.df.columns:
+            return dependencies
+            
+        missing_mask = self.df[target_col].isnull()
+        if missing_mask.sum() == 0 or missing_mask.sum() == len(self.df):
+            return dependencies # Cannot test if all or none are missing
+            
+        # Split data
+        group_missing = self.df[missing_mask]
+        group_observed = self.df[~missing_mask]
+        
+        # Test against other numerical columns
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        
+        for col in numeric_cols:
+            if col == target_col:
+                continue
+                
+            # Get values for both groups, dropping NaNs in the predictor column
+            vals_missing = group_missing[col].dropna()
+            vals_observed = group_observed[col].dropna()
+            
+            if len(vals_missing) < 2 or len(vals_observed) < 2:
+                continue
+                
+            # Perform T-test (ind)
+            try:
+                t_stat, p_val = stats.ttest_ind(vals_missing, vals_observed, equal_var=False)
+                
+                if p_val < 0.05:
+                    dependencies.append({
+                        "Predictor": col,
+                        "p_value": p_val,
+                        "Mean_Missing": vals_missing.mean(),
+                        "Mean_Observed": vals_observed.mean(),
+                        "Difference": vals_missing.mean() - vals_observed.mean()
+                    })
+            except Exception:
+                pass
+                
+        return sorted(dependencies, key=lambda x: x['p_value'])
+
+    def perform_mcar_test(self):
+        """
+        Performs a heuristic Little's MCAR test by aggregating pairwise MAR checks.
+        If we find significant dependencies between missingness and observed values, 
+        we reject the MCAR hypothesis.
+        """
+        from scipy import stats
+        
+        p_values = []
+        cols_with_missing = [col for col in self.df.columns if self.df[col].isnull().any()]
+        
+        if not cols_with_missing:
+            return {"p_value": 1.0, "interpretation": "No missing data (MCAR trivially true)"}
+            
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        
+        for target_col in cols_with_missing:
+            missing_mask = self.df[target_col].isnull()
+            group_missing = self.df[missing_mask]
+            group_observed = self.df[~missing_mask]
+            
+            for col in numeric_cols:
+                if col == target_col: continue
+                
+                vals_missing = group_missing[col].dropna()
+                vals_observed = group_observed[col].dropna()
+                
+                if len(vals_missing) >= 2 and len(vals_observed) >= 2:
+                    try:
+                        _, p_val = stats.ttest_ind(vals_missing, vals_observed, equal_var=False)
+                        p_values.append(p_val)
+                    except: pass
+        
+        if not p_values:
+             return {"p_value": 1.0, "interpretation": "Insufficient data to test MCAR"}
+             
+        # Combine p-values (Fisher's method would be better, but simple min with Bonferroni is conservative)
+        # Here we just return the minimum p-value as a signal of the strongest dependency found.
+        # If min_p < 0.05/N, we reject MCAR.
+        min_p = min(p_values)
+        
+        # Simple interpretation for the UI
+        is_mcar = min_p > 0.05 
+        
+        return {
+            "p_value": min_p,
+            "interpretation": "Likely MCAR (Missing Completely At Random)" if is_mcar else "Likely Not MCAR (MAR or MNAR detected)",
+            "is_mcar": is_mcar
+        }
 
     def run_audit(self):
         """Runs all checks and populates metrics and advice."""

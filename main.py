@@ -18,7 +18,7 @@ import streamlit as st
 from io import BytesIO
 from PIL import Image
 from utils.multipage import MultiPageApp
-from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, interpretation
+from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, interpretation, yfiles_test
 
 def main():
 
@@ -47,6 +47,7 @@ def main():
     app.add_page("Visualization", visualization.app, "📈")
     app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁")
     app.add_page("Configuration Form", config_form.app, "⚙️")
+    app.add_page("yFiles Test", yfiles_test.app, "🧪")
     
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")
     

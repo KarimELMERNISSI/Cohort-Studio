@@ -46,12 +46,16 @@ class RAGManager:
         self.qa_chain = None
         self.initialized = False
         self.global_context = "General Medical Domain"
+        self.current_role = "Medical Researcher" # Default role
+        self.adherence_score = 0.5 # Default score
         
         # Cache for theoretical concepts to avoid reprocessing the "Knowledge" step
         self.concept_cache = {} 
         
         # Variable Taxonomy (Mapping of cryptic names to standard concepts)
         self.variable_taxonomy = {}
+        # Formulas Registry (Detailed formula definitions)
+        self.formulas_registry = {}
         
         if api_key:
             os.environ["GOOGLE_API_KEY"] = api_key
@@ -159,7 +163,7 @@ class RAGManager:
                 }
             }
 
-    def initialize_system(self, model_name="models/gemini-1.5-flash", adherence_score=0.5, dataset_columns=None, use_existing_db=False, progress_callback=None, selected_files=None):
+    def initialize_system(self, model_name="models/gemini-flash-latest", adherence_score=0.5, temperature=0.3, dataset_columns=None, use_existing_db=False, progress_callback=None, selected_files=None):
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install `chromadb`, `pypdf`, `langchain-community`, `langchain-google-genai`."
         
@@ -289,7 +293,7 @@ class RAGManager:
             if progress_callback: progress_callback(95, "Setting up LLM chains...")
             # Use the selected model. Strip 'models/' prefix if present as langchain might handle it differently
             clean_model_name = model_name.replace("models/", "") if model_name.startswith("models/") else model_name
-            self.llm = CustomGeminiChat(api_key=self.api_key, model=clean_model_name, temperature=0.2) #ChatGoogleGenerativeAI(model=clean_model_name, temperature=0.3) #to be changed when langchain-google-genai is updated
+            self.llm = CustomGeminiChat(api_key=self.api_key, model=clean_model_name, temperature=temperature) #ChatGoogleGenerativeAI(model=clean_model_name, temperature=0.3) #to be changed when langchain-google-genai is updated
             
             # 5. Analyze Global Context (One-time)
             self.global_context = self._analyze_global_context(texts, dataset_columns)
@@ -564,6 +568,7 @@ class RAGManager:
         {{
             "original_var_name": {{
                 "standard_name": "Standard Concept Name",
+                "node_type": "Input",
                 "description": "Brief description of what this variable represents.",
                 "category": "Demographics/Vitals/Labs/etc"{json_structure_extra}
             }},
@@ -587,6 +592,7 @@ class RAGManager:
             return taxonomy, None
         except Exception as e:
             return None, f"Generation Error: {str(e)}"
+
     def _generate_advanced_taxonomy(self, columns_info, existing_mapping, progress_callback):
         """Orchestrates the multi-step taxonomy generation pipeline."""
         if not self.initialized:
@@ -595,20 +601,24 @@ class RAGManager:
         taxonomy = {}
         
         # 1. Standardization Step
-        if progress_callback: progress_callback(10, "Step 1/3: Standardizing variables...")
+        if progress_callback: progress_callback(10, "Step 1/5: Standardizing variables...")
         standard_mapping, error = self._identify_standard_concepts(columns_info, existing_mapping)
         if error: return None, error
         
-        # 2. Formula Enrichment Step
-        if progress_callback: progress_callback(40, "Step 2/3: Identifying related formulas...")
-        taxonomy = self._enrich_with_formulas(standard_mapping, columns_info)
+        # 2. Contextualization Step (Moved UP)
+        if progress_callback: progress_callback(30, "Step 2/5: Adding clinical context...")
+        taxonomy = self._contextualize_variables(standard_mapping, columns_info)
         
-        # 3. Contextualization Step
-        if progress_callback: progress_callback(60, "Step 3/4: Adding clinical context...")
-        taxonomy = self._contextualize_variables(taxonomy, columns_info)
+        # 3. Formula Enrichment Step (Moved DOWN)
+        if progress_callback: progress_callback(50, "Step 3/5: Identifying related formulas...")
+        taxonomy = self._enrich_with_formulas(taxonomy, columns_info)
+        
+        # 4. Resolution Step (NEW)
+        if progress_callback: progress_callback(70, "Step 4/5: Resolving external links...")
+        taxonomy = self._resolve_formula_links(taxonomy)
 
-        # 4. Graph Metadata Enrichment Step
-        if progress_callback: progress_callback(80, "Step 4/4: Enriching graph metadata...")
+        # 5. Graph Metadata Enrichment Step
+        if progress_callback: progress_callback(90, "Step 5/5: Enriching graph metadata...")
         taxonomy = self._enrich_graph_metadata(taxonomy, columns_info)
         
         # Store in instance
@@ -619,36 +629,42 @@ class RAGManager:
 
     def _enrich_graph_metadata(self, taxonomy, columns_info):
         """Step 4: Identify node types and relationships for graph visualization."""
-        # We will do a batch process to identify:
-        # 1. Node Type: Input (Independent), Derived (Calculated), Outcome (Dependent)
-        # 2. Direct Relationships: 'correlated_with', 'part_of', 'risk_factor_for'
-        
+        # 1. Deterministic Node Typing (Internal vs Derived)
+        # Identify confirmed formula outputs
+        formula_outputs = set()
+        for f in self.formulas_registry.values():
+            if f.get('output_variable'):
+                formula_outputs.add(f['output_variable'])
+
+        # Apply deterministic types
+        for k in taxonomy.keys():
+            if k in formula_outputs:
+                taxonomy[k]['node_type'] = "Derived-Internal"
+            else:
+                taxonomy[k]['node_type'] = "Input-Internal"
+
         vars_desc_list = []
         for k, v in taxonomy.items():
             desc = f"{k} ({v.get('standard_name', '')}): {v.get('description', '')}"
             vars_desc_list.append(desc)
             
-        vars_desc = "\n".join(vars_desc_list[:50]) # Limit to 50 for now to avoid context limits
+        vars_desc = "\n".join(vars_desc_list[:50]) # Limit to 50 for now
         
         prompt = f"""
         Role: Medical Data Scientist.
         
-        Task: Analyze the variables to identify their Role and Relationships for a Knowledge Graph.
+        Task: Analyze the variables to identify semantic relationships (correlations, risk factors) for a Knowledge Graph.
         
         Variables:
         {vars_desc}
         
         Instructions:
-        For each variable, determine:
-        1. **Type**: 'Input' (raw data, demographics, vitals), 'Derived' (scores, formulas), or 'Outcome' (events, endpoints).
-        2. **Relationships**: List other variables from the list that this variable is directly related to (e.g., components of a score, highly correlated).
+        For each variable, identify OTHER variables from the list that are directly related (e.g., risk factors, co-morbidities).
+        Do NOT analyze formulas (we already have those). Focus on clinical associations.
         
         JSON Output Format:
         {{
-            "original_var_name": {{
-                "node_type": "Input/Derived/Outcome",
-                "relationships": ["related_var_1", "related_var_2"]
-            }},
+            "original_var_name": ["related_var_1", "related_var_2"],
             ...
         }}
         """
@@ -658,15 +674,15 @@ class RAGManager:
             cleaned_response = self._clean_json_response(response.content)
             metadata = json.loads(cleaned_response)
             
-            # Merge into taxonomy
-            for var, meta in metadata.items():
-                if var in taxonomy:
-                    taxonomy[var]['node_type'] = meta.get('node_type', 'Input')
-                    taxonomy[var]['relationships'] = meta.get('relationships', [])
+            # Merge relationships into taxonomy
+            for var, relationships in metadata.items():
+                if var in taxonomy and isinstance(relationships, list):
+                    current_rels = taxonomy[var].get('relationships', [])
+                    # Append unique
+                    taxonomy[var]['relationships'] = list(set(current_rels + relationships))
                     
         except Exception as e:
             print(f"Graph Enrichment Error: {e}")
-            # Don't fail the whole process, just skip enrichment
             
         return taxonomy
 
@@ -676,13 +692,9 @@ class RAGManager:
         return self._generate_simple_taxonomy(columns_info, existing_mapping, deep_analysis=False)
 
     def _enrich_with_formulas(self, taxonomy, columns_info):
-        """Step 2: Find formulas relating to these variables."""
-        # Group variables to process in batches to save tokens/time
-        # For now, we'll do a simplified batch process
-        
+        """Step 2: Identify formula relationships (Structured)."""
         updated_taxonomy = taxonomy.copy()
         
-        # Prepare a summary of variables to ask about formulas
         # Prepare a summary of variables to ask about formulas
         vars_desc_list = []
         for k, v in taxonomy.items():
@@ -697,7 +709,7 @@ class RAGManager:
         vars_desc = "\n".join(vars_desc_list)
         
         prompt = f"""
-        Role: Medical Statistician & Expert System.
+        Role: {self.current_role} & Expert System.
         
         Task: Identify standard medical formulas and scores that relate to the provided variables.
         
@@ -705,16 +717,26 @@ class RAGManager:
         {vars_desc}
         
         Instructions:
-        For each variable, list:
-        1. Formulas where it is a PARAMETER (Input).
-        2. Formulas where it is the RESULT (Output).
-        3. **CRITICAL**: If the variable represents a **Unit of Measurement** (e.g., has values like 'mmol/L', 'g/L', 'mg/dL'), you MUST provide the standard conversion formula between these units.
-           Example: "1 g/L = 100 mg/dL" or "mmol/L = mg/dL * 0.0555" (for Glucose).
+        1. Identify known medical formulas (e.g., BMI, eGFR, HAS-BLED, CHA2DS2-VASc, Unit Conversions) that involve these variables.
+        2. Create a "Formula Registry" entry for each.
+        3. Link variables to these formulas explicitly.
         
-        Return JSON:
+        Return JSON structure:
         {{
-            "original_var_name": {{
-                "related_formulas": ["Formula 1", "Conversion: 1 g/L = ..."]
+            "formulas": [
+                {{
+                    "id": "unique_slug_id", 
+                    "name": "Display Name",
+                    "description": "Brief description",
+                    "expression": "Mathematical expression or rule description",
+                    "input_variables": ["original_var_name_1", "original_var_name_2"],
+                    "output_variable": "original_var_name_result" // or null if derived variable not in list
+                }}
+            ],
+            "variable_updates": {{
+                "original_var_name": {{
+                    "involved_in_formulas": ["formula_id_1"] 
+                }}
             }}
         }}
         """
@@ -722,17 +744,52 @@ class RAGManager:
             response = self.llm.invoke(prompt)
             cleaned_response = self._clean_json_response(response.content)
             try:
-                formulas_data = json.loads(cleaned_response)
+                data = json.loads(cleaned_response)
+                print(f"DEBUG: Formulas Data Keys: {data.keys()}") # DEBUG
+                
+                # 1. Update Registry
+                formulas = data.get('formulas', [])
+                print(f"DEBUG: Found {len(formulas)} formulas") # DEBUG
+                for f in formulas:
+                    # Use ID as key
+                    f_id = f.get('id')
+                    if f_id:
+                        self.formulas_registry[f_id] = f
+                
+                # 2. Update Taxonomy Links
+                var_updates = data.get('variable_updates', {})
+                print(f"DEBUG: Found updates for {len(var_updates)} variables") # DEBUG
+                
+                # Create reverse lookup for standard names
+                std_to_orig = {v.get('standard_name', '').lower(): k for k, v in taxonomy.items()}
+                
+                for var_key, updates in var_updates.items():
+                    target_key = None
+                    
+                    # 1. Try direct match
+                    if var_key in updated_taxonomy:
+                        target_key = var_key
+                    # 2. Try standard name match
+                    elif var_key.lower() in std_to_orig:
+                        target_key = std_to_orig[var_key.lower()]
+                    
+                    if target_key:
+                        # Append to existing list or create new
+                        current_formulas = updated_taxonomy[target_key].get('related_formula_ids', [])
+                        new_formulas = updates.get('involved_in_formulas', [])
+                        
+                        # Merge unique
+                        updated_taxonomy[target_key]['related_formula_ids'] = list(set(current_formulas + new_formulas))
+                    else:
+                        print(f"DEBUG: Could not match update key '{var_key}' to any variable.")
+                        
             except json.JSONDecodeError as e:
                 print(f"JSON Error in formulas: {e}. Raw: {response.content[:200]}...")
-                formulas_data = {}
             
-            for var, data in formulas_data.items():
-                if var in updated_taxonomy:
-                    updated_taxonomy[var]['related_formulas'] = data.get('related_formulas', [])
         except Exception as e:
             print(f"Error in formula enrichment: {e}")
             
+        print(f"DEBUG: Registry Size: {len(self.formulas_registry)}") # DEBUG
         return updated_taxonomy
 
     def _contextualize_variables(self, taxonomy, columns_info):
@@ -796,6 +853,466 @@ class RAGManager:
             print(f"Error in contextualization: {e}")
             
         return updated_taxonomy
+
+    def _resolve_formula_links(self, taxonomy):
+        """Step 4: Resolve 'External' formula inputs to internal keys via LLM."""
+        updated_taxonomy = taxonomy.copy()
+        
+        # 1. Identify Unresolved Variables in Formulas
+        unresolved_vars = set()
+        for f in self.formulas_registry.values():
+            for inp in f.get('input_variables', []):
+                if inp not in taxonomy:
+                    unresolved_vars.add(inp)
+            out = f.get('output_variable')
+            if out and out not in taxonomy:
+                unresolved_vars.add(out)
+        
+        if not unresolved_vars:
+            print("DEBUG: No unresolved formula variables found.")
+            return updated_taxonomy
+
+        # 2. Prepare Prompt
+        dataset_keys = list(taxonomy.keys())
+        # Summarize dataset roughly
+        dataset_desc = "\n".join([f"{k}: {v.get('standard_name', '')}" for k, v in taxonomy.items()])
+        
+        prompt = f"""
+        Role: Data Mapping Expert.
+        
+        Task: Map 'External' variables found in formulas to existing variables in the dataset.
+        
+        External Variables (Unresolved):
+        {list(unresolved_vars)}
+        
+        Dataset Dictionary (Key: Standard Name):
+        {dataset_desc}
+        
+        Instructions:
+        For each External Variable, determine if it corresponds to an existing Dataset Key (likely via synonym or abbreviation).
+        
+        Return JSON mapping:
+        {{
+            "External_Name_1": "Dataset_Key_X", 
+            "External_Name_2": null  // if no match found
+        }}
+        """
+        
+        try:
+            response = self.llm.invoke(prompt)
+            cleaned_response = self._clean_json_response(response.content)
+            mapping = json.loads(cleaned_response)
+            
+            print(f"DEBUG: Resolution Mapping: {mapping}")
+            
+            # 3. Apply Mapping to Registry
+            for f_id, f_data in self.formulas_registry.items():
+                # Inputs
+                new_inputs = []
+                for inp in f_data.get('input_variables', []):
+                    # Check mapping
+                    mapped_key = mapping.get(inp)
+                    if mapped_key and mapped_key in taxonomy:
+                        new_inputs.append(mapped_key)
+                        
+                        # Also update Variable Taxonomy links
+                        current_links = updated_taxonomy[mapped_key].get('related_formula_ids', [])
+                        if f_id not in current_links:
+                            updated_taxonomy[mapped_key]['related_formula_ids'] = current_links + [f_id]
+                    else:
+                        new_inputs.append(inp) # Keep original if no match
+                
+                self.formulas_registry[f_id]['input_variables'] = new_inputs
+                
+                # Output
+                out = f_data.get('output_variable')
+                if out:
+                    mapped_out = mapping.get(out)
+                    if mapped_out and mapped_out in taxonomy:
+                        self.formulas_registry[f_id]['output_variable'] = mapped_out
+                        # Link
+                        current_links = updated_taxonomy[mapped_out].get('related_formula_ids', [])
+                        if f_id not in current_links:
+                            updated_taxonomy[mapped_out]['related_formula_ids'] = current_links + [f_id]
+                            
+        except Exception as e:
+            print(f"Error in resolution: {e}")
+            
+        return updated_taxonomy
+
+    def _unify_synonyms(self, new_candidates, existing_keys):
+        """
+        Uses LLM to identify and merge synonyms within the new candidates 
+        and against existing taxonomy keys.
+        Returns a mapping { 'alias_id': 'canonical_id' }.
+        """
+        if not new_candidates:
+            return {}
+            
+        # Context
+        new_keys_str = ", ".join(list(new_candidates.keys()))
+        exist_sample = ", ".join(list(existing_keys)[:100]) 
+        
+        prompt = f"""
+        Role: Clinical Data Standardizer.
+        Task: Identify synonyms in a list of variable IDs and map them to a single canonical ID.
+        
+        New Variables: {new_keys_str}
+        Existing Variables (Context): {exist_sample}
+        
+        Instructions:
+        1. Look for synonyms among "New Variables" (e.g. 'bmi', 'body_mass_index').
+        2. Look for synonyms between "New Variables" and "Existing Variables".
+        3. If a synonym exists, choose the MOST STANDARD medical acronym or name as the 'canonical_id'.
+        4. If the canonical ID is already in "Existing Variables", map to that.
+        5. If duplicates found (e.g. 'bsa_dubois' and 'bsa_mosteller' are NOT synonyms, keep both), do NOT map distinct variants.
+        
+        Return JSON mapping {{ "alias_id": "canonical_id" }}
+        Only include entries that need re-mapping.
+        """
+        try:
+            resp = self.llm.invoke(prompt)
+            clean = self._clean_json_response(resp.content)
+            return json.loads(clean)
+        except Exception as e:
+            print(f"Unification Error: {e}")
+            return {}
+
+    def enrich_variable_taxonomy(self, current_taxonomy, columns_info, distance=1, progress_callback=None):
+        """
+        Enriches an existing taxonomy using 'Wise Enrichment' strategy (Formula-centric).
+        Returns (new_candidates, error) where new_candidates is a dict of proposed variables.
+        Does NOT merge automatically.
+        """
+        if not self.initialized:
+            return {}, "RAG system not initialized."
+            
+        new_candidates = {}
+        new_formulas = {}
+        
+        # Helper for duplicate detection
+        existing_keys_lower = {k.lower().strip() for k in current_taxonomy.keys()}
+        
+        def is_duplicate(key):
+            return key.lower().strip() in existing_keys_lower
+
+        # Dynamic Progress Calculation
+        # We have 'distance' levels, and each level has 2 major steps (Harvest, Infer)
+        total_steps = distance * 2
+        step_increment = 90 // total_steps if total_steps > 0 else 20
+        current_progress = 5 
+
+        # Iterative Enrichment Loop
+        current_pool = current_taxonomy.copy() # Start with base taxonomy
+        new_items_history = [] # Track enrichment history for context window
+
+        for level in range(1, distance + 1):
+            level_candidates = {}
+            
+            # --- Step A: Harvest from Formulas Registry (Deterministic) ---
+            current_progress += step_increment
+            if progress_callback: 
+                progress_callback(min(current_progress, 100), f"Level {level}: Harvesting formulas...")
+                
+            # Scan registry against CURRENT POOL (Base + Previous Candidates)
+            for f in self.formulas_registry.values():
+                # Check Inputs against pool
+                # If we have SOME inputs in pool, propose the MISSING ones
+                inputs = f.get('input_variables', [])
+                inputs_in_pool = [i for i in inputs if i in current_pool or i.lower() in [k.lower() for k in current_pool.keys()]]
+                
+                if inputs_in_pool: # We have a connection
+                    # Propose MISSING inputs
+                    for inp in inputs:
+                        if not is_duplicate(inp) and inp not in new_candidates and inp not in current_pool:
+                            level_candidates[inp] = {
+                                "standard_name": inp.replace('_', ' ').title(),
+                                "node_type": "Input-External",
+                                "description": f"Required input for formula: {f.get('name')}",
+                                "category": "External Factor",
+                                "relationships": [f.get('id')]
+                            }
+                    
+                    # Propose Output if we have ALL inputs (or most?)
+                    out = f.get('output_variable')
+                    if out and not is_duplicate(out) and out not in new_candidates and out not in current_pool:
+                         level_candidates[out] = {
+                            "standard_name": out.replace('_', ' ').title(),
+                            "node_type": "Derived-External",
+                            "description": f"Calculated result of formula: {f.get('name')}",
+                            "category": "External Factor",
+                            "relationships": [f.get('id')]
+                        }
+            
+            # Update candidates for this level
+            if level_candidates:
+                new_candidates.update(level_candidates)
+                current_pool.update(level_candidates)
+                new_items_history.extend(list(level_candidates.keys()))
+
+            # --- Step B: LLM Inference (Creative with RAG) ---
+            current_progress += step_increment
+            if progress_callback: 
+                 progress_callback(min(current_progress, 100), f"Level {level}: Inferring new connections...")
+            
+            # Prepare context (Summary of current pool with Standard Names if avaialble)
+            all_keys = list(current_pool.keys())
+            
+            def format_var(k):
+                sn = current_pool[k].get('standard_name', k)
+                return f'{k}: "{sn}"'
+            
+            # Prioritize listing the NEW stuff if we are deeper
+            # Context Strategy: Latest 50 items + Random 50 base items
+            if new_items_history:
+                # Take recent history (e.g. from previous level or this level's harvest)
+                recent_window = new_items_history[-60:] 
+                base_window = [k for k in all_keys if k not in new_items_history][:40]
+                focus_keys = recent_window + base_window
+                vars_context = ", ".join([format_var(k) for k in focus_keys])
+            else:
+                vars_context = ", ".join([format_var(k) for k in all_keys[:100]])
+            
+            # RAG: Retrieve Relevant Documents
+            rag_context = ""
+            if self.vector_store:
+                try:
+                    search_query = f"Clinical formulas and scores related to: {vars_context[:200]}"
+                    docs = self.vector_store.similarity_search(search_query, k=3)
+                    rag_context = "\n\n".join([d.page_content for d in docs])
+                except Exception as e:
+                    print(f"Vector Search Error: {e}")
+
+            # Define Adherence Logic
+            if self.adherence_score > 0.7:
+                adherence_instruction = "STRICTLY propose formulas explicitly mentioned in the 'Context from Documents'. Do NOT halluncinate or invent formulas."
+            elif self.adherence_score < 0.4:
+                adherence_instruction = "Use 'Context from Documents' as inspiration, but rely primarily on general medical knowledge to identify standard missing scores."
+            else:
+                adherence_instruction = "Prioritize formulas found in 'Context from Documents', but you may also suggest standard medical scores if clearly relevant."
+
+            prompt = f"""
+            Role: Clinical Knowledge Expert.
+            
+            Task: "Wise Enrichment" of a Clinical Knowledge Graph (Level {level}).
+            
+            Goal: Identify potential NEW formulas or scores that could be calculated from the Current Variables.
+            
+            Context from Documents:
+            {rag_context}
+            
+            Current Variables (Format: ID: "Standard Name"):
+            {vars_context}
+            
+            Instructions:
+            1. {adherence_instruction}
+            2. **Synonym Check**: Check the 'Current Variables' list CAREFULLY. If a concept exists (e.g. 'Body Height'), USE THAT ID. Do NOT create a duplicate (e.g. 'height_cm').
+            3. **ID Format**: Use snake_case for IDs (e.g. `body_mass_index`, NOT `calc_bmi`). Avoid prefixes like `calc_` or `derived_`.
+            4. **Formula Check**: Do not propose formulas that strictly duplicate existing ones. Variants are OK (e.g. BSA DuBois vs BSA Mosteller), but exact duplicates (BMI vs Body Mass Index) are NOT.
+            5. Look for standard medical scores (e.g. BMI, eGFR) where we have SOME of the variables.
+            6. Propose the MISSING external variables needed.
+            
+            Return JSON with the NEW variables and NEW formulas:
+            {{
+                "variables": {{
+                    "new_variable_id_snake_case": {{
+                        "standard_name": "Standard Name",
+                        "description": "Why this is needed",
+                        "node_type": "Input-External", 
+                        "category": "Suggested Category",
+                        "clinical_usage": "Reason for inclusion"
+                    }}
+                }},
+                "formulas": {{
+                    "new_formula_id": {{
+                        "name": "Formula Name (e.g. BMI)",
+                        "description": "Calculation logic",
+                        "output_variable": "output_var_id",
+                        "input_variables": ["input_var_id_1", "input_var_id_2"]
+                    }}
+                }}
+            }}
+            """
+            
+            try:
+                response = self.llm.invoke(prompt)
+                cleaned_response = self._clean_json_response(response.content)
+                inferred_data = json.loads(cleaned_response)
+                
+                # Pre-Initialize unify_map for this batch to handle duplicates immediately
+                unify_map = {}
+                
+                # Check structure
+                if "variables" in inferred_data:
+                    for k, v in inferred_data["variables"].items():
+                        # Enhanced Deduplication
+                        # Check 1: Exact ID Match
+                        if k in current_taxonomy or k in new_candidates or k in current_pool:
+                            continue
+                            
+                        # Check 2: Name/Standard Name Match (Case Insensitive)
+                        is_var_dup = False
+                        cand_std = v.get('standard_name', '').lower().strip()
+                        
+                        # Check against Current Taxonomy
+                        target_remap = None
+                        
+                        for exist_k, exist_v in current_taxonomy.items():
+                            exist_std = exist_v.get('standard_name', '').lower().strip()
+                            exist_name = exist_v.get('name', exist_k).lower().strip()
+                            
+                            if cand_std == exist_std or cand_std == exist_name:
+                                is_var_dup = True
+                                target_remap = exist_k
+                                break
+                        
+                        if not is_var_dup:
+                             # Check against previously added candidates in this batch
+                            for added_k, added_v in new_candidates.items():
+                                added_std = added_v.get('standard_name', '').lower().strip()
+                                if cand_std == added_std:
+                                    is_var_dup = True
+                                    target_remap = added_k
+                                    break
+
+                        if not is_var_dup:
+                            new_candidates[k] = v
+                            current_pool[k] = v
+                        elif target_remap:
+                            # Map duplicate ID to existing ID
+                            # We use this to fix formula links later
+                            unify_map = unify_map or {} # Ensure it's init
+                            unify_map[k] = target_remap
+                
+                if "formulas" in inferred_data:
+                    for k, v in inferred_data["formulas"].items():
+                        # Remap IDs in Formulas based on Variable Deduplication
+                        f_out = v.get('output_variable')
+                        if f_out in unify_map:
+                            v['output_variable'] = unify_map[f_out]
+                        
+                        f_inputs = v.get('input_variables', [])
+                        f_inputs = [unify_map.get(i, i) for i in f_inputs]
+                        v['input_variables'] = list(set(f_inputs))
+
+                        # Strict Formula Deduplication
+                        # Check if a formula with same output already exists in new_formulas or registry
+                        output_var = v.get('output_variable')
+                        
+                        is_formula_dup = False
+                        # Check against new formulas
+                        for existing_f in new_formulas.values():
+                             if existing_f.get('output_variable') == output_var:
+                                 is_formula_dup = True
+                                 break
+                        # Check against registry
+                        if not is_formula_dup:
+                             for existing_f in self.formulas_registry.values():
+                                  if existing_f.get('output_variable') == output_var:
+                                       is_formula_dup = True
+                                       break
+                        
+                        # Check 3: Name Similarity (e.g. "BSA DuBois" vs "Body Surface Area (DuBois)")
+                        if not is_formula_dup:
+                            cand_name = v.get('name', '').lower().replace(" ", "").replace("(", "").replace(")", "")
+                            
+                            # Check against new formulas
+                            for existing_f in new_formulas.values():
+                                ext_name = existing_f.get('name', '').lower().replace(" ", "").replace("(", "").replace(")", "")
+                                if cand_name == ext_name:
+                                    is_formula_dup = True
+                                    break
+                            
+                            # Check against registry
+                            if not is_formula_dup:
+                                for existing_f in self.formulas_registry.values():
+                                    ext_name = existing_f.get('name', '').lower().replace(" ", "").replace("(", "").replace(")", "")
+                                    if cand_name == ext_name:
+                                        is_formula_dup = True
+                                        break
+
+                        if not is_formula_dup and k not in new_formulas and k not in self.formulas_registry:
+                            v["id"] = k
+                            new_formulas[k] = v
+                            v["id"] = k
+                            new_formulas[k] = v
+
+                # Fallback for old flat format (just in case LLM is stubborn)
+                if "variables" not in inferred_data and "formulas" not in inferred_data:
+                     for k, v in inferred_data.items():
+                         # Assume variables
+                         if not is_duplicate(k) and k not in new_candidates and k not in current_pool:
+                            new_candidates[k] = v
+                            current_pool[k] = v
+
+            except Exception as e:
+                print(f"Error in LLM enrichment: {e}")
+
+        # --- Post-Processing: Semantic Unification ---
+        if progress_callback:
+            progress_callback(95, "Unifying synonyms...")
+
+        unify_map = self._unify_synonyms(new_candidates, current_taxonomy.keys())
+        
+        if unify_map:
+            # Remap Candidates
+            final_candidates = {}
+            for k, v in new_candidates.items():
+                target = unify_map.get(k, k)
+                if target in current_taxonomy: 
+                    continue # Merged into existing taxonomy, drop candidate
+                
+                # If target is new canonical, ensure it exists
+                if target not in final_candidates:
+                    if k == target:
+                        final_candidates[target] = v
+                    else:
+                        # Alias k -> target. Use v, but update ID info
+                        v["standard_name"] = v.get("standard_name", "").replace(k, target) # naïve update
+                        final_candidates[target] = v
+                else:
+                    # Target already exists (e.g. we processed the canonical one, or another alias)
+                    # Merge metadata? (Keep 'v' logic simple: first writer or extend)
+                    pass
+
+            new_candidates = final_candidates
+            
+            # Remap Formulas
+            for f in new_formulas.values():
+                # Output
+                out = f.get('output_variable')
+                if out in unify_map:
+                    f['output_variable'] = unify_map[out]
+                
+                # Inputs
+                new_inputs = []
+                for inp in f.get('input_variables', []):
+                    new_inputs.append(unify_map.get(inp, inp))
+                f['input_variables'] = list(set(new_inputs))
+
+        # Post-Processing: Fill Metadata for ALL candidates
+        if progress_callback:
+            progress_callback(98, "Finalizing candidates...")
+
+        for k, v in new_candidates.items():
+            # Check if this candidate is an OUTPUT of any new formula
+            is_derived = False
+            for f in new_formulas.values():
+                if f.get('output_variable') == k:
+                    is_derived = True
+                    break
+            
+            if is_derived:
+                v['node_type'] = "Derived-External"
+            else:
+                # Default to Input-External if not explicitly derived
+                if 'node_type' not in v or v['node_type'] not in ["Input-External", "Input-Internal"]:
+                     v['node_type'] = "Input-External"
+
+            if 'role' not in v:
+                v['role'] = v.get('node_type', 'derived-external').lower()
+
+        return new_candidates, new_formulas, None
 
 
 

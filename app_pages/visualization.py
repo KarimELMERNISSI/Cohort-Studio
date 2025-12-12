@@ -8,8 +8,8 @@ from plotly.subplots import make_subplots
 from app_pages import data_monitoring as dm
 import logging
 from manage.db_manager import DBManager
-import app_pages.visualization_utils as vu
-from app_pages.visualization_utils import DataAnalyzer
+import utils.visualization_utils as vu
+from utils.visualization_utils import DataAnalyzer
 import plotly.figure_factory as ff
 
 logging.basicConfig(level=logging.DEBUG)

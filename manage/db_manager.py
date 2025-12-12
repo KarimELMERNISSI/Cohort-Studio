@@ -88,13 +88,13 @@ class DBManager:
     def get_available_tables(self):
         """List available parquet files in the current directory."""
         files = glob.glob("*.parquet")
-        return [f.replace(".parquet", "") for f in files if not f.startswith("stats_")]
+        return [f.replace(".parquet", "") for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
 
     def get_available_datasets(self):
         """List available parquet files in the current directory, sorted by modification time."""
         files = glob.glob("*.parquet")
-        # Filter out stats files
-        dataset_files = [f for f in files if not f.startswith("stats_")]
+        # Filter out stats files and temp files
+        dataset_files = [f for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
         # Sort by modification time (newest first)
         dataset_files.sort(key=os.path.getmtime, reverse=True)
         return [f.replace(".parquet", "") for f in dataset_files]
