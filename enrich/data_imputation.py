@@ -1,6 +1,8 @@
 ######################################## PACKAGES ########################################
 import pandas as pd
 from sklearn.base import TransformerMixin
+from sklearn.experimental import enable_iterative_imputer  # Explicitly enable experimental features
+from sklearn.impute import IterativeImputer  # Now import IterativeImputer
 from lightgbm import LGBMClassifier, LGBMRegressor #used for MissForest
 #from missforest import MissForest # our MissForest adaptation is based on this package
 from miss_forest.missforest import MissForest
@@ -9,7 +11,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler # preprocess non
 from sklearn.compose import ColumnTransformer # split some of our processing to specific columns
 from sklearn.pipeline import Pipeline # to make our data pre-processing pipeline
 import streamlit as st
-from page_files.home import DataAnalyzer
+from app_pages.home import DataAnalyzer
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 class MissForestTransformer(TransformerMixin):
@@ -30,8 +32,8 @@ class MissForestTransformer(TransformerMixin):
         self.current_progress = 0  # To track progress updates
         self.total_steps = 10
         self.imputer = MissForest(
-            clf=LGBMClassifier(verbosity=-1),
-            rgr=LGBMRegressor(verbosity=-1),
+            clf=LGBMClassifier(verbosity=-1, n_jobs=-1),
+            rgr=LGBMRegressor(verbosity=-1, n_jobs=-1),
             initial_guess='median',
             max_iter=self.total_steps,
             early_stopping=True,
@@ -419,10 +421,12 @@ def get_imputer(numerical_imputation_method='mean',
         num_imputer = SimpleImputer(strategy='median')
     elif numerical_imputation_method == 'knn':
         num_imputer = KNNImputer()
+    elif numerical_imputation_method == 'mice':
+        num_imputer = IterativeImputer(random_state=0)
     elif numerical_imputation_method == 'missforest':
         num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
     else:
-        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', or 'missforest'.")
+        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', 'mice', or 'missforest'.")
 
     if categorical_imputation_method == 'most_frequent':
         cat_imputer = SimpleImputer(strategy='most_frequent')
@@ -595,10 +599,12 @@ def get_imputer_in_progress(numerical_imputation_method='mean',
         num_imputer = SimpleImputer(strategy='median')
     elif numerical_imputation_method == 'knn':
         num_imputer = KNNImputer()
+    elif numerical_imputation_method == 'mice':
+        num_imputer = IterativeImputer(random_state=0)
     elif numerical_imputation_method == 'missforest':
         num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
     else:
-        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', or 'missforest'.")
+        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', 'mice', or 'missforest'.")
 
     if categorical_imputation_method == 'most_frequent':
         cat_imputer = SimpleImputer(strategy='most_frequent')

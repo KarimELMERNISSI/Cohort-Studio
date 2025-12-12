@@ -1,6 +1,6 @@
 ######################################## PACKAGES ########################################
 import os # for path etc
-import chardet # for separator identification - relative to csv files processing
+
 import pandas as pd # for Dataframes manipulation
 from detect_delimiter import detect
 import logging  # Added for logging
@@ -51,7 +51,7 @@ def list_files_in_directory(directory, file_extensions=None):
 
 def detect_encoding(file_path, num_lines=100):
     """
-    Detects the encoding of a file using chardet.
+    Detects the encoding of a file using charset-normalizer.
 
     Parameters:
     - file_path (str): The path to the file.
@@ -62,37 +62,38 @@ def detect_encoding(file_path, num_lines=100):
 
     Note:
     The function attempts to detect the encoding of the file by analyzing a portion of its content. 
-    It reads the specified number of lines from the file and uses the chardet library to determine the encoding.
+    It reads the specified number of lines and uses the charset-normalizer library to determine the encoding.
     """
-    detector = chardet.UniversalDetector(should_rename_legacy=True)
-    detector.reset()
+    from charset_normalizer import from_bytes
+
     with open(file_path, 'rb') as rawdata:
+        content = b""
         for _ in range(num_lines):
             line = rawdata.readline()
             if not line:
-                break  # Stop if end of file is reached
-            detector.feed(line)
-        detector.close()  # Close the detector after processing
-        result = detector.result
+                break
+            content += line
+            
+        results = from_bytes(content)
+        best_match = results.best()
+        
+        if best_match is None:
+             print("None......")
+             rawdata.seek(0)
+             content = rawdata.read()
+             results = from_bytes(content)
+             best_match = results.best()
 
-        if result['encoding'] is None:
-            print("None......")
-            result = chardet.detect(rawdata.read())
-        else:
-            result2 = chardet.detect(rawdata.read())
-            if result2['confidence'] > result['confidence']:
-                print("\n\n",file_path,"----encoding ---> ", result2, result, " ----\n")
-                return result2['encoding']
-
-    print("\n\n",file_path,"----encoding ---> ", result, " ----\n")
-    return result['encoding']
+        if best_match:
+            print(f"\n\n {file_path} ----encoding ---> {best_match.encoding} (confidence: {best_match.coherence}) ----\n")
+            return best_match.encoding
+        
+        return 'utf-8'
 
 
 def load_csv_with_separator(file_path, encoding, num_lines=30):
     """
     Load a CSV file with automatic delimiter detection.
-
-    Parameters:
     - file_path (str): The path to the CSV file.
     - encoding (str): The encoding of the file.
     - num_lines (int): The number of lines to read for delimiter detection. Default is 10.
@@ -171,6 +172,18 @@ def load_dataframe(file_path, encoding='utf-8'):
             return df
         else:
             logging.error(f"Error loading Excel file '{file_path}': DataFrame is None")
+            return None
+    elif file_extension == '.parquet':
+        try:
+            df = pd.read_parquet(file_path)
+        except Exception as e:
+            logging.error(f"Error reading Parquet file '{file_path}': {str(e)}")
+            return None
+        if df is not None:
+            print("DataFrame loaded successfully.")
+            return df
+        else:
+            logging.error(f"Error loading Parquet file '{file_path}': DataFrame is None")
             return None
     else:
         logging.error(f"Unsupported file format: {file_extension}")

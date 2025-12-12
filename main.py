@@ -17,14 +17,14 @@ import streamlit as st
 #import requests
 from io import BytesIO
 from PIL import Image
-from multipage import MultiPageApp
-from page_files import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring
+from utils.multipage import MultiPageApp
+from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, interpretation
 
 def main():
 
     # Fetch icons from URLs
     #imrb_icon = requests.get("https://github.com/KarimELMERNISSI/MetaboSign/blob/main/images/metabosign_icon.png?raw=true").content
-    imrb_icon = "imrb-logo.png" #Image.open("imrb-logo.png")
+    imrb_icon = "assets/imrb-logo.png" #Image.open("imrb-logo.png")
     
     
     st.set_page_config(
@@ -39,9 +39,13 @@ def main():
     
     # Register pages
     app.add_page("Main View", home.app, imrb_icon ) #"🏠")
+    #app.add_page("Data Quality Dashboard", data_quality.app, "✅")
     app.add_page("Data Enrichment", data_enrichment.app, "🔄")
+    app.add_page("Data Interpretation", interpretation.app, "🧠")
+    app.add_page("Epidemiology & Hypothesis", epidemiology.app, "🧬")
     app.add_page("Data Validation & Monitoring", data_monitoring.app, "🔍") #👁️‍🗨️
     app.add_page("Visualization", visualization.app, "📈")
+    app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁")
     app.add_page("Configuration Form", config_form.app, "⚙️")
     
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")

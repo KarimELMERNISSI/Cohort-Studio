@@ -120,7 +120,7 @@ def compare_dataframes(df1, df2, id_column, exception_list):
     """
     try:
         # Merge df1 and df2 based on 'visit_id' using left join
-        merged_df = pd.merge(df2, df1, on=id_column, suffixes=('_df2', '_df1'), how='outer')
+        merged_df = pd.merge(df2, df1, on=id_column, suffixes=('_df2', '_df1'), how='outer', indicator=True)
         print("\n MERGED DF : \n",merged_df.head())
         # Initialize modification column with False
         merged_df['modification'] = False
@@ -142,8 +142,14 @@ def compare_dataframes(df1, df2, id_column, exception_list):
         print("____ DATAFRAME MERGED ____\n",merged_df.head(),"\n")
         # Iterate over rows and compare values
         for index, row in merged_df.iterrows():
+            if row['_merge'] != 'both':
+                continue
             # Check if any value in the row (excluding the ID column) is different between df1 and df2
-            differing_columns = [col for col in cols_to_compare if pd.notna(row[f'{col}_df2']) and pd.notna(row[f'{col}_df1']) and row[f'{col}_df2'] != row[f'{col}_df1']]
+            differing_columns = [
+                col for col in cols_to_compare 
+                if (pd.isna(row[f'{col}_df1']) != pd.isna(row[f'{col}_df2'])) or 
+                   (pd.notna(row[f'{col}_df1']) and pd.notna(row[f'{col}_df2']) and row[f'{col}_df1'] != row[f'{col}_df2'])
+            ]
             if differing_columns:
                 print("\n ____ differing_columns : \n", differing_columns)
             differing_values = [(row[f'{col}_df1'],row[f'{col}_df2']) for col in differing_columns]

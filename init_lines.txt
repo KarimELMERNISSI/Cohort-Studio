@@ -1,0 +1,51 @@
+Found init at line 22:
+22:     def __init__(self) -> None:
+23:         self._directed_mapping: Optional[Union[str, Callable[[dict], bool]]] = None
+24:         self._edge_thickness_factor_mapping: Optional[Union[str, Callable[[dict], float]]] = None
+25:         self._edge_styles_mapping: Optional[Union[str, Callable[[dict], EdgeStyle]]] = None
+26:         self._edge_color_mapping: Optional[Union[str, Callable[[dict], str]]] = None
+27:         self._edge_property_mapping: Optional[Union[str, Callable[[dict], dict]]] = None
+28:         self._edge_label_mapping: Optional[Union[str, Callable[[dict], Union[str, LabelStyle]]]] = None
+29:         self._node_parent_group_mapping: Optional[Union[str, Callable[[dict], Union[str, dict]]]] = None
+30:         self._node_coordinate_mapping: Optional[Union[str, Callable[[dict], Tuple[float, float]]]] = None
+31:         self._node_position_mapping: Optional[Union[str, Callable[[dict], Tuple[float, float]]]] = None
+32:         self._node_parent_mapping: Optional[Union[str, Callable[[dict], Union[str, int, float]]]] = None
+33:         self._node_type_mapping: Optional[Union[str, Callable[[dict], str]]] = None
+34:         self._node_cell_mapping: Optional[Union[str, Callable[[dict], Tuple[int, int]]]] = None
+35:         self._node_layout_mapping: Optional[Union[str, Callable[[dict], Tuple[float, float, float, float]]]] = None
+36:         self._node_size_mapping: Optional[Union[str, Callable[[dict], Tuple[float, float]]]] = None
+37:         self._node_color_mapping: Optional[Union[str, Callable[[dict], str]]] = None
+38:         self._node_property_mapping: Optional[Union[str, Callable[[dict], dict]]] = None
+39:         self._node_scale_factor_mapping: Optional[Union[str, Callable[[dict], float]]] = None
+40:         self._node_styles_mapping: Optional[Union[str, Callable[[dict], NodeStyle]]] = None
+41:         self._node_label_mapping: Optional[Union[str, Callable[[dict], Union[str, LabelStyle]]]] = None
+42:         self._heat_mapping: Optional[Union[str, Callable[[dict], float]]] = None
+43: 
+44:         self._selected_graph: Tuple[List[TDict], List[TDict]] = ([], [])
+45:         self._graph_layout = layout_(Layout.ORGANIC, **{})
+46:         self._overview: TDict[str, bool] = dict(enabled=True, overview_set=True)
+47:         self._sidebar: Optional[TDict[str, Any]] = None
+48:         self._neighborhood: Optional[TDict[str, Any]] = None
+49: 
+50:         self._edges: List[TDict[str, Any]] = []
+51:         self._nodes: List[Union[Node, TDict[str, Any]]] = []
+52:         self._error = None
+53:         self._errorMessage = ''
+54:         self._itemtype2colorIdx: TDict[str, int] = {}
+55: 
+56:         self._group_nodes: List[TDict[str, Any]] = []
+57:         self._mapper = MappingClass(self)
+58:         self._directed = False
+59:         self._data_importer = 'unknown'
+60: 
+61: 
+62:     # region Properties
+63: 
+64:     # region nodes
+65:     def get_nodes(self):
+66:         """Legacy getter for nodes property.
+67: 
+68:         Deprecated, use ``widget.nodes`` instead.
+69:         """
+70:         warnings.warn(
+71:             "get_nodes() is deprecated; use `widget.nodes` instead.",

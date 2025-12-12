@@ -11,6 +11,7 @@ from sklearn.impute import KNNImputer
 import seaborn as sns
 from openpyxl.styles import PatternFill, Font
 from matplotlib.colors import to_hex
+import datetime
 
 #from statsmodels.multivariate.manova import MANOVA
 # PENSER A REALISER UN LOG DES SELECTIONS ET TRANSFORMATIONS APPLIQUEES AUX DONNEES -- IDEE + D'INTEGRITE DANS LES DONNEES, RENDRE REPRODUCTIBLE TOUS LES BIAIS DUS A DES CHOIX ARBITRAIRE SUR LES DONNEES INITIALES. GENERER UN RAPPORT D'INTEGRITE : DATA TRANS ET SELECT SUMMARY
@@ -59,6 +60,22 @@ def get_statistics_dataframe(df, nb_top_categories=4, exclude_columns=None, mult
     stats_df['nb_modalities'] = df.apply(lambda x: x.nunique())
     stats_df['variable_type'] = df.dtypes
 
+    # Helper to safely convert Timestamp/Timedelta to string for Arrow compatibility
+    def safe_str_conversion(val):
+        if pd.api.types.is_scalar(val):
+             if isinstance(val, (pd.Timestamp, pd.Timedelta, datetime.datetime, datetime.date, np.datetime64)):
+                 return str(val)
+        return val
+
+    # Apply conversion to the entire stats DataFrame
+    stats_df = stats_df.applymap(safe_str_conversion)
+
+    # Force conversion of potential mixed-type columns to string to prevent ArrowInvalid
+    mixed_type_cols = ['min', 'max', '25%', '50%', '75%']
+    for col in mixed_type_cols:
+        if col in stats_df.columns:
+            stats_df[col] = stats_df[col].astype(str)
+
     if multi_index:
         stats_df = create_multiindex_dataframe(result=stats_df.transpose(), super_column=super_column)
     
@@ -76,20 +93,7 @@ def calculate_group_stats(group, group_name=None):
     Returns:
     - dict: Dictionary containing descriptive statistics with group name as prefix.
     """
-    if group_name is not None:
-        return {
-            f'{group_name}_mean': group.mean(),
-            f'{group_name}_std': group.std(),
-            f'{group_name}_min': group.min(),
-            f'{group_name}_25%': group.quantile(0.25),
-            f'{group_name}_median': group.median(),
-            f'{group_name}_75%': group.quantile(0.75),
-            f'{group_name}_max': group.max(),
-            f'{group_name}_mode': group.mode()[0]
-        }
-    else:
-        print("##### IN GROUP_STAT",group_name)
-        return {
+    stats = {
         'mean': group.mean(),
         'std': group.std(),
         'min': group.min(),
@@ -97,8 +101,24 @@ def calculate_group_stats(group, group_name=None):
         'median': group.median(),
         '75%': group.quantile(0.75),
         'max': group.max(),
-        'mode': group.mode()[0]
+        'mode': group.mode()[0] if not group.mode().empty else None
     }
+
+    # Helper to safely convert Timestamp/Timedelta to string for Arrow compatibility
+    def safe_str(val):
+        if pd.api.types.is_scalar(val):
+             if isinstance(val, (pd.Timestamp, pd.Timedelta, datetime.datetime, datetime.date, np.datetime64)):
+                 return str(val)
+        return val
+
+    # Apply conversion
+    safe_stats = {k: safe_str(v) for k, v in stats.items()}
+
+    if group_name is not None:
+        return {f'{group_name}_{k}': v for k, v in safe_stats.items()}
+    else:
+        print("##### IN GROUP_STAT", group_name)
+        return safe_stats
 
 
 def calculate_group_stats_for_multiple_groups(groups, group_names=None):

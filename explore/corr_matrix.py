@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 from openpyxl.styles import PatternFill, Font
 from matplotlib.colors import to_hex
 import plotly.express as px
+import scipy.cluster.hierarchy as sch
+import scipy.spatial.distance as ssd
+import plotly.figure_factory as ff
+import plotly.graph_objects as go
 
 ####################################### CORRELATION MATRIX ###########################################
 
@@ -16,6 +20,10 @@ def plotly_corr_mat(
     selected_color=px.colors.sequential.Viridis,
     corr_method_name=None,
     triangle="lower",  # 'lower', 'upper', or 'full'
+    cluster_rows=False,
+    cluster_cols=False,
+    show_row_dendrogram=False,
+    show_col_dendrogram=False,
     ):
     """
     Generate an interactive correlation matrix using Plotly, with optional triangular masking.
@@ -28,72 +36,223 @@ def plotly_corr_mat(
     - selected_color (str): Colormap for the heatmap.
     - corr_method_name (str or None): Display name for the correlation method (optional).
     - triangle (str): 'lower', 'upper', or 'full' to control the displayed triangle.
+    - cluster_rows (bool): Whether to apply hierarchical clustering to reorder rows.
+    - cluster_cols (bool): Whether to apply hierarchical clustering to reorder columns.
+    - show_row_dendrogram (bool): Whether to show the row dendrogram tree.
+    - show_col_dendrogram (bool): Whether to show the column dendrogram tree.
 
     Returns:
     - plotly.graph_objs._figure.Figure: Plotly figure object.
     """
     # Filter the data to include only the target and predictor columns
-    data_filtered = data[targets + predictors]
+    # Ensure unique columns to avoid duplicates in correlation matrix calculation
+    unique_cols = list(set(targets + predictors))
+    data_filtered = data[unique_cols]
 
     # Calculate the correlation matrix
     corr_matrix = data_filtered.corr(method=method).loc[predictors, targets]
 
-    # Handle symmetric matrix for identical targets and predictors
-    if set(targets) == set(predictors):  # Check if target and predictor sets are identical
-        mask = np.zeros_like(corr_matrix, dtype=bool)
+    # Initialize variables for clustering
+    row_order = corr_matrix.index.tolist()
+    col_order = corr_matrix.columns.tolist()
+    row_dendro_traces = []
+    col_dendro_traces = []
+    row_dendro_y_vals = None
+    col_dendro_x_vals = None
+    row_dendro_range = None
+    col_dendro_range = None
+    
+    cm_filled = corr_matrix.fillna(0)
+
+    # 1. Row Clustering
+    if cluster_rows and len(row_order) > 1:
+        try:
+            # orientation='left' -> leaves on left (facing heatmap)
+            dendro_side = ff.create_dendrogram(cm_filled, orientation='left', labels=cm_filled.index)
+            row_order = dendro_side['layout']['yaxis']['ticktext']
+            row_dendro_y_vals = dendro_side['layout']['yaxis']['tickvals']
+            
+            if show_row_dendrogram:
+                row_dendro_traces = dendro_side['data']
+                # Calculate max range for tight layout (height is on x-axis for orientation='left')
+                max_d = 0
+                for trace in row_dendro_traces:
+                    if 'x' in trace and len(trace['x']) > 0:
+                        max_d = max(max_d, max(trace['x']))
+                row_dendro_range = [0, max_d]
+        except Exception as e:
+            print(f"Row clustering failed: {e}")
+
+    # 2. Column Clustering
+    if cluster_cols and len(col_order) > 1:
+        try:
+            # orientation='bottom' -> leaves on bottom (facing heatmap)
+            # Transpose for column clustering
+            dendro_top = ff.create_dendrogram(cm_filled.T, orientation='bottom', labels=cm_filled.columns)
+            col_order = dendro_top['layout']['xaxis']['ticktext']
+            col_dendro_x_vals = dendro_top['layout']['xaxis']['tickvals']
+            
+            if show_col_dendrogram:
+                col_dendro_traces = dendro_top['data']
+                # Calculate max range for tight layout (height is on y-axis for orientation='bottom')
+                max_d = 0
+                for trace in col_dendro_traces:
+                    if 'y' in trace and len(trace['y']) > 0:
+                        max_d = max(max_d, max(trace['y']))
+                col_dendro_range = [0, max_d]
+        except Exception as e:
+            print(f"Column clustering failed: {e}")
+
+    # Reorder Heatmap Data
+    X_ordered = corr_matrix.loc[row_order, col_order]
+
+    # Handle symmetric matrix masking if NOT clustering (or if clustering preserves symmetry which is not guaranteed unless we force it)
+    # If clustering is enabled, masking usually doesn't make sense unless the order is identical.
+    # If cluster_rows and cluster_cols are both True and symmetric, we might want to mask.
+    # But for now, let's disable masking if any clustering is active to avoid confusion, or check if orders match.
+    
+    if (not cluster_rows and not cluster_cols) and set(targets) == set(predictors):
+        mask = np.zeros_like(X_ordered, dtype=bool)
         if triangle == "lower":
             mask[np.triu_indices_from(mask)] = True
         elif triangle == "upper":
             mask[np.tril_indices_from(mask)] = True
-        corr_matrix = corr_matrix.mask(mask)
+        X_ordered = X_ordered.mask(mask)
 
     # Generate correlation method title if not provided
     if corr_method_name is None:
         corr_method_name = method.capitalize()
 
     # Dynamically adjust figure size based on number of predictors and targets
-    fig_width = max(10, 1.5 * len(targets))  # Ensure a minimum width
-    fig_height = max(8, 1 * len(predictors))  # Ensure a minimum height
+    fig_width = max(6, 0.35 * len(col_order))
+    fig_height = max(5, 0.35 * len(row_order))
 
-    # Create the interactive heatmap
-    fig = px.imshow(
-        corr_matrix,
-        color_continuous_scale=selected_color,
-        labels=dict(color="Correlation Coefficient"),
+    # Create Figure
+    fig = go.Figure()
+
+    # Determine Heatmap Axes Values
+    # If showing dendrogram, use the numerical values from dendrogram layout.
+    # If not, use the categorical labels.
+    
+    x_vals = col_dendro_x_vals if show_col_dendrogram else col_order
+    y_vals = row_dendro_y_vals if show_row_dendrogram else row_order
+    
+    # Add Heatmap
+    heatmap = go.Heatmap(
+        x = x_vals,
+        y = y_vals,
+        z = X_ordered.values,
+        colorscale = selected_color,
+        colorbar=dict(len=0.4, thickness=10, x=1.05, y=0.4)
+    )
+    fig.add_trace(heatmap)
+
+    # Add Row Dendrogram Traces
+    for trace in row_dendro_traces:
+        trace.xaxis = 'x2'
+        trace.yaxis = 'y' # Share y-axis with heatmap
+        fig.add_trace(trace)
+
+    # Add Column Dendrogram Traces
+    for trace in col_dendro_traces:
+        trace.xaxis = 'x' # Share x-axis with heatmap
+        trace.yaxis = 'y2'
+        fig.add_trace(trace)
+
+    # Define Layout Domains
+    # Default (No dendrograms)
+    hm_x_domain = [0, 1]
+    hm_y_domain = [0, 1]
+    
+    # Use tighter domains to reduce whitespace
+    # Heatmap takes 85%, Dendrogram takes 15% (touching)
+    if show_row_dendrogram:
+        hm_x_domain = [0, 0.85]
+    
+    if show_col_dendrogram:
+        hm_y_domain = [0, 0.85]
+
+    # Calculate explicit ranges for Heatmap to ensure it touches dendrograms
+    hm_x_range = None
+    hm_y_range = None
+    
+    if show_col_dendrogram and col_dendro_x_vals is not None and len(col_dendro_x_vals) > 0:
+        # Dendrogram ticks are usually centers. We need edges.
+        # Assuming uniform spacing
+        vals = sorted(col_dendro_x_vals)
+        if len(vals) > 1:
+            step = vals[1] - vals[0]
+        else:
+            step = 10.0 # Default
+        hm_x_range = [min(vals) - step/2, max(vals) + step/2]
+        
+    if show_row_dendrogram and row_dendro_y_vals is not None and len(row_dendro_y_vals) > 0:
+        vals = sorted(row_dendro_y_vals)
+        if len(vals) > 1:
+            step = vals[1] - vals[0]
+        else:
+            step = 10.0
+        hm_y_range = [min(vals) - step/2, max(vals) + step/2]
+
+    # Prepare Axis Configs
+    xaxis_config = dict(
+        domain=hm_x_domain, 
+        tickmode='array', 
+        tickvals=x_vals, 
+        ticktext=col_order, 
+        tickangle=45,
+        title='',
+        automargin=True
+    )
+    if hm_x_range:
+        xaxis_config['range'] = hm_x_range
+
+    yaxis_config = dict(
+        domain=hm_y_domain, 
+        tickmode='array', 
+        tickvals=y_vals, 
+        ticktext=row_order, 
+        side='left',
+        title='',
+        automargin=True
+    )
+    if hm_y_range:
+        yaxis_config['range'] = hm_y_range
+
+    # Update Layout
+    fig.update_layout(
+        # Heatmap Axes
+        xaxis=xaxis_config,
+        yaxis=yaxis_config,
+        
+        # Row Dendrogram Axis (Right)
+        xaxis2=dict(
+            domain=[0.85, 1], 
+            range=row_dendro_range,
+            showgrid=False, 
+            showline=False, 
+            showticklabels=False,
+            title=''
+        ),
+        
+        # Column Dendrogram Axis (Top)
+        yaxis2=dict(
+            domain=[0.85, 1], 
+            range=col_dendro_range,
+            showgrid=False, 
+            showline=False, 
+            showticklabels=False,
+            title=''
+        ),
+        
+        width=fig_width * 100 + (150 if show_row_dendrogram else 0),
+        height=fig_height * 100 + (150 if show_col_dendrogram else 0),
         title=f"Correlation Matrix ({corr_method_name})",
+        showlegend=False,
+        margin=dict(l=20, r=20, t=50, b=50),
+        autosize=False
     )
 
-    # Adjust the layout for text size and figure dimensions
-    fig.update_layout(
-        title_x=0.5,
-        title_font=dict(size=20),
-        width=fig_width * 100,  # Scale width for more space
-        height=fig_height * 100,  # Scale height for more space
-        font=dict(size=12),  # Smaller font size for better readability
-        xaxis=dict(tickangle=45, tickmode='array', tickvals=list(range(len(corr_matrix.columns)))),
-        yaxis=dict(tickmode='array', tickvals=list(range(len(corr_matrix.index)))),
-        margin=dict(l=50, r=50, t=50, b=50),  # Adjust margins, reduced top margin to remove extra space
-        autosize=True
-    )
-
-    # Adjust the axis labels' font size
-    fig.update_xaxes(title_font=dict(size=14), tickfont=dict(size=10))
-    fig.update_yaxes(title_font=dict(size=14), tickfont=dict(size=10))
-
-    # Adjust the color bar to be on the right, properly sized and positioned
-    fig.update_layout(
-        coloraxis_colorbar=dict(
-            len=0.8,  # Length of the color bar, scales to 80% of the figure height
-            thickness=20,  # Width of the color bar
-            ticks="outside",  # Position ticks outside of the color bar
-            ticklen=5,  # Length of the ticks
-            tickfont=dict(size=10),  # Font size for the color bar ticks
-            x=1.05,  # Position color bar on the right side
-            xanchor="left"  # Anchor the color bar to the left (relative to x=1.05)
-        )
-    )
-
-    # Return the figure
     return fig
 
 
@@ -185,6 +344,9 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     corr_flat = correlations.stack().reset_index()
     corr_flat.columns = ['Predictor', 'Target', 'Correlation']
 
+    # Remove self-correlations (where Predictor == Target)
+    corr_flat = corr_flat[corr_flat['Predictor'] != corr_flat['Target']]
+
     # Sort by absolute correlation value in descending order
     corr_flat['AbsCorrelation'] = corr_flat['Correlation'].abs()
     corr_flat_sorted = corr_flat.sort_values(by='AbsCorrelation', ascending=False)
@@ -222,7 +384,12 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     filtered_strengths = strength_order[filter_index:]
     
     # Filter the data to include only the desired strength categories
-    corr_flat_filtered = corr_flat_sorted[corr_flat_sorted['Strength'].str.lower().isin(filtered_strengths)]
+    if corr_flat_sorted.empty:
+        corr_flat_filtered = pd.DataFrame(columns=corr_flat_sorted.columns)
+    else:
+        # Ensure Strength column is treated as string
+        corr_flat_sorted['Strength'] = corr_flat_sorted['Strength'].astype(str)
+        corr_flat_filtered = corr_flat_sorted[corr_flat_sorted['Strength'].str.lower().isin(filtered_strengths)]
 
     # Limit to top N correlations
     if top_n:
