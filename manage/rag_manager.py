@@ -27,8 +27,9 @@ try:
     from utils.custom_gemini import CustomGeminiChat, CustomGeminiEmbeddings
 
     # for our QA chains
-    from langchain.chains import create_retrieval_chain
-    from langchain.chains.combine_documents import create_stuff_documents_chain
+    # for our QA chains
+    from langchain_core.runnables import RunnablePassthrough
+    from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
     RAG_AVAILABLE = True
 except ImportError as e:
@@ -97,12 +98,26 @@ class RAGManager:
             if match:
                 return match.group(1).strip()
         
-        # If no markdown, try to find the first { and last }
-        if "{" in text and "}" in text:
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            return text[start:end]
-            
+        # If no markdown, find outer brackets
+        first_brace = text.find("{")
+        first_bracket = text.find("[")
+        
+        start = -1
+        end = -1
+        
+        # Determine if we should look for { or [
+        if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+             # It's likely an object
+             start = first_brace
+             end = text.rfind("}") + 1
+        elif first_bracket != -1:
+             # It's likely a list
+             start = first_bracket
+             end = text.rfind("]") + 1
+             
+        if start != -1 and end > start:
+             return text[start:end]
+             
         return text
 
     def _analyze_global_context(self, texts, dataset_columns=None):
@@ -382,19 +397,23 @@ class RAGManager:
         )
 
         # 3. Create the Chains (LCEL style)
-        question_answer_chain = create_stuff_documents_chain(
-            self.llm,
-            prompt,
-            document_prompt=document_prompt,
-            document_variable_name="context" # This automatically feeds into {context} above
+        
+        retriever = self.vector_store.as_retriever(
+            search_type="mmr", 
+            search_kwargs={"k": 8, "fetch_k": 20} # Preserving high precision settings
         )
 
-        self.qa_chain = create_retrieval_chain(
-            self.vector_store.as_retriever(
-                search_type="mmr", 
-                search_kwargs={"k": 8, "fetch_k": 20} # Preserving high precision settings
-            ),
-            question_answer_chain
+        def format_docs(docs):
+            return "\n\n".join(f"Document: {d.metadata.get('source', 'Unknown')} | Page: {d.metadata.get('page', 'N/A')}\nContent: {d.page_content}\n----------------" for d in docs)
+
+        self.qa_chain = (
+            {
+                "context": (lambda x: x["input"]) | retriever | format_docs,
+                "input": lambda x: x["input"]
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
         )
 
     def suggest_column_renaming(self, columns, strategy="literature", progress_callback=None):
@@ -978,6 +997,367 @@ class RAGManager:
             print(f"Unification Error: {e}")
             return {}
 
+    # =========================================================================
+    # DOCUMENT GRAPH KNOWLEDGE (NATIVE FILE API)
+    # =========================================================================
+
+    def get_available_documents(self):
+        """Returns a list of PDF files in the documents directory."""
+        if not os.path.exists(self.documents_dir):
+            return []
+        return [f for f in os.listdir(self.documents_dir) if f.lower().endswith('.pdf')]
+
+    def extract_custom_graph_from_doc(self, file_name, progress_callback=None):
+        """
+        Uses Gemini Native File API to extract a knowledge graph from a specific document.
+        """
+        if not self.initialized:
+            return None, "RAG System not initialized."
+            
+        file_path = os.path.join(self.documents_dir, file_name)
+        if not os.path.exists(file_path):
+            return None, f"File {file_name} not found."
+            
+        if progress_callback: progress_callback(10, f"Uploading {file_name} to Gemini...")
+        
+        try:
+            # 1. Upload File
+            # Access underlying client from CustomGeminiChat wrapper
+            client = self.llm.client 
+            
+            # The 'files' module is on the client instance in v1.0 SDK
+            with open(file_path, "rb") as f:
+                # Need to read logs? No, client.files.upload accepts path directly usually
+                # But SDK v1.0 might want path or file-like. Let's use path argument if supported.
+                # Assuming client.files.upload(path=...) is correct based on general SDK usage.
+                uploaded_file = client.files.upload(file=file_path)
+            
+            # 2. Wait for Processing
+            while uploaded_file.state.name == "PROCESSING":
+                if progress_callback: progress_callback(20, "Processing file...")
+                time.sleep(2)
+                uploaded_file = client.files.get(name=uploaded_file.name)
+                
+            if uploaded_file.state.name == "FAILED":
+                return None, "File processing failed by Google."
+                
+            if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
+            
+            # 3. Generate Content
+            prompt_text = """
+            Role: Expert Information Architect.
+            Task: Analyze this document and extract a Knowledge Graph of key entities and their relationships.
+            
+            Instructions:
+            1. Identify core entities (Concepts, Methods, Metrics, Findings, Diseases, Treatments).
+            2. Identify relationships between them.
+            3. NAMING CONVENTION: Use the **Canonical/Standard** name for each entity. 
+               - E.g., Use "Heart Failure" instead of "HF". 
+               - Deduplicate within the document (do not create separate nodes for acronyms).
+            4. EXHAUSTIVE EXTRACTION: For each entity, scan the ENTIRE document.
+               - Collect ALL page numbers.
+               - Select the BEST definition and representative quote.
+            5. SCIENTIFIC SUMMARY: Analyze the document type (e.g. Clinical Study, Review, Protocol) and generate a structured summary.
+            
+            Return JSON:
+            {
+                "summary": {
+                    "title": "Inferred Document Title",
+                    "doc_type": "Study Type (e.g. Cohort Study, Review)",
+                    "objective": "Primary goal/hypothesis of the study",
+                    "methods": "Key methodology, population, study design",
+                    "key_findings": "Primary results and outcomes",
+                    "significance": "Clinical or scientific implications",
+                    "top_concepts": ["List of 3-5 most important concepts"]
+                },
+                "nodes": [
+                    {
+                        "id": "Canonical Name",
+                        "type": "Concept/Metric/Finding/etc",
+                        "description": "Comprehensive Definition",
+                        "source_text": "Representative quote...",
+                        "page_reference": "1, 3, 5"
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "Source Node ID",
+                        "target": "Target Node ID",
+                        "relation": "relationship_type",
+                        "description": "Context of relationship"
+                    }
+                ],
+                "formulas": [
+                    {
+                        "name": "Formula Name",
+                        "expression": "Math expression",
+                        "page": "Page X",
+                        "description": "Explanation"
+                    }
+                ]
+            }
+            """
+            
+            # Prepare contents
+            # Using types.Content for structure
+            
+            # Note: We need to import types locally if not available, or assume it's there. 
+            # We imported types globally at the top.
+            
+            response = client.models.generate_content(
+                model=self.llm.model_name,
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_uri(
+                                file_uri=uploaded_file.uri,
+                                mime_type=uploaded_file.mime_type
+                            ),
+                            types.Part.from_text(text=prompt_text)
+                        ]
+                    )
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
+            
+            # 4. Cleanup
+            try:
+                client.files.delete(name=uploaded_file.name)
+            except:
+                pass
+
+            # 5. Parse Response
+            json_str = response.text
+            # Use our robust cleaner
+            cleaned_json = self._clean_json_response(json_str)
+            parsed_data = json.loads(cleaned_json)
+            
+            # Robustness: Handle if LLM returned a list [ { "nodes": ... } ]
+            if isinstance(parsed_data, list):
+                if len(parsed_data) > 0 and isinstance(parsed_data[0], dict):
+                    parsed_data = parsed_data[0]
+                else:
+                    # Fallback or error?
+                    return None, "LLM returned an unexpected list format."
+            
+            if not isinstance(parsed_data, dict):
+                 return None, "LLM did not return a valid JSON object."
+                 
+            return parsed_data, None
+            
+        except Exception as e:
+            return None, str(e)
+
+
+
+    def extract_merged_graph_from_docs(self, doc_list, progress_callback=None):
+        """
+        Extracts and merges graphs from multiple documents.
+        Returns (merged_json, error).
+        """
+        if not doc_list:
+            return None, "No documents specified."
+            
+        merged_nodes = {} # id_lower -> node_data
+        merged_edges = [] # list of edge dicts
+        merged_formulas = []
+        merged_summaries = []
+        
+        seen_edges = set() # (src_lower, tgt_lower, rel_lower)
+        
+        total = len(doc_list)
+        
+        for idx, doc in enumerate(doc_list):
+            if progress_callback: progress_callback(int((idx/total)*100), f"Processing {doc}...")
+            
+            # Reuse single doc extraction
+            g_json, err = self.extract_custom_graph_from_doc(doc)
+            if err:
+                print(f"Error processing {doc}: {err}")
+                continue # Skip bad docs but keep partial result
+            
+            # Collect Summary
+            if "summary" in g_json:
+                s = g_json["summary"]
+                s["doc"] = doc # Link to source
+                merged_summaries.append(s)
+
+            # Merge Nodes
+            for n in g_json.get("nodes", []):
+                nid = n.get("id", "").strip()
+                if not nid: continue
+                nid_lower = nid.lower()
+                
+                # Create Citation
+                citation = {
+                    "doc": doc,
+                    "page": n.get("page_reference", "Unknown"),
+                    "text": n.get("source_text", "")
+                }
+                
+                # ID Matching Logic
+                match_id = None
+                
+                # 1. Exact Match
+                if nid_lower in merged_nodes:
+                    match_id = nid_lower
+                else:
+                    # 2. Fuzzy Match (Robustness for LLM variations)
+                    # Iterate existing keys to find close match
+                    import difflib
+                    existing_keys = list(merged_nodes.keys())
+                    # Using get_close_matches for speed, cutoff 0.85 (high similarity)
+                    matches = difflib.get_close_matches(nid_lower, existing_keys, n=1, cutoff=0.85)
+                    if matches:
+                        match_id = matches[0]
+                
+                if not match_id:
+                    # New Node
+                    n["citations"] = [citation]
+                    # Clean up single doc fields to avoid confusion
+                    n.pop("source_text", None)
+                    n.pop("page_reference", None)
+                    merged_nodes[nid_lower] = n
+                else:
+                    # Merge Logic
+                    existing = merged_nodes[match_id]
+                    existing["citations"].append(citation)
+                    # Keep longest description? or concatenation?
+                    if len(n.get("description", "")) > len(existing.get("description", "")):
+                        existing["description"] = n.get("description", "")
+            
+            # Merge Edges
+            for e in g_json.get("edges", []):
+                s = str(e.get("source"))
+                t = str(e.get("target"))
+                r = e.get("relation", "relates to")
+                key = (s.lower(), t.lower(), r.lower())
+                
+                if key not in seen_edges:
+                    merged_edges.append(e)
+                    seen_edges.add(key)
+            
+            # Merge Formulas
+            for f in g_json.get("formulas", []):
+                f["doc"] = doc # Add source
+                merged_formulas.append(f)
+
+        return {
+            "nodes": list(merged_nodes.values()),
+            "edges": merged_edges,
+            "formulas": merged_formulas,
+            "summaries": merged_summaries
+        }, None
+
+
+    def match_columns_to_graph(self, columns, graph_json):
+        """
+        Matches dataset columns to Knowledge Graph nodes using fuzzy string matching.
+        Returns dict: {column_name: {match_found: bool, node: data, confidence: float}}
+        """
+        import difflib
+        
+        results = {}
+        nodes = graph_json.get("nodes", [])
+        if not nodes:
+            return {c: {"match_found": False} for c in columns}
+            
+        # Create lookups
+        node_lookup = {n.get("id", "").lower(): n for n in nodes}
+        node_ids_lower = list(node_lookup.keys())
+        
+        for col in columns:
+            col_lower = col.lower().replace("_", " ")
+            
+            # 1. Exact Match (Best)
+            if col_lower in node_lookup:
+                results[col] = {
+                    "match_found": True, 
+                    "node": node_lookup[col_lower], 
+                    "confidence": 1.0,
+                    "method": "Exact"
+                }
+                continue
+                
+            # 2. Fuzzy Match
+            matches = difflib.get_close_matches(col_lower, node_ids_lower, n=1, cutoff=0.6)
+            if matches:
+                 match_id = matches[0]
+                 # Calculate similarity score
+                 ratio = difflib.SequenceMatcher(None, col_lower, match_id).ratio()
+                 results[col] = {
+                     "match_found": True, 
+                     "node": node_lookup[match_id], 
+                     "confidence": ratio,
+                     "method": "Fuzzy"
+                 }
+            else:
+                results[col] = {"match_found": False}
+                
+        return results
+
+
+    def chat_with_specific_doc(self, doc_names, query):
+        """
+        Chat with specific document(s) using the vector store.
+        doc_names: string or list of strings.
+        """
+        if not self.initialized or not self.vector_store:
+            return "System not initialized or no database available."
+
+        if isinstance(doc_names, str):
+            doc_names = [doc_names]
+            
+        full_paths = [os.path.join(self.documents_dir, d) for d in doc_names]
+        
+        # Retrieval Filter
+        filter_dict = {}
+        if len(full_paths) == 1:
+            filter_dict = {"source": full_paths[0]}
+        else:
+             # ChromaDB $in operator
+             filter_dict = {"source": {"$in": full_paths}}
+        
+        retriever = self.vector_store.as_retriever(
+            search_type="mmr",
+            search_kwargs={
+                "k": 5,
+                "filter": filter_dict
+            }
+        )
+        
+        doc_list_str = ", ".join(doc_names)
+        
+        prompt = ChatPromptTemplate.from_template(f"""
+        Role: Document Assistant.
+        Context (From {doc_list_str}):
+        {{context}}
+        
+        User Question: {{question}}
+        
+        Instruction: Answer the question based ONLY on the provided context from the documents.
+        If the answer is not in the context, say "I cannot find this information in the documents."
+        """)
+        
+        def format_docs(docs):
+            return "\\n\\n".join(f"[Source: {{d.metadata.get('source','Unknown')}}] {{d.page_content}}" for d in docs)
+
+        chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
+        
+        try:
+            return chain.invoke(query)
+        except Exception as e:
+            return f"Error responding: {{str(e)}}"
+
     def enrich_variable_taxonomy(self, current_taxonomy, columns_info, distance=1, progress_callback=None):
         """
         Enriches an existing taxonomy using 'Wise Enrichment' strategy (Formula-centric).
@@ -1316,10 +1696,43 @@ class RAGManager:
 
 
 
+    def _expand_search_hint(self, search_hint):
+        """Pre-processing: Expand acronyms or ambiguous terms to standard medical concepts."""
+        if not search_hint or len(search_hint) > 20: # Skip if too long, likely already descriptive
+            return search_hint
+            
+        prompt = f"""
+        Role: Medical Terminology Expert.
+        Input: "{search_hint}"
+        
+        Task: 
+        1. If the input is a medical acronym or abbreviation (e.g. BSA, BMI, eGFR, SBP), return the STANDARD FULL NAME (e.g. Body Surface Area).
+        2. If it is already a full name or not a known medical acronym, return it exactly as is.
+        
+        Return ONLY the expanded/standard name. No bolding, no extra text.
+        """
+        try:
+             # Quick call, low temperature for determinism
+            expanded = self.llm.invoke(prompt).content.strip().strip('"').strip("'")
+            # Basic sanity check: don't accept if it turned into a sentence
+            if len(expanded) < 60:
+                return expanded
+            return search_hint
+        except:
+            return search_hint
+
     def suggest_computed_variables(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, progress_callback=None):
         if not self.initialized:
             return None, "RAG system not initialized."
         
+        # --- STEP PRE-0: EXPAND HINT ---
+        original_hint = search_hint
+        if search_hint:
+             if progress_callback: progress_callback(5, "Analyzing search term...")
+             search_hint = self._expand_search_hint(search_hint)
+             if search_hint != original_hint:
+                 print(f"Expanded search hint: '{original_hint}' -> '{search_hint}'")
+
         # --- STEP 0: RETRIEVE CONTEXT ---
         if search_hint:
             retrieval_query = f"{search_hint} formula calculation clinical score"

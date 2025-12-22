@@ -1579,7 +1579,7 @@ def define_new_variables(main_data):
                                 
                                 col_fix1, col_fix2 = st.columns(2)
                                 with col_fix1:
-                                    if st.button(f"Find Proxy for {missing_vars[0]}", key=f"proxy_{i}"):
+                                    if st.button(f"Find Proxy for {missing_vars[0]}", key=f"proxy_{i}_{missing_vars[0]}"):
                                         with st.spinner(f"Finding proxy for {missing_vars[0]}..."):
                                             proxy_res = st.session_state.rag_manager.suggest_proxy_variable(missing_vars[0], list(main_data.columns))
                                             if proxy_res.get('proxy_found'):
@@ -1591,7 +1591,7 @@ def define_new_variables(main_data):
                                                 st.caption(proxy_res.get('explanation'))
                                 
                                 with col_fix2:
-                                    if st.button(f"Find Alternative Formula", key=f"alt_{i}"):
+                                    if st.button(f"Find Alternative Formula", key=f"alt_{i}_{sugg.get('name', 'unknown')}"):
                                         with st.spinner(f"Finding alternative for {sugg.get('title')}..."):
                                             alt_res = st.session_state.rag_manager.suggest_alternative_formula(sugg.get('title'), missing_vars[0], list(main_data.columns))
                                             if alt_res.get('alternative_found'):
@@ -1634,7 +1634,7 @@ def define_new_variables(main_data):
                             else:
                                 st.info(explanation or citation, icon="ℹ️")
 
-                        if st.button("Apply to Editor", key=f"apply_var_{i}", width='stretch'):
+                        if st.button("Apply to Editor", key=f"apply_var_{i}_{sugg.get('name', 'unknown')}", width='stretch'):
                             st.session_state.variable_name_input = sugg.get('name', '')
                             st.session_state.formula_input = sugg.get('formula', '')
                             st.rerun()
