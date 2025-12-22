@@ -753,7 +753,7 @@ def app():
                 # Find path for selected version
                 path_to_load = next(v[1] for v in local_versions if f"v{v[0]}" == sel_v)
 
-                if st.button(f"Load {sel_v}", type="primary", use_container_width=True):
+                if st.button(f"Load {sel_v}", type="primary", width='stretch'):
                     with open(path_to_load, "r") as f:
                         st.session_state.offline_taxonomy = json.load(f)
                     st.rerun()

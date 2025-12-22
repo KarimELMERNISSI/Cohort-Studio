@@ -3,8 +3,9 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import numpy as np
+from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle
 import explore.corr_matrix as ecm
-from scipy import stats
+import utils.visualization_utils as vu
 import os
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager # test
@@ -1410,42 +1411,179 @@ def app():
                     predictors = st.multiselect("Select predictor columns", cols_select)
                     triangle = 'lower'
 
-                # Generate correlation matrix
+                # Generate correlation matrix ONCE
                 try:
-                    # Generate the heatmap figure
-                    fig = ecm.plotly_corr_mat(
-                        data=filtered_df,
-                        targets=targets,
-                        predictors=predictors,
-                        method=corr_method,
-                        selected_color='Plasma',
-                        triangle=triangle,
-                        cluster_rows=cluster_rows,
-                        cluster_cols=cluster_cols,
-                        show_row_dendrogram=show_row_dendrogram,
-                        show_col_dendrogram=show_col_dendrogram
-                    )
-                    st.plotly_chart(fig, width='stretch')
+                    # Pre-calculate matrix to optimize performance
+                    unique_cols = list(set(targets + predictors))
+                    # Filter numeric columns only to avoid errors
+                    data_for_corr = filtered_df[unique_cols].select_dtypes(include=[np.number])
                     
-                    # Define output file name
-                    file_name = "correlation_matrix"
-                    # Generate Excel file
-                    
-                    st.download_button(
-                        on_click=ecm.custom_corr_mat_to_excel(
-                        data=filtered_df,
-                        targets=targets,
-                        predictors=predictors,
-                        group_column=group_column,
-                        file_name=file_name,
-                        method=corr_method,
-                        threshold="Negligible"
-                        ),
-                        label="Download Correlation Matrix",
-                        data=open(f"{file_name}.xlsx", "rb"),
-                        file_name=f"{file_name}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                    if not data_for_corr.empty:
+                        corr_matrix_precalc = data_for_corr.corr(method=corr_method)
+                    else:
+                        corr_matrix_precalc = pd.DataFrame() # Empty if no data
+
+                    # Create Tabs - Graph first as requested
+                    tab_graph, tab_matrix = st.tabs(["Correlation Graph", "Correlation Matrix"])
+
+                    with tab_matrix:
+                        # Generate the heatmap figure
+                        fig = ecm.plotly_corr_mat(
+                            data=filtered_df,
+                            targets=targets,
+                            predictors=predictors,
+                            method=corr_method,
+                            selected_color='Plasma',
+                            triangle=triangle,
+                            cluster_rows=cluster_rows,
+                            cluster_cols=cluster_cols,
+                            show_row_dendrogram=show_row_dendrogram,
+                            show_col_dendrogram=show_col_dendrogram,
+                            correlation_matrix=corr_matrix_precalc
+                        )
+                        st.plotly_chart(fig, width='stretch')
+                        
+                        # Define output file name
+                        file_name = "correlation_matrix"
+                        # Generate Excel file
+                        
+                        st.download_button(
+                            on_click=ecm.custom_corr_mat_to_excel(
+                            data=filtered_df,
+                            targets=targets,
+                            predictors=predictors,
+                            group_column=group_column,
+                            file_name=file_name,
+                            method=corr_method,
+                            threshold="Negligible"
+                            ),
+                            label="Download Correlation Matrix",
+                            data=open(f"{file_name}.xlsx", "rb"),
+                            file_name=f"{file_name}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
+
+                    with tab_graph:
+                        # Correlation Network Graph
+                        st.subheader("Correlation Network Graph")
+                        
+                        # Legend
+                        with st.expander("Legend & Help", expanded=False):
+                            legend_html = """
+                            <style>
+                                .legend-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-bottom: 10px; }
+                                .legend-table th { background-color: #f0f2f6; padding: 8px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
+                                .legend-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+                                .line-sample { display: inline-block; width: 60px; vertical-align: middle; position: relative; height: 10px; }
+                                .line-draw { position: absolute; top: 50%; left: 0; right: 0; display: block; }
+                            </style>
+                            <table class="legend-table">
+                                <thead>
+                                    <tr>
+                                        <th>Strength</th>
+                                        <th>Positive (Co-vary) <span style="color:#0000ff; font-size:0.8em;">(Blue)</span></th>
+                                        <th>Negative (Inverse) <span style="color:#ff0000; font-size:0.8em;">(Red)</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Very Strong</strong></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 5.0px solid #00008b;"></span></div></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 5.0px solid #8b0000;"></span></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Strong</strong></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 3.5px solid #0000ff;"></span></div></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 3.5px solid #ff0000;"></span></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Moderate</strong></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 2.5px solid #4169e1;"></span></div></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 2.5px solid #cd5c5c;"></span></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Weak</strong></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 1.5px dashed #add8e6;"></span></div></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 1.5px dashed #f08080;"></span></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Negligible</strong></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 1.0px dotted #d3d3d3;"></span></div></td>
+                                        <td><div class="line-sample"><span class="line-draw" style="border-top: 1.0px dotted #d3d3d3;"></span></div></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div style="font-size: 0.9em; color: #555;">
+                                <p><strong>Interactions:</strong> for the moment it is not possible to select a node and move it</p>
+                                <ul>
+                                    <li><strong>Node Heat:</strong> Nodes with a "hotter" appearance (heat map overlay) have a higher cumulative correlation strength with their neighbors.</li>
+                                    <li><strong>Focus:</strong> Selecting a variable highlights it in <span style="color:orange; font-weight:bold;">Orange</span> and shows only its connected components.</li>
+                                </ul>
+                            </div>
+                            """
+                            st.markdown(legend_html, unsafe_allow_html=True)
+                        
+                        col_thresh, col_focus = st.columns([1, 1])
+                        with col_thresh:
+                            net_thresh = st.select_slider(
+                                "Minimum Edge Strength",
+                                options=["Negligible", "Weak", "Moderate", "Strong", "Very Strong"],
+                                value="Weak",
+                                help="Filter edges to show only correlations with strength equal to or greater than this threshold."
+                            )
+                        with col_focus:
+                            # Focus variable selector
+                            focus_options = sorted(list(set(targets + predictors)))
+                            focus_variable = st.selectbox(
+                                "Focus on Variable (Connected Component)", 
+                                ["None"] + focus_options,
+                                help="Select a variable to show only the nodes connected to it (directly or indirectly) via the selected edge strength."
+                            )
+                            
+                        focus_node = None if focus_variable == "None" else focus_variable
+                        
+                        nodes, edges = ecm.get_yfiles_network_data(
+                            data=filtered_df,
+                            targets=targets,
+                            predictors=predictors,
+                            method=corr_method,
+                            threshold_category=net_thresh,
+                            correlation_matrix=corr_matrix_precalc,
+                            focus_node=focus_node
+                        )
+                        
+                        
+                        if nodes:
+                            widget = StreamlitGraphWidget(nodes=nodes, edges=edges, heat_mapping="heat")
+                            widget.directed = False
+                            widget.node_label_mapping = lambda n: n['properties']['label']
+                            widget.node_label_style_mapping = lambda n: LabelStyle(color="#000000", text_position="center")
+                            widget.node_color_mapping = lambda n: n['properties']['color']
+                            
+                            def get_edge_style(edge):
+                                props = edge['properties']
+                                d_str = props.get('dash', 'solid')
+                                if d_str == 'dashed': 
+                                    d_style = DashStyle.DASH
+                                elif d_str == 'dotted': 
+                                    d_style = DashStyle.DOT
+                                else: 
+                                    d_style = DashStyle.SOLID
+                                    
+                                return EdgeStyle(
+                                    color=props.get('color', 'black'),
+                                    dash_style=d_style,
+                                    directed=False,
+                                    thickness=props.get('thickness', 1.0)
+                                )
+                            
+                            widget.edge_styles_mapping = get_edge_style
+                            widget.edge_label_mapping = lambda e: e['properties']['label']
+                            
+                            widget.height = 500
+                            widget.show(key="corr_network_graph", graph_layout=Layout.ORGANIC)
+                        else:
+                            st.info("No correlations found meeting the criteria.")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
 
