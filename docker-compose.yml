@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cohort-app:
+    build: .
+    image: cohort-monitoring-app:latest
+    container_name: cohort_monitoring_app
+    ports:
+      - "8501:8501"
+    volumes:
+      # Persist data and logs
+      - ./data:/app/data
+      # Allow configuration updates without rebuild
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

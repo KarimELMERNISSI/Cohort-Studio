@@ -7,8 +7,15 @@ import pandas as pd
 
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
-    def __init__(self, db_path="cohort_data.duckdb"):
-        self.db_path = db_path
+    def __init__(self, db_path=":memory:"):
+        self.dataset_dir = os.path.join("data", "datasets")
+        self.stats_dir = os.path.join("data", "stats")
+        self.db_path = os.path.join(self.dataset_dir, "cohort_data.duckdb")
+        
+        # Ensure directories exist
+        os.makedirs(self.dataset_dir, exist_ok=True)
+        os.makedirs(self.stats_dir, exist_ok=True)
+        
         # Don't keep a persistent connection - open/close as needed
 
     def _get_connection(self):
@@ -21,7 +28,7 @@ class DBManager:
 
     def _get_next_version(self, base_name):
         """Determines the next version number for a given base name."""
-        files = glob.glob(f"{base_name}_v*.parquet")
+        files = glob.glob(os.path.join(self.dataset_dir, f"{base_name}_v*.parquet"))
         if not files:
             return 1
         versions = []
@@ -35,13 +42,14 @@ class DBManager:
                 continue
         return max(versions) + 1 if versions else 1
 
-    def save_dataframe(self, df, name="main_data"):
+    def save_dataframe(self, df, name="main_data", folder=None):
         """Persists a pandas DataFrame to a Parquet file via DuckDB (Low level)."""
         con = self._get_connection()
         if con is None:
             return False, "Database connection not available"
         try:
-            file_path = f"{name}.parquet"
+            target_folder = folder if folder else self.dataset_dir
+            file_path = os.path.join(target_folder, f"{name}.parquet")
             con.execute(f"COPY (SELECT * FROM df) TO '{file_path}' (FORMAT PARQUET)")
             return True, f"Data saved to '{file_path}'"
         except Exception as e:
@@ -57,7 +65,7 @@ class DBManager:
         try:
             version = self._get_next_version(base_name)
             file_name = f"{base_name}_v{version}"
-            file_path = f"{file_name}.parquet"
+            file_path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
             
             # Use DuckDB to write parquet efficiently
             con.execute(f"COPY (SELECT * FROM df) TO '{file_path}' (FORMAT PARQUET)")
@@ -67,13 +75,14 @@ class DBManager:
         finally:
             con.close()
 
-    def load_dataframe(self, name="main_data"):
+    def load_dataframe(self, name="main_data", folder=None):
         """Loads a Parquet file into a pandas DataFrame via DuckDB (Low level)."""
         con = self._get_connection()
         if con is None:
             return None, "Database connection not available"
         try:
-            file_path = f"{name}.parquet"
+            target_folder = folder if folder else self.dataset_dir
+            file_path = os.path.join(target_folder, f"{name}.parquet")
             df = con.execute(f"SELECT * FROM read_parquet('{file_path}')").df()
             return df, f"Data loaded from '{file_path}'"
         except Exception as e:
@@ -92,17 +101,18 @@ class DBManager:
 
     def get_available_datasets(self):
         """List available parquet files in the current directory, sorted by modification time."""
-        files = glob.glob("*.parquet")
+        # files = glob.glob("*.parquet")
+        files = glob.glob(os.path.join(self.dataset_dir, "*.parquet"))
         # Filter out stats files and temp files
-        dataset_files = [f for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
+        dataset_files = [f for f in files if not os.path.basename(f).startswith("stats_") and not os.path.basename(f).startswith("tmp_")]
         # Sort by modification time (newest first)
         dataset_files.sort(key=os.path.getmtime, reverse=True)
-        return [f.replace(".parquet", "") for f in dataset_files]
+        return [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
 
     def save_stats(self, df, dataset_name, stats_type):
         """Save statistical results to parquet cache."""
-        return self.save_dataframe(df, f"stats_{stats_type}_{dataset_name}")
+        return self.save_dataframe(df, f"stats_{stats_type}_{dataset_name}", folder=self.stats_dir)
 
     def load_stats(self, dataset_name, stats_type):
         """Load statistical results from parquet cache."""
-        return self.load_dataframe(f"stats_{stats_type}_{dataset_name}")
+        return self.load_dataframe(f"stats_{stats_type}_{dataset_name}", folder=self.stats_dir)

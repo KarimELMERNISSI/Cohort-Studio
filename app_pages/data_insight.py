@@ -33,10 +33,46 @@ def get_taxonomy_versions():
 from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle, NodeStyle, NodeShape
 
 # ==========================================
+# ==========================================
 # 1. GRAPH HELPER FUNCTIONS
 # ==========================================
 
-def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None):
+def repair_taxonomy_links(taxonomy, formulas_registry):
+    """
+    Ensures taxonomy variables have correct related_formula_ids based on registry.
+    Run this on load to fix desynchronized files.
+    """
+    if not taxonomy or not formulas_registry:
+        return taxonomy
+        
+    # Create reverse map of formula usage
+    var_to_formulas = {} # var_id -> set(f_id)
+    
+    for f_id, f_data in formulas_registry.items():
+        # Inputs
+        for inp in f_data.get('input_variables', []):
+            if inp not in var_to_formulas: var_to_formulas[inp] = set()
+            var_to_formulas[inp].add(f_id)
+            
+        # Output
+        out = f_data.get('output_variable')
+        if out:
+             if out not in var_to_formulas: var_to_formulas[out] = set()
+             var_to_formulas[out].add(f_id)
+             
+    # Update Taxonomy
+    for var_id, f_ids in var_to_formulas.items():
+        if var_id in taxonomy:
+            # Get existing
+            current = set(taxonomy[var_id].get('related_formula_ids', []))
+            # Merge
+            new_set = current.union(f_ids)
+            if len(new_set) > len(current):
+                taxonomy[var_id]['related_formula_ids'] = list(new_set)
+                
+    return taxonomy
+
+def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None, formula_search_query=None):
     nodes = []
     edges = []
     existing_node_ids = set()
@@ -71,11 +107,73 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
             ))
             existing_node_ids.add(safe_id)
 
+    # --- Pre-compute Lookups for Robust Matching ---
+    std_to_orig = {}
+    
+    for k, v in taxonomy_data.items():
+        # Standard Name Lookup
+        s_name = str(v.get('standard_name', '')).lower()
+        if s_name: std_to_orig[s_name] = k
+
+    # Helper to resolve ID (Shared Logic)
+    def resolve_id(raw_name):
+        r = str(raw_name).strip()
+        r_lower = r.lower()
+        
+        # 1. Check if ID exists directly (in existing nodes or taxonomy)
+        if r in existing_node_ids: return r
+        if r in taxonomy_data: return r
+        if full_taxonomy_ref and r in full_taxonomy_ref: return r
+        
+        # 2. Check Standard Name (Exact & Case-insensitive)
+        if r_lower in std_to_orig: return std_to_orig[r_lower]
+        
+        # Check Standard Name in FULL taxonomy if available
+        if full_taxonomy_ref:
+                for k, v in full_taxonomy_ref.items():
+                    if str(v.get('standard_name', '')).lower() == r_lower:
+                        return k
+
+        # 3. Check if 'r' is a substring of any Standard Name (Fuzzy)
+        # (Only if r is long enough to be significant)
+        if len(r) > 4:
+            for s_name, t_id in std_to_orig.items():
+                if r_lower in s_name or s_name in r_lower:
+                    return t_id
+                    
+        return r # Fallback to raw (External)
+
+
+    # --- FILTER PRE-PASS: Identify allowed Variables if Formula Search is active ---
+    allowed_var_ids = None    
+    if formula_search_query and formulas_registry:
+        allowed_var_ids = set()
+        
+        for f_id, f_data in formulas_registry.items():
+            f_name = f_data.get('name', f_id)
+            f_desc = f_data.get('description', '')
+            
+            # Check match
+            search_text = f"{f_name} {f_desc} {str(f_data.get('input_variables', []))} {str(f_data.get('output_variable', ''))}".lower()
+            if formula_search_query in search_text:
+                # Add inputs
+                for inp in f_data.get('input_variables', []):
+                    allowed_var_ids.add(resolve_id(inp))
+                # Add output
+                out = f_data.get('output_variable')
+                if out:
+                    allowed_var_ids.add(resolve_id(out))
+
     # --- Main Parsing Loop ---
     # 1. Variables & Categories
     for var_id, attributes in taxonomy_data.items():
         var_id_str = str(var_id)
         
+        # STRICT FILTER CHECK
+        if allowed_var_ids is not None:
+            if var_id_str not in allowed_var_ids:
+                continue
+
         # Variable Node
         node_type = attributes.get("node_type", "Input")
         # Remap Input -> Input-Internal
@@ -106,55 +204,19 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
 
     # 2. Formula Logic (Structured vs Legacy)
     if formulas_registry:
-        # --- Pre-compute Lookups for Robust Matching ---
-        std_to_orig = {}
-        desc_to_orig = {} 
-        
-        for k, v in taxonomy_data.items():
-            # Standard Name Lookup
-            s_name = str(v.get('standard_name', '')).lower()
-            if s_name: std_to_orig[s_name] = k
-            
-            # Description Lookup (First 50 chars as a heuristic key? or just contain?)
-            # Let's use exact description match for now to be safe, or significant words?
-            # User said "description for context". 
-            # Let's try matching if the input var name is IN the description? No, risky.
-            # Let's just stick to Standard Name and maybe "Original Name" if stored.
-            pass
-
         # --- NEW STRUCTURED PATH ---
         for f_id, f_data in formulas_registry.items():
             f_name = f_data.get('name', f_id)
             f_desc = f_data.get('description', '')
-            formula_node_id = f"FORM_{f_id}" # Namespace it
             
-            # Helper to resolve ID
-            def resolve_id(raw_name):
-                r = str(raw_name).strip()
-                r_lower = r.lower()
-                
-                # 1. Check if ID exists directly
-                if r in existing_node_ids: return r
-                if r in taxonomy_data: return r
-                if full_taxonomy_ref and r in full_taxonomy_ref: return r
-                
-                # 2. Check Standard Name (Exact & Case-insensitive)
-                if r_lower in std_to_orig: return std_to_orig[r_lower]
-                
-                # Check Standard Name in FULL taxonomy if available
-                if full_taxonomy_ref:
-                     for k, v in full_taxonomy_ref.items():
-                         if str(v.get('standard_name', '')).lower() == r_lower:
-                             return k
+            # --- FORMULA QUERY FILTER ---
+            if formula_search_query:
+                # Check name, description, and inputs/outputs
+                search_text = f"{f_name} {f_desc} {str(f_data.get('input_variables', []))} {str(f_data.get('output_variable', ''))}".lower()
+                if formula_search_query not in search_text:
+                    continue
 
-                # 3. Check if 'r' is a substring of any Standard Name (Fuzzy)
-                # (Only if r is long enough to be significant)
-                if len(r) > 4:
-                    for s_name, t_id in std_to_orig.items():
-                        if r_lower in s_name or s_name in r_lower:
-                            return t_id
-                            
-                return r # Fallback to raw (External)
+            formula_node_id = f"FORM_{f_id}" # Namespace it
 
             # --- FILTER CHECK: Is this formula relevant? ---
             # It is relevant if:
@@ -275,7 +337,7 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
                              n.properties['role'] = 'derived-external'
                         else:
                              n.properties['type'] = 'Derived-Internal'
-                             n.properties['role'] = 'derived-internal'
+                             n.properties['role'] = 'derived'
 
                 edges.append(Edge(
                     start=formula_node_id, 
@@ -406,7 +468,46 @@ def get_edge_label_style(edge):
 # 2. MAIN APP LOGIC
 # ==========================================
 
+def load_and_repair_taxonomy(target_path, rag_manager=None):
+    """
+    Robust loading function:
+    1. Loads Taxonomy & Formulas
+    2. Repairs Links immediately
+    3. Updates Session State
+    4. Syncs with RAG Manager (if active)
+    """
+    try:
+        # 1. Load Taxonomy
+        with open(target_path, "r") as f:
+            loaded_taxonomy = json.load(f)
+
+        # 2. Load Formulas
+        formulas_path = os.path.join(os.path.dirname(target_path), "formulas_metadata.json")
+        loaded_formulas = {}
+        if os.path.exists(formulas_path):
+            with open(formulas_path, "r") as f:
+                loaded_formulas = json.load(f)
+
+        # 3. Repair Links
+        # This modifies loaded_taxonomy in place
+        loaded_taxonomy = repair_taxonomy_links(loaded_taxonomy, loaded_formulas)
+
+        # 4. Update Session State
+        st.session_state.offline_taxonomy = loaded_taxonomy
+        st.session_state.offline_formulas = loaded_formulas
+        st.session_state["loaded_path"] = target_path
+
+        # 5. Update RAG Manager
+        if rag_manager:
+            rag_manager.variable_taxonomy = loaded_taxonomy
+            rag_manager.formulas_registry = loaded_formulas
+            
+        return True, len(loaded_formulas)
+    except Exception as e:
+        return False, str(e)
+
 def app():
+
     # --- 1. Session State & Setup ---
     if 'offline_taxonomy' not in st.session_state:
         st.session_state.offline_taxonomy = None
@@ -438,6 +539,7 @@ def app():
     
     # Load Logic
     # Load Logic
+    # Load Logic
     avail_versions = get_taxonomy_versions()
     
     if avail_versions:
@@ -449,37 +551,14 @@ def app():
         target_path = v_paths[selected_v_label]
         
         if col_p1.button("📂 Load"):
-            try:
-                with open(target_path, "r") as f:
-                    loaded_taxonomy = json.load(f)
-                st.session_state.offline_taxonomy = loaded_taxonomy
-                st.session_state["loaded_path"] = target_path # Track for overwrite
-                
-                if rag_active:
-                    rag_manager.variable_taxonomy = loaded_taxonomy
-                
-                # Load Formulas if present
-                # Path is .../vX/taxonomy_metadata.json -> .../vX/formulas_metadata.json
-                formulas_path = os.path.join(os.path.dirname(target_path), "formulas_metadata.json")
-
-                if os.path.exists(formulas_path):
-                    with open(formulas_path, "r") as f:
-                        loaded_formulas = json.load(f)
-                    st.session_state.offline_formulas = loaded_formulas
-                    st.toast(f"Loaded {len(loaded_formulas)} formulas from disk.", icon="🧮")
-                    if rag_active:
-                        rag_manager.formulas_registry = loaded_formulas
-                else:
-                    st.toast(f"No formula file found at {formulas_path}", icon="⚠️")
-                    st.session_state.offline_formulas = {}
-                    if rag_active:
-                        rag_manager.formulas_registry = {}
-                
-                st.toast(f"Loaded {selected_v_label} successfully!", icon="✅")
-                # Force rerun to update UI
+            success, info = load_and_repair_taxonomy(target_path, rag_manager if rag_active else None)
+            
+            if success:
+                st.toast(f"Loaded {info} formulas and synced!", icon="✅")
+                # Trigger a single rerun to refresh UI with new state
                 st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Load failed: {e}")
+            else:
+                 st.sidebar.error(f"Load failed: {info}")
     else:
         col_p1.warning("No saved versions.")
 
@@ -779,7 +858,7 @@ def app():
     )
 
     # --- Main Content Tabs ---
-    tab_overview, tab_details, tab_formulas, tab_graph, tab_refine = st.tabs(["📋 Overview", "🔍 Variable Details", "🧮 Formulas Details", "🕸️ Knowledge Graph", "🛠️ Refinement"])
+    tab_graph, tab_overview, tab_details, tab_formulas,  tab_refine = st.tabs(["🕸️ Knowledge Graph", "📋 Overview", "🔍 Variable Details", "🧮 Formulas Details", "🛠️ Refinement"])
     
     # --- TAB 1: OVERVIEW ---
     with tab_overview:
@@ -997,7 +1076,7 @@ def app():
             st.warning(f"⚠️ Rendering {len(graph_source)} variables. The graph might be slow.")
 
         # Pass FULL taxonomy as reference to allow finding hidden nodes
-        nodes, edges = get_graph_data(graph_source, formulas_registry, full_taxonomy_ref=taxonomy)
+        nodes, edges = get_graph_data(graph_source, formulas_registry, full_taxonomy_ref=taxonomy, formula_search_query=f_query)
         
         # --- FILTERS ---
         if nodes:

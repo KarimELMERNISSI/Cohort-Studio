@@ -18,7 +18,7 @@ import streamlit as st
 from io import BytesIO
 from PIL import Image
 from utils.multipage import MultiPageApp
-from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, interpretation, yfiles_test, document_insight
+from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight
 
 def main():
 

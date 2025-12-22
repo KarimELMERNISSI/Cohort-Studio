@@ -173,27 +173,99 @@ def get_edge_label_style(edge):
 
 
 # ==========================================
-# 2. MAIN APP
+# 2. PERSISTENCE HELPERS
+# ==========================================
+import os
+import json
+import datetime
+
+GRAPH_STORAGE_DIR = os.path.join("data", "knowledge_graphs")
+
+def get_saved_graphs():
+    """Returns list of saved graph filenames (without extension)."""
+    if not os.path.exists(GRAPH_STORAGE_DIR):
+        return []
+    files = [f.replace(".json", "") for f in os.listdir(GRAPH_STORAGE_DIR) if f.endswith(".json")]
+    return sorted(files)
+
+def save_graph(name, graph_json, source_docs):
+    """Saves graph + metadata to disk."""
+    if not os.path.exists(GRAPH_STORAGE_DIR):
+        os.makedirs(GRAPH_STORAGE_DIR)
+        
+    safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_', '-')]).strip()
+    if not safe_name: return False, "Invalid name"
+    
+    filepath = os.path.join(GRAPH_STORAGE_DIR, f"{safe_name}.json")
+    
+    payload = {
+        "meta": {
+            "name": safe_name,
+            "date": str(datetime.datetime.now()),
+            "source_docs": source_docs
+        },
+        "graph": graph_json
+    }
+    
+    try:
+        with open(filepath, "w") as f:
+            json.dump(payload, f, indent=2)
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+def load_graph(name):
+    """Loads graph payload."""
+    filepath = os.path.join(GRAPH_STORAGE_DIR, f"{name}.json")
+    if not os.path.exists(filepath):
+        return None, "File not found"
+        
+    try:
+        with open(filepath, "r") as f:
+            payload = json.load(f)
+        return payload, None
+    except Exception as e:
+        return None, str(e)
+
+
+# ==========================================
+# 3. MAIN APP
 # ==========================================
 
 def app():
+    # st.title("📄 Document Knowledge Graph") # Removed per user preference previously
     
     rag_manager = st.session_state.get('rag_manager')
-    if not rag_manager or not rag_manager.initialized:
-        st.warning("Please initialize the AI System on the Home page first.")
-        return
-
+    # Use persistence even if RAG not active? Preferably yes, but RAG required for new generation.
+    
     # Sidebar: Document Selection
     st.sidebar.header("Documents Selection")
+
+    # --- PERSISTENCE: LOAD ---
+    saved_graphs = get_saved_graphs()
+    if saved_graphs:
+        with st.sidebar.expander("📂 Load Saved Analysis", expanded=False):
+            selected_load = st.selectbox("Select Analysis", [""] + saved_graphs, index=0)
+            if selected_load and st.button("📂 Load Graph"):
+                payload, err = load_graph(selected_load)
+                if err:
+                    st.sidebar.error(f"Load failed: {err}")
+                else:
+                    st.session_state.doc_graph_json = payload.get("graph")
+                    st.session_state.doc_graph_source = payload.get("meta", {}).get("source_docs", [])
+                    st.success(f"Loaded '{selected_load}'!")
+                    st.rerun()
     
-    docs = rag_manager.get_available_documents()
-    if not docs:
-        st.sidebar.error("No PDF documents found in 'DOCUMENTS' folder.")
-        # Provide upload option?
-        # Maybe later. For now, just list.
-        return
-        
-    selected_docs = st.sidebar.multiselect("Choose Document(s)", docs)
+    st.sidebar.divider()
+
+    docs = []
+    if rag_manager and rag_manager.initialized:
+        docs = rag_manager.get_available_documents()
+    
+    if not docs and (not rag_manager or not rag_manager.initialized):
+        st.sidebar.warning("⚠️ AI System not initialized. You can only load saved graphs.")
+    
+    selected_docs = st.sidebar.multiselect("Choose Document(s)", docs, default=st.session_state.get("doc_graph_source", []))
     
     # State Management for Graph
     if "doc_graph_json" not in st.session_state:
@@ -202,26 +274,42 @@ def app():
         st.session_state.doc_graph_source = []
         
     # Generate Button
-    if st.sidebar.button("✨ Generate Graph", type="primary", disabled=len(selected_docs)==0):
-        progress_bar = st.progress(0, text="Starting extraction...")
-        def update_progress(p, t):
-            progress_bar.progress(p, text=t)
+    if rag_manager and rag_manager.initialized:
+        if st.sidebar.button("✨ Generate Graph", type="primary", disabled=len(selected_docs)==0):
+            progress_bar = st.progress(0, text="Starting extraction...")
+            def update_progress(p, t):
+                progress_bar.progress(p, text=t)
+                
+            json_res, error = rag_manager.extract_merged_graph_from_docs(selected_docs, progress_callback=update_progress)
             
-        json_res, error = rag_manager.extract_merged_graph_from_docs(selected_docs, progress_callback=update_progress)
-        
-        progress_bar.empty()
-        
-        if error:
-            st.error(f"Extraction failed: {error}")
-        else:
-            st.session_state.doc_graph_json = json_res
-            st.session_state.doc_graph_source = selected_docs
-            st.success(f"Graph merged from {len(selected_docs)} documents!")
-            st.rerun()
+            progress_bar.empty()
+            
+            if error:
+                st.error(f"Extraction failed: {error}")
+            else:
+                st.session_state.doc_graph_json = json_res
+                st.session_state.doc_graph_source = selected_docs
+                st.success(f"Graph merged from {len(selected_docs)} documents!")
+                st.rerun()
 
     # Reset if document changed and graph exists for old one?
     if st.session_state.doc_graph_json and set(st.session_state.doc_graph_source) != set(selected_docs):
         st.warning(f"Displaying graph for **{len(st.session_state.doc_graph_source)} docs**. Click 'Generate Graph' to update.")
+        
+    # --- PERSISTENCE: SAVE ---
+    if st.session_state.doc_graph_json:
+        with st.sidebar.expander("💾 Save Analysis", expanded=True):
+            save_name = st.text_input("Analysis Name", placeholder="e.g. Heart Failure Study")
+            if st.button("💾 Save Graph"):
+                if not save_name:
+                    st.sidebar.error("Please enter a name.")
+                else:
+                    success, msg = save_graph(save_name, st.session_state.doc_graph_json, st.session_state.doc_graph_source)
+                    if success:
+                        st.sidebar.success("Saved!")
+                        # st.rerun() # Optional, to update load list
+                    else:
+                        st.sidebar.error(f"Save failed: {msg}")
 
     # Main Graph Display
     if st.session_state.doc_graph_json:
