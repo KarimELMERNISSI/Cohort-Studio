@@ -774,6 +774,9 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     print(f"Filtered correlations (threshold: {threshold}, top {top_n}) added to {sheet_name} sheet.")
 
 
+from functools import cache
+
+@cache
 def generate_palette(style: str = "blue_white_red") -> list:
     """
     Generate a diverging color palette for correlation matrix visualization.

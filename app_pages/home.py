@@ -285,13 +285,7 @@ class DataAnalyzer:
 
         self.high_cardinality_cat_cols = self._detect_high_cardinality_cat_columns()
         
-        # Print column states for debugging
-        print(f"\n############################################################\nNumeric columns: {self.numeric_cols}")
-        print(f"\nCategorical columns: {self.categorical_cols}")
-        print(f"\nDate columns: {self.date_cols}")
-        print(f"\nBinary columns: {self.binary_cols}")
-        print(f"\nLow-cardinality numeric columns: {self.low_cardinality_numeric_cols}")
-        print(f"\nHigh-cardinality categorical columns: {self.high_cardinality_cat_cols}\n############################################################")
+        # Debug logging removed for production - use logging module if needed
     
     def _detect_date_columns(self):
         """Detect columns that are likely dates, with additional checks for accuracy."""
@@ -386,7 +380,6 @@ def to_excel_sheets(dataframes_dict):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for sheet_name, df in dataframes_dict.items():
-            print(f"\n-----> sheet_name {sheet_name}")
             if type(sheet_name) != 'str':
                 sheet_name = str(sheet_name)
             df.to_excel(writer, sheet_name=sheet_name[:27], index=True)  # Excel sheet names max length: 31
@@ -635,16 +628,18 @@ def normality_test(column, method='dagostino'):
         print(f"Error in performing {method} test: {e}")
         return np.nan  # Handle errors (e.g., insufficient data)
 
-
-def get_statistics_dataframe(df, analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, db_manager=None):
+@st.cache_data(ttl=3600, show_spinner="Computing statistics...")
+def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
     """
     Creates new DataFrames with statistics for numerical and non-numerical columns.
     Tries to load from DuckDB/Parquet cache if dataset_name is provided.
+    
+    Note: Parameters starting with _ are excluded from hashing by Streamlit.
     """
     # Try to load cached stats if dataset name is available
-    if dataset_name and db_manager:
-        cached_num, _ = db_manager.load_stats(dataset_name, "numerical")
-        cached_cat, _ = db_manager.load_stats(dataset_name, "categorical")
+    if dataset_name and _db_manager:
+        cached_num, _ = _db_manager.load_stats(dataset_name, "numerical")
+        cached_cat, _ = _db_manager.load_stats(dataset_name, "categorical")
         
         # Simple validation: if cached stats exist and have same number of columns as current analysis
         # (This is a basic check; for production, hash the dataframe content)
@@ -653,6 +648,10 @@ def get_statistics_dataframe(df, analyzer, nb_top_categories=4, exclude_columns=
             # This is optional but recommended
             return cached_num, cached_cat
 
+    # Work with copies to avoid modifying original
+    df = _df.copy()
+    analyzer = _analyzer
+    
     # Exclude specified columns
     if exclude_columns:
         df = df.drop(columns=exclude_columns, errors='ignore')
@@ -680,8 +679,7 @@ def get_statistics_dataframe(df, analyzer, nb_top_categories=4, exclude_columns=
             if not pd.api.types.is_numeric_dtype(std_vals):
                 std_vals = pd.to_numeric(std_vals, errors='coerce')
             numerical_stats['std'] = std_vals.round(2)
-    except Exception as e:
-        print(f"Warning: Could not calculate std: {e}")
+    except Exception:
         numerical_stats['std'] = np.nan
 
     #Normality tests
@@ -762,9 +760,9 @@ def get_statistics_dataframe(df, analyzer, nb_top_categories=4, exclude_columns=
     numerical_stats = move_columns_to_front(numerical_stats, columns_to_move)
 
     # Cache the computed stats
-    if dataset_name and db_manager:
-        db_manager.save_stats(numerical_stats, dataset_name, "numerical")
-        db_manager.save_stats(categorical_stats, dataset_name, "categorical")
+    if dataset_name and _db_manager:
+        _db_manager.save_stats(numerical_stats, dataset_name, "numerical")
+        _db_manager.save_stats(categorical_stats, dataset_name, "categorical")
 
     return numerical_stats, categorical_stats
 
@@ -1173,7 +1171,7 @@ def app():
                         nb_top_categories=max_top_modalities, 
                         qual_var_threshold=50,
                         dataset_name=dataset_name,
-                        db_manager=st.session_state.db_manager
+                        _db_manager=st.session_state.db_manager
                     )
                     # Show available columns and let user select columns to retain
                     selected_quant_columns = st.multiselect(
@@ -1279,7 +1277,7 @@ def app():
                         nb_top_categories=max_top_modalities, 
                         qual_var_threshold=50,
                         dataset_name=dataset_name,
-                        db_manager=st.session_state.db_manager
+                        _db_manager=st.session_state.db_manager
                     )
                     
                     with col2:
