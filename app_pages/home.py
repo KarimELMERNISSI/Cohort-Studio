@@ -6,9 +6,11 @@ import numpy as np
 from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle
 import explore.corr_matrix as ecm
 import utils.visualization_utils as vu
+from utils.export_utils import to_excel, to_excel_sheets
+from utils.statistics_utils import normality_test, show_test_guidelines
 import os
 from manage.db_manager import DBManager
-from manage.rag_manager import RAGManager # test
+from manage.rag_manager import RAGManager
 import json
 import duckdb
 import time
@@ -364,28 +366,7 @@ class DataAnalyzer:
         """Detect categorical columns with many unique values"""
         return [col for col in self.categorical_cols 
                 if self.df[col].nunique() > 0.5 * len(self.df)]
-    
-    
-# Convert DataFrame to Excel for download using openpyxl
-def to_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=True, sheet_name='Sheet1')
-    return output.getvalue()
-
-def to_excel_sheets(dataframes_dict):
-    """
-    Converts multiple DataFrames into an Excel file with separate sheets.
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        for sheet_name, df in dataframes_dict.items():
-            if type(sheet_name) != 'str':
-                sheet_name = str(sheet_name)
-            df.to_excel(writer, sheet_name=sheet_name[:27], index=True)  # Excel sheet names max length: 31
-    return output.getvalue()
-
-
+     
 def display_category_box(title, columns):
     if len(columns)>0:
         st.markdown(
@@ -418,215 +399,6 @@ def move_columns_to_front(df, columns_to_move):
     
     # Reorder the DataFrame
     return df[columns_to_move + remaining_columns]
-
-
-def show_test_guidelines():
-    """
-    Displays a detailed explanation of the normality tests, including algorithms, formulas, and recommendations.
-    """
-    # Help menu checkbox with informative label
-    show_help = st.checkbox("Show Normality Test Selection Guide and Detailed Algorithm Explanations")
-
-    if show_help:
-        st.write("### Help Menu")
-        st.write("Select an option to learn more about normality tests.")
-
-        # Select what to display
-        display_option = st.radio("Choose what to display:", 
-                                  ["Normality Test Overview and Selection Guide", 
-                                   "Detailed Explanation of a Specific Algorithm"])
-
-        if display_option == "Normality Test Overview and Selection Guide":
-            st.write("### Normality Test Overview and Selection Guide")
-            st.write("""
-            Select the appropriate normality test based on your dataset's sample size and its distribution properties. 
-            Each test has specific advantages depending on the data size and the characteristics of the distribution.
-            """)
-
-            # Table for selecting method based on sample size
-            st.write("### Normality Test Selection Table")
-            data = {
-                "Test Name": ["Shapiro-Wilk", "D'Agostino-Pearson", "Anderson-Darling", "Kolmogorov-Smirnov"],
-                "Sample Size": ["3 < n < 50", "50 <= n <= 1000", "n > 5", "n > 50"],
-                "Characteristics": [
-                    "Most powerful for small datasets, detects deviations from normality",
-                    "Effective for moderate datasets with skewness and kurtosis",
-                    "Sensitive to tail deviations, good for large datasets",
-                    "Compares sample distribution with a known distribution, works well with large datasets"
-                ],
-                "Notes": [
-                    "Most powerful for small datasets, sensitive to all deviations from normality",
-                    "Useful for detecting skewness and kurtosis, requires moderate sample sizes",
-                    "Effective for datasets with heavy tails, highly sensitive to the distribution's tails",
-                    "Compares sample with a reference normal distribution, best for large datasets"
-                ]
-            }
-            st.table(data)
-
-            st.write("### Recommendations Based on Sample Size")
-            st.write("""
-            - **Small Samples (3 < n < 50)**: The **Shapiro-Wilk** test is the most powerful and recommended for small datasets.
-            - **Moderate Samples (50 <= n <= 1000)**: The **D'Agostino-Pearson** test detects skewness and kurtosis. The **Anderson-Darling** test is also a strong choice, especially for its sensitivity to tail deviations.
-            - **Large Samples (n > 1000)**: The **Kolmogorov-Smirnov** test is suitable for comparing the sample distribution to a normal distribution. The **Anderson-Darling** test remains valuable for evaluating tail behavior in large datasets.
-            """)
-
-            st.write("### Conclusion")
-            st.write("""
-            Selecting the appropriate normality test is crucial to understanding your dataset. Use the table and the recommendations above to choose the most suitable test based on sample size and distribution characteristics.
-            """)
-
-        elif display_option == "Detailed Explanation of a Specific Algorithm":
-            st.write("### Detailed Explanation of a Specific Algorithm")
-            st.write("Select a normality test to learn more about its methodology, when to use it, and the detailed algorithm.")
-
-            # Select normality test
-            test_choice = st.selectbox("Choose a normality test:", 
-                                       ["Shapiro-Wilk", "D'Agostino-Pearson", "Anderson-Darling", "Kolmogorov-Smirnov"])
-
-            # Select level of detail
-            detail_level = st.radio("Select Level of Detail:", ["Brief", "Detailed"])
-
-            if test_choice == "Shapiro-Wilk":
-                st.write("#### Shapiro-Wilk Test")
-                if detail_level == "Brief":
-                    st.write("""
-                    - **Best for**: Small to moderate datasets (3 < n < 5000).
-                    - **Characteristics**: Most powerful test for small datasets, highly sensitive to deviations from normality.
-                    - **When to Use**: Best for small to moderate datasets (3 < n < 5000).
-                    """)
-                else:
-                    st.latex(r"""
-                    W = \frac{\left( \sum_{i=1}^n a_i x_i \right)^2}{\sum_{i=1}^n (x_i - \bar{x})^2}
-                    """)
-                    st.write("""
-                    - **Variables**:
-                        - \( W \): Test statistic measuring the deviation of the sample from normality.
-                        - \( a_i \): Constants derived from the sample size, used to weight the ordered sample values.
-                        - \( x_i \): Ordered sample values.
-                        - \( \bar{x} \): Sample mean.
-                    - **Algorithm**:
-                        1. Calculate the test statistic \( W \).
-                        2. Compare \( W \) with a known distribution to determine if the data is normally distributed.
-                        3. Reject \( H_0 \) if the p-value is below the threshold (typically 0.05).
-                    - **When to Use**: The Shapiro-Wilk test is best for small to moderate datasets (3 < n < 5000), as it is the most powerful for detecting normality.
-                    """)
-
-            elif test_choice == "D'Agostino-Pearson":
-                st.write("#### D'Agostino-Pearson Test")
-                if detail_level == "Brief":
-                    st.write("""
-                    - **Best for**: Moderate-sized datasets (50 <= n <= 1000).
-                    - **Characteristics**: Detects skewness and kurtosis.
-                    - **When to Use**: Best for moderate sample sizes when there is significant skewness or kurtosis.
-                    """)
-                else:
-                    st.latex(r"""
-                    Z = \frac{\gamma_1}{\sigma_{\gamma_1}} + \frac{\gamma_2}{\sigma_{\gamma_2}}
-                    """)
-                    st.write("""
-                    - **Variables**:
-                        - \( Z \): Combined statistic for assessing deviations from normality.
-                        - \( \gamma_1 \): Skewness measure.
-                        - \( \gamma_2 \): Kurtosis measure.
-                        - \( \sigma_{\gamma_1} \): Standard error of skewness.
-                        - \( \sigma_{\gamma_2} \): Standard error of kurtosis.
-                    - **Algorithm**:
-                        1. Calculate skewness (\( \gamma_1 \)) and kurtosis (\( \gamma_2 \)).
-                        2. Compute the combined statistic \( Z \).
-                        3. Use the p-value to assess normality.
-                    - **When to Use**: Best for moderate-sized datasets (50 <= n <= 1000), particularly when skewness or kurtosis is noticeable.
-                    """)
-
-            elif test_choice == "Anderson-Darling":
-                st.write("#### Anderson-Darling Test")
-                if detail_level == "Brief":
-                    st.latex("""
-                    - **Best for**: Large datasets (n > 5).
-                    - **Characteristics**: Sensitive to the tails of the distribution.
-                    - **When to Use**: Particularly useful for large datasets where tail behavior is important.
-                    """)
-                else:
-                    st.latex(r"""
-                    A^2 = -n - S_n
-                    """)
-                    st.latex("""
-                    - **Variables**:
-                        - \( A^2 \): Test statistic for measuring deviation from normality.
-                        - \( n \): Sample size.
-                        - \( S_n \): Weighted sum of squared differences between the empirical distribution function (EDF) and the CDF of the normal distribution.
-                    - **Algorithm**:
-                        1. Compare the EDF with the normal distribution's CDF.
-                        2. Compute the statistic \( A^2 \).
-                        3. Use the p-value to assess normality.
-                    - **When to Use**: Effective for large datasets and datasets where tail deviations are important.
-                    """)
-
-            elif test_choice == "Kolmogorov-Smirnov":
-                st.write("#### Kolmogorov-Smirnov Test")
-                if detail_level == "Brief":
-                    st.latex("""
-                    - **Best for**: Large datasets (n > 50).
-                    - **Characteristics**: Compares sample distribution to normal distribution.
-                    - **When to Use**: Suitable for large datasets and when comparing the sample with a known distribution.
-                    """)
-                else:
-                    st.latex(r"""
-                    D = \sup_x |F_n(x) - F(x)|
-                    """)
-                    st.latex("""
-                    - **Variables**:
-                        - \( D \): Test statistic measuring the maximum difference between the empirical and normal CDFs.
-                        - \( F_n(x) \): Empirical distribution function (EDF).
-                        - \( F(x) \): Cumulative distribution function (CDF) of the normal distribution.
-                    - **Algorithm**:
-                        1. Compare the EDF with the CDF of the normal distribution.
-                        2. Compute the supremum (maximum difference).
-                        3. Use the p-value to assess normality.
-                    - **When to Use**: Ideal for large datasets (n > 50) and when comparing data against a known distribution.
-                    """)
-
-
-
-def normality_test(column, method='dagostino'):
-    """Perform specified normality test on a column and return the p-value."""
-    if column.isnull().all():  # Handle empty or all-NaN columns
-        return np.nan
-    
-    try:
-        # Shapiro-Wilk test for small sample sizes
-        if method == 'shapiro':
-            stat, p_value = stats.shapiro(column.dropna())
-        
-        # D'Agostino's K-squared test for moderate sample sizes
-        elif method == 'dagostino':
-            stat, p_value = stats.normaltest(column.dropna())
-        
-        # Kolmogorov-Smirnov test for large sample sizes
-        elif method == 'ks':
-            stat, p_value = stats.kstest(column.dropna(), 'norm', args=(np.mean(column.dropna()), np.std(column.dropna())))
-        
-        # Anderson-Darling test for normality
-        elif method == 'anderson':
-            result = stats.anderson(column.dropna(), dist='norm')
-            
-            # Determine the most significant level where the statistic exceeds the critical value
-            for i, critical_value in enumerate(result.critical_values):
-                if result.statistic > critical_value:
-                    # Return the corresponding significance level
-                    return result.significance_level[i] / 100.0
-            
-            # If statistic is smaller than all critical values, return the smallest significance level
-            return result.significance_level[-1] / 100.0
-        
-        else:
-            raise ValueError("Unknown method. Please choose 'shapiro', 'dagostino', 'ks', or 'anderson'.")
-        
-        # Return the rounded p-value
-        return round(p_value, 4)
-    
-    except Exception as e:
-        print(f"Error in performing {method} test: {e}")
-        return np.nan  # Handle errors (e.g., insufficient data)
 
 @st.cache_data(ttl=3600, show_spinner="Computing statistics...")
 def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
