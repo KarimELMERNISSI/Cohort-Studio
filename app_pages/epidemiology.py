@@ -4,7 +4,7 @@ import numpy as np
 from scipy import stats
 import plotly.express as px
 import plotly.graph_objects as go
-from app_pages.home import DataAnalyzer
+from utils.data_analyzer import DataAnalyzer
 import utils.visualization_utils as vu
 import utils.analysis_utils as au
 from io import BytesIO

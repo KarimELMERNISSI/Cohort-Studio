@@ -11,7 +11,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler # preprocess non
 from sklearn.compose import ColumnTransformer # split some of our processing to specific columns
 from sklearn.pipeline import Pipeline # to make our data pre-processing pipeline
 import streamlit as st
-from app_pages.home import DataAnalyzer
+from utils.data_analyzer import DataAnalyzer
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 class MissForestTransformer(TransformerMixin):

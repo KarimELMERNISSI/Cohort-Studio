@@ -4,7 +4,7 @@ import pandas as pd
 from io import BytesIO
 import numpy as np
 from scipy import stats
-from app_pages.home import DataAnalyzer
+from utils.data_analyzer import DataAnalyzer
 from app_pages.config_form import transform_expression, create_empty_config
 from app_pages.data_quality import render_dashboard
 from enrich import custom_metrics_and_filters as ecm

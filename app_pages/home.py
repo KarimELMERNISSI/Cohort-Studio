@@ -8,6 +8,7 @@ import explore.corr_matrix as ecm
 import utils.visualization_utils as vu
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, show_test_guidelines
+from utils.data_analyzer import DataAnalyzer
 import os
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
@@ -244,129 +245,6 @@ class RenameColumnsComponent:
         
 
         return st.session_state["working_df"]
-
-class DataAnalyzer:
-    """Helper class to analyze and validate data columns"""
-    def __init__(self, df):
-        #self.df = df
-        # Coerce object columns to numeric if possible
-        self.df = df #.apply(lambda col: pd.to_numeric(col, errors='coerce') if col.dtypes == 'object' else col)
-        self.date_formats = {}
-        self.analyze_columns()
-    
-    def refresh(self, df):
-        """Refresh the column metadata based on the latest DataFrame state."""
-        self.df = df #.apply(lambda col: pd.to_numeric(col, errors='coerce') if col.dtypes == 'object' else col)
-        self.date_formats = {}
-        self.analyze_columns()
-    
-    def analyze_columns(self):
-        """Analyze and categorize columns by data type"""
-        self.numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
-        self.categorical_cols = self.df.select_dtypes(include=['object', 'category']).columns.tolist()
-        self.date_cols = self._detect_date_columns()
-        self.binary_cols, self.num_binary_cols, self.non_num_binary_cols = self._detect_binary_columns()
-        self.low_cardinality_numeric_cols = self._detect_low_cardinality_numeric_columns()
-        self.non_binary_low_cardinality_numeric_cols = [col for col in self.low_cardinality_numeric_cols if col not in self.binary_cols]
-        self.timedelta_cols = self.df.select_dtypes(include=[np.timedelta64]).columns.tolist()
-        
-        # Remove low-cardinality numeric columns from numeric_cols and add to categorical_cols
-        for col in self.low_cardinality_numeric_cols:
-            if col in self.numeric_cols:
-                self.numeric_cols.remove(col)
-            if col not in self.categorical_cols and col not in self.binary_cols:
-                self.categorical_cols.append(col)
-        
-        # Remove date and time interval columns from categorical_cols and numeric_cols
-        for col in self.date_cols + self.timedelta_cols:
-            if col in self.categorical_cols:
-                self.categorical_cols.remove(col)
-            if col in self.numeric_cols:
-                self.numeric_cols.remove(col)
-
-
-        self.high_cardinality_cat_cols = self._detect_high_cardinality_cat_columns()
-        
-        # Debug logging removed for production - use logging module if needed
-    
-    def _detect_date_columns(self):
-        """Detect columns that are likely dates, with additional checks for accuracy."""
-        date_cols = []
-        # Expanded list of formats for date detection, including date-time
-        formats = [
-            "%d/%m/%Y",                # e.g., 31/12/2021
-            "%m/%d/%Y",                # e.g., 12/31/2021
-            "%Y-%m-%d",                # e.g., 2021-12-31
-            "%d-%m-%Y",                # e.g., 31-12-2021
-            "%m-%d-%Y",                # e.g., 12-31-2021
-            "%Y-%m-%d %H:%M:%S",       # e.g., 2021-12-31 23:59:59
-            "%Y-%m-%d %H:%M:%S.%f",    # e.g., 2021-12-31 23:59:59.123456
-            "%d %b %Y",                # e.g., 31 Dec 2021
-            "%b %d, %Y",               # e.g., Dec 31, 2021
-            "%Y/%m/%d",                # e.g., 2021/12/31
-            "%d-%b-%Y",                # e.g., 31-Dec-2021
-            "%Y-%m-%d %H:%M:%S",       # e.g., 2021-12-31 23:59:59
-            "%Y/%m/%d %H:%M:%S",       # e.g., 2021/12/31 23:59:59
-            "%Y-%m-%d %H:%M:%S.%f",    # e.g., 2021-12-31 23:59:59.123456
-            "%Y-%m-%d %H:%M:%S",       # Timestamps like 1959-05-01 00:00:00
-            "%Y-%m-%d %H:%M:%S.%f",    # Timestamps like 1959-05-01 00:00:00.000000
-            "%H:%M:%S",                # Time-only values, e.g., 23:59:59
-        ]
-        
-        for col in self.df.columns:
-            # Add proper date format columns
-            if pd.api.types.is_datetime64_any_dtype(self.df[col]):
-                date_cols.append(col)
-
-            # Proceed only if column is of object or string type, likely to contain dates
-            if pd.api.types.is_object_dtype(self.df[col]):
-                is_date_column = False
-                
-                # Check if values look like dates using regex (including times)
-                non_null_values = self.df[col].dropna().astype(str)
-                sample_size = min(10, len(non_null_values))
-                sample_values = non_null_values.sample(n=sample_size, replace=(sample_size > len(non_null_values)))
-                #sample_values = self.df[col].dropna().astype(str).sample(min(10, len(self.df[col])))  # Check a sample
-                if sample_values.str.match(r'(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{4}[-/]\d{1,2}[-/]\d{1,2} \d{1,2}:\d{2}(:\d{2})?)').all():
-                    # Try parsing each format to confirm it's a date column
-                    for fmt in formats:
-                        try:
-                            converted = pd.to_datetime(self.df[col], format=fmt, errors='coerce')
-                            non_na_dates = converted.notna().sum()
-                            if non_na_dates > len(self.df[col]) * 0.5:  # More than 50% are dates
-                                date_cols.append(col)
-                                self.date_formats[col] = fmt
-                                is_date_column = True
-                                break
-                        except Exception:
-                            continue
-                    
-                    if not is_date_column:
-                        # Fallback with general parsing
-                        try:
-                            converted = pd.to_datetime(self.df[col], errors='coerce')
-                            non_na_dates = converted.notna().sum()
-                            if non_na_dates > len(self.df[col]) * 0.5:
-                                date_cols.append(col)
-                                # No specific format detected for fallback
-                        except Exception:
-                            continue
-        return date_cols
-
-
-    def _detect_binary_columns(self):
-        """Detect columns with only two unique values, including numeric columns"""
-        return [col for col in self.df.columns if self.df[col].nunique() == 2],[col for col in self.df.select_dtypes(include=[np.number]).columns if self.df[col].nunique() == 2],[col for col in self.df.select_dtypes(exclude=[np.number]).columns if self.df[col].nunique() == 2]
-    
-    def _detect_low_cardinality_numeric_columns(self):
-        """Detect numeric columns with fewer or eq to 5 unique values to treat as categorical"""
-        return [col for col in self.numeric_cols if self.df[col].nunique() <= 10]
-    
-    def _detect_high_cardinality_cat_columns(self):
-        """Detect categorical columns with many unique values"""
-        return [col for col in self.categorical_cols 
-                if self.df[col].nunique() > 0.5 * len(self.df)]
-     
 def display_category_box(title, columns):
     if len(columns)>0:
         st.markdown(

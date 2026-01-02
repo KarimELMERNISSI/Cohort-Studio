@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, Union, List, Tuple, Callable
 from io import BytesIO
 from utils.multipage import load_dataframe, get_file_hash
 import enrich.external_data as eed
-from app_pages.home import DataAnalyzer
+from utils.data_analyzer import DataAnalyzer
 from fuzzywuzzy import fuzz
 import os
 import re
