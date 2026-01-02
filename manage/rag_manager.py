@@ -33,6 +33,14 @@ from .rag_taxonomy import TaxonomyMixin
 from .rag_documents import DocumentsMixin
 from .rag_computed_vars import ComputedVarsMixin
 
+# Import LLM utilities for reliable parsing
+from utils.llm_utils import (
+    parse_json_safe,
+    validate_and_parse,
+    StructuredOutputHelper,
+    clean_json_response,
+)
+
 
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY_IMPL"] = "false"
@@ -138,32 +146,34 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return []
 
     def _clean_json_response(self, text):
-        """Helper to clean JSON output from LLM."""
-        text = text.strip()
-        if not text: return "{}"
+        """
+        Clean JSON output from LLM using robust parsing utilities.
         
-        if "```" in text:
-            match = re.search(r"```(?:json)?(.*?)```", text, re.DOTALL)
-            if match:
-                return match.group(1).strip()
+        This method is a wrapper around llm_utils.clean_json_response
+        for backward compatibility with existing code.
+        """
+        return clean_json_response(text)
+    
+    def _parse_json_safe(self, text, default=None):
+        """
+        Safely parse JSON with multiple fallback strategies.
         
-        first_brace = text.find("{")
-        first_bracket = text.find("[")
-        
-        start = -1
-        end = -1
-        
-        if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
-            start = first_brace
-            end = text.rfind("}") + 1
-        elif first_bracket != -1:
-            start = first_bracket
-            end = text.rfind("]") + 1
-             
-        if start != -1 and end > start:
-            return text[start:end]
-             
-        return text
+        Uses llm_utils.parse_json_safe for robust parsing with:
+        - Automatic JSON extraction from markdown
+        - Trailing comma removal
+        - Bracket balancing
+        - AST literal_eval fallback
+        """
+        return parse_json_safe(text, default)
+    
+    def _get_structured_output_helper(self):
+        """Get a StructuredOutputHelper instance for schema-validated LLM calls."""
+        if not hasattr(self, '_output_helper') or self._output_helper is None:
+            if hasattr(self, 'llm'):
+                self._output_helper = StructuredOutputHelper(self.llm, max_retries=2)
+            else:
+                return None
+        return self._output_helper
 
     def _analyze_global_context(self, texts, dataset_columns=None):
         """Analyzes a sample of the documents and dataset columns to determine the global context."""

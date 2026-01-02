@@ -53,4 +53,8 @@ The **Home** page serves as the central command center for the Cohort Monitoring
 ## Technical Details
 
 * **File**: `app_pages/home.py`
+* **Utilities**:
+  * `utils/data_analyzer.py` - Column type detection
+  * `utils/export_utils.py` - Excel export
+  * `utils/statistics_utils.py` - Normality tests
 * **Dependencies**: `manage.db_manager`, `manage.rag_manager`, `explore.corr_matrix`, `scipy.stats`, `duckdb`

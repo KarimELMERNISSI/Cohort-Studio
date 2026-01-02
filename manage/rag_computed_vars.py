@@ -8,6 +8,21 @@ import json
 import re
 import ast
 import hashlib
+import logging
+
+# Import Pydantic schemas for structured output
+from .rag_schemas import (
+    TheoreticalConcept,
+    TheoreticalConceptList,
+    ComputedVariableSuggestion,
+    SuggestionResponse,
+    ProxyVariable,
+    AlternativeFormula,
+    FormulaCorrection,
+)
+from utils.llm_utils import parse_json_safe, validate_and_parse
+
+logger = logging.getLogger(__name__)
 
 
 class ComputedVarsMixin:
@@ -140,8 +155,15 @@ class ComputedVarsMixin:
         """
         try:
             response = self.llm.invoke(prompt)
-            return json.loads(self._clean_json_response(response.content))
-        except Exception:
+            # Use robust JSON parsing
+            concepts = parse_json_safe(response.content, default=[])
+            if not isinstance(concepts, list):
+                # Handle case where model returns object with concepts key
+                concepts = concepts.get('concepts', []) if isinstance(concepts, dict) else []
+            logger.debug(f"Parsed {len(concepts)} theoretical concepts")
+            return concepts
+        except Exception as e:
+            logger.warning(f"Failed to get theoretical formulas: {e}")
             return []
 
     def _map_formulas_to_data(self, concepts, columns, allow_missing, limit, use_taxonomy=True):
@@ -204,21 +226,35 @@ class ComputedVarsMixin:
         """
         try:
             response = self.llm.invoke(prompt)
-            return self._clean_json_response(response.content)
+            cleaned = self._clean_json_response(response.content)
+            
+            # Validate basic structure before returning
+            parsed = parse_json_safe(cleaned, default={"suggestions": []})
+            if not isinstance(parsed, dict) or 'suggestions' not in parsed:
+                parsed = {"suggestions": parsed if isinstance(parsed, list) else []}
+            
+            logger.debug(f"Mapped {len(parsed.get('suggestions', []))} formulas to data")
+            return json.dumps(parsed)
         except Exception as e:
+            logger.warning(f"Failed to map formulas to data: {e}")
             return json.dumps({"suggestions": [], "error": str(e)})
 
     def suggest_computed_variables_with_validation(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, progress_callback=None):
         """Wrapper that calls the pipeline and performs final AST validation with Auto-Correction."""
         
         json_str, error = self.suggest_computed_variables(columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, progress_callback)
-        if error: return None, error
+        if error: 
+            return None, error
         
+        # Use robust parsing with fallback
         try:
-            data = json.loads(json_str)
+            data = parse_json_safe(json_str, default={"suggestions": []})
+            if not isinstance(data, dict):
+                data = {"suggestions": data if isinstance(data, list) else []}
             suggestions = data.get("suggestions", [])
-        except Exception:
-            return None, "Failed to parse suggestions."
+        except Exception as e:
+            logger.warning(f"Failed to parse suggestions: {e}")
+            return None, f"Failed to parse suggestions: {e}"
 
         if progress_callback: progress_callback(60, "Validating and aligning variables...")
         validated = []
@@ -334,13 +370,13 @@ class ComputedVarsMixin:
                 """
                 
                 md_response = self.llm.invoke(markdown_prompt)
-                md_map = json.loads(self._clean_json_response(md_response.content))
+                md_map = parse_json_safe(md_response.content, default={})
                 
                 for s in validated:
                     if s['name'] in md_map:
                         s['markdown_formula'] = md_map[s['name']]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Markdown formula conversion failed: {e}")
 
         data['suggestions'] = validated
         return json.dumps(data), None
@@ -349,14 +385,26 @@ class ComputedVarsMixin:
         """Suggests a proxy variable when the target is missing."""
         query = f"Suggest a proxy for '{target_variable}' using [{', '.join(available_columns)}]. Return JSON with keys: proxy_found (bool), proxy_name, formula, explanation."
         try:
-            return json.loads(self._clean_json_response(self.llm.invoke(query).content))
-        except Exception:
+            response = self.llm.invoke(query)
+            # Use Pydantic validation for structured output
+            result, error = validate_and_parse(response.content, ProxyVariable)
+            if result:
+                return result.model_dump()
+            return parse_json_safe(response.content, default={"proxy_found": False})
+        except Exception as e:
+            logger.warning(f"suggest_proxy_variable failed: {e}")
             return {"proxy_found": False}
 
     def suggest_alternative_formula(self, target_concept, missing_variable, available_columns):
         """Suggests an alternative formula avoiding a missing variable."""
         query = f"Suggest alternative formula for '{target_concept}' avoiding '{missing_variable}' using [{', '.join(available_columns)}]. Return JSON with keys: alternative_found (bool), alternative_name, formula, explanation."
         try:
-            return json.loads(self._clean_json_response(self.llm.invoke(query).content))
-        except Exception:
+            response = self.llm.invoke(query)
+            # Use Pydantic validation for structured output
+            result, error = validate_and_parse(response.content, AlternativeFormula)
+            if result:
+                return result.model_dump()
+            return parse_json_safe(response.content, default={"alternative_found": False})
+        except Exception as e:
+            logger.warning(f"suggest_alternative_formula failed: {e}")
             return {"alternative_found": False}
