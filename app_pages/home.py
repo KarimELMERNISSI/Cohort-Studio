@@ -1528,7 +1528,7 @@ def app():
                             net_thresh = st.select_slider(
                                 "Minimum Edge Strength",
                                 options=["Negligible", "Weak", "Moderate", "Strong", "Very Strong"],
-                                value="Weak",
+                                value="Moderate",
                                 help="Filter edges to show only correlations with strength equal to or greater than this threshold."
                             )
                         with col_focus:

@@ -9,7 +9,15 @@ import time
 import logging
 import re
 
-# Disable ChromaDB telemetry to prevent errors
+# Import prompt functions
+from prompts import (
+    context_analysis,
+    column_renaming,
+    taxonomy_simple,
+    formula_enrichment,
+)
+
+
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY_IMPL"] = "false"
 
@@ -142,26 +150,14 @@ class RAGManager:
             columns_str = ", ".join(dataset_columns[:50]) 
             columns_context = f"\nDataset Variables Sample: [{columns_str}]"
 
-        prompt = f"""
-        Analyze the following text samples from a set of documents{ " and the provided dataset variable names" if dataset_columns else ""}. 
-        
-        Your task is to identify the context and define expert personas that would be best suited to answer questions about this data, depending on how strictly they must adhere to the documents.
+        columns_suffix = " and the provided dataset variable names" if dataset_columns else ""
+        prompt = context_analysis(
+            sample_text=sample_text[:4000],
+            columns_context=columns_context,
+            columns_suffix=columns_suffix
+        )
 
-        Return the result strictly as a JSON object with the following structure:
-        {{
-            "domain": "The specific medical or scientific domain (e.g. Cardiology, Oncology)",
-            "context_description": "A concise description (max 2 sentences) of the study type and document nature.",
-            "roles": {{
-                "strict": "A role title for high adherence (e.g. Clinical Data Auditor)",
-                "balanced": "A role title for balanced adherence (e.g. Principal Investigator)",
-                "creative": "A role title for low adherence/high creativity (e.g. Senior Medical Consultant)"
-            }}
-        }}
-        
-        Text Samples:
-        {sample_text[:4000]}
-        {columns_context}
-        """
+
         
         try:
             response = self.llm.invoke(prompt)
@@ -445,26 +441,14 @@ class RAGManager:
         else:
             task = "Suggest scientifically accurate and standard variable names based on the medical literature."
 
-        prompt = f"""
-        Role: {self.current_role}
-        Constraint: {self.adherence_guidance}
+        prompt = column_renaming(
+            current_role=self.current_role,
+            adherence_guidance=self.adherence_guidance,
+            task=task,
+            columns_str=columns_str,
+            context_text=context_text[:3000]
+        )
 
-        Task: {task}
-        
-        Input Data (Columns & Stats): 
-        {columns_str}
-        
-        Context from Documents:
-        {context_text[:3000]}
-        
-        Instructions:
-        1. Analyze the Input Data and Context.
-        2. Suggest a new name ONLY if the current name is ambiguous, non-standard, or can be improved.
-        3. Return a JSON object where keys are the ORIGINAL names and values are the NEW names.
-        4. Return ONLY valid JSON. No markdown formatting, no explanations outside the JSON.
-        
-        JSON Output:
-        """
 
         if progress_callback: progress_callback(60, "Generating suggestions...")
         try:
@@ -561,39 +545,14 @@ class RAGManager:
                 "clinical_usage": "Brief explanation of clinical relevance."
             """
 
-        prompt = f"""
-        Role: Medical Data Standardizer.
-        
-        Task: Create a taxonomy mapping for the provided dataset variables.
-        The goal is to map potentially cryptic or non-standard variable names to their Standard Medical Concept.
-        
-        Input Variables:
-        {columns_str}
-        
-        Context from Documents (Data Dictionaries / Protocols):
-        {context_text[:4000]}
-        
-        {manual_renames_str}
-        
-        Instructions:
-        1. Analyze each variable name and its statistics/values to infer its meaning.
-        2. USE THE CONTEXT from documents to find exact definitions if available.
-        3. Map it to a Standard Medical Concept (e.g. "sbp_val" -> "Systolic Blood Pressure").
-        4. Provide a brief description.
-        5. Return a JSON object where keys are the ORIGINAL variable names.
-        {deep_instructions}
-        
-        JSON Output Format:
-        {{
-            "original_var_name": {{
-                "standard_name": "Standard Concept Name",
-                "node_type": "Input",
-                "description": "Brief description of what this variable represents.",
-                "category": "Demographics/Vitals/Labs/etc"{json_structure_extra}
-            }},
-            ...
-        }}
-        """
+        prompt = taxonomy_simple(
+            columns_str=columns_str,
+            context_text=context_text[:4000],
+            manual_renames_str=manual_renames_str,
+            deep_instructions=deep_instructions,
+            json_structure_extra=json_structure_extra
+        )
+
         
         if progress_callback: progress_callback(50, "Generating taxonomy...")
         try:
@@ -727,38 +686,11 @@ class RAGManager:
             
         vars_desc = "\n".join(vars_desc_list)
         
-        prompt = f"""
-        Role: {self.current_role} & Expert System.
-        
-        Task: Identify standard medical formulas and scores that relate to the provided variables.
-        
-        Variables:
-        {vars_desc}
-        
-        Instructions:
-        1. Identify known medical formulas (e.g., BMI, eGFR, HAS-BLED, CHA2DS2-VASc, Unit Conversions) that involve these variables.
-        2. Create a "Formula Registry" entry for each.
-        3. Link variables to these formulas explicitly.
-        
-        Return JSON structure:
-        {{
-            "formulas": [
-                {{
-                    "id": "unique_slug_id", 
-                    "name": "Display Name",
-                    "description": "Brief description",
-                    "expression": "Mathematical expression or rule description",
-                    "input_variables": ["original_var_name_1", "original_var_name_2"],
-                    "output_variable": "original_var_name_result" // or null if derived variable not in list
-                }}
-            ],
-            "variable_updates": {{
-                "original_var_name": {{
-                    "involved_in_formulas": ["formula_id_1"] 
-                }}
-            }}
-        }}
-        """
+        prompt = formula_enrichment(
+            current_role=self.current_role,
+            vars_desc=vars_desc
+        )
+
         try:
             response = self.llm.invoke(prompt)
             cleaned_response = self._clean_json_response(response.content)

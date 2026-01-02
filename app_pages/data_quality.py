@@ -258,7 +258,7 @@ def render_dashboard(df, config):
                             show_col_labels=show_col_labels,
                             figsize=(18, 12)
                         )
-                        st.plotly_chart(fig_matrix, use_container_width=True)
+                        st.plotly_chart(fig_matrix, width='stretch')
                     except Exception as e:
                         st.error(f"Error generating Nullity Matrix: {e}")
                         
@@ -279,7 +279,7 @@ def render_dashboard(df, config):
                         color_discrete_sequence=['#636EFA']
                     )
                     fig_dist.update_layout(bargap=0.1)
-                    st.plotly_chart(fig_dist, use_container_width=True)
+                    st.plotly_chart(fig_dist, width='stretch')
                 # Compute correlation from the boolean matrix directly
                 # This is much faster and more robust
                 # Re-calculate nullity_df as it is needed here (was local to plot_nullity_matrix)

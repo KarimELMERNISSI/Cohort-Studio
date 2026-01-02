@@ -774,20 +774,52 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     print(f"Filtered correlations (threshold: {threshold}, top {top_n}) added to {sheet_name} sheet.")
 
 
-def generate_palette():
+def generate_palette(style: str = "blue_white_red") -> list:
     """
-    Generate a diverging palette similar to sns.diverging_palette(240, 10, s=70, l=85, as_cmap=True).
+    Generate a diverging color palette for correlation matrix visualization.
+    
+    Parameters:
+    style (str): Color style to use:
+        - "blue_white_red": Clear blue (negative) → white (zero) → red (positive)
+        - "coolwarm": Matplotlib's coolwarm colormap (color-blind friendly)
+        - "RdBu_r": Red-Blue reversed (classic scientific)
+        - "legacy": Original seaborn palette
     
     Returns:
-    list of str: List of color hex codes.
+    list of str: List of 256 color hex codes.
     """
-    palette = sns.diverging_palette(240, 10, s=70, l=85, as_cmap=True)
-    return [to_hex(palette(i)) for i in range(256)]
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    
+    if style == "blue_white_red":
+        # High-contrast blue-white-red gradient
+        # Deep blue → Light blue → White → Light red → Deep red
+        colors = [
+            "#053061",  # Deep blue (-1.0)
+            "#2166ac",  # Blue (-0.75)
+            "#4393c3",  # Light blue (-0.5)
+            "#92c5de",  # Pale blue (-0.25)
+            "#f7f7f7",  # White (0.0)
+            "#f4a582",  # Pale red (+0.25)
+            "#d6604d",  # Light red (+0.5)
+            "#b2182b",  # Red (+0.75)
+            "#67001f",  # Deep red (+1.0)
+        ]
+        cmap = LinearSegmentedColormap.from_list("blue_white_red", colors, N=256)
+    elif style == "coolwarm":
+        cmap = plt.get_cmap("coolwarm")
+    elif style == "RdBu_r":
+        cmap = plt.get_cmap("RdBu_r")
+    else:  # legacy
+        cmap = sns.diverging_palette(240, 10, s=70, l=85, as_cmap=True)
+    
+    return [to_hex(cmap(i / 255)) for i in range(256)]
 
 
 def get_color_from_value(value: float, min_val: float, max_val: float, palette: list) -> str:
     """
     Get the fill color based on the correlation value using an existing color palette.
+    Uses symmetric scaling centered at zero for correlation matrices.
 
     Parameters:
     value (float): The correlation value to determine the color.
@@ -798,16 +830,23 @@ def get_color_from_value(value: float, min_val: float, max_val: float, palette: 
     Returns:
     str: The color code in hexadecimal format.
     """
-    # Handle NaN values by defaulting to 0
+    # Handle NaN values by returning neutral color (white)
     if np.isnan(value):
-        value = 0
+        return palette[len(palette) // 2]  # Return middle color (white/neutral)
     
-    # Normalize value between 0 and 1
-    normalized_value = (value - min_val) / (max_val - min_val) if max_val != min_val else 0.5
+    # Use symmetric scaling centered at 0 for correlations
+    # This ensures 0 is always white/neutral regardless of data range
+    abs_max = max(abs(min_val), abs(max_val), 1.0)  # At least 1.0 for standard correlations
+    
+    # Normalize value to [-1, 1] range, then to [0, 1] for palette indexing
+    # value -1 → 0, value 0 → 0.5, value +1 → 1
+    normalized_value = (value + abs_max) / (2 * abs_max)
+    normalized_value = max(0, min(1, normalized_value))  # Clamp to [0, 1]
 
     # Find the closest color in the palette
     index = int(normalized_value * (len(palette) - 1))
     return palette[index]
+
 
 
 def _write_corr_to_sheet(

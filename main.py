@@ -20,6 +20,12 @@ from PIL import Image
 from utils.multipage import MultiPageApp
 from app_pages import home, data_preparation, statistical_tests, visualization, config_form, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight
 
+# Lazy import for RAG monitoring to avoid performance impact
+def load_rag_monitoring():
+    """Lazy loader for RAG monitoring page - only imported when accessed."""
+    from app_pages import rag_monitoring
+    return rag_monitoring.render_rag_monitoring
+
 def main():
 
     # Fetch icons from URLs
@@ -48,6 +54,7 @@ def main():
     app.add_page("Visualization", visualization.app, "📈")
     app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁")
     app.add_page("Configuration Form", config_form.app, "⚙️")
+    app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊")
     #app.add_page("yFiles Test", yfiles_test.app, "🧪")
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")
     

@@ -60,6 +60,9 @@ Cohort Monitoring Package/
 │   ├── visualization.py    # Advanced Plotting Suite
 │   ├── reproduce_analysis.py # Analysis Replay
 │   └── config_form.py      # Configuration Editor
+├── prompts/                # External LLM prompt templates
+│   ├── __init__.py         # Prompt loader utility
+│   └── *.md                # Individual prompt templates
 ├── data/                   # Data storage (Inputs, Outputs, ChromaDB)
 ├── enrich/                 # Core logic for data enrichment
 ├── explore/                # Exploratory data analysis scripts

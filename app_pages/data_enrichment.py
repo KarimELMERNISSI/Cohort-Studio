@@ -1547,7 +1547,7 @@ def define_new_variables(main_data):
                                 dot_code += f'  "Error" [shape=plaintext];\n'
                             
                             dot_code += '}'
-                            st.graphviz_chart(dot_code, use_container_width=True)
+                            st.graphviz_chart(dot_code, width='stretch')
 
                         with col_formula:
                             if 'markdown_formula' in sugg and sugg['markdown_formula']:
