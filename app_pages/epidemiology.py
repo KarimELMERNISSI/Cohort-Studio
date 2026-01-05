@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy import stats
+from scipy.stats import t as t_dist
 import plotly.express as px
 import plotly.graph_objects as go
 from utils.data_analyzer import DataAnalyzer
@@ -260,18 +261,114 @@ def run_univariate_analysis(df, analyzer):
         width="stretch"
     )
     
+    # ============ NEW: Epidemiological Interpretation Summary ============
+    st.subheader("📊 Results Interpretation")
+    
+    # Categorize results by significance and effect size
+    def classify_result(row):
+        """Classify result into 4 quadrants based on p-value and effect size."""
+        p_col = "P-Value (Adj)" if "P-Value (Adj)" in row.index else "P-Value"
+        p_val = row.get(p_col, 1.0)
+        es = abs(row.get('Effect Size', 0)) if not pd.isna(row.get('Effect Size', np.nan)) else 0
+        es_type = row.get('Effect Type', '')
+        
+        # Determine if effect size is small/medium/large based on effect type
+        if es_type in ["Cohen's d", "Rank-Biserial r"]:
+            is_large = es >= 0.5
+        elif es_type in ["Eta Squared", "η²H", "Epsilon Squared"]:
+            is_large = es >= 0.06
+        elif es_type == "Cramer's V":
+            is_large = es >= 0.3
+        elif es_type == "Odds Ratio":
+            is_large = es >= 1.5 or es <= 0.67  # Moderate effect
+        else:
+            is_large = es >= 0.3  # Default
+        
+        is_sig = p_val < 0.05
+        
+        if is_sig and is_large:
+            return "sig_large"
+        elif is_sig and not is_large:
+            return "sig_small"
+        elif not is_sig and is_large:
+            return "nonsig_large"
+        else:
+            return "nonsig_small"
+    
+    # Apply classification
+    if not results_df.empty:
+        classifications = results_df.apply(classify_result, axis=1)
+        
+        sig_large = results_df[classifications == "sig_large"]['Variable'].tolist()
+        sig_small = results_df[classifications == "sig_small"]['Variable'].tolist()
+        nonsig_large = results_df[classifications == "nonsig_large"]['Variable'].tolist()
+        nonsig_small = results_df[classifications == "nonsig_small"]['Variable'].tolist()
+        
+        col_int1, col_int2 = st.columns(2)
+        
+        with col_int1:
+            # Significant + Large Effect
+            if sig_large:
+                st.markdown(f"""
+                <div style="background-color: #c8e6c9; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #4caf50;">
+                    <strong>✅ Statistically AND Clinically Significant ({len(sig_large)})</strong><br/>
+                    <span style="font-size: 0.9em;">{', '.join(sig_large[:5])}{' ...' if len(sig_large) > 5 else ''}</span><br/>
+                    <em style="font-size: 0.8em; color: #2e7d32;">→ Strong evidence for real effect. Consider for clinical decision-making.</em>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Non-Significant + Small Effect
+            if nonsig_small:
+                st.markdown(f"""
+                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #81c784;">
+                    <strong>✅ True Negatives ({len(nonsig_small)})</strong><br/>
+                    <span style="font-size: 0.9em;">{', '.join(nonsig_small[:5])}{' ...' if len(nonsig_small) > 5 else ''}</span><br/>
+                    <em style="font-size: 0.8em; color: #388e3c;">→ No evidence of effect. Consistent with null hypothesis.</em>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col_int2:
+            # Significant + Small Effect
+            if sig_small:
+                st.markdown(f"""
+                <div style="background-color: #fff3e0; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #ff9800;">
+                    <strong>⚠️ Statistically Significant but Small Effect ({len(sig_small)})</strong><br/>
+                    <span style="font-size: 0.9em;">{', '.join(sig_small[:5])}{' ...' if len(sig_small) > 5 else ''}</span><br/>
+                    <em style="font-size: 0.8em; color: #e65100;">→ May be due to large sample size. Evaluate clinical relevance carefully.</em>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Non-Significant + Large Effect
+            if nonsig_large:
+                st.markdown(f"""
+                <div style="background-color: #ffcdd2; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #f44336;">
+                    <strong>❌ Possibly Underpowered ({len(nonsig_large)})</strong><br/>
+                    <span style="font-size: 0.9em;">{', '.join(nonsig_large[:5])}{' ...' if len(nonsig_large) > 5 else ''}</span><br/>
+                    <em style="font-size: 0.8em; color: #c62828;">→ Effect may exist but study too small. Check Power tab!</em>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Summary stats
+        n_sig = len(sig_large) + len(sig_small)
+        n_total = len(results_df)
+        st.caption(f"**Summary**: {n_sig}/{n_total} variables show p < 0.05 | {len(sig_large)} with meaningful effect size")
+    
     with st.expander("ℹ️ Methodological Guidance"):
         st.markdown("""
-        *   **Effect Size**: Indicates the magnitude of the difference.
-            *   *Cohen's d* (T-test): 0.2 (Small), 0.5 (Medium), 0.8 (Large).
-            *   *Rank-Biserial r* (Mann-Whitney): 0.1 (Small), 0.3 (Medium), 0.5 (Large).
-            *   *Eta Squared* (ANOVA): 0.01 (Small), 0.06 (Medium), 0.14 (Large).
-            *   *Epsilon Squared* (Kruskal-Wallis): 0.01 (Small), 0.06 (Medium), 0.14 (Large).
-            *   *Cramer's V* (Chi-Square): 0.1 (Small), 0.3 (Medium), 0.5 (Large).
-            *   *Odds Ratio* (Fisher): 1 (No association), >1 (Increased odds), <1 (Decreased odds).
-        *   **Multiple Testing**: When testing many variables, the chance of finding a "significant" result by random chance increases.
-            *   *Bonferroni**: Very conservative. Controls the Family-Wise Error Rate.
-            *   *Benjamini-Hochberg**: Controls the False Discovery Rate (FDR). Recommended for exploratory analysis.
+        **📐 Effect Size Interpretation** (indicates the magnitude of the difference):
+        
+        | Test | Effect Size | Small | Medium | Large |
+        |:-----|:------------|:-----:|:------:|:-----:|
+        | T-test | Cohen's d | 0.2 | 0.5 | 0.8 |
+        | Mann-Whitney | Rank-Biserial r | 0.1 | 0.3 | 0.5 |
+        | ANOVA | η² | 0.01 | 0.06 | 0.14 |
+        | Kruskal-Wallis | η²H | 0.01 | 0.06 | 0.14 |
+        | Chi-Square | Cramér's V | 0.1 | 0.3 | 0.5 |
+        | Fisher's Exact | Odds Ratio | 1 = No effect | >1 Increased | <1 Decreased |
+        
+        **🔬 Multiple Testing Correction**:
+        - **Bonferroni**: Very conservative. Controls Family-Wise Error Rate (FWER). Best for confirmatory analysis.
+        - **Benjamini-Hochberg (FDR)**: Controls False Discovery Rate. Recommended for exploratory analysis.
         """)
 
     # Detailed View
@@ -526,7 +623,11 @@ def visualize_result(df, group_col, target, analyzer):
         stats_df = df.groupby(group_col)[target].agg(['mean', 'count', 'std']).reset_index()
         # Calculate 95% CI
         # CI = 1.96 * (std / sqrt(n))
-        stats_df['ci'] = 1.96 * (stats_df['std'] / np.sqrt(stats_df['count']))
+        # Use Student's t-distribution for accurate CI (important for small samples)
+        stats_df['ci'] = stats_df.apply(
+            lambda row: t_dist.ppf(0.975, row['count'] - 1) * (row['std'] / np.sqrt(row['count'])) 
+            if row['count'] > 1 else 0, axis=1
+        )
         
         fig_ci = go.Figure()
         
@@ -817,29 +918,183 @@ def run_zscore_analysis(df, analyzer):
 def show_educational_content():
     st.header("📚 Statistical Test Guide")
     
-    with st.expander("Choosing the Right Test", expanded=True):
-        st.markdown("""
-        ### Flowchart for Group Comparisons
+    with st.expander("🧭 Choosing the Right Test - Decision Tree", expanded=True):
+        st.markdown("### Step-by-Step Test Selection Guide")
+        st.caption("Follow this decision tree to select the appropriate statistical test for your analysis.")
         
-        1.  **Are you comparing 2 Groups or >2 Groups?**
-            *   **2 Groups**: Go to Step 2.
-            *   **>2 Groups**: Go to Step 3.
+        # ============ NODE 1: Number of Groups ============
+        st.markdown("""
+        <div style="background-color: #e3f2fd; padding: 20px; border-radius: 12px; border: 2px solid #1976d2; margin: 10px 0;">
+            <h4 style="margin:0; color: #1976d2;">🔷 Node 1: How many groups are you comparing?</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Count the number of distinct categories in your grouping variable.</p>
+            <p style="margin: 0; font-size: 0.9em; color: #555;">
+                <em>Example: Treatment vs Control = 2 groups | Low/Medium/High dose = 3 groups</em>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_2g, col_3g = st.columns(2)
+        with col_2g:
+            st.markdown("##### ➡️ **2 Groups** → Go to Node 2A")
+        with col_3g:
+            st.markdown("##### ➡️ **3+ Groups** → Go to Node 2B")
+        
+        st.markdown("---")
+        
+        # ============ NODE 2: Variable Type ============
+        col_2a, col_2b = st.columns(2)
+        
+        with col_2a:
+            st.markdown("""
+            <div style="background-color: #fff3e0; padding: 18px; border-radius: 12px; border: 2px solid #f57c00; margin: 5px 0;">
+                <h4 style="margin:0; color: #f57c00;">🔶 Node 2A: What type of variable is your outcome? (2 Groups)</h4>
+                <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong></p>
+                <ul style="margin: 5px 0; font-size: 0.9em;">
+                    <li><strong>Numeric (Continuous)</strong>: Age, blood pressure, BMI, lab values</li>
+                    <li><strong>Categorical</strong>: Disease status, sex, treatment response (Yes/No)</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
             
-        2.  **Comparing 2 Groups (e.g., Treatment vs Control)**
-            *   *Is the Target Variable Numeric?*
-                *   **Yes**: Check Normality.
-                    *   **Normal**: Use **Student's t-test** (or Welch's if variances unequal).
-                    *   **Not Normal**: Use **Mann-Whitney U Test** (Non-parametric).
-            *   *Is the Target Variable Categorical?*
-                *   **Yes**: Use **Chi-Square Test** (or Fisher's Exact for small samples).
-                
-        3.  **Comparing >2 Groups (e.g., Low vs Med vs High Dose)**
-            *   *Is the Target Variable Numeric?*
-                *   **Yes**: Check Normality.
-                    *   **Normal**: Use **ANOVA (One-way)**.
-                    *   **Not Normal**: Use **Kruskal-Wallis Test** (Non-parametric).
-            *   *Is the Target Variable Categorical?*
-                *   **Yes**: Use **Chi-Square Test**.
+            st.markdown("##### ➡️ **Numeric** → Go to Node 3A")
+            st.markdown("##### ➡️ **Categorical** → Go to Node 3C")
+        
+        with col_2b:
+            st.markdown("""
+            <div style="background-color: #fff3e0; padding: 18px; border-radius: 12px; border: 2px solid #f57c00; margin: 5px 0;">
+                <h4 style="margin:0; color: #f57c00;">🔶 Node 2B: What type of variable is your outcome? (3+ Groups)</h4>
+                <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong></p>
+                <ul style="margin: 5px 0; font-size: 0.9em;">
+                    <li><strong>Numeric (Continuous)</strong>: Age, blood pressure, BMI, lab values</li>
+                    <li><strong>Categorical</strong>: Disease status, sex, treatment response (Yes/No)</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("##### ➡️ **Numeric** → Go to Node 3B")
+            st.markdown("##### ➡️ **Categorical** → Use **Chi-Square Test** ✅")
+        
+        st.markdown("---")
+        
+        # ============ NODE 3: Normality Check ============
+        st.markdown("""
+        <div style="background-color: #e8f5e9; padding: 20px; border-radius: 12px; border: 2px solid #4caf50; margin: 10px 0;">
+            <h4 style="margin:0; color: #388e3c;">🔷 Node 3: Is your data normally distributed?</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>Decision Criteria:</strong></p>
+            <table style="width:100%; font-size: 0.9em; margin-top: 10px;">
+                <tr>
+                    <td style="padding: 5px;"><strong>Test</strong></td>
+                    <td style="padding: 5px;"><strong>How to Check</strong></td>
+                    <td style="padding: 5px;"><strong>Interpretation</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;">Shapiro-Wilk Test</td>
+                    <td style="padding: 5px;">Run on each group separately</td>
+                    <td style="padding: 5px;">p > 0.05 → Normal ✅ | p < 0.05 → Non-Normal ❌</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;">Q-Q Plot</td>
+                    <td style="padding: 5px;">Visual inspection</td>
+                    <td style="padding: 5px;">Points on diagonal → Normal ✅ | Curved → Non-Normal ❌</td>
+                </tr>
+                <tr>
+                    <td style="padding: 5px;">Sample Size Rule</td>
+                    <td style="padding: 5px;">Check n per group</td>
+                    <td style="padding: 5px;">n ≥ 30 → CLT applies (parametric OK) | n < 30 → Check normality carefully</td>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_3a, col_3b = st.columns(2)
+        
+        with col_3a:
+            st.markdown("##### Node 3A (2 Groups, Numeric):")
+            st.markdown("➡️ **Normal** → Go to Node 4")
+            st.markdown("➡️ **Non-Normal** → Use **Mann-Whitney U Test** ✅")
+            st.caption("_Mann-Whitney compares ranks, not means. Robust to outliers._")
+        
+        with col_3b:
+            st.markdown("##### Node 3B (3+ Groups, Numeric):")
+            st.markdown("➡️ **Normal** → Go to Node 5")
+            st.markdown("➡️ **Non-Normal** → Use **Kruskal-Wallis Test** ✅")
+            st.caption("_Kruskal-Wallis is the non-parametric alternative to ANOVA._")
+        
+        st.markdown("---")
+        
+        # ============ NODE 3C: Categorical Decision ============
+        st.markdown("""
+        <div style="background-color: #f3e5f5; padding: 18px; border-radius: 12px; border: 2px solid #9c27b0; margin: 10px 0;">
+            <h4 style="margin:0; color: #7b1fa2;">🟣 Node 3C: Categorical Variable - Check Expected Frequencies</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Calculate expected cell counts in the contingency table.</p>
+            <ul style="margin: 5px 0; font-size: 0.9em;">
+                <li><strong>All expected counts ≥ 5</strong> → Use <strong>Chi-Square Test</strong> ✅</li>
+                <li><strong>Any expected count < 5</strong> → Use <strong>Fisher's Exact Test</strong> ✅</li>
+            </ul>
+            <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #555;">
+                <em>Expected count = (Row Total × Column Total) / Grand Total</em>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # ============ NODE 4: Equal Variances (2 Groups) ============
+        st.markdown("""
+        <div style="background-color: #fce4ec; padding: 18px; border-radius: 12px; border: 2px solid #e91e63; margin: 10px 0;">
+            <h4 style="margin:0; color: #c2185b;">🔷 Node 4: Are variances equal between groups? (2 Groups)</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
+            <ul style="margin: 5px 0; font-size: 0.9em;">
+                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>Student's t-test</strong> ✅</li>
+                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's t-test</strong> ✅</li>
+            </ul>
+            <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #555;">
+                <em>Welch's t-test is robust to unequal variances (heteroscedasticity) and is often recommended as the default choice.</em>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # ============ NODE 5: Equal Variances (3+ Groups) ============
+        st.markdown("""
+        <div style="background-color: #fce4ec; padding: 18px; border-radius: 12px; border: 2px solid #e91e63; margin: 10px 0;">
+            <h4 style="margin:0; color: #c2185b;">🔷 Node 5: Are variances equal between groups? (3+ Groups)</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
+            <ul style="margin: 5px 0; font-size: 0.9em;">
+                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>One-way ANOVA</strong> ✅</li>
+                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's ANOVA</strong> or <strong>Kruskal-Wallis</strong> ✅</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # ============ FINAL: Post-Hoc Tests ============
+        st.markdown("""
+        <div style="background-color: #e0f7fa; padding: 18px; border-radius: 12px; border: 2px solid #00bcd4; margin: 10px 0;">
+            <h4 style="margin:0; color: #0097a7;">📌 After the Test: Post-Hoc Analysis (for 3+ Groups)</h4>
+            <p style="margin: 10px 0 5px 0;"><strong>If the global test is significant (p < 0.05):</strong></p>
+            <ul style="margin: 5px 0; font-size: 0.9em;">
+                <li><strong>After ANOVA</strong> → Run <strong>Tukey's HSD</strong> (Honestly Significant Difference)</li>
+                <li><strong>After Kruskal-Wallis</strong> → Run <strong>Dunn's Test</strong> with Bonferroni correction</li>
+            </ul>
+            <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #555;">
+                <em>Post-hoc tests identify WHICH groups differ from each other.</em>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Legend
+        st.markdown("---")
+        st.markdown("#### 📋 Summary Table")
+        st.markdown("""
+        | Scenario | Normal Data | Non-Normal Data |
+        |:---------|:-----------:|:---------------:|
+        | **2 Groups, Numeric** | Student's / Welch's t-test | Mann-Whitney U |
+        | **3+ Groups, Numeric** | One-way ANOVA | Kruskal-Wallis |
+        | **2 Groups, Categorical** | Chi-Square / Fisher's Exact | Chi-Square / Fisher's Exact |
+        | **3+ Groups, Categorical** | Chi-Square | Chi-Square |
         """)
     
     st.divider()
@@ -874,18 +1129,18 @@ def show_educational_content():
         st.markdown("""
         **1. Mann-Whitney U Test**
         *   **Use**: Compare distributions of 2 independent groups.
-        *   **Assumptions**: Independent samples.
+        *   **Assumptions**: Independent samples, similar distribution shapes.
         *   **Effect Size**: Rank-Biserial Correlation ($r$).
         
         **2. Kruskal-Wallis Test**
         *   **Use**: Compare distributions of 3+ independent groups.
-        *   **Assumptions**: Independent samples.
-        *   **Effect Size**: Epsilon Squared ($\epsilon^2$).
+        *   **Assumptions**: Independent samples, similar distribution shapes.
+        *   **Effect Size**: Eta-Squared H ($\eta^2_H$).
         
         **3. Chi-Square Test of Independence**
         *   **Use**: Test association between two categorical variables.
-        *   **Assumptions**: Expected cell counts > 5.
-        *   **Effect Size**: Cramer's V.
+        *   **Assumptions**: Expected cell counts ≥ 5 (use Fisher's Exact otherwise).
+        *   **Effect Size**: Cramér's V.
         """)
         
     st.divider()
@@ -894,17 +1149,231 @@ def show_educational_content():
     **P-value** tells you *if* there is a difference. **Effect Size** tells you *how big* the difference is.
     
     | Test | Effect Size Metric | Small | Medium | Large |
-    | :--- | :--- | :--- | :--- | :--- |
+    | :--- | :--- | :---: | :---: | :---: |
     | **T-test** | Cohen's d | 0.2 | 0.5 | 0.8 |
     | **Mann-Whitney** | Rank-Biserial r | 0.1 | 0.3 | 0.5 |
     | **ANOVA** | Eta Squared ($\eta^2$) | 0.01 | 0.06 | 0.14 |
-    | **Kruskal-Wallis** | Epsilon Squared ($\epsilon^2$) | 0.01 | 0.06 | 0.14 |
-    | **Chi-Square** | Cramer's V | 0.1 | 0.3 | 0.5 |
+    | **Kruskal-Wallis** | Eta-Squared H ($\eta^2_H$) | 0.01 | 0.06 | 0.14 |
+    | **Chi-Square** | Cramér's V | 0.1 | 0.3 | 0.5 |
+    | **Fisher's Exact** | Odds Ratio | - | - | - |
+    
+    > 💡 **Tip**: An Odds Ratio of 1 means no association. OR > 1 indicates increased odds, OR < 1 indicates decreased odds.
     """)
+    
+    # Key Assumptions Section
+    st.divider()
+    st.subheader("🔍 Key Assumptions to Check")
+    st.markdown("""
+    | Assumption | Why It Matters | How to Check |
+    | :--- | :--- | :--- |
+    | **Independence** | Observations must not influence each other | Study design review |
+    | **Normality** | Required for parametric tests | Shapiro-Wilk test, Q-Q plot |
+    | **Homogeneity of Variance** | Groups should have similar variances | Levene's test |
+    | **Sample Size** | n ≥ 30 per group for CLT to apply | Check group sizes |
+    
+    > ⚠️ **Small samples (n < 30)**: Prefer non-parametric tests or verify normality carefully.
+    """)
+    
+    # NEW: Epidemiological Interpretation Tables
+    st.divider()
+    st.subheader("📋 Epidemiological Interpretation Guide")
+    
+    # Tab system for different tables
+    epi_tabs = st.tabs(["🎯 P-value vs Effect Size", "⚠️ Type I & II Errors", "📊 Odds Ratio Guide", "📏 Sample Size Rules"])
+    
+    with epi_tabs[0]:
+        st.markdown("### Statistical Significance vs Clinical Significance")
+        st.markdown("""
+        <table style="width:100%; border-collapse: collapse; text-align: center;">
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 12px;"></th>
+                <th style="border: 1px solid #ddd; padding: 12px;" colspan="2">Effect Size</th>
+            </tr>
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 12px;">P-value</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">Small / Negligible</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">Medium / Large</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">p < 0.05<br/>(Significant)</td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #fff3e0;">
+                    <strong>⚠️ Statistically significant</strong><br/>
+                    but likely NOT clinically meaningful<br/>
+                    <em>→ May be due to large sample size</em>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
+                    <strong>✅ Both statistically AND clinically significant</strong><br/>
+                    <em>→ Strong evidence for real effect</em>
+                </td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">p ≥ 0.05<br/>(Not Significant)</td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #e8f5e9;">
+                    <strong>✅ True negative</strong><br/>
+                    No effect detected, none exists<br/>
+                    <em>→ Consistent with null hypothesis</em>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #ffcdd2;">
+                    <strong>❌ Possibly underpowered</strong><br/>
+                    Effect may exist but study too small<br/>
+                    <em>→ Check power, consider larger study</em>
+                </td>
+            </tr>
+        </table>
+        """, unsafe_allow_html=True)
+        
+        st.info("**Key insight**: A small p-value does NOT mean a large effect. Always report both p-value AND effect size!")
+    
+    with epi_tabs[1]:
+        st.markdown("### Type I and Type II Errors (α and β)")
+        st.markdown("""
+        <table style="width:100%; border-collapse: collapse; text-align: center;">
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 12px;"></th>
+                <th style="border: 1px solid #ddd; padding: 12px;" colspan="2">Reality (Truth)</th>
+            </tr>
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 12px;">Test Result</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">H₀ True (No Effect)</th>
+                <th style="border: 1px solid #ddd; padding: 12px;">H₁ True (Effect Exists)</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">Reject H₀<br/>(p < α)</td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #ffcdd2;">
+                    <strong>❌ Type I Error (α)</strong><br/>
+                    False Positive<br/>
+                    <em>Probability = α (usually 0.05)</em>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
+                    <strong>✅ Correct Decision</strong><br/>
+                    True Positive (Power = 1-β)<br/>
+                    <em>Goal: Power ≥ 0.80</em>
+                </td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">Fail to Reject H₀<br/>(p ≥ α)</td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
+                    <strong>✅ Correct Decision</strong><br/>
+                    True Negative<br/>
+                    <em>Probability = 1-α</em>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 12px; background-color: #fff3e0;">
+                    <strong>⚠️ Type II Error (β)</strong><br/>
+                    False Negative<br/>
+                    <em>Missed real effect</em>
+                </td>
+            </tr>
+        </table>
+        """, unsafe_allow_html=True)
+        
+        col_err1, col_err2 = st.columns(2)
+        with col_err1:
+            st.warning("**Type I (α = 0.05)**: 5% chance of finding an effect when none exists")
+        with col_err2:
+            st.warning("**Type II (β = 0.20)**: 20% chance of missing a real effect (if Power = 80%)")
+    
+    with epi_tabs[2]:
+        st.markdown("### Odds Ratio (OR) Interpretation Guide")
+        st.markdown("""
+        | OR Value | Interpretation | Clinical Meaning |
+        |:--------:|:---------------|:-----------------|
+        | **OR = 1** | No association | Exposure does not affect outcome |
+        | **OR > 1** | Positive association | Exposure **increases** odds of outcome |
+        | **OR < 1** | Negative association | Exposure **decreases** odds of outcome (protective) |
+        | **OR = 2** | 2x higher odds | Exposed have **double** the odds vs unexposed |
+        | **OR = 0.5** | 50% lower odds | Exposed have **half** the odds vs unexposed |
+        """)
+        
+        st.markdown("#### Strength of Association (for OR):")
+        st.markdown("""
+        | OR Range | Strength |
+        |:--------:|:---------|
+        | 1.0 - 1.5 | Weak |
+        | 1.5 - 3.0 | Moderate |
+        | 3.0 - 10.0 | Strong |
+        | > 10.0 | Very Strong |
+        
+        > 💡 **Note**: Same thresholds apply for OR < 1 (use 1/OR for comparison)
+        """)
+        
+        st.info("**Confidence Interval**: If 95% CI includes 1, the OR is NOT statistically significant")
+    
+    with epi_tabs[3]:
+        st.markdown("### Minimum Sample Size Recommendations")
+        st.markdown("""
+        | Analysis Type | Minimum n per group | Notes |
+        |:--------------|:-------------------:|:------|
+        | **T-test / ANOVA** | 30 | For CLT to apply |
+        | **Mann-Whitney / Kruskal** | 15-20 | Non-parametric, more robust |
+        | **Chi-Square** | 5 per cell (expected) | Use Fisher's if < 5 |
+        | **Correlation** | 30 | For stable estimates |
+        | **Regression** | 10-20 per predictor | Rule of thumb |
+        """)
+        
+        st.markdown("#### Effect Size → Required Sample Size (Power = 80%, α = 0.05)")
+        st.markdown("""
+        | Effect Size (Cohen's d) | n per group (approx) |
+        |:-----------------------:|:--------------------:|
+        | Small (d = 0.2) | ~400 |
+        | Medium (d = 0.5) | ~65 |
+        | Large (d = 0.8) | ~25 |
+        
+        > 📌 **Use the Power & Sample Size tab** for precise calculations based on your data!
+        """)
 
 def run_power_analysis(df, analyzer):
     st.header("Power Analysis & Sample Size Calculator")
     st.markdown("Calculate sample size or power for your study design.")
+    
+    # ============ Epidemiological Context ============
+    with st.expander("📋 Understanding Power Analysis", expanded=False):
+        st.markdown("""
+        ### Why Power Matters in Epidemiology
+        
+        **Statistical Power** is the probability of detecting a TRUE effect when it exists.
+        
+        | Term | Symbol | Definition | Goal |
+        |:-----|:------:|:-----------|:----:|
+        | **Significance Level** | α | Probability of Type I error (false positive) | 0.05 |
+        | **Power** | 1-β | Probability of detecting true effect | ≥ 0.80 |
+        | **Type II Error** | β | Probability of missing true effect | ≤ 0.20 |
+        """)
+        
+        st.markdown("""
+        <table style="width:100%; border-collapse: collapse; text-align: center; margin: 15px 0;">
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 10px;"></th>
+                <th style="border: 1px solid #ddd; padding: 10px;">H₀ True (No Effect)</th>
+                <th style="border: 1px solid #ddd; padding: 10px;">H₁ True (Effect Exists)</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 10px; font-weight: bold;">Reject H₀</td>
+                <td style="border: 1px solid #ddd; padding: 10px; background-color: #ffcdd2;">
+                    <strong>Type I Error (α=0.05)</strong><br/>False Positive
+                </td>
+                <td style="border: 1px solid #ddd; padding: 10px; background-color: #c8e6c9;">
+                    <strong>True Positive (Power)</strong><br/>Correct Detection
+                </td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 10px; font-weight: bold;">Fail to Reject H₀</td>
+                <td style="border: 1px solid #ddd; padding: 10px; background-color: #c8e6c9;">
+                    <strong>True Negative</strong><br/>Correct Non-Detection
+                </td>
+                <td style="border: 1px solid #ddd; padding: 10px; background-color: #fff3e0;">
+                    <strong>Type II Error (β)</strong><br/>Missed Real Effect
+                </td>
+            </tr>
+        </table>
+        """, unsafe_allow_html=True)
+        
+        st.info("""
+        **Key Insights:**
+        - **Underpowered study (Power < 80%)**: High risk of missing real effects (Type II error)
+        - **Power ≥ 80%**: Standard threshold for adequate studies
+        - **Power ≥ 90%**: Recommended for confirmatory/clinical trials
+        - **Larger effect size or sample size → Higher power**
+        """)
 
     auto_fill_data = None
 
@@ -981,7 +1450,7 @@ def run_power_analysis(df, analyzer):
                         
                     elif target_test == "Kruskal-Wallis":
                         target_test = "Kruskal-Wallis (Non-parametric)"
-                        if es_type_res == "Epsilon Squared":
+                        if es_type_res == "η²H" or es_type_res == "Epsilon Squared":
                             st.session_state['es_type_kw'] = "Epsilon Squared"
                         else:
                             st.session_state['es_type_kw'] = "Cohen's f equivalent"
@@ -1006,10 +1475,12 @@ def run_power_analysis(df, analyzer):
                         st.session_state['n_total_chi2'] = n_total_val
                         st.session_state['min_dim_chi2'] = min_dim_val
                     
-                    # Set the test type dropdown
+                    # Set the test type dropdown - use the selectbox key directly
                     st.session_state['power_test_type'] = target_test
+                    st.session_state['power_test_type_selector'] = target_test  # This is the actual selectbox key
                     
-                    st.success("Values loaded! Check the calculator below.")
+                    st.success("✅ Parameters loaded! The calculator fields below have been updated.")
+                    st.rerun()  # Refresh UI to show updated values
 
     # 2. Auto-fill from Dataset (Group Structure)
     with st.expander("📊 Auto-fill Group Structure from Dataset", expanded=True):

@@ -1,4 +1,4 @@
-# 🧬 Epidemiology & Hypothesis
+# 🧬 Epidemiology & Hypothesis Testing
 
 ## Overview
 
@@ -8,21 +8,23 @@ The **Epidemiology** module is dedicated to rigorous statistical analysis. It pr
 
 ### 1. 🔬 Hypothesis Testing
 
-* **Univariate Analysis**: Compare groups on a continuous outcome.
+* **Univariate Analysis**: Compare groups on a continuous or categorical outcome.
 * **Test Selection**:
-  * **Parametric**: Independent T-test, ANOVA (One-way).
+  * **Parametric**: Independent T-test (Student's or Welch's), ANOVA (One-way).
   * **Non-Parametric**: Mann-Whitney U, Kruskal-Wallis H.
+  * **Categorical**: Chi-Square, Fisher's Exact (for small samples).
   * **Auto-Detect**: Automatically chooses the best test based on normality (Shapiro-Wilk) and homogeneity of variance (Levene's test).
-* **Post-Hoc Analysis**: Automatically performs post-hoc tests (Tukey HSD, Dunn's) if a global test (ANOVA/Kruskal) is significant.
+* **Post-Hoc Analysis**: Automatically performs post-hoc tests (Tukey HSD, Dunn's with Bonferroni) if a global test (ANOVA/Kruskal) is significant.
 
 ### 2. 📏 Effect Sizes
 
 * **Calculation**: Automatically computes appropriate effect sizes for each test:
-  * **Cohen's d** (T-test)
-  * **Rank-Biserial Correlation** (Mann-Whitney)
-  * **Eta-Squared** (ANOVA)
-  * **Epsilon-Squared** (Kruskal-Wallis)
-* **Interpretation**: Provides context for effect sizes (Small, Medium, Large).
+  * **Cohen's d** (T-test) — Small: 0.2, Medium: 0.5, Large: 0.8
+  * **Rank-Biserial r** (Mann-Whitney) — Small: 0.1, Medium: 0.3, Large: 0.5
+  * **Eta-Squared η²** (ANOVA) — Small: 0.01, Medium: 0.06, Large: 0.14
+  * **Eta-Squared H η²H** (Kruskal-Wallis) — Small: 0.01, Medium: 0.06, Large: 0.14
+  * **Cramér's V** (Chi-Square) — Small: 0.1, Medium: 0.3, Large: 0.5
+  * **Odds Ratio** (Fisher's Exact) — 1 = No effect
 
 ### 3. 🧮 Multivariate Analysis
 
@@ -43,17 +45,34 @@ The **Epidemiology** module is dedicated to rigorous statistical analysis. It pr
 ### 6. 🛠️ Data Preprocessing
 
 * **Transformations**: Apply Log (Log1p), Z-Score, or Min-Max normalization to variables before analysis to meet normality assumptions.
-* **Multiple Testing Correction**: Apply Bonferroni or Benjamini-Hochberg (FDR) corrections to P-values when testing multiple variables to control error rates.
+* **Multiple Testing Correction**: Apply Bonferroni or Benjamini-Hochberg (FDR) corrections to P-values when testing multiple variables.
 
 ## Usage Guide
 
 1. **Preprocess**: Use the sidebar to apply transformations if your data is skewed.
 2. **Select Variables**: Choose a Grouping variable (Factor) and a Target variable (Outcome).
-3. **Configure Analysis**: Select the test type (or leave as Auto) and correction method (Bonferroni/FDR).
+3. **Configure Analysis**: Select the test type (or leave as Auto) and correction method.
 4. **Run Analysis**: View the results table, which includes P-values, Test Statistics, and Effect Sizes.
-5. **Check Power**: Use the "Power & Sample Size" tab to verify if your study was adequately powered to detect the observed effects.
+5. **Check Power**: Use the "Power & Sample Size" tab to verify if your study was adequately powered.
+
+## Key Assumptions
+
+| Test Type | Independence | Normality | Equal Variance | Sample Size |
+|-----------|:------------:|:---------:|:--------------:|:-----------:|
+| T-test | ✓ | ✓ | ✓ (Student's) | n ≥ 30 ideal |
+| Welch's T-test | ✓ | ✓ | Not required | n ≥ 30 ideal |
+| ANOVA | ✓ | ✓ | ✓ | n ≥ 30/group |
+| Mann-Whitney | ✓ | Not required | Similar shapes | n ≥ 5/group |
+| Kruskal-Wallis | ✓ | Not required | Similar shapes | n ≥ 5/group |
+| Chi-Square | ✓ | N/A | N/A | Expected ≥ 5 |
 
 ## Technical Details
 
 * **File**: `app_pages/epidemiology.py`
 * **Dependencies**: `scipy.stats`, `statsmodels.api`, `statsmodels.formula.api`, `statsmodels.stats.power`
+
+## References
+
+* Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.).
+* Tomczak, M., & Tomczak, E. (2014). The need to report effect size estimates revisited. *Trends in Sport Sciences*, 1(21), 19-25.
+* Noether, G. E. (1987). Sample size determination for some common nonparametric tests. *JASA*, 82(398), 645-647.

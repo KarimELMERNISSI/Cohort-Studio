@@ -161,9 +161,10 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
             elif use_test == "Kruskal-Wallis":
                 test_name = "Kruskal-Wallis"
                 statistic, p_value = stats.kruskal(*groups_data)
-                # Epsilon Squared = (H - k + 1) / (n - k)
-                effect_size = (statistic - k + 1) / (n_total - k)
-                effect_size_type = "Epsilon Squared"
+                # Eta-Squared H (η²H) for Kruskal-Wallis (Tomczak & Tomczak, 2014)
+                # Formula: η²H = (H - k + 1) / (n - k)
+                effect_size = (statistic - k + 1) / (n_total - k) if (n_total - k) > 0 else 0
+                effect_size_type = "η²H"
 
     elif is_categorical:
         # Chi-Square or Fisher
