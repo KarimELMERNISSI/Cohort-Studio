@@ -1584,24 +1584,24 @@ def compute_transformations(dataframe):
     # Step 1: Transformation Type Selection
     transformation_type = st.selectbox(
         "Choose a transformation type:",
-        options=["Statistical-Based", "Dimensional Reduction-Based", "Scaling-Based", "Cluster-Based", "Encoding"],
+        options=["Statistics", "Dimensionality Reduction", "Scaling", "Clustering", "Encoding"],
         help="Select the type of transformation."
     )
 
     # Step 2: Transformation Selection (based on transformation type)
-    if transformation_type == "Statistical-Based":
+    if transformation_type == "Statistics":
         transformation = st.selectbox(
             "Choose a statistical transformation:",
             options=["Mean", "Median", "Summation", "Minimum Value", "Maximum Value", "Standard Deviation"],
             help="Select the statistical transformation to apply."
         )
-    elif transformation_type == "Scaling-Based":
+    elif transformation_type == "Scaling":
         transformation = st.selectbox(
             "Choose a scaling method:",
             options=["Min-Max Normalization", "Z-Score Standardization", "Natural Logarithm Transformation"],
             help="Select the scaling method."
         )
-    elif transformation_type == "Dimensional Reduction-Based":
+    elif transformation_type == "Dimensionality Reduction":
         # Define explanations for each dimensional reduction method
         transformation_explanations = {
             "PCA": ":grey_question: Principal Component Analysis (PCA) reduces dimensions by finding orthogonal directions (principal components) that explain the most variance in the dataset.",
@@ -1619,7 +1619,7 @@ def compute_transformations(dataframe):
         # Display explanation for the selected transformation method
         st.info(transformation_explanations[transformation])
 
-    elif transformation_type == "Cluster-Based":
+    elif transformation_type == "Clustering":
         # Define explanations for each clustering method
         cluster_explanations = {
             "K-Means": ":grey_question: **K-Means** partitions data into K clusters by minimizing within-cluster distances. Creates a categorical variable indicating which cluster each sample belongs to.",
@@ -1668,7 +1668,7 @@ def compute_transformations(dataframe):
                             default=dataframe[col].unique(),
                             key=f"order_{col}"
                         )
-    elif transformation_type == "Dimensional Reduction-Based" and transformation == "FAMD":
+    elif transformation_type == "Dimensionality Reduction" and transformation == "FAMD":
         columns = st.multiselect(
             "Choose columns to apply the selected transformation:",
             options=dataframe.select_dtypes(include=[ np.number, 'object', 'category']).columns,
@@ -1682,11 +1682,11 @@ def compute_transformations(dataframe):
         )
 
     # Step 4: Naming Pattern Customization
-    if transformation_type == "Dimensional Reduction-Based":
+    if transformation_type == "Dimensionality Reduction":
         naming_pattern_val = "Name_{method_applied}_Component"
     elif transformation_type == "Encoding":
         naming_pattern_val = "{initial_variable}_{category}"
-    elif transformation_type == "Cluster-Based":
+    elif transformation_type == "Clustering":
         naming_pattern_val = "Cluster_{method_applied}"
     else:
         naming_pattern_val = "{initial_variable}_{method_applied}"
@@ -1698,7 +1698,7 @@ def compute_transformations(dataframe):
     )
 
     # Dimensional Reduction Settings
-    if transformation_type == "Dimensional Reduction-Based" and len(columns) > 1:
+    if transformation_type == "Dimensionality Reduction" and len(columns) > 1:
         col1, col2, col3 = st.columns([1, 1, 3], vertical_alignment="center")
 
         with col1:
@@ -1783,6 +1783,7 @@ def compute_transformations(dataframe):
                     result = model.fit_transform(dataframe[columns])
 
                     variance_ratio = model.percentage_of_variance_
+                    column_correlations = model.column_correlations(dataframe[columns])
 
                 else:  # FAMD
                     model = prince.FAMD(n_components=len(columns), random_state=42)
@@ -1795,6 +1796,15 @@ def compute_transformations(dataframe):
                     # Compute proportion of variance explained
                     #total_variance = sum(eigenvalues)
                     variance_ratio = model.percentage_of_variance_#[eig / total_variance for eig in eigenvalues]
+                    
+                    # Use native column_contributions_ for FAMD
+                    if hasattr(model, 'column_contributions_'):
+                        column_correlations = model.column_contributions_
+                    else:
+                        try:
+                            column_correlations = model.column_correlations(dataframe[columns])
+                        except NotImplementedError:
+                            column_correlations = None
 
                 cumulative_variance = np.cumsum(variance_ratio)
 
@@ -1812,12 +1822,28 @@ def compute_transformations(dataframe):
                 ax.grid(True)
                 st.pyplot(fig)
 
+                # Define styled_df for display
+                styled_df = None
+                if column_correlations is not None:
+                    # Adapt styling for contributions (0-1) vs correlations (-1 to 1)
+                    if transformation == "FAMD":
+                         styled_df = (column_correlations.style
+                                .background_gradient(cmap="Blues", vmin=0, vmax=1)
+                                .format("{:.0%}"))
+                    else:
+                        styled_df = (column_correlations.style
+                                .background_gradient(cmap="RdBu", vmin=-1, vmax=1)
+                                .format(precision=2))
+
         if transformation in ["PCA", "FAMD"] and show_explained_variance:  
             st.subheader("Contributions to components")
-            st.dataframe(styled_df, width='stretch')
+            if styled_df is not None:
+                st.dataframe(styled_df, width='stretch')
+            else:
+                st.info(f"Component contributions are not available for {transformation}.")
 
     # Clustering Settings
-    if transformation_type == "Cluster-Based":
+    if transformation_type == "Clustering":
         st.markdown("### Clustering Parameters")
         col_c1, col_c2 = st.columns(2)
         with col_c1:
@@ -1830,6 +1856,12 @@ def compute_transformations(dataframe):
         with col_c2:
             if transformation == "DBSCAN":
                 min_samples = st.slider("Min Samples", 2, 20, 5, key="cldb_min")
+        
+        st.info("""
+        💡 **Methodological Note:**
+        - **Standardization**: Input variables will be automatically standardized (Z-score) to ensure equal weight in distance calculations.
+        - **Missing Values**: Rows with ANY missing values in selected columns will be excluded from the analysis (Complete Case Analysis). Ensure you have imputed missing data beforehand if needed.
+        """)
 
     # Apply Transformation Button
     if st.button("Apply Transformation", disabled=not (naming_pattern and columns)):
@@ -1840,7 +1872,7 @@ def compute_transformations(dataframe):
         new_columns = {}
 
         try:
-            if transformation_type == "Dimensional Reduction-Based":
+            if transformation_type == "Dimensionality Reduction":
                 # Standardize data
                 if transformation in ["t-SNE", "UMAP"]:
                     scaler = StandardScaler()
@@ -1884,7 +1916,7 @@ def compute_transformations(dataframe):
                 # Convert to dictionary and update new_columns
                 new_columns.update(result_df.to_dict(orient="list"))
 
-            elif transformation_type == "Cluster-Based":
+            elif transformation_type == "Clustering":
                 from utils.clustering_utils import prepare_data_for_clustering, fit_kmeans, fit_dbscan, fit_gaussian_mixture
                 
                 # Prepare Data (handles standardization)

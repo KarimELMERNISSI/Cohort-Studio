@@ -1,7 +1,8 @@
-# pages/data_preparation.py
 import streamlit as st
 import pandas as pd
 from explore.data_quality import DataQualityAuditor
+from manage.transformation_manager import TransformationManager
+from app_pages.data_enrichment import save_snapshot
 
 def app():
     if st.session_state.data is None:
@@ -62,6 +63,21 @@ def app():
                         else:
                             st.session_state.data[col] = st.session_state.data[col].astype(new_type)
                     st.success("Conversion successful!")
+                    
+                    # Log transformation
+                    if 'transformation_manager' in st.session_state:
+                         # Save snapshot
+                        snapshot_path = save_snapshot(st.session_state.data, "type_conversion")
+                        
+                        st.session_state.transformation_manager.add_step(
+                            function_name="data_type_conversion",
+                            params={
+                                "columns": selected_cols,
+                                "new_type": new_type
+                            },
+                            description=f"Converted columns {selected_cols} to {new_type}",
+                            output_dataset_path=snapshot_path
+                        )
                 except Exception as e:
                     st.error(f"Error during conversion: {str(e)}")
     
@@ -115,5 +131,24 @@ def handle_missing_values():
                     for col in selected_cols:
                         st.session_state.data[col].fillna(fill_value, inplace=True)
                 st.success("Missing values handled successfully!")
+
+                # Log transformation
+                if 'transformation_manager' in st.session_state:
+                     # Save snapshot
+                    snapshot_path = save_snapshot(st.session_state.data, "missing_values")
+                    
+                    params = {
+                        "strategy": strategy,
+                        "columns": selected_cols
+                    }
+                    if strategy == "Fill with value":
+                        params["fill_value"] = fill_value
+                        
+                    st.session_state.transformation_manager.add_step(
+                        function_name="missing_value_handling",
+                        params=params,
+                        description=f"Handled missing values using {strategy} on {selected_cols}",
+                        output_dataset_path=snapshot_path
+                    )
             except Exception as e:
                 st.error(f"Error handling missing values: {str(e)}")

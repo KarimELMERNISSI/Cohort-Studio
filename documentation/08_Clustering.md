@@ -74,6 +74,30 @@ The **Population Clustering** tab in Data Insight enables exploratory analysis t
 
 ---
 
+---
+
+## Generating Cluster Variables
+
+You can also create a permanent variable for your clusters to use in other analysis tabs:
+
+1. Go to **Data Enrichment** > **Create New Variables**
+2. Select **Transformation Type**: `Cluster-Based`
+3. Choose your numeric variables
+4. Select the clustering algorithm (K-Means, DBSCAN, GMM)
+5. Click **Apply Transformation**
+
+A new column (e.g., `Cluster_K-Means`) will be added to your dataset containing the cluster labels.
+
+## Methodological Notes
+
+> [!IMPORTANT]
+> **Standardization**: All clustering algorithms implemented here rely on distance metrics (Euclidean). Input variables are **automatically standardized** (Z-score normalization: mean=0, std=1) before analysis to ensure that variables with large ranges (e.g., Platelets) do not dominate those with small ranges (e.g., Creatinine).
+
+> [!WARNING]
+> **Missing Values**: Clustering algorithms cannot handle missing data. Rows with **any missing value** in the selected variables will be **excluded** from the analysis (Complete Case Analysis). Please impute missing data beforehand if significant data loss is a concern.
+
+---
+
 ## Technical Details
 
 - **File**: `utils/clustering_utils.py`

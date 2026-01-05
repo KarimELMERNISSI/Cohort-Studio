@@ -240,6 +240,41 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     else:
                         st.warning(f"Variable transformation returned no data at step {i+1}")
 
+                elif func_name == "data_type_conversion":
+                    # Replay data type conversion
+                    columns = params.get("columns", [])
+                    new_type = params.get("new_type")
+                    
+                    for col in columns:
+                        if new_type == "datetime":
+                            current_df[col] = pd.to_datetime(current_df[col])
+                        else:
+                            current_df[col] = current_df[col].astype(new_type)
+
+                elif func_name == "missing_value_handling":
+                    # Replay missing value handling
+                    strategy = params.get("strategy")
+                    columns = params.get("columns", [])
+                    fill_value = params.get("fill_value")
+
+                    if strategy == "Drop rows":
+                        current_df.dropna(subset=columns, inplace=True)
+                    elif strategy == "Fill with mean":
+                        for col in columns:
+                            current_df[col].fillna(current_df[col].mean(), inplace=True)
+                    elif strategy == "Fill with median":
+                        for col in columns:
+                            current_df[col].fillna(current_df[col].median(), inplace=True)
+                    elif strategy == "Fill with mode":
+                        for col in columns:
+                            # Safely handle mode if empty
+                            mode_val = current_df[col].mode()
+                            if not mode_val.empty:
+                                current_df[col].fillna(mode_val[0], inplace=True)
+                    elif strategy == "Fill with value":
+                         for col in columns:
+                            current_df[col].fillna(fill_value, inplace=True)
+
                 # ... Add other replay handlers as needed ...
                     
             except Exception as e:

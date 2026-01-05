@@ -37,7 +37,7 @@ def apply_variable_transformation(dataframe, params):
 
     new_columns = {}
 
-    if transformation_type == "Dimensional Reduction-Based":
+    if transformation_type in ["Dimensionality Reduction", "Dimensional Reduction-Based"]:
         # Standardize data
         if transformation in ["t-SNE", "UMAP"]:
             scaler = StandardScaler()
@@ -76,6 +76,37 @@ def apply_variable_transformation(dataframe, params):
             result_df.columns = component_names
 
         new_columns.update(result_df.to_dict(orient="list"))
+
+    elif transformation_type in ["Clustering", "Cluster-Based"]:
+        from utils.clustering_utils import prepare_data_for_clustering, fit_kmeans, fit_dbscan, fit_gaussian_mixture
+        
+        # Clustering params
+        n_clusters = params.get("n_clusters", 3)
+        eps = params.get("eps", 0.5)
+        min_samples = params.get("min_samples", 5)
+
+        # Prepare Data (handles standardization)
+        numeric_cols = dataframe[columns].select_dtypes(include=np.number).columns.tolist()
+        prep_data, valid_idx = prepare_data_for_clustering(dataframe[columns], numeric_cols)
+        
+        if len(prep_data) >= 2:
+            # Run Clustering
+            if transformation == "K-Means":
+                labels, _ = fit_kmeans(prep_data, n_clusters)
+            elif transformation == "DBSCAN":
+                labels, _ = fit_dbscan(prep_data, eps, min_samples)
+            elif transformation == "Gaussian Mixture":
+                labels, _ = fit_gaussian_mixture(prep_data, n_clusters)
+            else:
+                 labels = []
+
+            if len(labels) > 0:
+                # Map results back to original index
+                full_labels = pd.Series(index=dataframe.index, data=np.nan)
+                full_labels.loc[valid_idx] = labels
+                
+                col_name = naming_pattern.format(method_applied=transformation.replace(" ", "_"))
+                new_columns[col_name] = full_labels.values
 
     elif transformation_type == "Encoding":
         if transformation == "One-Hot Encoding":

@@ -257,7 +257,7 @@ plotly
 pluggy
 ply
 posthog==5.4.0
-prince==0.16.2
+prince>=0.16.2
 prometheus-client
 prompt-toolkit==3.0.42
 propcache==0.4.1

@@ -1412,6 +1412,7 @@ def app():
                         default=numeric_cols[:min(5, len(numeric_cols))],
                         help="Choose numeric variables to include in clustering."
                     )
+                    st.caption("ℹ️ *Variables are automatically standardized (Z-score) and missing values handled.*")
                     
                     dim_method = st.selectbox(
                         "📐 Dimensionality Reduction",
