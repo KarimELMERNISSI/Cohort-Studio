@@ -13,7 +13,7 @@ The **Epidemiology** module is dedicated to rigorous statistical analysis for bi
 Compare groups on continuous or categorical outcomes with automatic test selection.
 
 | Test Type | When Used | Effect Size |
-|:----------|:----------|:------------|
+| :---------- | :---------- | :------------ |
 | **Student's T-test** | 2 groups, normal, equal variance | Cohen's d |
 | **Welch's T-test** | 2 groups, normal, unequal variance | Cohen's d |
 | **Mann-Whitney U** | 2 groups, non-normal | Rank-Biserial r |
@@ -34,7 +34,7 @@ Compare groups on continuous or categorical outcomes with automatic test selecti
 ### 2. 📏 Effect Size Interpretation
 
 | Measure | Small | Medium | Large | Test |
-|:--------|:-----:|:------:|:-----:|:-----|
+| :-------- | :-----: | :------: | :-----: | :----- |
 | Cohen's d | 0.2 | 0.5 | 0.8 | T-test |
 | Rank-Biserial r | 0.1 | 0.3 | 0.5 | Mann-Whitney |
 | Eta² (η²) | 0.01 | 0.06 | 0.14 | ANOVA |
@@ -72,7 +72,7 @@ Compare groups on continuous or categorical outcomes with automatic test selecti
 Calculate statistical power or required sample size for study planning.
 
 | Test | Effect Size Input | Methods |
-|:-----|:------------------|:--------|
+| :----- | :------------------ | :-------- |
 | T-Test | Cohen's d | Non-central t-distribution |
 | Mann-Whitney | P(X<Y), Rank-Biserial r | Noether's formula (1987) |
 | ANOVA | Cohen's f, Eta² | Non-central F-distribution |
@@ -97,7 +97,7 @@ Standardize data against a reference population for cross-variable comparison.
 **Reference Methods:**
 
 | Method | Description |
-|:-------|:------------|
+| :------- | :------------ |
 | Internal Control Group | Use a specific group (e.g., controls) as reference |
 | Whole Cohort | Standardize to sample mean/SD (mean ≈ 0, SD ≈ 1) |
 | Manual Reference | Enter published norms (e.g., WHO growth charts) |
@@ -111,7 +111,7 @@ Standardize data against a reference population for cross-variable comparison.
 **Interpretation Guide:**
 
 | Z-Score | Interpretation | Percentile |
-|:--------|:---------------|:-----------|
+| :-------- | :--------------- | :----------- |
 | Z > +2 | Abnormally High | > 97.7% |
 | +1 < Z ≤ +2 | Mildly Elevated | 84.1% - 97.7% |
 | -1 ≤ Z ≤ +1 | Normal Range | 15.9% - 84.1% |
@@ -141,7 +141,7 @@ Standardize data against a reference population for cross-variable comparison.
 ## Key Assumptions Table
 
 | Test | Independence | Normality | Equal Variance | Min Sample |
-|:-----|:------------:|:---------:|:--------------:|:----------:|
+| :----- | :------------: | :---------: | :--------------: | :----------: |
 | T-test (Student's) | ✓ | ✓ | ✓ | n ≥ 30 |
 | T-test (Welch's) | ✓ | ✓ | ✗ | n ≥ 30 |
 | ANOVA | ✓ | ✓ | ✓ | n ≥ 30/group |
