@@ -445,41 +445,94 @@ def run_univariate_analysis(df, analyzer):
 
 def run_multivariate_analysis(df, analyzer):
     st.header("Multivariate Analysis (ANCOVA)")
-    st.markdown("""
-    **Analysis of Covariance (ANCOVA)** allows you to compare group means while adjusting for the effect of other continuous variables (covariates).
     
-    *Model: Target ~ Group + Covariates*
-    """)
-    
-    with st.expander("📊 Model Configuration", expanded=True):
-        col1, col2, col3 = st.columns(3)
+    # Educational Introduction
+    with st.expander("📚 What is ANCOVA?", expanded=False):
+        st.markdown("""
+        ### Analysis of Covariance (ANCOVA)
         
-        with col1:
-            target_col = st.selectbox(
-                "Target Variable (Y)",
-                options=analyzer.numeric_cols,
-                help="The continuous dependent variable."
-            )
-            
-        with col2:
-            group_col = st.selectbox(
-                "Grouping Variable (Factor)",
-                options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 10],
-                help="The main categorical independent variable."
-            )
-            
-        with col3:
-            covariates = st.multiselect(
-                "Covariates (X)",
-                options=[c for c in analyzer.numeric_cols if c != target_col],
-                help="Continuous variables to adjust for."
-            )
-            
+        ANCOVA combines ANOVA and regression to compare group means while **controlling for confounding variables** (covariates).
+        
+        **When to use ANCOVA:**
+        - You want to compare group means on an outcome variable
+        - There are continuous variables that may influence the outcome (confounders)
+        - You need to "adjust" for baseline differences between groups
+        
+        **Model:** `Outcome ~ Group + Covariate₁ + Covariate₂ + ...`
+        
+        | Term | Description |
+        |:-----|:------------|
+        | **Target (Y)** | Continuous outcome variable (e.g., blood pressure, score) |
+        | **Factor (Group)** | Categorical grouping variable (e.g., treatment vs control) |
+        | **Covariate (X)** | Continuous confounder to adjust for (e.g., age, baseline value) |
+        """)
+        
+        st.markdown("""
+        <div style="background-color: #e8f5e9; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #4caf50;">
+            <strong>💡 Key Interpretation:</strong><br/>
+            ANCOVA answers: "Is there a group difference <em>after adjusting for</em> the covariates?"
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.warning("""
+        **ANCOVA Assumptions:**
+        1. **Independence** of observations
+        2. **Normality** of residuals (check Q-Q plot)
+        3. **Homogeneity of variance** across groups
+        4. **Linearity** between covariate and outcome
+        5. **Homogeneity of regression slopes** (same covariate effect in all groups)
+        """)
+    
+    # Model Configuration
+    st.subheader("📊 Model Configuration")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        target_col = st.selectbox(
+            "🎯 Target Variable (Y)",
+            options=analyzer.numeric_cols,
+            help="The continuous dependent variable you want to compare across groups."
+        )
+        
+    with col2:
+        group_col = st.selectbox(
+            "👥 Grouping Variable (Factor)",
+            options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 10],
+            help="The main categorical variable defining your groups (e.g., Treatment, Sex)."
+        )
+        
+    with col3:
+        covariates = st.multiselect(
+            "📐 Covariates (Confounders)",
+            options=[c for c in analyzer.numeric_cols if c != target_col],
+            help="Continuous variables to adjust for (e.g., Age, Baseline score). These are potential confounders."
+        )
+    
+    # Show preview of group structure
+    if target_col and group_col:
+        col_preview1, col_preview2 = st.columns(2)
+        with col_preview1:
+            group_counts = df[group_col].value_counts()
+            st.caption(f"**Groups:** {', '.join([f'{k} (n={v})' for k, v in group_counts.items()])}")
+        with col_preview2:
+            if covariates:
+                st.caption(f"**Adjusting for:** {', '.join(covariates)}")
+            else:
+                st.caption("⚠️ No covariates selected (equivalent to One-way ANOVA)")
+        
     if not target_col or not group_col:
-        st.info("Please select a Target and a Grouping variable.")
+        st.info("👆 Please select a Target and a Grouping variable to proceed.")
         return
+    
+    # Run Button
+    col_btn1, col_btn2 = st.columns([1, 3])
+    with col_btn1:
+        run_button = st.button("🚀 Run ANCOVA", type="primary", use_container_width=True)
+    with col_btn2:
+        st.caption("This will fit an OLS regression model and compute Type II ANOVA table.")
         
-    if st.button("Run ANCOVA"):
+    if run_button:
         perform_ancova(df, target_col, group_col, covariates)
 
 def perform_ancova(df, target, group, covariates):
@@ -490,10 +543,13 @@ def perform_ancova(df, target, group, covariates):
     if data.empty:
         st.error("No valid data after dropping missing values.")
         return
+    
+    n_missing = len(df) - len(data)
+    if n_missing > 0:
+        st.warning(f"⚠️ {n_missing} rows with missing values were excluded from analysis.")
 
     try:
-        # Sanitize column names for statsmodels formula (remove spaces, special chars)
-        # We create a mapping to rename columns temporarily
+        # Sanitize column names for statsmodels formula
         safe_cols = {col: re.sub(r'[^a-zA-Z0-9_]', '_', col) for col in cols}
         data_safe = data.rename(columns=safe_cols)
         
@@ -502,80 +558,211 @@ def perform_ancova(df, target, group, covariates):
         covariates_safe = [safe_cols[c] for c in covariates]
         
         # Construct Formula
-        # Target ~ C(Group) + Covariate1 + Covariate2 ...
-        formula = f"{target_safe} ~ C({group_safe}) + {' + '.join(covariates_safe)}"
+        if covariates_safe:
+            formula = f"{target_safe} ~ C({group_safe}) + {' + '.join(covariates_safe)}"
+        else:
+            formula = f"{target_safe} ~ C({group_safe})"
         
-        st.write(f"**Model Formula:** `{formula}`")
+        st.info(f"**Model Formula:** `{formula}`")
         
         # Fit OLS Model
         model = smf.ols(formula, data=data_safe).fit()
         
-        # Display Summary
-        st.subheader("ANCOVA Results (OLS Regression)")
-        st.write(model.summary())
+        # ============ Results Section ============
+        st.subheader("📈 ANCOVA Results")
         
-        # Extract Group Effect P-value
-        # The group effect is represented by the C(Group)[T.level] coefficients
-        # To get a single p-value for the Factor "Group", we run an ANOVA on the model
+        # ANOVA Table
         anova_table = sm.stats.anova_lm(model, typ=2)
-        st.subheader("ANOVA Table (Type II SS)")
-        st.dataframe(anova_table.style.format("{:.4f}"))
         
-        # Check significance of the Group variable
+        # Calculate Partial Eta-Squared for effect size
+        anova_table['Partial η²'] = anova_table['sum_sq'] / (anova_table['sum_sq'] + anova_table.loc['Residual', 'sum_sq'])
+        
+        # Display ANOVA Table with styling
+        st.markdown("#### Type II ANOVA Table")
+        
+        formatted_anova = anova_table.copy()
+        formatted_anova = formatted_anova.rename(columns={
+            'sum_sq': 'Sum of Squares',
+            'df': 'DF',
+            'F': 'F-statistic',
+            'PR(>F)': 'P-value'
+        })
+        
+        st.dataframe(
+            formatted_anova.style.format({
+                'Sum of Squares': '{:.2f}',
+                'F-statistic': '{:.3f}',
+                'P-value': '{:.4f}',
+                'Partial η²': '{:.3f}'
+            }).applymap(
+                lambda x: 'background-color: #c8e6c9' if isinstance(x, float) and x < 0.05 else '',
+                subset=['P-value']
+            ),
+            use_container_width=True
+        )
+        
+        # Extract and interpret group effect
         group_row = anova_table.loc[f"C({group_safe})"]
         p_value = group_row["PR(>F)"]
+        f_stat = group_row["F"]
+        eta_sq = group_row["Partial η²"]
         
-        if p_value < 0.05:
-            st.success(f"The group effect is **significant** (p = {p_value:.4e}) after adjusting for covariates.")
+        # Interpretation box
+        st.markdown("#### 🔍 Results Interpretation")
+        
+        # Effect size interpretation
+        if eta_sq < 0.01:
+            eta_interp = "negligible"
+            eta_color = "#e0e0e0"
+        elif eta_sq < 0.06:
+            eta_interp = "small"
+            eta_color = "#fff3e0"
+        elif eta_sq < 0.14:
+            eta_interp = "medium"
+            eta_color = "#ffe0b2"
         else:
-            st.info(f"The group effect is **not significant** (p = {p_value:.4f}) after adjusting for covariates.")
+            eta_interp = "large"
+            eta_color = "#ffcc80"
+        
+        col_res1, col_res2 = st.columns(2)
+        
+        with col_res1:
+            if p_value < 0.05:
+                st.markdown(f"""
+                <div style="background-color: #c8e6c9; padding: 18px; border-radius: 10px; border-left: 4px solid #4caf50;">
+                    <h4 style="margin:0; color: #2e7d32;">✅ Significant Group Effect</h4>
+                    <p style="margin: 10px 0 5px 0;">
+                        <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
+                        <strong>p = {p_value:.4f}</strong>
+                    </p>
+                    <p style="margin: 0; font-size: 0.9em;">
+                        Groups differ significantly on {target} after adjusting for covariates.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style="background-color: #fff3e0; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
+                    <h4 style="margin:0; color: #e65100;">⚠️ No Significant Group Effect</h4>
+                    <p style="margin: 10px 0 5px 0;">
+                        <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
+                        <strong>p = {p_value:.4f}</strong>
+                    </p>
+                    <p style="margin: 0; font-size: 0.9em;">
+                        No significant group difference after adjusting for covariates.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        with col_res2:
+            st.markdown(f"""
+            <div style="background-color: {eta_color}; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
+                <h4 style="margin:0; color: #5d4037;">📏 Effect Size</h4>
+                <p style="margin: 10px 0 5px 0;">
+                    <strong>Partial η² = {eta_sq:.3f}</strong> ({eta_interp} effect)
+                </p>
+                <p style="margin: 0; font-size: 0.85em;">
+                    {eta_sq*100:.1f}% of variance in {target} is explained by {group} (after controlling for covariates).
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Covariate effects
+        if covariates:
+            st.markdown("#### 📐 Covariate Effects")
+            cov_data = []
+            for cov in covariates_safe:
+                if cov in anova_table.index:
+                    cov_row = anova_table.loc[cov]
+                    cov_p = cov_row["PR(>F)"]
+                    cov_eta = cov_row["Partial η²"]
+                    cov_beta = model.params.get(cov, 0)
+                    cov_data.append({
+                        "Covariate": cov,
+                        "β (coefficient)": f"{cov_beta:.3f}",
+                        "P-value": f"{cov_p:.4f}",
+                        "Partial η²": f"{cov_eta:.3f}",
+                        "Significant?": "✅" if cov_p < 0.05 else "❌"
+                    })
             
-        # Visualization: Adjusted Means (Partial Residual Plot)
-        st.subheader("Visualization: Adjusted Distributions")
+            if cov_data:
+                st.dataframe(pd.DataFrame(cov_data), use_container_width=True, hide_index=True)
+                st.caption("**β coefficient**: For each 1-unit increase in the covariate, the target changes by β units (holding other variables constant).")
         
-        # Calculate adjusted values: Y_adj = Y - (Covariate_Effect)
-        # Or simply plot the residuals + mean + Group_Effect?
-        # Standard approach: Plot the fitted values holding covariates at their mean.
-        
-        # Create a prediction dataset
-        # We want to see the effect of Group, so we vary Group and hold Covariates constant (at mean)
-        
-        # Actually, for boxplots, we often want "Adjusted Y" for each individual.
-        # Y_adj_i = Y_i - (Beta_cov * (X_cov_i - Mean_X_cov))
-        # This removes the variability due to covariates deviating from their mean.
-        
-        data_adj = data.copy()
-        y_adj = data_safe[target_safe].copy()
-        
-        for cov in covariates_safe:
-            beta = model.params.get(cov, 0)
-            mean_val = data_safe[cov].mean()
-            y_adj -= beta * (data_safe[cov] - mean_val)
+        # Full model summary (collapsible)
+        with st.expander("📋 Full Model Summary (OLS Regression)"):
+            st.write(model.summary())
+            st.caption("**R²** = proportion of variance explained by the model. **Adj. R²** = adjusted for number of predictors.")
             
-        data_adj['Adjusted Target'] = y_adj
+        # ============ Visualizations ============
+        st.subheader("📊 Visualizations")
         
-        fig = px.box(data_adj, x=group, y='Adjusted Target', color=group, 
-                     title=f"Distribution of {target} by {group} (Adjusted for Covariates)")
-        st.plotly_chart(fig, width='stretch')
+        viz_tabs = st.tabs(["Adjusted Means", "Raw vs Adjusted", "Model Diagnostics"])
         
-        # Residual Diagnostics
-        st.subheader("Model Diagnostics")
-        col1, col2 = st.columns(2)
-        with col1:
-            # Q-Q Plot of Residuals
-            fig_qq = vu.create_qq_plot(model.resid, title="Q-Q Plot of Model Residuals")
-            st.plotly_chart(fig_qq, width='stretch')
-        with col2:
-            # Residuals vs Fitted
-            fig_rvf = px.scatter(x=model.fittedvalues, y=model.resid, 
-                                 labels={'x': 'Fitted Values', 'y': 'Residuals'},
-                                 title="Residuals vs Fitted")
-            fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
-            st.plotly_chart(fig_rvf, width='stretch')
+        with viz_tabs[0]:
+            # Calculate adjusted values
+            data_adj = data.copy()
+            y_adj = data_safe[target_safe].copy()
+            
+            for cov in covariates_safe:
+                beta = model.params.get(cov, 0)
+                mean_val = data_safe[cov].mean()
+                y_adj -= beta * (data_safe[cov] - mean_val)
+                
+            data_adj['Adjusted ' + target] = y_adj
+            
+            fig = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, 
+                         title=f"Adjusted {target} by {group} (Covariates held at mean)",
+                         points="outliers")
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("📌 Adjusted values = Original values minus covariate effects (evaluated at covariate means).")
+        
+        with viz_tabs[1]:
+            col_viz1, col_viz2 = st.columns(2)
+            with col_viz1:
+                fig_raw = px.box(data, x=group, y=target, color=group, title=f"Raw {target} by {group}")
+                fig_raw.update_layout(showlegend=False)
+                st.plotly_chart(fig_raw, use_container_width=True)
+                st.caption("**Raw (unadjusted)** distributions")
+            with col_viz2:
+                fig_adj = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, title=f"Adjusted {target} by {group}")
+                fig_adj.update_layout(showlegend=False)
+                st.plotly_chart(fig_adj, use_container_width=True)
+                st.caption("**Adjusted** distributions (confounders removed)")
+        
+        with viz_tabs[2]:
+            st.markdown("#### Model Assumption Checks")
+            col_diag1, col_diag2 = st.columns(2)
+            
+            with col_diag1:
+                fig_qq = vu.create_qq_plot(model.resid, title="Q-Q Plot of Residuals")
+                st.plotly_chart(fig_qq, use_container_width=True)
+                st.caption("✅ Points on diagonal = Normality assumption met")
+            
+            with col_diag2:
+                fig_rvf = px.scatter(x=model.fittedvalues, y=model.resid, 
+                                     labels={'x': 'Fitted Values', 'y': 'Residuals'},
+                                     title="Residuals vs Fitted Values")
+                fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
+                st.plotly_chart(fig_rvf, use_container_width=True)
+                st.caption("✅ Random scatter around 0 = Homoscedasticity assumption met")
+            
+            # Check homogeneity of regression slopes if covariates present
+            if covariates:
+                with st.expander("🔬 Advanced: Homogeneity of Regression Slopes"):
+                    st.markdown("""
+                    **Assumption**: The relationship between each covariate and the outcome should be the **same across all groups**.
+                    
+                    To test this formally, you would fit a model with interaction terms:
+                    `Target ~ Group * Covariate`
+                    
+                    If the interaction is significant, ANCOVA assumptions may be violated.
+                    """)
         
     except Exception as e:
         st.error(f"An error occurred during ANCOVA computation: {e}")
-        st.write("Tip: Ensure categorical variables are not encoded as numbers without being declared as factors.")
+        st.write("**Tip:** Ensure categorical variables are properly encoded. Check for multicollinearity among covariates.")
 
 def visualize_result(df, group_col, target, analyzer):
     is_numeric = target in analyzer.numeric_cols
@@ -683,111 +870,285 @@ def visualize_result(df, group_col, target, analyzer):
 
 def run_zscore_analysis(df, analyzer):
     st.header("Z-Score Standardization & Reference Analysis")
-    st.markdown("""
-    Standardize your data against a reference population to compare deviations across different variables.
     
-    $Z = \\frac{X - \mu_{ref}}{\sigma_{ref}}$
-    """)
-    
-    with st.expander("⚙️ Configuration", expanded=True):
-        col1, col2 = st.columns(2)
+    # Educational Introduction
+    with st.expander("📚 What is Z-Score Standardization?", expanded=False):
+        st.markdown("""
+        ### Understanding Z-Scores in Epidemiology
         
-        with col1:
-            # Select Variables
-            target_vars = st.multiselect(
-                "Select Variables to Standardize",
-                options=analyzer.numeric_cols,
-                default=analyzer.numeric_cols[:5] if analyzer.numeric_cols else [],
-                help="Select continuous variables to calculate Z-scores for."
-            )
-            
-        with col2:
-            # Reference Method
-            ref_method = st.selectbox(
-                "Reference Population Method",
-                ["Internal Control Group", "Whole Cohort (Standardization)", "Manual Reference Values"],
-                help="Define the mean and standard deviation used for Z-score calculation."
-            )
-            
-            ref_group_col = None
-            ref_group_val = None
-            manual_refs = {}
-            
-            if ref_method == "Internal Control Group":
-                ref_group_col = st.selectbox(
-                    "Select Grouping Variable",
-                    options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20]
-                )
-                if ref_group_col:
-                    ref_group_val = st.selectbox(
-                        "Select Control Group Value",
-                        options=df[ref_group_col].unique()
-                    )
-            elif ref_method == "Manual Reference Values":
-                st.info("Define Mean and Std Dev for each variable below.")
-
-    if not target_vars:
-        st.warning("Please select at least one variable.")
-        return
-
-    # Calculate Z-Scores
-    z_df = df.copy()
-    z_cols = []
-    
-    ref_stats = {} # Store used mean/std for reporting
-
-    for var in target_vars:
-        col_name = f"{var}_Z"
-        z_cols.append(col_name)
+        A **Z-score** expresses how many standard deviations a value is from the reference mean.
         
-        if ref_method == "Whole Cohort (Standardization)":
-            mu = df[var].mean()
-            sigma = df[var].std()
-        elif ref_method == "Internal Control Group":
-            if ref_group_col and ref_group_val:
-                control_data = df[df[ref_group_col] == ref_group_val][var]
-                mu = control_data.mean()
-                sigma = control_data.std()
-            else:
-                mu, sigma = 0, 1 # Fallback
-        else: # Manual
-            c1, c2 = st.columns(2)
-            with c1:
-                mu = st.number_input(f"Mean for {var}", value=0.0, key=f"mu_{var}")
-            with c2:
-                sigma = st.number_input(f"Std Dev for {var}", value=1.0, key=f"sigma_{var}")
+        $$Z = \\frac{X - \\mu_{ref}}{\\sigma_{ref}}$$
         
-        ref_stats[var] = {"mean": mu, "std": sigma}
-        z_df[col_name] = (df[var] - mu) / sigma
-
-    # Display Reference Stats
-    with st.expander("View Reference Statistics Used"):
-        st.json(ref_stats)
-
-    # Download Z-Score Data
-    st.download_button(
-        label="📥 Download Z-Score Data",
-        data=to_excel(z_df[list(df.columns) + z_cols]),
-        file_name="z_score_data.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # Visualization Section
-    st.subheader("Visualization")
+        | Term | Meaning |
+        |:-----|:--------|
+        | **X** | Individual observation |
+        | **μ_ref** | Reference population mean |
+        | **σ_ref** | Reference population standard deviation |
+        | **Z** | Number of standard deviations from reference mean |
+        """)
+        
+        st.markdown("### Z-Score Interpretation")
+        st.markdown("""
+        <table style="width:100%; border-collapse: collapse; text-align: center;">
+            <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 10px;">Z-Score</th>
+                <th style="border: 1px solid #ddd; padding: 10px;">Interpretation</th>
+                <th style="border: 1px solid #ddd; padding: 10px;">Percentile</th>
+                <th style="border: 1px solid #ddd; padding: 10px;">Clinical Significance</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>Z > +2</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; background-color: #ffcdd2;">Abnormally High</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">> 97.7%</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">🔴 Outside normal range</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>+1 < Z ≤ +2</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; background-color: #fff3e0;">Mildly Elevated</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">84.1% - 97.7%</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">🟠 Borderline</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>-1 ≤ Z ≤ +1</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; background-color: #c8e6c9;">Normal Range</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">15.9% - 84.1%</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">🟢 Within normal limits</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>-2 ≤ Z < -1</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; background-color: #fff3e0;">Mildly Low</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">2.3% - 15.9%</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">🟠 Borderline</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>Z < -2</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; background-color: #ffcdd2;">Abnormally Low</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">< 2.3%</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">🔴 Outside normal range</td>
+            </tr>
+        </table>
+        """, unsafe_allow_html=True)
+        
+        st.info("""
+        **Common Applications:**
+        - **Growth charts** (height-for-age, weight-for-age Z-scores)
+        - **Laboratory values** (comparing to reference ranges)
+        - **Cognitive/behavioral assessments** (IQ, developmental scores)
+        - **Multi-variable comparison** (making different measures comparable)
+        """)
+        
+        st.warning("""
+        **Assumptions:**
+        - Reference population is representative
+        - Data is approximately normally distributed (for meaningful percentile interpretation)
+        - Same measurement method was used
+        """)
     
-    viz_type = st.selectbox("Select Visualization", ["Group Comparison (Forest Plot)", "Heatmap", "Individual Profile"])
+    # Configuration Section
+    st.subheader("⚙️ Configuration")
     
-    if viz_type == "Group Comparison (Forest Plot)":
-        group_col = st.selectbox(
-            "Group by", 
-            options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20],
-            index=0
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        target_vars = st.multiselect(
+            "📊 Select Variables to Standardize",
+            options=analyzer.numeric_cols,
+            default=analyzer.numeric_cols[:3] if len(analyzer.numeric_cols) >= 3 else analyzer.numeric_cols,
+            help="Select continuous variables to calculate Z-scores for."
         )
         
-        if group_col:
-            # Calculate Mean Z-Score and CI per group
-            plot_data = []
+    with col2:
+        ref_method = st.selectbox(
+            "📐 Reference Population Method",
+            ["Internal Control Group", "Whole Cohort (Standardization)", "Manual Reference Values"],
+            help="Define the mean and standard deviation used for Z-score calculation."
+        )
+        
+    ref_group_col = None
+    ref_group_val = None
+    manual_refs = {}
+    
+    # Reference method specific configuration
+    if ref_method == "Internal Control Group":
+        col_ref1, col_ref2 = st.columns(2)
+        with col_ref1:
+            potential_groupers = [c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20]
+            ref_group_col = st.selectbox(
+                "👥 Select Grouping Variable",
+                options=potential_groupers,
+                help="Variable that identifies groups (e.g., Case/Control, Treatment/Placebo)"
+            )
+        with col_ref2:
+            if ref_group_col:
+                ref_group_val = st.selectbox(
+                    "🎯 Select Reference Group (Control)",
+                    options=df[ref_group_col].unique(),
+                    help="The group to use as reference (mean=0, SD=1 for this group)"
+                )
+                
+        if ref_group_col and ref_group_val:
+            ref_n = len(df[df[ref_group_col] == ref_group_val])
+            st.caption(f"📌 Reference group: **{ref_group_val}** (n = {ref_n})")
             
+    elif ref_method == "Whole Cohort (Standardization)":
+        st.info("📌 Using the entire cohort mean and SD as reference. All Z-scores will have mean ≈ 0 and SD ≈ 1.")
+        
+    elif ref_method == "Manual Reference Values":
+        st.info("📌 Enter published or population-based reference values below.")
+
+    if not target_vars:
+        st.warning("👆 Please select at least one variable to standardize.")
+        return
+    
+    # Create a configuration key to detect changes
+    config_key = f"{','.join(sorted(target_vars))}_{ref_method}_{ref_group_col}_{ref_group_val}"
+    
+    # Check if we need to recalculate (config changed or button pressed)
+    need_recalc = False
+    
+    col_btn1, col_btn2 = st.columns([1, 3])
+    with col_btn1:
+        run_button = st.button("🚀 Calculate Z-Scores", type="primary", use_container_width=True)
+    with col_btn2:
+        st.caption("This will standardize selected variables against the reference population.")
+    
+    # Determine if we need to calculate
+    if run_button:
+        need_recalc = True
+    elif 'zscore_config_key' in st.session_state and st.session_state['zscore_config_key'] != config_key:
+        # Config changed, need recalc
+        need_recalc = True
+    
+    # Check if we have cached results
+    has_cached_results = 'zscore_results' in st.session_state and st.session_state.get('zscore_config_key') == config_key
+    
+    if not has_cached_results and not run_button:
+        st.info("👆 Click 'Calculate Z-Scores' to compute standardized values.")
+        return
+    
+    # Calculate Z-Scores (only if needed)
+    if need_recalc or not has_cached_results:
+        z_df = df.copy()
+        z_cols = []
+        ref_stats = {}
+
+        for var in target_vars:
+            col_name = f"{var}_Z"
+            z_cols.append(col_name)
+            
+            if ref_method == "Whole Cohort (Standardization)":
+                mu = df[var].mean()
+                sigma = df[var].std()
+            elif ref_method == "Internal Control Group":
+                if ref_group_col and ref_group_val:
+                    control_data = df[df[ref_group_col] == ref_group_val][var]
+                    mu = control_data.mean()
+                    sigma = control_data.std()
+                else:
+                    mu, sigma = 0, 1
+            else:  # Manual - use session state values
+                mu = st.session_state.get(f"mu_{var}", 0.0)
+                sigma = st.session_state.get(f"sigma_{var}", 1.0)
+            
+            ref_stats[var] = {"mean": round(mu, 3), "std": round(sigma, 3)}
+            z_df[col_name] = (df[var] - mu) / sigma if sigma > 0 else 0
+        
+        # Cache results in session state
+        st.session_state['zscore_results'] = {
+            'z_df': z_df,
+            'z_cols': z_cols,
+            'ref_stats': ref_stats,
+            'target_vars': target_vars
+        }
+        st.session_state['zscore_config_key'] = config_key
+    else:
+        # Use cached results
+        cached = st.session_state['zscore_results']
+        z_df = cached['z_df']
+        z_cols = cached['z_cols']
+        ref_stats = cached['ref_stats']
+        target_vars = cached['target_vars']
+
+    # ============ Results Section ============
+    st.subheader("📈 Results")
+    
+    # Summary Statistics
+    st.markdown("#### Summary of Z-Scores")
+    
+    summary_data = []
+    for z_col in z_cols:
+        orig_var = z_col.replace("_Z", "")
+        vals = z_df[z_col].dropna()
+        n_abnormal_high = (vals > 2).sum()
+        n_abnormal_low = (vals < -2).sum()
+        n_abnormal = n_abnormal_high + n_abnormal_low
+        pct_abnormal = (n_abnormal / len(vals) * 100) if len(vals) > 0 else 0
+        
+        summary_data.append({
+            "Variable": orig_var,
+            "Ref Mean": ref_stats[orig_var]["mean"],
+            "Ref SD": ref_stats[orig_var]["std"],
+            "Mean Z": f"{vals.mean():.2f}",
+            "SD": f"{vals.std():.2f}",
+            "Min": f"{vals.min():.2f}",
+            "Max": f"{vals.max():.2f}",
+            "n Abnormal (|Z|>2)": n_abnormal,
+            "% Abnormal": f"{pct_abnormal:.1f}%"
+        })
+    
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    
+    # Interpretation helper
+    total_abnormal = sum([int(row["n Abnormal (|Z|>2)"]) for row in summary_data])
+    if total_abnormal > 0:
+        st.warning(f"⚠️ **{total_abnormal} observations** have Z-scores outside ±2 SD (potentially abnormal values)")
+    else:
+        st.success("✅ All observations are within ±2 SD of the reference mean")
+    
+    # Download buttons
+    col_dl1, col_dl2 = st.columns(2)
+    with col_dl1:
+        st.download_button(
+            label="📥 Download Z-Score Data",
+            data=to_excel(z_df[list(df.columns) + z_cols]),
+            file_name="z_score_data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    with col_dl2:
+        st.download_button(
+            label="📥 Download Summary Table",
+            data=to_excel(summary_df),
+            file_name="z_score_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    # ============ Visualization Section ============
+    st.subheader("📊 Visualizations")
+    
+    viz_tabs = st.tabs(["📊 Group Comparison", "🌡️ Heatmap", "👤 Individual Profile"])
+    
+    with viz_tabs[0]:
+        st.markdown("#### Forest Plot: Mean Z-Scores by Group")
+        
+        col_grp1, col_grp2 = st.columns([2, 1])
+        with col_grp1:
+            group_col = st.selectbox(
+                "Group by", 
+                options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20],
+                key="zscore_group_col"
+            )
+        with col_grp2:
+            error_type = st.radio(
+                "Error bars",
+                ["95% CI", "±1 SD", "±2 SD"],
+                horizontal=True,
+                help="CI = Confidence Interval of the mean (smaller). SD = Standard Deviation of values (larger)."
+            )
+        
+        if group_col:
+            plot_data = []
             groups = z_df[group_col].dropna().unique()
             
             for g in groups:
@@ -797,29 +1158,33 @@ def run_zscore_analysis(df, analyzer):
                     vals = g_data[z_col].dropna()
                     if len(vals) > 1:
                         mean = vals.mean()
+                        sd = vals.std()
                         sem = stats.sem(vals)
-                        ci = 1.96 * sem
+                        ci = t_dist.ppf(0.975, len(vals)-1) * sem if len(vals) > 1 else 0
+                        
+                        # Select error bar based on user choice
+                        if error_type == "95% CI":
+                            error = ci
+                        elif error_type == "±1 SD":
+                            error = sd
+                        else:  # ±2 SD
+                            error = 2 * sd
+                        
                         plot_data.append({
                             "Group": g,
                             "Variable": orig_var,
                             "Mean Z": mean,
-                            "Lower CI": mean - ci,
-                            "Upper CI": mean + ci
+                            "SD": sd,
+                            "SEM": sem,
+                            "CI": ci,
+                            "Error": error,
+                            "n": len(vals)
                         })
             
             plot_df = pd.DataFrame(plot_data)
             
             if not plot_df.empty:
-                st.download_button(
-                    label="📥 Download Group Summary (Excel)",
-                    data=to_excel(plot_df),
-                    file_name="zscore_group_summary.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
                 fig = go.Figure()
-                
-                # Color by Group
                 colors = px.colors.qualitative.Plotly
                 
                 for i, g in enumerate(groups):
@@ -831,89 +1196,203 @@ def run_zscore_analysis(df, analyzer):
                         y=g_plot["Variable"],
                         error_x=dict(
                             type='data',
-                            symmetric=False,
-                            array=g_plot["Upper CI"] - g_plot["Mean Z"],
-                            arrayminus=g_plot["Mean Z"] - g_plot["Lower CI"],
-                            visible=True
+                            array=g_plot["Error"],
+                            visible=True,
+                            thickness=2,
+                            width=4
                         ),
                         mode='markers',
                         name=str(g),
-                        marker=dict(color=color, size=10)
+                        marker=dict(color=color, size=12, line=dict(width=1, color='black')),
+                        hovertemplate=f"<b>{g}</b><br>Mean: %{{x:.2f}}<br>SD: %{{customdata[0]:.2f}}<br>n: %{{customdata[1]}}<extra></extra>",
+                        customdata=g_plot[["SD", "n"]].values
                     ))
                 
-                # Add Reference Lines
-                fig.add_vline(x=0, line_width=2, line_dash="solid", line_color="black", annotation_text="Ref Mean")
-                fig.add_vline(x=1.96, line_width=1, line_dash="dash", line_color="gray", annotation_text="+1.96 SD")
-                fig.add_vline(x=-1.96, line_width=1, line_dash="dash", line_color="gray", annotation_text="-1.96 SD")
+                # Add reference lines
+                fig.add_vline(x=0, line_width=2, line_color="black")
+                fig.add_vrect(x0=-2, x1=2, fillcolor="green", opacity=0.08, line_width=0)
+                fig.add_vline(x=2, line_width=1, line_dash="dash", line_color="red")
+                fig.add_vline(x=-2, line_width=1, line_dash="dash", line_color="red")
                 
                 fig.update_layout(
-                    title=f"Mean Z-Scores by {group_col} (Relative to Reference)",
+                    title=f"Mean Z-Scores by {group_col} ({error_type})",
                     xaxis_title="Z-Score (SD from Reference Mean)",
                     yaxis_title="Variable",
-                    height=max(400, len(target_vars) * 50),
-                    template="plotly_white"
+                    height=max(450, len(target_vars) * 80),
+                    template="plotly_white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                    xaxis=dict(range=[-4, 4], dtick=1),
+                    margin=dict(l=150)  # More space for variable names
                 )
-                st.plotly_chart(fig, width='stretch')
-            else:
-                st.warning("Not enough data to plot.")
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Explanatory note
+                # Scientific interpretation
+                with st.expander("📖 How to Interpret this Forest Plot", expanded=False):
+                    st.markdown("""
+                    ### Forest Plot Interpretation Guide
+                    
+                    **What this shows:** Mean Z-scores for each variable, stratified by group, relative to the reference population.
+                    
+                    | Pattern | Interpretation | Action |
+                    |:--------|:---------------|:-------|
+                    | Mean at 0 | Group is similar to reference | No deviation |
+                    | Mean > +2 or < -2 | Group is **abnormally** different | Investigate clinically |
+                    | Small CI | Precise estimate (large n or low variance) | High confidence |
+                    | Large CI | Imprecise estimate (small n or high variance) | Interpret cautiously |
+                    | Groups overlap | No significant difference between groups | Similar profiles |
+                    | Groups don't overlap | Likely significant difference | Compare further |
+                    
+                    **Epidemiological Use:**
+                    - Compare disease vs control groups on biomarkers
+                    - Assess treatment effects across clinical measures  
+                    - Identify variables where groups differ most
+                    
+                    > **Note:** When using **95% CI**, non-overlapping bars suggest p < 0.05.
+                    > When using **SD**, bars show individual variability, not statistical precision.
+                    """)
 
-    elif viz_type == "Heatmap":
-        st.write("Heatmap of Z-Scores (Rows: Samples, Columns: Variables)")
+    with viz_tabs[1]:
+        st.markdown("#### Heatmap: Z-Score Distribution Across Samples")
         
-        # Limit rows for performance
-        if len(z_df) > 1000:
-            st.info("Downsampling to 1000 rows for heatmap performance.")
-            heatmap_df = z_df.sample(1000)
+        if len(z_df) > 500:
+            st.info(f"📌 Downsampling from {len(z_df)} to 500 rows for performance.")
+            heatmap_df = z_df.sample(500, random_state=42)
         else:
             heatmap_df = z_df
             
-        # Sort option
-        sort_col = st.selectbox("Sort by", ["None"] + z_cols)
+        sort_col = st.selectbox("Sort samples by", ["None"] + z_cols, key="heatmap_sort")
         if sort_col != "None":
             heatmap_df = heatmap_df.sort_values(sort_col)
             
         fig = px.imshow(
-            heatmap_df[z_cols],
+            heatmap_df[z_cols].values,
+            x=[c.replace("_Z", "") for c in z_cols],
             labels=dict(x="Variable", y="Sample", color="Z-Score"),
             color_continuous_scale="RdBu_r",
             zmin=-3, zmax=3,
             aspect="auto"
         )
-        st.plotly_chart(fig, width='stretch')
-
-    elif viz_type == "Individual Profile":
-        # Select a sample (row)
-        # Assuming there is some ID column or just use index
-        sample_id_col = st.selectbox("Select Sample ID Column (Optional)", ["Index"] + analyzer.categorical_cols)
+        fig.update_layout(height=500)
+        st.plotly_chart(fig, use_container_width=True)
         
-        if sample_id_col == "Index":
+        # Scientific interpretation
+        with st.expander("📖 How to Interpret this Heatmap", expanded=False):
+            st.markdown("""
+            ### Heatmap Interpretation Guide
+            
+            **What this shows:** Z-scores for all samples (rows) across all variables (columns).
+            
+            | Color | Z-Score | Meaning |
+            |:------|:--------|:--------|
+            | 🔵 Dark Blue | < -2 | Abnormally LOW (< 2.3 percentile) |
+            | 🔵 Light Blue | -2 to -1 | Mildly low |
+            | ⬜ White | -1 to +1 | Normal range |
+            | 🔴 Light Red | +1 to +2 | Mildly elevated |
+            | 🔴 Dark Red | > +2 | Abnormally HIGH (> 97.7 percentile) |
+            
+            **Patterns to Look For:**
+            - **Horizontal bands (rows):** Individual with multiple abnormal values → systemic issue
+            - **Vertical bands (columns):** Variable abnormal across many samples → measurement issue or population shift
+            - **Clusters:** Groups of similar profiles → potential subpopulations
+            
+            **Epidemiological Use:**
+            - Identify outlier individuals for case review
+            - Detect variables with high population-level deviation
+            - Screen for systematic measurement biases
+            """)
+
+    with viz_tabs[2]:
+        st.markdown("#### Individual Z-Score Profile")
+        
+        sample_id_col = st.selectbox("Select Sample ID Column", ["Row Index"] + analyzer.categorical_cols, key="profile_id_col")
+        
+        if sample_id_col == "Row Index":
             sample_idx = st.number_input("Row Index", min_value=0, max_value=len(z_df)-1, value=0, step=1)
             selected_row = z_df.iloc[sample_idx]
-            label = f"Row {sample_idx}"
+            label = f"Sample #{sample_idx}"
         else:
             sample_val = st.selectbox("Select Sample", z_df[sample_id_col].unique())
             selected_row = z_df[z_df[sample_id_col] == sample_val].iloc[0]
             label = str(sample_val)
             
-        # Radar Chart or Bar Chart
         values = [selected_row[c] for c in z_cols]
+        var_names = [c.replace("_Z", "") for c in z_cols]
+        
+        # Color by abnormality
+        colors_bar = []
+        for v in values:
+            if abs(v) > 2:
+                colors_bar.append('#f44336')  # Red - abnormal
+            elif abs(v) > 1:
+                colors_bar.append('#ff9800')  # Orange - borderline
+            else:
+                colors_bar.append('#4caf50')  # Green - normal
         
         fig = go.Figure()
         fig.add_trace(go.Bar(
-            x=target_vars,
+            x=var_names,
             y=values,
-            marker_color=['red' if abs(v) > 1.96 else 'blue' for v in values]
+            marker_color=colors_bar,
+            text=[f"{v:.2f}" for v in values],
+            textposition='outside'
         ))
         
-        fig.add_hline(y=1.96, line_dash="dash", line_color="red")
-        fig.add_hline(y=-1.96, line_dash="dash", line_color="red")
+        # Reference lines
+        fig.add_hline(y=2, line_dash="dash", line_color="red", annotation_text="+2 SD (Abnormal)")
+        fig.add_hline(y=-2, line_dash="dash", line_color="red", annotation_text="-2 SD (Abnormal)")
+        fig.add_hline(y=0, line_color="black", line_width=2)
+        fig.add_hrect(y0=-2, y1=2, fillcolor="green", opacity=0.1, line_width=0)
         
         fig.update_layout(
-            title=f"Z-Score Profile for {label}",
+            title=f"Z-Score Profile: {label}",
             yaxis_title="Z-Score",
-            yaxis_range=[min(min(values), -3), max(max(values), 3)]
+            yaxis_range=[min(min(values) - 0.5, -3), max(max(values) + 0.5, 3)],
+            template="plotly_white"
         )
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Interpretation table for this individual
+        n_abnormal = sum(1 for v in values if abs(v) > 2)
+        n_borderline = sum(1 for v in values if 1 < abs(v) <= 2)
+        
+        col_interp1, col_interp2, col_interp3 = st.columns(3)
+        with col_interp1:
+            st.metric("🔴 Abnormal (|Z| > 2)", n_abnormal)
+        with col_interp2:
+            st.metric("🟠 Borderline (1 < |Z| ≤ 2)", n_borderline)
+        with col_interp3:
+            st.metric("🟢 Normal (|Z| ≤ 1)", len(values) - n_abnormal - n_borderline)
+        
+        # Scientific interpretation
+        with st.expander("📖 How to Interpret Individual Profiles", expanded=False):
+            st.markdown("""
+            ### Individual Profile Interpretation Guide
+            
+            **What this shows:** One individual's Z-scores across all measured variables.
+            
+            | Zone | Clinical Interpretation |
+            |:-----|:------------------------|
+            | 🟢 Green bars | Values within normal limits |
+            | 🟠 Orange bars | Borderline values - monitor |
+            | 🔴 Red bars | Abnormal values - investigate |
+            
+            **Clinical Decision Rules:**
+            - **All green:** Normal profile, routine follow-up
+            - **1-2 orange:** Monitor at next visit
+            - **Any red:** Requires clinical review
+            - **Multiple red:** Consider comprehensive workup
+            
+            **Things to Consider:**
+            - Is the abnormality **clinically meaningful** (not just statistically)?
+            - Is it **isolated** or part of a **pattern** (e.g., all lipid markers elevated)?
+            - What is the **direction** of deviation (high vs low)?
+            - Does the **reference population** match this individual's demographics?
+            
+            **Epidemiological Context:**
+            - ~5% of healthy individuals will have at least one |Z| > 2 by chance alone
+            - More variables = higher false positive rate (multiple testing)
+            """)
 
 def show_educational_content():
     st.header("📚 Statistical Test Guide")
