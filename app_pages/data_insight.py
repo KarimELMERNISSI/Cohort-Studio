@@ -858,7 +858,7 @@ def app():
     )
 
     # --- Main Content Tabs ---
-    tab_graph, tab_overview, tab_details, tab_formulas,  tab_refine = st.tabs(["🕸️ Knowledge Graph", "📋 Overview", "🔍 Variable Details", "🧮 Formulas Details", "🛠️ Refinement"])
+    tab_graph, tab_overview, tab_details, tab_formulas, tab_clustering, tab_refine = st.tabs(["🕸️ Knowledge Graph", "📋 Overview", "🔍 Variable Details", "🧮 Formulas Details", "🔬 Population Clustering", "🛠️ Refinement"])
     
     # --- TAB 1: OVERVIEW ---
     with tab_overview:
@@ -1326,8 +1326,336 @@ def app():
                         st.markdown(f"- {ref}")
             else:
                 st.info("Select a formula from the left panel to view its details.")
+    
+    # --- TAB 5: POPULATION CLUSTERING ---
+    with tab_clustering:
+        st.subheader("🔬 Population Clustering & Dimensionality Reduction")
+        
+        # Educational Introduction
+        with st.expander("📚 What is Clustering Analysis?", expanded=False):
+            st.markdown("""
+            ### Understanding Clustering in Epidemiology
             
-    # --- TAB 4: REFINEMENT ---
+            **Clustering** identifies natural subgroups (phenotypes) in your population based on 
+            similarities across multiple variables.
+            
+            ---
+            
+            #### 🎯 Clustering Algorithms
+            
+            | Method | How it Works | Best For | Output |
+            |:-------|:-------------|:---------|:-------|
+            | **K-Means** | Minimizes distance to K centroids | Well-separated, spherical clusters | Hard assignment (1 cluster per sample) |
+            | **DBSCAN** | Groups points in dense regions | Arbitrary shapes, **outlier detection** | Hard + Noise label (-1) |
+            | **Gaussian Mixture** | Fits K Gaussian distributions | Overlapping clusters, probabilistic | **Soft assignment** (probability per cluster) |
+            
+            ##### Parameter Guide
+            
+            | Algorithm | Parameter | Meaning | Typical Values |
+            |:----------|:----------|:--------|:---------------|
+            | **K-Means** | K | Number of clusters to find | 2-10 (use Elbow/Silhouette) |
+            | **DBSCAN** | eps | Max distance for neighbors | 0.3-1.0 (depends on data scale) |
+            | **DBSCAN** | min_samples | Min points to form cluster | 5-10 |
+            | **Gaussian Mixture** | n_components | Number of Gaussians = clusters | 2-10 (use BIC/AIC) |
+            
+            > **Note:** In GMM, "components" = clusters. Each Gaussian distribution represents one subpopulation.
+            > GMM gives **soft assignments**: each sample has a probability of belonging to each cluster.
+            
+            ---
+            
+            #### 📐 Dimensionality Reduction Methods
+            
+            | Method | What it Preserves | Speed | When to Use |
+            |:-------|:------------------|:------|:------------|
+            | **PCA** | Global structure & variance | ⚡ Very fast | First exploration, interpretable axes |
+            | **t-SNE** | Local neighborhoods | 🐢 Slow | Visualizing clusters (< 3000 samples) |
+            | **UMAP** | Local + some global | 🚀 Fast | Large datasets, better than t-SNE |
+            
+            ##### Key Differences
+            
+            - **PCA**: Linear projection. Axes have meaning (loadings). Distances are meaningful.
+            - **t-SNE**: Non-linear. Great for cluster visualization. **Distances BETWEEN clusters are meaningless!**
+            - **UMAP**: Non-linear like t-SNE but preserves more global structure. Generally preferred.
+            
+            ---
+            
+            #### ⚠️ Important Caveats
+            
+            1. **Standardization**: Variables are auto-standardized (mean=0, SD=1) before analysis
+            2. **Missing values**: Rows with any missing value are dropped
+            3. **Interpretation**: Clusters are exploratory, validate with clinical knowledge
+            4. **Overfitting**: More clusters ≠ better. Aim for 3-5 interpretable groups
+            """)
+        
+        # Check if data is loaded
+        if "working_df" not in st.session_state:
+            st.warning("⚠️ Please load a dataset from the Main View page first.")
+        else:
+            df = st.session_state["working_df"]
+            
+            # Identify column types
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            
+            if len(numeric_cols) < 2:
+                st.error("❌ Need at least 2 numeric variables for clustering.")
+            else:
+                # Configuration Panel
+                st.markdown("### ⚙️ Configuration")
+                
+                col_cfg1, col_cfg2 = st.columns(2)
+                
+                with col_cfg1:
+                    selected_vars = st.multiselect(
+                        "📊 Select Variables for Analysis",
+                        options=numeric_cols,
+                        default=numeric_cols[:min(5, len(numeric_cols))],
+                        help="Choose numeric variables to include in clustering."
+                    )
+                    
+                    dim_method = st.selectbox(
+                        "📐 Dimensionality Reduction",
+                        ["PCA", "t-SNE", "UMAP"],
+                        help="Method to project data to 2D for visualization."
+                    )
+                    
+                with col_cfg2:
+                    cluster_method = st.selectbox(
+                        "🎯 Clustering Algorithm",
+                        ["K-Means", "DBSCAN", "Gaussian Mixture"],
+                        help="Algorithm to identify subgroups."
+                    )
+                    
+                    # Method-specific parameters
+                    if cluster_method == "K-Means":
+                        n_clusters = st.slider("Number of Clusters (K)", 2, 10, 3)
+                    elif cluster_method == "DBSCAN":
+                        eps = st.slider("Epsilon (neighborhood size)", 0.1, 2.0, 0.5, 0.1)
+                        min_samples = st.slider("Min Samples", 2, 20, 5)
+                    else:  # GMM
+                        n_clusters = st.slider("Number of Components", 2, 10, 3)
+                    
+                    color_by = st.selectbox(
+                        "🎨 Color by (optional)",
+                        ["Cluster"] + categorical_cols[:10],
+                        help="Color points by cluster or existing group variable."
+                    )
+                
+                if len(selected_vars) < 2:
+                    st.warning("👆 Please select at least 2 variables.")
+                else:
+                    # Run Analysis Button
+                    if st.button("🚀 Run Clustering Analysis", type="primary", use_container_width=True):
+                        with st.spinner("Running analysis..."):
+                            try:
+                                # Lazy import clustering utils
+                                from utils.clustering_utils import (
+                                    prepare_data_for_clustering, 
+                                    run_pca, run_tsne, run_umap,
+                                    fit_kmeans, fit_dbscan, fit_gaussian_mixture,
+                                    optimal_k_analysis, compute_cluster_profiles
+                                )
+                                
+                                # Prepare data
+                                prep_data, valid_idx = prepare_data_for_clustering(
+                                    df, selected_vars, handle_missing="drop"
+                                )
+                                
+                                if len(prep_data) < 10:
+                                    st.error("❌ Not enough valid samples after removing missing values.")
+                                else:
+                                    # Run dimensionality reduction
+                                    if dim_method == "PCA":
+                                        embeddings, dim_info = run_pca(prep_data, n_components=2)
+                                    elif dim_method == "t-SNE":
+                                        embeddings, dim_info = run_tsne(prep_data, n_components=2, max_samples=3000)
+                                    else:  # UMAP
+                                        try:
+                                            embeddings, dim_info = run_umap(prep_data, n_components=2, max_samples=5000)
+                                        except ImportError:
+                                            st.error("UMAP not installed. Run: `pip install umap-learn`")
+                                            embeddings, dim_info = run_pca(prep_data, n_components=2)
+                                            dim_method = "PCA (fallback)"
+                                    
+                                    # Run clustering
+                                    if cluster_method == "K-Means":
+                                        labels, clust_info = fit_kmeans(embeddings, n_clusters)
+                                    elif cluster_method == "DBSCAN":
+                                        labels, clust_info = fit_dbscan(embeddings, eps, min_samples)
+                                    else:  # GMM
+                                        labels, clust_info = fit_gaussian_mixture(embeddings, n_clusters)
+                                    
+                                    # Store results in session state
+                                    st.session_state['clustering_results'] = {
+                                        'embeddings': embeddings,
+                                        'labels': labels,
+                                        'valid_idx': valid_idx,
+                                        'dim_info': dim_info,
+                                        'clust_info': clust_info,
+                                        'dim_method': dim_method,
+                                        'cluster_method': cluster_method,
+                                        'selected_vars': selected_vars
+                                    }
+                                    st.success(f"✅ Analysis complete! Found {len(set(labels)) - (1 if -1 in labels else 0)} clusters.")
+                            
+                            except Exception as e:
+                                st.error(f"❌ Error: {str(e)}")
+                    
+                    # Display results if available
+                    if 'clustering_results' in st.session_state:
+                        results = st.session_state['clustering_results']
+                        embeddings = results['embeddings']
+                        labels = results['labels']
+                        valid_idx = results['valid_idx']
+                        
+                        st.markdown("---")
+                        st.markdown("### 📊 Results")
+                        
+                        # Visualization tabs
+                        viz_tabs = st.tabs(["📈 Scatter Plot", "📊 Cluster Profiles", "📉 Optimal K"])
+                        
+                        with viz_tabs[0]:
+                            import plotly.express as px
+                            
+                            # Prepare plot data
+                            plot_df = pd.DataFrame({
+                                'Dim 1': embeddings[:, 0],
+                                'Dim 2': embeddings[:, 1],
+                                'Cluster': [f"Cluster {l}" if l >= 0 else "Noise" for l in labels]
+                            })
+                            
+                            # Add color_by variable if not cluster
+                            if color_by != "Cluster" and color_by in df.columns:
+                                plot_df['Color'] = df.loc[valid_idx, color_by].values
+                                color_col = 'Color'
+                            else:
+                                color_col = 'Cluster'
+                            
+                            fig = px.scatter(
+                                plot_df,
+                                x='Dim 1',
+                                y='Dim 2',
+                                color=color_col,
+                                title=f"{results['dim_method']} Projection with {results['cluster_method']} Clustering",
+                                template="plotly_white"
+                            )
+                            fig.update_layout(height=500)
+                            fig.update_traces(marker=dict(size=8, opacity=0.7))
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Interpretation
+                            with st.expander("📖 How to Interpret"):
+                                st.markdown("""
+                                **Reading the Plot:**
+                                - Each point = one sample
+                                - Nearby points = similar profiles
+                                - Colors = cluster assignments or group
+                                - Well-separated clusters = distinct subpopulations
+                                
+                                **Caveats:**
+                                - 2D projection may distort distances
+                                - t-SNE/UMAP: distances between clusters are NOT meaningful
+                                - Always validate clusters with clinical knowledge
+                                """)
+                        
+                        with viz_tabs[1]:
+                            from utils.clustering_utils import compute_cluster_profiles
+                            
+                            # Compute profiles
+                            df_subset = df.loc[valid_idx].copy()
+                            profiles = compute_cluster_profiles(df_subset, labels, results['selected_vars'])
+                            
+                            st.markdown("#### Mean Values per Cluster")
+                            st.dataframe(profiles.style.background_gradient(axis=0, cmap='RdYlGn'), use_container_width=True)
+                            
+                            # Download
+                            st.download_button(
+                                "📥 Download Profiles",
+                                data=profiles.to_csv(),
+                                file_name="cluster_profiles.csv",
+                                mime="text/csv"
+                            )
+                            
+                            with st.expander("📖 How to Interpret"):
+                                st.markdown("""
+                                **Reading Cluster Profiles:**
+                                - Each row = one cluster
+                                - Values = mean of each variable in that cluster
+                                - Compare across clusters to characterize phenotypes
+                                
+                                **Example Interpretation:**
+                                - "Cluster 0 has high BMI, high glucose → metabolic phenotype"
+                                - "Cluster 2 has low all biomarkers → healthy controls"
+                                """)
+                        
+                        with viz_tabs[2]:
+                            from utils.clustering_utils import optimal_k_analysis
+                            import plotly.graph_objects as go
+                            
+                            # Only for K-Means/GMM
+                            if results['cluster_method'] != "DBSCAN":
+                                with st.spinner("Computing optimal K..."):
+                                    opt_analysis = optimal_k_analysis(embeddings, k_range=range(2, 11))
+                                
+                                fig = go.Figure()
+                                
+                                # Elbow plot
+                                fig.add_trace(go.Scatter(
+                                    x=opt_analysis['k_values'],
+                                    y=opt_analysis['inertias'],
+                                    mode='lines+markers',
+                                    name='Inertia (Elbow)',
+                                    yaxis='y1'
+                                ))
+                                
+                                # Silhouette
+                                fig.add_trace(go.Scatter(
+                                    x=opt_analysis['k_values'],
+                                    y=opt_analysis['silhouette_scores'],
+                                    mode='lines+markers',
+                                    name='Silhouette Score',
+                                    yaxis='y2',
+                                    line=dict(color='green')
+                                ))
+                                
+                                fig.update_layout(
+                                    title="Optimal Number of Clusters",
+                                    xaxis_title="K (Number of Clusters)",
+                                    yaxis=dict(title="Inertia", side="left"),
+                                    yaxis2=dict(title="Silhouette", side="right", overlaying="y"),
+                                    template="plotly_white"
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                                st.info(f"📌 **Recommended K (by Silhouette):** {opt_analysis['optimal_k_silhouette']}")
+                                
+                                with st.expander("📖 How to Choose K"):
+                                    st.markdown("""
+                                    **Elbow Method:** Look for "bend" in the curve
+                                    - Steep drop → adding clusters helps
+                                    - Flat → diminishing returns
+                                    
+                                    **Silhouette Score:** Higher is better (max = 1)
+                                    - > 0.5 = good clustering
+                                    - 0.25-0.5 = acceptable
+                                    - < 0.25 = poor separation
+                                    
+                                    **Practical Advice:**
+                                    - Consider clinical interpretability
+                                    - More clusters ≠ better
+                                    - 3-5 clusters often sufficient
+                                    """)
+                            else:
+                                st.info("ℹ️ DBSCAN automatically determines the number of clusters based on density.")
+                                st.markdown(f"""
+                                **DBSCAN Results:**
+                                - Clusters found: **{results['clust_info']['n_clusters']}**
+                                - Noise points: **{results['clust_info']['n_noise']}** ({results['clust_info']['noise_ratio']:.1%})
+                                
+                                💡 Adjust `eps` and `min_samples` to tune clustering.
+                                """)
+            
+    # --- TAB 6: REFINEMENT ---
     with tab_refine:
         st.subheader("🛠️ Taxonomy Refinement")
         

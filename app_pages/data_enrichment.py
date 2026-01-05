@@ -1584,7 +1584,7 @@ def compute_transformations(dataframe):
     # Step 1: Transformation Type Selection
     transformation_type = st.selectbox(
         "Choose a transformation type:",
-        options=["Statistical-Based", "Dimensional Reduction-Based", "Scaling-Based", "Encoding"],
+        options=["Statistical-Based", "Dimensional Reduction-Based", "Scaling-Based", "Cluster-Based", "Encoding"],
         help="Select the type of transformation."
     )
 
@@ -1619,6 +1619,21 @@ def compute_transformations(dataframe):
         # Display explanation for the selected transformation method
         st.info(transformation_explanations[transformation])
 
+    elif transformation_type == "Cluster-Based":
+        # Define explanations for each clustering method
+        cluster_explanations = {
+            "K-Means": ":grey_question: **K-Means** partitions data into K clusters by minimizing within-cluster distances. Creates a categorical variable indicating which cluster each sample belongs to.",
+            "DBSCAN": ":grey_question: **DBSCAN** groups densely packed points, leaving sparse points as noise (-1). Good for finding clusters of arbitrary shapes and detecting outliers.",
+            "Gaussian Mixture": ":grey_question: **Gaussian Mixture Model (GMM)** fits K Gaussian distributions to the data. Each component = one cluster. Provides soft (probabilistic) cluster assignments."
+        }
+        
+        transformation = st.selectbox(
+            "Choose a clustering algorithm:",
+            options=["K-Means", "DBSCAN", "Gaussian Mixture"],
+            help="Select the clustering algorithm to assign samples to groups."
+        )
+        # Display explanation for the selected method
+        st.info(cluster_explanations[transformation])
 
     else:
         # Define explanations for each numerization method
@@ -1671,6 +1686,8 @@ def compute_transformations(dataframe):
         naming_pattern_val = "Name_{method_applied}_Component"
     elif transformation_type == "Encoding":
         naming_pattern_val = "{initial_variable}_{category}"
+    elif transformation_type == "Cluster-Based":
+        naming_pattern_val = "Cluster_{method_applied}"
     else:
         naming_pattern_val = "{initial_variable}_{method_applied}"
     
@@ -1796,9 +1813,23 @@ def compute_transformations(dataframe):
                 st.pyplot(fig)
 
         if transformation in ["PCA", "FAMD"] and show_explained_variance:  
-            styled_df = model.column_contributions_.iloc[:, :n_components].style.format('{:.0%}').background_gradient(cmap='Blues', vmin=0, vmax=1)  # Gradient scale from 0 to 1
             st.subheader("Contributions to components")
             st.dataframe(styled_df, width='stretch')
+
+    # Clustering Settings
+    if transformation_type == "Cluster-Based":
+        st.markdown("### Clustering Parameters")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            if transformation == "K-Means":
+                n_clusters = st.slider("Number of Clusters (K)", 2, 20, 3, key="clk_k")
+            elif transformation == "DBSCAN":
+                eps = st.slider("Epsilon (Neighborhood Size)", 0.1, 5.0, 0.5, 0.1, key="cldb_eps")
+            elif transformation == "Gaussian Mixture":
+                n_clusters = st.slider("Number of Components", 2, 20, 3, key="clgmm_k")
+        with col_c2:
+            if transformation == "DBSCAN":
+                min_samples = st.slider("Min Samples", 2, 20, 5, key="cldb_min")
 
     # Apply Transformation Button
     if st.button("Apply Transformation", disabled=not (naming_pattern and columns)):
@@ -1853,6 +1884,32 @@ def compute_transformations(dataframe):
                 # Convert to dictionary and update new_columns
                 new_columns.update(result_df.to_dict(orient="list"))
 
+            elif transformation_type == "Cluster-Based":
+                from utils.clustering_utils import prepare_data_for_clustering, fit_kmeans, fit_dbscan, fit_gaussian_mixture
+                
+                # Prepare Data (handles standardization)
+                numeric_cols = dataframe[columns].select_dtypes(include=np.number).columns.tolist()
+                prep_data, valid_idx = prepare_data_for_clustering(dataframe[columns], numeric_cols)
+                
+                if len(prep_data) < 2:
+                    st.error("❌ Not enough valid data points for clustering.")
+                    return
+                
+                # Run Clustering
+                if transformation == "K-Means":
+                    labels, _ = fit_kmeans(prep_data, n_clusters)
+                elif transformation == "DBSCAN":
+                    labels, _ = fit_dbscan(prep_data, eps, min_samples)
+                elif transformation == "Gaussian Mixture":
+                    labels, _ = fit_gaussian_mixture(prep_data, n_clusters)
+                
+                # Map results back to original index
+                full_labels = pd.Series(index=dataframe.index, data=np.nan)
+                full_labels.loc[valid_idx] = labels
+                
+                col_name = naming_pattern.format(method_applied=transformation.replace(" ", "_"))
+                new_columns[col_name] = full_labels.values
+
 
             elif transformation_type == "Encoding":
                 if transformation == "One-Hot Encoding":
@@ -1904,6 +1961,19 @@ def compute_transformations(dataframe):
                             result = [result] * len(dataframe)
                         new_columns[new_col_name] = result
 
+            # Resolve duplicate column names
+            final_new_columns = {}
+            for col_name, data in new_columns.items():
+                original_col_name = col_name
+                counter = 1
+                # Check against existing dataframe columns AND newly created columns
+                while col_name in dataframe.columns or col_name in final_new_columns:
+                    col_name = f"{original_col_name}_{counter}"
+                    counter += 1
+                final_new_columns[col_name] = data
+            
+            new_columns = final_new_columns
+
             # Create final result DataFrame
             if new_columns:
                 result_df = pd.DataFrame(new_columns, index=dataframe.index)
@@ -1932,6 +2002,9 @@ def compute_transformations(dataframe):
                 if 'n_neighbors' in locals(): params['n_neighbors'] = n_neighbors
                 if 'min_dist' in locals(): params['min_dist'] = min_dist
                 if 'category_orders' in locals(): params['category_orders'] = category_orders
+                if 'n_clusters' in locals(): params['n_clusters'] = n_clusters
+                if 'eps' in locals(): params['eps'] = eps
+                if 'min_samples' in locals(): params['min_samples'] = min_samples
 
                 st.session_state.transformation_manager.add_step(
                     "variable_transformation", 
