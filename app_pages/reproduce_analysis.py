@@ -11,7 +11,6 @@ from utils.multipage import load_dataframe
 from utils.path_utils import resolve_path
 
 def app():
-    st.title("🔄 Reproduce Analysis")
     
     # Option to upload trace directly
     uploaded_trace = st.file_uploader("📂 Upload Trace File (.json)", type=["json"])
