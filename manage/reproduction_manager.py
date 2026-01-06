@@ -4,6 +4,7 @@ import json
 import enrich.external_data as eed
 from app_pages.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
+from utils.path_utils import resolve_path
 
 def reproduce_trace(trace_file):
     try:
@@ -21,7 +22,30 @@ def reproduce_trace(trace_file):
     if st.button("Start Reproduction"):
         # Load source dataset
         db_manager = DBManager()
-        df, msg = db_manager.load_dataset(source_dataset)
+        if hasattr(db_manager, "load_dataset"):
+            # Resolve path first
+            resolved_source = resolve_path(source_dataset)
+            if resolved_source:
+                df, msg = db_manager.load_dataset(resolved_source)
+            else:
+                df, msg = None, f"Source file not found: {source_dataset}"
+        else:
+            # Fallback if db_manager doesn't have load_dataset directly (depending on impl)
+            resolved_source = resolve_path(source_dataset)
+            if resolved_source:
+                try:
+                    if resolved_source.endswith('.csv'):
+                        df = pd.read_csv(resolved_source)
+                        msg = "Success"
+                    elif resolved_source.endswith('.xlsx'):
+                        df = pd.read_excel(resolved_source)
+                        msg = "Success"
+                    else:
+                        df, msg = None, "Unknown format"
+                except Exception as e:
+                    df, msg = None, str(e)
+            else:
+                df, msg = None, "File not found"
         
         if df is None:
             st.error(f"Could not load source dataset: {msg}")
@@ -47,18 +71,21 @@ def reproduce_trace(trace_file):
                 if func_name == "enrichment":
                     # Need to load enrichment file
                     enrichment_file_path = params.get("enrichment_file_path")
-                    
-                    # Try to load enrichment df
-                    try:
-                        if enrichment_file_path.endswith('.xlsx'):
-                            enrichment_df = pd.read_excel(enrichment_file_path) 
-                        else:
-                            enrichment_df = pd.read_csv(enrichment_file_path)
-                    except:
+                    resolved_enrich = resolve_path(enrichment_file_path)
+
+                    if not resolved_enrich:
                         st.error(f"Could not load enrichment file: {enrichment_file_path}. Please ensure the file is accessible.")
                         return
 
-                    identifier = params.get("identifier")
+                    # Try to load enrichment df
+                    try:
+                        if resolved_enrich.endswith('.xlsx'):
+                            enrichment_df = pd.read_excel(resolved_enrich) 
+                        else:
+                            enrichment_df = pd.read_csv(resolved_enrich)
+                    except Exception as e:
+                        st.error(f"Could not load enrichment file: {resolved_enrich} (Original: {enrichment_file_path}). Error: {e}")
+                        return
                     # identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
                     # additional_columns = list(set(enrichment_df.columns) - identifier_set)
                     

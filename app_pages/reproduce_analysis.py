@@ -8,31 +8,47 @@ import enrich.external_data as eed
 from app_pages.transformation_logic import apply_variable_transformation
 from app_pages.data_enrichment import apply_imputer, evaluate_formula_safely
 from utils.multipage import load_dataframe
+from utils.path_utils import resolve_path
 
 def app():
     st.title("🔄 Reproduce Analysis")
     
-    trace_dir = "data/traces"
-    if not os.path.exists(trace_dir):
-        st.info("No analysis traces found.")
-        return
-
-    # List available traces
-    traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]
+    # Option to upload trace directly
+    uploaded_trace = st.file_uploader("📂 Upload Trace File (.json)", type=["json"])
     
-    if not traces:
-        st.info("No analysis traces found in data/traces/")
-        return
+    trace_data = None
+    selected_trace_file = None
 
-    # Sort traces by modification time (newest first)
-    traces.sort(key=lambda x: os.path.getmtime(os.path.join(trace_dir, x)), reverse=True)
+    if uploaded_trace:
+        try:
+            trace_data = json.load(uploaded_trace)
+            st.success(f"Result loaded from **{uploaded_trace.name}**")
+        except Exception as e:
+            st.error(f"Error parsing JSON: {e}")
+    else:
+        trace_dir = "data/traces"
+        if not os.path.exists(trace_dir):
+            st.info("No analysis traces found (and no file uploaded).")
+            return
 
-    selected_trace_file = st.selectbox("Select Analysis Session", traces)
-    
-    if selected_trace_file:
-        trace_path = os.path.join(trace_dir, selected_trace_file)
-        with open(trace_path, 'r') as f:
-            trace_data = json.load(f)
+        # List available traces
+        traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]
+        
+        if not traces:
+            st.info("No analysis traces found in data/traces/")
+            return
+
+        # Sort traces by modification time (newest first)
+        traces.sort(key=lambda x: os.path.getmtime(os.path.join(trace_dir, x)), reverse=True)
+
+        selected_trace_file = st.selectbox("Select Analysis Session", traces)
+        
+        if selected_trace_file:
+            trace_path = os.path.join(trace_dir, selected_trace_file)
+            with open(trace_path, 'r') as f:
+                trace_data = json.load(f)
+
+    if trace_data:
             
         source_dataset = trace_data.get('source_dataset')
         session_id = trace_data.get('session_id', 'Unknown Session')
@@ -100,11 +116,18 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     target_step = steps[target_step_index]
     
     # 1. Fast Mode: Try to load snapshot
-    if rerun_mode == "Fast (Use Snapshots)" and target_step.get('output_dataset_path') and os.path.exists(target_step.get('output_dataset_path')):
+    snapshot_path = target_step.get('output_dataset_path')
+    resolved_snapshot = resolve_path(snapshot_path) if snapshot_path else None
+    
+    if rerun_mode == "Fast (Use Snapshots)" and resolved_snapshot:
         try:
             with st.spinner(f"Loading snapshot for Step {target_step_index+1}..."):
                 # Determine file type
-                path = target_step.get('output_dataset_path')
+                path = resolve_path(target_step.get('output_dataset_path'))
+                if not path:
+                    st.warning(f"Snapshot not found: {target_step.get('output_dataset_path')}")
+                    raise FileNotFoundError("Snapshot not found")
+
                 if path.endswith('.parquet'):
                     df = pd.read_parquet(path)
                 elif path.endswith('.csv'):
@@ -134,17 +157,52 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     source_dataset = candidate_path
 
         # Handle initial load
-        if source_dataset and os.path.exists(source_dataset):
-             # Determine file type
-            if source_dataset.endswith('.csv'):
-                df = pd.read_csv(source_dataset)
-            elif source_dataset.endswith('.xlsx'):
-                df = pd.read_excel(source_dataset)
-            elif source_dataset.endswith('.parquet'):
-                df = pd.read_parquet(source_dataset)
+        if source_dataset:
+            resolved_source = resolve_path(source_dataset)
+            if not resolved_source:
+                st.warning(f"Could not find source dataset at: `{source_dataset}`")
+                st.info("It seems the file path is different (possibly due to Docker/OS differences). Please locate the file manually.")
+                
+                # Check if we have a manual override in session state from a previous run or input
+                manual_path_key = f"manual_source_path_{session_id}"
+                
+                col_manual, col_upload = st.columns(2)
+                with col_manual:
+                    manual_source = st.text_input("Enter path to source dataset:", value=os.path.basename(source_dataset), key=manual_path_key)
+                
+                with col_upload:
+                    uploaded_source = st.file_uploader("Or upload source file:", type=['csv', 'xlsx', 'parquet'], key=f"upload_source_{session_id}")
+                
+                if uploaded_source:
+                    # Save uploaded file
+                    os.makedirs("data/uploads", exist_ok=True)
+                    save_path = os.path.join("data/uploads", uploaded_source.name)
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_source.getbuffer())
+                    resolved_source = save_path
+                    st.success(f"Using uploaded file: {save_path}")
+                elif manual_source and os.path.exists(manual_source):
+                     resolved_source = manual_source
+                elif manual_source and os.path.exists(os.path.join("data", manual_source)):
+                     resolved_source = os.path.join("data", manual_source)
+            
+            if resolved_source and os.path.exists(resolved_source):
+                source_dataset = resolved_source # Update to valid path
+                # Determine file type
+                if source_dataset.endswith('.csv'):
+                    df = pd.read_csv(source_dataset)
+                elif source_dataset.endswith('.xlsx'):
+                    df = pd.read_excel(source_dataset)
+                elif source_dataset.endswith('.parquet'):
+                    df = pd.read_parquet(source_dataset)
+                else:
+                    st.error(f"Unknown file type for source dataset: {source_dataset}")
+                    return
             else:
-                st.error(f"Unknown file type for source dataset: {source_dataset}")
-                return
+                 if resolved_source:
+                     st.error(f"Still cannot find file at: {resolved_source}")
+                 return
+
         else:
             # Try DB Manager
             db_manager = DBManager()
@@ -156,10 +214,18 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             
         current_df = df.copy()
         
+        # Initialize Progress Bar
+        progress_bar = st.progress(0, text="Starting reproduction...")
+        
         # Replay loop
         for i in range(target_step_index + 1):
             step = steps[i]
             func_name = step['function']
+            description = step.get('description', func_name)
+            
+            # Update Progress
+            progress_bar.progress((i + 1) / (target_step_index + 1), text=f"Step {i+1}: {description}")
+            
             params = step['params']
             
             if func_name == "initial_load":
@@ -173,8 +239,34 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     strategy = params.get("strategy", "left")
                     conflict_resolution = params.get("conflict_resolution", "add")
                     
-                    if enrichment_file_path and os.path.exists(enrichment_file_path):
-                        enrichment_df = load_dataframe(enrichment_file_path)
+                    if enrichment_file_path:
+                        resolved_enrich_path = resolve_path(enrichment_file_path)
+                        
+                        if not resolved_enrich_path:
+                             st.warning(f"Enrichment file not found: `{enrichment_file_path}`")
+                             manual_enrich_key = f"manual_enrich_path_{i}_{session_id}"
+                             
+                             col_enrich_manual, col_enrich_upload = st.columns(2)
+                             with col_enrich_manual:
+                                 manual_enrich = st.text_input(f"Enter path for enrichment file (Step {i+1}):", value=os.path.basename(enrichment_file_path), key=manual_enrich_key)
+                             
+                             with col_enrich_upload:
+                                 uploaded_enrich = st.file_uploader(f"Or upload enrichment file (Step {i+1}):", type=['csv', 'xlsx'], key=f"upload_enrich_{i}_{session_id}")
+                             
+                             if uploaded_enrich:
+                                 os.makedirs("data/uploads", exist_ok=True)
+                                 save_path_enrich = os.path.join("data/uploads", uploaded_enrich.name)
+                                 with open(save_path_enrich, "wb") as f:
+                                     f.write(uploaded_enrich.getbuffer())
+                                 resolved_enrich_path = save_path_enrich
+                                 st.success(f"Using uploaded enrichment file: {save_path_enrich}")
+                             elif manual_enrich and os.path.exists(manual_enrich):
+                                 resolved_enrich_path = manual_enrich
+                             elif manual_enrich and os.path.exists(os.path.join("data", manual_enrich)):
+                                 resolved_enrich_path = os.path.join("data", manual_enrich)
+
+                        if resolved_enrich_path and os.path.exists(resolved_enrich_path):
+                            enrichment_df = load_dataframe(resolved_enrich_path)
                         if enrichment_df is not None:
                             # Ensure identifier is a list/set as expected by add_data
                             # In data_enrichment.py it handles str vs list, but let's be safe
@@ -284,4 +376,5 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
         st.session_state['working_df'] = current_df
         st.session_state['data'] = current_df
         st.session_state['enriched_df'] = current_df
+        progress_bar.empty() # clear progress bar
         st.success(f"Successfully reproduced state at Step {target_step_index+1} (Full Replay)")
