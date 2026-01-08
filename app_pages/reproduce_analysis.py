@@ -92,6 +92,11 @@ def app():
                     )
                 
                 if artifact_folder and os.path.exists(artifact_folder):
+                    # Handle if user pointed to a file instead of a folder
+                    if os.path.isfile(artifact_folder):
+                         st.info(f"ℹ️ You selected a file (`{os.path.basename(artifact_folder)}`). Using its parent directory as the artifact folder.")
+                         artifact_folder = os.path.dirname(artifact_folder)
+
                     st.success(f"Scanning folder: `{artifact_folder}`")
                     
                     # Show files in this folder as a control
