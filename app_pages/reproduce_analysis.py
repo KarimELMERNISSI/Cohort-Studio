@@ -50,12 +50,13 @@ def app():
     if trace_data:
             
         # --- PRE-FLIGHT CHECK ---
-        missing_files = []
+        # Use a dict to ensure unique paths and prevent duplicate widget keys
+        missing_files_map = {}
         
         # Check source
         source_dataset = trace_data.get('source_dataset')
         if source_dataset and not resolve_path(source_dataset):
-             missing_files.append({'type': 'source', 'path': source_dataset, 'description': 'Source Dataset'})
+             missing_files_map[source_dataset] = {'type': 'source', 'path': source_dataset, 'description': 'Source Dataset'}
 
         # Check enrichment steps
         steps = trace_data.get('steps', [])
@@ -63,7 +64,14 @@ def app():
              if step['function'] == 'enrichment':
                  enrich_path = step['params'].get('enrichment_file_path')
                  if enrich_path and not resolve_path(enrich_path):
-                      missing_files.append({'type': 'enrichment', 'path': enrich_path, 'description': f"Enrichment File (Step {i+1})"})
+                      if enrich_path not in missing_files_map:
+                          missing_files_map[enrich_path] = {'type': 'enrichment', 'path': enrich_path, 'description': f"Enrichment File (Step {i+1})"}
+                      else:
+                          # Start appending usage info if reused
+                          if "Steps" not in missing_files_map[enrich_path]['description']:
+                               missing_files_map[enrich_path]['description'] += f", {i+1}"
+        
+        missing_files = list(missing_files_map.values())
         
         if missing_files:
             with st.expander("⚠️ Missing Resources", expanded=True):
