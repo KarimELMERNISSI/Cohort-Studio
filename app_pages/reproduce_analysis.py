@@ -81,8 +81,27 @@ def app():
                 artifact_folder = st.text_input("📂 Select Artifact Root Folder (Optional batch resolution)", 
                                               help="If you have a folder containing the missing files, enter its path here to try and resolve them automatically.")
                 
+                # Check for common Windows path issues in Docker (Linux)
+                if artifact_folder and (":\\" in artifact_folder or "\\" in artifact_folder) and os.name == 'posix':
+                    st.warning(
+                        "⚠️ You entered a Windows-style path (e.g., `C:\\...`). "
+                        "Since the app is running in Docker (Linux), it cannot access your host's `C:` drive directly.\n\n"
+                        "**Solution:**\n"
+                        "1. Ensure your artifacts are inside the project's `data/` folder (mounted to `/app/data`).\n"
+                        "2. Enter the path relative to the container, e.g., `/app/data/traces/artifacts`."
+                    )
+                
                 if artifact_folder and os.path.exists(artifact_folder):
                     st.success(f"Scanning folder: `{artifact_folder}`")
+                    
+                    # Show files in this folder as a control
+                    try:
+                        folder_files = os.listdir(artifact_folder)
+                        with st.expander(f"📄 View files in `{os.path.basename(artifact_folder)}` ({len(folder_files)} files)", expanded=False):
+                            st.write(folder_files)
+                    except Exception as e:
+                        st.error(f"Could not list files: {e}")
+
                     resolved_count = 0
                     files_to_remove = []
 
@@ -108,8 +127,9 @@ def app():
                         del missing_files_map[k]
                     
                     if resolved_count > 0:
-                        st.info(f"Batch resolved {resolved_count} files!")
+                        st.info(f"✅ Batch resolved {resolved_count} files!")
                         if not missing_files_map:
+                             st.balloons()
                              st.rerun() # All done!
 
                 # --- End Artifact Folder Selection ---
