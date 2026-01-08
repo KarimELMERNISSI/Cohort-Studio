@@ -75,43 +75,80 @@ def app():
         
         if missing_files:
             with st.expander("⚠️ Missing Resources", expanded=True):
-                st.warning("The following files referenced in the trace could not be found. Please upload them or provide the correct path to proceed.")
+                st.warning("The following files referenced in the trace could not be found.")
+
+                # --- NEW: Artifact Folder Selection ---
+                artifact_folder = st.text_input("📂 Select Artifact Root Folder (Optional batch resolution)", 
+                                              help="If you have a folder containing the missing files, enter its path here to try and resolve them automatically.")
                 
-                os.makedirs("data/uploads", exist_ok=True)
-                
-                for item in missing_files:
-                    cols = st.columns([2, 2, 2])
-                    with cols[0]:
-                        st.markdown(f"**{item['description']}**")
-                        st.caption(f"`{os.path.basename(item['path'])}`")
+                if artifact_folder and os.path.exists(artifact_folder):
+                    st.success(f"Scanning folder: `{artifact_folder}`")
+                    resolved_count = 0
+                    files_to_remove = []
+
+                    for path_key, item in missing_files_map.items():
+                         filename = os.path.basename(item['path'])
+                         candidate = os.path.join(artifact_folder, filename)
+                         if os.path.exists(candidate):
+                             # Update trace data in memory
+                             if item['type'] == 'source':
+                                 trace_data['source_dataset'] = candidate
+                             elif item['type'] == 'enrichment':
+                                 # Need to find which steps used this path and update them
+                                 for step in trace_data.get('steps', []):
+                                     if step['function'] == 'enrichment' and step['params'].get('enrichment_file_path') == item['path']:
+                                         step['params']['enrichment_file_path'] = candidate
+                             
+                             st.toast(f"Resolved: {filename}", icon="✅")
+                             files_to_remove.append(path_key)
+                             resolved_count += 1
                     
-                    with cols[1]:
-                        # File Uploader
-                        uploaded_missing = st.file_uploader(f"Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
-                        if uploaded_missing:
-                             save_path = os.path.join("data/uploads", uploaded_missing.name)
-                             with open(save_path, "wb") as f:
-                                 f.write(uploaded_missing.getbuffer())
-                             st.toast(f"Uploaded {uploaded_missing.name}", icon="✅")
-                             st.rerun()
+                    # Remove resolved files from missing map
+                    for k in files_to_remove:
+                        del missing_files_map[k]
+                    
+                    if resolved_count > 0:
+                        st.info(f"Batch resolved {resolved_count} files!")
+                        if not missing_files_map:
+                             st.rerun() # All done!
 
-                    with cols[2]:
-                        # Manual Input
-                        manual_path = st.text_input(f"Or enter path", key=f"pre_manual_{item['path']}")
-                        if manual_path:
-                            # Verify existence (simple check)
-                            if os.path.exists(manual_path) or os.path.exists(os.path.join("data", manual_path)):
-                                # We can't easily 'save' this mapping without a complex state, 
-                                # but usually resolve_path checks 'data/' + filename. 
-                                # If the user provides a full path that exists, we might need to symlink or copy,
-                                # OR just tell the user to move it.
-                                # For now, let's assume if they give a valid path, they mean it's there.
-                                # But resolve_path isn't stateful.
-                                # A hack: copy to data/uploads if it's external?
-                                pass 
+                # --- End Artifact Folder Selection ---
 
-                st.info("Uploaded files are automatically saved to `data/uploads/`, which is checked during reproduction.")
-                st.divider()
+                # Re-evaluate missing files list after potential batch resolution
+                missing_files = list(missing_files_map.values())
+
+                if missing_files:
+                    st.markdown("---")
+                    st.caption("Please upload missing files or provide their location manually:")
+                    
+                    os.makedirs("data/uploads", exist_ok=True)
+                    
+                    for item in missing_files:
+                        cols = st.columns([2, 2, 2])
+                        with cols[0]:
+                            st.markdown(f"**{item['description']}**")
+                            st.caption(f"`{os.path.basename(item['path'])}`")
+                        
+                        with cols[1]:
+                            # File Uploader
+                            uploaded_missing = st.file_uploader(f"Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
+                            if uploaded_missing:
+                                save_path = os.path.join("data/uploads", uploaded_missing.name)
+                                with open(save_path, "wb") as f:
+                                    f.write(uploaded_missing.getbuffer())
+                                st.toast(f"Uploaded {uploaded_missing.name}", icon="✅")
+                                st.rerun()
+
+                        with cols[2]:
+                            # Manual Input
+                            manual_path = st.text_input(f"Or enter path", key=f"pre_manual_{item['path']}")
+                            if manual_path:
+                                # Verify existence (simple check)
+                                if os.path.exists(manual_path) or os.path.exists(os.path.join("data", manual_path)):
+                                    pass 
+
+                    st.info("Uploaded files are automatically saved to `data/uploads/`, which is checked during reproduction.")
+                    st.divider()
 
         # --- END PRE-FLIGHT CHECK ---
             
