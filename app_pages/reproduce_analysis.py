@@ -216,6 +216,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     """
     steps = trace_data.get('steps', [])
     target_step = steps[target_step_index]
+    session_id = trace_data.get('session_id', 'unknown_session')
     
     # 1. Fast Mode: Try to load snapshot
     snapshot_path = target_step.get('output_dataset_path')
