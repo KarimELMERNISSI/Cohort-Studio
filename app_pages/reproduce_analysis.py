@@ -8,7 +8,9 @@ import enrich.external_data as eed
 from app_pages.transformation_logic import apply_variable_transformation
 from app_pages.data_enrichment import apply_imputer, evaluate_formula_safely
 from utils.multipage import load_dataframe
+from utils.multipage import load_dataframe
 from utils.path_utils import resolve_path
+import difflib
 
 def app():
     
@@ -251,8 +253,30 @@ def app():
 
                         with cols[2]:
                             # Dropdown (Select from Artifacts)
+                            # Dropdown (Select from Artifacts)
                             if 'folder_files' in locals() and folder_files:
-                                selected_artifact = st.selectbox("Select from Artifacts", [""] + folder_files, key=f"pre_select_{item['path']}")
+                                # Fuzzy match for pre-selection
+                                missing_basename = os.path.basename(item['path'])
+                                match_index = 0
+                                
+                                # Try to find exact or close match
+                                matches = difflib.get_close_matches(missing_basename, folder_files, n=1, cutoff=0.6)
+                                if matches:
+                                    try:
+                                        # Index passed to selectbox is 0-based index of OPTIONS. 
+                                        # Options are [""] + folder_files.
+                                        # So if match is found at folder_files[i], index should be i + 1.
+                                        match_index = folder_files.index(matches[0]) + 1
+                                    except ValueError:
+                                        match_index = 0
+                                
+                                selected_artifact = st.selectbox(
+                                    "Select from Artifacts", 
+                                    [""] + folder_files, 
+                                    index=match_index,
+                                    key=f"pre_select_{item['path']}"
+                                )
+                                
                                 if selected_artifact:
                                     candidate = os.path.join(artifact_folder, selected_artifact)
                                     if os.path.exists(candidate):
