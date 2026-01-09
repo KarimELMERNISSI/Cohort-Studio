@@ -107,15 +107,26 @@ def app():
                 potential_paths = []
                 
                 # 1. Try to find a folder matching the trace name (e.g. session_date.json -> folder session_date)
+                # 1. Try to find a folder matching the trace name (e.g. session_date.json -> folder session_date)
+                trace_basename = None
                 if selected_trace_file:
                     trace_basename = os.path.splitext(selected_trace_file)[0]
+                elif uploaded_trace:
+                    trace_basename = os.path.splitext(uploaded_trace.name)[0]
+
+                if trace_basename:
                     # Common locations for such a folder
-                    possible_matches = [
-                        os.path.join(os.path.dirname(trace_path), "artifacts", trace_basename),
-                        os.path.join(os.path.dirname(trace_path), trace_basename),
+                    possible_matches = []
+                    # If we have a real trace path (not just a temp upload one), check near it
+                    if trace_path and "uploads" not in trace_path:
+                         possible_matches.append(os.path.join(os.path.dirname(trace_path), "artifacts", trace_basename))
+                         possible_matches.append(os.path.join(os.path.dirname(trace_path), trace_basename))
+                    
+                    # Always check standard data locations
+                    possible_matches.extend([
                         os.path.join("data", "traces", "artifacts", trace_basename),
                         os.path.join("data", trace_basename)
-                    ]
+                    ])
                     for pm in possible_matches:
                          if os.path.exists(pm) and os.path.isdir(pm):
                              potential_paths.append(pm)
