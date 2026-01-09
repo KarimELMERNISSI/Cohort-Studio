@@ -19,13 +19,17 @@ def app():
     
     trace_data = None
     selected_trace_file = None
+    trace_path = None
 
     if uploaded_trace:
         try:
             trace_data = json.load(uploaded_trace)
             st.success(f"Result loaded from **{uploaded_trace.name}**")
+            # If uploaded, use the uploaded file's directory as a pseudo trace path if needed, or None
+            trace_path = os.path.join("data", "uploads", uploaded_trace.name) 
         except Exception as e:
             st.error(f"Error parsing JSON: {e}")
+            trace_path = None
     else:
         trace_dir = "data/traces"
         if not os.path.exists(trace_dir):
