@@ -96,9 +96,25 @@ def app():
 
                 # --- NEW: Artifact Folder Selection & Fixes ---
                 
-                # Suffix suggestion
+                # Suffix suggestion & Auto-detection by Trace Name
                 suggested_folder = ""
                 potential_paths = []
+                
+                # 1. Try to find a folder matching the trace name (e.g. session_date.json -> folder session_date)
+                if selected_trace_file:
+                    trace_basename = os.path.splitext(selected_trace_file)[0]
+                    # Common locations for such a folder
+                    possible_matches = [
+                        os.path.join(os.path.dirname(trace_path), "artifacts", trace_basename),
+                        os.path.join(os.path.dirname(trace_path), trace_basename),
+                        os.path.join("data", "traces", "artifacts", trace_basename),
+                        os.path.join("data", trace_basename)
+                    ]
+                    for pm in possible_matches:
+                         if os.path.exists(pm) and os.path.isdir(pm):
+                             potential_paths.append(pm)
+
+                # 2. Add generic 'artifacts' folders
                 if trace_path: 
                     potential_paths.append(os.path.join(os.path.dirname(trace_path), "artifacts")) # data/traces/artifacts
                 potential_paths.append(os.path.join("data", "artifacts"))
