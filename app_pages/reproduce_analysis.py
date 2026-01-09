@@ -142,9 +142,16 @@ def app():
 
                     st.success(f"Scanning folder: `{artifact_folder}`")
                     
+                    folder_files = []
+                    file_map = {} # Map lower_case -> real_filename
+                    
                     # Show files in this folder as a control
                     try:
                         folder_files = os.listdir(artifact_folder)
+                        # Build case-insensitive map
+                        for f in folder_files:
+                            file_map[f.lower()] = f
+                            
                         with st.expander(f"📄 View files in `{os.path.basename(artifact_folder)}` ({len(folder_files)} files)", expanded=False):
                             st.write(folder_files)
                     except Exception as e:
@@ -155,8 +162,17 @@ def app():
 
                     for path_key, item in missing_files_map.items():
                          filename = os.path.basename(item['path'])
-                         candidate = os.path.join(artifact_folder, filename)
-                         if os.path.exists(candidate):
+                         
+                         candidate = None
+                         # 1. Exact Match
+                         if os.path.exists(os.path.join(artifact_folder, filename)):
+                             candidate = os.path.join(artifact_folder, filename)
+                         # 2. Case-Insensitive Match
+                         elif filename.lower() in file_map:
+                             real_name = file_map[filename.lower()]
+                             candidate = os.path.join(artifact_folder, real_name)
+
+                         if candidate and os.path.exists(candidate):
                              # Update trace data in memory
                              trace_data_updated = False
                              if item['type'] == 'source':
@@ -173,7 +189,7 @@ def app():
                                  # Persist this resolution in session state to prevent loops on rerun
                                  st.session_state['resolved_paths'][item['path']] = candidate
                                  
-                                 st.toast(f"Resolved: {filename}", icon="✅")
+                                 st.toast(f"Resolved: {filename} -> {os.path.basename(candidate)}", icon="✅")
                                  files_to_remove.append(path_key)
                                  resolved_count += 1
                     
@@ -194,12 +210,12 @@ def app():
 
                 if missing_files:
                     st.markdown("---")
-                    st.caption("Please upload missing files or provide their location manually:")
+                    st.caption("Please upload missing files, select from artifacts, or provide their location manually:")
                     
                     os.makedirs("data/uploads", exist_ok=True)
                     
                     for item in missing_files:
-                        cols = st.columns([2, 2, 2])
+                        cols = st.columns([2, 2, 2, 2]) # Added column for Dropdown
                         with cols[0]:
                             st.markdown(f"**{item['description']}**")
                             st.caption(f"`{os.path.basename(item['path'])}`")
@@ -218,6 +234,19 @@ def app():
                                 st.rerun()
 
                         with cols[2]:
+                            # Dropdown (Select from Artifacts)
+                            if 'folder_files' in locals() and folder_files:
+                                selected_artifact = st.selectbox("Select from Artifacts", [""] + folder_files, key=f"pre_select_{item['path']}")
+                                if selected_artifact:
+                                    candidate = os.path.join(artifact_folder, selected_artifact)
+                                    if os.path.exists(candidate):
+                                        st.session_state['resolved_paths'][item['path']] = candidate
+                                        st.toast(f"Selected: {selected_artifact}", icon="✅")
+                                        st.rerun()
+                            else:
+                                st.empty()
+
+                        with cols[3]:
                             # Manual Input
                             manual_path = st.text_input(f"Or enter path", key=f"pre_manual_{item['path']}")
                             if manual_path:
