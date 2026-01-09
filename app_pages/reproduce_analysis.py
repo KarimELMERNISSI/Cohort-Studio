@@ -9,7 +9,7 @@ from app_pages.transformation_logic import apply_variable_transformation
 from app_pages.data_enrichment import apply_imputer, evaluate_formula_safely
 from utils.multipage import load_dataframe
 from utils.multipage import load_dataframe
-from utils.path_utils import resolve_path
+from utils.path_utils import resolve_path, normalize_path
 import difflib
 
 def app():
@@ -236,7 +236,7 @@ def app():
                         cols = st.columns([2, 2, 2, 2]) # Added column for Dropdown
                         with cols[0]:
                             st.markdown(f"**{item['description']}**")
-                            st.caption(f"`{os.path.basename(item['path'])}`")
+                            st.caption(f"`{os.path.basename(normalize_path(item['path']))}`")
                         
                         with cols[1]:
                             # File Uploader
@@ -254,12 +254,11 @@ def app():
                         with cols[2]:
                             # Dropdown (Select from Artifacts)
                             # Dropdown (Select from Artifacts)
-                            # Dropdown (Select from Artifacts)
                             if 'folder_files' in locals() and folder_files:
                                 folder_files.sort() # Ensure consistent order
                                 
                                 # Fuzzy match for pre-selection
-                                missing_basename = os.path.basename(item['path'])
+                                missing_basename = os.path.basename(normalize_path(item['path']))
                                 match_index = 0
                                 widget_key = f"pre_select_{item['path']}"
                                 

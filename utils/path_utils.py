@@ -1,6 +1,17 @@
 import os
 import streamlit as st
 
+
+def normalize_path(path_str: str) -> str:
+    """
+    Normalizes a file path by replacing backslashes with forward slashes.
+    Crucial for handling Windows paths in a Linux (Docker) environment, 
+    ensuring os.path.basename returns the correct filename.
+    """
+    if not path_str:
+        return path_str
+    return path_str.replace('\\', '/')
+
 def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     """
     Attempts to resolve a file path.
