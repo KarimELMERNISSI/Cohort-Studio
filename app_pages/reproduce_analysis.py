@@ -211,16 +211,31 @@ def app():
                                 save_path = os.path.join("data/uploads", uploaded_missing.name)
                                 with open(save_path, "wb") as f:
                                     f.write(uploaded_missing.getbuffer())
-                                st.toast(f"Uploaded {uploaded_missing.name}", icon="✅")
+                                
+                                # Persist resolution
+                                st.session_state['resolved_paths'][item['path']] = save_path
+                                st.toast(f"Uploaded & Resolved: {uploaded_missing.name}", icon="✅")
                                 st.rerun()
 
                         with cols[2]:
                             # Manual Input
                             manual_path = st.text_input(f"Or enter path", key=f"pre_manual_{item['path']}")
                             if manual_path:
-                                # Verify existence (simple check)
-                                if os.path.exists(manual_path) or os.path.exists(os.path.join("data", manual_path)):
-                                    pass 
+                                # Auto-fix Windows paths
+                                manual_path_fixed = manual_path.replace("\\", "/")
+                                
+                                # Verify existence
+                                valid_path = None
+                                if os.path.exists(manual_path_fixed):
+                                    valid_path = manual_path_fixed
+                                elif os.path.exists(os.path.join("data", manual_path_fixed)):
+                                    valid_path = os.path.join("data", manual_path_fixed)
+                                
+                                if valid_path:
+                                     # Persist resolution
+                                     st.session_state['resolved_paths'][item['path']] = valid_path
+                                     st.toast(f"Path Verified: {os.path.basename(valid_path)}", icon="✅")
+                                     st.rerun() 
 
                     st.info("Uploaded files are automatically saved to `data/uploads/`, which is checked during reproduction.")
                     st.divider()
