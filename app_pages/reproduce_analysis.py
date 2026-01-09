@@ -46,6 +46,23 @@ def app():
             trace_path = os.path.join(trace_dir, selected_trace_file)
             with open(trace_path, 'r') as f:
                 trace_data = json.load(f)
+                
+            # Initialize persistent storage for resolved paths
+            if 'resolved_paths' not in st.session_state:
+                st.session_state['resolved_paths'] = {}
+
+            # Apply persisted resolutions (Fixes Infinite Loop)
+            if trace_data:
+                # Update source if previously resolved
+                if trace_data.get('source_dataset') in st.session_state['resolved_paths']:
+                    trace_data['source_dataset'] = st.session_state['resolved_paths'][trace_data['source_dataset']]
+                
+                # Update steps if previously resolved
+                for step in trace_data.get('steps', []):
+                    if step['function'] == 'enrichment':
+                         original = step['params'].get('enrichment_file_path')
+                         if original in st.session_state['resolved_paths']:
+                             step['params']['enrichment_file_path'] = st.session_state['resolved_paths'][original]
 
     if trace_data:
             
@@ -77,14 +94,40 @@ def app():
             with st.expander("⚠️ Missing Resources", expanded=True):
                 st.warning("The following files referenced in the trace could not be found.")
 
-                # --- NEW: Artifact Folder Selection ---
-                artifact_folder = st.text_input("📂 Select Artifact Root Folder (Optional batch resolution)", 
-                                              help="If you have a folder containing the missing files, enter its path here to try and resolve them automatically.")
+                # --- NEW: Artifact Folder Selection & Fixes ---
                 
-                # Check for common Windows path issues in Docker (Linux)
-                if artifact_folder and (":\\" in artifact_folder or "\\" in artifact_folder) and os.name == 'posix':
+                # Suffix suggestion
+                suggested_folder = ""
+                potential_paths = []
+                if trace_path: 
+                    potential_paths.append(os.path.join(os.path.dirname(trace_path), "artifacts")) # data/traces/artifacts
+                potential_paths.append(os.path.join("data", "artifacts"))
+
+                for p in potential_paths:
+                    if os.path.exists(p) and os.path.isdir(p):
+                        suggested_folder = p
+                        break
+                
+                help_text="Enter path to folder containing missing files."
+                if suggested_folder:
+                     help_text += f" Found likely candidate: `{suggested_folder}`"
+
+                artifact_folder_input = st.text_input("📂 Select Artifact Root Folder (Optional batch resolution)", 
+                                              value=suggested_folder if suggested_folder else "",
+                                              help=help_text)
+                
+                # Auto-fix Windows paths (replace \ with /)
+                if artifact_folder_input:
+                     artifact_folder = artifact_folder_input.replace("\\", "/")
+                     if artifact_folder != artifact_folder_input:
+                          st.caption(f"ℹ️ Auto-corrected path to: `{artifact_folder}`")
+                else:
+                     artifact_folder = artifact_folder_input
+
+                # Check for remaining Windows path issues (e.g. C:)
+                if artifact_folder and (":/" in artifact_folder) and os.name == 'posix':
                     st.warning(
-                        "⚠️ You entered a Windows-style path (e.g., `C:\\...`). "
+                        "⚠️ You entered a Windows-style absolute path (e.g., `C:/...`). "
                         "Since the app is running in Docker (Linux), it cannot access your host's `C:` drive directly.\n\n"
                         "**Solution:**\n"
                         "1. Ensure your artifacts are inside the project's `data/` folder (mounted to `/app/data`).\n"
@@ -115,17 +158,24 @@ def app():
                          candidate = os.path.join(artifact_folder, filename)
                          if os.path.exists(candidate):
                              # Update trace data in memory
+                             trace_data_updated = False
                              if item['type'] == 'source':
                                  trace_data['source_dataset'] = candidate
+                                 trace_data_updated = True
                              elif item['type'] == 'enrichment':
                                  # Need to find which steps used this path and update them
                                  for step in trace_data.get('steps', []):
                                      if step['function'] == 'enrichment' and step['params'].get('enrichment_file_path') == item['path']:
                                          step['params']['enrichment_file_path'] = candidate
+                                         trace_data_updated = True
                              
-                             st.toast(f"Resolved: {filename}", icon="✅")
-                             files_to_remove.append(path_key)
-                             resolved_count += 1
+                             if trace_data_updated:
+                                 # Persist this resolution in session state to prevent loops on rerun
+                                 st.session_state['resolved_paths'][item['path']] = candidate
+                                 
+                                 st.toast(f"Resolved: {filename}", icon="✅")
+                                 files_to_remove.append(path_key)
+                                 resolved_count += 1
                     
                     # Remove resolved files from missing map
                     for k in files_to_remove:
