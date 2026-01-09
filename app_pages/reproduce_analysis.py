@@ -254,19 +254,29 @@ def app():
                         with cols[2]:
                             # Dropdown (Select from Artifacts)
                             # Dropdown (Select from Artifacts)
+                            # Dropdown (Select from Artifacts)
                             if 'folder_files' in locals() and folder_files:
+                                folder_files.sort() # Ensure consistent order
+                                
                                 # Fuzzy match for pre-selection
                                 missing_basename = os.path.basename(item['path'])
                                 match_index = 0
+                                widget_key = f"pre_select_{item['path']}"
                                 
                                 # Try to find exact or close match
                                 matches = difflib.get_close_matches(missing_basename, folder_files, n=1, cutoff=0.6)
                                 if matches:
+                                    best_match = matches[0]
+                                    
+                                    # FORCE FIX: Explicitly update session state if currently empty
+                                    # This ensures the widget picks up the value immediately
+                                    if widget_key not in st.session_state or st.session_state[widget_key] == "":
+                                         st.session_state[widget_key] = best_match
+
                                     try:
                                         # Index passed to selectbox is 0-based index of OPTIONS. 
                                         # Options are [""] + folder_files.
-                                        # So if match is found at folder_files[i], index should be i + 1.
-                                        match_index = folder_files.index(matches[0]) + 1
+                                        match_index = folder_files.index(best_match) + 1
                                     except ValueError:
                                         match_index = 0
                                 
@@ -274,7 +284,7 @@ def app():
                                     "Select from Artifacts", 
                                     [""] + folder_files, 
                                     index=match_index,
-                                    key=f"pre_select_{item['path']}"
+                                    key=widget_key
                                 )
                                 
                                 if selected_artifact:
