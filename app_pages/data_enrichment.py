@@ -1786,8 +1786,15 @@ def compute_transformations(dataframe):
                     column_correlations = model.column_correlations
 
                 else:  # FAMD
-                    model = prince.FAMD(n_components=len(columns), random_state=42)
-                    #famd = model.fit(dataframe[columns])
+                    model = prince.FAMD(
+                        n_components=len(columns),
+                        n_iter=3,
+                        copy=True,
+                        check_input=True,
+                        random_state=42,
+                        engine="sklearn",
+                        handle_unknown="error"
+                    )
                     result = model.fit_transform(dataframe[columns])
 
                     # Get eigenvalues (variance explained by each dimension)
@@ -1800,6 +1807,8 @@ def compute_transformations(dataframe):
                     # Use native column_contributions_ for FAMD
                     if hasattr(model, 'column_contributions_'):
                         column_correlations = model.column_contributions_
+                        # Normalize to ensure they represent percentages of contribution (0-1 range)
+                        column_correlations = column_correlations / column_correlations.sum(axis=0)
                     else:
                         try:
                             column_correlations = model.column_correlations(dataframe[columns])
