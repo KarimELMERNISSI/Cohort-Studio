@@ -53,22 +53,25 @@ def app():
             with open(trace_path, 'r') as f:
                 trace_data = json.load(f)
                 
-            # Initialize persistent storage for resolved paths
-            if 'resolved_paths' not in st.session_state:
-                st.session_state['resolved_paths'] = {}
 
-            # Apply persisted resolutions (Fixes Infinite Loop)
-            if trace_data:
-                # Update source if previously resolved
-                if trace_data.get('source_dataset') in st.session_state['resolved_paths']:
-                    trace_data['source_dataset'] = st.session_state['resolved_paths'][trace_data['source_dataset']]
-                
-                # Update steps if previously resolved
-                for step in trace_data.get('steps', []):
-                    if step['function'] == 'enrichment':
-                         original = step['params'].get('enrichment_file_path')
-                         if original in st.session_state['resolved_paths']:
-                             step['params']['enrichment_file_path'] = st.session_state['resolved_paths'][original]
+
+    # --- GLOBAL PERSISTENCE LOGIC (Fixes Loop for both Drag & Drop and Select) ---
+    # Initialize persistent storage for resolved paths
+    if 'resolved_paths' not in st.session_state:
+        st.session_state['resolved_paths'] = {}
+
+    # Apply persisted resolutions
+    if trace_data:
+        # Update source if previously resolved
+        if trace_data.get('source_dataset') in st.session_state['resolved_paths']:
+            trace_data['source_dataset'] = st.session_state['resolved_paths'][trace_data['source_dataset']]
+        
+        # Update steps if previously resolved
+        for step in trace_data.get('steps', []):
+            if step['function'] == 'enrichment':
+                    original = step['params'].get('enrichment_file_path')
+                    if original in st.session_state['resolved_paths']:
+                        step['params']['enrichment_file_path'] = st.session_state['resolved_paths'][original]
 
     if trace_data:
             
