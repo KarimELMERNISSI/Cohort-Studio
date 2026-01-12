@@ -408,3 +408,89 @@ class ComputedVarsMixin:
         except Exception as e:
             logger.warning(f"suggest_alternative_formula failed: {e}")
             return {"alternative_found": False}
+
+    def suggest_imputation_formulas(self, target_variable, available_columns, search_hint=None, context_columns=None, context_stats=None, num_suggestions=3):
+        """
+        Suggests formulas to impute missing values for a specific target variable 
+        based on relationships with other available columns.
+        
+        Parameters:
+        - target_variable (str): Name of the variable to impute.
+        - available_columns (list): List of all available column names.
+        - search_hint (str): Optional user-provided hint (e.g. "Reverse BMI").
+        - context_columns (list): Optional list of specific columns selected by the user.
+        - context_stats (dict): Optional dictionary of statistics for the context columns.
+        - num_suggestions (int): Number of suggestions to generate.
+        """
+        if not self.initialized:
+            return None, "RAG system not initialized."
+            
+        # Determine which columns to show in the prompt
+        if context_columns:
+            columns_scope = context_columns
+            scope_desc = "User-Selected Context Columns"
+        else:
+            columns_scope = available_columns[:100]
+            scope_desc = "Available Columns"
+            
+        columns_str = ", ".join(columns_scope)
+        
+        # Prepare context stats string if available
+        stats_context = ""
+        if context_stats:
+            stats_context = f"\n\nContext Column Statistics (Use this to match units or ranges):\n{json.dumps(context_stats, indent=2)}"
+
+        # Prepare hint string
+        hint_instruction = ""
+        if search_hint:
+            hint_instruction = f"\nUSER HINT: {search_hint}\nFocus specifically on relationships related to this hint."
+
+        prompt = f"""
+        Role: Medical Data Expert.
+        Task: Suggest physiological formulas or regression-like heuristics to ESTIMATE missing values for '{target_variable}'.
+        
+        {scope_desc} for Input: [{columns_str}]{stats_context}
+        Target Variable to Impute: {target_variable}
+        {hint_instruction}
+        
+        Instructions:
+        1. Identify standard relationships where '{target_variable}' is the OUTPUT.
+        2. Example: If Target is 'Weight', suggest 'BMI * (Height**2)'.
+        3. If statistics show mismatched units (e.g. g/L vs mg/dL), include the conversion factor in the formula.
+        4. Only suggest formulas using the provided {scope_desc}.
+        5. Provide {num_suggestions} distinct options.
+        6. **CRITICAL SYNTAX RULES**:
+           - Use **Python/Pandas** syntax ONLY. 
+           - **DO NOT** use SQL (No `CASE WHEN`).
+           - **DO NOT** use `df['col']` or `df.col`. Refer to columns directly.
+           - For column names with **spaces, dots (.), or special characters**, you MUST enclose them in **double double quotes** (e.g. `""LDLc.2""`, `""My Var""`).
+           - For simple column names (letters/numbers/underscores only), use them directly (e.g. `Weight`, `BMI_2`).
+           - For conditional logic, use `np.where(condition, value_if_true, value_if_false)`.
+           - Example: `np.where(""LDLc.2"" == 'mmol/L', ""LDLc.1"" * 0.387, ""LDLc.1"")`
+           - Use `**` for power (e.g. `Height**2`), not `^`.
+        
+        Return JSON Object:
+        {{
+            "suggestions": [
+                {{
+                    "name": "Imputed_{target_variable}",
+                    "formula": "Formula using available columns",
+                    "reasoning": "Why this relationship holds (e.g. standard Definition)",
+                    "confidence": "High/Medium/Low"
+                }}
+            ]
+        }}
+        """
+        try:
+            response = self.llm.invoke(prompt)
+            cleaned = self._clean_json_response(response.content)
+            parsed = parse_json_safe(cleaned, default={"suggestions": []})
+            
+            if not isinstance(parsed, dict) or 'suggestions' not in parsed:
+                parsed = {"suggestions": parsed if isinstance(parsed, list) else []}
+                
+            return parsed.get("suggestions", []), None
+            
+        except Exception as e:
+            logger.warning(f"Failed to suggest imputation formulas: {e}")
+            return [], str(e)

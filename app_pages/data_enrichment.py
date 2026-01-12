@@ -53,6 +53,10 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
                    current_file_hash != st.session_state['last_main_file_hash']:
                     st.session_state['last_main_file_hash'] = current_file_hash
                     st.success("✅ Main dataset successfully loaded from upload.")
+                
+                st.session_state['data'] = df
+                if 'enriched_df' not in st.session_state:
+                    st.session_state['enriched_df'] = df.copy()
                 return df
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
@@ -64,6 +68,9 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
             try:
                 df = load_dataframe(file_path)
                 st.success("✅ Main dataset successfully loaded from provided path.")
+                st.session_state['data'] = df
+                if 'enriched_df' not in st.session_state:
+                    st.session_state['enriched_df'] = df.copy()
                 return df
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
@@ -948,7 +955,7 @@ def create_variables_dict(dataset: pd.DataFrame, identified_columns: List[str], 
     return local_vars
 
 
-def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFrame) -> tuple[bool, str, pd.DataFrame]:
+def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFrame, return_series: bool = False) -> tuple[bool, Any, pd.DataFrame]:
     """
     Safely evaluate a computation formula to create a new variable in the dataset.
 
@@ -960,51 +967,59 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         The name of the new variable to create.
     dataset : pd.DataFrame
         The dataset containing columns to use in the formula.
+    return_series : bool, optional
+        If True, returns the computed Series instead of a success message, and does not modify the dataset.
 
     Returns:
     --------
-    tuple[bool, str, pd.DataFrame]
+    tuple[bool, Any, pd.DataFrame]
         A tuple containing:
         - A boolean indicating success or failure.
-        - A success or error message.
+        - A success message OR the computed Series (if return_series=True), OR an error message.
         - The modified DataFrame (or the original DataFrame on failure).
     """
-    # Extract dataset column names
+    # ... (rest of function until check)
     column_names = dataset.columns.tolist()
-    
-    # Remove leading/trailing whitespace
     formula = formula.strip()
     
-    # Validate formula and extract variables
     is_valid, error_message, identified_columns, constants = validate_and_extract_columns_ast(formula, column_names)
     if not is_valid:
         return False, f"Invalid formula: {error_message}", dataset
 
-    # Ensure date columns are properly converted to datetime objects
+    # Ensure date columns are properly converted
     try:
         analyzer = DataAnalyzer(dataset)
         for col in identified_columns:
             if col in analyzer.date_cols:
-                # Convert to datetime, coercing errors to NaT
                 dataset[col] = pd.to_datetime(dataset[col], errors='coerce')
     except Exception as e:
         print(f"Error during date conversion: {e}")
 
-    # Map column names to dataset references
-    #local_vars = {col: dataset[col] for col in identified_columns}
-    #local_vars = {f"var_{idx}": dataset[col] for idx, col in enumerate(identified_columns)}
     local_vars = create_variables_dict(dataset, identified_columns, constants)
-
-    #normalize the formula
     print(f"local_vars dict: {local_vars} \nInitial formula: {formula}")
     normalized_formula = normalize_formula(formula, local_vars)
+    
     try:
         # Safely evaluate the formula
         print(f"Normalized formula: {normalized_formula}")
         result = eval(normalized_formula, {"np":np, "pd":pd}, local_vars)
         print(result)
+        
+        # Convert numpy array to Series if needed
+        if isinstance(result, np.ndarray):
+            result = pd.Series(result, index=dataset.index)
+        
+        # Convert scalar to Series if needed
+        if np.isscalar(result):
+            result = pd.Series(result, index=dataset.index)
+
         # Check if result is a pandas Series with the correct length
         if isinstance(result, pd.Series) and result.shape[0] == dataset.shape[0]:
+            
+            # If requesting series return, skip validation and modification
+            if return_series:
+                 return True, result, dataset
+
             # Add the new variable to the dataset
             if variable_name in dataset.columns:
                 return False, f"Variable '{variable_name}' already exists.", dataset
@@ -2232,6 +2247,41 @@ def save_snapshot(df, step_name, base_dir="data/traces/snapshots"):
         return None
 
 
+# Helper to extract statistics for context columns (Guided Mode)
+def extract_column_stats(df, columns):
+    """
+    Extracts summary statistics (Min, Max, Median) and potential units for selected columns.
+    Used to give context to the RAG model for unit conversion logic.
+    """
+    stats = {}
+    for col in columns:
+        if col not in df.columns:
+            continue
+            
+        col_data = df[col].dropna()
+        if col_data.empty:
+            stats[col] = {"status": "empty"}
+            continue
+
+        if pd.api.types.is_numeric_dtype(col_data):
+            stats[col] = {
+                "type": "Numeric",
+                "min": float(col_data.min()),
+                "max": float(col_data.max()),
+                "median": float(col_data.median()),
+                "q1": float(col_data.quantile(0.25)),
+                "q3": float(col_data.quantile(0.75))
+            }
+        else:
+            # For categorical/object, show top values which might contain units like "mg/dL"
+            top_vals = col_data.value_counts().head(5).to_dict()
+            stats[col] = {
+                "type": "Categorical/Object",
+                "top_values": {str(k): v for k, v in top_vals.items()}
+            }
+    return stats
+
+
 # TBD: Rework the cat of missingforest based on set(binary + cat)
 def app():
     """Improved page for external data and variable definition."""
@@ -2244,6 +2294,11 @@ def app():
     # Initialize Transformation Manager
     if 'transformation_manager' not in st.session_state:
         st.session_state.transformation_manager = TransformationManager()
+
+    # Initialize RAG Manager if not present
+    if 'rag_manager' not in st.session_state:
+        from manage.rag_manager import RAGManager
+        st.session_state.rag_manager = RAGManager()
 
     # Dataset Management Sidebar (Automatic Versioning)
     with st.sidebar.expander("Dataset History", expanded=False):
@@ -2348,8 +2403,147 @@ def app():
                 st.warning("No enrichment results available. Please complete the enrichment process first.")
 
     # 2. Handle Missing Values
+    # 2. Handle Missing Values
     with impute_tab:
-        with st.expander("Configure and apply imputation to your dataset", expanded=True):
+        
+        tab_targeted, tab_global = st.tabs([
+            "🎯 Targeted Imputation (Custom Formula)", 
+            "🤖 Global Imputation (Auto-MICE/KNN/Mean)"
+        ])
+        
+        # --- TAB 1: Targeted Imputation ---
+        with tab_targeted:
+            st.markdown("### Targeted Imputation")
+            st.info("Use this mode to manually fix specific columns using formulas or AI suggestions.")
+            
+            main_data = st.session_state['enriched_df']
+            missing_counts = main_data.isnull().sum()
+            cols_with_missing = missing_counts[missing_counts > 0].index.tolist()
+            
+            if not cols_with_missing:
+                st.success("✅ No missing values found in the current dataset.")
+            else:
+                col_target, col_rag = st.columns([1, 2])
+                with col_target:
+                    target_var = st.selectbox("Select Variable to Impute", cols_with_missing, key="target_impute_var")
+                
+                # AI Suggestions
+                if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
+                    with st.expander("🤖 AI Imputation Suggestions (RAG)", expanded=True):
+                        
+                        # Mode Selection
+                        suggestion_mode = st.radio(
+                            "Suggestion Mode:",
+                            ["Free Thinking (Auto)", "Guided (with Hints)"],
+                            horizontal=True,
+                            help="Free Thinking scans all columns. Guided allows you to provide a specific clue and limit the context."
+                        )
+                        
+                        search_hint = None
+                        context_cols = None
+                        
+                        if "Guided" in suggestion_mode:
+                            st.info("Provide a hint (e.g., 'Unit conversion') and select relevant columns.")
+                            col_hint, col_ctx = st.columns([1, 1])
+                            with col_hint:
+                                search_hint = st.text_input("Clue / Hint", placeholder="e.g. Reverse BMI calculation")
+                            with col_ctx:
+                                context_cols = st.multiselect(
+                                    "Context Columns", 
+                                    options=[c for c in main_data.columns if c != target_var],
+                                    help="Select columns that are likely related to the target variable."
+                                )
+
+                        if st.button("Generate Formula Suggestions", key="gen_impute_sugg"):
+                            with st.spinner("Analyzing relationships..."):
+                                available_cols = [c for c in main_data.columns if c != target_var]
+                                
+                                # Prepare context stats for Guided Mode to help with units/ranges
+                                context_stats = None
+                                if context_cols:
+                                    context_stats = extract_column_stats(main_data, context_cols + [target_var])
+                                
+                                suggestions, error = st.session_state.rag_manager.suggest_imputation_formulas(
+                                    target_variable=target_var, 
+                                    available_columns=available_cols,
+                                    search_hint=search_hint,
+                                    context_columns=context_cols,
+                                    context_stats=context_stats
+                                )
+                                
+                                if error:
+                                    st.error(f"RAG Error: {error}")
+                                elif suggestions:
+                                    st.session_state['imputation_suggestions'] = suggestions
+                                else:
+                                    st.warning("No suggestions found.")
+                        
+                        if 'imputation_suggestions' in st.session_state:
+                            for i, sugg in enumerate(st.session_state['imputation_suggestions']):
+                                st.markdown(f"**Option {i+1}: {sugg.get('name', 'Formula')}**")
+                                st.code(sugg.get('formula', ''))
+                                st.caption(sugg.get('reasoning', ''))
+                                if st.button(f"Use Formula #{i+1}", key=f"use_imp_sugg_{i}"):
+                                    st.session_state['imputation_formula_input'] = sugg.get('formula', '')
+                                    st.rerun()
+
+                # Formula Input
+                st.markdown("#### Formula Editor")
+                formula_input = st.text_area(
+                    "Enter Imputation Formula", 
+                    value=st.session_state.get('imputation_formula_input', ''),
+                    key="imputation_formula_input",
+                    help="Use standard operators (+, -, *, /) and column names. Example: Weight / (Height**2)"
+                )
+                
+                if st.button("Apply Targeted Imputation", type="primary", disabled=not formula_input):
+                    try:
+                        # compute formula series
+                        success, result_or_error, _ = evaluate_formula_safely(formula_input, target_var, main_data, return_series=True)
+                        
+                        if success:
+                            computed_series = result_or_error
+                            original_missing = main_data[target_var].isnull().sum()
+                            
+                            # Apply fillna
+                            main_data[target_var] = main_data[target_var].fillna(computed_series)
+                            
+                            new_missing = main_data[target_var].isnull().sum()
+                            filled_count = original_missing - new_missing
+                            
+                            if filled_count > 0:
+                                st.success(f"✅ Successfully filled {filled_count} missing values in '{target_var}'!")
+                                st.session_state['enriched_df'] = main_data
+                                
+                                # Snapshot
+                                snapshot_path = save_snapshot(main_data, f"impute_{target_var}")
+                                
+                                # Log
+                                st.session_state.transformation_manager.add_step(
+                                    "targeted_imputation",
+                                    {
+                                        "target_variable": target_var,
+                                        "formula": formula_input,
+                                        "filled_count": int(filled_count)
+                                    },
+                                    f"Imputed {filled_count} values in {target_var} using formula",
+                                    output_dataset_path=snapshot_path
+                                )
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ Formula computed successfully but didn't fill any missing values (check data overlap).")
+                        else:
+                            st.error(f"Formula Error: {result_or_error}")
+                            
+                    except Exception as e:
+                        st.error(f"Execution Error: {str(e)}")
+
+
+        # --- TAB 2: Global Imputation ---
+        with tab_global:
+            st.markdown("### Global & Automated Imputation")
+            st.info("Use this mode to apply statistical strategies (Mean, Median, MICE, KNN) to all missing values at once.")
+
             main_data = st.session_state['enriched_df']
             
             # --- Missing Data Overview ---
@@ -2445,7 +2639,7 @@ def app():
                         debug=True
                     )
                     if df_imputed is not None:
-                        print(f"\n---------\n------\n --> Column dtypes after imputation:\n{df_imputed.dtypes}")
+                        # print(f"\n---------\n------\n --> Column dtypes after imputation:\n{df_imputed.dtypes}")
 
                         st.success("Imputation Applied Successfully!")
                         st.session_state['enriched_df'] = df_imputed

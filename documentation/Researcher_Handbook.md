@@ -2,143 +2,190 @@
 
 ## 1. Introduction
 
-Welcome to the **Cohort Monitoring Package**, a comprehensive tool designed for epidemiological researchers and data scientists. This application streamlines the entire research workflow, from raw data quality assessment to advanced statistical analysis and reproducibility.
+Welcome to the **Cohort Monitoring Package**. This application is designed to be your "Co-Pilot" for clinical and epidemiological research. It does not just analyze data; it enforces rigorous methodological standards (reproducibility, traceability, validity) while automating the tedious parts of data cleaning and enrichment.
 
-**Key Capabilities:**
+### 🌟 Key Philosophy
 
-* **Data Quality Auditing**: Instant health check of your dataset.
-* **Intelligent Enrichment**: LLM-assisted variable creation and imputation.
-* **Advanced Statistics**: Automated Univariate and Multivariate (ANCOVA) analysis.
-* **Dimensionality Reduction**: PCA and FAMD for complex datasets.
-* **Knowledge Graph**: Insight extraction from scientific literature (RAG).
-* **Reproducibility**: Full trace tracking of all operations.
+* **Traceability**: Every click is recorded. Your analysis is reproducible by design.
+* **Enrichment over Deletion**: Don't just drop rows; impute, transform, and understand them.
+* **Context-Aware**: The app uses your documents (protocols, papers) to guide your analysis.
 
 ---
 
-## 2. Workflow Overview
+## 2. Phase 1: Getting Started (Diagnosis)
 
-The application is structured to follow a standard research pipeline:
+*Goal: Assess if your data is fit for purpose.*
 
-1. **Import & Load**: Upload CSV/Excel files or load existing snapshots.
-2. **Quality Check**: Assess completeness and validity.
-3. **Enrichment**: Handle missing data, create new variables, and transform data.
-4. **Insight & Analysis**: Visualize distributions, run epidemiological tests, and explore dimensionality.
-5. **Reporting**: Export results and save reproduction traces.
+### 📥 Import & Load
 
----
+* **Supported Formats**: CSV, Excel, Parquet.
+* **Snapshots**: Load previous sessions (`.parquet`) to resume work instantly.
+* **Descriptive Statistics**: Instant summary tables for Quantitative (Mean, SD, Distribution) and Qualitative (Counts, Frequencies) variables.
+* **Correlation Preview**: Early detection of relationships between variables.
 
-## 3. Module 1: Data Quality & Validation
+### 🏥 Quality Audit (Health Check)
 
-Before analysis, ensure your data is "research-ready".
+Before touching a single variable, check the patient's vital signs:
 
-### 📊 Global Quality Score
+* **Global Score (0-100)**: A weighted composite index of your dataset's health:
+  * *Clinical Validity*: **Weighted 2x** (Most critical).
+  * *Completeness & Consistency*: Weighted 1x.
+* **Completeness**: Are critical fields empty?
+* **Consistency**: Do "Dates" look like dates and "Age" look like a number?
+* **Statistical Validity**: Detection of univariate outliers (Z-Score) and multivariate anomalies (Isolation Forest).
+* **Clinical Validity**: Customizable rules (e.g., `BMI > 10` and `BMI < 60`) flag biologically impossible values.
 
-The dashboard provides a single score (0-100) based on weighted metrics:
+### 🕵️ Missingness Detective
 
-* **Completeness**: Percentage of non-missing values.
-* **Consistency**: Data types match expected formats (e.g., numbers are numeric).
-* **Clinical Validity**: Adherence to biological constraints (e.g., BMI < 15 is flagged).
-* **Uniqueness**: No duplicate rows.
-
-### 🕵️ Missing Data Diagnosis
-
-Understanding *why* data is missing is crucial for choosing the right imputation method.
-
-* **Little's MCAR Test**:
-  * **Result > 0.05**: Data is **MCAR** (Missing Completely At Random). You can safely drop rows/cols or impute.
-  * **Result < 0.05**: Data is **MAR** (Missing At Random) or **MNAR** (Not Random). *Do not just drop rows.* Use the **Dependency Scan** to find which variables predict missingness.
-* **Visual Matrix**: Use the "Nullity Matrix" to see if missing values cluster together (e.g., an entire form was skipped).
+* **Pattern Analysis**: Is data missing at random (MCAR)?
+* **Little's Test**: A p-value > 0.05 suggests you can safely impute without bias.
+* **Visual Nullity Matrix**: Uses hierarchical clustering (dendrograms) to group variables that tend to be missing together (e.g., an entire skipped questionnaire).
+* **Dependency Scan**: If p < 0.05, finding specific variables that *cause* missingness (e.g., "Sicker patients don't fill out the Quality of Life survey").
 
 ---
 
-## 4. Module 2: Data Enrichment
+## 3. Phase 2: Configuration (Study Logic)
 
-Refine your dataset for analysis.
+*Goal: Define the "Rules of the Game" before playing.*
 
-### 🧪 Handling Missing Data
+Use the **Configuration Editor** (`config_form.py`) to standardize your study logic. This ensures that every team member applies the exact same criteria.
 
-* **Imputation**: Use **MICE** (Multiple Imputation by Chained Equations) for high-precision imputation of numerical data.
-* **LLM Suggestions**: The "AI Assistant" can suggest imputation strategies based on variable names.
+### 🎭 Mask Families (Inclusion Criteria)
 
-### 📐 Dimensionality Reduction (PCA / FAMD)
+Define reusable filters for your study population:
 
-Reduce complex data into interpretable components.
+* **Range Masks**: e.g., `Adults` = Age [18, 99].
+* **Logic Masks**: e.g., `Enrolled` = `Status == 'Active' AND Consent == True`.
 
-* **PCA (Principal Component Analysis)**: Best for purely numerical data.
-* **FAMD (Factor Analysis of Mixed Data)**: **Use this for datasets with both categorical (Sex, Treatment) and numerical (Age, BMI) variables.**
-  * *Note*: The "Contributions" table is normalized so that variable contributions sum to 100% per component, making interpretation intuitive.
-* **Error Handling**: The system checks for missing values before running these sensitive algorithms. **You must impute missing data first.**
+### 🔄 Unit Standardization
 
----
+Automatically unify mixed units to preventing analysis errors:
 
-## 5. Module 3: Data Insight (Smart Documentation)
-
-The **Data Insight** module acts as your automated "Data Steward," turning static metadata into a navigable knowledge graph.
-
-### 🧠 Data Stewardship & Taxonomy
-
-Maintain a single source of truth for your variables.
-
-* **Taxonomy Management**: Definitions, types (Input, Derived, Outcome), and descriptions are stored centrally.
-* **Versioning**: The system tracks changes to variable definitions (v1, v2, etc.), allowing you to audit how a variable evolved over time.
-
-### 🕸️ Interactive Knowledge Graph
-
-Stop guessing how variables are calculated.
-
-* **Visual Lineage**: Click on a variable (e.g., `Hypercholesterolemia`) to see its dependencies (e.g., `LDL`, `Total Cholesterol`, `Statin Use`).
-* **Formula Transparency**: See the exact mathematical formula or logic rule used to derive any variable.
-* **Orphan Detection**: Identify variables that are defined but never used, or inputs that strictly drive outcomes.
+* **Rule**: "If `Weight_Unit` is 'lbs', divide `Weight` by 2.204."
+* **Effect**: Applied automatically during the Enrichment phase.
 
 ---
 
-## 6. Module 4: Epidemiological Analysis
+## 4. Phase 3: Data Enrichment (The Engine Room)
 
-Perform robust statistical comparison of groups.
+*Goal: Transform raw data into analytical variables. This is where you create value.*
+
+### 🧹 Step 1: Cleaning & Imputation
+
+* **Strategy**: Choose between `MICE` (Iterative), `KNN` (Similarity), or `Simple` (Mean/Median).
+* **AI Suggestion**: The Assistant analyzes variable names to recommend the statistically appropriate method.
+
+### 🧪 Step 2: Advanced Variable Creation
+
+Move beyond simple columns. Create clinically meaningful indices.
+
+#### A. Computed Columns (Formulas)
+
+* **Syntax**: Write natural mathematical formulas: `BMI = Weight / (Height/100)**2`.
+* **Safety**: The system handles type checking and zero-division errors.
+
+#### B. Dimensionality Reduction (Synthetic Variables)
+
+*Concept: Turn 50 correlated variables into 3 "Super-Variables" that capture the underlying trend.*
+
+* **PCA (Principal Component Analysis)**:
+  * *Usage*: For purely numerical data (e.g., 30 Lab values).
+  * *Output*: Creates `PC1`, `PC2` scores representing the major axes of variance.
+* **FAMD (Factor Analysis of Mixed Data)**:
+  * *Usage*: The "Medical Standard". Handles **both** categorical (Sex, Treatment) and numerical (Age, BP) data simultaneously.
+  * *Interpretation*: The "Contributions" table reveals which real variables drive the synthetic score.
+* **t-SNE / UMAP**:
+  * *Usage*: Non-linear cluster finding (e.g., finding patient phenotypic subgroups).
+  * *Parameters*: Tune `Perplexity` (t-SNE) or `Neighbors` (UMAP) to balance local vs global structure.
+
+---
+
+## 5. Phase 4: Exploration (Visualization)
+
+*Goal: See the patterns.*
+
+### 📊 Plotting Suite
+
+* **Distributions**: Histogram, Density, Violin Plots. (Check: Is my data normal?)
+* **Comparisons**: Box Plots with **auto-calculated P-values**.
+* **Correlations**: Heatmaps & Scatter plots.
+
+### 🏎️ Performance Mode
+
+* **Pandas vs DuckDB**: For datasets >100k rows, run the benchmark. The app will verify results and switch to DuckDB (SQL-based) for instant chart rendering if it's faster.
+
+---
+
+## 6. Phase 5: Confirmatory Analysis (Epidemiology)
+
+*Goal: Prove your hypothesis.*
 
 ### ⚖️ Univariate Analysis
 
-Compares groups (e.g., "Treatment vs Control") one variable at a time.
+Compare groups (e.g., Treatment vs Placebo).
 
-* **Auto-Selection**: The app automatically chooses the correct test (T-test, ANOVA, Chi-Square, etc.) based on data types and distribution.
-* **Effect Size**: Look beyond the P-value.
-  * **Large Effect**: Cohen's d > 0.8, Odds Ratio > 1.5. Indicates a clinically meaningful difference.
-  * **Small Effect**: Statistically significant but distinct distributions overlap heavily.
+* **Auto-Selector**: The app picks the right test (T-Test, Wilcoxon, ANOVA, Kruskal) based on normality and group count.
+* **Correction Methods**:
+  * **Bonferroni**: Strict control of Family-Wise Error Rate (FWER).
+  * **Benjamini-Hochberg (FDR)**: Balanced approach for exploratory analysis.
+* **Effect Size Classified**: Results are automatically tagged:
+  * ✅ **Clean**: Significant + Large Effect (Cohen's d > 0.8).
+  * ⚠️ **Caution**: Significant but Small Effect (likely due to large N).
+  * ❌ **Underpowered**: Non-significant but Large Effect (N too small).
 
-### 📈 Multivariate Analysis (ANCOVA)
+### 📈 Multivariate Analysis (GLM/ANCOVA)
 
-Answers: *"Is the difference real, or due to a confounder?"*
+"Adjust for Confounders."
 
-* **Target**: The outcome (e.g., Blood Pressure).
-* **Factor**: The group (e.g., Drug).
-* **Covariates**: Confounders (e.g., Age, Baseline BP).
-* **Interpretation**: If the Group effect remains significant (p < 0.05) after adjustment, the result is robust.
-
----
-
-## 7. Module 5: RAG & Document Insight
-
-Leverage your document repository.
-
-* **Knowledge Graph**: Visualizes connections between concepts in your uploaded papers.
-* **Q&A**: Ask questions like *"What is the standard deviation of Age in the reference paper?"*.
-* **Monitoring**: Check the "RAG Quality" dashboard to verify that AI answers are faithful to the source text (Hallucination Check).
+* **Model**: `Outcome ~ Group + Confounder1 + Confounder2`.
+* **Result**: See if the treatment effect survives after adjusting for Age and Severity.
 
 ---
 
-## 8. Reproducibility & Best Practices
+## 7. Phase 6: Knowledge & Insight
 
-Science must be reproducible.
+*Goal: Contextualize your findings.*
 
-### 🔁 Traces
+### 🧠 Data Insight (The Steward)
 
-* Every action (filtering, recoding, analysis) is recorded in a **Trace**.
-* **Save Trace**: Exits the session with a recipe file (`.json`).
-* **Load Trace**: Re-applies all steps to the raw data, ensuring exact replication of results.
+* **Lineage**: Click any variable to see its history: *Raw -> Imputed -> Transformed*.
+* **Orphan Check**: Find created variables that you forgot to use in the analysis.
 
-### ✅ Best Practices
+### 📚 RAG (Document Chat)
 
-1. **Format**: Ensure your CSV has a single header row.
-2. **Dates**: Format dates as YYYY-MM-DD for automatic recognition.
-3. **Variable Names**: Use descriptive names (e.g., `systolic_bp` instead of `var1`) to help the AI assistant.
-4. **Save Often**: Download intermediate datasets ("Snapshots") after major enrichment steps.
+* **Upload**: Protocols, Papers, PDFs.
+* **Query**: "What is the exclusion criteria for Heart Failure in the attached PDF?"
+* **Coverage**: "Does my CSV contain all the variables mentioned in Table 1 of the paper?"
+
+### 🛡️ RAG Quality Monitor (Trust Center)
+
+Trust but verify.
+
+* **Hallucination Rate**: Tracks % of answers unsupported by context.
+* **Faithfulness**: Score (0-10) measuring adherence to source text.
+* **Context Relevance**: Score (0-10) measuring if the retrieved PDF chunks actually answer the question.
+
+---
+
+## 8. Master Class: Reproducibility
+
+*Goal: Science that stands the test of time.*
+
+### 🔁 The Trace System
+
+Every project generates a `.json` "Recipe File".
+
+1. **Fast Mode (Replay)**: Reloads intermediate Snapshots. fast.
+2. **Full Reproducibility**: Re-runs the *entire* cleaning pipeline from the raw csv. Proof of correctness.
+
+### 💾 Dataset Versioning
+
+* **Snapshots**: Save `V1_Raw`, `V2_Imputed`, `V3_Final`.
+* **Rollback**: Made a mistake? One-click restore to yesterday's version.
+
+### ✅ Best Practices Checklist
+
+1. **One Header**: Ensure your CSV has a single header row.
+2. **ISO Dates**: Use `YYYY-MM-DD` to help the auto-detector.
+3. **Meaningful Names**: `Systolic_BP` is better than `Var12`.
+4. **Save Traces**: Always download your Trace JSON at the end of a session.
