@@ -1783,7 +1783,7 @@ def compute_transformations(dataframe):
                     result = model.fit_transform(dataframe[columns])
 
                     variance_ratio = model.percentage_of_variance_
-                    column_correlations = model.column_correlations(dataframe[columns])
+                    column_correlations = model.column_correlations
 
                 else:  # FAMD
                     model = prince.FAMD(n_components=len(columns), random_state=42)
@@ -1870,6 +1870,14 @@ def compute_transformations(dataframe):
             return
 
         new_columns = {}
+
+        # CHECK FOR MISSING VALUES (Elegant Error Handling)
+        if transformation_type in ["Dimensionality Reduction", "Clustering"]:
+             if dataframe[columns].isnull().any().any():
+                 st.error("❌ **Input columns contain missing values (NaNs).**\n\n"
+                          "Dimensionality reduction (PCA, t-SNE, etc.) and Clustering require complete data to function correctly.\n\n"
+                          "👉 **Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
+                 return
 
         try:
             if transformation_type == "Dimensionality Reduction":
