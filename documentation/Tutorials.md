@@ -1,82 +1,100 @@
 # 🎓 Tutorials
 
-This section provides step-by-step guides for common workflows in the Cohort Monitoring Package.
+This section provides step-by-step guides for common workflows in the **Integrated Research Environment**.
 
 ---
 
-## 1. Importing and Cleaning a New Dataset
+## 1. Setting Up a Study (Validation First)
 
-**Goal**: Load a raw CSV/Excel file, standardize column names, and save it as "Version 1".
+**Goal**: Load a raw dataset, define who belongs in the study, and set up your quality rules.
 
-1. **Launch the App**: Run `streamlit run main.py`.
-2. **Go to Home**: In the sidebar, select **Main View**.
-3. **Upload**:
-    * Look for the **Data Source** section in the sidebar.
-    * Choose **Upload File** and select your dataset (CSV or Excel).
-4. **Inspect**:
-    * The "Dataset Statistics" tab will show you an initial overview.
-    * Look for any columns with strange names or obvious errors.
-5. **Rename Columns** (Optional but Recommended):
-    * Switch to the **Columns Renaming** tab.
-    * If the AI is active, click **Suggest Names** to get standardized medical names.
-    * Otherwise, manually double-click cells in the "Rename to" column to edit them.
-    * Click **Apply Renames** to update the dataset in memory.
-6. **Save Version**:
-    * In the sidebar, under "Dataset Management", click **Save Version**.
-    * This creates a checkpoint (e.g., `v1`) that you can reload anytime.
+1. **Launch & Load**:
+    * Run `streamlit run main.py`.
+    * Go to **Main View** (Home).
+    * Use the sidebar to **Upload File** (CSV/Excel).
+2. **Standardize Names** (Optional):
+    * Go to **Main View > Tab 2: Columns Renaming**.
+    * Use **AI Suggest Names** to map cryptic codes (e.g., `bp_1`) to standard terms (`Systolic BP`).
+    * Click **Apply**.
+3. **Define Rules**:
+    * Go to **Data Validation & Monitoring** (Sidebar).
+    * **Tab 2: Clinical Anomalies**: Define impossible values (e.g., `Age > 120`).
+    * **Tab 3: Inclusion Criteria**: Define your study population (e.g., `Status == 'Enrolled'`).
+    * *Tip: Use the interactive editor to add rules without writing code.*
+4. **Check Health**:
+    * Go to **Tab 1: Data Quality Dashboard**.
+    * Review your **Health Score** and address any red flags (e.g., High Missingness).
+5. **Save Baseline**:
+    * In the sidebar ("Dataset Management"), click **Save Version** (e.g., `v1_raw_validated`).
 
 ---
 
-## 2. Generating a Knowledge Graph (Data Insight)
+## 2. Enrichment & Imputation strategy
+
+**Goal**: Handle missing data and create analytical variables.
+
+1. **Go to Data Enrichment**: Select **Data Enrichment** from the sidebar.
+2. **Targeted Imputation (Precision)**:
+    * Go to **Tab 1: Handle Missing Data > Sub-tab A: Targeted Imputation**.
+    * Select a variable (e.g., `BMI`).
+    * Enter a formula (e.g., `Weight / (Height/100)**2`) or ask the **AI Assistant** ("How do I calculate BMI?").
+    * Click **Apply Formula** to fill missing values just for that column.
+3. **Global Imputation (Bulk)**:
+    * Go to **Sub-tab B: Global Imputation**.
+    * Select **Numerical Strategy**: `MICE` (Best for accuracy) or `MissForest` (Best for non-linear).
+    * Click **Run Imputation**.
+4. **Create New Variables**:
+    * Go to **Tab 3: Feature Engineering**.
+    * Select **Transformation Type**: `Computed Column`.
+    * Enter your formula.
+5. **Save Enriched Version**: Save as `v2_enriched`.
+
+---
+
+## 3. Generating a Knowledge Graph (Data Insight)
 
 **Goal**: Visualize the relationships between your variables automatically.
 
-1. **Load Data**: Ensure your dataset is loaded (see Tutorial 1).
+1. **Load Data**: Ensure your dataset is loaded.
 2. **Go to Data Insight**: Select **Data Insight** from the sidebar.
 3. **Generate**:
-    * If the screen is empty, look for the **✨ Generate New** column or button.
-    * Click **🚀 Generate Taxonomy**.
-    * *Note: This requires the RAG/AI system to be initialized.*
-4. **Review**:
-    * Wait for the progress bar to complete.
-    * Explore the graph. Blue nodes are your inputs, yellow are derived.
-5. **Save**:
-    * In the sidebar, click **💾 Save New (v1)** to store this graph layout.
+    * Click **🚀 New Taxonomy**.
+    * The system analyzes column names and detects relationships (Formula links, Categories).
+4. **Explore**:
+    * Blue nodes = Inputs. Yellow nodes = Derived variables.
+    * Click a node to see its metadata.
+5. **Save**: In the sidebar, save as `v1_graph`.
 
 ---
 
-## 3. Analyzing Research Documents
+## 4. Analyzing Research Documents (RAG)
 
 **Goal**: Extract concepts from a PDF and check if your dataset covers them.
 
 1. **Go to Documents Insight**: Select **Documents Insight** from the sidebar.
-2. **Select Documents**:
-    * In the sidebar, check the boxes for the PDFs you want to analyze.
-    * *If no docs appear, ensure you have placed PDFs in the `DOCUMENTS` folder and the system has indexed them.*
+2. **Select Documents**: Check the PDFs you want to analyze in the sidebar.
 3. **Generate Graph**: Click **✨ Generate Graph**.
-4. **Check Coverage**:
-    * Once the graph appears, switch to the **📊 Dataset Coverage** tab.
-    * Click **🔍 Check Coverage**.
-    * Review the list. Green checks ✅ mean your dataset contains variables that match the concepts in the paper.
-5. **Chat**:
-    * Switch to the **💬 Chat** tab.
+4. **Check Coverage** (Tab 3):
+    * Click **Checking Coverage**.
+    * Green checks ✅ mean your dataset contains variables that match the concepts in the paper.
+5. **Chat** (Tab 4):
     * Ask: *"What are the inclusion criteria mentioned in these papers?"*
 
 ---
 
-## 4. Running a Statistical Report
+## 5. Running a Statistical Analysis
 
-**Goal**: Compare two groups (e.g., Treatment vs Control) and export the results.
+**Goal**: Compare two groups (e.g., Treatment vs Control).
 
 1. **Go to Epidemiology**: Select **Epidemiology & Hypothesis** from the sidebar.
-2. **Define Groups**:
-    * Select **Hypothesis Testing**.
-    * **Group A**: Define a filter, e.g., `Treatment == 1`.
-    * **Group B**: Define a filter, e.g., `Treatment == 0`.
-3. **Select Variables**: Choose the variables you want to compare (e.g., `Age`, `BMI`, `Outcome`).
+2. **Configure Analysis** (Sidebar):
+    * **Test Type**: Select "Parametric" or "Non-Parametric".
+    * **Correction**: Select "Bonferroni" if you are testing many variables.
+3. **Define Groups**:
+    * **Group A Filter**: `Treatment == 1`.
+    * **Group B Filter**: `Treatment == 0`.
 4. **Run Tests**:
+    * Select variables (e.g., `Age`, `Outcome`).
     * Click **Run Analysis**.
-    * The system will automatically select appropriate tests (T-test or Mann-Whitney) based on normality.
-5. **Export**:
-    * View the results table.
-    * Click the **Download Excel** button to save the full statistical report.
+5. **Check Power** (Tab 2):
+    * Input your sample size and observed effect size to see if the result is robust.

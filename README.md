@@ -167,6 +167,8 @@ See the `documentation/` folder for detailed guides:
 | `06_Data_Insight.md` | Variable relationships and Taxonomy Graph |
 | `07_Document_Insight.md` | Chat with PDF and Literature Knowledge Graphs |
 | `08_Reproduction.md` | Trace replay and session management |
+| `09_Clustering.md` | Population clustering (PCA, t-SNE, UMAP, K-Means) |
+| `10_Developer_Guide.md` | Architecture, RAG utilities, and Contribution guide |
 | `Tutorials.md` | Step-by-step specific workflows |
 
 ---
