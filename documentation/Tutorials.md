@@ -98,3 +98,23 @@ This section provides step-by-step guides for common workflows in the **Integrat
     * Click **Run Analysis**.
 5. **Check Power** (Tab 2):
     * Input your sample size and observed effect size to see if the result is robust.
+
+---
+
+## 6. Creating a Publication-Ready Figure
+
+**Goal**: Design a high-resolution, customized chart for your manuscript and export it.
+
+1. **Go to Visualization**: Select **Visualization** from the sidebar.
+2. **Generate Chart**:
+    * Select your plot type (e.g., **Violin Plot**).
+    * Choose X (Group) and Y (Variable).
+    * Check **Show Statistical Significance** to add p-values directly to the plot.
+3. **Customize Style** (Visual Settings Expander):
+    * **Theme**: Select `ggplot2` or `seaborn` for a clean, academic look.
+    * **Colors**: Choose a high-contrast palette like `Set1` or `Viridis`.
+    * **Dimensions**: Set width/height if you need a specific aspect ratio.
+4. **Export**:
+    * Hover over the top-right of the chart.
+    * Click the **Camera Icon** (Download plot as png).
+    * *Note: The system generates high-resolution images suitable for submission.*

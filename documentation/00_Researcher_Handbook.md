@@ -140,6 +140,7 @@ Move beyond simple columns. Create clinically meaningful indices.
 * **Distributions**: Histogram, Density, Violin Plots. (Check: Is my data normal?)
 * **Comparisons**: Box Plots with **auto-calculated P-values**.
 * **Correlations**: Heatmaps & Scatter plots.
+* **Publication-Grade Figures**: Customise themes (ggplot, seaborn) and export high-resolution plots (SVG/PNG) for your manuscript in one click.
 
 ### 🏎️ Performance Mode
 
