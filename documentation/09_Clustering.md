@@ -11,15 +11,16 @@ The **Population Clustering** tab in Data Insight enables exploratory analysis t
 ### Dimensionality Reduction
 
 | Method | Preserves | Speed | Best For |
-|:-------|:----------|:------|:---------|
+| :--- | :--- | :--- | :--- |
 | **PCA** | Global variance | ⚡ Fast | Initial exploration, interpretability |
+| **FAMD** | Mixed (Num+Cat) variance | 🚀 Medium | Mixed data (Numeric + Categorical) |
 | **t-SNE** | Local structure | 🐢 Slow | Cluster visualization (< 3000 samples) |
 | **UMAP** | Local + global | 🚀 Medium | Large datasets, preserves topology |
 
 ### Clustering Algorithms
 
 | Method | Best For | Key Parameter |
-|:-------|:---------|:--------------|
+| :--- | :--- | :--- |
 | **K-Means** | Well-separated spherical clusters | K (number of clusters) |
 | **DBSCAN** | Arbitrary shapes, outlier detection | eps (neighborhood size) |
 | **Gaussian Mixture** | Overlapping clusters, soft assignments | Number of components |
@@ -29,11 +30,12 @@ The **Population Clustering** tab in Data Insight enables exploratory analysis t
 ## Usage Guide
 
 1. **Load data** from Main View
-2. **Select variables** (numeric only, ≥ 2)
-3. **Choose dimensionality reduction** (PCA for speed, UMAP for accuracy)
-4. **Choose clustering** (K-Means for simple, DBSCAN for outliers)
-5. **Run analysis**
-6. **Explore results**:
+1. **Load data** from Main View
+1. **Select variables** (Numeric or Mixed for FAMD)
+1. **Choose dimensionality reduction** (PCA for numeric, FAMD for mixed)
+1. **Choose clustering** (K-Means for simple, DBSCAN for outliers)
+1. **Run analysis**
+1. **Explore results**:
    - Scatter plot (2D projection)
    - Cluster profiles (mean values per cluster)
    - Optimal K analysis (elbow + silhouette)
@@ -47,18 +49,22 @@ The **Population Clustering** tab in Data Insight enables exploratory analysis t
 - Each **point** = one sample
 - **Nearby points** = similar profiles
 - **Colors** = cluster assignments
+- **Axis Labels** = % of explained variance (for PCA/FAMD), helping you judge dimension importance
 - **Well-separated clusters** = distinct subpopulations
 
 ### Reading Cluster Profiles
 
 - Each **row** = one cluster
-- **Values** = mean of variables in that cluster
+- Each **row** = one cluster
+- **Values**:
+  - **Numeric**: Mean value
+  - **Categorical**: Mode (most frequent value)
 - Compare to characterize phenotypes
 
 ### Choosing K (Number of Clusters)
 
 | Silhouette Score | Interpretation |
-|:-----------------|:---------------|
+| :--- | :--- |
 | > 0.5 | Good clustering |
 | 0.25 - 0.5 | Acceptable |
 | < 0.25 | Poor separation |
@@ -92,7 +98,6 @@ A new column (e.g., `Cluster_K-Means`) will be added to your dataset containing 
 
 > [!IMPORTANT]
 > **Standardization**: All clustering algorithms implemented here rely on distance metrics (Euclidean). Input variables are **automatically standardized** (Z-score normalization: mean=0, std=1) before analysis to ensure that variables with large ranges (e.g., Platelets) do not dominate those with small ranges (e.g., Creatinine).
-
 > [!WARNING]
 > **Missing Values**: Clustering algorithms cannot handle missing data. Rows with **any missing value** in the selected variables will be **excluded** from the analysis (Complete Case Analysis). Please impute missing data beforehand if significant data loss is a concern.
 
@@ -101,7 +106,7 @@ A new column (e.g., `Cluster_K-Means`) will be added to your dataset containing 
 ## Technical Details
 
 - **File**: `utils/clustering_utils.py`
-- **Dependencies**: `scikit-learn`, `umap-learn` (optional)
+- **Dependencies**: `scikit-learn`, `umap-learn` (optional), `prince` (for FAMD)
 
 ## References
 

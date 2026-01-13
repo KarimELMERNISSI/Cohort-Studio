@@ -1457,7 +1457,7 @@ def app():
                     st.warning("👆 Please select at least 2 variables (can be mixed numeric/categorical).")
                 else:
                     # Run Analysis Button
-                    if st.button("🚀 Run Clustering Analysis", type="primary", use_container_width=True):
+                    if st.button("🚀 Run Clustering Analysis", type="primary", width='content'):
                         with st.spinner("Running analysis..."):
                             try:
                                 # Prepare dataify variable types in selection
@@ -1595,7 +1595,7 @@ def app():
                             )
                             fig.update_layout(height=500)
                             fig.update_traces(marker=dict(size=8, opacity=0.7))
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig)
                             
                             # Interpretation
                             with st.expander("📖 How to Interpret"):
@@ -1628,27 +1628,27 @@ def app():
                                     numeric_cols=current_numeric,
                                     categorical_cols=current_categorical
                                 )
-                                st.dataframe(profiles, use_container_width=True)
+                                st.dataframe(profiles)
                             
-                            # Download
-                            st.download_button(
-                                "📥 Download Profiles",
-                                data=profiles.to_csv(),
-                                file_name="cluster_profiles.csv",
-                                mime="text/csv"
-                            )
-                            
-                            with st.expander("📖 How to Interpret"):
-                                st.markdown("""
-                                **Reading Cluster Profiles:**
-                                - Each row = one cluster
-                                - Values = mean of each variable in that cluster
-                                - Compare across clusters to characterize phenotypes
+                                # Download
+                                st.download_button(
+                                    "📥 Download Profiles",
+                                    data=profiles.to_csv(),
+                                    file_name="cluster_profiles.csv",
+                                    mime="text/csv"
+                                )
                                 
-                                **Example Interpretation:**
-                                - "Cluster 0 has high BMI, high glucose → metabolic phenotype"
-                                - "Cluster 2 has low all biomarkers → healthy controls"
-                                """)
+                                with st.expander("📖 How to Interpret"):
+                                    st.markdown("""
+                                    **Reading Cluster Profiles:**
+                                    - Each row = one cluster
+                                    - Values = mean of each variable in that cluster
+                                    - Compare across clusters to characterize phenotypes
+                                    
+                                    **Example Interpretation:**
+                                    - "Cluster 0 has high BMI, high glucose → metabolic phenotype"
+                                    - "Cluster 2 has low all biomarkers → healthy controls"
+                                    """)
                         
                         with viz_tabs[2]:
                             from utils.clustering_utils import optimal_k_analysis
@@ -1687,7 +1687,7 @@ def app():
                                     yaxis2=dict(title="Silhouette", side="right", overlaying="y"),
                                     template="plotly_white"
                                 )
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, width='content')
                                 
                                 st.info(f"📌 **Recommended K (by Silhouette):** {opt_analysis['optimal_k_silhouette']}")
                                 

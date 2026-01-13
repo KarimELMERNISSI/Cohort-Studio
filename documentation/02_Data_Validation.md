@@ -25,7 +25,7 @@ The **Data Validation & Monitoring** module is a comprehensive control center fo
 * **Detection Methods**:
   * **Statistical**: Z-Score, IQR (Interquartile Range), Quantile.
   * **Machine Learning**: **Isolation Forest**, **LOF (Local Outlier Factor)**, and **DBSCAN (Density-Based Spatial Clustering)** for multivariate anomaly detection.
-* **Visualization**: 2D projection using **PCA**, **FAMD**, **t-SNE**, or **UMAP** to visually inspect outlier separation.
+* **Visualization**: 2D projection using **PCA**, **FAMD** (for mixed data), **t-SNE**, or **UMAP**. Axes now display the percentage of explained variance for better interpretability.
 * **Handling Strategies**:
   * **Remove**: Delete rows with outliers.
   * **Clip**: Cap values at the threshold (winsorization).
