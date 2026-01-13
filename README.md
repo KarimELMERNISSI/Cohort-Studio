@@ -61,8 +61,7 @@ Cohort Monitoring Package/
 │   ├── document_insight.py     # Document Chat & Graph
 │   ├── epidemiology.py         # Statistical Analysis
 │   ├── data_monitoring.py      # Validation & Monitoring
-│   ├── visualization.py        # Plotting Suite
-│   └── config_form.py          # Configuration Editor
+│   └── visualization.py        # Plotting Suite
 │
 ├── manage/                     # Backend Managers
 │   ├── rag_manager.py          # RAG Orchestrator (Mixin Pattern)
@@ -159,14 +158,16 @@ See the `documentation/` folder for detailed guides:
 
 | Guide | Description |
 |-------|-------------|
-| `01_Home.md` | Data loading and dashboard |
-| `04_Data_Monitoring.md` | Quality checks and validation |
-| `05_Data_Enrichment.md` | Imputation and transformation |
-| `06_Visualization.md` | Interactive plotting |
-| `07_Epidemiology.md` | Statistical analysis |
-| `09_Data_Insight.md` | Knowledge graphs |
-| `10_Documents_Insight.md` | Document chat |
-| `Tutorials.md` | Step-by-step workflows |
+| `00_Researcher_Handbook.md` | **Start Here**. Philosophy, workflow, and phase-by-phase guide. |
+| `01_Home.md` | Data loading, RAG setup, and dashboard statistics |
+| `02_Data_Validation.md` | Validation rules, Anomalies, and Inclusion masks |
+| `03_Data_Enrichment.md` | Imputation, Computed Variables, and Dimensionality Reduction |
+| `04_Visualization.md` | Interactive plotting and distribution checks |
+| `05_Epidemiology.md` | Statistical analysis, Power calc, and Z-Scores |
+| `06_Data_Insight.md` | Variable relationships and Taxonomy Graph |
+| `07_Document_Insight.md` | Chat with PDF and Literature Knowledge Graphs |
+| `08_Reproduction.md` | Trace replay and session management |
+| `Tutorials.md` | Step-by-step specific workflows |
 
 ---
 

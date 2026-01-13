@@ -8,10 +8,11 @@ The **Data Validation & Monitoring** module is a comprehensive control center fo
 
 ### 1. 🏥 Clinical Anomalies (Tab 2)
 
-* **Rule Definition**: Define domain-specific rules to flag invalid data.
-  * **Numeric Rules**: Set Min/Max bounds for quantitative variables (e.g., "Age must be between 0 and 120").
-  * **Expression Rules**: Write custom Python expressions for complex logic (e.g., `systolic_bp > diastolic_bp`).
-* **Application**: Apply these rules to create an "Anomaly Mask" and visualize the percentage of irregular rows.
+* **Integrated Rule Editor**: Create new validation rules directly in the interface. No need for external configuration files.
+* **Rule Logic**:
+  * **Numeric Rules**: Set Min/Max bounds (e.g., "Age must be between 0 and 120").
+  * **Expression Rules**: Write custom Python expressions (e.g., `systolic_bp > diastolic_bp`).
+* **Visual Feedback**: Real-time anomaly masks showing the percentage of irregular rows.
 
 ### 2. 🎯 Inclusion Criteria (Tab 3)
 

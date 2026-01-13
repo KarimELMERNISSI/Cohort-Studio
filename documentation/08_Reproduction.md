@@ -23,6 +23,7 @@ The **Reproduction** module ensures the reproducibility of analysis workflows. I
   * **Fast Replay**: Uses intermediate snapshots (if available) to quickly jump to a specific state.
   * **Full Replay**: Re-executes every step from the raw source dataset to ensure complete verification.
 * **Artifact Links**: Provides direct links to intermediate outputs (e.g., "Categorical Stats", "Correlation Matrix") generated during the original session.
+* **Portable Reproduction (Path Resolver)**: Automatically adapts file paths (e.g., `C:/Users/Bob/Data.csv` -> `/home/Alice/Data.csv`) allowing traces to run across different machines and OS (Windows/Linux/Docker).
 
 ## Usage Guide
 

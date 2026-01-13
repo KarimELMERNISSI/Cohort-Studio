@@ -102,6 +102,32 @@ Standardize data against a reference population for cross-variable comparison.
 | Whole Cohort | Standardize to sample mean/SD (mean ≈ 0, SD ≈ 1) |
 | Manual Reference | Enter published norms (e.g., WHO growth charts) |
 
+### 3. 🔋 Power & Sample Size (Tab 2)
+
+Ensure your study is statistically sound before or after analysis.
+
+- **Post-hoc Power**: "Did I have enough patients to find this effect?"
+  - Input: Effect size (Cohen's d), Sample Size (N), Alpha (0.05).
+  - Output: Power (0-100%).
+- **Sample Size Estimation**: "How many patients do I need?"
+  - Input: Desired Power (80%), Expected Effect Size.
+  - Output: Required N per group.
+
+### 4. 📏 Z-Score & Reference Analysis (Tab 3)
+
+Standardize your data for clinical comparison (e.g., Growth Charts).
+
+- **Standardization**: Converts raw values into Z-Scores (Standard Deviations from the Mean).
+- **Reference Populations**: Define a reference group (e.g., "Controls") to normalize the "Case" group against.
+
+### 5. ⚙️ Analysis Configuration (Sidebar)
+
+Configure your analysis rules "Just-in-Time":
+
+- **Test Selection**: Choose between **Parametric** (assume normal distribution) or **Non-Parametric** (ranking tests).
+- **Correction Method**: Apply **Bonferroni** or **FDR (Benjamini-Hochberg)** to control for multiple comparisons.
+- **Transformation**: Pre-process data with **Log**, **Z-Score**, or **Min-Max** scaling before running tests.
+
 **Visualizations:**
 
 1. **Forest Plot**: Mean Z-scores by group with 95% CI or ±SD

@@ -5,7 +5,7 @@ from io import BytesIO
 import numpy as np
 from scipy import stats
 from utils.data_analyzer import DataAnalyzer
-from app_pages.config_form import transform_expression, create_empty_config
+from utils.config_loader import transform_expression, create_empty_config
 from app_pages.data_quality import render_dashboard
 from enrich import custom_metrics_and_filters as ecm
 import monitor.outliers as mo
