@@ -119,7 +119,9 @@ def run_tsne(
         "perplexity_used": effective_perplexity,
         "n_samples": len(numeric_data),
         "sampled": sampled,
-        "kl_divergence": tsne.kl_divergence_ if hasattr(tsne, 'kl_divergence_') else None
+        "sampled": sampled,
+        "kl_divergence": tsne.kl_divergence_ if hasattr(tsne, 'kl_divergence_') else None,
+        "feature_names": numeric_data.columns.tolist()
     }
     
     return embeddings, info
@@ -163,7 +165,9 @@ def run_umap(
         "n_neighbors_used": min(n_neighbors, len(numeric_data) - 1),
         "min_dist": min_dist,
         "n_samples": len(numeric_data),
-        "sampled": sampled
+        "n_samples": len(numeric_data),
+        "sampled": sampled,
+        "feature_names": numeric_data.columns.tolist()
     }
     
     return embeddings, info
@@ -188,9 +192,71 @@ def run_famd(
     famd = famd.fit(data)
     embeddings = famd.row_coordinates(data).values
     
+    # Check for variance attributes (Prince 0.7.x vs older)
+    # The eigenvalues_summary is a dataframe with columns like '% of variance' and '% of variance (cumulative)'
+    if hasattr(famd, 'eigenvalues_summary'):
+        summary_df = famd.eigenvalues_summary
+        # The summary might have more components than requested if it computed more, 
+        # but usually it matches n_components or the potential full rank
+        # We want the cumulative variance of the n_components used.
+        # Check if the dataframe index is integers or strings, usually integers 0, 1, ...
+        # If n_components is 2, we want the value at index 1 (component 1) if strictly cumulative,
+        # or we just sum the individual % of variance. 
+        # According to debug output, we have '% of variance (cumulative)'
+        
+        target_col = '% of variance (cumulative)'
+        if target_col in summary_df.columns:
+            # Get the cumulative variance for the last component we kept
+            # We used n_components. The summary df index might go up to min(n_rows, n_cols).
+            # We only care about the first n_components.
+            
+            # Ensure we only look at the first n_components
+            sliced_summary = summary_df.iloc[:n_components]
+            
+            # The cumulative value at the LAST row of this slice is our total explained variance
+            total_variance_pct = sliced_summary[target_col].iloc[-1]
+            
+            # Convert percentage string ("47%") or float to float 0-1
+            if isinstance(total_variance_pct, str):
+                total_variance_pct = float(total_variance_pct.strip('%'))
+                
+            total_variance = total_variance_pct / 100.0
+            
+            # Sanitize explained_inertia list (convert strings to floats)
+            raw_inertia = sliced_summary['% of variance'].tolist() if '% of variance' in sliced_summary.columns else []
+            explained_inertia = []
+            for x in raw_inertia:
+                if isinstance(x, str):
+                    try:
+                        explained_inertia.append(float(x.strip('%')))
+                    except ValueError:
+                        explained_inertia.append(0.0)
+                else:
+                    explained_inertia.append(float(x))
+        else:
+            # Fallback
+            total_variance = 0.0
+            explained_inertia = []
+
+    elif hasattr(famd, 'percentage_of_variance_'):
+        variance_ratio = famd.percentage_of_variance_
+        total_variance = sum(variance_ratio)
+        # Normalize if it's in percentage (0-100) -> 0-1
+        if total_variance > 1.0:
+            total_variance /= 100.0
+        explained_inertia = variance_ratio # Keep as is for info
+    elif hasattr(famd, 'explained_inertia_'):
+        explained_inertia = famd.explained_inertia_
+        total_variance = sum(explained_inertia)
+    else:
+        explained_inertia = []
+        total_variance = 0.0
+
     info = {
-        "explained_inertia": famd.explained_inertia_.tolist() if hasattr(famd, 'explained_inertia_') else None,
-        "n_samples": len(data)
+        "explained_inertia": explained_inertia,
+        "total_variance_explained": total_variance,
+        "n_samples": len(data),
+        "feature_names": data.columns.tolist()
     }
     
     return embeddings, info

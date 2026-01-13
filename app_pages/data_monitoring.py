@@ -10,6 +10,7 @@ from app_pages.data_quality import render_dashboard
 from enrich import custom_metrics_and_filters as ecm
 import monitor.outliers as mo
 import monitor.changes as mc
+import utils.clustering_utils as cu
 from typing import Dict, Any, Optional, Union, List, Tuple, Callable
 import os
 import re
@@ -59,17 +60,11 @@ class OutlierHandler:
   
     def detect_outliers_zscore(self, column, threshold=3):
         """Detect outliers using Z-score method"""
-        z_scores = stats.zscore(self.df[column])
-        return abs(z_scores) > threshold
+        return mo.find_outliers_zscore(self.df[column], threshold)
         
     def detect_outliers_iqr(self, column, multiplier=1.5):
         """Detect outliers using IQR method"""
-        Q1 = self.df[column].quantile(0.25)
-        Q3 = self.df[column].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - multiplier * IQR
-        upper_bound = Q3 + multiplier * IQR
-        return (self.df[column] < lower_bound) | (self.df[column] > upper_bound)
+        return mo.find_outliers_boxplot(self.df[column], multiplier)
         
     def detect_outliers_quantile(self, column, lower=0.01, upper=0.99):
         """Detect outliers using quantile method"""
@@ -173,6 +168,28 @@ class OutlierHandler:
             debug=debug
         )
         
+        return outliers_tag, outliers_scores, additional_info
+
+
+    def detect_dbscan_outliers(self, data, eps=0.5, min_samples=5, 
+                              numerical_imputation_method='missforest', 
+                              categorical_imputation_method='missforest', 
+                              remainder_columns='auto', 
+                              remainder_threshold=0.3, 
+                              debug=True):
+        """
+        Detect outliers using DBSCAN method
+        """
+        outliers_tag, outliers_scores, additional_info = mo.find_dbscan_outliers(
+            data,
+            eps=eps,
+            min_samples=min_samples,
+            numerical_imputation_method=numerical_imputation_method,
+            categorical_imputation_method=categorical_imputation_method,
+            remainder_columns=remainder_columns,
+            remainder_threshold=remainder_threshold,
+            debug=debug
+        )
         return outliers_tag, outliers_scores, additional_info
 
 
@@ -340,7 +357,7 @@ class OutlierHandler:
             DataFrame: Outlier matrix with boolean values indicating outliers.
         """
         # Ensure valid methods
-        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest']
+        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest', 'DBSCAN']
         if method not in valid_methods:
             raise ValueError(f"Invalid method '{method}'. Choose from {valid_methods}.")
 
@@ -369,13 +386,15 @@ class OutlierHandler:
                 # Add to the outlier matrix
                 outlier_matrix[column] = is_outlier
 
-        elif method in ['Local Outlier Factor', 'Isolation Forest']:
+        elif method in ['Local Outlier Factor', 'Isolation Forest', 'DBSCAN']:
             # Apply dataset-wide methods
             data = self.df[columns]
             if method == 'Local Outlier Factor':
                 is_outlier, outlier_score, _ = self.detect_lof_outliers(data=data, **kwargs)
             elif method == 'Isolation Forest':
                 is_outlier, outlier_score, _ = self.detect_isolation_forest_outliers(data=data, **kwargs)
+            elif method == 'DBSCAN':
+                is_outlier, outlier_score, _ = self.detect_dbscan_outliers(data=data, **kwargs)
 
             # Add the dataset-wide outliers to the matrix
             outlier_matrix['overall'] = is_outlier
@@ -434,7 +453,7 @@ class OutlierHandler:
                         df_processed.loc[outlier_matrix[column], f"{method}_list"] = (df_processed.loc[outlier_matrix[column], f"{method}_list"] + ", " + column).str.strip(", ")
                         
 
-            elif method in ['Isolation Forest', 'Local Outlier Factor']:
+            elif method in ['Isolation Forest', 'Local Outlier Factor', 'DBSCAN']:
                 # Initialize score and tag columns for dataset-wide methods
                 tag_col = f"{method}_tag"
                 score_col = f"{method}_score"
@@ -507,7 +526,7 @@ class OutlierHandler:
         summary = {}
 
         # Check for valid methods
-        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest']
+        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest', 'DBSCAN']
         if method not in valid_methods:
             raise ValueError(f"Invalid method '{method}'. Choose from {valid_methods}.")
 
@@ -554,7 +573,7 @@ class OutlierHandler:
                 }
 
         # Dataset-wide methods
-        elif method in ['Local Outlier Factor', 'Isolation Forest']:
+        elif method in ['Local Outlier Factor', 'Isolation Forest', 'DBSCAN']:
             data = self.df[columns]#.dropna()
             # data = self.df[columns].select_dtypes(include=['int64', 'float64']).dropna()
             #if data.empty:
@@ -564,6 +583,8 @@ class OutlierHandler:
                 is_outlier, scores, _ = self.detect_lof_outliers(data=data, **kwargs)
             elif method == 'Isolation Forest':
                 is_outlier, scores, _ = self.detect_isolation_forest_outliers(data=data, **kwargs)
+            elif method == 'DBSCAN':
+                is_outlier, scores, _ = self.detect_dbscan_outliers(data=data, **kwargs)
 
             # Calculate overall statistics
             #n_outliers = sum(is_outlier)
@@ -838,7 +859,7 @@ def add_outlier_handling_ui(df, numeric_cols):
     with col1:
         detection_method = st.selectbox(
             "Outlier Detection Method",
-            ["zscore", "iqr", "quantile", "Local Outlier Factor", "Isolation Forest"],
+            ["zscore", "iqr", "quantile", "Local Outlier Factor", "Isolation Forest", "DBSCAN"],
             help="Z-score: Uses standard deviations from mean\n"
                  "IQR: Uses interquartile range\n"
                  "Quantile: Uses percentile thresholds"
@@ -883,6 +904,11 @@ def add_outlier_handling_ui(df, numeric_cols):
     # Step 6: Display Combined Information for Each Variable
     display_combined_information(df, df_processed, summary, selected_cols, detection_method, handling_strategy)
 
+    # Step 7: Visualization
+    with st.expander("Visual Inspection", expanded=True):
+         # Pass selected columns instead of all numeric columns to ensure correct data scope
+         display_outlier_visualization(df, outlier_matrix, selected_cols, detection_method)
+
     return df_processed
 
 
@@ -905,6 +931,13 @@ def configure_method_params(detection_method):
         return {'n_estimators': 100, 'max_samples': 'auto'}
     elif detection_method == "Local Outlier Factor":
         return {'n_neighbors': 50, 'contamination': 'auto'}
+    elif detection_method == "DBSCAN":
+        col1, col2 = st.columns(2)
+        with col1:
+            eps = st.number_input("Epsilon (eps)", 0.1, 10.0, 0.5, 0.1)
+        with col2:
+            min_samples = st.number_input("Min Samples", 1, 100, 5, 1)
+        return {'eps': eps, 'min_samples': int(min_samples)}
     return {}
 
 
@@ -1163,7 +1196,7 @@ def generate_outlier_summary_from_predictions(df, outlier_predictions, selected_
                 'percentage_outliers': pct_outliers,
                 'outlier_values': df.loc[is_outlier, col].tolist()
             }
-    elif method in ['Local Outlier Factor', 'Isolation Forest']:
+    elif method in ['Local Outlier Factor', 'Isolation Forest', 'DBSCAN']:
         is_outlier = outlier_predictions.get('overall', [])
         n_outliers = sum(is_outlier)
         pct_outliers = (n_outliers / len(df)) * 100
@@ -1173,6 +1206,161 @@ def generate_outlier_summary_from_predictions(df, outlier_predictions, selected_
         }
 
     return summary
+
+
+
+def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
+    """Display 2D visualization of outliers using PCA, FAMD, t-SNE, or UMAP."""
+    st.subheader("Visual Inspection")
+    
+    # Projection Method Selector
+    projection_method = st.selectbox(
+        "Select Projection Method",
+        ["PCA", "FAMD", "t-SNE", "UMAP"],
+        index=0,
+        help="PCA: Linear (fast, numeric only)\n"
+             "FAMD: Factor Analysis for Mixed Data (numeric + categorical)\n"
+             "t-SNE: Non-linear, preserves local structure\n"
+             "UMAP: Non-linear, preserves global structure"
+    )
+
+    if not selected_cols:
+         st.warning("No columns selected for visualization.")
+         return
+
+    # Prepare data based on method requirements
+    # For PCA/t-SNE/UMAP in clustering_utils, it expects numeric data mainly, 
+    # but we should filter DF to selected columns first.
+    
+    data_viz = df[selected_cols].copy()
+    
+    # Impute missing values instead of dropping to preserve data points
+    # Separate numeric and categorical
+    num_cols = data_viz.select_dtypes(include=['number']).columns
+    cat_cols = data_viz.select_dtypes(include=['object', 'category']).columns
+
+    if not num_cols.empty:
+        # Fill numeric with mean
+        data_viz[num_cols] = data_viz[num_cols].fillna(data_viz[num_cols].mean())
+    
+    if not cat_cols.empty:
+        # Fill categorical with mode
+        for col in cat_cols:
+             if not data_viz[col].mode().empty:
+                 data_viz[col] = data_viz[col].fillna(data_viz[col].mode()[0])
+             else:
+                 data_viz[col] = data_viz[col].fillna("Unknown")
+
+    if data_viz.isna().any().any():
+        st.warning("Some missing values could not be imputed. Dropping remaining rows.")
+        data_viz = data_viz.dropna()
+
+    if data_viz.empty:
+        st.warning("No valid data for visualization (all rows contain NaNs in selected columns).")
+        return
+    
+    # Check if we have enough data
+    if len(data_viz) < 5:
+         st.warning("Not enough data points for visualization (need at least 5).")
+         return
+
+    embeddings = None
+    info = {}
+    
+    try:
+        with st.spinner(f"Running {projection_method}..."):
+            if projection_method == "PCA":
+                # PCA usually requires numeric only, let's filter just in case logic above passed mixed
+                # But wait, we want to visualize what was used. 
+                # If users used LOF on mixed data, they might want to see mixed data projection.
+                # Currently cu.run_pca filters for numbers.
+                embeddings, info = cu.run_pca(data_viz, n_components=2)
+                ratio = info.get('explained_variance_ratio', [0, 0])
+                # Ensure we have at least 2 elements
+                if len(ratio) < 2: ratio = ratio + [0] * (2 - len(ratio))
+                
+                axis_labels = {
+                    "x": f"PC1 ({ratio[0]:.1%})", 
+                    "y": f"PC2 ({ratio[1]:.1%})"
+                }
+                title = f"PCA Projection (Explained Variance: {info.get('total_variance_explained', 0):.2%})"
+            
+            elif projection_method == "t-SNE":
+                embeddings, info = cu.run_tsne(data_viz, n_components=2)
+                axis_labels = {"x": "Dim 1", "y": "Dim 2"}
+                title = f"t-SNE Projection (Perplexity: {info.get('perplexity_used', 'N/A')})"
+                
+            elif projection_method == "UMAP":
+                embeddings, info = cu.run_umap(data_viz, n_components=2)
+                axis_labels = {"x": "Dim 1", "y": "Dim 2"}
+                title = "UMAP Projection"
+
+            elif projection_method == "FAMD":
+                # FAMD handles mixed data, so we need to ensure we pass the right data
+                # run_famd in utils should handle it.
+                embeddings, info = cu.run_famd(data_viz, n_components=2)
+                
+                inertia = info.get('explained_inertia', [0, 0])
+                if len(inertia) < 2: inertia = inertia + [0] * (2 - len(inertia))
+                
+                # FAMD from prince (via our utils) returns percentages (e.g. 45.2)
+                # But sometimes it might fall back to ratio if using different attr.
+                # In our utils, we prioritized 'eigenvalues_summary' which has '% of variance'
+                # Let's assume it is percentage numbers.
+                
+                axis_labels = {
+                    "x": f"Dim 1 ({inertia[0]:.1f}%)", 
+                    "y": f"Dim 2 ({inertia[1]:.1f}%)"
+                }
+                title = f"FAMD Projection (Explained Variance: {info.get('total_variance_explained', 0):.2%})"
+
+    except ImportError as e:
+        st.error(f"Dependency missing: {str(e)}")
+        return
+    except Exception as e:
+        st.error(f"Error running {projection_method}: {str(e)}")
+        return
+
+    if embeddings is None:
+         return
+
+    # Check for dropped columns (e.g. categorical cols in PCA)
+    used_features = info.get('feature_names', [])
+    if used_features:
+        dropped_cols = list(set(data_viz.columns) - set(used_features))
+        if dropped_cols:
+            st.info(f"ℹ️ **Note**: The following columns were excluded from {projection_method} (incompatible data type): {', '.join(dropped_cols)}")
+
+    # Create DataFrame for plotting
+    plot_df = pd.DataFrame(embeddings, columns=['Dim1', 'Dim2'], index=data_viz.index)
+    
+    # Determine outlier status
+    # We need to match indices from the visualization data back to the outlier matrix
+    is_outlier = pd.Series(False, index=data_viz.index)
+    
+    if method in ['zscore', 'iqr', 'quantile']:
+        # Univariate: Outlier in ANY of the selected columns
+        relevant_cols = [c for c in outlier_matrix.columns if c in selected_cols]
+        if relevant_cols:
+            is_outlier = outlier_matrix.loc[data_viz.index, relevant_cols].any(axis=1)
+    else:
+        # Multivariate: Check 'overall' column
+        if 'overall' in outlier_matrix.columns:
+            is_outlier = outlier_matrix.loc[data_viz.index, 'overall']
+
+    plot_df['Outlier'] = is_outlier.map({True: 'Yes', False: 'No'})
+    
+    # Plot using Plotly
+    import plotly.express as px
+    fig = px.scatter(
+        plot_df, x='Dim1', y='Dim2', color='Outlier',
+        color_discrete_map={'Yes': 'red', 'No': 'blue'},
+        title=title,
+        labels={'Dim1': axis_labels.get('x', 'Dim 1'), 'Dim2': axis_labels.get('y', 'Dim 2')},
+        hover_data=[plot_df.index],
+        opacity=0.7
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 

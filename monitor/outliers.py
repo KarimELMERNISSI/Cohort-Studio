@@ -4,6 +4,7 @@ import os # for path etc
 import pandas as pd # for Dataframes manipulation
 import numpy as np # extend some specific Dataframes manipulation
 from sklearn.neighbors import LocalOutlierFactor # Local Outlier Factor for outliers detection - density neighborhood based
+from sklearn.cluster import DBSCAN # Density-Based Spatial Clustering of Applications with Noise
 from sklearn.ensemble import IsolationForest # Isolation Forest for outliers detection - isolation by forest successive splits 
 from sklearn.impute import SimpleImputer # basic imputation
 from sklearn.pipeline import Pipeline # building pipelines
@@ -557,3 +558,95 @@ def tag_num_columns(row):
         if row[col]:
             outlier_columns.append(col)
     return ', '.join(map(str, outlier_columns))
+
+
+### DBSCAN
+def find_dbscan_outliers(
+    data, 
+    eps=0.5, 
+    min_samples=5, 
+    numerical_imputation_method='missforest', 
+    categorical_imputation_method='missforest', 
+    remainder_columns=None, 
+    remainder_threshold=0.4, 
+    debug=False
+):
+    """
+    Detects outliers in a DataFrame using DBSCAN with preprocessing.
+    
+    Parameters:
+    - data: pd.DataFrame
+    - eps: float, default=0.5
+        The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+    - min_samples: int, default=5
+        The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
+    
+    Returns:
+    - outlier_tags: np.ndarray (True for outliers/noise)
+    - outlier_scores: np.ndarray (Cluster labels, where -1 is noise/outlier)
+    - full_pipeline: sklearn.pipeline.Pipeline
+    """
+    if not isinstance(data, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame with named columns.")
+
+    # Handle remainder columns
+    if remainder_columns is None:
+        remainder_columns = []
+    elif remainder_columns == 'auto':
+        remainder_columns = edi.detect_remainder_columns(data, threshold=remainder_threshold)
+    else:
+        remainder_columns = [col for col in remainder_columns if col in data.columns]
+
+    debug_print(f"Filtered remainder_columns: {remainder_columns}", debug=debug)
+
+    # Identify categorical and numerical columns
+    categorical_cols = data.select_dtypes(include=['object', 'category']).columns.tolist()
+    numerical_cols = data.select_dtypes(include=['number']).columns.tolist()
+
+    # Exclude remainder columns
+    categorical_cols = [col for col in categorical_cols if col not in remainder_columns]
+    numerical_cols = [col for col in numerical_cols if col not in remainder_columns]
+
+    # Check for missing values
+    missing_values = data[categorical_cols+numerical_cols].isna().any().any()
+
+    # Define the preprocessing pipeline
+    if missing_values:
+        debug_print("Missing values detected. Using imputation.", debug=debug)
+        imputer, output_cols = edi.get_imputer(
+            numerical_imputation_method=numerical_imputation_method,
+            categorical_imputation_method=categorical_imputation_method,
+            num_scaler=True, cat_encoder=True,
+            data=data, debug=debug,
+            remainder_columns=remainder_columns, remainder_strategy='drop', remainder_threshold=remainder_threshold
+        )
+        preprocessor = imputer
+    else:
+        debug_print("No missing values. Using encoding and scaling only.", debug=debug)
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), numerical_cols),
+                ('cat', OneHotEncoder(drop='first'), categorical_cols)
+            ],
+            remainder='drop'
+        )
+
+    # Define the full pipeline
+    full_pipeline = Pipeline([
+        ('data_preprocessing', preprocessor),
+        ('clf', DBSCAN(eps=eps, min_samples=min_samples))
+    ])
+
+    # Fit and predict
+    # DBSCAN labels: -1 means noise (outlier), 0+ mean clusters
+    cluster_labels = full_pipeline.fit_predict(data)
+    
+    outlier_tags = cluster_labels == -1
+    
+    # DBSCAN doesn't provide "scores" like LOF/IF, so we return the cluster labels as scores
+    # where -1 is the outlier class.
+    outlier_scores = cluster_labels
+
+    debug_print(f"Outlier detection completed. Number of outliers detected: {sum(outlier_tags)}", debug=debug)
+
+    return outlier_tags, outlier_scores, full_pipeline
