@@ -32,6 +32,14 @@ def get_taxonomy_versions():
 # Ensure clean imports consistent with your environment
 from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle, NodeStyle, NodeShape
 
+# Lazy-compatible imports for clustering (module itself is light)
+from utils.clustering_utils import (
+    prepare_data_for_clustering, 
+    run_pca, run_tsne, run_umap, run_famd,
+    fit_kmeans, fit_dbscan, fit_gaussian_mixture,
+    optimal_k_analysis, compute_cluster_profiles
+)
+
 # ==========================================
 # ==========================================
 # 1. GRAPH HELPER FUNCTIONS
@@ -1403,63 +1411,65 @@ def app():
                 # Configuration Panel
                 st.markdown("### ⚙️ Configuration")
                 
-                col_cfg1, col_cfg2 = st.columns(2)
-                
-                with col_cfg1:
-                    selected_vars = st.multiselect(
-                        "📊 Select Variables for Analysis",
-                        options=numeric_cols,
-                        default=numeric_cols[:min(5, len(numeric_cols))],
-                        help="Choose numeric variables to include in clustering."
-                    )
-                    st.caption("ℹ️ *Variables are automatically standardized (Z-score) and missing values handled.*")
+                with st.expander("🛠️ Analysis Configuration", expanded=True):
+                    col_cfg1, col_cfg2 = st.columns(2)
                     
-                    dim_method = st.selectbox(
-                        "📐 Dimensionality Reduction",
-                        ["PCA", "t-SNE", "UMAP"],
-                        help="Method to project data to 2D for visualization."
-                    )
-                    
-                with col_cfg2:
-                    cluster_method = st.selectbox(
-                        "🎯 Clustering Algorithm",
-                        ["K-Means", "DBSCAN", "Gaussian Mixture"],
-                        help="Algorithm to identify subgroups."
-                    )
-                    
-                    # Method-specific parameters
-                    if cluster_method == "K-Means":
-                        n_clusters = st.slider("Number of Clusters (K)", 2, 10, 3)
-                    elif cluster_method == "DBSCAN":
-                        eps = st.slider("Epsilon (neighborhood size)", 0.1, 2.0, 0.5, 0.1)
-                        min_samples = st.slider("Min Samples", 2, 20, 5)
-                    else:  # GMM
-                        n_clusters = st.slider("Number of Components", 2, 10, 3)
-                    
-                    color_by = st.selectbox(
-                        "🎨 Color by (optional)",
-                        ["Cluster"] + categorical_cols[:10],
-                        help="Color points by cluster or existing group variable."
-                    )
+                    with col_cfg1:
+                        # Combine lists for selection
+                        all_candidates = numeric_cols + categorical_cols
+                        selected_vars = st.multiselect(
+                            "📊 Select Analysis Variables",
+                            options=all_candidates,
+                            default=numeric_cols[:min(3, len(numeric_cols))],
+                            help="Choose numeric and categorical variables to include."
+                        )
+                        st.caption(f"Selected: {len(selected_vars)} variables")
+                        
+                        dim_method = st.selectbox(
+                            "📐 Dimensionality Reduction",
+                            ["PCA", "FAMD", "t-SNE", "UMAP"],
+                            help="Method to project data to 2D for visualization."
+                        )
+                        
+                    with col_cfg2:
+                        cluster_method = st.selectbox(
+                            "🎯 Clustering Algorithm",
+                            ["K-Means", "DBSCAN", "Gaussian Mixture"],
+                            help="Algorithm to identify subgroups."
+                        )
+                        
+                        # Method-specific parameters
+                        if cluster_method == "K-Means":
+                            n_clusters = st.slider("Number of Clusters (K)", 2, 10, 3)
+                        elif cluster_method == "DBSCAN":
+                            eps = st.slider("Epsilon (neighborhood size)", 0.1, 2.0, 0.5, 0.1)
+                            min_samples = st.slider("Min Samples", 2, 20, 5)
+                        else:  # GMM
+                            n_clusters = st.slider("Number of Components", 2, 10, 3)
+                        
+                        color_by = st.selectbox(
+                            "🎨 Color by (optional)",
+                            ["Cluster"] + categorical_cols[:10],
+                            help="Color points by cluster or existing group variable."
+                        )
                 
                 if len(selected_vars) < 2:
-                    st.warning("👆 Please select at least 2 variables.")
+                    st.warning("👆 Please select at least 2 variables (can be mixed numeric/categorical).")
                 else:
                     # Run Analysis Button
                     if st.button("🚀 Run Clustering Analysis", type="primary", use_container_width=True):
                         with st.spinner("Running analysis..."):
                             try:
-                                # Lazy import clustering utils
-                                from utils.clustering_utils import (
-                                    prepare_data_for_clustering, 
-                                    run_pca, run_tsne, run_umap,
-                                    fit_kmeans, fit_dbscan, fit_gaussian_mixture,
-                                    optimal_k_analysis, compute_cluster_profiles
-                                )
+                                # Prepare dataify variable types in selection
+                                sel_numeric = [v for v in selected_vars if v in numeric_cols]
+                                sel_categorical = [v for v in selected_vars if v in categorical_cols]
                                 
                                 # Prepare data
                                 prep_data, valid_idx = prepare_data_for_clustering(
-                                    df, selected_vars, handle_missing="drop"
+                                    df, 
+                                    numeric_cols=sel_numeric, 
+                                    categorical_cols=sel_categorical,
+                                    handle_missing="drop"
                                 )
                                 
                                 if len(prep_data) < 10:
@@ -1470,11 +1480,30 @@ def app():
                                         embeddings, dim_info = run_pca(prep_data, n_components=2)
                                     elif dim_method == "t-SNE":
                                         embeddings, dim_info = run_tsne(prep_data, n_components=2, max_samples=3000)
-                                    else:  # UMAP
+                                    elif dim_method == "UMAP":
                                         try:
                                             embeddings, dim_info = run_umap(prep_data, n_components=2, max_samples=5000)
                                         except ImportError:
                                             st.error("UMAP not installed. Run: `pip install umap-learn`")
+                                            embeddings, dim_info = run_pca(prep_data, n_components=2)
+                                            dim_method = "PCA (fallback)"
+                                    elif dim_method == "FAMD":
+                                        try:
+                                            # Use the raw selected data (imputed) for FAMD if available, or just prep_data
+                                            # prep_data is already numeric+imputed if standardized?
+                                            # wait, prepare_data_for_clustering standardizes numeric columns.
+                                            # FAMD usually needs mix. 
+                                            # For now, let's pass prep_data which might be mixed if we updated prepare_data...
+                                            # Checking prepare_data_for_clustering -> it does standardization on numeric.
+                                            # It keeps categorical columns if passed.
+                                            # So we can pass prep_data directly.
+                                            embeddings, dim_info = run_famd(prep_data, n_components=2)
+                                        except ImportError:
+                                            st.error("Prince not installed. Run: `pip install prince`")
+                                            embeddings, dim_info = run_pca(prep_data, n_components=2)
+                                            dim_method = "PCA (fallback)"
+                                        except Exception as e:
+                                            st.error(f"FAMD Error: {e}")
                                             embeddings, dim_info = run_pca(prep_data, n_components=2)
                                             dim_method = "PCA (fallback)"
                                     
@@ -1532,13 +1561,37 @@ def app():
                             else:
                                 color_col = 'Cluster'
                             
+                            
+                            # Warning for dropped columns
+                            used_features = results['dim_info'].get('feature_names', [])
+                            if used_features:
+                                dropped = list(set(selected_vars) - set(used_features))
+                                if dropped:
+                                    st.info(f"ℹ️ Note: Columns excluded from projection: {', '.join(dropped)}")
+
+                            # Axis labels
+                            dim_info = results['dim_info']
+                            axis_labels = {"x": "Dim 1", "y": "Dim 2"}
+                            
+                            if results['dim_method'] == 'PCA':
+                                ratio = dim_info.get('explained_variance_ratio', [0, 0])
+                                if len(ratio) < 2: ratio = ratio + [0]*(2-len(ratio))
+                                axis_labels = {"x": f"PC1 ({ratio[0]:.1%})", "y": f"PC2 ({ratio[1]:.1%})"}
+                            
+                            elif results['dim_method'] == 'FAMD':
+                                inertia = dim_info.get('explained_inertia', [0, 0])
+                                if len(inertia) < 2: inertia = inertia + [0]*(2-len(inertia))
+                                axis_labels = {"x": f"Dim 1 ({inertia[0]:.1f}%)", "y": f"Dim 2 ({inertia[1]:.1f}%)"}
+
                             fig = px.scatter(
                                 plot_df,
                                 x='Dim 1',
                                 y='Dim 2',
                                 color=color_col,
                                 title=f"{results['dim_method']} Projection with {results['cluster_method']} Clustering",
-                                template="plotly_white"
+                                template="plotly_white",
+                                labels={'Dim 1': axis_labels['x'], 'Dim 2': axis_labels['y']},
+                                hover_data={'Dim 1': False, 'Dim 2': False, 'Cluster': True}
                             )
                             fig.update_layout(height=500)
                             fig.update_traces(marker=dict(size=8, opacity=0.7))
@@ -1559,15 +1612,23 @@ def app():
                                 - Always validate clusters with clinical knowledge
                                 """)
                         
-                        with viz_tabs[1]:
-                            from utils.clustering_utils import compute_cluster_profiles
-                            
-                            # Compute profiles
-                            df_subset = df.loc[valid_idx].copy()
-                            profiles = compute_cluster_profiles(df_subset, labels, results['selected_vars'])
-                            
-                            st.markdown("#### Mean Values per Cluster")
-                            st.dataframe(profiles.style.background_gradient(axis=0, cmap='RdYlGn'), use_container_width=True)
+                            with viz_tabs[1]:
+                                st.markdown("##### 📌 Cluster Profiles")
+                                st.caption("Mean values (numeric) and Mode (categorical) for each cluster.")
+                                
+                                # Access selections from session state or logic above (need to be robust)
+                                # We didn't store sel_numeric/sel_categorical in session state, 
+                                # but we can re-derive them from results['selected_vars']
+                                all_selected = results['selected_vars']
+                                current_numeric = [c for c in all_selected if c in numeric_cols]
+                                current_categorical = [c for c in all_selected if c in categorical_cols]
+                                
+                                profiles = compute_cluster_profiles(
+                                    df.loc[valid_idx], labels, 
+                                    numeric_cols=current_numeric,
+                                    categorical_cols=current_categorical
+                                )
+                                st.dataframe(profiles, use_container_width=True)
                             
                             # Download
                             st.download_button(
