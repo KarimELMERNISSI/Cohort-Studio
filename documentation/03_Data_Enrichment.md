@@ -58,12 +58,23 @@ Organized into two focused sub-tabs:
 * **Source Transparency**: Each suggestion is tagged with its source type (**Document**, **Hybrid**, or **Knowledge Base**) and includes the specific formula and reasoning derived from the text.
 * **One-Click Application**: Instantly apply the suggested formulas to the variable creation editor.
 
+### 5. 📄 Data Transformation Reporting
+
+* **Automated Documentation**: Generates a professional Microsoft Word (`.docx`) report summarizing the entire data transformation session.
+* **Audit Trail**: Includes:
+  * Session ID and Source Dataset name.
+  * Chronological list of all applied steps (Enrichment, Imputation, etc.).
+  * Detailed parameter tables for each operation.
+  * Timestamps for all actions.
+* **Access Points**: Available in the **Dataset History** sidebar (next to "Load Selected Version") and in the **Reproduce Analysis** tab.
+
 ## Usage Guide
 
 1. **Impute Missing Data**: Select columns with missing values and choose an imputation method (MissForest is recommended for complex datasets).
 2. **Reduce Dimensions**: Select a subset of numeric features and run PCA, t-SNE, or UMAP to visualize the data in 2D or 3D space. This is useful for identifying clusters or patterns.
 3. **Transform Features**: Create new variables or scale existing ones to prepare the data for statistical modeling.
 4. **Discover Variables**: Expand "🤖 AI Variable Suggestions", upload your protocol documents (in the sidebar), and click "Generate Suggestions" to find clinically relevant computed variables.
+5. **Download Report**: In the **Dataset History** sidebar, select a version and click **📄 Download Report** to get a documented history of your changes.
 
 ## Technical Details
 
