@@ -1,0 +1,4 @@
+Testing with trace: calculated_data_v5_trace.json
+DEBUG: Adding title
+DEBUG: Processing step 1
+Test Failed: assigned style is type CHARACTER (2), need type PARAGRAPH (1)

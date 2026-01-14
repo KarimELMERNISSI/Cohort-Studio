@@ -22,6 +22,7 @@ import prince
 import logging
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
+from manage.trace_documenter import TraceDocumenter
 from datetime import datetime
 import ast
 
@@ -2307,37 +2308,117 @@ def app():
         datasets = st.session_state.db_manager.get_available_datasets()
         if datasets:
             selected_dataset = st.selectbox("Select Dataset Version", datasets, index=0)
-            if st.button("Load Selected Version"):
-                df_loaded, msg = st.session_state.db_manager.load_dataset(selected_dataset)
-                if df_loaded is not None:
-                    st.session_state['data'] = df_loaded
-                    st.session_state['working_df'] = df_loaded.copy()
-                    st.session_state['enriched_df'] = df_loaded.copy()
-                    st.session_state['current_dataset_name'] = selected_dataset
-                    
-                    # Initialize new session trace
-                    st.session_state.transformation_manager.initialize_session(selected_dataset)
-                    # Log initial load
-                    st.session_state.transformation_manager.add_step(
-                        "initial_load", 
-                        {"dataset_name": selected_dataset}, 
-                        f"Loaded dataset: {selected_dataset}"
-                    )
-                    
-                    st.success(msg)
-                    st.rerun()
+            col_load, col_report = st.columns(2)
+            with col_load:
+                if st.button("Load Selected Version"):
+                    df_loaded, msg = st.session_state.db_manager.load_dataset(selected_dataset)
+                    if df_loaded is not None:
+                        st.session_state['data'] = df_loaded
+                        st.session_state['working_df'] = df_loaded.copy()
+                        st.session_state['enriched_df'] = df_loaded.copy()
+                        st.session_state['current_dataset_name'] = selected_dataset
+                        
+                        # Initialize new session trace
+                        st.session_state.transformation_manager.initialize_session(selected_dataset)
+                        # Log initial load
+                        st.session_state.transformation_manager.add_step(
+                            "initial_load", 
+                            {"dataset_name": selected_dataset}, 
+                            f"Loaded dataset: {selected_dataset}"
+                        )
+                        
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+            
+            with col_report:
+                # Attempt to find the trace for this dataset
+                tm = st.session_state.transformation_manager
+                traces = tm.get_available_datasets_from_traces()
+                # Find trace where file_path contains selected_dataset
+                # selected_dataset usually is a filename like "calculated_data_v5.parquet"
+                matching_trace = next((t for t in traces if selected_dataset in t.get('file_path', '')), None)
+                
+                if matching_trace:
+                     trace_path = os.path.join("data", "traces", f"{matching_trace['session_id']}.json")
+                     if os.path.exists(trace_path):
+                        try:
+                            doc = TraceDocumenter(trace_path)
+                            buf = doc.generate_report()
+                            st.download_button(
+                                label="📄 Download Report",
+                                data=buf,
+                                file_name=f"report_{selected_dataset}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                        except Exception as e:
+                            st.warning(f"Error generating report: {e}")
                 else:
-                    st.error(msg)
+                    st.caption("No trace found")
         else:
             st.info("No saved datasets found.")
 
     # Reproduction Sidebar
     with st.sidebar.expander("Reproduce Analysis", expanded=False):
-        st.caption("Reproduce analysis from a trace file")
-        uploaded_trace = st.file_uploader("Upload Trace JSON", type=["json"])
-        if uploaded_trace:
-            from manage.reproduction_manager import reproduce_trace
-            reproduce_trace(uploaded_trace)
+        st.caption("Reproduce analysis or generate report")
+        
+        tab_upload, tab_history = st.tabs(["Upload", "History"])
+        
+        with tab_upload:
+            uploaded_trace = st.file_uploader("Upload Trace JSON", type=["json"])
+            if uploaded_trace:
+                # Report Generation for Uploaded Trace
+                try:
+                    # Save temporary file to read it with TraceDocumenter if needed, 
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
+                        tmp.write(uploaded_trace.getvalue())
+                        tmp_path = tmp.name
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        from manage.reproduction_manager import reproduce_trace
+                        if st.button("Reproduce Analysis"):
+                            reproduce_trace(uploaded_trace)
+                    
+                    with col2:
+                        documenter = TraceDocumenter(tmp_path)
+                        report_buffer = documenter.generate_report()
+                        st.download_button(
+                            label="📄 Download Report",
+                            data=report_buffer,
+                            file_name="uploaded_trace_report.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                    os.unlink(tmp_path) # Clean up
+                except Exception as e:
+                    st.error(f"Could not generate report from upload: {e}")
+
+        with tab_history:
+            if 'transformation_manager' in st.session_state:
+                datasets = st.session_state.transformation_manager.get_available_datasets_from_traces()
+                if datasets:
+                    options = {f"{d['timestamp']} | {d['session_id']}": d for d in datasets}
+                    selected_label = st.selectbox("Select Trace", list(options.keys()))
+                    if selected_label:
+                        selected_data = options[selected_label]
+                        trace_path = os.path.join("data", "traces", f"{selected_data['session_id']}.json")
+                        
+                        if os.path.exists(trace_path):
+                            try:
+                                documenter = TraceDocumenter(trace_path)
+                                report_buffer = documenter.generate_report()
+                                st.download_button(
+                                    label="📄 Download Transformation Report (.docx)",
+                                    data=report_buffer,
+                                    file_name=f"trace_report_{selected_data['session_id']}.docx",
+                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                )
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                else:
+                    st.info("No traces found.")
 
     # Main navigation tabs
     main_tab, impute_tab, define_var_tab = st.tabs([

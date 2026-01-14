@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import json
 from manage.db_manager import DBManager
+from manage.trace_documenter import TraceDocumenter
 # Import necessary modules for reproduction logic
 import enrich.external_data as eed
 from app_pages.transformation_logic import apply_variable_transformation
@@ -342,6 +343,19 @@ def app():
         session_id = trace_data.get('session_id', 'Unknown Session')
         st.markdown(f"**Session:** `{session_id}`")
         st.markdown(f"**Source Dataset:** `{source_dataset}`")
+        
+        # Download Report Button
+        try:
+            documenter = TraceDocumenter(trace_data)
+            report_buffer = documenter.generate_report()
+            st.download_button(
+                label="📄 Download Transformation Report (.docx)",
+                data=report_buffer,
+                file_name=f"trace_report_{session_id}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        except Exception as e:
+            st.warning(f"Report generation unavailable: {e}")
         
         steps = trace_data.get('steps', [])
         
