@@ -103,11 +103,11 @@ class ComputedVarsMixin:
         """Step 1: Identify WHAT to calculate (Standard Medical Knowledge)."""
         
         if suggestion_mode == "Go To Target" and search_hint:
-            task_desc = f"Identify standard medical formulas that result in '{search_hint}'. If necessary, rearrange formulas to solve for it."
+            task_desc = f"Identify standard medical formulas that result in '{search_hint}' (Target is OUTPUT). If necessary, rearrange formulas to solve for it."
         elif suggestion_mode == "Go From Target" and search_hint:
-            task_desc = f"Identify standard medical scores or indices that use '{search_hint}' as an INPUT."
+            task_desc = f"Identify standard medical scores or indices that use '{search_hint}' as a required INPUT parameter. If necessary, rearrange formulas to solve for it. (Example: If input is BMI, suggest Weight = BMI*Height^2, If input is Height, suggest BMI = Weight/Height^2)."
         elif suggestion_mode == "Around Target" and search_hint:
-            task_desc = f"Identify clinical metrics conceptually related to '{search_hint}'."
+            task_desc = f"Identify clinical proxies, surrogates, or alternative metrics for '{search_hint}'. Focus on variables that are strongly correlated or used as substitutes."
         else:
             task_desc = "Identify standard medical indices and scores relevant to the retrieved context."
 
@@ -200,6 +200,11 @@ class ComputedVarsMixin:
            - If a variable name contains spaces or special characters, you MUST enclose it in double double-quotes.
            - Example: ""Weight (kg)"" / ""Height (m)""
            - If it is a simple name, you can use it directly: Weight / Height
+        5. **DATE ARITHMETIC**:
+           - Subtracting dates yields a 'Timedelta' object, which cannot be used directly in division or 'np.floor'.
+           - You **MUST** convert the difference to days using `.dt.days`.
+           - **Correct Formula**: `( ""Visit Date"" - ""Birth Date"" ).dt.days / 365.25`
+           - **Wrong Formula**: `( ""Visit Date"" - ""Birth Date"" ) / 365.25`
         
         Instructions:
         1. Map 'required_inputs' to 'Available Columns'.

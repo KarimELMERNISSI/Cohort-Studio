@@ -781,6 +781,7 @@ def is_number(token):
     
 
 import ast
+from utils.date_parser import smart_parse_dates
 
 def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> Tuple[bool, str, List[str], List[str]]:
     """
@@ -992,18 +993,56 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         analyzer = DataAnalyzer(dataset)
         for col in identified_columns:
             if col in analyzer.date_cols:
-                dataset[col] = pd.to_datetime(dataset[col], errors='coerce')
+                # Use smart_parse_dates for robust conversion
+                parsed_series, _ = smart_parse_dates(dataset[col])
+                dataset[col] = parsed_series
     except Exception as e:
         print(f"Error during date conversion: {e}")
 
+    # Helper for robust subtraction (handles Date-Date -> Days automatically)
+    def safe_sub(a, b):
+        try:
+            res = a - b
+            # If result is a Series with timedelta dtype
+            if hasattr(res, 'dtype') and pd.api.types.is_timedelta64_dtype(res.dtype):
+                return res.dt.days
+            # If result is a scalar Timedelta
+            elif isinstance(res, (pd.Timedelta, datetime.timedelta)):
+                return res.days
+            return res
+        except Exception:
+            return a - b
+
+    # AST Transformer to rewrite Subtraction: A - B  -->  safe_sub(A, B)
+    class DateSubRewriter(ast.NodeTransformer):
+        def visit_BinOp(self, node):
+            self.generic_visit(node)
+            if isinstance(node.op, ast.Sub):
+                return ast.Call(
+                    func=ast.Name(id='__safe_sub__', ctx=ast.Load()),
+                    args=[node.left, node.right],
+                    keywords=[]
+                )
+            return node
+
     local_vars = create_variables_dict(dataset, identified_columns, constants)
+    
     print(f"local_vars dict: {local_vars} \nInitial formula: {formula}")
     normalized_formula = normalize_formula(formula, local_vars)
     
+    local_vars['__safe_sub__'] = safe_sub # Inject helper AFTER normalization to avoid attribute error
+    
     try:
-        # Safely evaluate the formula
-        print(f"Normalized formula: {normalized_formula}")
-        result = eval(normalized_formula, {"np":np, "pd":pd}, local_vars)
+        # Apply AST Transformation for safe subtraction
+        # We need to parse the normalized formula again to rewrite the ops
+        tree = ast.parse(normalized_formula, mode='eval')
+        tree = DateSubRewriter().visit(tree)
+        ast.fix_missing_locations(tree)
+        
+        # Compile and Evaluate
+        code = compile(tree, filename="<string>", mode="eval")
+        print(f"Normalized & Rewritten formula: {normalized_formula}")
+        result = eval(code, {"np":np, "pd":pd}, local_vars)
         print(result)
         
         # Convert numpy array to Series if needed
@@ -1122,7 +1161,7 @@ def define_new_variables(main_data):
                     suggestion_mode = st.selectbox(
                         "Suggestion Type",
                         ["Go To Target", "Go From Target", "Around Target"],
-                        help="Go To Target: Find formulas to compute the searched concept from your data (Target is Output).\nGo From Target: Find new variables that use the searched concept as a component (Target is Input).\nAround Target: Find interesting metrics close to this concept and clinically relevant."
+                        help="Go To Target: Find formulas to compute the searched concept from your data (Target is Output).\nGo From Target: Find indices/scores that use the searched concept as a parameter (Target is Input, e.g. Weight -> BMI).\nAround Target: Find proxies, surrogates, or alternative metrics for this concept."
                     )
                 else:
                     # In exploratory mode, these modes don't apply, so we disable or set to default
@@ -1131,6 +1170,13 @@ def define_new_variables(main_data):
 
                 num_suggestions = st.slider("Count", min_value=1, max_value=10, value=5)
                 
+                # NEW: Restrict to specific variables
+                restrict_cols = st.multiselect(
+                    "Restrict to specific variables (Optional)", 
+                    options=list(main_data.columns),
+                    help="If selected, the AI will only consider using these variables (plus the target concept if provided) to generate suggestions."
+                )
+
                 # NEW: Allow missing variables
                 allow_missing = st.checkbox("Include suggestions with missing variables", value=False, help="Allow AI to suggest formulas even if some variables are not in the dataset.")
                 
@@ -1152,9 +1198,14 @@ def define_new_variables(main_data):
                         progress_bar.progress(percent, text=text)
 
                     try:
+                        # Determine which columns to use
+                        cols_to_use = list(main_data.columns)
+                        if restrict_cols:
+                            cols_to_use = restrict_cols
+                        
                         # Use validation method to ensure quality and filter useless suggestions
                         suggestions_text, error = st.session_state.rag_manager.suggest_computed_variables_with_validation(
-                            list(main_data.columns),
+                            cols_to_use,
                             search_hint=search_hint,
                             num_suggestions=num_suggestions,
                             suggestion_mode=suggestion_mode,
@@ -1255,6 +1306,12 @@ def define_new_variables(main_data):
                                     if isinstance(node, ast.Name) and node.id != target_name:
                                         var_name = quoted_vars.get(node.id, node.id)
                                         inputs.add(var_name)
+                                    elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                                        inputs.add(node.value)
+                                
+                                # Add explicitly missing variables from RAG suggestion
+                                if 'missing_variables' in sugg:
+                                    inputs.update(sugg['missing_variables'])
 
                                 has_inputs = False
                                 for inp in inputs:
@@ -1263,7 +1320,8 @@ def define_new_variables(main_data):
                                     if inp in main_data.columns:
                                         dot_code += f'  "{inp}" [shape=ellipse, style=filled, fillcolor="#f0f4c3"];\n'
                                     else:
-                                        dot_code += f'  "{inp}" [shape=ellipse, style=dashed, color="red"];\n'
+                                        # Use a distinct style for missing inputs as requested
+                                        dot_code += f'  "{inp}" [label="{inp}\\n(Missing)", shape=ellipse, style="dashed,filled", fillcolor="#ffcdd2", color="red", fontcolor="red"];\n'
                                     dot_code += f'  "{inp}" -> "{target_name}";\n'
                                 
                                 if not has_inputs:
