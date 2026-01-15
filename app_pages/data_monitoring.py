@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 import numpy as np
+import time
 from scipy import stats
 from utils.data_analyzer import DataAnalyzer
 from utils.config_loader import transform_expression, create_empty_config
@@ -18,6 +19,7 @@ import json
 from utils.multipage import load_dataframe, get_file_hash
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
+from utils.date_parser import smart_parse_dates
 
 #############################################################################################
 
@@ -1419,19 +1421,33 @@ def validate_mask_name(config: Dict[str, Any], family_name: str, mask_name: str,
 
 def handle_numeric_mask_input(st_container, base_key:str):
     """Collect numeric mask inputs from the user."""
-    is_lower_bound = st_container.checkbox("Need lower bound?", key=f"{base_key}_lower_bound")
-    is_upper_bound = st_container.checkbox("Need upper bound?", key=f"{base_key}_upper_bound")
+    st_container.markdown("Define the range of values to flag or filter:")
+    
+    col1, col2 = st_container.columns(2)
+    with col1:
+        is_lower_bound = st_container.checkbox("Need lower bound?", key=f"{base_key}_lower_bound", help="Check if there is a minimum value limit.")
+    with col2:
+        is_upper_bound = st_container.checkbox("Need upper bound?", key=f"{base_key}_upper_bound", help="Check if there is a maximum value limit.")
+        
     lower_bound = st_container.number_input(
-        "Lower Bound", value=0.0, disabled=not is_lower_bound, key=f"{base_key}_lower_bound_input"
+        "Lower Bound", value=0.0, disabled=not is_lower_bound, key=f"{base_key}_lower_bound_input",
+        help="Values below this may be excluded or flagged depending on the strategy."
     ) if is_lower_bound else None
+    
     upper_bound = st_container.number_input(
-        "Upper Bound", value=0.0, disabled=not is_upper_bound, key=f"{base_key}_upper_bound_input"
+        "Upper Bound", value=0.0, disabled=not is_upper_bound, key=f"{base_key}_upper_bound_input",
+        help="Values above this may be excluded or flagged depending on the strategy."
     ) if is_upper_bound else None
+    
     strategy = st_container.selectbox(
         "Strategy",
         ["exclude", "include"],
         disabled=not (is_lower_bound and is_upper_bound),
-        key=f"{base_key}_strategy"
+        key=f"{base_key}_strategy",
+        help=(
+            "**include**: The range [Lower, Upper] is the *target* (e.g., normal range). Everything OUTSIDE is an anomaly.\n"
+            "**exclude**: The range [Lower, Upper] is *forbidden*. Everything INSIDE is an anomaly."
+        )
     ) if is_lower_bound and is_upper_bound else None
 
     return {
@@ -1444,13 +1460,34 @@ def handle_numeric_mask_input(st_container, base_key:str):
 
 def handle_expression_mask_input(st_container, base_key: str):
     """Collect expression mask inputs from the user."""
+    
+    with st_container.expander("ℹ️ Expression Help & Examples", expanded=False):
+        st.markdown("""
+        Write a Python boolean expression. Use `df` to refer to the dataframe.
+        
+        **Examples:**
+        - `df['Age'] < 18` (Selects rows where Age is under 18)
+        - `(df['Systolic_BP'] > 140) & (df['Diastolic_BP'] > 90)` (Complex condition)
+        - `df['Status'].isin(['Active', 'Pending'])` (Categorical check)
+        - `df['Lab_Val'].isna()` (Check for missing values)
+        """)
+
     expression = st_container.text_area(
-        "Expression", placeholder="Enter a valid mask expression", key=f"{base_key}_txt_area"
+        "Expression", 
+        placeholder="e.g. df['Age'] > 100", 
+        key=f"{base_key}_txt_area",
+        help="Enter a condition that evaluates to True/False for each row."
     )
-    use_simplified_mask_expression = st_container.checkbox("Use Simplified Mask Expression", key=f"{base_key}_simpl")
+    use_simplified_mask_expression = st_container.checkbox(
+        "Use Simplified Mask Expression", 
+        key=f"{base_key}_simpl",
+        help="Enable this if you want to use a simplified syntax (if available via configuration)."
+    )
+    
     if not expression.strip():
-        st_container.error("⚠️ Expression cannot be empty.")
+        # st_container.warning("⚠️ Expression is empty.") # Don't error immediately, let them type
         return None
+        
     if use_simplified_mask_expression:
         expression = transform_expression(expression)  # Example placeholder function
     return {"numeric": False, "expression": expression}
@@ -1829,8 +1866,129 @@ def deep_merge_dicts(original, new):
 
 ##### ANOMALY PART
 
+def render_ai_criteria_assistant(st_container, config, family_name, mode="anomaly"):
+    """
+    Renders the AI assistant for generating criteria.
+    """
+    if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
+        with st_container.expander("🤖 AI Assistant (Beta)", expanded=False):
+            st.markdown(
+                "Describe what you want to flag or include using natural language. "
+                "The AI will generate the Python expressions for you."
+            )
+            
+            col_input, col_btn = st.columns([3, 1])
+            with col_input:
+                description = st.text_area(
+                    "Describe Criteria", 
+                    placeholder="e.g. Patients with Systolic BP > 140 or Age under 18",
+                    key=f"ai_desc_{family_name}",
+                    label_visibility="collapsed"
+                )
+            with col_btn:
+                generate_clicked = st.button("✨ Generate", key=f"ai_gen_{family_name}", type="primary")
+
+            if generate_clicked:
+                if 'data' not in st.session_state or st.session_state.data is None:
+                    st.error("Please load a dataset first.")
+                elif not description:
+                    st.warning("Please enter a description.")
+                else:
+                    with st.spinner("Generating criteria..."):
+                        columns = list(st.session_state.data.columns)
+                        # Pass sample data for smart inference
+                        sample_df = st.session_state.data.head(3) if 'data' in st.session_state else None
+                        
+                        criteria_list, error = st.session_state.rag_manager.suggest_anomaly_criteria(
+                            description, columns, sample_df, mode
+                        )
+                    
+                    if error:
+                        st.error(f"AI Error: {error}")
+                    elif not criteria_list:
+                        st.warning("No criteria suggested. Try a more specific description.")
+                    else:
+                        st.session_state[f"ai_suggestions_{family_name}"] = criteria_list
+            
+            # Display Suggestions from Session State
+            if f"ai_suggestions_{family_name}" in st.session_state:
+                st.write("---")
+                st.write("### AI Suggestions")
+                
+                start_idx = 0
+                # Pagination or simple list
+                suggestions = st.session_state[f"ai_suggestions_{family_name}"]
+                
+                for i, item in enumerate(suggestions):
+                    with st.container():
+                        c1, c2 = st.columns([4, 1])
+                        with c1:
+                            st.markdown(f"**{item.get('name', 'Unnamed')}**")
+                            st.code(item.get('expression', ''), language="python")
+                            st.caption(f"_{item.get('explanation', '')}_")
+
+                        # Validation & Proxy Logic
+                        missing_vars = item.get('missing_variables', [])
+                        if missing_vars:
+                            st.warning(f"⚠️ Missing variables: {', '.join(missing_vars)}")
+                            c_fix1, c_fix2 = st.columns([1,1])
+                            with c_fix1:
+                                proxy_key = f"proxy_{family_name}_{i}_{missing_vars[0]}"
+                                if st.button(f"🔍 Find Proxy for '{missing_vars[0]}'", key=proxy_key):
+                                    with st.spinner("Finding proxy..."):
+                                        columns = list(st.session_state.data.columns)
+                                        res = st.session_state.rag_manager.suggest_proxy_variable(missing_vars[0], columns)
+                                        if res.get('proxy_found'):
+                                            st.success(f"Found: {res.get('proxy_name')}")
+                                            # Auto-fix: Replace in expression
+                                            old_var = missing_vars[0]
+                                            new_var = res.get('proxy_name')
+                                            item['expression'] = item['expression'].replace(f"'{old_var}'", f"'{new_var}'").replace(f'"{old_var}"', f'"{new_var}"')
+                                            # Remove from missing list
+                                            item['missing_variables'].remove(old_var)
+                                            st.rerun()
+                                        else:
+                                            st.error("No proxy found.")
+
+                        with c2:
+                            # Disable Add if missing variables exist
+                            if missing_vars:
+                                st.button("Add", key=f"ai_add_{family_name}_{i}", disabled=True, help="Fix missing variables first")
+                            elif st.button("Add", key=f"ai_add_{family_name}_{i}"):
+                                mask_name = item.get('name', f"criteria_{i}")
+                                expression = item.get('expression', '')
+                                
+                                # Add to config
+                                ensure_family_exists(config, family_name)
+                                config["mask_families"][family_name][mask_name] = {
+                                    "numeric": False,
+                                    "expression": expression
+                                }
+                                st.success(f"Added!")
+                                time.sleep(0.5)
+                                st.rerun()
+                        st.divider()
+
 def add_domain_expert_based_anomaly_mask(config: Dict[str, Any], st_container):
     st_container.subheader("Define New Anomaly Criterion")
+
+    st_container.info(
+        """
+        **What is a Clinical Anomaly?**
+        
+        An anomaly is a data point considered *incorrect* or *suspicious* based on domain knowledge.
+        * **Action:** Rows matching these criteria are **flagged** but kept in the dataset.
+        
+        **How to use:**
+        * **Numeric Mode:** Use this for simple range checks on a single column.
+          * **IMPORTANT:** The 'Anomaly Mask Name' **MUST** be the exact name of the column you want to check.
+        * **Custom Expression:** Use this for complex logic involving multiple columns or specific conditions.
+          * The 'Anomaly Mask Name' can be anything you like.
+        """
+    )
+    
+    # AI Assistant
+    render_ai_criteria_assistant(st_container, config, "clinical_anomalies", mode="anomaly")
 
     family_name = "clinical_anomalies"
     ensure_family_exists(config, family_name)
@@ -1840,7 +1998,7 @@ def add_domain_expert_based_anomaly_mask(config: Dict[str, Any], st_container):
     config["mask_families"][family_name]["operator"] = family_operator
 
     # Mask Addition
-    mask_name = st_container.text_input("Anomaly Mask Name", placeholder="Enter mask name")
+    mask_name = st_container.text_input("Anomaly Mask Name", placeholder="Enter mask name (Exact Column Name if Numeric!)")
     if not validate_mask_name(config, family_name, mask_name, st_container):
         return
 
@@ -1896,6 +2054,24 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
 def add_study_inclusion_mask(config: Dict[str, Any], st_container):
     st_container.subheader("Define New Study Inclusion Criterion")
 
+    st_container.info(
+        """
+        **What is an Inclusion Criterion?**
+
+        Conditions that must be *met* for a row to be included in the study.
+        * **Action:** Rows *failing* to match are **excluded** from the analysis.
+
+        **How to use:**
+        * **Numeric Mode:** Use for simple range values on a single column (e.g., Age 18-99).
+          * **IMPORTANT:** The 'Inclusion Mask Name' **MUST** be the exact name of the column.
+        * **Custom Expression:** Use for conditions like `Consent == True` or multi-column logic.
+          * The 'Inclusion Mask Name' can be anything (e.g., 'Consent_Check').
+        """
+    )
+
+    # AI Assistant
+    render_ai_criteria_assistant(st_container, config, "study_inclusion", mode="inclusion")
+
     family_name = "study_inclusion"
     ensure_family_exists(config, family_name)
 
@@ -1904,7 +2080,7 @@ def add_study_inclusion_mask(config: Dict[str, Any], st_container):
     config["mask_families"][family_name]["operator"] = family_operator
 
     # Mask Addition
-    mask_name = st_container.text_input("Inclusion Mask Name", placeholder="Enter mask name")
+    mask_name = st_container.text_input("Inclusion Mask Name", placeholder="Enter mask name (Exact Column Name if Numeric!)")
     if not validate_mask_name(config, family_name, mask_name, st_container):
         return
 
@@ -1984,6 +2160,10 @@ def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
         
     return df
 
+
+
+
+
 def app():
 
     # Initialize session state
@@ -2020,6 +2200,49 @@ def app():
     df = st.session_state.get('data', None)
     if df is not None:
         analyzer = DataAnalyzer(st.session_state.get('data', None))
+        
+        # Standardize Date Columns to ensure consistency across the app
+        date_cols_standardized = []
+        parsing_report = {}
+        
+        for col in analyzer.date_cols:
+            original_values = df[col].copy()
+            
+            # SMART DATE PARSING (Heuristic-Based)
+            parsed_series, used_notes = smart_parse_dates(df[col])
+            
+            # Check for data loss
+            original_nans = df[col].isna().sum()
+            new_nans = parsed_series.isna().sum()
+            loss = new_nans - original_nans
+            
+            df[col] = parsed_series
+            date_cols_standardized.append(f"{col} ({', '.join(used_notes)})")
+            
+            if loss > len(df) * 0.05: # >5% loss
+                st.warning(f"⚠️ High data loss in '{col}': {loss} rows could not be parsed.")
+
+            # IMPORTANT: Since we modified the data in place (potentially fixing thousands of rows), 
+            # we MUST invalidate any cached statistics that might have been computed on the "bad" data.
+            # We do this UNCONDITIONALLY if we processed a date column.
+            if 'current_dataset' in st.session_state:
+                st.session_state.db_manager.clear_stats(st.session_state.current_dataset)
+            if 'dataset_name' in st.session_state: # Another common key
+                    st.session_state.db_manager.clear_stats(st.session_state.dataset_name)
+            
+            # Also clear Streamlit's data cache if possible, though 'st.cache_data.clear()' is global.
+            # We rely on DBManager clearing the parquet files.
+
+            # Note: Removed redundant 'else' block and 'res_primary' logic.
+            
+        if date_cols_standardized:
+            st.info(f"📅 **Date Consistency Applied**: {', '.join(date_cols_standardized)}")
+            
+        if parsing_report:
+            with st.expander("⚠️ Date Parsing Issues Detected", expanded=True):
+                st.warning("Some values could not be converted to dates. Please check the examples below:")
+                for col, examples in parsing_report.items():
+                    st.write(f"**{col}**: Failed to parse strings like `{examples}`")
     
     
     # Create tabs for different visualization aspects

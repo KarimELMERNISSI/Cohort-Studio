@@ -113,22 +113,72 @@ class DataAnalyzer:
                 )
                 
                 date_regex = r'(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{4}[-/]\d{1,2}[-/]\d{1,2} \d{1,2}:\d{2}(:\d{2})?)'
-                if sample_values.str.match(date_regex).all():
-                    for fmt in formats:
+                
+                # Check for keyword strong signals in column name
+                name_signal = any(x in col.upper() for x in ['DATE', 'DOB', 'BIRTH', 'TIME', 'YEAR', 'MONTH'])
+                
+                # Check match rate in sample (allow some garbage)
+                matches_regex = sample_values.str.match(date_regex).mean() > 0.6  # >60% match regex
+                
+                if matches_regex or name_signal:
+                    # Try specific formats first
+                    best_format = None
+                    min_nat_count = len(self.df) + 1
+                    
+                    # Heuristic: Check for dayfirst (13/05/2021)
+                    # If we see day > 12 at position 0, it's Day First.
+                    is_dayfirst_strong_signal = False
+                    for val in sample_values:
+                        import re
+                        if isinstance(val, str):
+                            m = re.match(r'(\d{1,2})[-/](\d{1,2})[-/]\d{2,4}', val)
+                            if m:
+                                d, m_val = int(m.group(1)), int(m.group(2))
+                                if d > 12:
+                                    is_dayfirst_strong_signal = True
+                                    break
+                    
+                    if is_dayfirst_strong_signal:
+                        # Prioritize Day-First formats
+                        priority_formats = ["%d/%m/%Y", "%d-%m-%Y"] + formats
+                    else:
+                        priority_formats = formats
+
+                    for fmt in priority_formats:
                         try:
                             converted = pd.to_datetime(self.df[col], format=fmt, errors='coerce')
-                            non_na_dates = converted.notna().sum()
-                            if non_na_dates > len(self.df[col]) * 0.5:
-                                date_cols.append(col)
-                                self.date_formats[col] = fmt
-                                is_date_column = True
+                            nat_count = converted.isna().sum()
+                            
+                            # If this format parses everything (or mostly everything), it's a winner
+                            if nat_count < min_nat_count:
+                                min_nat_count = nat_count
+                                best_format = fmt
+                                
+                            if nat_count == 0: # Perfect match
                                 break
                         except Exception:
                             continue
                     
+                    if best_format:
+                         # Threshold: More than 40% valid dates (relaxed from 50% to catch messy columns)
+                         converted = pd.to_datetime(self.df[col], format=best_format, errors='coerce')
+                         if converted.notna().sum() > len(self.df[col]) * 0.4:
+                            date_cols.append(col)
+                            self.date_formats[col] = best_format
+                            is_date_column = True
+                    # Fallback: exact format failed, but name suggested Date?
+                    # Try generic parser
+                    elif name_signal:
+                         converted = pd.to_datetime(self.df[col], errors='coerce')
+                         if converted.notna().sum() > len(self.df[col]) * 0.4:
+                            date_cols.append(col)
+                            self.date_formats[col] = "mixed"
+                            is_date_column = True
+
                     if not is_date_column:
                         try:
-                            converted = pd.to_datetime(self.df[col], errors='coerce')
+                            # Fallback to dayfirst=True if signaled
+                            converted = pd.to_datetime(self.df[col], dayfirst=is_dayfirst_strong_signal, errors='coerce')
                             non_na_dates = converted.notna().sum()
                             if non_na_dates > len(self.df[col]) * 0.5:
                                 date_cols.append(col)

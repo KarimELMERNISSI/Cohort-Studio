@@ -307,8 +307,11 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
         df = df.drop(columns=exclude_columns, errors='ignore')
     
     # Handle date columns by converting to datetime if not already in that format
+    # Handle date columns by converting to datetime using smart parser
+    from utils.date_parser import smart_parse_dates
     for col in analyzer.date_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
+        parsed_series, _ = smart_parse_dates(df[col])
+        df[col] = parsed_series
 
     # Round Low-Cardinality Numercial Values
     for col in analyzer.low_cardinality_numeric_cols:
@@ -413,8 +416,45 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
     if dataset_name and _db_manager:
         _db_manager.save_stats(numerical_stats, dataset_name, "numerical")
         _db_manager.save_stats(categorical_stats, dataset_name, "categorical")
+    
+    # ---------------------------------------------------------
+    # Date Statistics
+    # ---------------------------------------------------------
+    date_stats = pd.DataFrame()
+    if analyzer.date_cols:
+        date_data = []  # List of dicts
+        for col in analyzer.date_cols:
+            if col in df:
+                series = df[col]
+                fill_pct = (1 - series.isnull().mean()) * 100
+                
+                # Filter valid
+                valid = series.dropna()
+                
+                if not valid.empty:
+                    min_date = valid.min()
+                    max_date = valid.max()
+                    duration = max_date - min_date
+                    n_unique = valid.nunique()
+                else:
+                    min_date, max_date, duration, n_unique = pd.NaT, pd.NaT, pd.NaT, 0
+                
+                date_data.append({
+                    "Feature": col,
+                    "Variable Type": "Date",
+                    "Min Date": min_date,
+                    "Max Date": max_date,
+                    "Duration": duration,
+                    "Unique Values": n_unique,
+                    "Fill Percentage": fill_pct
+                })
+        
+        if date_data:
+            date_stats = pd.DataFrame(date_data).set_index("Feature")
+            # Round fill %
+            date_stats["Fill Percentage"] = date_stats["Fill Percentage"].round(2)
 
-    return numerical_stats, categorical_stats
+    return numerical_stats, categorical_stats, date_stats
 
 def run_benchmark(df, analyzer):
     st.subheader("Performance Benchmark: Pandas vs DuckDB")
@@ -733,7 +773,19 @@ def app():
     with tabs[0]:
         if 'working_df' in st.session_state:
             analyzer.refresh(st.session_state["working_df"])
-        st.title("Dataset Statistics")
+        col_title, col_reset = st.columns([4, 1])
+        with col_title:
+            st.title("Dataset Statistics")
+        with col_reset:
+             if st.button("🔄 Reset Cache", help="Force full recomputation of statistics"):
+                # 1. Clear Disk Cache
+                if 'db_manager' in st.session_state:
+                    st.session_state.db_manager.clear_all_stats()
+                # 2. Clear Memory Cache
+                st.cache_data.clear()
+                st.toast("Cache cleared! Reloading...")
+                time.sleep(1)
+                st.rerun()
         #df = st.session_state.get('data', None)
         if "max_top_modalities" not in locals():
             max_top_modalities = 3
@@ -815,7 +867,7 @@ def app():
                 if selected_group_quant == "None":
                     # Display numerical stats
                     dataset_name = st.session_state.get('current_dataset_name', None)
-                    numerical_stats, _ = get_statistics_dataframe(
+                    numerical_stats, _, date_stats = get_statistics_dataframe(
                         filtered_df, 
                         analyzer, 
                         nb_top_categories=max_top_modalities, 
@@ -854,7 +906,7 @@ def app():
                     quant_dict = {}
                     for category, group in quant_category_groups:
                         #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
-                        numerical_stats, _ = get_statistics_dataframe(
+                        numerical_stats, _, _ = get_statistics_dataframe(
                             df=group, 
                             analyzer=analyzer, 
                             nb_top_categories=1
@@ -895,6 +947,25 @@ def app():
                         file_name=f"Descriptive_Statistics_by_{selected_group_quant}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                # Display Date Stats if available
+                if not date_stats.empty and selected_group_quant == "None":
+                    st.divider()
+                    st.markdown("#### 📅 Date Statistics")
+                    st.dataframe(date_stats,
+                                width='stretch', 
+                                column_config={
+                                    "Fill Percentage": st.column_config.ProgressColumn(
+                                        "Fill Percentage",
+                                        help="Shows the percentage of non-missing values in this column.",
+                                        format="%d%%",
+                                        min_value=0,
+                                        max_value=100,
+                                    ),
+                                    "Min Date": st.column_config.DateColumn("Min Date"),
+                                    "Max Date": st.column_config.DateColumn("Max Date"),
+                                }
+                    )
+
                 # Call the function to display the guide
                 #show_test_guidelines()
 
@@ -921,7 +992,8 @@ def app():
 
                 if selected_group_qual == "None":
                     dataset_name = st.session_state.get('current_dataset_name', None)
-                    _, non_numerical_stats = get_statistics_dataframe(
+                    dataset_name = st.session_state.get('current_dataset_name', None)
+                    _, non_numerical_stats, _ = get_statistics_dataframe(
                         filtered_df, 
                         analyzer, 
                         nb_top_categories=max_top_modalities, 
@@ -965,7 +1037,7 @@ def app():
                     qual_dict = {}
                     for category, group in qual_category_groups:
                         #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
-                        _, non_numerical_stats = get_statistics_dataframe(
+                        _, non_numerical_stats, _ = get_statistics_dataframe(
                             df=group, 
                             analyzer=analyzer, 
                             nb_top_categories=max_top_modalities

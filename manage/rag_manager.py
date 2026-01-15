@@ -19,6 +19,7 @@ import hashlib
 import time
 import logging
 import re
+from fuzzywuzzy import process
 
 # Import prompt functions
 from prompts import (
@@ -26,6 +27,7 @@ from prompts import (
     column_renaming,
     taxonomy_simple,
     formula_enrichment,
+    anomaly_criteria_prompt,
 )
 
 # Import mixins
@@ -605,4 +607,122 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return updated_taxonomy, None
             
         except Exception as e:
-            return updated_taxonomy, f"Refinement Error: {str(e)}"
+            return updated_taxonomy, f"Refinement Eror: {str(e)}"
+
+    def suggest_anomaly_criteria(self, description, columns, sample_data=None, mode="anomaly"):
+        """
+        Suggests anomaly or inclusion criteria based on natural language description.
+        Returns a list of criteria dictionaries.
+        """
+        if not self.initialized:
+            return [], "RAG system not initialized."
+            
+        columns_info = ", ".join(columns)
+        
+        # Format sample data as string if provided
+        sample_str = ""
+        if sample_data is not None:
+            try:
+                # If it's a dataframe
+                if hasattr(sample_data, "to_markdown"):
+                    sample_str = sample_data.head(3).to_markdown()
+                    
+                    # SMART DATE INFERENCE
+                    # Iterate columns to find date-like strings and guess format
+                    date_hints = []
+                    for col in sample_data.columns:
+                        if sample_data[col].dtype == 'object':
+                            # check first non-null
+                            head_vals = sample_data[col].dropna().head(5).astype(str).tolist()
+                            if not head_vals: continue
+                            
+                            # Check for DD/MM/YYYY pattern
+                            # If we see day > 12 at start, it's definitely DD/MM
+                            is_dmy = any(re.match(r'(1[3-9]|2[0-9]|3[01])[-/]\d{2}[-/]\d{4}', v) for v in head_vals)
+                            
+                            if is_dmy:
+                                date_hints.append(f"Column '{col}' appears to be DD/MM/YYYY. Use format='%d/%m/%Y'.")
+                            else:
+                                # Check generic date
+                                try:
+                                    pd.to_datetime(head_vals, dayfirst=True)
+                                    # If no error and looks like a date, suggest dayfirst=True just in case
+                                    if any(re.match(r'\d{2}[-/]\d{2}[-/]\d{4}', v) for v in head_vals):
+                                         date_hints.append(f"Column '{col}' might be Day-First. Use dayfirst=True.")
+                                except:
+                                    pass
+                    
+                    if date_hints:
+                        sample_str += "\n\nDate Parsing Hints:\n" + "\n".join(date_hints)
+                        
+                # If it's a list/dict
+                elif isinstance(sample_data, (list, dict)):
+                    sample_str = str(sample_data)
+            except:
+                sample_str = str(sample_data)
+
+        prompt = anomaly_criteria_prompt(description, columns_info, sample_str, mode)
+        
+        try:
+            response = self.llm.invoke(prompt)
+            cleaned = self._clean_json_response(response.content)
+            data = json.loads(cleaned)
+            criteria_list = data.get("criteria", [])
+            
+            # Helper to extract variables from expression
+            def extract_variables(expression):
+                try:
+                    tree = ast.parse(expression, mode='eval')
+                    names = set()
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Name):
+                            names.add(node.id)
+                        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                            # Heuristic for df['Col'] where 'Col' is a string constant
+                            names.add(node.value)
+                    return names
+                except:
+                    return set()
+
+            # Enhanced validation: Check for missing variables
+            # Simple heuristic: Look for strings inside brackets ['...'] as potential column names
+            for item in criteria_list:
+                expr = item.get("expression", "")
+                
+                # Regex to find df['ColName'] or df["ColName"]
+                found_cols = re.findall(r"df\[['\"](.*?)['\"]\]", expr)
+                
+                # Check for missing variables
+                missing = [col for col in found_cols if col not in columns]
+                
+                # AUTO-CORRECTION ATTEMPT using fuzzy matching
+                if missing:
+                    still_missing = []
+                    for m_col in missing:
+                        # Find best match in existing columns
+                        best_match, score = process.extractOne(m_col, columns)
+                        
+                        # Threshold for auto-correction (e.g., 90% similarity)
+                        if score >= 88:
+                            # Auto-replace in expression
+                            # Use regex substitutoin to avoid partial matches on other vars
+                            # e.g. replacing 'Age' in 'Age_Group' -> risky, but here we replace explicit quoted string
+                            # Simpler: string replace with quotes
+                            expr = expr.replace(f"'{m_col}'", f"'{best_match}'").replace(f'"{m_col}"', f'"{best_match}"')
+                            
+                            # Add a note explaining the correction
+                            if "explanation" in item:
+                                item["explanation"] += f" (Auto-corrected '{m_col}' to '{best_match}')"
+                        else:
+                            still_missing.append(m_col)
+                    
+                    # Update expression in item
+                    item["expression"] = expr
+                    
+                    # Only report variables that couldn't be auto-corrected
+                    if still_missing:
+                        item["missing_variables"] = still_missing
+            
+            return criteria_list, None
+        except Exception as e:
+            return [], str(e)

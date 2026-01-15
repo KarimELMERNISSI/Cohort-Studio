@@ -116,3 +116,30 @@ class DBManager:
     def load_stats(self, dataset_name, stats_type):
         """Load statistical results from parquet cache."""
         return self.load_dataframe(f"stats_{stats_type}_{dataset_name}", folder=self.stats_dir)
+
+    def clear_stats(self, dataset_name):
+        """Delete cached statistics for a given dataset to force recalculation."""
+        try:
+            # Stats are saved as stats_numerical_{dataset_name} and stats_categorical_{dataset_name}
+            for stats_type in ["numerical", "categorical"]:
+                file_path = os.path.join(self.stats_dir, f"stats_{stats_type}_{dataset_name}.parquet")
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            return True, "Statistics cache cleared."
+        except Exception as e:
+            return False, f"Failed to clear stats: {e}"
+
+    def clear_all_stats(self):
+        """Delete ALL cached statistics files."""
+        try:
+            files = glob.glob(os.path.join(self.stats_dir, "*.parquet"))
+            count = 0
+            for f in files:
+                try:
+                    os.remove(f)
+                    count += 1
+                except:
+                    pass
+            return True, f"Cleared {count} cached statistics files."
+        except Exception as e:
+            return False, f"Failed to clean cache: {e}"
