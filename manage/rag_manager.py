@@ -452,7 +452,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         existing_keys = set(current_taxonomy.keys())
         
         # Get format info from columns
-        columns_str = ", ".join([c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in columns_info[:100]])
+        columns_str = ", ".join([c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in columns_info])
         
         # Build variable context
         vars_desc_list = []

@@ -113,7 +113,8 @@ class ComputedVarsMixin:
 
         scoping_instruction = ""
         if available_columns:
-            cols_str = ", ".join(available_columns[:100])
+            # Use all columns, as modern LLMs have large context windows
+            cols_str = ", ".join(available_columns)
             
             taxonomy_context = ""
             if self.variable_taxonomy and use_taxonomy:
@@ -191,21 +192,18 @@ class ComputedVarsMixin:
         CRITICAL SYNTAX RULES (Interpreter Constraints):
         1. **AUTHORIZED OPERATORS**: You may use: +, -, *, /, ** (for power), (, ).
         2. **FUNCTIONS**: You MUST use the 'np.' prefix for mathematical functions.
-           - Correct: np.sqrt(x), np.log(x), np.exp(x), np.abs(x)
+           - Correct: np.sqrt(x), np.log(x), np.exp(x), np.abs(x), np.floor(x)
            - Wrong: sqrt(x), log(x), ln(x), square_root(x)
         3. **SPACING**: You MUST put a single space around every operator.
            - Correct: " ( Weight / Height ) ** 2 "
            - Wrong: "Weight/Height**2"
         4. **VARIABLE NAMES**: 
-           - If a variable name contains spaces or special characters, you MUST enclose it in double double-quotes.
-           - Example: ""Weight (kg)"" / ""Height (m)""
+           - If a variable name contains spaces or special characters, you MUST enclose it in double double-quotes. **CRITICAL** to use "" "" for variable names with spaces or special characters. Do not use single quotes.
+           - Examples: ""Weight (kg)"" / ""Height (m)""
            - If it is a simple name, you can use it directly: Weight / Height
-        5. **DATE ARITHMETIC**:
-           - Subtracting dates yields a 'Timedelta' object, which cannot be used directly in division or 'np.floor'.
-           - You **MUST** convert the difference to days using `.dt.days`.
-           - **Correct Formula**: `( ""Visit Date"" - ""Birth Date"" ).dt.days / 365.25`
-           - **Wrong Formula**: `( ""Visit Date"" - ""Birth Date"" ) / 365.25`
-        
+        5. **DATE DIFFERENCE**: You MUST use simple formula for date difference.
+           - Correct: ( ""Visit Date"" - Birthdate ) / 365.25
+           - Wrong: (VisitDate - Birthdate).dt.days / 365.25
         Instructions:
         1. Map 'required_inputs' to 'Available Columns'.
         2. Handle Unit Conversions (e.g. m to cm, lbs to kg) directly in the formula.

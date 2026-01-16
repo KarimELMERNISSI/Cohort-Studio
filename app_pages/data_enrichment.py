@@ -1144,109 +1144,134 @@ def define_new_variables(main_data):
     with st.expander("🤖 AI Variable Suggestions (RAG)", expanded=False):
         if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
             
-            # Create columns for Search | Mode | Button
-            col_search, col_options, col_btn = st.columns([2, 2, 1])
+            use_specific = st.toggle("🔍 Specific Search", value=True)
+
+            # -- ROW 1: Search & Strategy --
+            col_input, col_mode = st.columns([1, 1], gap="medium")
             
-            with col_search:
-                use_specific = st.toggle("🔍 Specific Search", value=True)
+            with col_input:
                 if use_specific:
-                    search_hint = st.text_input("Concept:", placeholder="e.g. 'BSA' or 'Diabetes Risk'", label_visibility="collapsed")
+                    search_hint = st.text_input("Concept Search:", placeholder="e.g. 'BSA' or 'Diabetes Risk'", help="Enter a medical concept, variable name, or clinical score you want to find.")
                 else:
                     search_hint = None
-                    st.caption("Exploratory mode: Finds general high-value features.")
-            
-            with col_options:
-                # DYNAMIC MODE SELECTION
+                    st.info("🚀 **Exploratory Mode**: The AI will scan your dataset to suggest generally useful medical scores (e.g. BMI, Charlson) based on available variables.")
+
+            with col_mode:
                 if use_specific:
                     suggestion_mode = st.selectbox(
-                        "Suggestion Type",
+                        "Suggestion Strategy",
                         ["Go To Target", "Go From Target", "Around Target"],
-                        help="Go To Target: Find formulas to compute the searched concept from your data (Target is Output).\nGo From Target: Find indices/scores that use the searched concept as a parameter (Target is Input, e.g. Weight -> BMI).\nAround Target: Find proxies, surrogates, or alternative metrics for this concept."
+                        help="**Go To Target:** Find formulas to compute this concept (Target = Output).\n**Go From Target:** Find scores that use this concept (Target = Input).\n**Around Target:** Find proxies/surrogates."
                     )
                 else:
-                    # In exploratory mode, these modes don't apply, so we disable or set to default
-                    suggestion_mode = "Comprehensive" 
+                    suggestion_mode = "Comprehensive"
+                    st.write("") # Spacer
                     st.caption("Standard Medical Indices")
 
-                num_suggestions = st.slider("Count", min_value=1, max_value=10, value=5)
+            # -- ROW 2: Configuration --
+            with st.expander("⚙️ Advanced Configuration", expanded=True):
+                col_conf_1, col_conf_2 = st.columns([1, 1])
                 
-                # NEW: Restrict to specific variables
-                restrict_cols = st.multiselect(
-                    "Restrict to specific variables (Optional)", 
-                    options=list(main_data.columns),
-                    help="If selected, the AI will only consider using these variables (plus the target concept if provided) to generate suggestions."
-                )
+                with col_conf_1:
+                    num_suggestions = st.slider("Number of Suggestions", min_value=1, max_value=10, value=5)
+                    restrict_cols = st.multiselect(
+                        "Restrict to specific variables (Optional)", 
+                        options=list(main_data.columns),
+                        help="Force AI to only use these variables."
+                    )
 
-                # NEW: Allow missing variables
-                allow_missing = st.checkbox("Include suggestions with missing variables", value=False, help="Allow AI to suggest formulas even if some variables are not in the dataset.")
-                
-                # NEW: Use Taxonomy
-                use_taxonomy = st.checkbox("Use Variable Taxonomy", value=True, help="Use the generated variable taxonomy to understand cryptic column names. (Requires Taxonomy to be generated in Data Preparation)")
+                with col_conf_2:
+                    st.write("**Analysis Options:**")
+                    allow_missing = st.checkbox("Include suggestions with missing variables", value=False)
+                    use_taxonomy = st.checkbox("Use Variable Taxonomy (Better understanding)", value=True)
+                    debug_mode = st.checkbox("Debug Mode (Show Raw Output)", value=False)
 
-                # Debug mode
-                debug_mode = st.checkbox("Debug Mode", value=False, help="Show raw LLM output for debugging.")
-            
-            with col_btn:
-                st.write("") # Spacer
-                if use_specific:
-                    st.write("") # Extra spacer for alignment
+            # -- ROW 3: Action --
+            st.write("")
+            if st.button("✨ Generate AI Suggestions", type="primary", use_container_width=True):
+                progress_bar = st.progress(0, text="Starting analysis...")
                 
-                if st.button("Generate", width='stretch'):
-                    progress_bar = st.progress(0, text="Starting analysis...")
+                def update_progress(percent, text):
+                    progress_bar.progress(percent, text=text)
+
+                try:
+                    # Determine which columns to use
+                    cols_to_use = list(main_data.columns)
+                    filtering_msg = None
                     
-                    def update_progress(percent, text):
-                        progress_bar.progress(percent, text=text)
+                    if restrict_cols:
+                        cols_to_use = restrict_cols
+                    elif len(cols_to_use) > 50:
+                        # SMART FILTERING (User asked for "lighter treatment")
+                        # If dataset is large and no restriction is set, filter out likely IDs/spam
+                        try:
+                            analyzer = DataAnalyzer(main_data)
+                            
+                            # Candidates to keep: Numeric, Date, Binary, Low/Mid Cardinality Categorical
+                            keep_cols = set(analyzer.numeric_cols + analyzer.date_cols + analyzer.binary_cols + analyzer.low_cardinality_numeric_cols)
+                            
+                            # Add decent categorical columns (not unique identifiers)
+                            for col in analyzer.categorical_cols:
+                                if col not in analyzer.high_cardinality_cat_cols:
+                                    keep_cols.add(col)
+                            
+                            filtered_cols = [c for c in cols_to_use if c in keep_cols]
+                            
+                            # If we filtered out something, use the cleaner list
+                            if len(filtered_cols) < len(cols_to_use) and len(filtered_cols) > 5:
+                                removed_count = len(cols_to_use) - len(filtered_cols)
+                                cols_to_use = filtered_cols
+                                filtering_msg = f"ℹ️ Automatically filtered {removed_count} irrelevant columns (IDs, unique strings) to improve AI focus."
+                        except Exception as e:
+                            pass # Fallback to all columns if analysis fails
 
-                    try:
-                        # Determine which columns to use
-                        cols_to_use = list(main_data.columns)
-                        if restrict_cols:
-                            cols_to_use = restrict_cols
-                        
-                        # Use validation method to ensure quality and filter useless suggestions
-                        suggestions_text, error = st.session_state.rag_manager.suggest_computed_variables_with_validation(
-                            cols_to_use,
-                            search_hint=search_hint,
-                            num_suggestions=num_suggestions,
-                            suggestion_mode=suggestion_mode,
-                            allow_missing_variables=allow_missing,
-                            use_taxonomy=use_taxonomy,
-                            progress_callback=update_progress
-                        )
-                        progress_bar.empty()
-                        
-                        if debug_mode:
-                            with st.expander("🕵️ Debug: Raw LLM Output", expanded=True):
-                                st.code(suggestions_text, language="json")
+                    if filtering_msg:
+                        st.info(filtering_msg)
+                    
+                    # Use validation method to ensure quality and filter useless suggestions
+                    suggestions_text, error = st.session_state.rag_manager.suggest_computed_variables_with_validation(
+                        cols_to_use,
+                        search_hint=search_hint,
+                        num_suggestions=num_suggestions,
+                        suggestion_mode=suggestion_mode,
+                        allow_missing_variables=allow_missing,
+                        use_taxonomy=use_taxonomy,
+                        progress_callback=update_progress
+                    )
+                    progress_bar.empty()
+                    
+                    if debug_mode:
+                        with st.expander("🕵️ Debug: Raw LLM Output", expanded=True):
+                            st.code(suggestions_text, language="json")
 
-                    except TypeError:
-                        st.error("Session outdated. Please refresh the page (F5) to apply the latest updates.")
-                        return
+                except TypeError:
+                    st.error("Session outdated. Please refresh the page (F5) to apply the latest updates.")
+                    return
 
-                    if error:
-                        st.error(f"Error: {error}")
-                    else:
-                            try:
-                                # Clean up potential markdown code blocks
-                                if "```json" in suggestions_text:
-                                    suggestions_text = suggestions_text.split("```json")[1].split("```")[0]
-                                elif "```" in suggestions_text:
-                                    suggestions_text = suggestions_text.split("```")[1].split("```")[0]
+                if error:
+                    st.error(f"Error: {error}")
+                else:
+                        try:
+                            # Clean up potential markdown code blocks
+                            if "```json" in suggestions_text:
+                                suggestions_text = suggestions_text.split("```json")[1].split("```")[0]
+                            elif "```" in suggestions_text:
+                                suggestions_text = suggestions_text.split("```")[1].split("```")[0]
+                            
+                            response_data = json.loads(suggestions_text)
+                            
+                            # Handle both new object format and old list format
+                            if isinstance(response_data, list):
+                                st.session_state['ai_variable_suggestions'] = response_data
+                                st.session_state['ai_domain_analysis'] = None
+                            else:
+                                st.session_state['ai_variable_suggestions'] = response_data.get('suggestions', [])
+                                st.session_state['ai_domain_analysis'] = response_data.get('domain_analysis', None)
                                 
-                                response_data = json.loads(suggestions_text)
-                                
-                                # Handle both new object format and old list format
-                                if isinstance(response_data, list):
-                                    st.session_state['ai_variable_suggestions'] = response_data
-                                    st.session_state['ai_domain_analysis'] = None
-                                else:
-                                    st.session_state['ai_variable_suggestions'] = response_data.get('suggestions', [])
-                                    st.session_state['ai_domain_analysis'] = response_data.get('domain_analysis', None)
-                                    
-                                st.success("Suggestions received!")
-                            except Exception as e:
-                                st.error(f"Error parsing suggestions: {e}")
-                                st.write(suggestions_text) # Fallback
+                            st.success("Suggestions received!")
+                        except Exception as e:
+                            st.error(f"Error parsing suggestions: {e}")
+                            st.write(suggestions_text) # Fallback
 
             # Display Domain Analysis
             if 'ai_domain_analysis' in st.session_state and st.session_state['ai_domain_analysis']:
