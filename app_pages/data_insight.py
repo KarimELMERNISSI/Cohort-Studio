@@ -1725,13 +1725,54 @@ def app():
             st.warning("⚠️ AI System Required")
             st.info("Refining the taxonomy requires the RAG system to be initialized.")
         else:
-            st.info("Select variables to refine and provide feedback for the AI.")
-            
-            vars_to_refine = st.multiselect(
-                "Select variables:",
-                options=sorted(filtered_vars.keys()),
-                format_func=lambda x: f"{x} ({filtered_vars[x].get('standard_name', 'Unknown')})"
-            )
+            # --- Refine Existing Variable ---
+            with st.expander("🔧 Refine Existing Variable (AI)", expanded=False):
+                st.caption("Select variables to refine, provide natural language feedback, and let the AI update the taxonomy.")
+                
+                vars_to_refine = st.multiselect(
+                    "Select variables:",
+                    options=sorted(filtered_vars.keys()),
+                    format_func=lambda x: f"{x} ({filtered_vars[x].get('standard_name', 'Unknown')})"
+                )
+
+                if vars_to_refine:
+                    feedback_dict = {}
+                    st.write("### Provide Feedback")
+                    for var in vars_to_refine:
+                        current_desc = filtered_vars[var].get('description', 'No description')
+                        st.markdown(f"**{var}**: `{current_desc}`")
+                        feedback = st.text_area(f"Feedback for {var}:", key=f"feed_{var}", placeholder="e.g., 'This definition is incorrect...'")
+                        if feedback:
+                            feedback_dict[var] = feedback
+                        st.divider()
+                    
+                    if st.button("Refine Selected Variables", type="primary"):
+                        if not feedback_dict:
+                            st.warning("Please provide feedback for at least one variable.")
+                        else:
+                            with st.spinner("Refining taxonomy..."):
+                                # Get columns info context
+                                columns_info = []
+                                if "working_df" in st.session_state:
+                                    df = st.session_state["working_df"]
+                                    for col in df.columns:
+                                        info = {"name": col}
+                                        if pd.api.types.is_numeric_dtype(df[col]):
+                                            info["stats"] = {"min": float(df[col].min()), "max": float(df[col].max()), "mean": float(df[col].mean())}
+                                        columns_info.append(info)
+                                
+                                updated_taxonomy, error = rag_manager.refine_variable_taxonomy(
+                                    taxonomy, 
+                                    feedback_dict, 
+                                    columns_info
+                                )
+                                
+                                if error:
+                                    st.error(f"Refinement failed: {error}")
+                                else:
+                                    st.success("Taxonomy updated successfully!")
+                                    st.session_state.rag_manager.variable_taxonomy = updated_taxonomy
+                                    st.rerun()
 
             # --- NEW: Add Missing Concept Node ---
             st.divider()
@@ -1935,47 +1976,7 @@ def app():
                         with st.expander("Raw Output"):
                             st.write(s_text)
             
-            st.divider()
 
-            
-            if vars_to_refine:
-                feedback_dict = {}
-                st.write("### Provide Feedback")
-                for var in vars_to_refine:
-                    current_desc = filtered_vars[var].get('description', 'No description')
-                    st.markdown(f"**{var}**: `{current_desc}`")
-                    feedback = st.text_area(f"Feedback for {var}:", key=f"feed_{var}", placeholder="e.g., 'This definition is incorrect...'")
-                    if feedback:
-                        feedback_dict[var] = feedback
-                    st.divider()
-                
-                if st.button("Refine Selected Variables", type="primary"):
-                    if not feedback_dict:
-                        st.warning("Please provide feedback for at least one variable.")
-                    else:
-                        with st.spinner("Refining taxonomy..."):
-                            # Get columns info context
-                            columns_info = []
-                            if "working_df" in st.session_state:
-                                df = st.session_state["working_df"]
-                                for col in df.columns:
-                                    info = {"name": col}
-                                    if pd.api.types.is_numeric_dtype(df[col]):
-                                        info["stats"] = {"min": float(df[col].min()), "max": float(df[col].max()), "mean": float(df[col].mean())}
-                                    columns_info.append(info)
-                            
-                            updated_taxonomy, error = rag_manager.refine_variable_taxonomy(
-                                taxonomy, 
-                                feedback_dict, 
-                                columns_info
-                            )
-                            
-                            if error:
-                                st.error(f"Refinement failed: {error}")
-                            else:
-                                st.success("Taxonomy updated successfully!")
-                                st.session_state.rag_manager.variable_taxonomy = updated_taxonomy
-                                st.rerun()
 
 if __name__ == "__main__":
     app()
