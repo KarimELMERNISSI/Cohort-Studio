@@ -1732,6 +1732,211 @@ def app():
                 options=sorted(filtered_vars.keys()),
                 format_func=lambda x: f"{x} ({filtered_vars[x].get('standard_name', 'Unknown')})"
             )
+
+            # --- NEW: Add Missing Concept Node ---
+            st.divider()
+            with st.expander("➕ Add Missing Concept Node (AI)", expanded=False):
+                st.caption("Use AI to find and add specific derived concepts (e.g. medical scores, ratios) to the taxonomy.")
+                
+                
+                # --- NEW LAYOUT: Align Search/Suggestions and Clues/Category ---
+                c_top_1, c_top_2 = st.columns([3, 1])
+                with c_top_1:
+                    refine_search_hint = st.text_input("Concept Name / Medical Score:", placeholder="e.g. HOMA-IR, MAP, BMI", key="refine_search_hint")
+                with c_top_2:
+                    refine_num_sugg = st.number_input("Suggestions", min_value=1, max_value=5, value=3, key="refine_num_sugg")
+                
+                # Get existing categories safely
+                ex_cats = sorted(list(set(v.get('category', 'Uncategorized') for v in taxonomy.values() if isinstance(v, dict)))) if taxonomy else []
+
+                c_mid_1, c_mid_2 = st.columns([3, 1])
+                with c_mid_1:
+                     # Involved Variables Clue
+                    refine_clues = st.multiselect(
+                        "Involved Variables (Clue):",
+                        options=sorted(taxonomy.keys()) if taxonomy else [],
+                        format_func=lambda x: f"{x} ({taxonomy[x].get('standard_name', '')})" if taxonomy and x in taxonomy else x,
+                        help="Limit the search to specific variables to guide the AI."
+                    )
+                with c_mid_2:
+                    # Target Category Selection
+                    refine_target_category = st.selectbox("Target Category (Optional):", ["Auto (AI)"] + ex_cats, key="refine_target_category")
+
+                if st.button("Generate Concept Suggestions", type="primary"):
+                    if not refine_search_hint:
+                        st.warning("Please enter a concept name.")
+                    else:
+                        with st.spinner("Consulting RAG for concepts..."):
+                            # Get columns context
+                            # Default: All columns in dataframe or taxonomy
+                            cols_context = list(taxonomy.keys()) if taxonomy else []
+                            if "working_df" in st.session_state:
+                                cols_context = list(st.session_state["working_df"].columns)
+                            
+                            # Apply Clue Filter (Restriction)
+                            if refine_clues:
+                                cols_context = refine_clues
+                            
+                            # Store for later use in "Add to Graph"
+                            st.session_state['refine_active_clues'] = refine_clues if refine_clues else []
+                            st.session_state['refine_target_cat'] = refine_target_category
+
+                            # Re-use the enrichment logic
+                            # We use 'Go To Target' implicitly as we want to CREATE the concept
+                            sugg_text, err = rag_manager.suggest_computed_variables_with_validation(
+                                cols_context,
+                                search_hint=refine_search_hint,
+                                num_suggestions=refine_num_sugg,
+                                suggestion_mode="Go To Target",
+                                use_taxonomy=True,
+                                existing_categories=ex_cats  # Pass existing categories
+                            )
+                            
+                            if err:
+                                st.error(err)
+                            else:
+                                st.session_state['refine_suggestions_text'] = sugg_text
+
+                # Display Results
+                if 'refine_suggestions_text' in st.session_state:
+                    s_text = st.session_state['refine_suggestions_text']
+                    
+                    # Parse JSON safely
+                    try:
+                        # Clean cleanup similar to data_enrichment
+                        if "```json" in s_text:
+                            s_text = s_text.split("```json")[1].split("```")[0]
+                        elif "```" in s_text:
+                            s_text = s_text.split("```")[1].split("```")[0]
+                        
+                        s_data = json.loads(s_text)
+                        
+                        # Normalize to list
+                        if isinstance(s_data, dict):
+                            s_list = s_data.get('suggestions', [])
+                        else:
+                            s_list = s_data
+                            
+                        if not s_list:
+                            st.info("No suggestions returned.")
+                        else:
+                            st.markdown("### 🤖 Suggested Concepts")
+                            
+                            for idx, item in enumerate(s_list):
+                                with st.container(border=True):
+                                    c1, c2 = st.columns([3, 1])
+                                    with c1:
+                                        st.markdown(f"**{item.get('name', 'Unknown')}**")
+                                        st.caption(item.get('description', ''))
+                                        # Formula
+                                        f_code = item.get('formula', 'N/A')
+                                        st.code(f_code, language='python')
+                                        # Inputs
+                                        ins = item.get('input_variables', [])
+                                        # Display raw inputs from AI + Clues if any
+                                        active_clues = st.session_state.get('refine_active_clues', [])
+                                        # Merge for display
+                                        display_inputs = list(set(ins + active_clues))
+                                        
+                                        if display_inputs:
+                                            st.write(f"**Inputs:** {', '.join(display_inputs)}")
+
+                                        # Category
+                                        target_cat_pref = st.session_state.get('refine_target_cat', 'Auto (AI)')
+                                        if target_cat_pref != 'Auto (AI)':
+                                            disp_cat = target_cat_pref
+                                            cat_source = "(User)"
+                                        else:
+                                            disp_cat = item.get('suggestion_category', 'Generated')
+                                            cat_source = "(AI)"
+                                        
+                                        st.write(f"**Category:** {disp_cat} {cat_source}")
+                                    
+                                    with c2:
+                                        if st.button("Add to Graph", key=f"add_refine_{idx}"):
+                                            # Logic to Add Node and Formula
+                                            
+                                            # 1. Define IDs
+                                            new_var_id = item.get('name')
+                                            # Create a simpler ID for formula to avoid collisions? 
+                                            # Use hash or timestamp, or just FORM_VARNAME
+                                            new_form_id = f"FORM_{new_var_id}"
+                                            
+                                            # MERGE CLUES AS INPUTS
+                                            final_inputs = list(set(item.get('input_variables', []) + st.session_state.get('refine_active_clues', [])))
+                                            
+                                            # Determine Category
+                                            target_cat_pref = st.session_state.get('refine_target_cat', 'Auto (AI)')
+                                            if target_cat_pref != 'Auto (AI)':
+                                                final_category = target_cat_pref
+                                            else:
+                                                final_category = item.get('suggestion_category', 'Generated')
+
+                                            # 2. Update Taxonomy (Variable Node)
+                                            # We tag it as 'External-Derived' as requested
+                                            new_var_node = {
+                                                "node_type": "External-Derived",
+                                                "category": final_category,
+
+                                                "description": item.get('description', ''),
+                                                "standard_name": item.get('title', new_var_id),
+                                                "related_formula_ids": [new_form_id],
+                                                "source_type": "AI-Refinement",
+                                                "clinical_usage": item.get('clinical_usage', '')
+                                            }
+                                            
+                                            # 3. Update Formulas Registry (Formula Node)
+                                            # Use title for the name if available, otherwise cleaner ID
+                                            formula_display_name = item.get('title', new_var_id)
+                                            
+                                            new_form_node = {
+                                                "node_type": "Formula",
+                                                "id": new_form_id, # explicit ID
+                                                "name": formula_display_name,
+                                                "description": f"Formula for {new_var_id}",
+                                                "output_variable": new_var_id,
+                                                "input_variables": final_inputs,
+                                                "expression": f_code,
+                                                "formula": f_code, # duplicate for safety
+                                                "markdown_formula": item.get('markdown_formula', '')
+                                            }
+                                            
+                                            # 4. Commit to Session State
+                                            st.session_state.offline_taxonomy[new_var_id] = new_var_node
+                                            st.session_state.offline_formulas[new_form_id] = new_form_node
+                                            
+                                            # 5. Link Inputs (Update their related_formula_ids)
+                                            # This ensures that looking at an Input variable shows it contributes to this Formula
+                                            for inp in final_inputs:
+
+                                                if inp in st.session_state.offline_taxonomy:
+                                                    # Get node
+                                                    inp_node = st.session_state.offline_taxonomy[inp]
+                                                    # Init list if missing
+                                                    if 'related_formula_ids' not in inp_node:
+                                                        inp_node['related_formula_ids'] = []
+                                                    # Add if not present
+                                                    if new_form_id not in inp_node['related_formula_ids']:
+                                                        inp_node['related_formula_ids'].append(new_form_id)
+                                            
+                                            if rag_manager:
+                                                rag_manager.variable_taxonomy = st.session_state.offline_taxonomy
+                                            
+                                            st.toast(f"Added {new_var_id} to taxonomy!", icon="✅")
+
+                                            # Clear suggestions to reset state?
+                                            del st.session_state['refine_suggestions_text']
+                                            import time
+                                            time.sleep(1)
+                                            st.rerun()
+
+                    except Exception as e:
+                        st.error(f"Failed to parse suggestions: {e}")
+                        with st.expander("Raw Output"):
+                            st.write(s_text)
+            
+            st.divider()
+
             
             if vars_to_refine:
                 feedback_dict = {}

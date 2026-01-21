@@ -62,7 +62,7 @@ class ComputedVarsMixin:
         except Exception:
             return search_hint
 
-    def suggest_computed_variables(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, progress_callback=None):
+    def suggest_computed_variables(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, existing_categories=None, progress_callback=None):
         """Suggests computed variables based on dataset columns and medical knowledge."""
         if not self.initialized:
             return None, "RAG system not initialized."
@@ -95,7 +95,7 @@ class ComputedVarsMixin:
             self.concept_cache[cache_key] = theoretical_concepts
 
         if progress_callback: progress_callback(50, "Mapping formulas to dataset...")
-        final_suggestions_json = self._map_formulas_to_data(theoretical_concepts, columns, allow_missing_variables, num_suggestions, use_taxonomy)
+        final_suggestions_json = self._map_formulas_to_data(theoretical_concepts, columns, allow_missing_variables, num_suggestions, use_taxonomy, existing_categories)
         
         return final_suggestions_json, None
 
@@ -167,7 +167,7 @@ class ComputedVarsMixin:
             logger.warning(f"Failed to get theoretical formulas: {e}")
             return []
 
-    def _map_formulas_to_data(self, concepts, columns, allow_missing, limit, use_taxonomy=True):
+    def _map_formulas_to_data(self, concepts, columns, allow_missing, limit, use_taxonomy=True, existing_categories=None):
         """Step 2: Map theoretical inputs to actual dataset columns."""
         columns_str = ", ".join(columns)
         concepts_str = json.dumps(concepts, indent=2)
@@ -179,6 +179,16 @@ class ComputedVarsMixin:
             taxonomy_context = f"""
             VARIABLE TAXONOMY (Use this to understand cryptic column names):
             {taxonomy_str}
+            """
+            
+        category_instruction = ""
+        if existing_categories:
+            cats_str = ", ".join(existing_categories)
+            category_instruction = f"""
+            5. **CATEGORY CLASSIFICATION**: 
+               - You MUST classify the new variable into one of these Existing Categories: [{cats_str}].
+               - Only create a new category if absolutely necessary (e.g. "Computed", "Derived"). 
+               - Return this in the 'suggestion_category' field.
             """
 
         prompt = f"""
@@ -210,6 +220,7 @@ class ComputedVarsMixin:
         3. {missing_instr}
         4. Select the top {limit} feasible suggestions.
         5. **CRITICAL**: You MUST preserve the 'source' and 'logic' information from the Theoretical Concepts into 'source_citation' and 'source_explanation'.
+        {category_instruction}
         
         Return JSON Object:
         {{
@@ -220,6 +231,7 @@ class ComputedVarsMixin:
                     "formula": " Spaced Formula ",
                     "missing_variables": ["list", "if", "any"],
                     "description": "Clinical relevance",
+                    "suggestion_category": "Category Name",
                     "source_type": "Document" or "Model Knowledge" or "Hybrid",
                     "source_citation": "Filename.pdf (Pages X, Y) or 'Model Knowledge'",
                     "source_explanation": "Briefly explain the logic or source of the formula."
@@ -242,10 +254,10 @@ class ComputedVarsMixin:
             logger.warning(f"Failed to map formulas to data: {e}")
             return json.dumps({"suggestions": [], "error": str(e)})
 
-    def suggest_computed_variables_with_validation(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, progress_callback=None):
+    def suggest_computed_variables_with_validation(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, existing_categories=None, progress_callback=None):
         """Wrapper that calls the pipeline and performs final AST validation with Auto-Correction."""
         
-        json_str, error = self.suggest_computed_variables(columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, progress_callback)
+        json_str, error = self.suggest_computed_variables(columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback)
         if error: 
             return None, error
         
