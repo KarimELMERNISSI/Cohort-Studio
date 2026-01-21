@@ -47,7 +47,22 @@ def app():
         # Sort traces by modification time (newest first)
         traces.sort(key=lambda x: os.path.getmtime(os.path.join(trace_dir, x)), reverse=True)
 
-        selected_trace_file = st.selectbox("Select Analysis Session", traces)
+        trace_options = {}
+        for t in traces:
+            try:
+                t_path = os.path.join(trace_dir, t)
+                with open(t_path, 'r') as f:
+                    t_data = json.load(f)
+                    step_count = len(t_data.get('steps', []))
+                    suffix = "step" if step_count == 1 else "steps"
+                    label = f"{t} [{step_count} {suffix}]"
+                    trace_options[label] = t
+            except Exception:
+                # If a trace is corrupt or unreadable, just show the filename
+                trace_options[t] = t
+
+        selected_option = st.selectbox("Select Analysis Session", list(trace_options.keys()))
+        selected_trace_file = trace_options[selected_option] if selected_option else None
         
         if selected_trace_file:
             trace_path = os.path.join(trace_dir, selected_trace_file)
