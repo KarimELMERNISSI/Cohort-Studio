@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from explore.data_quality import DataQualityAuditor
+from explore.data_quality_auditor import DataQualityAuditor
 from manage.transformation_manager import TransformationManager
 from app_pages.data_enrichment import save_snapshot
 

@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.figure_factory as ff
 import scipy.cluster.hierarchy as sch
-from explore.data_quality import DataQualityAuditor
+from explore.data_quality_auditor import DataQualityAuditor
 import utils.analysis_utils as au
 import statsmodels.stats.multitest as smt
 import utils.visualization_utils as vu
@@ -16,10 +16,24 @@ def render_dashboard(df, config):
     """
     st.markdown("Comprehensive assessment of your dataset's health across key dimensions.")
 
+    # Initialize session state defaults if not set (first render)
+    if 'validity_outlier_method' not in st.session_state:
+        st.session_state['validity_outlier_method'] = 'iqr'
+    if 'validity_outlier_params' not in st.session_state:
+        st.session_state['validity_outlier_params'] = {'multiplier': 1.5}
+
+    # Get selected outlier method from session state (set in Tab 2)
+    validity_method = st.session_state['validity_outlier_method']
+    validity_params = st.session_state['validity_outlier_params']
+    
+    print(f"[DEBUG render_dashboard] validity_method={validity_method}, validity_params={validity_params}")
+
     # Initialize Auditor
     auditor = DataQualityAuditor(df, config=config)
-    metrics = auditor.run_audit()
+    metrics = auditor.run_audit(validity_method=validity_method, validity_params=validity_params)
     advice_list = auditor.generate_advice()
+    
+    print(f"[DEBUG render_dashboard] metrics={metrics}")
 
     # --- Global Score Calculation ---
     with st.expander("⚙️ Score Weights Configuration", expanded=False):
@@ -647,38 +661,246 @@ def render_dashboard(df, config):
 
     # --- Tab 2: Validity (Outliers) ---
     with tab2:
-        st.subheader("Numerical Outlier Detection (IQR Method)")
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        st.subheader("Numerical Outlier Detection")
+        st.markdown("Detect outliers using various statistical methods. The selected method will be used to calculate the **Statistical Validity** score.")
+        
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
         if len(numeric_cols) > 0:
-            outlier_summary = []
-            for col in numeric_cols:
-                data = df[col].dropna()
-                Q1 = data.quantile(0.25)
-                Q3 = data.quantile(0.75)
-                IQR = Q3 - Q1
-                outliers = ((data < (Q1 - 1.5 * IQR)) | (data > (Q3 + 1.5 * IQR))).sum()
-                if outliers > 0:
-                    outlier_summary.append({"Column": col, "Outliers": outliers, "Percentage": round(outliers/len(data)*100, 2)})
+            # Callback to trigger rerun when method/params change
+            def on_method_change():
+                """Callback when method or params change - updates session state."""
+                pass  # Session state is already updated by widget, rerun happens automatically
             
+            # --- Method Selection UI ---
+            col1, col2 = st.columns(2)
+            with col1:
+                detection_method = st.selectbox(
+                    "Detection Method",
+                    ["iqr", "zscore", "quantile", "Local Outlier Factor", "Isolation Forest", "DBSCAN"],
+                    index=["iqr", "zscore", "quantile", "Local Outlier Factor", "Isolation Forest", "DBSCAN"].index(
+                        st.session_state.get('validity_outlier_method', 'iqr')
+                    ),
+                    help="**IQR**: Uses interquartile range (default)\n"
+                         "**Z-score**: Uses standard deviations from mean\n"
+                         "**Quantile**: Uses percentile thresholds\n"
+                         "**LOF/IsoForest/DBSCAN**: Multivariate machine learning methods",
+                    key="validity_detection_method"
+                )
+            
+            # Store selected method in session state for dashboard recalculation
+            st.session_state['validity_outlier_method'] = detection_method
+            
+            # --- Method-Specific Parameters ---
+            with col2:
+                if detection_method == "iqr":
+                    # Get default from session state or use 1.5
+                    default_mult = st.session_state.get('validity_outlier_params', {}).get('multiplier', 1.5)
+                    multiplier = st.slider("IQR Multiplier", 0.5, 3.0, float(default_mult), 0.1, key="validity_iqr_mult",
+                                          help="Higher values = fewer outliers detected")
+                    params = {"multiplier": multiplier}
+                elif detection_method == "zscore":
+                    default_thresh = st.session_state.get('validity_outlier_params', {}).get('threshold', 3.0)
+                    threshold = st.slider("Z-score Threshold", 1.0, 5.0, float(default_thresh), 0.1, key="validity_zscore_thresh",
+                                         help="Number of standard deviations from mean")
+                    params = {"threshold": threshold}
+                elif detection_method == "quantile":
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        lower = st.number_input("Lower Percentile", 0.0, 0.5, 0.01, 0.01, key="validity_q_lower")
+                    with c2:
+                        upper = st.number_input("Upper Percentile", 0.5, 1.0, 0.99, 0.01, key="validity_q_upper")
+                    params = {"lower": lower, "upper": upper}
+                else:
+                    # ML methods - show info
+                    st.info("ℹ️ Multivariate methods analyze patterns across all selected columns.")
+                    params = {}
+            
+            # Check if params changed - if so, trigger rerun to update scorecard
+            old_params = st.session_state.get('validity_outlier_params', {})
+            st.session_state['validity_outlier_params'] = params
+            
+            # Show guidance about score synchronization
+            st.caption("💡 **Tip:** The health scorecard above will update automatically when you change detection settings.")
+            
+            # --- Column Selection (for ML methods) ---
+            if detection_method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
+                selected_cols = st.multiselect(
+                    "Select Columns for Analysis",
+                    numeric_cols,
+                    default=numeric_cols[:min(5, len(numeric_cols))],
+                    key="validity_ml_cols"
+                )
+            else:
+                selected_cols = numeric_cols
+            
+            # --- Run Detection ---
+            outlier_summary = []
+            outlier_mask_dict = {}
+            total_outliers = 0
+            total_values = 0
+            
+            if detection_method in ["iqr", "zscore", "quantile"]:
+                # Univariate methods - per column
+                for col in selected_cols:
+                    data = df[col].dropna()
+                    if len(data) == 0:
+                        continue
+                    
+                    if detection_method == "iqr":
+                        Q1 = data.quantile(0.25)
+                        Q3 = data.quantile(0.75)
+                        IQR = Q3 - Q1
+                        mask = (data < (Q1 - params["multiplier"] * IQR)) | (data > (Q3 + params["multiplier"] * IQR))
+                    elif detection_method == "zscore":
+                        z_scores = np.abs((data - data.mean()) / data.std())
+                        mask = z_scores > params["threshold"]
+                    elif detection_method == "quantile":
+                        lower_bound = data.quantile(params["lower"])
+                        upper_bound = data.quantile(params["upper"])
+                        mask = (data < lower_bound) | (data > upper_bound)
+                    
+                    outliers = mask.sum()
+                    total_outliers += outliers
+                    total_values += len(data)
+                    outlier_mask_dict[col] = mask
+                    
+                    if outliers > 0:
+                        outlier_summary.append({
+                            "Column": col, 
+                            "Outliers": outliers, 
+                            "Percentage": round(outliers/len(data)*100, 2)
+                        })
+                
+            else:
+                # Multivariate ML methods
+                if len(selected_cols) < 2:
+                    st.warning("Please select at least 2 columns for multivariate analysis.")
+                else:
+                    try:
+                        from sklearn.ensemble import IsolationForest
+                        from sklearn.neighbors import LocalOutlierFactor
+                        from sklearn.cluster import DBSCAN
+                        from sklearn.preprocessing import StandardScaler
+                        
+                        # Prepare data
+                        ml_data = df[selected_cols].dropna()
+                        if len(ml_data) > 10:
+                            scaler = StandardScaler()
+                            scaled_data = scaler.fit_transform(ml_data)
+                            
+                            if detection_method == "Isolation Forest":
+                                model = IsolationForest(contamination='auto', random_state=42)
+                                predictions = model.fit_predict(scaled_data)
+                                mask = predictions == -1
+                            elif detection_method == "Local Outlier Factor":
+                                model = LocalOutlierFactor(contamination='auto')
+                                predictions = model.fit_predict(scaled_data)
+                                mask = predictions == -1
+                            elif detection_method == "DBSCAN":
+                                model = DBSCAN(eps=0.5, min_samples=5)
+                                predictions = model.fit_predict(scaled_data)
+                                mask = predictions == -1  # Noise points
+                            
+                            outliers = mask.sum()
+                            total_outliers = outliers
+                            total_values = len(ml_data)
+                            outlier_mask_dict['overall'] = pd.Series(mask, index=ml_data.index)
+                            
+                            outlier_summary.append({
+                                "Column": "Overall (Multivariate)",
+                                "Outliers": outliers,
+                                "Percentage": round(outliers/len(ml_data)*100, 2)
+                            })
+                        else:
+                            st.warning("Not enough data points for ML-based detection (need > 10).")
+                    except ImportError as e:
+                        st.error(f"Missing dependency: {e}")
+            
+            # --- Display Results ---
             if outlier_summary:
                 outlier_df = pd.DataFrame(outlier_summary).sort_values("Outliers", ascending=False)
                 
+                # Display the scorecard value (same as Health Scorecard above)
+                # This ensures alignment between Tab 2 and the scorecard
+                scorecard_validity = metrics.get("Statistical Validity", 100.0)
+                st.metric(
+                    "Statistical Validity Score (from Health Scorecard)", 
+                    f"{scorecard_validity:.2f}%",
+                    help=f"Based on {detection_method.upper()} method. This value matches the Health Scorecard above."
+                )
+                
+                # Summary chart and table
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     fig = px.bar(
                         outlier_df, 
                         x='Column', 
                         y='Outliers',
-                        title="Outliers Count per Column",
+                        title=f"Outliers Count ({detection_method.upper()})",
                         color='Outliers',
                         color_continuous_scale='Oranges'
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                 with col2:
-                    st.dataframe(outlier_df, width='stretch')
+                    st.dataframe(outlier_df, use_container_width=True)
+                
+                # --- Visualization Options ---
+                st.divider()
+                st.markdown("### 📊 Visual Inspection")
+                
+                viz_col1, viz_col2 = st.columns(2)
+                with viz_col1:
+                    viz_type = st.selectbox(
+                        "Visualization Type",
+                        ["Box Plot", "Violin Plot", "Scatter (with outliers)"],
+                        key="validity_viz_type"
+                    )
+                with viz_col2:
+                    if detection_method in ["iqr", "zscore", "quantile"]:
+                        viz_column = st.selectbox(
+                            "Select Column",
+                            [s["Column"] for s in outlier_summary],
+                            key="validity_viz_col"
+                        )
+                    else:
+                        viz_column = None
+                
+                # Generate visualization
+                if viz_type == "Box Plot" and viz_column and viz_column in df.columns:
+                    fig = px.box(df, y=viz_column, title=f"Box Plot: {viz_column}", points="outliers")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                elif viz_type == "Violin Plot" and viz_column and viz_column in df.columns:
+                    fig = px.violin(df, y=viz_column, title=f"Violin Plot: {viz_column}", box=True, points="outliers")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                elif viz_type == "Scatter (with outliers)":
+                    if detection_method in ["iqr", "zscore", "quantile"] and viz_column and viz_column in df.columns:
+                        # Scatter with index
+                        plot_data = df[[viz_column]].dropna().copy()
+                        plot_data['is_outlier'] = outlier_mask_dict.get(viz_column, False)
+                        plot_data['Index'] = range(len(plot_data))
+                        fig = px.scatter(
+                            plot_data, x='Index', y=viz_column, 
+                            color='is_outlier',
+                            color_discrete_map={True: 'red', False: 'blue'},
+                            title=f"Scatter Plot: {viz_column} (Outliers in Red)"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    elif 'overall' in outlier_mask_dict and len(selected_cols) >= 2:
+                        # 2D scatter for ML methods using first 2 columns
+                        plot_data = df[selected_cols].dropna().copy()
+                        plot_data['is_outlier'] = outlier_mask_dict['overall']
+                        fig = px.scatter(
+                            plot_data, x=selected_cols[0], y=selected_cols[1],
+                            color='is_outlier',
+                            color_discrete_map={True: 'red', False: 'blue'},
+                            title=f"Multivariate Outliers ({selected_cols[0]} vs {selected_cols[1]})"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
             else:
-                st.success("No statistical outliers detected.")
+                st.success("✅ No statistical outliers detected with the selected method.")
         else:
             st.info("No numerical columns to analyze.")
 

@@ -37,40 +37,126 @@ class DataQualityAuditor:
         score = (unique_rows / total_rows) * 100
         return round(score, 2)
 
-    def compute_validity(self):
+    def compute_validity(self, method=None, params=None):
         """
         Calculates a validity score based on the absence of outliers in numerical columns.
-        Uses the IQR method.
+        
+        Parameters:
+        -----------
+        method : str, optional
+            Detection method: 'iqr' (default), 'zscore', 'quantile', 
+            'Local Outlier Factor', 'Isolation Forest', 'DBSCAN'
+        params : dict, optional
+            Method-specific parameters (e.g., multiplier, threshold, etc.)
         """
+        # Default to IQR if no method specified
+        if method is None:
+            method = "iqr"
+        if params is None:
+            params = {"multiplier": 1.5} if method == "iqr" else {}
+        
+        print(f"[DEBUG compute_validity] method={method}, params={params}")
+        
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        print(f"[DEBUG compute_validity] numeric_cols={list(numeric_cols)}")
+        
         if len(numeric_cols) == 0:
-            return 100.0 # No numeric columns to be invalid
+            return 100.0  # No numeric columns to be invalid
 
         total_outliers = 0
         total_numeric_values = 0
 
-        for col in numeric_cols:
-            data = self.df[col].dropna()
-            if len(data) == 0:
-                continue
-            
-            Q1 = data.quantile(0.25)
-            Q3 = data.quantile(0.75)
-            IQR = Q3 - Q1
-            
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
-            
-            outliers = ((data < lower_bound) | (data > upper_bound)).sum()
-            total_outliers += outliers
-            total_numeric_values += len(data)
+        # Univariate methods
+        if method in ["iqr", "zscore", "quantile"]:
+            for col in numeric_cols:
+                data = self.df[col].dropna()
+                if len(data) == 0:
+                    continue
+                
+                outliers = 0
+                
+                if method == "iqr":
+                    Q1 = data.quantile(0.25)
+                    Q3 = data.quantile(0.75)
+                    IQR = Q3 - Q1
+                    multiplier = params.get("multiplier", 1.5)
+                    
+                    # Handle edge case: IQR = 0 (constant data)
+                    if IQR == 0:
+                        # No outliers if all values are the same
+                        outliers = 0
+                    else:
+                        lower_bound = Q1 - multiplier * IQR
+                        upper_bound = Q3 + multiplier * IQR
+                        outliers = ((data < lower_bound) | (data > upper_bound)).sum()
+                    
+                elif method == "zscore":
+                    threshold = params.get("threshold", 3.0)
+                    std = data.std()
+                    
+                    # Handle edge case: std = 0 (constant data)
+                    if std == 0:
+                        outliers = 0
+                    else:
+                        z_scores = np.abs((data - data.mean()) / std)
+                        outliers = (z_scores > threshold).sum()
+                    
+                elif method == "quantile":
+                    lower = params.get("lower", 0.01)
+                    upper = params.get("upper", 0.99)
+                    lower_bound = data.quantile(lower)
+                    upper_bound = data.quantile(upper)
+                    outliers = ((data < lower_bound) | (data > upper_bound)).sum()
+                
+                total_outliers += outliers
+                total_numeric_values += len(data)
+                print(f"[DEBUG compute_validity] col={col}, outliers={outliers}, total_outliers={total_outliers}")
+        
+        # Multivariate ML methods
+        elif method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
+            try:
+                from sklearn.ensemble import IsolationForest
+                from sklearn.neighbors import LocalOutlierFactor
+                from sklearn.cluster import DBSCAN
+                from sklearn.preprocessing import StandardScaler
+                
+                ml_data = self.df[numeric_cols].dropna()
+                print(f"[DEBUG compute_validity] ML method, data shape={ml_data.shape}")
+                
+                if len(ml_data) > 10:
+                    scaler = StandardScaler()
+                    scaled_data = scaler.fit_transform(ml_data)
+                    
+                    if method == "Isolation Forest":
+                        model = IsolationForest(contamination='auto', random_state=42)
+                        predictions = model.fit_predict(scaled_data)
+                    elif method == "Local Outlier Factor":
+                        model = LocalOutlierFactor(contamination='auto')
+                        predictions = model.fit_predict(scaled_data)
+                    elif method == "DBSCAN":
+                        eps = params.get("eps", 0.5)
+                        min_samples = params.get("min_samples", 5)
+                        model = DBSCAN(eps=eps, min_samples=min_samples)
+                        predictions = model.fit_predict(scaled_data)
+                    
+                    total_outliers = (predictions == -1).sum()
+                    total_numeric_values = len(ml_data)
+                    print(f"[DEBUG compute_validity] ML outliers={total_outliers}")
+                else:
+                    print(f"[DEBUG compute_validity] Not enough data for ML: {len(ml_data)}")
+                    return 100.0  # Not enough data
+            except ImportError as e:
+                print(f"[DEBUG compute_validity] ImportError: {e}")
+                # Fall back to IQR if sklearn not available
+                return self.compute_validity(method="iqr")
 
         if total_numeric_values == 0:
+            print(f"[DEBUG compute_validity] total_numeric_values=0, returning 100")
             return 100.0
 
-        # Score penalizes outliers. 
-        # If 10% of data are outliers, score is 90.
+        # Score penalizes outliers
         score = (1 - (total_outliers / total_numeric_values)) * 100
+        print(f"[DEBUG compute_validity] total_outliers={total_outliers}, total_values={total_numeric_values}, score={score}")
         return round(score, 2)
 
     def compute_consistency(self):
@@ -333,12 +419,20 @@ class DataQualityAuditor:
             "is_mcar": is_mcar
         }
 
-    def run_audit(self):
-        """Runs all checks and populates metrics and advice."""
+    def run_audit(self, validity_method=None, validity_params=None):
+        """Runs all checks and populates metrics and advice.
+        
+        Parameters:
+        -----------
+        validity_method : str, optional
+            Method to use for Statistical Validity calculation
+        validity_params : dict, optional
+            Parameters for the validity method
+        """
         self.metrics = {
             "Completeness": self.compute_completeness(),
             "Uniqueness": self.compute_uniqueness(),
-            "Statistical Validity": self.compute_validity(),
+            "Statistical Validity": self.compute_validity(method=validity_method, params=validity_params),
             "Consistency": self.compute_consistency(),
             "Uniformity": self.compute_uniformity()
         }

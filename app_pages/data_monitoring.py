@@ -7,7 +7,7 @@ import time
 from scipy import stats
 from utils.data_analyzer import DataAnalyzer
 from utils.config_loader import transform_expression, create_empty_config
-from app_pages.data_quality import render_dashboard
+from app_pages.data_quality_dashboard import render_dashboard
 from enrich import custom_metrics_and_filters as ecm
 import monitor.outliers as mo
 import monitor.changes as mc
