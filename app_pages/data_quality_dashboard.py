@@ -858,45 +858,138 @@ def render_dashboard(df, config):
                     )
                 with viz_col2:
                     if detection_method in ["iqr", "zscore", "quantile"]:
-                        viz_column = st.selectbox(
-                            "Select Column",
-                            [s["Column"] for s in outlier_summary],
-                            key="validity_viz_col"
+                        # Multi-select for columns with outliers
+                        available_cols = [s["Column"] for s in outlier_summary]
+                        viz_columns = st.multiselect(
+                            "Select Columns",
+                            available_cols,
+                            default=available_cols[:min(3, len(available_cols))],
+                            key="validity_viz_cols",
+                            help="Select multiple columns to compare"
                         )
                     else:
-                        viz_column = None
+                        # ML methods - automatically use the analysis columns
+                        viz_columns = selected_cols
+                        st.info(f"📊 Displaying columns from analysis: {', '.join(selected_cols[:5])}{'...' if len(selected_cols) > 5 else ''}")
                 
                 # Generate visualization
-                if viz_type == "Box Plot" and viz_column and viz_column in df.columns:
-                    fig = px.box(df, y=viz_column, title=f"Box Plot: {viz_column}", points="outliers")
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                elif viz_type == "Violin Plot" and viz_column and viz_column in df.columns:
-                    fig = px.violin(df, y=viz_column, title=f"Violin Plot: {viz_column}", box=True, points="outliers")
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                elif viz_type == "Scatter (with outliers)":
-                    if detection_method in ["iqr", "zscore", "quantile"] and viz_column and viz_column in df.columns:
-                        # Scatter with index
-                        plot_data = df[[viz_column]].dropna().copy()
-                        plot_data['is_outlier'] = outlier_mask_dict.get(viz_column, False)
-                        plot_data['Index'] = range(len(plot_data))
-                        fig = px.scatter(
-                            plot_data, x='Index', y=viz_column, 
-                            color='is_outlier',
-                            color_discrete_map={True: 'red', False: 'blue'},
-                            title=f"Scatter Plot: {viz_column} (Outliers in Red)"
+                if viz_type == "Box Plot" and viz_columns:
+                    valid_cols = [c for c in viz_columns if c in df.columns]
+                    if valid_cols:
+                        # Create faceted subplots - each column with its own y-axis range
+                        from plotly.subplots import make_subplots
+                        
+                        n_cols = len(valid_cols)
+                        fig = make_subplots(rows=1, cols=n_cols, subplot_titles=valid_cols)
+                        
+                        colors = px.colors.qualitative.Plotly
+                        for i, col in enumerate(valid_cols):
+                            fig.add_trace(
+                                go.Box(
+                                    y=df[col].dropna(), 
+                                    name=col, 
+                                    boxpoints='outliers',
+                                    marker_color=colors[i % len(colors)]
+                                ),
+                                row=1, col=i+1
+                            )
+                        
+                        fig.update_layout(
+                            title=f"Box Plot Comparison ({n_cols} columns)",
+                            showlegend=False,
+                            height=450
                         )
                         st.plotly_chart(fig, use_container_width=True)
-                    elif 'overall' in outlier_mask_dict and len(selected_cols) >= 2:
-                        # 2D scatter for ML methods using first 2 columns
-                        plot_data = df[selected_cols].dropna().copy()
-                        plot_data['is_outlier'] = outlier_mask_dict['overall']
-                        fig = px.scatter(
-                            plot_data, x=selected_cols[0], y=selected_cols[1],
-                            color='is_outlier',
-                            color_discrete_map={True: 'red', False: 'blue'},
-                            title=f"Multivariate Outliers ({selected_cols[0]} vs {selected_cols[1]})"
+                    
+                elif viz_type == "Violin Plot" and viz_columns:
+                    valid_cols = [c for c in viz_columns if c in df.columns]
+                    if valid_cols:
+                        # Create faceted subplots - each column with its own y-axis range
+                        from plotly.subplots import make_subplots
+                        
+                        n_cols = len(valid_cols)
+                        fig = make_subplots(rows=1, cols=n_cols, subplot_titles=valid_cols)
+                        
+                        colors = px.colors.qualitative.Plotly
+                        for i, col in enumerate(valid_cols):
+                            fig.add_trace(
+                                go.Violin(
+                                    y=df[col].dropna(), 
+                                    name=col, 
+                                    box_visible=True,
+                                    points='outliers',
+                                    marker_color=colors[i % len(colors)]
+                                ),
+                                row=1, col=i+1
+                            )
+                        
+                        fig.update_layout(
+                            title=f"Violin Plot Comparison ({n_cols} columns)",
+                            showlegend=False,
+                            height=450
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                elif viz_type == "Scatter (with outliers)" and viz_columns:
+                    valid_cols = [c for c in viz_columns if c in df.columns]
+                    if valid_cols:
+                        from plotly.subplots import make_subplots
+                        
+                        n_cols = len(valid_cols)
+                        fig = make_subplots(rows=1, cols=n_cols, subplot_titles=valid_cols)
+                        
+                        # Get outlier mask - either per-column (univariate) or overall (ML methods)
+                        if 'overall' in outlier_mask_dict:
+                            # ML methods: use same mask for all columns
+                            overall_mask = outlier_mask_dict['overall']
+                        else:
+                            overall_mask = None
+                        
+                        for i, col in enumerate(valid_cols):
+                            col_data = df[[col]].dropna().copy()
+                            col_data['Index'] = range(len(col_data))
+                            
+                            # Get appropriate outlier mask
+                            if overall_mask is not None:
+                                # ML methods - use overall mask
+                                outlier_mask = overall_mask.reindex(col_data.index, fill_value=False)
+                            else:
+                                # Univariate methods - use per-column mask
+                                outlier_mask = outlier_mask_dict.get(col, pd.Series(False, index=col_data.index))
+                                outlier_mask = outlier_mask.reindex(col_data.index, fill_value=False)
+                            
+                            # Non-outliers (blue)
+                            non_outliers = col_data[~outlier_mask]
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=non_outliers['Index'], 
+                                    y=non_outliers[col],
+                                    mode='markers',
+                                    marker=dict(color='blue', size=5),
+                                    name='Normal',
+                                    showlegend=(i == 0)
+                                ),
+                                row=1, col=i+1
+                            )
+                            
+                            # Outliers (red)
+                            outliers_data = col_data[outlier_mask]
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=outliers_data['Index'], 
+                                    y=outliers_data[col],
+                                    mode='markers',
+                                    marker=dict(color='red', size=7),
+                                    name='Outlier',
+                                    showlegend=(i == 0)
+                                ),
+                                row=1, col=i+1
+                            )
+                        
+                        method_label = "Multivariate" if overall_mask is not None else "Univariate"
+                        fig.update_layout(
+                            title=f"Scatter Plot ({n_cols} columns) - {method_label} Outliers in Red",
+                            height=450
                         )
                         st.plotly_chart(fig, use_container_width=True)
             else:
