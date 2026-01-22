@@ -2369,7 +2369,6 @@ def extract_column_stats(df, columns):
 # TBD: Rework the cat of missingforest based on set(binary + cat)
 def app():
     """Improved page for external data and variable definition."""
-    st.title("Data Enrichment and Variable Definition")
 
     # Initialize DB Manager
     if 'db_manager' not in st.session_state:
