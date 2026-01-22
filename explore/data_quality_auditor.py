@@ -194,14 +194,17 @@ class DataQualityAuditor:
         """
         Calculates a score based on declared anomaly criteria (if available).
         Score = 100 - (% of rows triggering at least one anomaly).
+        Returns None if no anomaly rules are defined (shows as N/A in dashboard).
         """
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
         
+        # If no config or no mask_families, return None (N/A - rules not configured)
         if not self.config or "mask_families" not in self.config:
             return None
 
         anomaly_config = self.config["mask_families"].get("clinical_anomalies", {})
+        # If no anomaly rules defined, return None (N/A - no rules to evaluate)
         if not anomaly_config:
             return None
 
@@ -221,7 +224,8 @@ class DataQualityAuditor:
                     has_masks = True
             
             if not has_masks:
-                return 100.0
+                # No valid masks generated - treat as N/A (rules exist but none matched columns)
+                return None
             
             # Store details for UI
             if anomaly_data:
@@ -437,7 +441,7 @@ class DataQualityAuditor:
             "Uniformity": self.compute_uniformity()
         }
         
-        # Add Clinical Validity if config is present
+        # Add Clinical Validity only if rules are defined (otherwise N/A)
         clinical_score = self.compute_clinical_validity()
         if clinical_score is not None:
             self.metrics["Clinical Validity"] = clinical_score
