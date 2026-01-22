@@ -496,12 +496,14 @@ def app():
                                     )
 
                     fig.update_layout(title_text="Box Plots")
+                    fig.update_layout(title_text="Box Plots")
                     for i in range(1, len(y_cols) + 1):
                         fig.update_xaxes(showgrid=True, gridcolor='lightgray', row=1, col=i)
                         fig.update_yaxes(showgrid=True, gridcolor='lightgray', row=1, col=i)
-
-                    if orientation == "Vertical" and x_col != "None":
-                        fig.update_layout(xaxis_tickangle=-45)
+                        
+                        # Ensure consistent tick angle for all subplots
+                        if orientation == "Vertical" and x_col != "None":
+                            fig.update_xaxes(tickangle=-45, row=1, col=i)
 
 
             elif plot_type == "Violin Plot":
@@ -619,12 +621,14 @@ def app():
                                     )
 
                     fig.update_layout(title_text="Violin Plots")
+                    fig.update_layout(title_text="Violin Plots")
                     for i in range(1, len(y_cols) + 1):
                         fig.update_xaxes(showgrid=True, gridcolor='lightgray', row=1, col=i)
                         fig.update_yaxes(showgrid=True, gridcolor='lightgray', row=1, col=i)
 
-                    if orientation == "Vertical" and x_col != "None":
-                        fig.update_layout(xaxis_tickangle=-45)
+                        # Ensure consistent tick angle for all subplots
+                        if orientation == "Vertical" and x_col != "None":
+                            fig.update_xaxes(tickangle=-45, row=1, col=i)
             
             
             elif plot_type == "Scatter Plot":
