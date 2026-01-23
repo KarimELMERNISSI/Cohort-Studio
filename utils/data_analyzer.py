@@ -252,6 +252,9 @@ class DataAnalyzer:
                 "categorical": cat_vars + self.high_cardinality_cat_cols,
                 "numeric": num_vars,
                 "identifiers": sorted(self.df.columns.tolist())
+            },
+            "Sunburst Chart": {
+                "categorical": cat_vars + self.high_cardinality_cat_cols
             }
         }
         

@@ -117,7 +117,7 @@ def app():
                 "requirements": {"numeric": 1}
             },
             "Categorical": {
-                "plots": ["Bar Plot", "Pie Chart"],
+                "plots": ["Bar Plot", "Pie Chart", "Sunburst Chart"],
                 "requirements": {"categorical": 1}
             },
             "Time Series": {
@@ -248,6 +248,13 @@ def app():
                 "usage": "Display relative composition or percentage distribution of a categorical variable.",
                 "insight": "Identify the dominant and minor constituents of the dataset.",
                 "inputs": "1 Categorical variable (Labels)."
+            },
+            "Sunburst Chart": {
+                "title": "Sunburst Chart",
+                "desc": "A hierarchical chart used to visualize the proportion of different categories within a hierarchy.",
+                "usage": "Visualize hierarchical data structures and the distribution of categories at each level.",
+                "insight": "Understand relationships between parent and child categories and their relative sizes.",
+                "inputs": "1 or more Categorical variables (Hierarchy)."
             },
             "Line Plot": {
                 "title": "Line Plot",
@@ -837,6 +844,25 @@ def app():
                     color_discrete_sequence=selected_color,
                     title=f"Distribution of {names_col}"
                 )
+
+            elif plot_type == "Sunburst Chart":
+                st.info("Select multiple categorical variables to define the hierarchy.")
+                path_cols = st.multiselect("Select Hierarchy (in order)", suitable_cols["categorical"], default=suitable_cols["categorical"][:2] if len(suitable_cols["categorical"]) >= 2 else suitable_cols["categorical"])
+                
+                if not path_cols:
+                    st.warning("Please select at least one variable for the hierarchy.")
+                else:
+                    # Missing values handling
+                    df_plot = df.copy()
+                    for col in path_cols:
+                        df_plot[col] = df_plot[col].fillna('Unknown').astype(str)
+                    
+                    fig = px.sunburst(
+                        df_plot,
+                        path=path_cols,
+                        color_discrete_sequence=selected_color,
+                        title=f"Sunburst Chart: {' > '.join(path_cols)}"
+                    )
             
             elif plot_type == "Correlation Matrix":
                 if len(suitable_cols["numeric"]) < 2:
