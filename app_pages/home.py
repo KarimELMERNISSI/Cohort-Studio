@@ -279,7 +279,7 @@ def move_columns_to_front(df, columns_to_move):
     return df[columns_to_move + remaining_columns]
 
 @st.cache_data(ttl=3600, show_spinner="Computing statistics...")
-def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
+def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
     """
     Creates new DataFrames with statistics for numerical and non-numerical columns.
     Tries to load from DuckDB/Parquet cache if dataset_name is provided.
@@ -299,7 +299,7 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
             return cached_num, cached_cat
 
     # Work with copies to avoid modifying original
-    df = _df.copy()
+    df = df.copy()
     analyzer = _analyzer
     
     # Exclude specified columns
@@ -864,6 +864,7 @@ def app():
                 with col_quant_1:
                     selected_group_quant = st.selectbox(label="Select grouping column (optional):", options=["None"] + group_select, index=0, key='select_group_quant')
                 
+                date_stats = pd.DataFrame()
                 if selected_group_quant == "None":
                     # Display numerical stats
                     dataset_name = st.session_state.get('current_dataset_name', None)
@@ -897,30 +898,36 @@ def app():
                         label="Download as Excel",
                         data=to_excel(numerical_stats[selected_quant_columns]),
                         file_name="Quantitative Data Statistics.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key='quant_download_ungrouped'
                     )
                 else:
                     # Group data by the selected categorical variable
                     quant_category_groups = filtered_df.groupby(selected_group_quant)
                     # Generate descriptive statistics for each group using the custom function
                     quant_dict = {}
+                    date_stats_dict = {}
                     for category, group in quant_category_groups:
+                        if group.empty:
+                            continue
                         #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
-                        numerical_stats, _, _ = get_statistics_dataframe(
+                        numerical_stats, _, group_date_stats = get_statistics_dataframe(
                             df=group, 
-                            analyzer=analyzer, 
+                            _analyzer=analyzer, 
                             nb_top_categories=1
                         )
                         quant_dict[category] = numerical_stats
+                        date_stats_dict[category] = group_date_stats
                     
                     with col_quant_2:
-                        selected_category = st.selectbox(label="Select grouping value:", options=quant_dict.keys(), index=0)
+                        selected_category = st.selectbox(label="Select grouping value:", options=quant_dict.keys(), index=0, key='quant_group_value')
                     
                     
                     selected_quant_columns = st.multiselect(
                             "Select columns to retain in descriptive statistics of quantitative variables",
                             options=numerical_stats.columns.tolist(),
-                            default=numerical_stats.columns.tolist()
+                            default=numerical_stats.columns.tolist(),
+                            key='quant_cols_select'
                         )
                     
                     # Filter columns for all groups
@@ -941,17 +948,26 @@ def app():
                                  )
 
                     # Allow user to download all data as a multi-sheet Excel file
+                    # Allow user to download all data as a multi-sheet Excel file
                     st.download_button(
                         label="Download as Excel",
                         data=to_excel_sheets(quant_dict),
                         file_name=f"Descriptive_Statistics_by_{selected_group_quant}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key='quant_download_grouped'
                     )
                 # Display Date Stats if available
-                if not date_stats.empty and selected_group_quant == "None":
+                # Display Date Stats if available
+                current_date_stats = pd.DataFrame()
+                if selected_group_quant == "None":
+                    current_date_stats = date_stats
+                elif selected_group_quant != "None" and 'date_stats_dict' in locals() and selected_category in date_stats_dict:
+                    current_date_stats = date_stats_dict[selected_category]
+
+                if not current_date_stats.empty:
                     st.divider()
                     st.markdown("#### 📅 Date Statistics")
-                    st.dataframe(date_stats,
+                    st.dataframe(current_date_stats,
                                 width='stretch', 
                                 column_config={
                                     "Fill Percentage": st.column_config.ProgressColumn(
@@ -1026,7 +1042,8 @@ def app():
                         label="Download as Excel",
                         data=to_excel(non_numerical_stats[selected_qual_columns]),
                         file_name="Qualitative Data Statistics.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key='qual_download_ungrouped'
                     )
                     
                 else:
@@ -1039,7 +1056,7 @@ def app():
                         #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
                         _, non_numerical_stats, _ = get_statistics_dataframe(
                             df=group, 
-                            analyzer=analyzer, 
+                            _analyzer=analyzer, 
                             nb_top_categories=max_top_modalities
                         )
                         qual_dict[category] = non_numerical_stats
@@ -1047,13 +1064,14 @@ def app():
                     with col2:
                         # Show available columns and let user select columns to retain
                         selected_qual_columns = st.multiselect(
-                                "Select columns to retain in descriptive statistics of quantitative variables",
+                                "Select columns to retain in descriptive statistics of qualitative variables",
                                 options=non_numerical_stats.columns.tolist(),
-                                default=non_numerical_stats.columns.tolist()
+                                default=non_numerical_stats.columns.tolist(),
+                                key='qual_cols_select'
                             )
                         
                     with col_qual_2:
-                        selected_category = st.selectbox(label="Select grouping value:", options=qual_dict.keys(), index=0)
+                        selected_category = st.selectbox(label="Select grouping value:", options=qual_dict.keys(), index=0, key='qual_group_value')
 
                     # Filter columns for all groups
                     for category in qual_dict.keys():
@@ -1073,11 +1091,13 @@ def app():
                                  )
 
                     # Allow user to download all data as a multi-sheet Excel file
+                    # Allow user to download all data as a multi-sheet Excel file
                     st.download_button(
                         label="Download as Excel",
                         data=to_excel_sheets(qual_dict),
                         file_name=f"Descriptive_Statistics_by_{selected_group_qual}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key='qual_download_grouped'
                     )
             
             st.subheader("Correlation Matrix Analysis")

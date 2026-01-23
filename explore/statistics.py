@@ -1,4 +1,5 @@
 import logging
+import streamlit as st
 from scipy import stats
 import numpy as np
 import pandas as pd
@@ -17,7 +18,8 @@ import datetime
 # PENSER A REALISER UN LOG DES SELECTIONS ET TRANSFORMATIONS APPLIQUEES AUX DONNEES -- IDEE + D'INTEGRITE DANS LES DONNEES, RENDRE REPRODUCTIBLE TOUS LES BIAIS DUS A DES CHOIX ARBITRAIRE SUR LES DONNEES INITIALES. GENERER UN RAPPORT D'INTEGRITE : DATA TRANS ET SELECT SUMMARY
 ######################################## GENERATE A DESCRIPTIVE STATISTICS FILE ########################################
 
-def get_statistics_dataframe(df, nb_top_categories=4, exclude_columns=None, multi_index=False,super_column='', qual_var_threshold=100):
+@st.cache_data
+def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_columns=None, multi_index=False, super_column='', qual_var_threshold=100, dataset_name=None, _db_manager=None):
     """
     Creates a new DataFrame with statistics for each column.
 
