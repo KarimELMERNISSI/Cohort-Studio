@@ -753,7 +753,7 @@ def app():
     with tabs[1]:
         if 'working_df' in st.session_state:
             analyzer.refresh(st.session_state["working_df"])
-        st.title("Columns Renaming")
+        
         #df = st.session_state.get('data', None)
         if df is not None:
             # Instantiate DataAnalyzer and RenameColumnsComponent
