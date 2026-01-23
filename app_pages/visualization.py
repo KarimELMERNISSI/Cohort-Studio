@@ -105,10 +105,8 @@ def app():
         df = dm.add_outlier_handling_ui(df, analyzer.numeric_cols)
     
     # Create tabs for different visualization aspects
-    tabs = st.tabs(["Basic Visualizations", "..."])
-    
-    with tabs[0]:
-        st.subheader("Basic Data Visualization")
+    # Main Visualization Container
+    with st.container():
         
         # Plot categories with requirements
         plot_categories = {
@@ -193,7 +191,7 @@ def app():
             }
 
             # Determine available color schemes based on plot type
-            if plot_type in ["Histogram", "Box Plot", "Violin Plot", "Scatter Plot", "Line Plot", "Bar Plot", "Pie Chart", "Clustermap", "Bland-Altman Plot", "ROC Curve"]:
+            if plot_type in ["Histogram", "Box Plot", "Violin Plot", "Scatter Plot", "Line Plot", "Bar Plot", "Pie Chart", "Clustermap", "ROC Curve", "Sunburst Chart", "Icicle Chart", "Treemap", "Sankey Diagram"]:
                 color_scheme_type = "Discrete"
             else:
                 color_scheme_type = "Continuous"
@@ -1314,7 +1312,7 @@ def app():
                     with col1:
                         title = st.text_input("Plot Title", "")
                         title_size = st.slider("Title Font Size", 10, 50, 20)
-                        show_grid = st.checkbox("Show Grid", True)
+                        show_grid = st.checkbox("Show Grid", False)
                     with col2:
                         height = st.slider("Plot Height", 400, 2000, 700)
                         width = st.slider("Plot Width", 400, 2000, 1000)
@@ -1503,21 +1501,7 @@ def app():
                             st.write(f"R-squared: {r_value**2:.2f}")
                             st.write(f"P-value: {p_value:.4f}")
 
-                    elif plot_type == "Bland-Altman Plot":
-                        diff = df[method1] - df[method2]
-                        md = diff.mean()
-                        sd = diff.std()
-                        st.write(f"**Mean Difference (Bias):** {md:.4f}")
-                        st.write(f"**Standard Deviation of Difference:** {sd:.4f}")
-                        st.write(f"**Limits of Agreement (95%):** [{md - 1.96*sd:.4f}, {md + 1.96*sd:.4f}]")
-                        
-                        # T-test for bias
-                        t_stat, p_val = stats.ttest_1samp(diff, 0)
-                        st.write(f"**T-test for Bias (H0: Mean Diff = 0):** p-value = {p_val:.4f}")
-                        if p_val < 0.05:
-                            st.write("⚠️ Significant bias detected.")
-                        else:
-                            st.write("✅ No significant bias detected.")
+
 
                     elif plot_type == "ROC Curve":
                         from sklearn.metrics import roc_curve, auc
