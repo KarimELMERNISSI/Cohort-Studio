@@ -117,7 +117,7 @@ def app():
                 "requirements": {"numeric": 1}
             },
             "Categorical": {
-                "plots": ["Bar Plot", "Pie Chart", "Sunburst Chart", "Icicle Chart"],
+                "plots": ["Bar Plot", "Pie Chart", "Sunburst Chart", "Icicle Chart", "Treemap"],
                 "requirements": {"categorical": 1}
             },
             "Time Series": {
@@ -261,6 +261,13 @@ def app():
                 "desc": "A hierarchical chart where the hierarchy is defined by the nesting of rectangles.",
                 "usage": "Visualize hierarchical data and the proportion of categories. Good for visualizing deep hierarchies.",
                 "insight": "Analyze the hierarchical structure and value contribution of each segment.",
+                "inputs": "1 or more Categorical variables (Hierarchy)."
+            },
+            "Treemap": {
+                "title": "Treemap",
+                "desc": "A hierarchical chart using nested rectangles to represent data values.",
+                "usage": "Compare proportions within a hierarchy and spot patterns across categories.",
+                "insight": "Efficiently displays large amounts of hierarchical data in a compact space.",
                 "inputs": "1 or more Categorical variables (Hierarchy)."
             },
             "Line Plot": {
@@ -888,6 +895,27 @@ def app():
                         path=path_cols,
                         color_discrete_sequence=selected_color,
                         title=f"Icicle Chart: {' > '.join(path_cols)}"
+                    )
+                    fig.update_traces(root_color="lightgrey")
+                    fig.update_layout(margin = dict(t=50, l=25, r=25, b=25))
+
+            elif plot_type == "Treemap":
+                st.info("Select multiple categorical variables to define the hierarchy.")
+                path_cols = st.multiselect("Select Hierarchy (in order)", suitable_cols["categorical"], default=suitable_cols["categorical"][:2] if len(suitable_cols["categorical"]) >= 2 else suitable_cols["categorical"])
+                
+                if not path_cols:
+                    st.warning("Please select at least one variable for the hierarchy.")
+                else:
+                    # Missing values handling
+                    df_plot = df.copy()
+                    for col in path_cols:
+                        df_plot[col] = df_plot[col].fillna('Unknown').astype(str)
+                    
+                    fig = px.treemap(
+                        df_plot,
+                        path=path_cols,
+                        color_discrete_sequence=selected_color,
+                        title=f"Treemap: {' > '.join(path_cols)}"
                     )
                     fig.update_traces(root_color="lightgrey")
                     fig.update_layout(margin = dict(t=50, l=25, r=25, b=25))

@@ -258,6 +258,9 @@ class DataAnalyzer:
             },
             "Icicle Chart": {
                 "categorical": cat_vars + self.high_cardinality_cat_cols
+            },
+            "Treemap": {
+                "categorical": cat_vars + self.high_cardinality_cat_cols
             }
         }
         
