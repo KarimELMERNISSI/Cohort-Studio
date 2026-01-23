@@ -155,7 +155,76 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
         df_values = df_values.dropna()
         
         if df_values.empty:
-            return None, "No data available after dropping NaNs."
+            # Diagnostic for incompatible columns
+            msg = "No data available after dropping NaNs."
+            
+            # 1. Check for individual empty columns
+            col_counts = {col: df_indexed[col].count() for col in value_cols}
+            empty_cols = [col for col, count in col_counts.items() if count == 0]
+            
+            if empty_cols:
+                msg += f"\n\nThe following columns are entirely empty/NaN: {', '.join(empty_cols)}"
+            else:
+                # 2. Check for incompatible subsets (Minimal Conflict Search)
+                incompatible_tuples = []
+                import itertools
+                
+                # We search for the smallest subsets of columns that have no intersection.
+                # Start with k=2 (pairs), then k=3, etc.
+                # Once we find conflicts at size k, we report them and stop (minimal diagnostics).
+                
+                # Pre-compute masks for performance
+                masks = {col: df_indexed[col].notna().to_numpy() for col in value_cols}
+                
+                found_conflict = False
+                # Limit search depth to avoid performance hit on large lists
+                max_k = min(len(value_cols), 5) 
+                
+                for k in range(2, max_k + 1):
+                    # For large N, skipping check if combinations are too huge?
+                    # 20C5 is ~15k, which is fast in numpy. 30C5 is ~142k.
+                    # Just hard cap operations if needed? 
+                    # For now, let's trust max_k=5 is safe enough for typical usage.
+                    
+                    for combo in itertools.combinations(value_cols, k):
+                        # Calculate intersection
+                        # Start with first
+                        common = masks[combo[0]]
+                        short_circuit = False
+                        
+                        # Iteratively intersect
+                        for c_next in combo[1:]:
+                            common = common & masks[c_next]
+                            if not common.any():
+                                short_circuit = True
+                                break
+                        
+                        if short_circuit or not common.any():
+                            incompatible_tuples.append(combo)
+                            found_conflict = True
+                    
+                    if found_conflict:
+                        break # Found minimal conflicts at this level, stop searching deeper
+                
+                if incompatible_tuples:
+                    msg += f"\n\nThe following minimal subsets of variables have no overlapping data (incompatible):\n"
+                    for tup in incompatible_tuples[:10]: # Limit output
+                         msg += f"- {', '.join(tup)}\n"
+                    if len(incompatible_tuples) > 10:
+                        msg += f"... and {len(incompatible_tuples)-10} others."
+                elif len(value_cols) > 1:
+                     msg += f"\n\nVariable combination is incompatible (common intersection is empty), but no simple subset (size <= {max_k}) was found to be exclusively empty."
+            
+            # 3. Add counts summary
+            msg += "\n\nNon-null value counts per column:"
+            # Sort by count ascending to highlight problematic ones
+            sorted_counts = sorted(col_counts.items(), key=lambda item: item[1])
+            for col, count in sorted_counts[:10]: # Show top 10 worst
+                msg += f"\n- {col}: {count}"
+            if len(sorted_counts) > 10:
+                msg += f"\n... (and {len(sorted_counts)-10} more)"
+
+            return None, msg
             
     except KeyError as e:
         return None, f"Missing columns: {e}"
@@ -173,11 +242,21 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
 
     if 'zscore' in transformation:
         # Apply zscore per row (axis=1) -> Standardize each Feature across Samples
-        # Drop rows with NaN zscores (constant values)
         # Use result_type='expand' to ensure we get a DataFrame, not a Series of arrays
         df_to_plot = df_transformed.apply(zscore, axis=1, result_type='expand')
         df_to_plot.columns = df_transformed.columns # Restore Sample IDs as columns
-        df_to_plot = df_to_plot.dropna()
+        
+        # Check for NaNs (which happen if standard deviation is 0, i.e., constant value)
+        if df_to_plot.isna().any().any():
+            # Identify constant features
+            constant_features = df_to_plot.index[df_to_plot.isna().any(axis=1)].tolist()
+            # Drop them
+            df_to_plot = df_to_plot.dropna()
+            
+            # If everything is gone, return specific error
+            if df_to_plot.empty:
+                return None, f"All selected features are constant (zero variance) across the selected samples and cannot be standardized (Z-score).\n\nConstant features: {', '.join(constant_features)}"
+        
         center = 0
         cbar_label = 'Z-score'
     else:
@@ -186,7 +265,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
         cbar_label = 'Value'
 
     if df_to_plot.empty:
-        return None, "No data available after transformation (check for constant rows if using z-score)."
+        return None, "No data available after transformation."
 
     # Initialize clustering variables
     row_dendro_traces = []
