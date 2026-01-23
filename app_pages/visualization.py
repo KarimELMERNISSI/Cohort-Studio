@@ -125,12 +125,8 @@ def app():
                 "requirements": {"date": 1,"numeric": 1}
             },
             "Relationships": {
-                "plots": ["Scatter Plot", "Correlation Matrix", "Clustermap", "Sankey Diagram"],
+                "plots": ["Scatter Plot", "Correlation Matrix", "Clustermap", "Sankey Diagram", "ROC Curve"],
                 "requirements": {"numeric": 1}
-            },
-            "Medical Research": {
-                "plots": ["Bland-Altman Plot", "ROC Curve"],
-                "requirements": {"numeric": 2}
             }
         }
         
@@ -305,13 +301,6 @@ def app():
                 "usage": "Visualize the flow of data labels between multiple categorical variables (stages).",
                 "insight": "Identify dominant movements or flows between categories and how groups split or merge.",
                 "inputs": "2 or more Categorical variables (Steps)."
-            },
-            "Bland-Altman Plot": {
-                "title": "Bland-Altman Plot (Difference Plot)",
-                "desc": "A difference plot used to analyze the agreement between two quantitative measurements.",
-                "usage": "Assess the concordance between two methods of measurement or clinical instruments.",
-                "insight": "Evaluate bias (mean difference) and limits of agreement (±1.96 SD). Detect systematic differences or proportional bias.",
-                "inputs": "2 Numeric variables (paired measurements)."
             },
             "ROC Curve": {
                 "title": "ROC Curve (Receiver Operating Characteristic)",
@@ -1299,16 +1288,6 @@ def app():
                     
                     fig.update_layout(title_text=f"Sankey Diagram: {' → '.join(cols)}", font_size=12)
 
-            elif plot_type == "Bland-Altman Plot":
-                col1, col2 = st.columns(2)
-                with col1:
-                    method1 = st.selectbox("Method 1 (Reference)", suitable_cols["method1"])
-                with col2:
-                    method2 = st.selectbox("Method 2 (New)", [c for c in suitable_cols["method2"] if c != method1])
-                
-                if method1 and method2:
-                    fig = vu.create_bland_altman_plot(df, method1, method2)
-            
             elif plot_type == "ROC Curve":
                 col1, col2 = st.columns(2)
                 with col1:
