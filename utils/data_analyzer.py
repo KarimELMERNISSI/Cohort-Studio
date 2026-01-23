@@ -255,6 +255,9 @@ class DataAnalyzer:
             },
             "Sunburst Chart": {
                 "categorical": cat_vars + self.high_cardinality_cat_cols
+            },
+            "Icicle Chart": {
+                "categorical": cat_vars + self.high_cardinality_cat_cols
             }
         }
         
