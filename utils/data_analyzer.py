@@ -261,6 +261,9 @@ class DataAnalyzer:
             },
             "Treemap": {
                 "categorical": cat_vars + self.high_cardinality_cat_cols
+            },
+            "Sankey Diagram": {
+                "categorical": cat_vars + self.high_cardinality_cat_cols
             }
         }
         

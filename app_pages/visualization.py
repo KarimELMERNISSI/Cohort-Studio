@@ -125,7 +125,7 @@ def app():
                 "requirements": {"date": 1,"numeric": 1}
             },
             "Relationships": {
-                "plots": ["Scatter Plot", "Correlation Matrix", "Clustermap"],
+                "plots": ["Scatter Plot", "Correlation Matrix", "Clustermap", "Sankey Diagram"],
                 "requirements": {"numeric": 1}
             },
             "Medical Research": {
@@ -295,8 +295,16 @@ def app():
                 "title": "Clustermap (Hierarchical Clustering)",
                 "desc": "A matrix-based visualization that applies hierarchical clustering to reorganize rows and columns based on similarity.",
                 "usage": "Uncover hidden structures, patterns, and relationships in complex, high-dimensional datasets.",
+                "usage": "Uncover hidden structures, patterns, and relationships in complex, high-dimensional datasets.",
                 "insight": "Identify clusters of similar samples or features, indicated by dendrogram structures and color intensity.",
                 "inputs": "2 or more Numeric variables."
+            },
+            "Sankey Diagram": {
+                "title": "Sankey Diagram",
+                "desc": "A flow diagram in which the width of the arrows is proportional to the flow rate.",
+                "usage": "Visualize the flow of data labels between multiple categorical variables (stages).",
+                "insight": "Identify dominant movements or flows between categories and how groups split or merge.",
+                "inputs": "2 or more Categorical variables (Steps)."
             },
             "Bland-Altman Plot": {
                 "title": "Bland-Altman Plot (Difference Plot)",
@@ -1222,6 +1230,74 @@ def app():
                     fig = st.session_state['fig_clustermap']
                 elif 'fig_clustermap_error' in st.session_state and st.session_state['fig_clustermap_error']:
                     st.error(f"Failed to generate clustermap: {st.session_state['fig_clustermap_error']}")
+
+            elif plot_type == "Sankey Diagram":
+                st.info("Select categorical variables to define the flow stages.")
+                cols = st.multiselect("Select Flow Stages (in order)", suitable_cols["categorical"], default=suitable_cols["categorical"][:2] if len(suitable_cols["categorical"]) >= 2 else [])
+                
+                if len(cols) < 2:
+                    st.warning("Please select at least two variables to create a flow.")
+                else:
+                    # Data preparation for Sankey
+                    # 1. Create a label list and map values to indices
+                    df_sankey = df.dropna(subset=cols).copy() # Better to dropNA for sankey or fillna
+                    for c in cols:
+                        df_sankey[c] = df_sankey[c].astype(str)
+
+                    # Better approach: distinct nodes per column
+                    nodes = []
+                    node_indices = {}
+                    idx = 0
+                    
+                    for col_idx, col in enumerate(cols):
+                        unique_vals = sorted(df_sankey[col].unique())
+                        for val in unique_vals:
+                            node_id = f"{col}: {val}"
+                            nodes.append({"label": val, "color": selected_color[col_idx % len(selected_color)]})
+                            node_indices[(col, val)] = idx
+                            idx += 1
+                            
+                    # 2. Create links
+                    sources = []
+                    targets = []
+                    values = []
+                    link_colors = []
+                    
+                    for i in range(len(cols) - 1):
+                        col_curr = cols[i]
+                        col_next = cols[i+1]
+                        
+                        # Count transitions
+                        transitions = df_sankey.groupby([col_curr, col_next]).size().reset_index(name='count')
+                        
+                        for _, row in transitions.iterrows():
+                            src_idx = node_indices[(col_curr, row[col_curr])]
+                            tgt_idx = node_indices[(col_next, row[col_next])]
+                            
+                            sources.append(src_idx)
+                            targets.append(tgt_idx)
+                            values.append(row['count'])
+                            # Link color same as source node but transparent
+                            # We need to get the color of the source node
+                            src_color = nodes[src_idx]['color']
+                            link_colors.append(vu.adjust_color_to_rgba(src_color, 0.3))
+
+                    fig = go.Figure(data=[go.Sankey(
+                        node = dict(
+                          pad = 15,
+                          thickness = 20,
+                          line = dict(color = "black", width = 0.5),
+                          label = [n["label"] for n in nodes],
+                          color = [n["color"] for n in nodes]
+                        ),
+                        link = dict(
+                          source = sources,
+                          target = targets,
+                          value = values,
+                          color = link_colors
+                      ))])
+                    
+                    fig.update_layout(title_text=f"Sankey Diagram: {' → '.join(cols)}", font_size=12)
 
             elif plot_type == "Bland-Altman Plot":
                 col1, col2 = st.columns(2)
