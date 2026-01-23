@@ -1868,8 +1868,10 @@ def run_power_analysis(df, analyzer):
             
             if selected_import != "None":
                 res = options[selected_import]
-                st.write(f"**Selected:** {selected_import}")
-                st.write(f"Effect Size: {res.get('Effect Size', 'N/A')} ({res.get('Effect Type', 'N/A')})")
+                st.write(f"Selected: **{selected_import}**")
+                if 'epidemiology_group_col' in st.session_state:
+                    st.write(f"Grouping Variable: **{st.session_state['epidemiology_group_col']}**")
+                st.write(f"Effect Size: **{res.get('Effect Size', 'N/A')} ({res.get('Effect Type', 'N/A')})**")
                 
                 if st.button("Load Parameters into Calculator"):
                     auto_fill_data = res
@@ -1958,6 +1960,15 @@ def run_power_analysis(df, analyzer):
                     st.session_state['power_test_type'] = target_test
                     st.session_state['power_test_type_selector'] = target_test  # This is the actual selectbox key
                     
+                    # Auto-fill Grouping Variable (Factor)
+                    if 'epidemiology_group_col' in st.session_state:
+                         g_col = st.session_state['epidemiology_group_col']
+                         # Basic validation to ensure it matches the options logic downstream (< 20 unique values)
+                         if g_col in df.columns and df[g_col].nunique() < 20:
+                             st.session_state['power_group_col'] = g_col
+                             # Clear selected groups to force a refresh/reset based on the new group column
+                             st.session_state.pop('power_selected_groups', None)
+
                     st.success("✅ Parameters loaded! The calculator fields below have been updated.")
                     st.rerun()  # Refresh UI to show updated values
 
