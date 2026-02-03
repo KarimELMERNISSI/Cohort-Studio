@@ -519,6 +519,10 @@ class MultiPageApp:
         # Execute the function for the selected page
         self.pages[selected_page].function()
 
+        # Add Logo at the bottom of sidebar
+        st.sidebar.markdown("---")
+        st.sidebar.image("assets/karim-app-logo.png", use_container_width=True)
+
 
     # def run(self) -> None:
     #     """Run the multi-page app."""
