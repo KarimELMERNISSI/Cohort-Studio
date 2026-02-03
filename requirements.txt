@@ -6,7 +6,7 @@ Flask
 GitPython==3.1.45
 HeapDict
 Jinja2==3.1.6
-Levenshtein==0.27.3
+
 Markdown
 MarkupSafe==2.1.4
 Protego
@@ -289,7 +289,7 @@ pyodbc
 pyparsing
 pyproject_hooks==1.2.0
 
-python-Levenshtein==0.27.3
+
 python-dateutil==2.8.2
 python-dotenv==1.2.1
 python-json-logger==2.0.7

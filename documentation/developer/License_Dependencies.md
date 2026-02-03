@@ -20,14 +20,16 @@ The following packages are licensed under **GPL**, which generally requires that
 
 | Package | License | Impact | Recommendation |
 | :--- | :--- | :--- | :--- |
+| **`Unidecode`** | GPL | Forces application to be GPL. | **Remove**. Replaced by `text-unidecode` (Artistic/Permissive) or similar. |
 
-| **`PyQt5`** | GPLv3 | Forces application to be GPLv3. | Likely an environment artifact not used by Streamlit. **Remove from requirements** if not used. |
+> [!NOTE]
+> `PyQt5` (GPL) was previously detected but has been confirmed as a local development artifact and is not a production dependency.
 
 ## Recommended Application License
 
 ### Option A: Open Source (GPLv3)
 
-If you intend to keep the current dependencies (`PyQt5`):
+If you intend to keep the current dependencies (e.g. `Unidecode`):
 
 - **Recommended License**: **GNU General Public License v3 (GPLv3)**.
 - **Why**: This ensures compatibility with the strict copyleft licenses of your dependencies.
@@ -36,7 +38,7 @@ If you intend to keep the current dependencies (`PyQt5`):
 
 If you wish to release under a permissive license (or keep the code proprietary):
 
-1. **Verify `PyQt5`** usage and remove it if unnecessary.
+1. **Remove `Unidecode`**.
 
 - **Recommended License**: **MIT License** or **Apache License 2.0**.
 
@@ -48,11 +50,11 @@ The following table lists the licenses for all direct dependencies found in `req
 | :--- | :--- |
 | **aiobotocore** | Apache License 2.0 |
 | **aiohappyeyeballs** | PSF-2.0 |
-| **aiohttp** | Apache-2.0 AND MIT |
+| **aiohttp** | Apache 2 |
 | **aioitertools** | UNKNOWN |
-| **aiosignal** | Apache 2.0 |
+| **aiosignal** | Apache 2 |
 | **alabaster** | UNKNOWN |
-| **altair** | Copyright (c) 2015-2023, Vega-Altair Developers... |
+| **altair** | BSD License |
 | **annotated-doc** | Unknown |
 | **annotated-types** | MIT License |
 | **anyio** | MIT |
@@ -63,24 +65,24 @@ The following table lists the licenses for all direct dependencies found in `req
 | **arrow** | Apache 2.0 |
 | **asgiref** | BSD-3-Clause |
 | **astropy** | BSD-3-Clause |
-| **astropy-iers-data** | Copyright (c) 2023, Astropy Developers  All rig... |
+| **astropy-iers-data** | Copyright (c) 2023, Astropy Developers  All rights |
 | **asttokens** | Apache 2.0 |
 | **async-lru** | MIT License |
 | **atomicwrites** | MIT |
-| **attrs** | Unknown |
+| **attrs** | MIT License |
 | **Automat** | MIT |
 | **Babel** | BSD |
 | **backoff** | MIT |
 | **backports.functools-lru-cache** | UNKNOWN |
 | **backports.tempfile** | Python Software Foundation License |
 | **backports.weakref** | Python Software Foundation License |
-| **bcrypt** | Apache-2.0 |
+| **bcrypt** | Apache License, Version 2.0 |
 | **beautifulsoup4** | MIT License |
 | **binaryornot** | BSD |
 | **black** | MIT |
 | **bleach** | Apache Software License |
 | **blinker** | MIT License |
-| **bokeh** | Copyright (c) Anaconda, Inc., and Bokeh Contrib... |
+| **bokeh** | Copyright (c) Anaconda, Inc., and Bokeh Contributo |
 | **boltons** | BSD |
 | **botocore** | Apache License 2.0 |
 | **Bottleneck** | Simplified BSD |
@@ -92,14 +94,14 @@ The following table lists the licenses for all direct dependencies found in `req
 | **chardet** | LGPL |
 | **charset-normalizer** | MIT |
 | **chroma-hnswlib** | Unknown |
-| **click** | Unknown |
+| **click** | BSD-3-Clause |
 | **cloudpickle** | BSD-3-Clause |
 | **colorama** | BSD License |
 | **colorcet** | CC-BY License |
 | **coloredlogs** | MIT |
-| **comm** | BSD 3-Clause License  Copyright (c) 2022, Jupyt... |
+| **comm** | BSD 3-Clause License  Copyright (c) 2022, Jupyter |
 | **constantly** | MIT |
-| **contourpy** | BSD 3-Clause License  Copyright (c) 2021-2023, ... |
+| **contourpy** | BSD 3-Clause License  Copyright (c) 2021-2023, Con |
 | **cryptography** | Apache-2.0 OR BSD-3-Clause |
 | **cssselect** | BSD |
 | **cycler** | BSD |
@@ -117,7 +119,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **distributed** | BSD-3-Clause |
 | **distro** | Apache License, Version 2.0 |
 | **docstring-to-markdown** | LGPL-2.1-or-later |
-| **docutils** | public domain, Python, 2-Clause BSD, GPL 3 (see... |
+| **docutils** | public domain, Python, 2-Clause BSD, GPL 3 (see CO |
 | **duckdb** | MIT License |
 | **entrypoints** | MIT License |
 | **et-xmlfile** | MIT |
@@ -129,10 +131,9 @@ The following table lists the licenses for all direct dependencies found in `req
 | **Flask** | BSD License |
 | **fonttools** | MIT |
 | **frozendict** | LGPL v3 |
-| **frozenlist** | Apache-2.0 |
-| **fsspec** | Unknown |
+| **frozenlist** | Apache 2 |
+| **fsspec** | BSD |
 | **future** | MIT |
-| **fuzzywuzzy** | GPLv2 |
 | **gitdb** | BSD License |
 | **GitPython** | BSD-3-Clause |
 | **google-api-core** | Apache 2.0 |
@@ -141,7 +142,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **google-auth-httplib2** | Apache 2.0 |
 | **google-genai** | Unknown |
 | **googleapis-common-protos** | Apache 2.0 |
-| **greenlet** | MIT AND Python-2.0 |
+| **greenlet** | MIT License |
 | **groq** | Apache-2.0 |
 | **grpcio** | Apache License 2.0 |
 | **h11** | MIT |
@@ -152,7 +153,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **httpcore** | BSD License |
 | **httplib2** | MIT |
 | **httptools** | Unknown |
-| **httpx** | BSD-3-Clause |
+| **httpx** | BSD License |
 | **httpx-sse** | MIT |
 | **huggingface-hub** | Apache |
 | **humanfriendly** | MIT |
@@ -170,7 +171,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **iniconfig** | MIT License |
 | **intake** | BSD |
 | **intervaltree** | Apache License, Version 2.0 |
-| **ipykernel** | BSD 3-Clause License  Copyright (c) 2015, IPyth... |
+| **ipykernel** | BSD 3-Clause License  Copyright (c) 2015, IPython |
 | **ipython** | BSD-3-Clause |
 | **ipython-genutils** | BSD |
 | **ipywidgets** | BSD |
@@ -187,28 +188,27 @@ The following table lists the licenses for all direct dependencies found in `req
 | **json5** | Apache |
 | **jsonpatch** | Modified BSD License |
 | **jsonpointer** | Modified BSD License |
-| **jsonschema** | Unknown |
-| **jsonschema-specifications** | Unknown |
+| **jsonschema** | MIT |
+| **jsonschema-specifications** | MIT |
 | **keyring** | MIT License |
-| **kiwisolver** | =========================  The Kiwi licensing t... |
+| **kiwisolver** | =========================  The Kiwi licensing term |
 | **kubernetes** | Apache License Version 2.0 |
-| **langchain** | Not Installed / Unknown |
+| **langchain** | Not Installed |
 | **langchain-chroma** | MIT |
 | **langchain-classic** | MIT |
-| **langchain-community** | Not Installed / Unknown |
-| **langchain-core** | Not Installed / Unknown |
-| **langchain-google-genai** | Not Installed / Unknown |
-| **langchain-text-splitters** | Not Installed / Unknown |
+| **langchain-community** | Not Installed |
+| **langchain-core** | Not Installed |
+| **langchain-google-genai** | Not Installed |
+| **langchain-text-splitters** | Not Installed |
 | **langgraph** | Unknown |
 | **langgraph-checkpoint** | Unknown |
 | **langgraph-prebuilt** | Unknown |
 | **langgraph-sdk** | Unknown |
 | **langsmith** | MIT |
 | **lazy-object-proxy** | BSD-2-Clause |
-| **lazy_loader** | BSD 3-Clause License  Copyright (c) 2022--2023,... |
-| **Levenshtein** | Unknown |
+| **lazy_loader** | BSD 3-Clause License  Copyright (c) 2022--2023, Sc |
 | **libarchive-c** | CC0 |
-| **lightgbm** | The MIT License (MIT)  Copyright (c) Microsoft ... |
+| **lightgbm** | The MIT License (MIT)  Copyright (c) Microsoft Cor |
 | **linkify-it-py** | MIT |
 | **llvmlite** | BSD |
 | **lmdb** | OLDAP-2.8 |
@@ -225,11 +225,11 @@ The following table lists the licenses for all direct dependencies found in `req
 | **mdit-py-plugins** | MIT |
 | **mdurl** | MIT License |
 | **mistune** | BSD 3-Clause License |
-| **mmh3** | MIT License  Copyright (c) 2011-2025 Hajime Sen... |
+| **mmh3** | MIT License  Copyright (c) 2011-2025 Hajime Senuma |
 | **more-itertools** | MIT License |
 | **mpmath** | BSD |
 | **msgpack** | Apache 2.0 |
-| **multidict** | Apache License 2.0 |
+| **multidict** | Apache 2 |
 | **multipledispatch** | BSD |
 | **munkres** | Apache Software License |
 | **mypy** | MIT |
@@ -240,7 +240,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **nltk** | Apache License, Version 2.0 |
 | **numba** | BSD |
 | **numexpr** | MIT |
-| **numpy** | Copyright (c) 2005-2023, NumPy Developers. All ... |
+| **numpy** | Copyright (c) 2005-2023, NumPy Developers. All rig |
 | **numpydoc** | BSD |
 | **oauthlib** | BSD-3-Clause |
 | **onnxruntime** | MIT License |
@@ -253,7 +253,7 @@ The following table lists the licenses for all direct dependencies found in `req
 | **ormsgpack** | Apache-2.0 OR MIT |
 | **overrides** | Apache License, Version 2.0 |
 | **packaging** | Apache Software License |
-| **pandas** | BSD 3-Clause License  Copyright (c) 2008-2011, ... |
+| **pandas** | BSD 3-Clause License  Copyright (c) 2008-2011, AQR |
 | **pandocfilters** | BSD-3-Clause |
 | **panel** | BSD |
 | **param** | BSD-3-Clause |
@@ -285,15 +285,15 @@ The following table lists the licenses for all direct dependencies found in `req
 | **ptyprocess** | UNKNOWN |
 | **pure-eval** | MIT |
 | **py-cpuinfo** | MIT |
-| **pyarrow** | Apache Software License |
-| **pyasn1** | BSD-2-Clause |
+| **pyarrow** | Apache License, Version 2.0 |
+| **pyasn1** | BSD |
 | **pyasn1_modules** | BSD |
 | **pybase64** | BSD-2-Clause |
 | **pycodestyle** | MIT |
 | **pycparser** | BSD |
-| **pydantic** | Unknown |
+| **pydantic** | MIT License |
 | **pydantic-settings** | MIT License |
-| **pydantic_core** | Unknown |
+| **pydantic_core** | MIT |
 | **pydeck** | Apache License 2.0 |
 | **PyDispatcher** | BSD |
 | **pydocstyle** | MIT |
@@ -305,28 +305,26 @@ The following table lists the licenses for all direct dependencies found in `req
 | **pyodbc** | MIT License |
 | **pyOpenSSL** | Apache License, Version 2.0 |
 | **pyparsing** | MIT License |
-| **pypdf** | Not Installed / Unknown |
+| **pypdf** | Not Installed |
 | **pyproject_hooks** | MIT License |
 | **PySocks** | BSD |
 | **python-dateutil** | Dual License |
 | **python-docx** | MIT |
 | **python-dotenv** | BSD-3-Clause |
 | **python-json-logger** | BSD |
-| **python-Levenshtein** | GPL-2.0-or-later |
-
 | **python-snappy** | BSD |
 | **pytoolconfig** | LGPL-3.0-or-later |
 | **pytz** | MIT |
-| **pyviz_comms** | BSD 3-Clause License  Copyright (c) 2023, Phili... |
-| **pywavelets** | Copyright (c) 2006-2012 Filip Wasilewski <http:... |
+| **pyviz_comms** | BSD 3-Clause License  Copyright (c) 2023, Philipp |
+| **pywavelets** | Copyright (c) 2006-2012 Filip Wasilewski <<http://e> |
 | **PyYAML** | MIT |
 | **pyzmq** | LGPL+BSD |
 | **qstylizer** | MIT |
 | **queuelib** | BSD |
-| **`RapidFuzz`** | MIT License |
+| **RapidFuzz** | Unknown |
 | **rdflib** | BSD-3-Clause |
 | **readchar** | MIT |
-| **referencing** | Unknown |
+| **referencing** | MIT |
 | **regex** | Apache Software License |
 | **requests** | Apache-2.0 |
 | **requests-file** | Apache 2.0 |
@@ -341,21 +339,21 @@ The following table lists the licenses for all direct dependencies found in `req
 | **Rtree** | MIT |
 | **ruamel.yaml** | MIT license |
 | **s3fs** | BSD |
-| **scikit-image** | Files: * Copyright: 2009-2022 the scikit-image ... |
+| **scikit-image** | Files: * Copyright: 2009-2022 the scikit-image tea |
 | **scikit-learn** | Unknown |
-| **scipy** | Copyright (c) 2001-2002 Enthought, Inc. 2003-20... |
+| **scipy** | Copyright (c) 2001-2002 Enthought, Inc. 2003-2024, |
 | **Scrapy** | BSD |
 | **seaborn** | BSD License |
 | **semver** | BSD |
 | **Send2Trash** | BSD License |
-| **sentence-transformers** | Not Installed / Unknown |
+| **sentence-transformers** | Not Installed |
 | **service-identity** | MIT |
 | **setuptools** | MIT License |
 | **shellingham** | ISC License |
 | **sip** | SIP |
 | **six** | MIT |
 | **smart-open** | MIT |
-| **smmap** | BSD-3-Clause |
+| **smmap** | BSD |
 | **sniffio** | MIT OR Apache-2.0 |
 | **snowballstemmer** | BSD-3-Clause |
 | **sortedcontainers** | Apache 2.0 |
@@ -377,7 +375,6 @@ The following table lists the licenses for all direct dependencies found in `req
 | **tabulate** | MIT |
 | **tblib** | BSD-2-Clause |
 | **tenacity** | Apache 2.0 |
-
 | **textdistance** | MIT |
 | **threadpoolctl** | BSD-3-Clause |
 | **three-merge** | MIT |
@@ -390,10 +387,10 @@ The following table lists the licenses for all direct dependencies found in `req
 | **toolz** | BSD |
 | **tornado** | Apache-2.0 |
 | **tqdm** | MPL-2.0 AND MIT |
-| **traitlets** | BSD 3-Clause License  - Copyright (c) 2001-, IP... |
+| **traitlets** | BSD 3-Clause License  - Copyright (c) 2001-, IPyth |
 | **truststore** | MIT License |
 | **Twisted** | MIT License |
-| **typer** | MIT License |
+| **typer** | UNKNOWN |
 | **typer-slim** | MIT License |
 | **typing-inspect** | MIT |
 | **typing-inspection** | Unknown |
@@ -403,7 +400,6 @@ The following table lists the licenses for all direct dependencies found in `req
 | **uc-micro-py** | MIT |
 | **ujson** | BSD License |
 | **umap-learn** | BSD |
-
 | **uritemplate** | BSD 3-Clause OR Apache-2.0 |
 | **urllib3** | MIT License |
 | **uvicorn** | Unknown |
@@ -418,15 +414,15 @@ The following table lists the licenses for all direct dependencies found in `req
 | **Werkzeug** | BSD License |
 | **whatthepatch** | MIT |
 | **wheel** | MIT License |
-| **win-inet-pton** | This software released into the public domain. ... |
+| **win-inet-pton** | This software released into the public domain. Any |
 | **wrapt** | BSD |
 | **xarray** | Apache-2.0 |
 | **xlwings** | BSD 3-clause |
 | **xxhash** | BSD |
 | **xyzservices** | 3-Clause BSD |
-| **`yapf`** | Apache License |
+| **yapf** | Apache License |
 | **yarl** | Apache-2.0 |
-| **yfiles-graphs-for-streamlit** | Not Installed / Unknown |
+| **yfiles-graphs-for-streamlit** | Not Installed |
 | **zict** | BSD |
 | **zipp** | MIT License |
 | **zope.interface** | ZPL 2.1 |
