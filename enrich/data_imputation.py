@@ -5,7 +5,7 @@ from sklearn.experimental import enable_iterative_imputer  # Explicitly enable e
 from sklearn.impute import IterativeImputer  # Now import IterativeImputer
 from lightgbm import LGBMClassifier, LGBMRegressor #used for MissForest
 #from missforest import MissForest # our MissForest adaptation is based on this package
-from miss_forest.missforest import MissForest
+from utils.miss_forest.missforest import MissForest
 from sklearn.impute import SimpleImputer, KNNImputer # to use basic (median, mean, most_frequent, constant, etc.) and knn imputers
 from sklearn.preprocessing import OneHotEncoder, StandardScaler # preprocess non numerical variables and scale numerical ones
 from sklearn.compose import ColumnTransformer # split some of our processing to specific columns

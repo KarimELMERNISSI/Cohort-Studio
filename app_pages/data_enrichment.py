@@ -8,7 +8,7 @@ from io import BytesIO
 from utils.multipage import load_dataframe, get_file_hash
 import enrich.external_data as eed
 from utils.data_analyzer import DataAnalyzer
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 import os
 import re
 from pandas.api.types import is_numeric_dtype
@@ -307,6 +307,16 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
 
 
 def display_category_box(title, columns):
+    """
+    Display a box containing column names for a specific category.
+
+    Parameters:
+    -----------
+    title : str
+        The title of the category box.
+    columns : list
+        List of column names to display.
+    """
     if len(columns)>0:
         st.markdown(
             f"""
@@ -479,6 +489,19 @@ def save_enrichment_config(enrichment_name: str, strategy: str,
 
 # Convert DataFrame to Excel for download using openpyxl
 def to_excel(df):
+    """
+    Convert a DataFrame to an Excel file in binary format.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        The DataFrame to convert.
+
+    Returns:
+    --------
+    bytes
+        The Excel file content as bytes.
+    """
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=True, sheet_name='Sheet1')
@@ -690,67 +713,130 @@ def suggest_columns(computation_formula: str, column_names: List[str], threshold
     return ranked_suggestions[:max_suggestions]
 
 
-def display_column_suggestions(suggestions):
-    """
-    Displays column suggestions as buttons and enables users to copy column names to the clipboard by clicking.
+def update_formula_callback(col, formula_key):
+    """Callback to update formula when a suggestion is clicked."""
+    if formula_key not in st.session_state:
+        return
 
-    Parameters:
-    ----------
-    suggestions : list of tuples
-        List of (column name, score) tuples to display.
+    current_formula = st.session_state[formula_key]
+    
+    # 1. format proper column string (quote if needed)
+    if not re.match(r'^[a-zA-Z0-9_]+$', col):
+        new_val = f'""{col}""'
+    else:
+        new_val = col
+
+    # 2. Get the last token to replace
+    tokens = tokenize_formula(current_formula)
+    
+    if tokens:
+        last_token = tokens[-1]
+        
+        # 3. Replace the last occurrence of the token at the end of the string
+        pattern = re.escape(last_token) + r"\s*$"
+        
+        if re.search(pattern, current_formula):
+            new_formula = re.sub(pattern, new_val, current_formula)
+            st.session_state[formula_key] = new_formula
+        else:
+            # Fallback
+            st.session_state[formula_key] = current_formula + new_val
+    else:
+        # Empty formula case
+        st.session_state[formula_key] = new_val
+
+def display_column_suggestions(suggestions, formula_key="formula_input"):
     """
+    Displays column suggestions as buttons. Clicking a button replaces the last token
+    in the formula input with the selected column name.
+    """
+    # Dynamic CSS Generation for Score "Gradient"
+    # We create a style rule for each range of scores (0-9, 10-19, ... 90-100)
+    # Mapping 0->Red (Hue 0) to 100->Green (Hue 120) with pastel lightness
+    
+    gradient_css = """
+    <style>
+    /* Base Button Style */
+    div.stButton > button[title*="Match Info]"] {
+        text-align: left !important;
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 10px 15px !important;
+        border: 1px solid rgba(0,0,0,0.1) !important;
+        border-radius: 6px !important;
+        box-shadow: 0px 1px 2px rgba(0,0,0,0.05) !important;
+        color: #2c3e50 !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    div.stButton > button[title*="Match Info]"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0px 3px 6px rgba(0,0,0,0.15) !important;
+        filter: brightness(95%);
+    }
+
+    /* Target the internal text */
+    div.stButton > button[title*="Match Info]"] p {
+        font-size: 14px !important;
+        line-height: 1.4 !important;
+    }
+    """
+    
+    # Generate CSS for each score tier (steps of 10)
+    # [Score: 9] covers 90-99, [Score: 10] covers 100
+    for i in range(11):
+        # Calculate Hue: 0 (Red) -> 120 (Green)
+        # i is 0..10. score roughly i*10. hue = i * 12
+        hue = i * 12
+        
+        # Pastel background: Lightness ~90%, Saturation ~80%
+        bg_color = f"hsl({hue}, 80%, 90%)"
+        border_color = f"hsl({hue}, 60%, 80%)"
+        
+        # Selector for help text starting with [Score: i]
+        # We use a specific tag like [Tier: i]
+        gradient_css += f"""
+        div.stButton > button[title^="[Tier: {i}]"] {{
+            background-color: {bg_color} !important;
+            border-color: {border_color} !important;
+        }}
+        """
+        
+    gradient_css += "</style>"
+    st.markdown(gradient_css, unsafe_allow_html=True)
+
     if suggestions:
         cols = st.columns(min(3, len(suggestions)))
         
         for idx, (col, score) in enumerate(suggestions):
+            # Calculate Tier (0 to 10)
+            # 100 -> 10, 95 -> 9, 83 -> 8, ...
+            tier = int(score / 10)
+            
+            # Icons just for the label
+            if score >= 80: score_icon = "🟢"
+            elif score >= 60: score_icon = "🟠"
+            else: score_icon = "⚪"
+
             with cols[idx % 3]:
-                # HTML code for the button with copy-to-clipboard functionality and temporary notification
-                html_code = f"""
-                <div style="margin: 5px 0; position: relative;">
-                    <button 
-                        onclick="
-                            navigator.clipboard.writeText('{col}').then(() => {{
-                                const notification = document.createElement('div');
-                                notification.innerText = 'Copied: {col}';
-                                notification.style = `
-                                    position: absolute;
-                                    top: -30px;
-                                    left: 50%;
-                                    transform: translateX(-50%);
-                                    background-color: #4CAF50;
-                                    color: white;
-                                    padding: 5px 10px;
-                                    border-radius: 4px;
-                                    font-size: 12px;
-                                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-                                    z-index: 1000;
-                                `;
-                                this.parentElement.appendChild(notification);
-                                
-                                setTimeout(() => {{
-                                    notification.remove();
-                                }}, 800);
-                            }});
-                        "
-                        style="
-                            background-color: #f0f2f6;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 4px;
-                            padding: 8px;
-                            cursor: pointer;
-                            width: 100%;
-                            text-align: left;
-                            box-shadow: 0px 1px 3px rgba(0,0,0,0.1);
-                            font-size: 14px;"
-                        onmouseover="this.style.backgroundColor='#e0e2e6'"
-                        onmouseout="this.style.backgroundColor='#f0f2f6'">
-                        <span style="color: #0066cc; font-weight: bold;">{col}</span>
-                        <br/>
-                        <small style="color: #666;">Score: {score}</small>
-                    </button>
-                </div>
-                """
-                st.components.v1.html(html_code, height=60)
+                # Label
+                label = f"{col}  \n{score_icon} Score: {score}"
+                
+                # Help text starts with [Tier: X] to trigger the CSS
+                help_text = f"[Tier: {tier}] [Match Info] Click to insert '{col}' into formula"
+                
+                # Button
+                st.button(
+                    label, 
+                    key=f"suggest_btn_{idx}_{col}", 
+                    help=help_text,
+                    on_click=update_formula_callback,
+                    args=(col, formula_key),
+                    use_container_width=True
+                )
     else:
         st.info("No matching columns found. Try typing part of a column name.")
 
@@ -773,6 +859,19 @@ def validate_variable_name(name, existing_columns):
 
 # Helper function to check if a string represents a number
 def is_number(token):
+    """
+    Check if a string token represents a valid number.
+
+    Parameters:
+    -----------
+    token : str
+        The token to check.
+
+    Returns:
+    --------
+    bool
+        True if the token can be converted to a float, False otherwise.
+    """
     try:
         float(token)  # Try converting to float
         return True
@@ -2368,7 +2467,15 @@ def extract_column_stats(df, columns):
 
 # TBD: Rework the cat of missingforest based on set(binary + cat)
 def app():
-    """Improved page for external data and variable definition."""
+    """
+    Main application function for the Data Enrichment page.
+    
+    Handles:
+    1. External Data Upload and Enrichment
+    2. Targeted Imputation (Manual/AI-assisted)
+    3. Global Imputation (MICE, KNN, etc.)
+    4. Dataset Versioning and Persistence
+    """
 
     # Initialize DB Manager
     if 'db_manager' not in st.session_state:

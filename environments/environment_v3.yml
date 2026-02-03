@@ -50,7 +50,7 @@ dependencies:
     - pydantic-settings
     - detect-delimiter
     - lightgbm
-    - fuzzywuzzy
+    - rapidfuzz
     - python-Levenshtein
     - progress
     - langchain-chroma

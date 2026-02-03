@@ -3,7 +3,15 @@ import re
 from typing import Dict, Any
 
 def create_empty_config() -> Dict[str, Any]:
-    """Create an empty configuration structure."""
+    """
+    Create an empty configuration structure.
+    
+    Returns:
+    --------
+    dict
+        A dictionary containing the default configuration structure for the application,
+        including sections for masks, transformations, thresholds, and folder paths.
+    """
     return {
         "mask_families": {},
         "transformations": [],
@@ -36,6 +44,21 @@ def create_empty_config() -> Dict[str, Any]:
 
 
 def transform_expression(expression, df_name='df'):
+    """
+    Transform a user-friendly expression into a valid Python expression for DataFrame filtering.
+    
+    Parameters:
+    -----------
+    expression : str
+        The input expression (e.g., "Age > 18").
+    df_name : str, optional
+        The name of the dataframe variable to use in the expression (default is 'df').
+        
+    Returns:
+    --------
+    str
+        The transformed expression executable in Python (e.g., "df['Age'] > 18").
+    """
     # Pattern to match:
     # 1. Quoted variable names allowing spaces and special characters within quotes.
     # 2. Unquoted variable names (including single letters) that start with a letter or underscore, 

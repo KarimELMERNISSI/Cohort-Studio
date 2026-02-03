@@ -81,6 +81,25 @@ def repair_taxonomy_links(taxonomy, formulas_registry):
     return taxonomy
 
 def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None, formula_search_query=None):
+    """
+    Constructs node and edge lists for the graph visualization.
+
+    Parameters:
+    -----------
+    taxonomy_data : dict
+        The filtered taxonomy data to visualize.
+    formulas_registry : dict, optional
+        Registry of formulas to include in the graph.
+    full_taxonomy_ref : dict, optional
+        Reference to the full taxonomy for resolving hidden nodes.
+    formula_search_query : str, optional
+        Query string to filter formulas.
+
+    Returns:
+    --------
+    tuple
+        (nodes, edges) lists for the graph widget.
+    """
     nodes = []
     edges = []
     existing_node_ids = set()
@@ -429,6 +448,19 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
 # --- Visual Mappers ---
 
 def get_node_style(node):
+    """
+    Determine the visual style of a node based on its role.
+
+    Parameters:
+    -----------
+    node : Node
+        The node object containing properties.
+
+    Returns:
+    --------
+    NodeStyle
+        The style configuration for the node.
+    """
     role = node['properties'].get('role', 'input')
     styles = {
         "category": {"color": "#E0E0E0", "shape": NodeShape.ROUND_RECTANGLE},
@@ -443,6 +475,19 @@ def get_node_style(node):
     return NodeStyle(color=config["color"], shape=config["shape"])
 
 def get_edge_style(edge):
+    """
+    Determine the visual style of an edge based on its properties.
+
+    Parameters:
+    -----------
+    edge : Edge
+        The edge object containing properties.
+
+    Returns:
+    --------
+    EdgeStyle
+        The style configuration for the edge.
+    """
     props = edge['properties']
     style_str = props.get('style', 'solid')
     
@@ -515,6 +560,15 @@ def load_and_repair_taxonomy(target_path, rag_manager=None):
         return False, str(e)
 
 def app():
+    """
+    Main application function for the Data Insight (Knowledge Graph) page.
+
+    Handles:
+    1. Loading and saving taxonomy versions.
+    2. Visualizing variables and formulas as a graph.
+    3. Generating new taxonomies using RAG.
+    4. Enriching existing taxonomies with external knowledge.
+    """
 
     # --- 1. Session State & Setup ---
     if 'offline_taxonomy' not in st.session_state:

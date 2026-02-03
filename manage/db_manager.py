@@ -91,7 +91,19 @@ class DBManager:
             con.close()
 
     def load_dataset(self, file_name):
-        """Loads a Parquet file into a pandas DataFrame via DuckDB."""
+        """
+        Loads a Parquet file into a pandas DataFrame via DuckDB.
+        
+        Parameters:
+        -----------
+        file_name : str
+            The name of the file to load (without extension)
+            
+        Returns:
+        --------
+        tuple
+            (DataFrame, message) - The loaded DataFrame and a success/error message
+        """
         return self.load_dataframe(file_name)
             
     def get_available_tables(self):

@@ -5,6 +5,7 @@ import numpy as np
 def smart_parse_dates(series):
     """
     Parses dates by enforcing a single consistent format across the column.
+    
     Detects components (Day, Month, Year) by analyzing global numeric ranges.
     
     Strategy:
@@ -15,6 +16,16 @@ def smart_parse_dates(series):
        - Value > 12 (and not Year) => DAY
        - Remaining => MONTH
     4. Reconstruct Date
+    
+    Parameters:
+    -----------
+    series : pd.Series
+        The pandas Series to parse.
+        
+    Returns:
+    --------
+    tuple
+        (parsed_series, notes) - The parsed datetime series and a list of notes explaining the parsing logic.
     """
     if series.empty:
         return series, ["Empty Column"]

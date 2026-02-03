@@ -181,6 +181,30 @@ class OutlierHandler:
                               debug=True):
         """
         Detect outliers using DBSCAN method
+        
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            Input data
+        eps : float
+            The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+        min_samples : int
+            The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
+        numerical_imputation_method : str
+            Imputation method for numerical columns
+        categorical_imputation_method : str
+            Imputation method for categorical columns
+        remainder_columns : str
+            How to handle remainder columns
+        remainder_threshold : float
+            Threshold for remainder columns
+        debug : bool
+            Enable debug printing
+
+        Returns:
+        --------
+        tuple
+            (outliers_tag, outliers_scores, additional_info)
         """
         outliers_tag, outliers_scores, additional_info = mo.find_dbscan_outliers(
             data,
@@ -509,7 +533,14 @@ class OutlierHandler:
 
 
     def get_outliers_masks(self):
-            """Get outliers masks"""
+            """
+            Get the masks of outliers detected so far.
+
+            Returns:
+            --------
+            dict or None
+                Dictionary of outlier masks if available, else None.
+            """
             return self.masks
 
 
@@ -754,7 +785,21 @@ class OutlierHandler:
 ######################################## handle data for comparisons
 
 def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
-    """Handle data selection from various sources."""
+    """
+    Handle data selection from various sources.
+
+    Parameters:
+    -----------
+    tmp : str
+        Unique identifier for the session keys.
+    label : str
+        Label to display in the UI selector.
+
+    Returns:
+    --------
+    Tuple[Optional[pd.DataFrame], Optional[str]]
+        The selected dataframe and its source name/path, or (None, None) if selection failed or nothing selected.
+    """
     
     options = ["Upload File", "Enter File Path", "Select from History"]
     if 'data' in st.session_state and st.session_state['data'] is not None:
@@ -1764,6 +1809,19 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
 
 # Convert DataFrame to Excel for download using openpyxl
 def to_excel(df):
+    """
+    Convert a DataFrame to an Excel file in binary format.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        The DataFrame to convert.
+
+    Returns:
+    --------
+    bytes
+        The Excel file content as bytes.
+    """
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=True, sheet_name='Sheet1')
@@ -2165,6 +2223,16 @@ def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def app():
+    """
+    Main application function for the Data Monitoring page.
+
+    Handles:
+    1. Data Quality Dashboard (Data Validity, Completeness, etc.).
+    2. Clinical Anomalies Management (Add/Apply Masks).
+    3. Study Inclusion Criteria Management (Add/Apply Masks).
+    4. Outlier Handling (Univariate & Multivariate).
+    5. Dataset Comparison (Changes tracking).
+    """
 
     # Initialize session state
     if 'config' not in st.session_state:

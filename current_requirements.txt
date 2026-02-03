@@ -115,7 +115,7 @@ frozendict @ file:///C:/b/abs_2alamqss6p/croot/frozendict_1713194885124/work
 frozenlist==1.8.0
 fsspec==2025.10.0
 future @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/future_1699484398832/work
-fuzzywuzzy==0.18.0
+
 gensim @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/gensim_1699557139199/work
 gitdb==4.0.12
 GitPython==3.1.45
@@ -330,7 +330,7 @@ python-Levenshtein==0.27.3
 python-lsp-black @ file:///C:/b/abs_5dhen_5vga/croot/python-lsp-black_1709232962589/work
 python-lsp-jsonrpc @ file:///croot/python-lsp-jsonrpc_1708962872556/work
 python-lsp-server @ file:///C:/b/abs_2cdyzvcq4z/croot/python-lsp-server_1708971796975/work
-python-slugify @ file:///tmp/build/80754af9/python-slugify_1620405669636/work
+
 python-snappy @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/python-snappy_1699564939880/work
 pytoolconfig @ file:///C:/b/abs_f2j_xsvrpn/croot/pytoolconfig_1701728751207/work
 pytz @ file:///C:/b/abs_6ap4tsz1ox/croot/pytz_1713974360290/work
@@ -405,7 +405,7 @@ tabulate @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/tabulat
 tblib @ file:///Users/ktietz/demo/mc3/conda-bld/tblib_1629402031467/work
 tenacity @ file:///C:/b/abs_d2_havtscu/croot/tenacity_1721222514290/work
 terminado @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/terminado_1699545066607/work
-text-unidecode @ file:///Users/ktietz/demo/mc3/conda-bld/text-unidecode_1629401354553/work
+
 textdistance @ file:///tmp/build/80754af9/textdistance_1612461398012/work
 threadpoolctl @ file:///C:/b/abs_def0dwqlft/croot/threadpoolctl_1719407816649/work
 three-merge @ file:///tmp/build/80754af9/three-merge_1607553261110/work
@@ -432,7 +432,7 @@ tzlocal @ file:///C:/b/abs_42w4rm077n/croot/tzlocal_1715108859396/work
 uc-micro-py @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/uc-micro-py_1699545612984/work
 ujson @ file:///C:/b/abs_c93a278xy4/croot/ujson_1717598062082/work
 umap-learn==0.5.9.post2
-Unidecode @ file:///tmp/build/80754af9/unidecode_1614712377438/work
+
 uritemplate==4.2.0
 urllib3==2.3.0
 uvicorn==0.38.0

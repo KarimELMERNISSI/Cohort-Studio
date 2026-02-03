@@ -19,7 +19,7 @@ import hashlib
 import time
 import logging
 import re
-from fuzzywuzzy import process
+from rapidfuzz import process
 
 # Import prompt functions
 from prompts import (
@@ -700,7 +700,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     still_missing = []
                     for m_col in missing:
                         # Find best match in existing columns
-                        best_match, score = process.extractOne(m_col, columns)
+                        best_match, score, _ = process.extractOne(m_col, columns)
                         
                         # Threshold for auto-correction (e.g., 90% similarity)
                         if score >= 88:

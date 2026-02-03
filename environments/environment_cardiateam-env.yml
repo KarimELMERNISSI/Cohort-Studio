@@ -69,7 +69,6 @@ dependencies:
   - freetype=2.12.1=hdaf720e_2
   - frozenlist=1.6.0=py311hc121033_0
   - fsspec=2025.10.0=pyhd8ed1ab_0
-  - fuzzywuzzy=0.18.0=pyhd8ed1ab_1
   - google-api-core=2.28.1=pyhd8ed1ab_0
   - google-api-python-client=2.70.0=pyhd8ed1ab_0
   - google-auth=2.43.0=pyhd8ed1ab_0

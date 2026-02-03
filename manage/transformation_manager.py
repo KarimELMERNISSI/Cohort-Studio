@@ -7,6 +7,14 @@ import os
 
 class TransformationManager:
     def __init__(self, trace_dir="data/traces"):
+        """
+        Initialize the TransformationManager.
+        
+        Parameters:
+        -----------
+        trace_dir : str
+             Directory where transformation traces will be stored.
+        """
         self.trace_dir = trace_dir
         self.history = []
         self.source_dataset = None
@@ -33,7 +41,26 @@ class TransformationManager:
         return os.path.join(self.trace_dir, f"{self.session_id}.json")
 
     def add_step(self, function_name, params, description, output_dataset_path=None, stats_cat_path=None, stats_num_path=None, corr_matrix_path=None):
-        """Records a transformation step with optional references to intermediate data."""
+        """
+        Records a transformation step with optional references to intermediate data.
+        
+        Parameters:
+        -----------
+        function_name : str
+            Name of the function/transformation applied.
+        params : dict
+             Dictionary of parameters used in the transformation.
+        description : str
+             Human-readable description of the step.
+        output_dataset_path : str, optional
+             Path to the output dataset (snapshot).
+        stats_cat_path : str, optional
+             Path to categorical statistics file.
+        stats_num_path : str, optional
+             Path to numerical statistics file.
+        corr_matrix_path : str, optional
+             Path to correlation matrix file.
+        """
         # Convert params to serializable format if necessary
         serializable_params = self._make_serializable(params)
         

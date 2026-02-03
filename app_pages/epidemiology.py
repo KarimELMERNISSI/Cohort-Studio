@@ -19,12 +19,35 @@ import statsmodels.api as sm
 import itertools
 
 def to_excel(df):
+    """
+    Convert a DataFrame to an Excel file in binary format.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        The DataFrame to convert.
+
+    Returns:
+    --------
+    bytes
+        The Excel file content as bytes.
+    """
     output = BytesIO()
     with pd.ExcelWriter(output) as writer:
         df.to_excel(writer, index=False, sheet_name='Results')
     return output.getvalue()
 
 def app():
+    """
+    Main application function for the Epidemiology Analysis page.
+
+    Handles:
+    1. Univariate Group Comparisons (T-tests, ANOVA, Chi-Square, etc.).
+    2. Multivariate Analysis (ANCOVA) to control for confounders.
+    3. Power Analysis & Sample Size Calculation.
+    4. Z-Score Calculation (Reference Standardization).
+    5. Educational Content display.
+    """
     if 'data' not in st.session_state or st.session_state['data'] is None:
         st.warning("Please upload a dataset in the Main View first.")
         return

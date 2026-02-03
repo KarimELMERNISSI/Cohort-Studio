@@ -2,7 +2,7 @@ from typing import Any, Union
 from sklearn.base import BaseEstimator
 import pandas as pd
 import numpy as np
-from miss_forest._errors import MultipleDataTypesError
+from utils.miss_forest._errors import MultipleDataTypesError
 
 
 def _is_estimator(estimator: Union[Any, BaseEstimator]) -> bool:

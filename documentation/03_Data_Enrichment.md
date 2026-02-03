@@ -79,4 +79,4 @@ Organized into two focused sub-tabs:
 ## Technical Details
 
 * **File**: `app_pages/data_enrichment.py`
-* **Dependencies**: `miss_forest`, `prince` (FAMD/PCA), `sklearn` (Preprocessing, Decomposition, Manifold), `umap`, `manage.rag_manager`
+* **Dependencies**: `utils.miss_forest`, `prince` (FAMD/PCA), `sklearn` (Preprocessing, Decomposition, Manifold), `umap`, `manage.rag_manager`
