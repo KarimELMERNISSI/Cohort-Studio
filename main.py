@@ -18,7 +18,7 @@ import streamlit as st
 from io import BytesIO
 from PIL import Image
 from utils.multipage import MultiPageApp
-from app_pages import home, data_preparation, statistical_tests, visualization, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight
+from app_pages import home, data_preparation, statistical_tests, visualization, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight, about
 
 # Lazy import for RAG monitoring to avoid performance impact
 def load_rag_monitoring():
@@ -30,7 +30,7 @@ def main():
 
     # Fetch icons from URLs
     #imrb_icon = requests.get("https://github.com/KarimELMERNISSI/MetaboSign/blob/main/images/metabosign_icon.png?raw=true").content
-    imrb_icon = "assets/imrb-logo.png" #Image.open("imrb-logo.png")
+    imrb_icon = "assets/karim-app-logo.png" #Image.open("imrb-logo.png")
     
     
     st.set_page_config(
@@ -55,6 +55,7 @@ def main():
     app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁")
 
     app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊")
+    app.add_page("About", about.app, "ℹ️")
     #app.add_page("yFiles Test", yfiles_test.app, "🧪")
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")
     
