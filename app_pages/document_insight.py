@@ -181,14 +181,23 @@ import datetime
 
 GRAPH_STORAGE_DIR = os.path.join("data", "knowledge_graphs")
 
-def get_saved_graphs():
-    """Returns list of saved graph filenames (without extension)."""
+def get_saved_graphs(username=None):
+    """Returns list of saved graph filenames (without extension). Filters by username."""
     if not os.path.exists(GRAPH_STORAGE_DIR):
         return []
+    
     files = [f.replace(".json", "") for f in os.listdir(GRAPH_STORAGE_DIR) if f.endswith(".json")]
+    
+    # User Isolation
+    if not username:
+        return []
+        
+    if username != 'admin':
+        files = [f for f in files if f.startswith(f"{username}_")]
+        
     return sorted(files)
 
-def save_graph(name, graph_json, source_docs):
+def save_graph(name, graph_json, source_docs, username=None):
     """Saves graph + metadata to disk."""
     if not os.path.exists(GRAPH_STORAGE_DIR):
         os.makedirs(GRAPH_STORAGE_DIR)
@@ -196,6 +205,10 @@ def save_graph(name, graph_json, source_docs):
     safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_', '-')]).strip()
     if not safe_name: return False, "Invalid name"
     
+    # User Isolation: Prefix
+    if username and username != 'admin' and not safe_name.startswith(f"{username}_"):
+        safe_name = f"{username}_{safe_name}"
+
     filepath = os.path.join(GRAPH_STORAGE_DIR, f"{safe_name}.json")
     
     payload = {
@@ -242,7 +255,8 @@ def app():
     st.sidebar.header("Documents Selection")
 
     # --- PERSISTENCE: LOAD ---
-    saved_graphs = get_saved_graphs()
+    username = st.session_state.get('username')
+    saved_graphs = get_saved_graphs(username)
     if saved_graphs:
         with st.sidebar.expander("📂 Load Saved Analysis", expanded=False):
             selected_load = st.selectbox("Select Analysis", [""] + saved_graphs, index=0)
@@ -304,7 +318,7 @@ def app():
                 if not save_name:
                     st.sidebar.error("Please enter a name.")
                 else:
-                    success, msg = save_graph(save_name, st.session_state.doc_graph_json, st.session_state.doc_graph_source)
+                    success, msg = save_graph(save_name, st.session_state.doc_graph_json, st.session_state.doc_graph_source, username=st.session_state.get('username'))
                     if success:
                         st.sidebar.success("Saved!")
                         # st.rerun() # Optional, to update load list

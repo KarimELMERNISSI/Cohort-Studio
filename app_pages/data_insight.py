@@ -9,15 +9,29 @@ import time
 
 TAXONOMY_DIR = os.path.join("data", "taxonomy")
 
-def get_taxonomy_versions():
+def get_user_taxonomy_dir(username):
+    """Returns the taxonomy directory for a specific user."""
+    if not username:
+        # Security: Do not fallback to global dir if username is missing.
+        # Return a non-existent path to ensure empty result.
+        return os.path.join(TAXONOMY_DIR, "_no_user_")
+    return os.path.join(TAXONOMY_DIR, username)
+
+def get_taxonomy_versions(username=None):
     """Returns list of (version_int, filepath) sorted descending."""
-    if not os.path.exists(TAXONOMY_DIR):
+    
+    # User Isolation
+    target_dir = TAXONOMY_DIR
+    if username:
+        target_dir = get_user_taxonomy_dir(username)
+
+    if not os.path.exists(target_dir):
         return []
     
     # Scan for directories starting with 'v'
     versions = []
-    for item in os.listdir(TAXONOMY_DIR):
-        full_path = os.path.join(TAXONOMY_DIR, item)
+    for item in os.listdir(target_dir):
+        full_path = os.path.join(target_dir, item)
         if os.path.isdir(full_path):
             # Check for 'vX' pattern
             match = re.search(r"^v(\d+)$", item)
@@ -599,10 +613,12 @@ def app():
     # Persistence (Save/Load)
     col_p1, col_p2 = st.sidebar.columns(2)
     
+    
     # Load Logic
-    # Load Logic
-    # Load Logic
-    avail_versions = get_taxonomy_versions()
+    username = st.session_state.get('username')
+    if not username:
+        st.sidebar.error("⚠️ No user detected. Please login.")
+    avail_versions = get_taxonomy_versions(username)
     
     if avail_versions:
         # Dropdown for version selection
@@ -648,7 +664,7 @@ def app():
     # Save Button (Active only if taxonomy exists)
     if taxonomy:
         # Determine Next Version
-        current_versions = get_taxonomy_versions()
+        current_versions = get_taxonomy_versions(username)
         next_v = 1
         if current_versions:
             next_v = current_versions[0][0] + 1
@@ -656,7 +672,9 @@ def app():
         # Save Controls
         if col_p2.button(f"💾 Save New (v{next_v})"):
             try:
-                new_dir = os.path.join(TAXONOMY_DIR, f"v{next_v}")
+                # User Isolation: Save to user folder
+                user_dir = get_user_taxonomy_dir(username)
+                new_dir = os.path.join(user_dir, f"v{next_v}")
                 os.makedirs(new_dir, exist_ok=True)
                 
                 new_path = os.path.join(new_dir, "taxonomy_metadata.json")
@@ -804,7 +822,9 @@ def app():
             if os.path.exists("taxonomy_metadata.json"):
                  st.info("Legacy `taxonomy_metadata.json` found in root. Consider moving it to data/taxonomy.")
             
-            local_versions = get_taxonomy_versions()
+            # User Isolation: Get from session
+            username = st.session_state.get('username')
+            local_versions = get_taxonomy_versions(username)
             if local_versions:
                 latest_v, latest_path = local_versions[0]
                 st.success(f"Found {len(local_versions)} versions. Latest: v{latest_v}")
