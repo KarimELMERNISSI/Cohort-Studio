@@ -391,7 +391,7 @@ def display_results(enriched_df: pd.DataFrame, title: str=None ,key_base='k'):
                 elif "imputation" in key_base: base_name = "imputed_data"
                 elif "new_variables" in key_base: base_name = "calculated_data"
                 
-                success, msg, saved_name = st.session_state.db_manager.save_dataset(enriched_df, base_name=base_name)
+                success, msg, saved_name = st.session_state.db_manager.save_dataset(enriched_df, base_name=base_name, username=st.session_state.get('username'))
                 if success:
                     st.session_state['current_dataset_name'] = saved_name
                     
@@ -2520,7 +2520,7 @@ def app():
                         st.session_state['current_dataset_name'] = selected_dataset
                         
                         # Initialize new session trace
-                        st.session_state.transformation_manager.initialize_session(selected_dataset)
+                        st.session_state.transformation_manager.initialize_session(selected_dataset, username=st.session_state.get('username'))
                         # Log initial load
                         st.session_state.transformation_manager.add_step(
                             "initial_load", 

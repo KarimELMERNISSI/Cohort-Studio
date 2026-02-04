@@ -3,7 +3,7 @@ import glob
 import re
 import os
 import logging
-import pandas as pd
+import bcrypt
 
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
@@ -11,12 +11,78 @@ class DBManager:
         self.dataset_dir = os.path.join("data", "datasets")
         self.stats_dir = os.path.join("data", "stats")
         self.db_path = os.path.join(self.dataset_dir, "cohort_data.duckdb")
+        self.user_db_path = os.path.join(self.dataset_dir, "users.duckdb")
         
         # Ensure directories exist
         os.makedirs(self.dataset_dir, exist_ok=True)
         os.makedirs(self.stats_dir, exist_ok=True)
         
+        # Initialize User DB
+        self.init_user_db()
+        
         # Don't keep a persistent connection - open/close as needed
+
+    def _get_user_connection(self):
+        """Get a new DuckDB connection for users DB."""
+        try:
+            return duckdb.connect(self.user_db_path)
+        except Exception as e:
+            logging.error(f"Failed to connect to User DuckDB: {e}")
+            return None
+
+    def init_user_db(self):
+        """Initialize the users table."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                con.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        username TEXT PRIMARY KEY,
+                        password_hash TEXT
+                    )
+                """)
+            except Exception as e:
+                logging.error(f"Failed to init user DB: {e}")
+            finally:
+                con.close()
+
+    def create_user(self, username, password):
+        """Create a new user."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                # Check if user exists
+                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
+                if res:
+                    return False, "Username already exists"
+                
+                # Hash password
+                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                
+                con.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", [username, hashed])
+                return True, "User created successfully"
+            except Exception as e:
+                return False, f"Error creating user: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
+
+    def verify_user(self, username, password):
+        """Verify user credentials."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                res = con.execute("SELECT password_hash FROM users WHERE username = ?", [username]).fetchone()
+                if res:
+                    stored_hash = res[0]
+                    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                        return True, "Login successful"
+                return False, "Invalid username or password"
+            except Exception as e:
+                return False, f"Error verifying user: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
 
     def _get_connection(self):
         """Get a new DuckDB connection."""
@@ -57,12 +123,17 @@ class DBManager:
         finally:
             con.close()
 
-    def save_dataset(self, df, base_name="dataset"):
+    def save_dataset(self, df, base_name="dataset", username=None):
         """Persists a pandas DataFrame to a Parquet file with automatic versioning."""
         con = self._get_connection()
         if con is None:
             return False, "Database connection not available", None
         try:
+            # Prefix functionality for user isolation
+            if username and username != 'admin':
+                display_name = base_name
+                base_name = f"{username}_{base_name}"
+            
             version = self._get_next_version(base_name)
             file_name = f"{base_name}_v{version}"
             file_path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
@@ -111,15 +182,25 @@ class DBManager:
         files = glob.glob("*.parquet")
         return [f.replace(".parquet", "") for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
 
-    def get_available_datasets(self):
-        """List available parquet files in the current directory, sorted by modification time."""
+    def get_available_datasets(self, username=None):
+        """
+        List available parquet files in the current directory, sorted by modification time.
+        Filters by username if provided (unless admin).
+        """
         # files = glob.glob("*.parquet")
         files = glob.glob(os.path.join(self.dataset_dir, "*.parquet"))
-        # Filter out stats files and temp files
-        dataset_files = [f for f in files if not os.path.basename(f).startswith("stats_") and not os.path.basename(f).startswith("tmp_")]
+        # Filter out stats files, temp files, and User DB
+        dataset_files = [f for f in files if not os.path.basename(f).startswith("stats_") and not os.path.basename(f).startswith("tmp_") and not os.path.basename(f) == "users.parquet" and not os.path.basename(f) == "users.duckdb"]
+        
         # Sort by modification time (newest first)
         dataset_files.sort(key=os.path.getmtime, reverse=True)
-        return [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
+        
+        all_files = [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
+        
+        if username and username != 'admin':
+            return [f for f in all_files if f.startswith(f"{username}_")]
+        
+        return all_files
 
     def save_stats(self, df, dataset_name, stats_type):
         """Save statistical results to parquet cache."""

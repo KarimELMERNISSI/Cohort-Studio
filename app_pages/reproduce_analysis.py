@@ -40,6 +40,11 @@ def app():
         # List available traces
         traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]
         
+        # User Isolation: Filter traces
+        username = st.session_state.get('username')
+        if username and username != 'admin':
+            traces = [f for f in traces if f.startswith(f"{username}_")]
+        
         if not traces:
             st.info("No analysis traces found in data/traces/")
             return

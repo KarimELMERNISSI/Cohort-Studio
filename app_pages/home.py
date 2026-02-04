@@ -697,7 +697,7 @@ def app():
         if st.session_state.get('data') is not None:
             if st.button("Save Current State as New Version"):
                 base_name = "cohort_data"
-                success, msg, saved_name = st.session_state.db_manager.save_dataset(st.session_state['data'], base_name=base_name)
+                success, msg, saved_name = st.session_state.db_manager.save_dataset(st.session_state['data'], base_name=base_name, username=st.session_state.get('username'))
                 if success:
                     st.session_state['current_dataset_name'] = saved_name
                     st.success(f"Saved as {saved_name}")
@@ -705,7 +705,7 @@ def app():
                 else:
                     st.error(msg)
 
-        datasets = st.session_state.db_manager.get_available_datasets()
+        datasets = st.session_state.db_manager.get_available_datasets(username=st.session_state.get('username'))
         if datasets:
             selected_dataset = st.selectbox("Select Dataset Version", datasets, index=0)
             if st.button("Load Selected Version"):

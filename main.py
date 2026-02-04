@@ -26,6 +26,80 @@ def load_rag_monitoring():
     from app_pages import rag_monitoring
     return rag_monitoring.render_rag_monitoring
 
+from manage.db_manager import DBManager
+import time
+
+def check_auth():
+    """Manages authentication with sidebar login/signup."""
+    if "user_authenticated" not in st.session_state:
+        st.session_state.user_authenticated = False
+        st.session_state.username = None
+
+    if st.session_state.user_authenticated:
+        with st.sidebar:
+            st.divider()
+            st.write(f"👤 User: **{st.session_state.username}**")
+            if st.button("Logout", use_container_width=True):
+                st.session_state.user_authenticated = False
+                st.session_state.username = None
+                st.rerun()
+        return True
+
+    # Initialize DB Manager for Auth
+    if 'db_manager' not in st.session_state or not hasattr(st.session_state.db_manager, 'verify_user'):
+        st.session_state.db_manager = DBManager()
+    
+    db = st.session_state.db_manager
+
+    with st.sidebar:
+        # Centered Logo
+        try:
+             st.image("assets/karim-app-logo.png", use_container_width=True)
+        except:
+             pass
+             
+        st.title("🔐 Access")
+        
+        tab_login, tab_signup = st.tabs(["Login", "Sign Up"])
+        
+        with tab_login:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submit_login = st.form_submit_button("Login", use_container_width=True)
+                
+                if submit_login:
+                    success, msg = db.verify_user(username, password)
+                    if success:
+                        st.session_state.user_authenticated = True
+                        st.session_state.username = username
+                        st.success(msg)
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+        
+        with tab_signup:
+            with st.form("signup_form"):
+                new_user = st.text_input("New Username")
+                new_pass = st.text_input("New Password", type="password")
+                confirm_pass = st.text_input("Confirm Password", type="password")
+                submit_signup = st.form_submit_button("Create Account", use_container_width=True)
+                
+                if submit_signup:
+                    if new_pass != confirm_pass:
+                        st.error("Passwords do not match")
+                    elif len(new_pass) < 4:
+                        st.error("Password must be at least 4 characters")
+                    else:
+                        success, msg = db.create_user(new_user, new_pass)
+                        if success:
+                            st.success("Account created! Please login.")
+                        else:
+                            st.error(msg)
+                            
+    return False
+
 def main():
 
     # Fetch icons from URLs
@@ -38,6 +112,9 @@ def main():
         page_icon="📊",
         layout="wide"
     )
+
+    if not check_auth():
+        st.stop()  # Do not continue if check_auth is not True.
     
     
 

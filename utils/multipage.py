@@ -276,7 +276,7 @@ def handle_data_upload():
                 st.success("Data uploaded successfully!")
                 
                 # Initialize Session Trace
-                st.session_state.transformation_manager.initialize_session(uploaded_file.name)
+                st.session_state.transformation_manager.initialize_session(uploaded_file.name, username=st.session_state.get('username'))
                 
                 # Save source file to artifacts for reproducibility
                 session_id = st.session_state.transformation_manager.session_id
@@ -313,7 +313,7 @@ def handle_data_upload():
                     st.success("Data uploaded successfully!")
                     
                     # Initialize New Session Trace
-                    st.session_state.transformation_manager.initialize_session(uploaded_file.name)
+                    st.session_state.transformation_manager.initialize_session(uploaded_file.name, username=st.session_state.get('username'))
                     
                     # Save source file to artifacts for reproducibility
                     session_id = st.session_state.transformation_manager.session_id

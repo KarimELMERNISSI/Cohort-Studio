@@ -24,11 +24,17 @@ class TransformationManager:
         if not os.path.exists(self.trace_dir):
             os.makedirs(self.trace_dir)
 
-    def initialize_session(self, dataset_name):
+    def initialize_session(self, dataset_name, username=None):
         """Initializes a new session trace."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = "".join([c for c in dataset_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-        self.session_id = f"session_{timestamp}_{safe_name}"
+        
+        # User Isolation: Prefix session ID
+        if username and username != 'admin':
+            self.session_id = f"{username}_session_{timestamp}_{safe_name}"
+        else:
+            self.session_id = f"session_{timestamp}_{safe_name}"
+
         self.source_dataset = dataset_name
         self.history = []
         logging.info(f"TransformationManager: Session initialized {self.session_id}")
@@ -131,16 +137,21 @@ class TransformationManager:
         except Exception as e:
             return False, str(e)
 
-    def get_available_datasets_from_traces(self):
+    def get_available_datasets_from_traces(self, username=None):
         """
         Scans all trace files in the trace directory and returns a list of available datasets.
         Each entry contains: session_id, timestamp, step_description, file_path.
+        Filters by username if provided (unless admin).
         """
         datasets = []
         if not os.path.exists(self.trace_dir):
             return datasets
 
         trace_files = [f for f in os.listdir(self.trace_dir) if f.endswith('.json')]
+        
+        # User Isolation Filtering
+        if username and username != 'admin':
+            trace_files = [f for f in trace_files if f.startswith(f"{username}_")]
         
         for trace_file in trace_files:
             try:
