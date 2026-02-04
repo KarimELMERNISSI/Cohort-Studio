@@ -29,17 +29,18 @@ The **Documents Insight** module allows you to "talk" to your research papers an
 
 ## Usage Guide
 
-1. **Select Documents**: Use the sidebar multiselect to choose the PDFs you want to analyze.
-2. **Generate Graph**: Click **✨ Generate Graph** to extract concepts. This may take a minute.
-3. **Explore**:
+1. **Login**: Ensure you are authenticated via the sidebar.
+2. **Select Documents**: Use the sidebar multiselect to choose the PDFs you want to analyze.
+3. **Generate Graph**: Click **✨ Generate Graph** to extract concepts. This may take a minute.
+4. **Explore**:
     * **Graph Tab**: Visualize connections. Click nodes to see citations in the right panel.
     * **Formulas Tab**: View any explicit mathematical formulas extracted from the text.
     * **Coverage Tab**: Click **Checking Coverage** to see if your dataset aligns with the papers.
     * **Chat Tab**: Ask free-text questions about the selected documents.
-4. **Save**: Give your analysis a name (e.g., "Review 2024") and save it for later quick access.
+5. **Save**: Give your analysis a name (e.g., "Review 2024") and save it for later quick access.
 
 ## Technical Details
 
 * **File**: `app_pages/document_insight.py`
-* **Storage**: Graphs are saved in `data/knowledge_graphs/`.
+* **Storage**: Graphs are saved in `data/knowledge_graphs/{username}_Graph.json`.
 * **AI**: Uses LLMs to extract entities and relations.

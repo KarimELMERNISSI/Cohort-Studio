@@ -37,10 +37,16 @@ The **Home** page serves as the central command center for the Cohort Monitoring
 * **Engine Comparison**: Benchmarks the performance of **Pandas** vs. **DuckDB** for standard operations (Basic Stats, Grouping, Correlation).
 * **Optimization**: Automatically highlights the faster engine and allows users to set their preferred computation backend for the session.
 
-### 4. 💾 Dataset Management (Sidebar)
+### 4. 🔐 Authentication & Security
+
+* **Secure Login**: Sidebar-based authentication using hashed passwords.
+* **User Isolation**: All data (datasets, traces, taxonomies) is isolated per user.
+* **Admin Access**: Dedicated admin role for system oversight.
+
+### 5. 💾 Dataset Management (Sidebar)
 
 * **Versioning**: Save the current state of the dataset as a new version.
-* **History**: Load previous versions of the dataset from the local DuckDB database.
+* **History**: Load previous versions of the dataset (User-Isolated).
 * **Auto-Loading**: Automatically loads the most recent dataset session upon startup.
 
 ## Usage Guide

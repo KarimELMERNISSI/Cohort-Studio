@@ -8,6 +8,12 @@ The **Cohort Monitoring Package** is a professional-grade, Streamlit-based appli
 
 ## 🚀 Key Features
 
+### 🔐 Secure Authentication & Isolation
+
+- **User Accounts**: Dedicated login/signup with hashed password storage.
+- **Data Privacy**: Complete isolation of datasets, traces, and analysis results per user.
+- **Admin Oversight**: Centralized management capability.
+
 ### 📂 Data Management & Preparation
 
 - **Dataset Versioning**: Built-in version control using DuckDB
@@ -50,7 +56,7 @@ Interactive Plotly visualizations with statistical testing:
 
 ## 📁 Project Structure
 
-```
+```text
 Cohort Monitoring Package/
 ├── main.py                     # Application entry point
 │
@@ -95,7 +101,7 @@ Cohort Monitoring Package/
 
 The RAG system uses a **Mixin composition pattern** for maintainability:
 
-```
+```text
 RAGManager (451 lines)
 ├── TaxonomyMixin      → rag_taxonomy.py
 ├── DocumentsMixin     → rag_documents.py
@@ -148,7 +154,7 @@ Set environment variables or use the Configuration page:
 
 | Variable | Description |
 |----------|-------------|
-| `GOOGLE_API_KEY` | Gemini API key for RAG features |
+| :--- | :--- |
 
 ---
 
@@ -157,7 +163,7 @@ Set environment variables or use the Configuration page:
 See the `documentation/` folder for detailed guides:
 
 | Guide | Description |
-|-------|-------------|
+| :--- | :--- |
 | `00_Researcher_Handbook.md` | **Start Here**. Philosophy, workflow, and phase-by-phase guide. |
 | `01_Home.md` | Data loading, RAG setup, and dashboard statistics |
 | `02_Data_Validation.md` | Validation rules, Anomalies, and Inclusion masks |
@@ -176,7 +182,7 @@ See the `documentation/` folder for detailed guides:
 ## 🧰 Technologies
 
 | Category | Technologies |
-|----------|--------------|
+| :--- | :--- |
 | **Frontend** | Streamlit, yFiles |
 | **Data** | Pandas, NumPy, DuckDB |
 | **Visualization** | Plotly |

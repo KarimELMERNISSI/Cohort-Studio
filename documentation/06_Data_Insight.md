@@ -31,17 +31,18 @@ If you don't have a taxonomy yet, you can generate one from your current dataset
 
 ## Usage Guide
 
-1. **Load a Dataset**: Ensure you have a dataset loaded in the **Home** page.
-2. **Generate or Load**:
+1. **Login**: Ensure you are authenticated via the sidebar.
+2. **Load a Dataset**: Ensure you have a dataset loaded in the **Home** page.
+3. **Generate or Load**:
     * If starting fresh, click **🚀 New Taxonomy** (requires RAG initialization).
     * If you have a saved graph, select a version (e.g., `v1`) in the sidebar and click **Load**.
-3. **Explore**:
+4. **Explore**:
     * Zoom and pan the graph widget.
     * Click on nodes to see details like their standard name and description.
-4. **Save**: Once satisfied, click **Save New (vX)** to persist your work.
+5. **Save**: Once satisfied, click **Save New (vX)** to persist your work.
 
 ## Technical Details
 
 * **File**: `app_pages/data_insight.py`
-* **Storage**: Taxonomies are stored in `data/taxonomy/vX/taxonomy_metadata.json`.
+* **Storage**: Taxonomies are stored in `data/taxonomy/{username}/vX/taxonomy_metadata.json`.
 * **Visualization**: Powered by **yFiles for HTML**.
