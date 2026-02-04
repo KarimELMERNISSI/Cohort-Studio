@@ -24,6 +24,7 @@ from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
 from manage.trace_documenter import TraceDocumenter
 from datetime import datetime
+from utils.date_parser import smart_parse_dates
 import ast
 
 # Note: DataTransformationEngine class was removed (dead code)
@@ -218,6 +219,11 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             st.warning("No common columns found between datasets!")
             return None
         
+        # Preprocess enrichment data to match date format of the main dataset
+        for col in enrichment_df.columns:
+            if col in main_df.columns and pd.api.types.is_datetime64_any_dtype(main_df[col]):
+                enrichment_df[col], _ = smart_parse_dates(enrichment_df[col])
+        
         identifier = st.multiselect(
             "Select Common Row Identifier",
             options=common_columns,
@@ -262,6 +268,12 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 st.error(f"Error performing enrichment: {str(e)}")
     else:
         col1, col2 = st.columns(2)
+        
+        # Preprocess enrichment data to match date format of the main dataset
+        for col in enrichment_df.columns:
+            if col in main_df.columns and pd.api.types.is_datetime64_any_dtype(main_df[col]):
+                enrichment_df[col], _ = smart_parse_dates(enrichment_df[col])
+
         with col1:
             left_identifier = st.multiselect(
                 "Select Main Dataset Row Identifier",

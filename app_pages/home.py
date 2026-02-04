@@ -434,7 +434,13 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
                 if not valid.empty:
                     min_date = valid.min()
                     max_date = valid.max()
-                    duration = max_date - min_date
+                    try:
+                        duration = max_date - min_date
+                    except Exception:
+                        # Handle OutOfBoundsDatetime (e.g. > 292 years)
+                        # Convert to python datetime objects for subtraction
+                        duration = max_date.to_pydatetime() - min_date.to_pydatetime()
+                        
                     n_unique = valid.nunique()
                 else:
                     min_date, max_date, duration, n_unique = pd.NaT, pd.NaT, pd.NaT, 0

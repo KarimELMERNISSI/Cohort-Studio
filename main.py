@@ -44,18 +44,18 @@ def main():
     app = MultiPageApp()
     
     # Register pages
-    app.add_page("Main View", home.app, imrb_icon ) #"🏠")
-    #app.add_page("Data Quality Dashboard", data_quality.app, "✅")
-    app.add_page("Data Enrichment", data_enrichment.app, "🔄")
-    app.add_page("Data Insight", data_insight.app, "🧠")
-    app.add_page("Documents Insight", document_insight.app, "📄")
-    app.add_page("Epidemiology & Hypothesis", epidemiology.app, "🧬")
-    app.add_page("Data Validation & Monitoring", data_monitoring.app, "🔍") #👁️‍🗨️
-    app.add_page("Visualization", visualization.app, "📈")
-    app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁")
+    app.add_page("Main View", home.app, imrb_icon ) #"🏠") # INGESTION & DESCRIPTION
+    app.add_page("Data Validation & Monitoring", data_monitoring.app, "🔍") #👁️ CONTROL & VALIDATION
+    app.add_page("Data Enrichment", data_enrichment.app, "🔄") # ENRICHMENT
+    app.add_page("Data Insight", data_insight.app, "🧠") # INTELLIGENCE -> DATA INSIGHT
+    app.add_page("Documents Insight", document_insight.app, "📄") # INTELLIGENCE -> DOC INSIGHT
+    app.add_page("Epidemiology & Hypothesis", epidemiology.app, "🧬") # ANALYSIS -> HYPOTHESIS TESTING, POWER ANALYSIS, etc
 
-    app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊")
-    app.add_page("About", about.app, "ℹ️")
+    app.add_page("Visualization", visualization.app, "📈") # DIFFUSION -> VISUALIZATION / REPORT
+    app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁") # REPRODUCIBILITY
+
+    app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊") # RAG QUALITY MONITOR (OPTIONAL - more for myself)
+    app.add_page("About", about.app, "ℹ️") # ABOUT
     #app.add_page("yFiles Test", yfiles_test.app, "🧪")
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")
     

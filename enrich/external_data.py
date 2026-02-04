@@ -132,19 +132,38 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
             
 
             if conflict_resolution == 'replace':
-                # Step 1: Find unmatched identifiers in `df` as tuples
-                unmatched_identifiers = df[~df[left_id_names].apply(tuple, axis=1).isin(merged_identifiers_df[left_id_names].apply(tuple, axis=1))][left_id_names]
-                unmatched_identifiers = unmatched_identifiers.dropna(subset=left_id_names).apply(tuple, axis=1).tolist()
-
-                # Step 2: Create a mask by checking each row against `unmatched_identifiers`
-                unmatched_identifiers_mask = df[left_id_names].apply(tuple, axis=1).isin(unmatched_identifiers)
-
-                # Display unmatched identifiers for debugging
-                print("Unmatched identifiers:", unmatched_identifiers)
-                print("Mask for unmatched identifiers:\n", unmatched_identifiers_mask, unmatched_identifiers_mask.sum())
-                df_excluding_conflicts = df[unmatched_identifiers_mask]
-                print("Rows in main DataFrame after excluding conflicts:\n", df_excluding_conflicts)
-                combined_df = pd.concat([df_excluding_conflicts, additional_df], ignore_index=True)
+                # Preserve original index type for restoration if needed, but here we reset eventually.
+                
+                # prepare additional_df with matching column names
+                rename_map = dict(zip(right_id_names, left_id_names))
+                additional_df_aligned = additional_df.rename(columns=rename_map)
+                
+                # set index to identifiers for alignment
+                # We need to ensure we don't lose data. 
+                # df.update() matches on Index and Columns.
+                
+                # Create copies to avoid SettingWithCopy warnings and modify safely
+                df_indexed = df.set_index(left_id_names)
+                additional_indexed = additional_df_aligned.set_index(left_id_names)
+                
+                # 1. Update existing rows
+                # update() modifies in-place and ignores NaNs in the source (additional_indexed)
+                # It updates values in df_indexed where indices overlap.
+                df_indexed.update(additional_indexed)
+                
+                # 2. Identify and append new rows (rows in additional not in df)
+                # usage of difference depends on index type. MultiIndex vs Index.
+                new_ids = additional_indexed.index.difference(df_indexed.index)
+                new_rows = additional_indexed.loc[new_ids]
+                
+                # Concatenate updated existing data and new data
+                combined_df = pd.concat([df_indexed, new_rows])
+                
+                # Reset index to restore identifier columns
+                combined_df = combined_df.reset_index()
+                
+                print("Merged with update (upsert) strategy. Preserved columns.")
+                
                 
             elif conflict_resolution == 'ignore':
                 # Step 1: Find unmatched identifiers in `df` as tuples
