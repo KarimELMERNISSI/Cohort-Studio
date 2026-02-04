@@ -2024,6 +2024,8 @@ def app():
                                         }
                                         
                                         # 4. Commit to Session State
+                                        if st.session_state.offline_taxonomy is None:
+                                            st.session_state.offline_taxonomy = {}
                                         st.session_state.offline_taxonomy[new_var_id] = new_var_node
                                         st.session_state.offline_formulas[new_form_id] = new_form_node
                                         
