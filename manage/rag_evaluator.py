@@ -23,6 +23,8 @@ from prompts.evaluation import (
     detect_hallucination,
 )
 
+from utils.data_paths import get_rag_eval_logs_dir
+
 
 class RAGEvaluator:
     """
@@ -32,16 +34,16 @@ class RAGEvaluator:
     and direct validation for structural metrics.
     """
     
-    def __init__(self, llm=None, log_dir: str = "data/rag_eval_logs"):
+    def __init__(self, llm=None, log_dir: str = None):
         """
         Initialize the RAG Evaluator.
         
         Args:
             llm: The LLM instance to use for evaluation (same as RAG system)
-            log_dir: Directory to store evaluation logs
+            log_dir: Directory to store evaluation logs (defaults to DATA_ROOT/rag_eval_logs)
         """
         self.llm = llm
-        self.log_dir = Path(log_dir)
+        self.log_dir = Path(log_dir) if log_dir else Path(get_rag_eval_logs_dir())
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         # Log files

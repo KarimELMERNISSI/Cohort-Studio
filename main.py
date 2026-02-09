@@ -118,7 +118,9 @@ def main():
     
     
 
-    app = MultiPageApp()
+    # Set default page based on user type
+    default_page = "Users Management" if st.session_state.get('username') == 'admin' else None
+    app = MultiPageApp(default_page=default_page)
     
     # Register pages
     app.add_page("Main View", home.app, imrb_icon ) #"🏠") # INGESTION & DESCRIPTION

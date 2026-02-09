@@ -8,10 +8,14 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      # Persist data and logs
+      # Persist data (users, datasets, chroma_db, traces, etc.)
       - ./data:/app/data
       # Allow configuration updates without rebuild
       - ./config:/app/config
+      # Mount documents for RAG
+      - ./DOCUMENTS:/app/DOCUMENTS
     environment:
       - PYTHONUNBUFFERED=1
+      # DATA_ROOT tells the app where to find/store data
+      - DATA_ROOT=/app/data
     restart: unless-stopped

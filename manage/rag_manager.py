@@ -273,7 +273,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 model="models/text-embedding-004"
             )
             
-            persist_directory = "data/chroma_db"
+            from utils.data_paths import get_chroma_dir
+            persist_directory = get_chroma_dir()
             
             if use_existing_db and os.path.exists(persist_directory):
                 if progress_callback: progress_callback(60, "Loading existing database...")

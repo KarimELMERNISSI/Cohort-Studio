@@ -1,6 +1,8 @@
 
 import re
+import os
 from typing import Dict, Any
+from utils.data_paths import get_data_root
 
 def create_empty_config() -> Dict[str, Any]:
     """
@@ -12,6 +14,7 @@ def create_empty_config() -> Dict[str, Any]:
         A dictionary containing the default configuration structure for the application,
         including sections for masks, transformations, thresholds, and folder paths.
     """
+    data_root = get_data_root()
     return {
         "mask_families": {},
         "transformations": [],
@@ -30,13 +33,13 @@ def create_empty_config() -> Dict[str, Any]:
             "PNG": False
         },
         "folder_names": {
-            "DATA_FOLDER": "./data/",
-            "ENRICHMENT_FOLDER": "./data/enrichment/",
-            "ENRICHED_FOLDER": "./data/enriched/",
-            "DESCRIPTIVE_FOLDER": "./data/descriptive/",
-            "HYPOTHESIS_TESTING_FOLDER": "./data/descriptive/hypothesis_testing/",
-            "OUTLIERS_FOLDER": "./data/outliers/",
-            "COMPARISONS_FOLDER": "./data/comparisons/"
+            "DATA_FOLDER": f"{data_root}/",
+            "ENRICHMENT_FOLDER": f"{data_root}/enrichment/",
+            "ENRICHED_FOLDER": f"{data_root}/enriched/",
+            "DESCRIPTIVE_FOLDER": f"{data_root}/descriptive/",
+            "HYPOTHESIS_TESTING_FOLDER": f"{data_root}/descriptive/hypothesis_testing/",
+            "OUTLIERS_FOLDER": f"{data_root}/outliers/",
+            "COMPARISONS_FOLDER": f"{data_root}/comparisons/"
         },
         "data_enrichments": {},
         "unicode_latex_mapping": {}

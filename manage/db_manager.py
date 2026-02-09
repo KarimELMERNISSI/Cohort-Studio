@@ -4,18 +4,17 @@ import re
 import os
 import logging
 import bcrypt
+from utils.data_paths import get_datasets_dir, get_stats_dir
 
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
     def __init__(self, db_path=":memory:"):
-        self.dataset_dir = os.path.join("data", "datasets")
-        self.stats_dir = os.path.join("data", "stats")
+        self.dataset_dir = get_datasets_dir()
+        self.stats_dir = get_stats_dir()
         self.db_path = os.path.join(self.dataset_dir, "cohort_data.duckdb")
         self.user_db_path = os.path.join(self.dataset_dir, "users.duckdb")
         
-        # Ensure directories exist
-        os.makedirs(self.dataset_dir, exist_ok=True)
-        os.makedirs(self.stats_dir, exist_ok=True)
+        # Directories are created by get_*_dir() functions
         
         # Initialize User DB
         self.init_user_db()
@@ -31,23 +30,41 @@ class DBManager:
             return None
 
     def init_user_db(self):
-        """Initialize the users table."""
+        """Initialize the users table with activation support."""
         con = self._get_user_connection()
         if con:
             try:
+                # Create table with is_active column
                 con.execute("""
                     CREATE TABLE IF NOT EXISTS users (
                         username TEXT PRIMARY KEY,
-                        password_hash TEXT
+                        password_hash TEXT,
+                        is_active BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                
+                # Migration: Add is_active column if missing (for existing DBs)
+                try:
+                    con.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT FALSE")
+                except:
+                    pass  # Column already exists
+                
+                try:
+                    con.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+                except:
+                    pass  # Column already exists
+                
+                # Ensure admin is always active
+                con.execute("UPDATE users SET is_active = TRUE WHERE username = 'admin'")
+                
             except Exception as e:
                 logging.error(f"Failed to init user DB: {e}")
             finally:
                 con.close()
 
-    def create_user(self, username, password):
-        """Create a new user."""
+    def create_user(self, username, password, auto_activate=False):
+        """Create a new user. Admin is auto-activated, others need approval."""
         con = self._get_user_connection()
         if con:
             try:
@@ -59,8 +76,18 @@ class DBManager:
                 # Hash password
                 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 
-                con.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", [username, hashed])
-                return True, "User created successfully"
+                # Admin is always active, others start as inactive (pending approval)
+                is_active = True if username == 'admin' or auto_activate else False
+                
+                con.execute(
+                    "INSERT INTO users (username, password_hash, is_active) VALUES (?, ?, ?)", 
+                    [username, hashed, is_active]
+                )
+                
+                if is_active:
+                    return True, "User created and activated successfully"
+                else:
+                    return True, "Account created! Please wait for admin approval to access the app."
             except Exception as e:
                 return False, f"Error creating user: {e}"
             finally:
@@ -68,15 +95,25 @@ class DBManager:
         return False, "Database connection failed"
 
     def verify_user(self, username, password):
-        """Verify user credentials."""
+        """Verify user credentials and check if account is active."""
         con = self._get_user_connection()
         if con:
             try:
-                res = con.execute("SELECT password_hash FROM users WHERE username = ?", [username]).fetchone()
+                res = con.execute(
+                    "SELECT password_hash, is_active FROM users WHERE username = ?", 
+                    [username]
+                ).fetchone()
+                
                 if res:
                     stored_hash = res[0]
+                    is_active = res[1] if len(res) > 1 else True  # Backwards compatibility
+                    
                     if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-                        return True, "Login successful"
+                        if is_active:
+                            return True, "Login successful"
+                        else:
+                            return False, "Account pending approval. Please contact administrator."
+                
                 return False, "Invalid username or password"
             except Exception as e:
                 return False, f"Error verifying user: {e}"
@@ -97,6 +134,69 @@ class DBManager:
             finally:
                 con.close()
         return []
+    
+    def get_all_users_with_status(self):
+        """Get list of all users with their activation status."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                res = con.execute("""
+                    SELECT username, is_active, created_at 
+                    FROM users 
+                    ORDER BY is_active ASC, username ASC
+                """).fetchall()
+                users = []
+                for row in res:
+                    users.append({
+                        'username': row[0],
+                        'is_active': row[1] if len(row) > 1 else True,
+                        'created_at': row[2] if len(row) > 2 else None,
+                        'status': 'Active' if (row[1] if len(row) > 1 else True) else 'Pending Approval'
+                    })
+                return users
+            except Exception as e:
+                logging.error(f"Error fetching users with status: {e}")
+                return []
+            finally:
+                con.close()
+        return []
+    
+    def activate_user(self, username):
+        """Activate a user account (admin only)."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
+                if not res:
+                    return False, "User not found"
+                
+                con.execute("UPDATE users SET is_active = TRUE WHERE username = ?", [username])
+                return True, f"User '{username}' has been activated"
+            except Exception as e:
+                return False, f"Error activating user: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
+    
+    def deactivate_user(self, username):
+        """Deactivate a user account (admin only). Cannot deactivate admin."""
+        if username == 'admin':
+            return False, "Cannot deactivate admin account"
+        
+        con = self._get_user_connection()
+        if con:
+            try:
+                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
+                if not res:
+                    return False, "User not found"
+                
+                con.execute("UPDATE users SET is_active = FALSE WHERE username = ?", [username])
+                return True, f"User '{username}' has been deactivated"
+            except Exception as e:
+                return False, f"Error deactivating user: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
 
     def update_user_password(self, username, new_password):
         """Update a user's password."""

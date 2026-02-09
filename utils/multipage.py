@@ -389,8 +389,9 @@ class Page:
 
 
 class MultiPageApp:
-    def __init__(self):
+    def __init__(self, default_page: str = None):
         self.pages: Dict[str, Page] = {}
+        self.default_page = default_page
         self.initialize_session_state()
 
     def initialize_session_state(self):
@@ -499,9 +500,15 @@ class MultiPageApp:
         render_rag_sidebar()
 
         # Custom navigation labels in the sidebar
+        page_list = list(self.pages.keys())
+        default_index = 0
+        if self.default_page and self.default_page in page_list:
+            default_index = page_list.index(self.default_page)
+        
         selected_page = st.sidebar.selectbox(
             "Go to",
-            list(self.pages.keys()),
+            page_list,
+            index=default_index,
             format_func=lambda x: self._render_sidebar_icon(self.pages[x].icon, x, is_widget=True)
         )
 

@@ -4,25 +4,25 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 import os
+from utils.data_paths import get_traces_dir
 
 class TransformationManager:
-    def __init__(self, trace_dir="data/traces"):
+    def __init__(self, trace_dir=None):
         """
         Initialize the TransformationManager.
         
         Parameters:
         -----------
-        trace_dir : str
+        trace_dir : str, optional
              Directory where transformation traces will be stored.
+             Defaults to DATA_ROOT/traces via data_paths utility.
         """
-        self.trace_dir = trace_dir
+        self.trace_dir = trace_dir if trace_dir else get_traces_dir()
         self.history = []
         self.source_dataset = None
         self.session_id = None
         
-        # Ensure trace directory exists
-        if not os.path.exists(self.trace_dir):
-            os.makedirs(self.trace_dir)
+        # Ensure trace directory exists (get_traces_dir already does this)
 
     def initialize_session(self, dataset_name, username=None):
         """Initializes a new session trace."""
