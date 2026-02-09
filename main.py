@@ -18,7 +18,7 @@ import streamlit as st
 from io import BytesIO
 from PIL import Image
 from utils.multipage import MultiPageApp
-from app_pages import home, data_preparation, statistical_tests, visualization, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight, about
+from app_pages import home, data_preparation, statistical_tests, visualization, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight, about, users_management
 
 # Lazy import for RAG monitoring to avoid performance impact
 def load_rag_monitoring():
@@ -132,6 +132,11 @@ def main():
     app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁") # REPRODUCIBILITY
 
     app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊") # RAG QUALITY MONITOR (OPTIONAL - more for myself)
+    
+    # Admin-only pages
+    if st.session_state.get('username') == 'admin':
+        app.add_page("Users Management", users_management.app, "👥") # ADMIN ONLY
+    
     app.add_page("About", about.app, "ℹ️") # ABOUT
     #app.add_page("yFiles Test", yfiles_test.app, "🧪")
     #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")

@@ -84,6 +84,61 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
 
+    def get_all_users(self):
+        """Get list of all registered usernames."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                res = con.execute("SELECT username FROM users ORDER BY username").fetchall()
+                return [row[0] for row in res]
+            except Exception as e:
+                logging.error(f"Error fetching users: {e}")
+                return []
+            finally:
+                con.close()
+        return []
+
+    def update_user_password(self, username, new_password):
+        """Update a user's password."""
+        con = self._get_user_connection()
+        if con:
+            try:
+                # Check if user exists
+                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
+                if not res:
+                    return False, "User not found"
+                
+                # Hash new password
+                hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                con.execute("UPDATE users SET password_hash = ? WHERE username = ?", [hashed, username])
+                return True, f"Password updated for '{username}'"
+            except Exception as e:
+                return False, f"Error updating password: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
+
+    def delete_user(self, username):
+        """Delete a user account. Protects admin from deletion."""
+        if username == 'admin':
+            return False, "Cannot delete admin account"
+        
+        con = self._get_user_connection()
+        if con:
+            try:
+                # Check if user exists
+                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
+                if not res:
+                    return False, "User not found"
+                
+                con.execute("DELETE FROM users WHERE username = ?", [username])
+                return True, f"User '{username}' deleted successfully"
+            except Exception as e:
+                return False, f"Error deleting user: {e}"
+            finally:
+                con.close()
+        return False, "Database connection failed"
+
     def _get_connection(self):
         """Get a new DuckDB connection."""
         try:
