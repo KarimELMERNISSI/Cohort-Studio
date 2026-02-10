@@ -11,7 +11,7 @@ The **Reproduce Analysis** page enables full reproducibility of data transformat
 A **trace** is a JSON file that captures every transformation applied during a session:
 
 | Field | Description |
-|---|---|
+| --- | --- |
 | **Session ID** | Unique identifier for the session. |
 | **Timestamp** | When the session started. |
 | **Username** | The user who ran the session. |
@@ -33,7 +33,7 @@ Replay a trace to reproduce the exact sequence of transformations.
 ### Replay Modes
 
 | Mode | Description |
-|---|---|
+| --- | --- |
 | **Fast Replay** | Re-applies transformations using parameters only. Requires the original dataset to be available. Quick and lightweight. |
 | **Full Replay** | Uses embedded dataset snapshots from each step. Works even if the original dataset has been modified or deleted. |
 
@@ -60,7 +60,7 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 ### Report Contents
 
 | Section | Description |
-|---|---|
+| --- | --- |
 | **Header** | Session metadata (ID, user, dataset, date). |
 | **Steps Table** | Each transformation step with its function, parameters, and description. |
 | **Summary** | Total number of steps and overall session description. |

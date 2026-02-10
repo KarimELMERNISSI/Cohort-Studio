@@ -17,7 +17,7 @@ The system checks your dataset for values that are clinically impossible or susp
 ### Anomaly Types
 
 | Type | Description |
-|---|---|
+| --- | --- |
 | **Impossible** | Values that cannot exist clinically (e.g. negative age). |
 | **Suspect** | Values that are plausible but warrant manual review. |
 
@@ -36,7 +36,7 @@ Define and apply inclusion/exclusion criteria to filter your cohort. Criteria ar
 ### Mask Types
 
 | Type | Example |
-|---|---|
+| --- | --- |
 | **Numeric** | `Age >= 18 AND Age <= 90` |
 | **Expression** | `Gender == 'Female'` |
 
@@ -56,7 +56,7 @@ Detect and manage outliers using six methods spanning statistical and machine le
 ### Detection Methods
 
 | Method | Type | Key Parameter | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Z-Score** | Statistical | `threshold` (default 3.0) | Flags values beyond ±N standard deviations from the mean. |
 | **IQR** | Statistical | `multiplier` (default 1.5) | Flags values outside Q1 − k·IQR and Q3 + k·IQR. |
 | **Quantile** | Statistical | `lower` / `upper` percentiles | Flags values below or above specified percentiles. |
@@ -67,7 +67,7 @@ Detect and manage outliers using six methods spanning statistical and machine le
 ### Handling Strategies
 
 | Strategy | Available For | Description |
-|---|---|---|
+| --- | --- | --- |
 | **None** | All methods | Detect only — no modification. |
 | **Remove** | All methods | Delete rows identified as outliers. |
 | **Clip** | Z-Score, IQR, Quantile | Cap values at the detection threshold. |
@@ -109,7 +109,7 @@ The comparison highlights differences in shape, column overlap, and value-level 
 The Data Quality Score aggregates results from all validation checks into a single overview:
 
 | Scorecard | What It Measures |
-|---|---|
+| --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
 | **Validity (Outliers)** | Proportion of values within the expected statistical range. |
 | **Consistency** | Adherence to anomaly rules and clinical logic. |

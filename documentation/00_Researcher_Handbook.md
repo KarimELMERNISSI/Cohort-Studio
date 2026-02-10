@@ -117,6 +117,35 @@ The application is organised into seven phases, mirroring the natural flow of co
 
 ---
 
+## ⚙️ System Administration
+
+Administrative features for managing users and monitoring system health.
+
+### User Management
+
+**Page**: Users Management (👥) — *Visible only to Admins*
+
+| Step | Action |
+| --- | --- |
+| A.1 | **View Users** list and their current status (Pending, Active, Deactivated). |
+| A.2 | **Activate** new accounts to grant access. |
+| A.3 | **Deactivate** or **Delete** users as needed. |
+| A.4 | **Reset Passwords** for users who cannot log in. |
+
+📄 See: [10_Developer_Guide.md](10_Developer_Guide.md)
+
+### RAG Quality Monitoring
+
+**Page**: RAG Quality Monitor (📊) — *Optional*
+
+| Step | Action |
+| --- | --- |
+| B.1 | Monitor **embedding health** and document chunking statistics. |
+| B.2 | Review **retrieval quality** metrics (precision, recall). |
+| B.3 | Run **manual evaluations** of the RAG system's answers. |
+
+---
+
 ## 💡 Best Practices
 
 1. **Save versions frequently** — After each major transformation, save a new dataset version.

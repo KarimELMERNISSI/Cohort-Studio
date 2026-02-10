@@ -21,7 +21,7 @@ Generate structured summaries from each uploaded paper.
 ### Extracted Fields
 
 | Field | Description |
-|---|---|
+| --- | --- |
 | **Objective** | The paper's stated research goal or hypothesis. |
 | **Methods** | Study design, population, and analytical methods used. |
 | **Key Findings** | Main results, effect sizes, and statistical significance. |
@@ -75,7 +75,7 @@ Check how well your dataset's variables are represented in the uploaded literatu
 ### Output
 
 | Column | Coverage | Source |
-|---|---|---|
+| --- | --- | --- |
 | `hdl_cholesterol` | ✅ Covered | Paper A (p. 3), Paper B (p. 7) |
 | `homa_ir` | ✅ Covered | Paper A (p. 5) |
 | `patient_id` | ❌ Not covered | — |

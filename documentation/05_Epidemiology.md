@@ -11,7 +11,7 @@ The **Epidemiology & Hypothesis** page provides a complete statistical analysis 
 The application guides test selection based on the analysis configuration:
 
 | Factor | Options |
-|---|---|
+| --- | --- |
 | **Outcome Variable** | Continuous or categorical. |
 | **Comparison Variable** | Binary, multi-group, or continuous. |
 | **Parametric / Non-Parametric** | Chosen based on normality testing or user preference. |
@@ -21,7 +21,7 @@ The application guides test selection based on the analysis configuration:
 #### Univariate
 
 | Test | When Used |
-|---|---|
+| --- | --- |
 | **Student's t-test** | Two-group comparison of means (parametric). |
 | **Mann-Whitney U** | Two-group comparison (non-parametric). |
 | **One-way ANOVA** | Multi-group comparison of means (parametric). |
@@ -34,7 +34,7 @@ The application guides test selection based on the analysis configuration:
 #### Post-hoc & Corrections
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | **Tukey HSD** | Post-hoc pairwise comparison after ANOVA. |
 | **Dunn's Test** | Post-hoc after Kruskal-Wallis. |
 | **Bonferroni** | Conservative multiple testing correction. |
@@ -43,7 +43,7 @@ The application guides test selection based on the analysis configuration:
 ### Effect Size Interpretation
 
 | Measure | Applies To |
-|---|---|
+| --- | --- |
 | **Cohen's d** | Two-group mean differences. |
 | **Eta-squared (η²)** | ANOVA / multi-group comparisons. |
 | **Cramér's V** | Chi-squared / categorical associations. |
@@ -78,7 +78,7 @@ Estimate the sample size needed to detect a meaningful effect, or the power of y
 ### Parameters
 
 | Parameter | Description |
-|---|---|
+| --- | --- |
 | **Effect Size** | Expected magnitude (Cohen's d or custom). |
 | **Alpha (α)** | Significance level (default 0.05). |
 | **Power (1 − β)** | Desired statistical power (default 0.80). |
@@ -99,7 +99,7 @@ Convert raw variable values into Z-scores relative to a reference population or 
 ### Modes
 
 | Mode | Description |
-|---|---|
+| --- | --- |
 | **Sample-based** | Z-scores computed from the dataset's own mean and standard deviation. |
 | **Reference-based** | User provides external reference mean and standard deviation (e.g. population norms). |
 

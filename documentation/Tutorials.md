@@ -173,3 +173,40 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
    - **Full Replay** — Uses embedded snapshots (works independently).
 5. Click **Replay** and monitor progress step by step.
 6. Click **Download Report** to generate a `.docx` summary of the session.
+
+---
+
+## Tutorial 10: Managing Users (Admin Only)
+
+**Goal**: Activate new accounts and manage user access.
+
+1. Log in with an **Administrator** account.
+2. Go to **Users Management** (sidebar).
+3. **Activate a New User**:
+   - Find the user with "Pending" status in the list.
+   - Click the **Activate** button.
+   - The user status changes to "Active" and they can now log in.
+4. **Deactivate a User**:
+   - Click **Deactivate** to temporarily revoke access.
+5. **Reset Password**:
+   - Click **Reset Password** to generate a temporary password for the user.
+6. **Delete User**:
+   - Click **Delete** to permanently remove the account and their trace history.
+
+---
+
+## Tutorial 11: Monitoring RAG Quality (Admin Only)
+
+**Goal**: Check the health and performance of the AI documentation assistant.
+
+1. Go to **RAG Quality Monitor**.
+2. **Overview**:
+   - Check the "Knowledge Base Health" for total documents and chunks.
+   - Ensure "Embedding Dimension" matches your model (e.g. 1536 for OpenAI).
+3. **Evaluation**:
+   - Go to the **Run Evaluation** tab.
+   - Enter a test question (e.g. "How is BMI calculated?").
+   - The system retrieves context and generates an answer.
+   - Rate the answer's **Accuracy** and **Faithfulness**.
+4. **Review Metrics**:
+   - Check the aggregate scores to see if the RAG system needs re-indexing or prompt tuning.

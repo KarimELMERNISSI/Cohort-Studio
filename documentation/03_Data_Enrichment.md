@@ -27,14 +27,14 @@ Two complementary approaches are available for imputation.
 Manually fix specific columns using formulas or AI-assisted suggestions.
 
 | Feature | Description |
-|---|---|
+| --- | --- |
 | **Formula Editor** | Write expressions using column names and arithmetic operators (e.g. `Weight / (Height**2)`). |
 | **AI Suggestions (RAG)** | The system proposes computed formulas based on related columns and uploaded documentation. |
 
 #### AI Suggestion Modes
 
 | Mode | Description |
-|---|---|
+| --- | --- |
 | **Free Thinking (Auto)** | Scans all available columns to suggest formulas automatically. |
 | **Guided (with Hints)** | User provides a clue (e.g. "unit conversion") and selects context columns for more focused suggestions. |
 
@@ -43,7 +43,7 @@ Manually fix specific columns using formulas or AI-assisted suggestions.
 Apply statistical or ML-based strategies to all missing values simultaneously.
 
 | Method | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | **Mean / Median** | Statistical | Replace missing values with the column mean or median. |
 | **Most Frequent** | Statistical | Replace with the mode (categorical columns). |
 | **KNN** | ML | Impute using K-nearest neighbours. |
@@ -53,7 +53,7 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 #### Global Imputation Options
 
 | Option | Description |
-|---|---|
+| --- | --- |
 | **Categorical Encoder** | Optionally one-hot encode categorical columns during imputation. |
 | **Numerical Scaler** | Optionally scale numerical columns during imputation. |
 | **Remainder Strategy** | Handle columns not part of the imputation (passthrough, drop). |
@@ -71,7 +71,7 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 #### Dimensionality Reduction
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | **PCA** | Principal Component Analysis (via Prince). Handles numerical data. |
 | **FAMD** | Factor Analysis of Mixed Data. Handles both numerical and categorical variables. |
 | **t-SNE** | Non-linear embedding for 2-D/3-D visualisation. Parameters: perplexity, learning rate. |
@@ -80,7 +80,7 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 #### Clustering
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | **K-Means** | Partition-based clustering. Set number of clusters (K). |
 | **DBSCAN** | Density-based clustering. Set epsilon and min_samples. |
 | **Gaussian Mixture** | Probabilistic clustering. Set number of components. |
@@ -90,7 +90,7 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 #### Encoding
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | **One-Hot** | Binary column per category. |
 | **Label** | Integer encoding. |
 | **Ordinal** | User-specified order mapping. |
@@ -98,7 +98,7 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 #### Scaling
 
 | Method | Description |
-|---|---|
+| --- | --- |
 | **Standard (Z-Score)** | Mean = 0, Std = 1. |
 | **Min-Max** | Scaled to [0, 1]. |
 | **Robust** | Median-centred, IQR-scaled. Resistant to outliers. |

@@ -55,7 +55,7 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 ```
 
 | State | Description |
-|---|---|
+| --- | --- |
 | **Pending** | Account created but not yet activated. Cannot log in. |
 | **Active** | Admin-approved. Full access to the application. |
 | **Deactivated** | Admin-disabled. Cannot log in until reactivated. |
@@ -83,7 +83,7 @@ Per-user isolation is enforced via:
 All structured LLM responses are validated against Pydantic models defined in `manage/rag_schemas.py`:
 
 | Schema | Purpose |
-|---|---|
+| --- | --- |
 | `TaxonomyNode` | Node in the taxonomy graph (variable, concept, formula, category). |
 | `TaxonomyEdge` | Relationship between two taxonomy nodes. |
 | `ComputedVariable` | AI-suggested variable with name, formula, and reasoning. |
@@ -117,7 +117,7 @@ Robust JSON parsing pipeline for LLM responses:
 Classifies DataFrame columns into semantic types:
 
 | Type | Description |
-|---|---|
+| --- | --- |
 | `numeric_cols` | Continuous numerical columns (float/int, high cardinality). |
 | `categorical_cols` | String/object columns. |
 | `binary_cols` | Columns with exactly 2 unique values. |
@@ -170,7 +170,7 @@ Handles trace replay with path resolution for cross-platform compatibility.
 The `rag_monitoring.py` page provides a dashboard for monitoring RAG system health:
 
 | Metric | Description |
-|---|---|
+| --- | --- |
 | **Embedding Statistics** | Document count, chunk count, and embedding dimensions. |
 | **Retrieval Quality** | Relevance scores for test queries. |
 | **Evaluation Results** | Structured evaluation of RAG responses against expected outputs. |
@@ -186,7 +186,7 @@ This is primarily a developer and admin tool for diagnosing RAG performance issu
 Contains data quality rules, validation thresholds, and anomaly definitions. Key sections:
 
 | Section | Purpose |
-|---|---|
+| --- | --- |
 | `anomalies` | Clinical anomaly rules per variable (min/max bounds, impossible values). |
 | `inclusion_criteria` | Mask family definitions for cohort filtering. |
 | `quality_weights` | Weights for completeness, validity, and consistency in the quality score. |

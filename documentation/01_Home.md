@@ -9,7 +9,7 @@ The **Main View (Home)** page is the entry point for working with your dataset. 
 ### Supported Formats
 
 | Format | Extension |
-|---|---|
+| --- | --- |
 | CSV | `.csv` |
 | Excel | `.xlsx` |
 | Parquet | `.parquet` |
@@ -23,7 +23,7 @@ After loading, the dataset is displayed as an interactive preview with shape inf
 An automatic summary of the loaded dataset:
 
 | Metric | Description |
-|---|---|
+| --- | --- |
 | **Shape** | Number of rows and columns. |
 | **Data Types** | Breakdown of numerical, categorical, binary, and date columns. |
 | **Missing Values** | Count and percentage per column. |
@@ -66,7 +66,7 @@ Compare query performance between **Pandas** and **DuckDB** on your dataset.
 Authentication is handled in the sidebar:
 
 | Feature | Description |
-|---|---|
+| --- | --- |
 | **Login** | Username and password authentication with bcrypt-hashed storage. |
 | **Sign Up** | New accounts are created with a "pending" status. |
 | **Account Activation** | New accounts require administrator approval before login is permitted. |
@@ -89,7 +89,7 @@ Each user's data is isolated through filename prefixes and user-specific directo
 ### Operations
 
 | Action | Description |
-|---|---|
+| --- | --- |
 | **Save** | Persist the current dataset as a new version. |
 | **Load** | Restore a previously saved version. |
 | **Delete** | Remove a saved version (with confirmation). |

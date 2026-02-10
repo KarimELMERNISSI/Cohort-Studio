@@ -9,7 +9,7 @@ The **Visualisation** page provides an interactive plotting suite powered by Plo
 ### Distribution Plots
 
 | Chart | Description |
-|---|---|
+| --- | --- |
 | **Histogram** | Frequency distribution with optional KDE overlay. |
 | **Box Plot** | Quartiles, median, whiskers, and outliers. Supports group comparison with statistical annotations. |
 | **Violin Plot** | Combines box plot with kernel density estimation for richer shape information. |
@@ -18,7 +18,7 @@ The **Visualisation** page provides an interactive plotting suite powered by Plo
 ### Relationship Plots
 
 | Chart | Description |
-|---|---|
+| --- | --- |
 | **Scatter Plot** | Two-variable relationship with optional colour grouping, trendlines, and marginal distributions. |
 | **Correlation Matrix** | Heatmap of pairwise correlations across selected variables. |
 | **Clustermap** | Hierarchically clustered correlation or similarity matrix. |
@@ -26,7 +26,7 @@ The **Visualisation** page provides an interactive plotting suite powered by Plo
 ### Medical / Specialised Plots
 
 | Chart | Description |
-|---|---|
+| --- | --- |
 | **Bland-Altman Plot** | Agreement between two measurement methods. Shows mean difference and limits of agreement. |
 | **ROC Curve** | Receiver Operating Characteristic for classification performance (AUC displayed). |
 | **Kaplan-Meier Curve** | Survival analysis with optional group comparison and log-rank test. |
@@ -38,7 +38,7 @@ The **Visualisation** page provides an interactive plotting suite powered by Plo
 Statistical tests are automatically applied and overlaid on applicable charts:
 
 | Chart Type | Auto-applied Test |
-|---|---|
+| --- | --- |
 | **Box Plot** (2 groups) | Mann-Whitney U |
 | **Box Plot** (3+ groups) | Kruskal-Wallis |
 | **Violin Plot** | Same as Box Plot |
@@ -51,7 +51,7 @@ Significance brackets and p-values are rendered directly on the plot.
 ## 🎛️ Data Controls
 
 | Control | Description |
-|---|---|
+| --- | --- |
 | **Variable Selection** | Choose outcome and grouping variables from the dataset. |
 | **Filter** | Restrict the data to a subset before plotting. |
 | **Group By** | Split the chart by a categorical variable. |
@@ -62,7 +62,7 @@ Significance brackets and p-values are rendered directly on the plot.
 ## 🎨 Customisation
 
 | Option | Description |
-|---|---|
+| --- | --- |
 | **Title & Labels** | Custom chart title, axis labels, and legend title. |
 | **Colour Palette** | Choose from preset palettes or define custom colours. |
 | **Orientation** | Horizontal or vertical (for bar/box/violin). |
@@ -75,7 +75,7 @@ Significance brackets and p-values are rendered directly on the plot.
 Charts can be exported in multiple formats:
 
 | Format | How |
-|---|---|
+| --- | --- |
 | **PNG** | Via the Plotly toolbar (camera icon). |
 | **SVG** | Via the Plotly toolbar. |
 | **HTML** | Interactive standalone file — retains hover and zoom. |

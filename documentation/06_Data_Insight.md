@@ -9,7 +9,7 @@ The **Data Insight** page generates, visualises, and refines a **Taxonomy** (kno
 A Taxonomy is a structured graph where:
 
 | Node Type | Description | Example |
-|---|---|---|
+| --- | --- | --- |
 | **Category** | Clinical domain or grouping. | Anthropometry, Lipid Panel |
 | **Variable** | A dataset column. | `weight_kg`, `hdl_cholesterol` |
 | **Concept** | An external-derived clinical or scientific concept. | BMI, HOMA-IR |
@@ -31,7 +31,7 @@ Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from
 ### Generation Options
 
 | Parameter | Description |
-|---|---|
+| --- | --- |
 | **Context Documents** | Optional PDFs to give the LLM domain knowledge for better classification. |
 | **Existing Taxonomy** | Optionally provide a prior version as a starting point. |
 
@@ -60,7 +60,7 @@ After initial generation, several tools are available to improve the taxonomy:
 ## 🗂️ Taxonomy Versioning
 
 | Action | Description |
-|---|---|
+| --- | --- |
 | **Save** | Persist the current taxonomy as a named JSON version. |
 | **Load** | Restore a previously saved version. |
 | **Compare** | View differences between the current taxonomy and a saved version. |
@@ -84,7 +84,7 @@ The taxonomy is rendered as an interactive graph using **yFiles**:
 ## 📤 Export
 
 | Format | Description |
-|---|---|
+| --- | --- |
 | **JSON** | Full taxonomy structure for programmatic use. |
 | **CSV** | Flat table of nodes and their attributes. |
 | **Interactive Graph** | yFiles HTML export for sharing. |
