@@ -38,10 +38,12 @@ The application is organised into seven phases, mirroring the natural flow of co
 | Step | Action |
 | --- | --- |
 | 2.1 | Review the **Data Quality Score** dashboard. |
-| 2.2 | Check for **clinical anomalies** (impossible or suspect values). |
-| 2.3 | Define **inclusion criteria** to filter your cohort. |
-| 2.4 | Detect and handle **outliers** using statistical or ML methods. |
-| 2.5 | **Compare** the cleaned dataset against the original. |
+| 2.2 | **Diagnose missing data** patterns (Completeness) using visual and statistical tools. |
+| 2.3 | Check for **clinical anomalies** (impossible or suspect values). |
+| 2.4 | Define **inclusion criteria** to filter your cohort. |
+| 2.5 | Detect and handle **outliers** using statistical or ML methods. |
+| 2.6 | **Check conformity** (duplicates, consistency, uniformity). |
+| 2.7 | **Compare** the cleaned dataset against the original. |
 
 📄 See: [02_Data_Validation.md](02_Data_Validation.md)
 
