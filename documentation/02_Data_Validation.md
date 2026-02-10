@@ -4,6 +4,26 @@ The **Data Validation & Monitoring** page provides a comprehensive data quality 
 
 ---
 
+## 🧩 Completeness
+
+Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, MAR, MNAR).
+
+### Missing Data Analysis
+
+- **Basic Counts**: Bar chart and percentage of missing values per column.
+- **Advanced Diagnosis**:
+  - **Nullity Matrix**: A clustered heatmap visualizing patterns of missing data. Useful for spotting blocks of missingness across rows or correlations between variables.
+  - **Distribution**: Histogram of row missingness (percentage of missing values per row).
+
+### Statistical Diagnosis
+
+- **Little's MCAR Test**: A statistical test to determine if data is Missing Completely At Random (MCAR).
+  - *p > 0.05*: Likely MCAR (random).
+  - *p < 0.05*: Likely MAR or MNAR (systematic).
+- **MAR Indicator**: Checks if missingness in one variable is correlated with values in another, helping identify Missing At Random (MAR) dependencies.
+
+---
+
 ## 🏥 Clinical Anomalies
 
 The system checks your dataset for values that are clinically impossible or suspect based on rules defined in `config/config.json`.
@@ -104,6 +124,30 @@ The comparison highlights differences in shape, column overlap, and value-level 
 
 ---
 
+## 🔍 Conformity & Consistency
+
+Checks for data structure and formatting issues beyond simple value errors.
+
+### Uniqueness
+
+Detects **Duplicate Rows** in the dataset.
+
+- **Metric**: Percentage of unique rows.
+- **Action**: Review and remove duplicates that may skew analysis.
+
+### Type Consistency
+
+Identifies columns with **mixed data types**, specifically text (Object) columns that appear to contain numeric or datetime data.
+
+- **Goal**: Ensure variables are cast to their correct types for accurate analysis.
+
+### Uniformity
+
+Detects specific string formatting issues in text columns:
+
+- **Whitespace**: Leading or trailing spaces.
+- **Capitalization**: Inconsistent casing (e.g., "Male" vs "male").
+
 ## 📊 Data Quality Dashboard
 
 The Data Quality Score aggregates results from all validation checks into a single overview:
@@ -111,7 +155,10 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | Scorecard | What It Measures |
 | --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
-| **Validity (Outliers)** | Proportion of values within the expected statistical range. |
-| **Consistency** | Adherence to anomaly rules and clinical logic. |
+| **Statistical Validity** | Proportion of non-outlier values (based on selected method). |
+| **Clinical Validity** | Compliance with defined clinical anomaly rules. |
+| **Consistency** | Percentage of columns with correct data type definitions. |
+| **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
+| **Uniqueness** | Percentage of unique (non-duplicate) rows. |
 
 > **Tip**: Focus on resolving high-impact issues first — anomalies and outliers that meaningfully shift the overall score.
