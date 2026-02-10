@@ -1,66 +1,103 @@
-# 🏠 Home / Dashboard
+# 🏠 Home — Dashboard & Data Loading
 
-## Overview
+The **Main View (Home)** page is the entry point for working with your dataset. It handles data loading, provides an overview of your data, and includes tools for column renaming, performance benchmarking, and dataset management.
 
-The **Home** page serves as the central command center for the Cohort Monitoring Package. It handles dataset ingestion, version management, and provides an initial high-level overview of the data. It also features an AI-powered assistant for standardizing column names.
+---
 
-## Key Features
+## 📂 Data Loading
 
-### 1. 📊 Dataset Statistics (Tab 1)
+### Supported Formats
 
-* **Data Preview & Filtering**:
-  * **Global Filters**: Checkboxes to "Exclude Rows with Anomalies" or "Restrict to Inclusion Criteria" (requires pre-defined criteria).
-  * **Column Categorization**: Automatic classification of columns into Quantitative, Binary, Categorical, Date, etc.
-* **Descriptive Statistics**:
-  * **Quantitative Data**: Detailed stats (Mean, Median, Std Dev, Min/Max, Quantiles) with **Normality Tests** (Shapiro-Wilk, D'Agostino's K², Kolmogorov-Smirnov). Supports **grouping** by categorical variables and Excel export.
-  * **Qualitative Data**: Counts, frequencies, and top modalities. Supports **grouping** and Excel export.
-* **Correlation Analysis**:
-  * **Network Graph (New)**: Interactive graph visualization powered by **yFiles**.
-    * **Dynamic Styling**: Edges are colored by sign (**Blue** for positive, **Red** for negative) and styled by strength (dotted to thick solid lines).
-    * **Focus Mode**: Select a "Focus Variable" to isolate and explore its specific connected component.
-    * **Heatmap**: Nodes glow based on their cumulative correlation strength, highlighting key drivers.
-    * **Legend**: Built-in legend to explain visual encodings.
-  * **Interactive Matrix**: Traditional heatmap visualization with Excel export.
-  * **Advanced Options**: Support for Pearson, Spearman, and Kendall methods. Includes **Hierarchical Clustering** (dendrograms).
+| Format | Extension |
+|---|---|
+| CSV | `.csv` |
+| Excel | `.xlsx` |
+| Parquet | `.parquet` |
 
-### 2. 🏷️ Columns Renaming (Tab 2)
+After loading, the dataset is displayed as an interactive preview with shape information (rows × columns) and data types per column.
 
-* **AI-Powered Suggestions (RAG)**:
-  * **Medical Literature**: Suggests names based on context found in uploaded research papers.
-  * **Standard Terminologies**: Maps columns to standard medical ontologies (UMLS, SNOMED CT, LOINC).
-* **Manual Interface**:
-  * **Smart Filtering**: Sort by name or filter by type (Numeric, Date, Binary, etc.).
-  * **Contextual Info**: Displays top 5 values (for categorical) or basic stats (Median, Min, Max) for each column to aid in identification.
+---
 
-### 3. ⚡ Performance Benchmark (Tab 3)
+## 📊 Dataset Statistics
 
-* **Engine Comparison**: Benchmarks the performance of **Pandas** vs. **DuckDB** for standard operations (Basic Stats, Grouping, Correlation).
-* **Optimization**: Automatically highlights the faster engine and allows users to set their preferred computation backend for the session.
+An automatic summary of the loaded dataset:
 
-### 4. 🔐 Authentication & Security
+| Metric | Description |
+|---|---|
+| **Shape** | Number of rows and columns. |
+| **Data Types** | Breakdown of numerical, categorical, binary, and date columns. |
+| **Missing Values** | Count and percentage per column. |
+| **Descriptive Statistics** | Mean, median, std, min, max for numerical columns. |
+| **Cardinality** | Unique value counts for categorical columns. |
 
-* **Secure Login**: Sidebar-based authentication using hashed passwords.
-* **User Isolation**: All data (datasets, traces, taxonomies) is isolated per user.
-* **Admin Access**: Dedicated admin role for system oversight.
+The statistics are cached for performance (`@st.cache_data`).
 
-### 5. 💾 Dataset Management (Sidebar)
+---
 
-* **Versioning**: Save the current state of the dataset as a new version.
-* **History**: Load previous versions of the dataset (User-Isolated).
-* **Auto-Loading**: Automatically loads the most recent dataset session upon startup.
+## ✏️ Column Renaming
 
-## Usage Guide
+Rename columns for clarity and consistency. Two approaches are available:
 
-1. **Load/Import**: Use the sidebar to load a saved dataset or upload a new file.
-2. **Clean & Rename**: Go to the **Columns Renaming** tab to standardize variable names using AI or manual input.
-3. **Inspect Statistics**: Use the **Dataset Statistics** tab to filter anomalies, check normality, and explore correlations.
-4. **Optimize**: Run the **Performance Benchmark** to ensure the application uses the fastest engine for your specific dataset size.
+### Manual Renaming
 
-## Technical Details
+- Edit column names directly in a mapping table.
+- Duplicate names are automatically detected and prevented.
 
-* **File**: `app_pages/home.py`
-* **Utilities**:
-  * `utils/data_analyzer.py` - Column type detection
-  * `utils/export_utils.py` - Excel export
-  * `utils/statistics_utils.py` - Normality tests
-* **Dependencies**: `manage.db_manager`, `manage.rag_manager`, `explore.corr_matrix`, `scipy.stats`, `duckdb`
+### AI-Assisted Renaming (RAG)
+
+- The RAG system suggests standardised names based on medical terminologies (UMLS, SNOMED, LOINC).
+- Suggestions can be reviewed, accepted, or modified before applying.
+- Requires the RAG system to be initialised (Gemini API key configured).
+
+---
+
+## ⚡ Performance Benchmark
+
+Compare query performance between **Pandas** and **DuckDB** on your dataset.
+
+- Runs a standard set of operations (filtering, grouping, aggregation).
+- Displays execution times side by side.
+- Helps decide whether to use DuckDB for large datasets.
+
+---
+
+## 🔐 Authentication
+
+Authentication is handled in the sidebar:
+
+| Feature | Description |
+|---|---|
+| **Login** | Username and password authentication with bcrypt-hashed storage. |
+| **Sign Up** | New accounts are created with a "pending" status. |
+| **Account Activation** | New accounts require administrator approval before login is permitted. |
+| **Logout** | Clears session state and returns to the login form. |
+
+### Data Isolation
+
+Each user's data is isolated through filename prefixes and user-specific directories. Datasets, traces, and analysis results are not shared across accounts.
+
+---
+
+## 💾 Dataset Management
+
+### Versioning
+
+- Datasets are versioned using **DuckDB** and **Parquet snapshots**.
+- Each save creates a new version; previous versions remain accessible.
+- Load any saved version from the sidebar.
+
+### Operations
+
+| Action | Description |
+|---|---|
+| **Save** | Persist the current dataset as a new version. |
+| **Load** | Restore a previously saved version. |
+| **Delete** | Remove a saved version (with confirmation). |
+| **Export** | Download the current dataset as CSV, Excel, or Parquet. |
+
+---
+
+## 💡 Tips
+
+- Use **AI-Assisted Renaming** early in your workflow — standardised column names improve the quality of taxonomy generation and AI suggestions downstream.
+- Run the **Performance Benchmark** on large datasets (>100k rows) to determine if DuckDB offers meaningful speedups for your data.

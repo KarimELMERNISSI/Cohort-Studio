@@ -1,48 +1,81 @@
 # 🔁 Reproduce Analysis
 
-## Overview
+The **Reproduce Analysis** page enables full reproducibility of data transformation sessions. Every analysis step is automatically recorded in a trace file, which can be replayed to recreate results or generate documentation reports.
 
-The **Reproduction** module ensures the reproducibility of analysis workflows. It allows users to replay previously recorded analysis sessions ("traces"), ensuring that results can be verified and recreated exactly as they were originally generated.
+---
 
-## Key Features
+## 📋 Trace Management
 
-### 1. 📜 Trace Management
+### What Is a Trace?
 
-* **Session Recording**: The application automatically records key actions into JSON trace files.
-* **Supported Operations**:
-  * **Enrichment**: Merging external datasets.
-  * **Variable Computation**: Creating new variables via formulas.
-  * **Imputation**: Handling missing values (Mean, Median, MissForest, etc.).
-  * **Transformation**: Scaling, Encoding, and Dimensionality Reduction.
-* **Trace Selection**: Users can browse and select from a history of analysis sessions.
+A **trace** is a JSON file that captures every transformation applied during a session:
 
-### 2. ⏯️ Replay Engine
+| Field | Description |
+|---|---|
+| **Session ID** | Unique identifier for the session. |
+| **Timestamp** | When the session started. |
+| **Username** | The user who ran the session. |
+| **Dataset Name** | The initial dataset loaded. |
+| **Steps** | Ordered list of transformations with parameters, descriptions, and snapshot paths. |
 
-* **Step-by-Step Replay**: Visualizes the sequence of operations performed in a session.
-* **Modes**:
-  * **Fast Replay**: Uses intermediate snapshots (if available) to quickly jump to a specific state.
-  * **Full Replay**: Re-executes every step from the raw source dataset to ensure complete verification.
-* **Artifact Links**: Provides direct links to intermediate outputs (e.g., "Categorical Stats", "Correlation Matrix") generated during the original session.
-* **Portable Reproduction (Path Resolver)**: Automatically adapts file paths (e.g., `C:/Users/Bob/Data.csv` -> `/home/Alice/Data.csv`) allowing traces to run across different machines and OS (Windows/Linux/Docker).
+### Viewing Traces
 
-### 3. 📄 Automated Reporting
+- Browse available traces from past sessions.
+- Select a specific trace to inspect its steps, parameters, and outputs.
+- Download the raw JSON trace file for external archiving.
 
-* **One-Click Generation**: Create a human-readable Word document (`.docx`) from any analysis trace.
-* **Comprehensive Content**:
-  * **Session Context**: ID, Source, Date/Time.
-  * **Step Breakdown**: Readable descriptions of every operation.
-  * **Parameter Details**: Exact values used for imputation, transformations, etc.
-* **No Confidentiality Footer**: Clean output suitable for diverse use cases.
+---
 
-## Usage Guide
+## ▶️ Replay Engine
 
-1. **Select Session**: Choose a trace file from the list (sorted by date).
-2. **Review Steps**: Examine the list of operations to understand the workflow.
-3. **Reproduce**: Click "Reproduce to Step X" to restore the application state to that specific point in the analysis.
-4. **Generate Report**: Click the **📄 Download Transformation Report (.docx)** button at the top of the session view to save a documentation file.
+Replay a trace to reproduce the exact sequence of transformations.
 
-## Technical Details
+### Replay Modes
 
-* **File**: `app_pages/reproduce_analysis.py`
-* **Dependencies**: `manage.reproduction_manager`, `json`, `python-docx`
-* **Helper Class**: `manage.trace_documenter.TraceDocumenter`
+| Mode | Description |
+|---|---|
+| **Fast Replay** | Re-applies transformations using parameters only. Requires the original dataset to be available. Quick and lightweight. |
+| **Full Replay** | Uses embedded dataset snapshots from each step. Works even if the original dataset has been modified or deleted. |
+
+### Path Resolution
+
+Traces include file paths to dataset snapshots. The replay engine handles **cross-platform portability**:
+
+- Relative paths are resolved against the project root.
+- Absolute paths are adapted to the current system.
+- Missing files are reported with clear error messages.
+
+### Step-by-Step Execution
+
+- Steps are replayed sequentially with progress indication.
+- Each step shows: function name, parameters, description, and result.
+- On error, the replay pauses and reports which step failed and why.
+
+---
+
+## 📄 Automated Reporting
+
+Generate a `.docx` report from any trace file using the **TraceDocumenter**.
+
+### Report Contents
+
+| Section | Description |
+|---|---|
+| **Header** | Session metadata (ID, user, dataset, date). |
+| **Steps Table** | Each transformation step with its function, parameters, and description. |
+| **Summary** | Total number of steps and overall session description. |
+
+### How to Generate
+
+1. Select a trace from the history or upload a trace JSON file.
+2. Click **Download Report**.
+3. A `.docx` file is generated and downloaded immediately.
+
+---
+
+## 💡 Tips
+
+- **Save traces regularly** — they are your audit trail for data provenance.
+- Use **Full Replay** when sharing analyses with collaborators who may not have the original dataset.
+- Generated `.docx` reports are useful for **supplementary materials** in publications or **audit documentation** for regulatory submissions.
+- The trace system also appears in the **Data Enrichment** sidebar, allowing quick access to replay and reporting without navigating away.

@@ -1,56 +1,117 @@
-# 🛡️ Data Validation & Monitoring
+# 📋 Data Validation & Monitoring
 
-## Overview
+The **Data Validation & Monitoring** page provides a comprehensive data quality framework. It detects clinical anomalies, applies inclusion/exclusion criteria, identifies statistical and ML-based outliers, and compares dataset versions — all tracked through an integrated Data Quality Score.
 
-The **Data Validation & Monitoring** module is a comprehensive control center for ensuring data integrity and tracking changes over time. It combines rule-based validation (Clinical Anomalies, Inclusion Criteria) with statistical monitoring (Outliers, Drift Detection).
+---
 
-## Key Features
+## 🏥 Clinical Anomalies
 
-### 1. 🏥 Clinical Anomalies (Tab 2)
+The system checks your dataset for values that are clinically impossible or suspect based on rules defined in `config/config.json`.
 
-* **Integrated Rule Editor**: Create new validation rules directly in the interface. No need for external configuration files.
-* **Rule Logic**:
-  * **Numeric Rules**: Set Min/Max bounds (e.g., "Age must be between 0 and 120").
-  * **Expression Rules**: Write custom Python expressions (e.g., `systolic_bp > diastolic_bp`).
-* **Visual Feedback**: Real-time anomaly masks showing the percentage of irregular rows.
+### How It Works
 
-### 2. 🎯 Inclusion Criteria (Tab 3)
+1. **Rule Evaluation** — Each variable is checked against configured ranges (e.g. `Age < 0` or `BMI > 100`).
+2. **Anomaly Flagging** — Rows with anomalies are flagged, with the violated rule displayed per variable.
+3. **Impact Score** — Anomalies contribute to the overall Data Quality Score.
 
-* **Cohort Selection**: Define criteria to filter the dataset for the final study population.
-* **Logic**: Similar to anomalies, use numeric bounds or expressions to define who *stays* in the study.
-* **Metrics**: Automatically calculates the number of included vs. excluded patients.
+### Anomaly Types
 
-### 3. 📉 Outlier Handling (Tab 4)
+| Type | Description |
+|---|---|
+| **Impossible** | Values that cannot exist clinically (e.g. negative age). |
+| **Suspect** | Values that are plausible but warrant manual review. |
 
-* **Detection Methods**:
-  * **Statistical**: Z-Score, IQR (Interquartile Range), Quantile.
-  * **Machine Learning**: **Isolation Forest**, **LOF (Local Outlier Factor)**, and **DBSCAN (Density-Based Spatial Clustering)** for multivariate anomaly detection.
-* **Visualization**: 2D projection using **PCA**, **FAMD** (for mixed data), **t-SNE**, or **UMAP**. Axes now display the percentage of explained variance for better interpretability.
-* **Handling Strategies**:
-  * **Remove**: Delete rows with outliers.
-  * **Clip**: Cap values at the threshold (winsorization).
-  * **Tag**: Create a new boolean column flagging the row as an outlier without removing it.
+---
 
-### 4. 🔄 Dataset Comparison (Tab 5)
+## ✅ Inclusion Criteria
 
-* **Version Diffing**: Compare the active dataset with any previously saved snapshot or uploaded file.
-* **Change Detection**: Identifies:
-  * **Added Rows**: New records present only in the current dataset.
-  * **Removed Rows**: Records present only in the reference dataset.
-  * **Modified Rows**: Records with the same ID but changed values.
-* **Export**: Generates a detailed Excel report highlighting cell-level differences.
+Define and apply inclusion/exclusion criteria to filter your cohort. Criteria are organised into **mask families** — groups of related conditions combined with logical operators.
 
-### 5. 📊 Data Quality Dashboard (Tab 1)
+### Key Concepts
 
-* **Integrated View**: Embeds the Data Quality Scorecard to provide immediate feedback on how validation rules affect the overall dataset health.
+- **Mask Family**: A named group of conditions (e.g. "Adult Patients").
+- **Mask**: An individual condition within a family (numeric threshold or expression).
+- **Family Operator**: How masks within a family combine — `AND` (all must pass) or `OR` (any may pass).
 
-## Usage Guide
+### Mask Types
 
-1. **Define Rules**: Use Tabs 2 & 3 to set up your clinical constraints and inclusion criteria.
-2. **Handle Outliers**: Go to Tab 4 to detect and manage statistical outliers using advanced algorithms like Isolation Forest.
-3. **Monitor Changes**: Use Tab 5 to compare your current cleaned dataset against previous versions to ensure consistency.
+| Type | Example |
+|---|---|
+| **Numeric** | `Age >= 18 AND Age <= 90` |
+| **Expression** | `Gender == 'Female'` |
 
-## Technical Details
+### Workflow
 
-* **File**: `app_pages/data_monitoring.py`
-* **Dependencies**: `monitor.changes`, `monitor.outliers`, `scipy.stats`, `sklearn.ensemble` (Isolation Forest), `sklearn.neighbors` (LOF)
+1. Create a mask family and name it.
+2. Add individual masks (numeric or expression).
+3. Apply the family to filter your dataset.
+4. View flagged vs retained rows.
+
+---
+
+## 📉 Outlier Detection & Handling
+
+Detect and manage outliers using six methods spanning statistical and machine learning approaches.
+
+### Detection Methods
+
+| Method | Type | Key Parameter | Description |
+|---|---|---|---|
+| **Z-Score** | Statistical | `threshold` (default 3.0) | Flags values beyond ±N standard deviations from the mean. |
+| **IQR** | Statistical | `multiplier` (default 1.5) | Flags values outside Q1 − k·IQR and Q3 + k·IQR. |
+| **Quantile** | Statistical | `lower` / `upper` percentiles | Flags values below or above specified percentiles. |
+| **Local Outlier Factor** | ML | `n_neighbors`, `contamination` | Density-based, flags points in sparse regions. |
+| **Isolation Forest** | ML | `n_estimators`, `max_samples` | Tree-based, isolates anomalous points via random partitions. |
+| **DBSCAN** | ML | `eps`, `min_samples` | Clustering-based, flags noise points not assigned to any cluster. |
+
+### Handling Strategies
+
+| Strategy | Available For | Description |
+|---|---|---|
+| **None** | All methods | Detect only — no modification. |
+| **Remove** | All methods | Delete rows identified as outliers. |
+| **Clip** | Z-Score, IQR, Quantile | Cap values at the detection threshold. |
+| **Tag** | All methods | Append tag/score columns to mark outliers. |
+
+### Impact Analysis
+
+After applying a handling strategy, the system reports the impact on each variable using selectable measures:
+
+- **Flat** — Absolute change in mean, std, min, max.
+- **% of Initial Value** — Percentage change relative to original value.
+- **% of IQR** — Change normalised by the interquartile range.
+
+### Outlier Visualisation
+
+A 2-D projection scatter plot overlays detected outliers onto a reduced representation of the data. Supported projection methods:
+
+- PCA, FAMD, t-SNE, UMAP
+
+Outlier points are colour-coded for easy visual inspection.
+
+---
+
+## 🔄 Dataset Comparison
+
+Compare two dataset versions side by side. Data sources include:
+
+- **Current Session Data** — the dataset loaded in the application.
+- **Upload File** — CSV, Excel, or Parquet upload.
+- **Enter File Path** — direct path to a file on disk.
+- **Select from History** — pick a snapshot from past trace sessions.
+
+The comparison highlights differences in shape, column overlap, and value-level changes.
+
+---
+
+## 📊 Data Quality Dashboard
+
+The Data Quality Score aggregates results from all validation checks into a single overview:
+
+| Scorecard | What It Measures |
+|---|---|
+| **Completeness** | Percentage of non-missing values across the dataset. |
+| **Validity (Outliers)** | Proportion of values within the expected statistical range. |
+| **Consistency** | Adherence to anomaly rules and clinical logic. |
+
+> **Tip**: Focus on resolving high-impact issues first — anomalies and outliers that meaningfully shift the overall score.

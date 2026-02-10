@@ -1,49 +1,90 @@
-# 📊 Visualization
+# 📊 Visualisation
 
-## Overview
+The **Visualisation** page provides an interactive plotting suite powered by Plotly. Charts include integrated statistical testing, flexible data controls, and customisation options for publication-ready figures.
 
-The **Visualization** module is a comprehensive plotting suite powered by Plotly. It allows users to explore data distributions, relationships, and trends with interactive, publication-ready charts. It uniquely integrates statistical testing directly into the visualizations.
+---
 
-## Key Features
+## 📈 Chart Types
 
-### 1. 📈 Chart Types
+### Distribution Plots
 
-* **Distribution**: Histograms, Box Plots, Violin Plots (with statistical annotations).
-* **Categorical**: Bar Plots, Pie Charts.
-* **Relationships**: Scatter Plots, Correlation Matrices, Hierarchical Clustermaps.
-* **Medical**: Bland-Altman Plots, ROC Curves, Kaplan-Meier (if applicable).
-* **Publication Standards**: All charts are generated largely in vector format (SVGs) or high-res PNGs suitable for manuscript submission.
+| Chart | Description |
+|---|---|
+| **Histogram** | Frequency distribution with optional KDE overlay. |
+| **Box Plot** | Quartiles, median, whiskers, and outliers. Supports group comparison with statistical annotations. |
+| **Violin Plot** | Combines box plot with kernel density estimation for richer shape information. |
+| **Density Plot** | Smoothed distribution curve. |
 
-### 2. 📐 Integrated Statistics
+### Relationship Plots
 
-* **Significance Testing**: Box and Violin plots include an option to "Show Statistical Significance".
-* **Auto-Detection**: Automatically selects appropriate tests (T-test vs. Mann-Whitney, ANOVA vs. Kruskal-Wallis) based on data characteristics.
-* **Visual Annotation**: Significant pairwise differences are highlighted directly on the plot with brackets and p-values.
-* **Detailed Results**: A collapsible table below the plot provides full statistical details (Test statistic, P-value, Effect size).
+| Chart | Description |
+|---|---|
+| **Scatter Plot** | Two-variable relationship with optional colour grouping, trendlines, and marginal distributions. |
+| **Correlation Matrix** | Heatmap of pairwise correlations across selected variables. |
+| **Clustermap** | Hierarchically clustered correlation or similarity matrix. |
 
-### 3. 🛠️ Data Controls
+### Medical / Specialised Plots
 
-* **Filtering**:
-  * **Anomalies**: Option to exclude rows flagged as clinical anomalies.
-  * **Inclusion**: Option to restrict the view to the study population (inclusion criteria).
-* **Outlier Handling**: Integrated outlier management to clean data before visualization.
+| Chart | Description |
+|---|---|
+| **Bland-Altman Plot** | Agreement between two measurement methods. Shows mean difference and limits of agreement. |
+| **ROC Curve** | Receiver Operating Characteristic for classification performance (AUC displayed). |
+| **Kaplan-Meier Curve** | Survival analysis with optional group comparison and log-rank test. |
 
-### 4. 🎨 Customization
+---
 
-* **Themes**: Support for multiple Plotly themes (Light, Dark, Seaborn, ggplot2) to match journal styles.
-* **Color Palettes**: Extensive selection of discrete and continuous color scales (Viridis, Plasma, Set1).
-* **Export**: One-click download of charts as **PNG**, **SVG**, or **HTML** (interactive).
-* **Interactive Guides**: Each plot type comes with a built-in guide explaining "When to use", "Inputs", and "What to look for".
+## 🧪 Integrated Statistical Testing
 
-## Usage Guide
+Statistical tests are automatically applied and overlaid on applicable charts:
 
-1. **Filter Data**: Use the top expanders to exclude anomalies or apply inclusion criteria if needed.
-2. **Select Category**: Choose a plot category (e.g., Distribution, Relationships) from the sidebar.
-3. **Configure Plot**: Select the X, Y, and Grouping variables.
-4. **Enable Statistics**: For Box/Violin plots, check "Show Statistical Significance" to perform hypothesis testing.
-5. **Customize**: Use the "Visual Settings" expander to adjust colors, themes, and dimensions.
+| Chart Type | Auto-applied Test |
+|---|---|
+| **Box Plot** (2 groups) | Mann-Whitney U |
+| **Box Plot** (3+ groups) | Kruskal-Wallis |
+| **Violin Plot** | Same as Box Plot |
+| **Scatter Plot** | Pearson / Spearman correlation coefficient |
 
-## Technical Details
+Significance brackets and p-values are rendered directly on the plot.
 
-* **File**: `app_pages/visualization.py`
-* **Dependencies**: `plotly.express`, `plotly.graph_objects`, `scipy.stats`, `app_pages.visualization_utils`
+---
+
+## 🎛️ Data Controls
+
+| Control | Description |
+|---|---|
+| **Variable Selection** | Choose outcome and grouping variables from the dataset. |
+| **Filter** | Restrict the data to a subset before plotting. |
+| **Group By** | Split the chart by a categorical variable. |
+| **Aggregation** | For grouped plots, apply mean, median, sum, or count. |
+
+---
+
+## 🎨 Customisation
+
+| Option | Description |
+|---|---|
+| **Title & Labels** | Custom chart title, axis labels, and legend title. |
+| **Colour Palette** | Choose from preset palettes or define custom colours. |
+| **Orientation** | Horizontal or vertical (for bar/box/violin). |
+| **Font Size** | Adjust text sizing for axes, title, and annotations. |
+
+---
+
+## 📤 Export
+
+Charts can be exported in multiple formats:
+
+| Format | How |
+|---|---|
+| **PNG** | Via the Plotly toolbar (camera icon). |
+| **SVG** | Via the Plotly toolbar. |
+| **HTML** | Interactive standalone file — retains hover and zoom. |
+
+---
+
+## 💡 Tips
+
+- Use **Box Plots** with a grouping variable to quickly identify significant differences between subgroups.
+- Enable **statistical annotations** to get p-values directly on the figure — useful for presentations and publications.
+- **Bland-Altman** plots require exactly two measurement columns; ensure both are numerical and on the same scale.
+- Export as **HTML** to share interactive, zoomable figures with collaborators.

@@ -1,46 +1,95 @@
 # 📄 Documents Insight
 
-## Overview
+The **Documents Insight** page enables you to analyse research PDFs using AI — generate structured summaries, chat with documents via retrieval-augmented Q&A, build knowledge graphs from extracted concepts, and check how well your dataset variables are covered in the literature.
 
-The **Documents Insight** module allows you to "talk" to your research papers and visualize their content. It extracts concepts from PDFs and builds a merged Knowledge Graph, showing how different documents cite the same or related topics.
+---
 
-## Key Features
+## 📁 Document Selection
 
-### 1. 📂 Document Selection
+Upload one or more PDF files. Documents are processed and indexed into the RAG vector store (ChromaDB) for retrieval.
 
-* **Load Saved Analysis**: Retrieve a previously generated graph.
-* **Select Documents**: Choose one or multiple PDF documents (uploaded via the RAG Manager) to analyze.
+- Supported format: `.pdf`
+- Documents are stored per-user for data isolation.
+- Previously uploaded documents can be reused across sessions.
 
-### 2. 🕸️ Knowledge Graph
+---
 
-* **Merged View**: See a unified graph where nodes represent Concepts (e.g., "Heart Failure") and edges represent relationships found in the text.
-* **Traceability**: Click any node to see exactly which documents cite it, including page numbers and source text snippets.
-* **Filtering**: Toggle text-based filtering to focus on specific documents within the large graph.
+## 📝 Document Summariser
 
-### 3. 💬 Chat with Documents
+Generate structured summaries from each uploaded paper.
 
-* **Context-Aware Chat**: Ask questions like "What does the dataset say about exclusion criteria?". The AI answers using *only* the currently visible/selected documents.
+### Extracted Fields
 
-### 4. 📊 Dataset Coverage (Tab 3)
+| Field | Description |
+|---|---|
+| **Objective** | The paper's stated research goal or hypothesis. |
+| **Methods** | Study design, population, and analytical methods used. |
+| **Key Findings** | Main results, effect sizes, and statistical significance. |
+| **Variables** | Clinical and biological variables discussed in the paper. |
 
-* **Gap Analysis**: Automatically compares your current dataset variables against the concepts found in the documents.
-* **Coverage Score**: See what percentage of your variables are supported by literature.
-* **Match Details**: Review which variable maps to which concept and the confidence score of the match.
+Summaries are generated via RAG and displayed in a dedicated tab for quick review.
 
-## Usage Guide
+---
 
-1. **Login**: Ensure you are authenticated via the sidebar.
-2. **Select Documents**: Use the sidebar multiselect to choose the PDFs you want to analyze.
-3. **Generate Graph**: Click **✨ Generate Graph** to extract concepts. This may take a minute.
-4. **Explore**:
-    * **Graph Tab**: Visualize connections. Click nodes to see citations in the right panel.
-    * **Formulas Tab**: View any explicit mathematical formulas extracted from the text.
-    * **Coverage Tab**: Click **Checking Coverage** to see if your dataset aligns with the papers.
-    * **Chat Tab**: Ask free-text questions about the selected documents.
-5. **Save**: Give your analysis a name (e.g., "Review 2024") and save it for later quick access.
+## 🌐 Knowledge Graph from Documents
 
-## Technical Details
+Build an interactive knowledge graph from concepts extracted across all uploaded PDFs.
 
-* **File**: `app_pages/document_insight.py`
-* **Storage**: Graphs are saved in `data/knowledge_graphs/{username}_Graph.json`.
-* **AI**: Uses LLMs to extract entities and relations.
+### How It Works
+
+1. **Entity Extraction** — The LLM identifies clinical concepts, variables, and relationships from each document.
+2. **Concept Merging** — Similar concepts (e.g. "Heart Failure" and "Heart Failure (HF)") are unified into single nodes with aggregated citations.
+3. **Graph Construction** — Nodes represent concepts; edges represent co-occurrence or semantic relationships.
+4. **Citation Tracking** — Each node includes page-level citations from all documents where it appears.
+
+### Features
+
+- **Filter by Document** — Show/hide concepts from specific papers.
+- **Node Details** — Click any node to view its definition, citations, and connected concepts.
+- **Interactive Layout** — Powered by yFiles with multiple layout options.
+
+---
+
+## 💬 Chat with Documents
+
+Ask questions about the uploaded documents using retrieval-augmented Q&A.
+
+### How It Works
+
+1. Relevant document chunks are retrieved from the vector store based on your question.
+2. The LLM generates an answer grounded in the retrieved context.
+3. Source citations (document name and page) are displayed with each answer.
+
+### Use Cases
+
+- *"What biomarkers are associated with insulin resistance in these papers?"*
+- *"Which studies used a cohort design?"*
+- *"Summarise the findings about HDL cholesterol across all documents."*
+
+---
+
+## 📊 Dataset Coverage Analysis
+
+Check how well your dataset's variables are represented in the uploaded literature.
+
+### Output
+
+| Column | Coverage | Source |
+|---|---|---|
+| `hdl_cholesterol` | ✅ Covered | Paper A (p. 3), Paper B (p. 7) |
+| `homa_ir` | ✅ Covered | Paper A (p. 5) |
+| `patient_id` | ❌ Not covered | — |
+
+This helps identify:
+
+- **Well-supported variables** — backed by literature.
+- **Gaps** — variables in your dataset not discussed in any uploaded paper.
+- **Opportunities** — concepts in the literature not yet captured in your dataset.
+
+---
+
+## 💡 Tips
+
+- Upload all relevant papers **before** generating the taxonomy on the Data Insight page — the RAG system uses them for better variable classification.
+- Use the **Chat** feature for quick literature queries instead of manually searching PDFs.
+- The **Coverage Analysis** is especially useful when preparing study protocols or grant applications.

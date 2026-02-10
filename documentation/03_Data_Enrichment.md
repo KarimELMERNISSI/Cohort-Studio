@@ -1,82 +1,143 @@
-# 🧪 Data Enrichment
+# 🔄 Data Enrichment
 
-## Overview
+The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to engineering new variables through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system for full reproducibility.
 
-The **Data Enrichment** module provides advanced tools for enhancing the dataset through imputation, dimensionality reduction, and feature engineering. It is designed to handle complex data challenges like missing values and high-dimensional spaces.
+---
 
-## Key Features
+## 📥 Import External Data
 
-### 1. 🧹 Handle Missing Data (Tab 1)
+Merge additional data sources into your main dataset.
 
-Organized into two focused sub-tabs:
+### Workflow
 
-#### A. Targeted Imputation (Custom Formulas)
+1. **Upload Main Dataset** — Load from the current session, a file upload, or a saved version.
+2. **Upload Enrichment Dataset** — Provide the supplementary data to merge.
+3. **Select Columns** — Choose which columns to retain from each dataset.
+4. **Configure Merge** — Select the join key(s) and merge type (inner, left, right, outer).
+5. **Review Results** — Inspect the enriched dataset, including column overlap and row counts.
 
-* **Precision**: Manually fix specific variables using known relationships (e.g., `Weight = BMI * Height^2`).
-* **AI Guided Mode**: The RAG assistant can suggest valid Python formulas based on your columns and docs.
+---
 
-#### B. Global Imputation (Auto)
+## 🛠️ Handle Missing Data
 
-* **Numerical Strategies**:
-  * **Standard**: Mean, Median.
-  * **Advanced**: **KNN**, **MICE** (Iterative), **MissForest** (Random Forest).
-* **Categorical Strategies**: Mode or MissForest classification.
-* **Auto-Encoding**: Pipeline handles encoding/scaling automatically.
+Two complementary approaches are available for imputation.
 
-### 2. 🌌 Dimensionality Reduction
+### 🎯 Targeted Imputation
 
-* **Mixed Data Support**:
-  * **FAMD (Factor Analysis of Mixed Data)**: Specifically designed to handle datasets with both numerical and categorical variables simultaneously.
-* **Linear Methods**:
-  * **PCA (Principal Component Analysis)**: Uses the `prince` library (sklearn engine) with automatic centering and scaling.
-* **Non-Linear / Manifold Learning**:
-  * **t-SNE**: t-Distributed Stochastic Neighbor Embedding for cluster visualization.
-  * **UMAP**: Uniform Manifold Approximation and Projection for scalable structure preservation.
-* **Analytics**: Includes "Explained Variance" plots and "Contribution to Components" heatmaps for PCA/FAMD.
+Manually fix specific columns using formulas or AI-assisted suggestions.
 
-### 3. 🛠️ Feature Engineering
+| Feature | Description |
+|---|---|
+| **Formula Editor** | Write expressions using column names and arithmetic operators (e.g. `Weight / (Height**2)`). |
+| **AI Suggestions (RAG)** | The system proposes computed formulas based on related columns and uploaded documentation. |
 
-* **Encoding Strategies**:
-  * **One-Hot Encoding**: For nominal variables.
-  * **Label Encoding**: For simple integer mapping.
-  * **Ordinal Encoding**: Respects specific category orders (e.g., Low < Medium < High).
-* **Statistical Aggregations**:
-  * **Central Tendency**: Mean, Median.
-  * **Dispersion**: Standard Deviation, Min, Max.
-  * **Totals**: Summation.
-* **Scaling & Normalization**:
-  * **Z-Score Standardization**: Centers data around 0 with unit variance.
-  * **Min-Max Normalization**: Scales data to a fixed range [0, 1].
-  * **Log Transformation**: Natural Logarithm (Log(x+1)) for handling skewed data.
+#### AI Suggestion Modes
 
-### 4. 🤖 AI Variable Discovery (RAG)
+| Mode | Description |
+|---|---|
+| **Free Thinking (Auto)** | Scans all available columns to suggest formulas automatically. |
+| **Guided (with Hints)** | User provides a clue (e.g. "unit conversion") and selects context columns for more focused suggestions. |
 
-* **Context-Aware Suggestions**: Uses Retrieval-Augmented Generation (RAG) to suggest new computed variables based on your uploaded documentation (e.g., clinical protocols, research papers).
-* **Dual Modes**:
-  * **Specific Search**: Ask for specific concepts (e.g., "Kidney Function", "BMI") and the AI will find relevant formulas in your documents.
-  * **Open Discovery**: Let the AI analyze your dataset columns against your documents to suggest relevant derived variables automatically.
-* **Source Transparency**: Each suggestion is tagged with its source type (**Document**, **Hybrid**, or **Knowledge Base**) and includes the specific formula and reasoning derived from the text.
-* **One-Click Application**: Instantly apply the suggested formulas to the variable creation editor.
+### 🤖 Global Imputation
 
-### 5. 📄 Data Transformation Reporting
+Apply statistical or ML-based strategies to all missing values simultaneously.
 
-* **Automated Documentation**: Generates a professional Microsoft Word (`.docx`) report summarizing the entire data transformation session.
-* **Audit Trail**: Includes:
-  * Session ID and Source Dataset name.
-  * Chronological list of all applied steps (Enrichment, Imputation, etc.).
-  * Detailed parameter tables for each operation.
-  * Timestamps for all actions.
-* **Access Points**: Available in the **Dataset History** sidebar (next to "Load Selected Version") and in the **Reproduce Analysis** tab.
+| Method | Type | Description |
+|---|---|---|
+| **Mean / Median** | Statistical | Replace missing values with the column mean or median. |
+| **Most Frequent** | Statistical | Replace with the mode (categorical columns). |
+| **KNN** | ML | Impute using K-nearest neighbours. |
+| **MICE** | ML | Multiple Imputation by Chained Equations — iterative, multivariate. |
+| **MissForest** | ML | Random forest-based imputation for mixed data types. |
 
-## Usage Guide
+#### Global Imputation Options
 
-1. **Impute Missing Data**: Select columns with missing values and choose an imputation method (MissForest is recommended for complex datasets).
-2. **Reduce Dimensions**: Select a subset of numeric features and run PCA, t-SNE, or UMAP to visualize the data in 2D or 3D space. This is useful for identifying clusters or patterns.
-3. **Transform Features**: Create new variables or scale existing ones to prepare the data for statistical modeling.
-4. **Discover Variables**: Expand "🤖 AI Variable Suggestions", upload your protocol documents (in the sidebar), and click "Generate Suggestions" to find clinically relevant computed variables.
-5. **Download Report**: In the **Dataset History** sidebar, select a version and click **📄 Download Report** to get a documented history of your changes.
+| Option | Description |
+|---|---|
+| **Categorical Encoder** | Optionally one-hot encode categorical columns during imputation. |
+| **Numerical Scaler** | Optionally scale numerical columns during imputation. |
+| **Remainder Strategy** | Handle columns not part of the imputation (passthrough, drop). |
 
-## Technical Details
+After imputation, an **imputation mask** highlights which values were filled, and a **before/after summary** is displayed.
 
-* **File**: `app_pages/data_enrichment.py`
-* **Dependencies**: `utils.miss_forest`, `prince` (FAMD/PCA), `sklearn` (Preprocessing, Decomposition, Manifold), `umap`, `manage.rag_manager`
+---
+
+## ⚙️ Create New Variables
+
+Engineer new features via transformations, dimensionality reduction, encoding, scaling, or clustering.
+
+### Transformation Types
+
+#### Dimensionality Reduction
+
+| Method | Description |
+|---|---|
+| **PCA** | Principal Component Analysis (via Prince). Handles numerical data. |
+| **FAMD** | Factor Analysis of Mixed Data. Handles both numerical and categorical variables. |
+| **t-SNE** | Non-linear embedding for 2-D/3-D visualisation. Parameters: perplexity, learning rate. |
+| **UMAP** | Uniform Manifold Approximation. Parameters: n_neighbours, min_dist. |
+
+#### Clustering
+
+| Method | Description |
+|---|---|
+| **K-Means** | Partition-based clustering. Set number of clusters (K). |
+| **DBSCAN** | Density-based clustering. Set epsilon and min_samples. |
+| **Gaussian Mixture** | Probabilistic clustering. Set number of components. |
+
+> **Note**: Input variables are automatically standardised (Z-score). Rows with any missing values in selected columns are excluded (complete case analysis).
+
+#### Encoding
+
+| Method | Description |
+|---|---|
+| **One-Hot** | Binary column per category. |
+| **Label** | Integer encoding. |
+| **Ordinal** | User-specified order mapping. |
+
+#### Scaling
+
+| Method | Description |
+|---|---|
+| **Standard (Z-Score)** | Mean = 0, Std = 1. |
+| **Min-Max** | Scaled to [0, 1]. |
+| **Robust** | Median-centred, IQR-scaled. Resistant to outliers. |
+| **Max-Abs** | Scaled by maximum absolute value. |
+
+#### Statistical Transformations
+
+Log, Square Root, Box-Cox, Yeo-Johnson, Rank, Quantile, and more.
+
+### Naming Convention
+
+All new columns follow a configurable naming pattern (e.g. `{method_applied}_{initial_variable}`) to maintain traceability.
+
+---
+
+## 🤖 AI Variable Discovery
+
+The RAG system can suggest **computed variables** that are clinically or statistically meaningful based on:
+
+- Existing column names and data types.
+- Uploaded research documentation.
+- Known medical formulas and indices.
+
+Suggestions include the variable name, formula, reasoning, and expected units.
+
+---
+
+## 💾 Dataset Versioning & Persistence
+
+The sidebar provides:
+
+- **Dataset History** — Load any previously saved dataset version.
+- **Automatic Snapshots** — Each transformation saves a Parquet snapshot for reproducibility.
+- **Reproduce Analysis** — Upload or select a trace file to regenerate reports or replay transformations.
+
+---
+
+## 💡 Tips
+
+- Run **Global Imputation** before **Dimensionality Reduction** or **Clustering** — these methods require complete data.
+- Use **Targeted Imputation** with AI suggestions for domain-specific formulas (e.g. computing BMI from weight and height).
+- Check the **imputation mask** after global imputation to verify which values were filled.

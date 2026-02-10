@@ -1,246 +1,206 @@
-# Developer Guide: RAG & LLM Utilities
+# 🛠️ Developer Guide
 
-This guide covers the architecture and usage of the RAG system and LLM utilities.
+This guide covers the architecture, design patterns, and key subsystems of the Cohort Monitoring Package for developers who want to understand, extend, or maintain the application.
 
 ---
 
-## RAG Manager Architecture
-
-The RAG system uses a **Mixin Pattern** for maintainability. The main `RAGManager` class inherits from three focused mixins:
+## 🏗️ Architecture Overview
 
 ```text
-RAGManager (manage/rag_manager.py)
-├── TaxonomyMixin      (manage/rag_taxonomy.py)
-├── DocumentsMixin     (manage/rag_documents.py)
-└── ComputedVarsMixin  (manage/rag_computed_vars.py)
+┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  Streamlit   │───▶│   App Pages      │───▶│  Backend         │
+│  Frontend    │    │  (app_pages/)    │    │  Managers        │
+│              │    │                  │    │  (manage/)       │
+└──────────────┘    └──────────────────┘    └──────────────────┘
+                           │                       │
+                    ┌──────▼──────┐          ┌─────▼──────┐
+                    │  Utilities  │          │  Storage   │
+                    │  (utils/)   │          │  (data/)   │
+                    └─────────────┘          └────────────┘
 ```
 
-### Key Benefits
-
-- **Separation of Concerns**: Each mixin handles one domain
-- **Maintainability**: Smaller, focused files (~300-500 lines each)
-- **Backward Compatibility**: External code sees a single `RAGManager` class
+- **App Pages** — Streamlit UI modules, one per page tab.
+- **Managers** — Backend logic for RAG, database, and reproduction.
+- **Utilities** — Reusable helpers for analysis, statistics, visualisation, and LLM interaction.
+- **Storage** — DuckDB databases, ChromaDB vector stores, Parquet snapshots, and trace JSON files.
 
 ---
 
-## Authentication & User Isolation Architecture
+## 🧠 RAG Manager (Mixin Pattern)
 
-**Location**: `manage/db_manager.py` (Backend), `main.py` (Frontend)
+The RAG system is structured using the **Mixin composition pattern** to keep each concern in its own module:
 
-The application implements a secure, sidebar-based authentication system with strict data isolation.
+```text
+RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
+├── rag_taxonomy.py      # Taxonomy generation & refinement
+├── rag_documents.py     # PDF processing, summarisation, knowledge graphs
+├── rag_computed_vars.py # Variable suggestion & imputation formulas
+└── rag_manager.py       # Orchestrator: initialisation, ChromaDB, shared utilities
+```
 
-### 1. Authentication Flow
+### Key Design Decisions
 
-- **Credential Storage**: Users are stored in a dedicated DuckDB table (`users.duckdb`).
-- **Password Hashing**: Passwords are hashed using `bcrypt` (salt + hash) before storage.
-- **Session**: `st.session_state` stores the authenticated `username`.
-
-### 2. Data Isolation Model
-
-The system uses a **Prefix & Directory** strategy to isolate user data.
-
-| Component | Storage Strategy | Format/Path | Admin Access |
-| :--- | :--- | :--- | :--- |
-| **Datasets** | Filename Prefix | `data/{username}_{filename}.parquet` | ✅ Sees all files |
-| **Traces** | Filename Prefix | `data/traces/{username}_session_{id}.json` | ✅ Sees all traces |
-| **Taxonomies** | User Directory | `data/taxonomy/{username}/v{N}/` | ✅ Sees all user dirs |
-| **Kn. Graphs** | Filename Prefix | `data/knowledge_graphs/{username}_{graph}.json` | ✅ Sees all graphs |
-
-### 3. Security Implementation
-
-- **Managers**: `DBManager`, `TransformationManager`, and frontend pages check `st.session_state.username`.
-- **Fail-Closed**: If `username` is missing (e.g., session timeout), access methods return empty lists or errors, preventing data leakage.
-- **Admin Override**: The user `admin` bypasses these filters to provide system oversight.
+- **ChromaDB** is used as the vector store for document embeddings.
+- **Google Gemini** is the LLM backend (via a custom LangChain adapter in `utils/custom_gemini.py`).
+- Each mixin accesses shared resources (`self.vectorstore`, `self.llm`) from the base `RAGManager`.
 
 ---
 
-## Pydantic Response Schemas
+## 🔐 Authentication & User Management
 
-**Location**: `manage/rag_schemas.py`
+### Account Lifecycle
 
-All LLM responses are validated using Pydantic models:
-
-```python
-from manage.rag_schemas import (
-    TheoreticalConcept,     # Medical formula concept
-    SuggestionResponse,     # Computed variable suggestions
-    ProxyVariable,          # Proxy variable response
-    AlternativeFormula,     # Alternative formula response
-)
+```text
+Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Delete)
 ```
 
-### Usage Example
+| State | Description |
+|---|---|
+| **Pending** | Account created but not yet activated. Cannot log in. |
+| **Active** | Admin-approved. Full access to the application. |
+| **Deactivated** | Admin-disabled. Cannot log in until reactivated. |
+| **Deleted** | Permanently removed from the database. |
 
-```python
-from manage.rag_schemas import ProxyVariable
-from utils.llm_utils import validate_and_parse
+### Implementation
 
-response_text = '{"proxy_found": true, "proxy_name": "bmi"}'
-result, error = validate_and_parse(response_text, ProxyVariable)
+- Passwords are hashed with **bcrypt** before storage.
+- User records are stored in the DuckDB database (`db_manager.py`).
+- The `is_active` field controls login eligibility.
+- The `admin` user is automatically activated and has access to the **Users Management** page.
 
-if result:
-    print(result.proxy_name)  # Type-safe access
-```
+### Data Isolation
+
+Per-user isolation is enforced via:
+
+- **Filename prefixes** — Saved datasets, traces, and configs are prefixed with the username.
+- **Directory scoping** — ChromaDB collections and snapshot directories are user-specific.
+- **Session state** — `st.session_state.username` gates all read/write operations.
 
 ---
 
-## LLM Utilities
+## 📋 Pydantic Response Schemas
 
-**Location**: `utils/llm_utils.py`
+All structured LLM responses are validated against Pydantic models defined in `manage/rag_schemas.py`:
 
-### Core Functions
+| Schema | Purpose |
+|---|---|
+| `TaxonomyNode` | Node in the taxonomy graph (variable, concept, formula, category). |
+| `TaxonomyEdge` | Relationship between two taxonomy nodes. |
+| `ComputedVariable` | AI-suggested variable with name, formula, and reasoning. |
+| `ImputationFormula` | AI-suggested imputation formula for a target variable. |
+| `DocumentSummary` | Structured summary extracted from a research paper. |
 
-#### `parse_json_safe(text, default=None)`
+### Why Schemas Matter
 
-Robust JSON parsing with multiple fallback strategies:
-
-1. Extract from markdown code blocks
-2. Find JSON by brace/bracket matching
-3. Repair trailing commas
-4. Balance brackets
-5. Fall back to `ast.literal_eval`
-
-```python
-from utils.llm_utils import parse_json_safe
-
-# Handles messy LLM output
-text = '''Here's the result:
-```json
-{"name": "test", "value": 42,}
-```
-
-'''
-result = parse_json_safe(text)  # {"name": "test", "value": 42}
-
-```
-
-#### `validate_and_parse(text, schema)`
-Parse JSON and validate against a Pydantic schema:
-
-```python
-from utils.llm_utils import validate_and_parse
-from manage.rag_schemas import SuggestionResponse
-
-result, error = validate_and_parse(llm_output, SuggestionResponse)
-if error:
-    print(f"Validation failed: {error}")
-else:
-    for s in result.suggestions:
-        print(s.name, s.formula)
-```
-
-#### `StructuredOutputHelper`
-
-Helper class for schema-validated LLM calls with retry:
-
-```python
-from utils.llm_utils import StructuredOutputHelper
-from manage.rag_schemas import ProxyVariable
-
-helper = StructuredOutputHelper(llm, max_retries=2)
-result, error = helper.invoke_with_schema(prompt, ProxyVariable)
-```
+- **Type safety** — Catch malformed LLM output before it reaches the UI.
+- **Retry logic** — If parsing fails, `utils/llm_utils.py` attempts JSON repair and re-prompts the LLM.
+- **Consistency** — Downstream code can rely on well-typed objects instead of raw dictionaries.
 
 ---
 
-## Data Analysis Utilities
+## 🔧 LLM Utilities (`utils/llm_utils.py`)
 
-### DataAnalyzer
+Robust JSON parsing pipeline for LLM responses:
 
-**Location**: `utils/data_analyzer.py`
-
-Analyzes DataFrame columns and categorizes them by type:
-
-```python
-from utils.data_analyzer import DataAnalyzer
-
-analyzer = DataAnalyzer(df)
-
-# Access categorized columns
-analyzer.numeric_cols           # Numeric columns (high cardinality)
-analyzer.categorical_cols       # Categorical + low-cardinality numeric
-analyzer.date_cols              # Date/datetime columns
-analyzer.binary_cols            # Columns with exactly 2 unique values
-analyzer.low_cardinality_numeric_cols  # Numeric with ≤10 unique values
-analyzer.high_cardinality_cat_cols     # Categorical with many values
-
-# Refresh after DataFrame changes
-analyzer.refresh(new_df)
-
-# Get suitable columns for plot types
-cols = analyzer.get_suitable_columns("Box Plot")
-# {"y": [...], "x": [...]}
-```
+1. **Markdown Extraction** — Strips ```json fences from the response.
+2. **Bracket Balancing** — Fixes unmatched `[`, `{`, `]`, `}`.
+3. **Trailing Comma Removal** — Cleans common JSON syntax errors.
+4. **Pydantic Validation** — Validates the parsed object against the expected schema.
+5. **LLM Self-Repair** — If all else fails, sends the malformed output back to the LLM with an error message and asks for a corrected version.
 
 ---
 
-## Statistics Utilities
+## 📊 Data Analysis Utilities
 
-**Location**: `utils/statistics_utils.py`
+### `utils/data_analyzer.py` — DataAnalyzer
 
-### Normality Testing
+Classifies DataFrame columns into semantic types:
 
-```python
-from utils.statistics_utils import normality_test
+| Type | Description |
+|---|---|
+| `numeric_cols` | Continuous numerical columns (float/int, high cardinality). |
+| `categorical_cols` | String/object columns. |
+| `binary_cols` | Columns with exactly 2 unique values. |
+| `date_cols` | Datetime columns. |
+| `low_cardinality_numeric_cols` | Numerical columns with few unique values (may be coded categories). |
 
-p_value = normality_test(column, method='shapiro')
-# Methods: 'shapiro', 'dagostino', 'ks', 'anderson'
-```
+### `utils/statistics_utils.py`
 
-### Test Guidelines UI
+- Normality tests (Shapiro-Wilk, D'Agostino).
+- Test selection guidelines based on sample size and distribution.
 
-```python
-from utils.statistics_utils import show_test_guidelines
+### `utils/visualization_utils.py`
 
-show_test_guidelines()  # Renders Streamlit help UI
-```
+- Plotly chart generators with statistical overlays.
+- Palette generation (`generate_palette()`, cached with `@functools.cache`).
 
----
+### `utils/clustering_utils.py`
 
-## Export Utilities
-
-**Location**: `utils/export_utils.py`
-
-```python
-from utils.export_utils import to_excel, to_excel_sheets
-
-# Single DataFrame
-excel_bytes = to_excel(df)
-
-# Multiple DataFrames to sheets
-excel_bytes = to_excel_sheets({
-    "Sheet1": df1,
-    "Sheet2": df2
-})
-```
+- `prepare_data_for_clustering()` — Standardises data and handles missing values.
+- `fit_kmeans()`, `fit_dbscan()`, `fit_gaussian_mixture()` — Algorithm wrappers returning labels and model objects.
 
 ---
 
-## Best Practices
+## 🔁 Trace & Reproduction System
 
-### 1. Always Use Schema Validation for LLM Outputs
+### TransformationManager
 
-```python
-# ❌ Fragile
-result = json.loads(llm_response)
+Manages the recording of analysis steps:
 
-# ✅ Robust
-result, error = validate_and_parse(llm_response, MySchema)
-```
+- `initialize_session(dataset_name, username)` — Starts a new trace session.
+- `add_step(function, params, description, output_dataset_path)` — Records a transformation step.
+- `get_available_datasets_from_traces()` — Lists datasets referenced in past traces.
 
-### 2. Use parse_json_safe for Unstructured JSON
+### TraceDocumenter
 
-```python
-# Handles all edge cases
-data = parse_json_safe(text, default={})
-```
+Generates `.docx` reports from trace JSON files using `python-docx`:
 
-### 3. Add Logging for Debugging
+- Session metadata header.
+- Step-by-step table with function, parameters, and description.
+- Downloadable via Streamlit's file download button.
 
-```python
-import logging
-logger = logging.getLogger(__name__)
+### ReproductionManager
 
-logger.debug(f"Parsed {len(items)} items")
-logger.warning(f"Failed to parse: {error}")
-```
+Handles trace replay with path resolution for cross-platform compatibility.
+
+---
+
+## 📊 RAG Quality Monitor
+
+The `rag_monitoring.py` page provides a dashboard for monitoring RAG system health:
+
+| Metric | Description |
+|---|---|
+| **Embedding Statistics** | Document count, chunk count, and embedding dimensions. |
+| **Retrieval Quality** | Relevance scores for test queries. |
+| **Evaluation Results** | Structured evaluation of RAG responses against expected outputs. |
+
+This is primarily a developer and admin tool for diagnosing RAG performance issues.
+
+---
+
+## 📁 Configuration
+
+### `config/config.json`
+
+Contains data quality rules, validation thresholds, and anomaly definitions. Key sections:
+
+| Section | Purpose |
+|---|---|
+| `anomalies` | Clinical anomaly rules per variable (min/max bounds, impossible values). |
+| `inclusion_criteria` | Mask family definitions for cohort filtering. |
+| `quality_weights` | Weights for completeness, validity, and consistency in the quality score. |
+
+### `.streamlit/secrets.toml`
+
+Stores the `GOOGLE_API_KEY` for local development (not committed to version control).
+
+---
+
+## 🤝 Contributing
+
+1. Follow the existing Mixin pattern when adding new RAG capabilities.
+2. Validate all LLM responses with Pydantic schemas.
+3. Use `TransformationManager.add_step()` to log any data-modifying operation.
+4. Add utility functions to the appropriate `utils/` module, not inline in app pages.
+5. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).
