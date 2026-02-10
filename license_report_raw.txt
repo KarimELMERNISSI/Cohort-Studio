@@ -134,7 +134,7 @@ frozenlist                     | 1.4.0           | Apache 2
 fsspec                         | 2025.10.0       | Unknown
 fsspec                         | 2024.3.1        | BSD
 future                         | 0.18.3          | MIT
-fuzzywuzzy                     | 0.18.0          | GPLv2
+
 gensim                         | 4.3.2           | LGPL-2.1-only
 gitdb                          | 4.0.12          | BSD License
 gitdb                          | 4.0.7           | BSD License
@@ -230,7 +230,7 @@ langsmith                      | 0.4.3           | MIT
 lazy-object-proxy              | 1.10.0          | BSD-2-Clause
 lazy_loader                    | 0.4             | BSD 3-Clause License  Copyright (c) 2022--2023, Sc
 lckr_jupyterlab_variableinspector | 3.1.0           | BSD 3-Clause License  Copyright (c) 2021, lckr All
-Levenshtein                    | 0.27.3          | Unknown
+
 libarchive-c                   | 2.9             | CC0
 libmambapy                     | 1.5.8           | Unknown
 lightgbm                       | 4.6.0           | The MIT License (MIT)  Copyright (c) Microsoft Cor
@@ -374,11 +374,11 @@ python-dateutil                | 2.8.2           | Dual License
 python-docx                    | 1.2.0           | MIT
 python-dotenv                  | 0.21.0          | BSD-3-Clause
 python-json-logger             | 2.0.7           | BSD
-python-Levenshtein             | 0.27.3          | GPL-2.0-or-later
+
 python-lsp-black               | 2.0.0           | MIT License
 python-lsp-jsonrpc             | 1.1.2           | MIT
 python-lsp-server              | 1.10.0          | MIT
-python-slugify                 | 5.0.2           | MIT
+
 python-snappy                  | 0.6.1           | BSD
 pytoolconfig                   | 1.2.6           | LGPL-3.0-or-later
 pytz                           | 2024.1          | MIT
@@ -462,7 +462,7 @@ tabulate                       | 0.9.0           | MIT
 tblib                          | 1.7.0           | BSD-2-Clause
 tenacity                       | 8.2.3           | Apache 2.0
 terminado                      | 0.17.1          | # terminado: A python websocket server backend for
-text-unidecode                 | 1.3             | Artistic License
+
 textdistance                   | 4.2.1           | MIT
 threadpoolctl                  | 3.5.0           | BSD-3-Clause
 three-merge                    | 0.1.1           | MIT
@@ -493,7 +493,7 @@ tzlocal                        | 5.2             | MIT
 uc-micro-py                    | 1.0.1           | MIT
 ujson                          | 5.10.0          | BSD License
 umap-learn                     | 0.5.9.post2     | BSD
-Unidecode                      | 1.2.0           | GPL
+
 uritemplate                    | 4.2.0           | BSD 3-Clause OR Apache-2.0
 urllib3                        | 2.3.0           | MIT License
 urllib3                        | 2.2.2           | MIT License

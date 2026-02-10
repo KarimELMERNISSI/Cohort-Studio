@@ -19,7 +19,7 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 
 **Methods:**
 
-- **__init__**(`self, db_path`) -> `None`
+- ****init****(`self, db_path`) -> `None`
   > No description available.
 
 - **_get_connection**(`self`) -> `None`
@@ -44,13 +44,13 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
   > **Parameters**:
   >
   > file_name : str
-  >     The name of the file to load (without extension)
+  > The name of the file to load (without extension)
   >
   >
   > **Returns**:
   >
   > tuple
-  >     (DataFrame, message) - The loaded DataFrame and a success/error message
+  > (DataFrame, message) - The loaded DataFrame and a success/error message
 
 - **get_available_tables**(`self`) -> `None`
   > List available parquet files in the current directory.
@@ -102,11 +102,13 @@ Returns:
 Lists files with specified extensions in a directory.
 
 Parameters:
+
 - directory (str): The path to the directory.
 
 - file_extensions (list of str, optional): List of file extensions to filter. Default is None.
 
 Returns:
+
 - list of str: List of file paths that match the specified extensions.
 
 If no file_extensions are provided, all files in the directory are listed.
@@ -120,11 +122,13 @@ If no file_extensions are provided, all files in the directory are listed.
 Detects the encoding of a file using charset-normalizer.
 
 Parameters:
+
 - file_path (str): The path to the file.
 
 - num_lines (int): The number of lines to read from the file for encoding detection. Default is 100.
 
 Returns:
+
 - str: The detected encoding of the file.
 
 Note:
@@ -146,6 +150,7 @@ Load a CSV file with automatic delimiter detection.
 - num_lines (int): The number of lines to read for delimiter detection. Default is 10.
 
 Returns:
+
 - pd.DataFrame: The loaded DataFrame.
 
 ### def `load_dataframe` (file_handling.py)
@@ -157,11 +162,13 @@ Returns:
 Loads a DataFrame from a file.
 
 Parameters:
+
 - file_path (str): The path to the file to load.
 
 - encoding (str, optional): The encoding of the file. Default is 'utf-8'.
 
 Returns:
+
 - DataFrame or None: The loaded DataFrame if successful, otherwise None.
 
 This function attempts to load a DataFrame from the specified file. It first detects the file extension
@@ -308,6 +315,7 @@ Methods:
 _RAG Evaluator Module
 
 Provides comprehensive evaluation metrics for the RAG system including:
+
 - Retrieval quality (context relevance, semantic similarity)
 
 - Generation quality (faithfulness, answer relevance, hallucination detection)
@@ -328,12 +336,12 @@ and direct validation for structural metrics.
 
 **Methods:**
 
-- **__init__**(`self, llm, log_dir: str`) -> `None`
+- ****init****(`self, llm, log_dir: str`) -> `None`
   > Initialize the RAG Evaluator.
   >
   > Args:
-  >     llm: The LLM instance to use for evaluation (same as RAG system)
-  >     log_dir: Directory to store evaluation logs
+  > llm: The LLM instance to use for evaluation (same as RAG system)
+  > log_dir: Directory to store evaluation logs
 
 - **_init_summary**(`self`) -> `None`
   > Initialize the metrics summary file.
@@ -351,62 +359,62 @@ and direct validation for structural metrics.
   > Evaluate the quality of retrieved context.
   >
   > Args:
-  >     query: The original query
-  >     retrieved_chunks: List of retrieved text chunks
-  >     k: Number of top chunks to consider
+  > query: The original query
+  > retrieved_chunks: List of retrieved text chunks
+  > k: Number of top chunks to consider
   >
   > Returns:
-  >     Dictionary with relevance scores and analysis
+  > Dictionary with relevance scores and analysis
 
 - **calculate_semantic_similarity**(`self, query_embedding: List[float], chunk_embeddings: List[List[float]]`) -> `Dict[ComplexType]`
   > Calculate semantic similarity between query and chunks.
   >
   > Args:
-  >     query_embedding: The query's embedding vector
-  >     chunk_embeddings: List of chunk embedding vectors
+  > query_embedding: The query's embedding vector
+  > chunk_embeddings: List of chunk embedding vectors
   >
   > Returns:
-  >     Dictionary with similarity metrics
+  > Dictionary with similarity metrics
 
 - **evaluate_generation_quality**(`self, query: str, context: str, response: str, function_name: str`) -> `Dict[ComplexType]`
   > Evaluate the quality of generated response.
   >
   > Args:
-  >     query: The original query
-  >     context: The retrieved context used
-  >     response: The generated response
-  >     function_name: Name of the RAG function being evaluated
+  > query: The original query
+  > context: The retrieved context used
+  > response: The generated response
+  > function_name: Name of the RAG function being evaluated
   >
   > Returns:
-  >     Dictionary with quality scores
+  > Dictionary with quality scores
 
 - **validate_json_output**(`self, response: str`) -> `Dict[ComplexType]`
   > Validate if the response contains valid JSON.
   >
   > Args:
-  >     response: The generated response
+  > response: The generated response
   >
   > Returns:
-  >     Dictionary with validation results
+  > Dictionary with validation results
 
 - **evaluate**(`self, query: str, context: str, response: str, function_name: str, retrieved_chunks: Optional[List[str]]`) -> `Dict[ComplexType]`
   > Run full evaluation on a RAG query-response pair.
   >
   > Args:
-  >     query: The original query
-  >     context: The retrieved context
-  >     response: The generated response
-  >     function_name: Name of the RAG function
-  >     retrieved_chunks: Optional list of individual chunks
+  > query: The original query
+  > context: The retrieved context
+  > response: The generated response
+  > function_name: Name of the RAG function
+  > retrieved_chunks: Optional list of individual chunks
   >
   > Returns:
-  >     Complete evaluation results
+  > Complete evaluation results
 
 - **log_result**(`self, result: Dict[ComplexType]`) -> `None`
   > Log evaluation result to file and update summary.
   >
   > Args:
-  >     result: Evaluation result dictionary
+  > result: Evaluation result dictionary
 
 - **_parse_evaluation_response**(`self, response: str, metric_type: str`) -> `Dict[ComplexType]`
   > Parse LLM evaluation response into structured format.
@@ -424,10 +432,10 @@ and direct validation for structural metrics.
   > Run all test cases against the RAG system.
   >
   > Args:
-  >     rag_manager: The RAGManager instance to test
+  > rag_manager: The RAGManager instance to test
   >
   > Returns:
-  >     Test suite results with pass/fail for each case
+  > Test suite results with pass/fail for each case
 
 - **get_summary**(`self`) -> `Dict[ComplexType]`
   > Get the current metrics summary.
@@ -445,6 +453,7 @@ and direct validation for structural metrics.
 _RAG Manager - Core Module.
 
 This is the main RAGManager class that composes functionality from mixin classes:
+
 - TaxonomyMixin: Variable taxonomy generation and enrichment
 
 - DocumentsMixin: Document processing and knowledge graph extraction
@@ -455,14 +464,14 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`os`, `shutil`, `streamlit`, `pathlib.Path`, `ast`, `json`, `hashlib`, `time`, `logging`, `re`, `fuzzywuzzy.process`, `prompts.context_analysis`, `prompts.column_renaming`, `prompts.taxonomy_simple`, `prompts.formula_enrichment`, `prompts.anomaly_criteria_prompt`, `rag_taxonomy.TaxonomyMixin`, `rag_documents.DocumentsMixin`, `rag_computed_vars.ComputedVarsMixin`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`
+`os`, `shutil`, `streamlit`, `pathlib.Path`, `ast`, `json`, `hashlib`, `time`, `logging`, `re`, `rapidfuzz.process`, `prompts.context_analysis`, `prompts.column_renaming`, `prompts.taxonomy_simple`, `prompts.formula_enrichment`, `prompts.anomaly_criteria_prompt`, `rag_taxonomy.TaxonomyMixin`, `rag_documents.DocumentsMixin`, `rag_computed_vars.ComputedVarsMixin`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`
 
 ### class `RAGManager` (rag_manager.py)
 
 Main RAG Manager class that composes functionality from mixins.
 
 Core Methods (defined here):
-    - __init__
+    - **init**
 
     - is_available
 
@@ -509,7 +518,7 @@ Computed Variable Methods (from ComputedVarsMixin):
 
 **Methods:**
 
-- **__init__**(`self, documents_dir, api_key`) -> `None`
+- ****init****(`self, documents_dir, api_key`) -> `None`
   > No description available.
 
 - **is_available**(`self`) -> `None`
@@ -723,7 +732,7 @@ No description available.
 
 **Methods:**
 
-- **__init__**(`self, trace_source`) -> `None`
+- ****init****(`self, trace_source`) -> `None`
   > Initialize with either a dictionary trace or a path to a json trace file.
 
 - **generate_report**(`self`) -> `None`
@@ -766,14 +775,14 @@ No description available.
 
 **Methods:**
 
-- **__init__**(`self, trace_dir`) -> `None`
+- ****init****(`self, trace_dir`) -> `None`
   > Initialize the TransformationManager.
   >
   >
   > **Parameters**:
   >
   > trace_dir : str
-  >      Directory where transformation traces will be stored.
+  > Directory where transformation traces will be stored.
 
 - **initialize_session**(`self, dataset_name`) -> `None`
   > Initializes a new session trace.
@@ -788,19 +797,19 @@ No description available.
   > **Parameters**:
   >
   > function_name : str
-  >     Name of the function/transformation applied.
+  > Name of the function/transformation applied.
   > params : dict
-  >      Dictionary of parameters used in the transformation.
+  > Dictionary of parameters used in the transformation.
   > description : str
-  >      Human-readable description of the step.
+  > Human-readable description of the step.
   > output_dataset_path : str, optional
-  >      Path to the output dataset (snapshot).
+  > Path to the output dataset (snapshot).
   > stats_cat_path : str, optional
-  >      Path to categorical statistics file.
+  > Path to categorical statistics file.
   > stats_num_path : str, optional
-  >      Path to numerical statistics file.
+  > Path to numerical statistics file.
   > corr_matrix_path : str, optional
-  >      Path to correlation matrix file.
+  > Path to correlation matrix file.
 
 - **_make_serializable**(`self, obj`) -> `None`
   > Recursively converts objects to JSON-serializable formats.

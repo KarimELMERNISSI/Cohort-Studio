@@ -13,7 +13,7 @@ def get_requirements():
                     continue
                 # Extract package name (remove version specifiers)
                 # Matches valid package names at start of string
-                match = re.match(r'^([A-Za-z0-9_\-\.] বিজ্ঞ)', line)
+                match = re.match(r'^([A-Za-z0-9_\-\.]+)', line)
                 if not match:
                     # simpler split if regex fails or for simple cases like 'pandas==2.2.2'
                     name = re.split(r'[=><~;]', line)[0].strip()

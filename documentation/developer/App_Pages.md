@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `numpy`, `json`, `matplotlib.pyplot`, `typing.Dict`, `typing.Any`, `typing.Optional`, `typing.Union`, `typing.List`, `typing.Tuple`, `typing.Callable`, `io.BytesIO`, `utils.multipage.load_dataframe`, `utils.multipage.get_file_hash`, `enrich.external_data`, `utils.data_analyzer.DataAnalyzer`, `fuzzywuzzy.fuzz`, `os`, `re`, `pandas.api.types.is_numeric_dtype`, `sklearn.decomposition.PCA`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.manifold.TSNE`, `umap`, `enrich.data_imputation`, `prince`, `logging`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `manage.trace_documenter.TraceDocumenter`, `datetime.datetime`, `ast`, `ast`, `utils.date_parser.smart_parse_dates`
+`streamlit`, `pandas`, `numpy`, `json`, `matplotlib.pyplot`, `typing.Dict`, `typing.Any`, `typing.Optional`, `typing.Union`, `typing.List`, `typing.Tuple`, `typing.Callable`, `io.BytesIO`, `utils.multipage.load_dataframe`, `utils.multipage.get_file_hash`, `enrich.external_data`, `utils.data_analyzer.DataAnalyzer`, `rapidfuzz.fuzz`, `os`, `re`, `pandas.api.types.is_numeric_dtype`, `sklearn.decomposition.PCA`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.manifold.TSNE`, `umap`, `enrich.data_imputation`, `prince`, `logging`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `manage.trace_documenter.TraceDocumenter`, `datetime.datetime`, `ast`, `ast`, `utils.date_parser.smart_parse_dates`
 
 ### def `handle_main_data_upload` (data_enrichment.py)
 
@@ -341,6 +341,7 @@ Enhanced version of define_new_variables with improved preview and validation.
 Merge transformed_data into main_data securely.
 
 Parameters:
+
 - main_data (pd.DataFrame): The original DataFrame.
 
 - transformed_data (pd.DataFrame): The DataFrame with new columns.
@@ -349,6 +350,7 @@ Parameters:
                            Options: "replace" or "ignore".
 
 Returns:
+
 - pd.DataFrame: The merged DataFrame.
 
 ### def `compute_transformations` (data_enrichment.py)
@@ -435,6 +437,7 @@ Used to give context to the RAG model for unit conversion logic.
 Main application function for the Data Enrichment page.
 
 Handles:
+
 1. External Data Upload and Enrichment
 2. Targeted Imputation (Manual/AI-assisted)
 3. Global Imputation (MICE, KNN, etc.)
@@ -549,6 +552,7 @@ No description available.
 - **Returns**: `None`
 
 Robust loading function:
+
 1. Loads Taxonomy & Formulas
 2. Repairs Links immediately
 3. Updates Session State
@@ -563,6 +567,7 @@ Robust loading function:
 Main application function for the Data Insight (Knowledge Graph) page.
 
 Handles:
+
 1. Loading and saving taxonomy versions.
 2. Visualizing variables and formulas as a graph.
 3. Generating new taxonomies using RAG.
@@ -583,7 +588,7 @@ Helper class to detect and handle outliers using various methods
 
 **Methods:**
 
-- **__init__**(`self, df, config`) -> `None`
+- ****init****(`self, df, config`) -> `None`
   > No description available.
 
 - **detect_outliers_zscore**(`self, column, threshold`) -> `None`
@@ -602,27 +607,27 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > columns : list
-  >     List of column names to use for outlier detection
+  > List of column names to use for outlier detection
   > n_neighbors : int, optional (default=20)
-  >     Number of neighbors to use for LOF
+  > Number of neighbors to use for LOF
   > contamination : str or float, optional (default='auto')
-  >     Expected proportion of outliers in the dataset
+  > Expected proportion of outliers in the dataset
   > numerical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing numerical missing values
+  > Method for imputing numerical missing values
   > categorical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing categorical missing values
+  > Method for imputing categorical missing values
   > remainder_columns : str or list, optional (default='auto')
-  >     Columns to keep if not in the selected columns
+  > Columns to keep if not in the selected columns
   > remainder_threshold : float, optional (default=0.4)
-  >     Threshold for keeping columns with missing values
+  > Threshold for keeping columns with missing values
   > debug : bool, optional (default=True)
-  >     Enable debug mode
+  > Enable debug mode
   >
   >
   > **Returns**:
   >
   > tuple
-  >     Outlier tags, outlier scores, and additional information
+  > Outlier tags, outlier scores, and additional information
 
 - **detect_isolation_forest_outliers**(`self, data, n_estimators, max_samples, contamination, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
   > Detect outliers using Isolation Forest method
@@ -631,29 +636,29 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > columns : list
-  >     List of column names to use for outlier detection
+  > List of column names to use for outlier detection
   > n_estimators : int, optional (default=100)
-  >     Number of trees in the forest
+  > Number of trees in the forest
   > max_samples : str or int, optional (default='auto')
-  >     Number of samples to draw for each base estimator
+  > Number of samples to draw for each base estimator
   > contamination : str or float, optional (default='auto')
-  >     Expected proportion of outliers in the dataset
+  > Expected proportion of outliers in the dataset
   > numerical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing numerical missing values
+  > Method for imputing numerical missing values
   > categorical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing categorical missing values
+  > Method for imputing categorical missing values
   > remainder_columns : str or list, optional (default='auto')
-  >     Columns to keep if not in the selected columns
+  > Columns to keep if not in the selected columns
   > remainder_threshold : float, optional (default=0.4)
-  >     Threshold for keeping columns with missing values
+  > Threshold for keeping columns with missing values
   > debug : bool, optional (default=True)
-  >     Enable debug mode
+  > Enable debug mode
   >
   >
   > **Returns**:
   >
   > tuple
-  >     Outlier tags, outlier scores, and additional information
+  > Outlier tags, outlier scores, and additional information
 
 - **detect_dbscan_outliers**(`self, data, eps, min_samples, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
   > Detect outliers using DBSCAN method
@@ -662,67 +667,67 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > data : pd.DataFrame
-  >     Input data
+  > Input data
   > eps : float
-  >     The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+  > The maximum distance between two samples for one to be considered as in the neighborhood of the other.
   > min_samples : int
-  >     The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
+  > The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
   > numerical_imputation_method : str
-  >     Imputation method for numerical columns
+  > Imputation method for numerical columns
   > categorical_imputation_method : str
-  >     Imputation method for categorical columns
+  > Imputation method for categorical columns
   > remainder_columns : str
-  >     How to handle remainder columns
+  > How to handle remainder columns
   > remainder_threshold : float
-  >     Threshold for remainder columns
+  > Threshold for remainder columns
   > debug : bool
-  >     Enable debug printing
+  > Enable debug printing
   >
   >
   > **Returns**:
   >
   > tuple
-  >     (outliers_tag, outliers_scores, additional_info)
+  > (outliers_tag, outliers_scores, additional_info)
 
 - **handle_outliers**(`self, columns, method, handling_strategy`) -> `None`
   > Handle outliers in the DataFrame and generate an outlier matrix.
   >
   > Parameters:
-  >     columns (list): List of columns to analyze for outliers.
-  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  >     handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
-  >     **kwargs: Additional parameters for specific outlier detection methods.
+  > columns (list): List of columns to analyze for outliers.
+  > method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
+  > handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
+  > **kwargs: Additional parameters for specific outlier detection methods.
   >
   > Returns:
-  >     DataFrame: Processed DataFrame with outliers handled.
-  >     DataFrame: Outlier matrix with boolean values indicating outliers.
+  > DataFrame: Processed DataFrame with outliers handled.
+  > DataFrame: Outlier matrix with boolean values indicating outliers.
 
 - **_apply_handling_strategy**(`self, columns, outlier_matrix, strategy, method, is_outlier, outlier_score`) -> `None`
   > Apply a handling strategy to the outliers.
   >
   > Parameters:
-  >     columns (list): Columns analyzed for outliers.
-  >     outlier_matrix (DataFrame): Boolean matrix indicating outliers.
-  >     strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
-  >     method (str): Outlier detection method.
-  >     is_outlier (ndarray): Boolean array for dataset-wide methods.
-  >     outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
-  >     **kwargs: Additional parameters for handling strategies.
+  > columns (list): Columns analyzed for outliers.
+  > outlier_matrix (DataFrame): Boolean matrix indicating outliers.
+  > strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
+  > method (str): Outlier detection method.
+  > is_outlier (ndarray): Boolean array for dataset-wide methods.
+  > outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
+  > **kwargs: Additional parameters for handling strategies.
   >
   > Returns:
-  >     DataFrame: Processed DataFrame with outliers handled.
+  > DataFrame: Processed DataFrame with outliers handled.
 
 - **clip_outliers**(`self, column, is_outlier, method`) -> `None`
   > Helper function to clip outliers based on the specified method.
   >
   > Parameters:
-  >     column (str): Column name to process.
-  >     is_outlier (pd.Series): Boolean mask indicating outliers.
-  >     method (str): Method for clipping ('zscore', 'iqr', 'quantile').
-  >     kwargs: Additional parameters for each method.
+  > column (str): Column name to process.
+  > is_outlier (pd.Series): Boolean mask indicating outliers.
+  > method (str): Method for clipping ('zscore', 'iqr', 'quantile').
+  > kwargs: Additional parameters for each method.
   >
   > Returns:
-  >     pd.Series: Updated column with outliers clipped.
+  > pd.Series: Updated column with outliers clipped.
 
 - **get_outliers_masks**(`self`) -> `None`
   > Get the masks of outliers detected so far.
@@ -731,18 +736,18 @@ Helper class to detect and handle outliers using various methods
   > **Returns**:
   >
   > dict or None
-  >     Dictionary of outlier masks if available, else None.
+  > Dictionary of outlier masks if available, else None.
 
 - **get_outlier_summary**(`self, columns, method`) -> `None`
   > Get a summary of outliers for each column or the dataset as a whole.
   >
   > Parameters:
-  >     columns (list): List of columns to analyze for outliers.
-  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  >     **kwargs: Additional parameters for specific outlier detection methods.
+  > columns (list): List of columns to analyze for outliers.
+  > method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
+  > **kwargs: Additional parameters for specific outlier detection methods.
   >
   > Returns:
-  >     dict: Summary of outliers for each column or the dataset.
+  > dict: Summary of outliers for each column or the dataset.
 
 ### def `export_comparison_results` (data_monitoring.py)
 
@@ -943,6 +948,7 @@ Display mask families configuration in a single top-level expander without nesti
 Apply a single mask family from JSON configuration to the dataset.
 
 Parameters:
+
 - df: DataFrame to which the mask family is applied.
 
 - family_name: Name of the mask family to apply.
@@ -952,6 +958,7 @@ Parameters:
 - st_container: Streamlit container for displaying results.
 
 Returns:
+
 - Updated DataFrame with mask family tags and lists.
 
 - The names of the columns related to the masks family
@@ -1056,6 +1063,7 @@ Process dataset using DataAnalyzer to fix types.
 Main application function for the Data Monitoring page.
 
 Handles:
+
 1. Data Quality Dashboard (Data Validity, Completeness, etc.).
 2. Clinical Anomalies Management (Add/Apply Masks).
 3. Study Inclusion Criteria Management (Add/Apply Masks).
@@ -1229,6 +1237,7 @@ bytes
 Main application function for the Epidemiology Analysis page.
 
 Handles:
+
 1. Univariate Group Comparisons (T-tests, ANOVA, Chi-Square, etc.).
 2. Multivariate Analysis (ANCOVA) to control for confounders.
 3. Power Analysis & Sample Size Calculation.
@@ -1306,7 +1315,7 @@ A Streamlit component for renaming DataFrame columns with sorting, searching, ty
 
 **Methods:**
 
-- **__init__**(`self, df, analyzer`) -> `None`
+- ****init****(`self, df, analyzer`) -> `None`
   > No description available.
 
 - **_get_columns_info**(`self, columns_to_process`) -> `None`
@@ -1373,6 +1382,7 @@ _RAG Monitoring Dashboard
 
 Streamlit page for monitoring and visualizing RAG system quality metrics.
 Provides dashboards for:
+
 - Quality overview with trends
 
 - Evaluation details and drill-down

@@ -23,7 +23,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Main View (🏠)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 1.1 | **Sign up / Log in** to your account. |
 | 1.2 | **Load your dataset** (CSV, Excel, or Parquet). |
 | 1.3 | **Rename columns** manually or with AI assistance for standardisation. |
@@ -36,7 +36,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Data Validation & Monitoring (🔍)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 2.1 | Review the **Data Quality Score** dashboard. |
 | 2.2 | Check for **clinical anomalies** (impossible or suspect values). |
 | 2.3 | Define **inclusion criteria** to filter your cohort. |
@@ -50,7 +50,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Data Enrichment (🔄)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 3.1 | **Import external data** and merge with your main dataset. |
 | 3.2 | **Impute missing values** (targeted formulas or global strategies). |
 | 3.3 | **Engineer new variables** (encoding, scaling, computed indices). |
@@ -65,7 +65,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Visualisation (📈)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 4.1 | Explore **distributions** (histograms, box plots, violin plots). |
 | 4.2 | Investigate **relationships** (scatter plots, correlation matrices). |
 | 4.3 | Generate **medical plots** (Bland-Altman, ROC, Kaplan-Meier). |
@@ -79,7 +79,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Epidemiology & Hypothesis (🧬)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 5.1 | Select and run **hypothesis tests** (auto-recommended). |
 | 5.2 | Interpret **effect sizes** and confidence intervals. |
 | 5.3 | Run **multivariate analysis** (ANCOVA) with covariates. |
@@ -93,7 +93,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Pages**: Data Insight (🧠), Documents Insight (📄)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 6.1 | **Generate a Taxonomy** (knowledge graph) from your dataset variables. |
 | 6.2 | **Refine** the taxonomy with AI enrichment and concept nodes. |
 | 6.3 | **Upload research papers** and generate structured summaries. |
@@ -107,7 +107,7 @@ The application is organised into seven phases, mirroring the natural flow of co
 **Page**: Reproduce Analysis (🔁)
 
 | Step | Action |
-|---|---|
+| --- | --- |
 | 7.1 | Review **trace history** of your analysis sessions. |
 | 7.2 | **Replay** a trace to reproduce results (Fast or Full mode). |
 | 7.3 | **Generate reports** (`.docx`) from trace files. |

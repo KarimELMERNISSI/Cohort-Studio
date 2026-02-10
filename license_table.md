@@ -1,383 +1,381 @@
 | Package | License |
 | :--- | :--- |
-| **aiobotocore** | Apache License 2.0 |
+| **aiobotocore** | Apache-2.0 |
 | **aiohappyeyeballs** | PSF-2.0 |
-| **aiohttp** | Apache-2.0 AND MIT |
-| **aioitertools** | UNKNOWN |
-| **aiosignal** | Apache 2.0 |
-| **alabaster** | UNKNOWN |
-| **altair** | Copyright (c) 2015-2023, Vega-Altair Developers... |
-| **annotated-doc** | Unknown |
-| **annotated-types** | MIT License |
+| **aiohttp** | Apache-2.0 |
+| **aioitertools** | MIT |
+| **aiosignal** | Apache-2.0 |
+| **alabaster** | BSD |
+| **altair** | BSD-3-Clause |
+| **annotated-doc** | MIT |
+| **annotated-types** | MIT |
 | **anyio** | MIT |
 | **appdirs** | MIT |
 | **archspec** | Apache-2.0 OR MIT |
-| **argon2-cffi** | MIT License |
+| **argon2-cffi** | MIT |
 | **argon2-cffi-bindings** | MIT |
-| **arrow** | Apache 2.0 |
+| **arrow** | Apache-2.0 |
 | **asgiref** | BSD-3-Clause |
 | **astropy** | BSD-3-Clause |
-| **astropy-iers-data** | Copyright (c) 2023, Astropy Developers  All rig... |
-| **asttokens** | Apache 2.0 |
-| **async-lru** | MIT License |
+| **astropy-iers-data** | BSD-3-Clause |
+| **asttokens** | Apache-2.0 |
+| **async-lru** | MIT |
 | **atomicwrites** | MIT |
-| **attrs** | Unknown |
+| **attrs** | MIT |
 | **Automat** | MIT |
-| **Babel** | BSD |
+| **Babel** | BSD-3-Clause |
 | **backoff** | MIT |
-| **backports.functools-lru-cache** | UNKNOWN |
-| **backports.tempfile** | Python Software Foundation License |
-| **backports.weakref** | Python Software Foundation License |
+| **backports.functools-lru-cache** | PSF |
+| **backports.tempfile** | PSF |
+| **backports.weakref** | PSF |
 | **bcrypt** | Apache-2.0 |
-| **beautifulsoup4** | MIT License |
-| **binaryornot** | BSD |
+| **beautifulsoup4** | MIT |
+| **binaryornot** | BSD-3-Clause |
 | **black** | MIT |
-| **bleach** | Apache Software License |
-| **blinker** | MIT License |
-| **bokeh** | Copyright (c) Anaconda, Inc., and Bokeh Contrib... |
-| **boltons** | BSD |
-| **botocore** | Apache License 2.0 |
-| **Bottleneck** | Simplified BSD |
+| **bleach** | Apache-2.0 |
+| **blinker** | MIT |
+| **bokeh** | BSD-3-Clause |
+| **boltons** | BSD-3-Clause |
+| **botocore** | Apache-2.0 |
+| **Bottleneck** | BSD-2-Clause |
 | **Brotli** | MIT |
-| **build** | Unknown |
+| **build** | MIT |
 | **cachetools** | MIT |
 | **certifi** | MPL-2.0 |
 | **cffi** | MIT |
-| **chardet** | LGPL |
+| **chardet** | LGPL-2.1 |
 | **charset-normalizer** | MIT |
-| **chroma-hnswlib** | Unknown |
-| **click** | Unknown |
+| **chroma-hnswlib** | Apache-2.0 |
+| **click** | BSD-3-Clause |
 | **cloudpickle** | BSD-3-Clause |
-| **colorama** | BSD License |
-| **colorcet** | CC-BY License |
+| **colorama** | BSD-3-Clause |
+| **colorcet** | CC-BY |
 | **coloredlogs** | MIT |
-| **comm** | BSD 3-Clause License  Copyright (c) 2022, Jupyt... |
+| **comm** | BSD-3-Clause |
 | **constantly** | MIT |
-| **contourpy** | BSD 3-Clause License  Copyright (c) 2021-2023, ... |
+| **contourpy** | BSD-3-Clause |
 | **cryptography** | Apache-2.0 OR BSD-3-Clause |
-| **cssselect** | BSD |
-| **cycler** | BSD |
-| **cytoolz** | BSD |
+| **cssselect** | BSD-3-Clause |
+| **cycler** | BSD-3-Clause |
+| **cytoolz** | BSD-3-Clause |
 | **dask** | BSD-3-Clause |
-| **dask-expr** | BSD |
+| **dask-expr** | BSD-3-Clause |
 | **dataclasses-json** | MIT |
-| **datashader** | New BSD |
+| **datashader** | BSD-3-Clause |
 | **debugpy** | MIT |
-| **decorator** | new BSD License |
-| **defusedxml** | PSFL |
-| **detect-delimiter** | UNKNOWN |
-| **diff-match-patch** | Apache |
+| **decorator** | BSD-2-Clause |
+| **defusedxml** | PSF |
+| **detect-delimiter** | Apache-2.0 |
+| **diff-match-patch** | Apache-2.0 |
 | **dill** | BSD-3-Clause |
 | **distributed** | BSD-3-Clause |
-| **distro** | Apache License, Version 2.0 |
+| **distro** | Apache-2.0 |
 | **docstring-to-markdown** | LGPL-2.1-or-later |
-| **docutils** | public domain, Python, 2-Clause BSD, GPL 3 (see... |
-| **duckdb** | MIT License |
-| **entrypoints** | MIT License |
+| **docutils** | BSD-2-Clause / PSF / Public Domain |
+| **duckdb** | MIT |
+| **entrypoints** | MIT |
 | **et-xmlfile** | MIT |
 | **executing** | MIT |
-| **fastapi** | Unknown |
-| **fastjsonschema** | BSD |
-| **filelock** | The Unlicense (Unlicense) |
+| **fastapi** | MIT |
+| **fastjsonschema** | BSD-3-Clause |
+| **filelock** | Unlicense |
 | **filetype** | MIT |
-| **Flask** | BSD License |
+| **Flask** | BSD-3-Clause |
 | **fonttools** | MIT |
-| **frozendict** | LGPL v3 |
+| **frozendict** | LGPL-3.0 |
 | **frozenlist** | Apache-2.0 |
-| **fsspec** | Unknown |
+| **fsspec** | BSD-3-Clause |
 | **future** | MIT |
-| **gitdb** | BSD License |
+| **gitdb** | BSD-3-Clause |
 | **GitPython** | BSD-3-Clause |
-| **google-api-core** | Apache 2.0 |
-| **google-api-python-client** | Apache 2.0 |
-| **google-auth** | Apache 2.0 |
-| **google-auth-httplib2** | Apache 2.0 |
-| **google-genai** | Unknown |
-| **googleapis-common-protos** | Apache 2.0 |
-| **greenlet** | MIT AND Python-2.0 |
+| **google-api-core** | Apache-2.0 |
+| **google-api-python-client** | Apache-2.0 |
+| **google-auth** | Apache-2.0 |
+| **google-auth-httplib2** | Apache-2.0 |
+| **google-genai** | Apache-2.0 |
+| **googleapis-common-protos** | Apache-2.0 |
+| **greenlet** | MIT |
 | **groq** | Apache-2.0 |
-| **grpcio** | Apache License 2.0 |
+| **grpcio** | Apache-2.0 |
 | **h11** | MIT |
 | **h5py** | BSD-3-Clause |
-| **HeapDict** | BSD |
-| **hf-xet** | Apache Software License |
-| **holoviews** | BSD |
-| **httpcore** | BSD License |
+| **HeapDict** | BSD-3-Clause |
+| **hf-xet** | Apache-2.0 |
+| **holoviews** | BSD-3-Clause |
+| **httpcore** | BSD-3-Clause |
 | **httplib2** | MIT |
-| **httptools** | Unknown |
+| **httptools** | MIT |
 | **httpx** | BSD-3-Clause |
 | **httpx-sse** | MIT |
-| **huggingface-hub** | Apache |
+| **huggingface-hub** | Apache-2.0 |
 | **humanfriendly** | MIT |
-| **hvplot** | BSD |
+| **hvplot** | BSD-3-Clause |
 | **hyperlink** | MIT |
-| **idna** | BSD License |
-| **imagecodecs** | BSD |
+| **idna** | BSD-3-Clause |
+| **imagecodecs** | BSD-3-Clause |
 | **imageio** | BSD-2-Clause |
 | **imagesize** | MIT |
 | **imbalanced-learn** | MIT |
-| **importlib-metadata** | Apache Software License |
-| **importlib_resources** | Apache Software License |
+| **importlib-metadata** | Apache-2.0 |
+| **importlib_resources** | Apache-2.0 |
 | **incremental** | MIT |
 | **inflection** | MIT |
-| **iniconfig** | MIT License |
-| **intake** | BSD |
-| **intervaltree** | Apache License, Version 2.0 |
-| **ipykernel** | BSD 3-Clause License  Copyright (c) 2015, IPyth... |
+| **iniconfig** | MIT |
+| **intake** | BSD-3-Clause |
+| **intervaltree** | Apache-2.0 |
+| **ipykernel** | BSD-3-Clause |
 | **ipython** | BSD-3-Clause |
-| **ipython-genutils** | BSD |
-| **ipywidgets** | BSD |
+| **ipython-genutils** | BSD-3-Clause |
+| **ipywidgets** | BSD-3-Clause |
 | **isort** | MIT |
-| **itemadapter** | BSD |
-| **itemloaders** | BSD |
-| **itsdangerous** | BSD License |
-| **jaraco.classes** | UNKNOWN |
+| **itemadapter** | BSD-3-Clause |
+| **itemloaders** | BSD-3-Clause |
+| **itsdangerous** | BSD-3-Clause |
+| **jaraco.classes** | MIT |
 | **jedi** | MIT |
 | **jellyfish** | MIT |
-| **Jinja2** | BSD License |
+| **Jinja2** | BSD-3-Clause |
 | **jmespath** | MIT |
-| **joblib** | BSD 3-Clause |
-| **json5** | Apache |
-| **jsonpatch** | Modified BSD License |
-| **jsonpointer** | Modified BSD License |
-| **jsonschema** | Unknown |
-| **jsonschema-specifications** | Unknown |
-| **keyring** | MIT License |
-| **kiwisolver** | =========================  The Kiwi licensing t... |
-| **kubernetes** | Apache License Version 2.0 |
-| **langchain** | Not Installed / Unknown |
+| **joblib** | BSD-3-Clause |
+| **json5** | Apache-2.0 |
+| **jsonpatch** | BSD-3-Clause |
+| **jsonpointer** | BSD-3-Clause |
+| **jsonschema** | MIT |
+| **jsonschema-specifications** | MIT |
+| **keyring** | MIT |
+| **kiwisolver** | BSD-3-Clause |
+| **kubernetes** | Apache-2.0 |
+| **langchain** | MIT |
 | **langchain-chroma** | MIT |
 | **langchain-classic** | MIT |
-| **langchain-community** | Not Installed / Unknown |
-| **langchain-core** | Not Installed / Unknown |
-| **langchain-google-genai** | Not Installed / Unknown |
-| **langchain-text-splitters** | Not Installed / Unknown |
-| **langgraph** | Unknown |
-| **langgraph-checkpoint** | Unknown |
-| **langgraph-prebuilt** | Unknown |
-| **langgraph-sdk** | Unknown |
+| **langchain-community** | MIT |
+| **langchain-core** | MIT |
+| **langchain-google-genai** | MIT |
+| **langchain-text-splitters** | MIT |
+| **langgraph** | MIT |
+| **langgraph-checkpoint** | MIT |
+| **langgraph-prebuilt** | MIT |
+| **langgraph-sdk** | MIT |
 | **langsmith** | MIT |
 | **lazy-object-proxy** | BSD-2-Clause |
-| **lazy_loader** | BSD 3-Clause License  Copyright (c) 2022--2023,... |
-| **Levenshtein** | Unknown |
+| **lazy_loader** | BSD-3-Clause |
 | **libarchive-c** | CC0 |
-| **lightgbm** | The MIT License (MIT)  Copyright (c) Microsoft ... |
+| **lightgbm** | MIT |
 | **linkify-it-py** | MIT |
-| **llvmlite** | BSD |
+| **llvmlite** | BSD-2-Clause |
 | **lmdb** | OLDAP-2.8 |
 | **locket** | BSD-2-Clause |
 | **lxml** | BSD-3-Clause |
-| **lz4** | BSD License |
-| **Markdown** | BSD License |
-| **markdown-it-py** | MIT License |
+| **lz4** | BSD-3-Clause |
+| **Markdown** | BSD-3-Clause |
+| **markdown-it-py** | MIT |
 | **MarkupSafe** | BSD-3-Clause |
-| **marshmallow** | MIT License |
+| **marshmallow** | MIT |
 | **matplotlib** | PSF |
-| **matplotlib-inline** | BSD 3-Clause |
-| **mccabe** | Expat license |
+| **matplotlib-inline** | BSD-3-Clause |
+| **mccabe** | MIT (Expat) |
 | **mdit-py-plugins** | MIT |
-| **mdurl** | MIT License |
-| **mistune** | BSD 3-Clause License |
-| **mmh3** | MIT License  Copyright (c) 2011-2025 Hajime Sen... |
-| **more-itertools** | MIT License |
-| **mpmath** | BSD |
-| **msgpack** | Apache 2.0 |
-| **multidict** | Apache License 2.0 |
-| **multipledispatch** | BSD |
-| **munkres** | Apache Software License |
+| **mdurl** | MIT |
+| **mistune** | BSD-3-Clause |
+| **mmh3** | MIT |
+| **more-itertools** | MIT |
+| **mpmath** | BSD-3-Clause |
+| **msgpack** | Apache-2.0 |
+| **multidict** | Apache-2.0 |
+| **multipledispatch** | BSD-3-Clause |
+| **munkres** | Apache-2.0 |
 | **mypy** | MIT |
-| **mypy_extensions** | Unknown |
-| **narwhals** | MIT License |
-| **nest-asyncio** | BSD |
-| **networkx** | BSD License |
-| **nltk** | Apache License, Version 2.0 |
-| **numba** | BSD |
+| **mypy_extensions** | MIT |
+| **narwhals** | MIT |
+| **nest-asyncio** | BSD-2-Clause |
+| **networkx** | BSD-3-Clause |
+| **nltk** | Apache-2.0 |
+| **numba** | BSD-2-Clause |
 | **numexpr** | MIT |
-| **numpy** | Copyright (c) 2005-2023, NumPy Developers. All ... |
-| **numpydoc** | BSD |
+| **numpy** | BSD-3-Clause |
+| **numpydoc** | BSD-3-Clause |
 | **oauthlib** | BSD-3-Clause |
-| **onnxruntime** | MIT License |
+| **onnxruntime** | MIT |
 | **openpyxl** | MIT |
-| **opentelemetry-instrumentation** | Apache Software License |
-| **opentelemetry-instrumentation-asgi** | Apache Software License |
-| **opentelemetry-instrumentation-fastapi** | Apache Software License |
-| **opentelemetry-util-http** | Apache Software License |
+| **opentelemetry-instrumentation** | Apache-2.0 |
+| **opentelemetry-instrumentation-asgi** | Apache-2.0 |
+| **opentelemetry-instrumentation-fastapi** | Apache-2.0 |
+| **opentelemetry-util-http** | Apache-2.0 |
 | **orjson** | Apache-2.0 OR MIT |
 | **ormsgpack** | Apache-2.0 OR MIT |
-| **overrides** | Apache License, Version 2.0 |
-| **packaging** | Apache Software License |
-| **pandas** | BSD 3-Clause License  Copyright (c) 2008-2011, ... |
+| **overrides** | Apache-2.0 |
+| **packaging** | Apache-2.0 |
+| **pandas** | BSD-3-Clause |
 | **pandocfilters** | BSD-3-Clause |
-| **panel** | BSD |
+| **panel** | BSD-3-Clause |
 | **param** | BSD-3-Clause |
-| **paramiko** | LGPL |
-| **parsel** | BSD |
+| **paramiko** | LGPL-2.1 |
+| **parsel** | BSD-3-Clause |
 | **parso** | MIT |
-| **partd** | BSD |
-| **pathlib** | MIT License |
-| **pathspec** | MPL 2.0 |
-| **patsy** | 2-clause BSD |
-| **pexpect** | ISC license |
+| **partd** | BSD-3-Clause |
+| **pathlib** | MIT |
+| **pathspec** | MPL-2.0 |
+| **patsy** | BSD-2-Clause |
+| **pexpect** | ISC |
 | **pickleshare** | MIT |
 | **pillow** | HPND |
 | **pkce** | MIT |
 | **pkginfo** | MIT |
-| **platformdirs** | MIT License |
+| **platformdirs** | MIT |
 | **plotly** | MIT |
 | **pluggy** | MIT |
-| **ply** | BSD |
+| **ply** | BSD-3-Clause |
 | **posthog** | MIT |
-| **prince** | Unknown |
-| **prometheus-client** | Apache Software License 2.0 |
-| **prompt-toolkit** | BSD License |
+| **prince** | MIT |
+| **prometheus-client** | Apache-2.0 |
+| **prompt-toolkit** | BSD-3-Clause |
 | **propcache** | Apache-2.0 |
-| **Protego** | BSD |
-| **proto-plus** | Apache 2.0 |
+| **Protego** | BSD-3-Clause |
+| **proto-plus** | Apache-2.0 |
 | **protobuf** | BSD-3-Clause |
-| **psutil** | BSD |
-| **ptyprocess** | UNKNOWN |
+| **psutil** | BSD-3-Clause |
+| **ptyprocess** | ISC |
 | **pure-eval** | MIT |
 | **py-cpuinfo** | MIT |
-| **pyarrow** | Apache Software License |
+| **pyarrow** | Apache-2.0 |
 | **pyasn1** | BSD-2-Clause |
-| **pyasn1_modules** | BSD |
+| **pyasn1_modules** | BSD-2-Clause |
 | **pybase64** | BSD-2-Clause |
 | **pycodestyle** | MIT |
-| **pycparser** | BSD |
-| **pydantic** | Unknown |
-| **pydantic-settings** | MIT License |
-| **pydantic_core** | Unknown |
-| **pydeck** | Apache License 2.0 |
-| **PyDispatcher** | BSD |
+| **pycparser** | BSD-3-Clause |
+| **pydantic** | MIT |
+| **pydantic-settings** | MIT |
+| **pydantic_core** | MIT |
+| **pydeck** | Apache-2.0 |
+| **PyDispatcher** | BSD-3-Clause |
 | **pydocstyle** | MIT |
-| **pyerfa** | BSD 3-Clause License |
+| **pyerfa** | BSD-3-Clause |
 | **Pygments** | BSD-2-Clause |
 | **PyJWT** | MIT |
-| **PyNaCl** | Apache License 2.0 |
-| **pynndescent** | BSD |
-| **pyodbc** | MIT License |
-| **pyOpenSSL** | Apache License, Version 2.0 |
-| **pyparsing** | MIT License |
-| **pypdf** | Not Installed / Unknown |
-| **pyproject_hooks** | MIT License |
-| **PySocks** | BSD |
-| **python-dateutil** | Dual License |
+| **PyNaCl** | Apache-2.0 |
+| **pynndescent** | BSD-2-Clause |
+| **pyodbc** | MIT |
+| **pyOpenSSL** | Apache-2.0 |
+| **pyparsing** | MIT |
+| **pypdf** | BSD-3-Clause |
+| **pyproject_hooks** | MIT |
+| **PySocks** | BSD-3-Clause |
+| **python-dateutil** | Apache-2.0 / BSD-3-Clause (Dual) |
 | **python-docx** | MIT |
 | **python-dotenv** | BSD-3-Clause |
-| **python-json-logger** | BSD |
-| **python-Levenshtein** | GPL-2.0-or-later |
-| **python-snappy** | BSD |
+| **python-json-logger** | BSD-2-Clause |
+| **python-snappy** | BSD-3-Clause |
 | **pytoolconfig** | LGPL-3.0-or-later |
 | **pytz** | MIT |
-| **pyviz_comms** | BSD 3-Clause License  Copyright (c) 2023, Phili... |
-| **pywavelets** | Copyright (c) 2006-2012 Filip Wasilewski <http:... |
+| **pyviz_comms** | BSD-3-Clause |
+| **pywavelets** | MIT |
 | **PyYAML** | MIT |
-| **pyzmq** | LGPL+BSD |
+| **pyzmq** | BSD-3-Clause / LGPL-3.0 |
 | **qstylizer** | MIT |
-| **queuelib** | BSD |
-| **RapidFuzz** | Unknown |
+| **queuelib** | BSD-3-Clause |
+| **RapidFuzz** | MIT |
 | **rdflib** | BSD-3-Clause |
 | **readchar** | MIT |
-| **referencing** | Unknown |
-| **regex** | Apache Software License |
+| **referencing** | MIT |
+| **regex** | Apache-2.0 |
 | **requests** | Apache-2.0 |
-| **requests-file** | Apache 2.0 |
+| **requests-file** | Apache-2.0 |
 | **requests-oauthlib** | ISC |
-| **requests-toolbelt** | Apache 2.0 |
-| **rfc3339-validator** | MIT license |
-| **rfc3986-validator** | MIT license |
+| **requests-toolbelt** | Apache-2.0 |
+| **rfc3339-validator** | MIT |
+| **rfc3986-validator** | MIT |
 | **rich** | MIT |
 | **rope** | LGPL-3.0-or-later |
 | **rpds-py** | MIT |
 | **rsa** | Apache-2.0 |
 | **Rtree** | MIT |
-| **ruamel.yaml** | MIT license |
-| **s3fs** | BSD |
-| **scikit-image** | Files: * Copyright: 2009-2022 the scikit-image ... |
-| **scikit-learn** | Unknown |
-| **scipy** | Copyright (c) 2001-2002 Enthought, Inc. 2003-20... |
-| **Scrapy** | BSD |
-| **seaborn** | BSD License |
-| **semver** | BSD |
-| **Send2Trash** | BSD License |
-| **sentence-transformers** | Not Installed / Unknown |
+| **ruamel.yaml** | MIT |
+| **s3fs** | BSD-3-Clause |
+| **scikit-image** | BSD-3-Clause |
+| **scikit-learn** | BSD-3-Clause |
+| **scipy** | BSD-3-Clause |
+| **Scrapy** | BSD-3-Clause |
+| **seaborn** | BSD-3-Clause |
+| **semver** | BSD-3-Clause |
+| **Send2Trash** | BSD-3-Clause |
+| **sentence-transformers** | Apache-2.0 |
 | **service-identity** | MIT |
-| **setuptools** | MIT License |
-| **shellingham** | ISC License |
-| **sip** | SIP |
+| **setuptools** | MIT |
+| **shellingham** | ISC |
+| **sip** | SIP (Permissive) |
 | **six** | MIT |
 | **smart-open** | MIT |
 | **smmap** | BSD-3-Clause |
 | **sniffio** | MIT OR Apache-2.0 |
 | **snowballstemmer** | BSD-3-Clause |
-| **sortedcontainers** | Apache 2.0 |
-| **soupsieve** | MIT License |
-| **Sphinx** | BSD |
-| **sphinxcontrib-applehelp** | BSD |
-| **sphinxcontrib-devhelp** | BSD |
-| **sphinxcontrib-htmlhelp** | BSD |
-| **sphinxcontrib-jsmath** | BSD |
-| **sphinxcontrib-serializinghtml** | BSD |
+| **sortedcontainers** | Apache-2.0 |
+| **soupsieve** | MIT |
+| **Sphinx** | BSD-2-Clause |
+| **sphinxcontrib-applehelp** | BSD-2-Clause |
+| **sphinxcontrib-devhelp** | BSD-2-Clause |
+| **sphinxcontrib-htmlhelp** | BSD-2-Clause |
+| **sphinxcontrib-jsmath** | BSD-2-Clause |
+| **sphinxcontrib-serializinghtml** | BSD-2-Clause |
 | **SQLAlchemy** | MIT |
 | **stack-data** | MIT |
-| **starlette** | Unknown |
-| **statsmodels** | BSD License |
-| **streamlit** | Apache License 2.0 |
-| **streamlit-agraph** | UNKNOWN |
-| **sympy** | BSD |
-| **tables** | BSD 3-Clause License |
+| **starlette** | BSD-3-Clause |
+| **statsmodels** | BSD-3-Clause |
+| **streamlit** | Apache-2.0 |
+| **streamlit-agraph** | MIT |
+| **sympy** | BSD-3-Clause |
+| **tables** | BSD-3-Clause |
 | **tabulate** | MIT |
 | **tblib** | BSD-2-Clause |
-| **tenacity** | Apache 2.0 |
+| **tenacity** | Apache-2.0 |
 | **textdistance** | MIT |
 | **threadpoolctl** | BSD-3-Clause |
 | **three-merge** | MIT |
-| **tifffile** | BSD |
-| **tinycss2** | BSD License |
-| **tldextract** | BSD License |
+| **tifffile** | BSD-3-Clause |
+| **tinycss2** | BSD-3-Clause |
+| **tldextract** | BSD-3-Clause |
 | **toml** | MIT |
-| **tomli** | MIT License |
-| **tomlkit** | Unknown |
-| **toolz** | BSD |
+| **tomli** | MIT |
+| **tomlkit** | MIT |
+| **toolz** | BSD-3-Clause |
 | **tornado** | Apache-2.0 |
 | **tqdm** | MPL-2.0 AND MIT |
-| **traitlets** | BSD 3-Clause License  - Copyright (c) 2001-, IP... |
-| **truststore** | MIT License |
-| **Twisted** | MIT License |
-| **typer** | MIT License |
-| **typer-slim** | MIT License |
+| **traitlets** | BSD-3-Clause |
+| **truststore** | MIT |
+| **Twisted** | MIT |
+| **typer** | MIT |
+| **typer-slim** | MIT |
 | **typing-inspect** | MIT |
-| **typing-inspection** | Unknown |
-| **typing_extensions** | Unknown |
+| **typing-inspection** | MIT |
+| **typing_extensions** | PSF |
 | **tzdata** | Apache-2.0 |
 | **tzlocal** | MIT |
 | **uc-micro-py** | MIT |
-| **ujson** | BSD License |
-| **umap-learn** | BSD |
-| **uritemplate** | BSD 3-Clause OR Apache-2.0 |
-| **urllib3** | MIT License |
-| **uvicorn** | Unknown |
+| **ujson** | BSD-3-Clause |
+| **umap-learn** | BSD-3-Clause |
+| **uritemplate** | BSD-3-Clause OR Apache-2.0 |
+| **urllib3** | MIT |
+| **uvicorn** | BSD-3-Clause |
 | **validators** | MIT |
-| **w3lib** | BSD |
+| **w3lib** | BSD-3-Clause |
 | **watchdog** | Apache-2.0 |
 | **watchfiles** | MIT |
 | **wcwidth** | MIT |
-| **webencodings** | BSD |
+| **webencodings** | BSD-3-Clause |
 | **websocket-client** | Apache-2.0 |
 | **websockets** | BSD-3-Clause |
-| **Werkzeug** | BSD License |
+| **Werkzeug** | BSD-3-Clause |
 | **whatthepatch** | MIT |
-| **wheel** | MIT License |
-| **win-inet-pton** | This software released into the public domain. ... |
-| **wrapt** | BSD |
+| **wheel** | MIT |
+| **win-inet-pton** | Public Domain |
+| **wrapt** | BSD-2-Clause |
 | **xarray** | Apache-2.0 |
-| **xlwings** | BSD 3-clause |
-| **xxhash** | BSD |
-| **xyzservices** | 3-Clause BSD |
-| **yapf** |                                Apache License  ... |
+| **xlwings** | BSD-3-Clause |
+| **xxhash** | BSD-2-Clause |
+| **xyzservices** | BSD-3-Clause |
+| **yapf** | Apache-2.0 |
 | **yarl** | Apache-2.0 |
-| **yfiles-graphs-for-streamlit** | Not Installed / Unknown |
-| **zict** | BSD |
-| **zipp** | MIT License |
-| **zope.interface** | ZPL 2.1 |
-| **zstandard** | BSD |
+| **yfiles-graphs-for-streamlit** | Proprietary (free, non-transferable) |
+| **zict** | BSD-3-Clause |
+| **zipp** | MIT |
+| **zope.interface** | ZPL-2.1 |
+| **zstandard** | BSD-3-Clause |
