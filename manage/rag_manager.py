@@ -219,7 +219,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 }
             }
 
-    def initialize_system(self, model_name="models/gemini-flash-latest", adherence_score=0.5, temperature=0.3, dataset_columns=None, use_existing_db=False, progress_callback=None, selected_files=None):
+    def initialize_system(self, model_name="models/gemini-flash-latest", adherence_score=0.5, temperature=0.3, dataset_columns=None, use_existing_db=False, progress_callback=None, selected_files=None, embedding_model="models/embedding-001"):
         """Initialize the RAG system with documents and LLM."""
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
@@ -270,7 +270,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             if progress_callback: progress_callback(50, "Initializing embeddings...")
             embeddings = CustomGeminiEmbeddings(
                 api_key=self.api_key, 
-                model="models/text-embedding-004"
+                model=embedding_model
             )
             
             from utils.data_paths import get_chroma_dir
@@ -312,8 +312,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                             embedding=embeddings, 
                             persist_directory=persist_directory
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        return False, f"Failed to create vector store: {e}"
+
+                    if not self.vector_store:
+                         return False, "Failed to initialize vector store (Unknown Error)."
+
 
                     start_index = batch_size if self.vector_store._collection.count() > 0 else 0
                     

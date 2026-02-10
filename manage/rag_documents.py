@@ -330,7 +330,7 @@ class DocumentsMixin:
         """)
         
         def format_docs(docs):
-            return "\\n\\n".join(f"[Source: {{d.metadata.get('source','Unknown')}}] {{d.page_content}}" for d in docs)
+            return "\n\n".join(f"[Source: {d.metadata.get('source','Unknown')}] {d.page_content}" for d in docs)
 
         chain = (
             {"context": retriever | format_docs, "question": RunnablePassthrough()}
@@ -342,4 +342,7 @@ class DocumentsMixin:
         try:
             return chain.invoke(query)
         except Exception as e:
-            return f"Error responding: {{str(e)}}"
+            print(f"DEBUG: RAG Chat Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"System Error: {str(e)}"

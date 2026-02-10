@@ -49,9 +49,15 @@ def render_rag_sidebar():
                 # fallback to name-based filtering to be safe.
                 for m in all_models:
                     name_lower = m.name.lower()
-                    # Exclude embeddings, imagen, veo, audio-only
-                    if "embedding" in name_lower or "imagen" in name_lower or "veo" in name_lower:
+                    # Exclude imagen, veo, audio-only (keep embeddings now)
+                    if "imagen" in name_lower or "veo" in name_lower:
                         continue
+                        
+                    if "embedding" in name_lower:
+                        if "text" in name_lower or "embedding" in name_lower: # redundancy validation
+                             # Add to embeddings list (will define below)
+                             pass 
+                    
                     if "gemini" in name_lower or "gemma" in name_lower:
                         text_models.append(m)
 
@@ -90,12 +96,27 @@ def render_rag_sidebar():
                     if not is_old:
                         model_options.append(name)
 
-                # Sort: Latest/Highest versions first
-                # Descending sort usually puts 'latest' or higher numbers first
-                model_options.sort(reverse=True)
+                # Sort: Latest > Flash (Non-Lite) > Flash (Lite) > Version
+                # Custom sort key: (is_latest, is_pure_flash, is_flash, name)
+                model_options.sort(
+                    key=lambda x: (
+                        1 if x.lower().endswith("latest") else 0,
+                        1 if "flash" in x.lower() and "lite" not in x.lower() else 0,
+                        1 if "flash" in x.lower() else 0,
+                        x
+                    ),
+                    reverse=True
+                )
 
                 if model_options:
-                    selected_model = st.selectbox("Select AI Model", model_options, index=0, key="rag_model_select")
+                    # Explicitly defaulted to flash-latest (non-lite) if available
+                    default_index = 0
+                    for i, m in enumerate(model_options):
+                         if "flash" in m.lower() and "latest" in m.lower() and "lite" not in m.lower():
+                              default_index = i
+                              break
+                              
+                    selected_model = st.selectbox("Select AI Model", model_options, index=default_index, key="rag_model_select")
                 else:
                     selected_model = "gemini-1.5-flash"
                     st.warning("No models found for this family. Using default.")
@@ -105,6 +126,36 @@ def render_rag_sidebar():
                 selected_model = "gemini-1.5-flash"
         else:
             selected_model = "models/gemini-1.5-flash"
+
+        # --- EMBEDDING MODEL SELECTION ---
+        embedding_models = []
+        if api_key:
+             try:
+                # Re-list to be sure or use logic above. 
+                # Let's use a simpler separate pass or reuse the client if possible.
+                # Since we didn't save embeddings in the loop above to a list, let's do it here cleanly.
+                if 'client' in locals() and client:
+                     for m in client.models.list():
+                         if "embedding" in m.name.lower():
+                             embedding_models.append(m.name)
+             except:
+                 pass
+        
+        # Sort and Filter
+        embedding_options = sorted([m for m in embedding_models if "text" in m or "embedding" in m], reverse=True)
+        
+        # Default safety
+        default_embed = "models/embedding-001"
+        if default_embed not in embedding_options:
+             embedding_options.append(default_embed)
+             
+        selected_embedding_model = st.selectbox(
+            "Embedding Model", 
+            embedding_options, 
+            index=embedding_options.index(default_embed) if default_embed in embedding_options else 0,
+            help="Select the model used for vectorizing documents. 'embedding-001' is recommended for stability.",
+            key="rag_embedding_model_select"
+        )
 
         # File Uploader for Documents
         uploaded_files = st.file_uploader("Upload Medical Literature (PDF)", type=["pdf"], accept_multiple_files=True, key="rag_file_uploader")
@@ -209,10 +260,12 @@ def render_rag_sidebar():
                     model_name=selected_model,
                     adherence_score=adherence_score,
                     temperature=temperature,
+
                     dataset_columns=dataset_columns,
                     use_existing_db=use_existing_db,
                     progress_callback=update_progress,
-                    selected_files=selected_files
+                    selected_files=selected_files,
+                    embedding_model=selected_embedding_model
                 )
                 
                 # Clear progress on completion

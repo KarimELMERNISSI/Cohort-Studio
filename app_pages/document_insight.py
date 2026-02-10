@@ -419,7 +419,11 @@ def app():
                         st.write(f.get('description', ''))
  
         with tab_chat:
-            st.subheader("Chat with Visible Documents")
+            st.subheader("Chat with Visible Documents (v1.1)")
+            
+            if st.button("🗑️ Clear Chat History"):
+                st.session_state.doc_chat_history = []
+                st.rerun()
             
             # Chat History
             if "doc_chat_history" not in st.session_state:

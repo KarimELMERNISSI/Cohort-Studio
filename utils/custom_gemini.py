@@ -14,7 +14,7 @@ class CustomGeminiEmbeddings(Embeddings):
     """
     Custom embedding class that uses the modern Google GenAI SDK (v1.0+).
     """
-    def __init__(self, api_key: str, model: str = "models/text-embedding-005"):
+    def __init__(self, api_key: str, model: str = "models/gemini-embedding-001"):
         self.client = genai.Client(api_key=api_key)
         self.model = model
 
@@ -47,10 +47,10 @@ class CustomGeminiChat(BaseChatModel):
     Bypasses 'langchain-google-genai' to avoid dependency hell.
     """
     client: Any = None
-    model_name: str = "gemini-1.5-flash"
+    model_name: str = "gemini-flash-lite-latest"
     temperature: float = 0.3
     
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash", temperature: float = 0.3, **kwargs):
+    def __init__(self, api_key: str, model: str = "gemini-flash-lite-latest", temperature: float = 0.3, **kwargs):
         super().__init__(**kwargs)
         self.model_name = model
         self.temperature = temperature
