@@ -4,6 +4,7 @@ from typing import Dict, Any, Callable, Optional, Union
 from dataclasses import dataclass
 import pandas as pd
 import io
+import functools
 
 import hashlib
 import manage.file_handling as mf
@@ -189,9 +190,17 @@ def load_dataframe(uploaded_file) -> Optional[pd.DataFrame]:
             
         elif file_extension in ['xls', 'xlsx']:
             try:
-                df = pd.read_excel(uploaded_file, engine='openpyxl')
-                st.success("Excel file loaded successfully!")
-                return df
+                uploaded_file.seek(0)
+                xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
+                sheet_names = xls.sheet_names
+                if len(sheet_names) == 1:
+                    # Single sheet: load directly (unchanged behavior)
+                    df = pd.read_excel(xls, sheet_name=sheet_names[0])
+                    st.success("Excel file loaded successfully!")
+                    return df
+                else:
+                    # Multiple sheets detected: return sentinel so caller shows UI
+                    return {"__multi_sheet__": True, "sheet_names": sheet_names}
             except Exception as e:
                 st.error(f"Error reading Excel file: {str(e)}")
                 return None
@@ -209,6 +218,60 @@ def load_dataframe(uploaded_file) -> Optional[pd.DataFrame]:
 
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
+        return None
+
+
+def _load_excel_with_selection(file_bytes: bytes, sheet_names: list, selected_sheets: list, 
+                               merge_key: str = None) -> Optional[pd.DataFrame]:
+    """
+    Load one or more sheets from an Excel file.
+    
+    Parameters:
+    - file_bytes: Raw bytes of the Excel file
+    - sheet_names: All sheet names in the file
+    - selected_sheets: List of sheet names the user selected
+    - merge_key: Column name to merge on (None for single-sheet mode)
+    
+    Returns:
+    - DataFrame or None
+    """
+    try:
+        xls = pd.ExcelFile(io.BytesIO(file_bytes), engine='openpyxl')
+        
+        if len(selected_sheets) == 1:
+            df = pd.read_excel(xls, sheet_name=selected_sheets[0])
+            st.success(f"Sheet '{selected_sheets[0]}' loaded successfully!")
+            return df
+        
+        # Load and merge multiple sheets
+        dataframes = []
+        for sheet in selected_sheets:
+            sheet_df = pd.read_excel(xls, sheet_name=sheet)
+            if merge_key and merge_key not in sheet_df.columns:
+                st.warning(f"Merge key '{merge_key}' not found in sheet '{sheet}'. Skipping.")
+                continue
+            dataframes.append(sheet_df)
+        
+        if not dataframes:
+            st.error("No valid sheets to load.")
+            return None
+        
+        if merge_key:
+            merged_df = functools.reduce(
+                lambda left, right: pd.merge(left, right, on=merge_key, how='outer'),
+                dataframes
+            )
+            st.success(f"Merged {len(dataframes)} sheets on '{merge_key}' → "
+                       f"{merged_df.shape[0]} rows × {merged_df.shape[1]} columns")
+            return merged_df
+        else:
+            # Concatenate if no merge key (stack vertically)
+            concat_df = pd.concat(dataframes, ignore_index=True)
+            st.success(f"Concatenated {len(dataframes)} sheets → "
+                       f"{concat_df.shape[0]} rows × {concat_df.shape[1]} columns")
+            return concat_df
+    except Exception as e:
+        st.error(f"Error loading Excel sheets: {str(e)}")
         return None
 
 
@@ -252,13 +315,133 @@ def get_file_hash(uploaded_file) -> str:
     return hash_md5.hexdigest()
 
 
+def _finalize_upload(df, uploaded_file, is_new_file=True):
+    """Finalize the upload: save source, init transformation trace, store data."""
+    st.session_state["data"] = df
+    st.session_state["last_uploaded_file_hash"] = get_file_hash(uploaded_file)
+
+    # Initialize Transformation Manager if needed
+    if 'transformation_manager' not in st.session_state:
+        st.session_state.transformation_manager = TransformationManager()
+
+    # Initialize Session Trace
+    st.session_state.transformation_manager.initialize_session(
+        uploaded_file.name, username=st.session_state.get('username')
+    )
+
+    # Save source file to artifacts for reproducibility
+    session_id = st.session_state.transformation_manager.session_id
+    artifact_dir = os.path.join("data", "traces", "artifacts", session_id)
+    os.makedirs(artifact_dir, exist_ok=True)
+
+    file_ext = os.path.splitext(uploaded_file.name)[1]
+    source_path = os.path.join(artifact_dir, f"source{file_ext}")
+
+    uploaded_file.seek(0)
+    with open(source_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # Update manager with the stored path
+    st.session_state.transformation_manager.source_dataset = source_path
+    st.session_state.transformation_manager.save_trace()
+
+    label = "initial" if is_new_file else "new version"
+    st.session_state.transformation_manager.add_step(
+        "initial_load",
+        {"filename": uploaded_file.name, "source_path": source_path},
+        f"Uploaded {label} dataset: {uploaded_file.name}"
+    )
+    st.success("Data uploaded successfully!")
+
+
+def _render_sheet_selection_ui(sheet_names: list, file_bytes: bytes, uploaded_file):
+    """Render the multi-sheet selection UI and return the loaded DataFrame or None."""
+    st.markdown(f"📑 **{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
+
+    load_mode = st.radio(
+        "How would you like to load this file?",
+        ["Load a single sheet", "Merge multiple sheets"],
+        key="excel_load_mode",
+        horizontal=True
+    )
+
+    if load_mode == "Load a single sheet":
+        selected_sheet = st.selectbox(
+            "Select sheet to load",
+            sheet_names,
+            key="excel_single_sheet_select"
+        )
+        if st.button("📥 Load Sheet", key="btn_load_single_sheet"):
+            df = _load_excel_with_selection(file_bytes, sheet_names, [selected_sheet])
+            if df is not None:
+                _finalize_upload(df, uploaded_file)
+                # Clear pending state
+                st.session_state.pop('excel_sheets_pending', None)
+                st.session_state.pop('excel_sheet_names', None)
+                st.session_state.pop('excel_file_bytes', None)
+                st.rerun()
+    else:
+        selected_sheets = st.multiselect(
+            "Select sheets to merge",
+            sheet_names,
+            default=sheet_names,
+            key="excel_multi_sheet_select"
+        )
+
+        if len(selected_sheets) >= 2:
+            # Read columns from first selected sheet to suggest merge key
+            try:
+                preview_xls = pd.ExcelFile(io.BytesIO(file_bytes), engine='openpyxl')
+                # Find common columns across all selected sheets
+                common_cols = None
+                for s in selected_sheets:
+                    cols = set(pd.read_excel(preview_xls, sheet_name=s, nrows=0).columns)
+                    common_cols = cols if common_cols is None else common_cols & cols
+                common_cols = sorted(common_cols) if common_cols else []
+            except Exception:
+                common_cols = []
+
+            if common_cols:
+                merge_key = st.selectbox(
+                    "Select merge key (row ID column)",
+                    common_cols,
+                    key="excel_merge_key"
+                )
+            else:
+                st.warning("No common columns found across selected sheets. Sheets will be concatenated vertically.")
+                merge_key = None
+
+            if st.button("📥 Merge & Load Sheets", key="btn_load_merge_sheets"):
+                df = _load_excel_with_selection(file_bytes, sheet_names, selected_sheets, merge_key)
+                if df is not None:
+                    _finalize_upload(df, uploaded_file)
+                    # Clear pending state
+                    st.session_state.pop('excel_sheets_pending', None)
+                    st.session_state.pop('excel_sheet_names', None)
+                    st.session_state.pop('excel_file_bytes', None)
+                    st.rerun()
+        elif len(selected_sheets) == 1:
+            st.info("Select at least 2 sheets to merge, or switch to single-sheet mode.")
+        else:
+            st.info("Please select at least one sheet.")
+
+
 def handle_data_upload():
     """Handle data upload and perform file comparison."""
     uploaded_file = st.session_state.get('uploaded_file', None)
 
     with st.sidebar.expander("Data Upload"):
         # Display file uploader in the sidebar
-        uploaded_file = st.file_uploader("Upload File (XLSX, CSV)", type=['xlsx', 'csv'], key="file_uploader")
+        uploaded_file = st.file_uploader("Upload File (XLSX, CSV)", type=['xlsx', 'csv', 'parquet'], key="file_uploader")
+
+        # Show multi-sheet selection UI if pending
+        if st.session_state.get('excel_sheets_pending', False):
+            _render_sheet_selection_ui(
+                st.session_state['excel_sheet_names'],
+                st.session_state['excel_file_bytes'],
+                st.session_state['uploaded_file']
+            )
+            return  # Don't proceed with normal flow while sheet selection is pending
 
         # If a new file is uploaded, check if the file has changed
         if uploaded_file is not None:
@@ -268,76 +451,34 @@ def handle_data_upload():
             if 'transformation_manager' not in st.session_state:
                 st.session_state.transformation_manager = TransformationManager()
 
-            # First-time upload or file change detection
-            if "last_uploaded_file_hash" not in st.session_state:
-                # First file upload
-                st.session_state["data"] = load_dataframe(uploaded_file)
-                st.session_state["last_uploaded_file_hash"] = get_file_hash(uploaded_file)
-                st.success("Data uploaded successfully!")
-                
-                # Initialize Session Trace
-                st.session_state.transformation_manager.initialize_session(uploaded_file.name, username=st.session_state.get('username'))
-                
-                # Save source file to artifacts for reproducibility
-                session_id = st.session_state.transformation_manager.session_id
-                artifact_dir = os.path.join("data", "traces", "artifacts", session_id)
-                os.makedirs(artifact_dir, exist_ok=True)
-                
-                file_ext = os.path.splitext(uploaded_file.name)[1]
-                source_path = os.path.join(artifact_dir, f"source{file_ext}")
-                
-                uploaded_file.seek(0)
-                with open(source_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                # Update manager with the stored path
-                st.session_state.transformation_manager.source_dataset = source_path
-                st.session_state.transformation_manager.save_trace()
-
-                st.session_state.transformation_manager.add_step(
-                    "initial_load", 
-                    {"filename": uploaded_file.name, "source_path": source_path}, 
-                    f"Uploaded initial dataset: {uploaded_file.name}"
-                )
-
-            else:
-                # Compare hashes of current and previous files
+            # Determine if this is a new file or same file
+            is_new_file = "last_uploaded_file_hash" not in st.session_state
+            file_changed = False
+            if not is_new_file:
                 current_file_hash = get_file_hash(uploaded_file)
                 last_file_hash = st.session_state["last_uploaded_file_hash"]
-
-                if current_file_hash != last_file_hash:
-                    # File changed, reload data
-                    st.session_state["data"] = load_dataframe(uploaded_file)
-                    st.session_state["working_df"] = load_dataframe(uploaded_file)
-                    st.session_state["last_uploaded_file_hash"] = current_file_hash
-                    st.success("Data uploaded successfully!")
-                    
-                    # Initialize New Session Trace
-                    st.session_state.transformation_manager.initialize_session(uploaded_file.name, username=st.session_state.get('username'))
-                    
-                    # Save source file to artifacts for reproducibility
-                    session_id = st.session_state.transformation_manager.session_id
-                    artifact_dir = os.path.join("data", "traces", "artifacts", session_id)
-                    os.makedirs(artifact_dir, exist_ok=True)
-                    
-                    file_ext = os.path.splitext(uploaded_file.name)[1]
-                    source_path = os.path.join(artifact_dir, f"source{file_ext}")
-                    
-                    uploaded_file.seek(0)
-                    with open(source_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # Update manager with the stored path
-                    st.session_state.transformation_manager.source_dataset = source_path
-                    st.session_state.transformation_manager.save_trace()
-
-                    st.session_state.transformation_manager.add_step(
-                        "initial_load", 
-                        {"filename": uploaded_file.name, "source_path": source_path}, 
-                        f"Uploaded new dataset version: {uploaded_file.name}"
-                    )
-                else:
+                file_changed = current_file_hash != last_file_hash
+                if not file_changed:
                     st.info("The file has not changed. No need to reload data.")
+                    return
+
+            # Attempt to load the file
+            result = load_dataframe(uploaded_file)
+
+            # Check if multi-sheet sentinel was returned
+            if isinstance(result, dict) and result.get("__multi_sheet__"):
+                # Store state for sheet selection UI
+                uploaded_file.seek(0)
+                st.session_state['excel_sheets_pending'] = True
+                st.session_state['excel_sheet_names'] = result['sheet_names']
+                st.session_state['excel_file_bytes'] = uploaded_file.read()
+                uploaded_file.seek(0)
+                st.rerun()
+            elif result is not None:
+                # Normal single-sheet or CSV/Parquet load
+                _finalize_upload(result, uploaded_file, is_new_file=is_new_file)
+                if not is_new_file:
+                    st.session_state["working_df"] = result
 
 
 class Page:
