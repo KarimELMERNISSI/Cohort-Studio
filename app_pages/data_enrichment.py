@@ -5,7 +5,9 @@ import json
 from matplotlib import pyplot as plt
 from typing import Dict, Any, Optional, Union, List, Tuple, Callable
 from io import BytesIO
-from utils.multipage import load_dataframe, get_file_hash
+import io
+import functools
+from utils.multipage import load_dataframe, get_file_hash, _load_excel_with_selection
 import enrich.external_data as eed
 from utils.data_analyzer import DataAnalyzer
 from rapidfuzz import fuzz
@@ -30,6 +32,86 @@ import ast
 # Note: DataTransformationEngine class was removed (dead code)
 # See git history if needed
 
+def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.DataFrame]:
+    """Handle multi-sheet Excel files inline with a selection UI.
+    
+    Persists the loaded DataFrame in session state so it survives Streamlit re-runs.
+    Returns the loaded DataFrame, or None if the user hasn't made a selection yet.
+    """
+    # Check if we already loaded data for this prefix — return it immediately
+    cache_key = f"{key_prefix}_loaded_df"
+    cache_path_key = f"{key_prefix}_loaded_path"
+    if cache_key in st.session_state and st.session_state[cache_key] is not None:
+        st.success(f"✅ Multi-sheet data loaded ({st.session_state[cache_key].shape[0]} rows × {st.session_state[cache_key].shape[1]} columns)")
+        return st.session_state[cache_key]
+    
+    uploaded_file.seek(0)
+    file_bytes = uploaded_file.read()
+    uploaded_file.seek(0)
+    
+    xls = pd.ExcelFile(io.BytesIO(file_bytes), engine='openpyxl')
+    sheet_names = xls.sheet_names
+    
+    st.markdown(f"📑 **{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
+    
+    load_mode = st.radio(
+        "How would you like to load this file?",
+        ["Load a single sheet", "Merge multiple sheets"],
+        key=f"{key_prefix}_load_mode",
+        horizontal=True
+    )
+    
+    if load_mode == "Load a single sheet":
+        selected_sheet = st.selectbox(
+            "Select sheet to load",
+            sheet_names,
+            key=f"{key_prefix}_single_sheet"
+        )
+        if st.button("📥 Load Sheet", key=f"{key_prefix}_btn_load_single"):
+            df = _load_excel_with_selection(file_bytes, sheet_names, [selected_sheet])
+            if df is not None:
+                st.session_state[cache_key] = df
+            return df
+    else:
+        selected_sheets = st.multiselect(
+            "Select sheets to merge",
+            sheet_names,
+            default=sheet_names,
+            key=f"{key_prefix}_multi_sheet"
+        )
+        if len(selected_sheets) >= 2:
+            # Find common columns across selected sheets
+            try:
+                common_cols = None
+                for s in selected_sheets:
+                    cols = set(pd.read_excel(io.BytesIO(file_bytes), sheet_name=s, nrows=0, engine='openpyxl').columns)
+                    common_cols = cols if common_cols is None else common_cols & cols
+                common_cols = sorted(common_cols) if common_cols else []
+            except Exception:
+                common_cols = []
+            
+            if common_cols:
+                merge_key = st.selectbox(
+                    "Select merge key (row ID column)",
+                    common_cols,
+                    key=f"{key_prefix}_merge_key"
+                )
+            else:
+                st.warning("No common columns found. Sheets will be concatenated vertically.")
+                merge_key = None
+            
+            if st.button("📥 Merge & Load Sheets", key=f"{key_prefix}_btn_merge"):
+                df = _load_excel_with_selection(file_bytes, sheet_names, selected_sheets, merge_key)
+                if df is not None:
+                    st.session_state[cache_key] = df
+                return df
+        elif len(selected_sheets) == 1:
+            st.info("Select at least 2 sheets to merge, or switch to single-sheet mode.")
+        else:
+            st.info("Please select at least one sheet.")
+    return None
+
+
 def handle_main_data_upload() -> Optional[pd.DataFrame]:
     """Handle the upload or path input for the main dataset."""
     if 'data' in st.session_state and st.session_state.data is not None:
@@ -48,18 +130,30 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
             try:
                 st.write(f"file_name: {uploaded_file.name}")
                 file_path = uploaded_file.name
-                df = load_dataframe(uploaded_file)
-                current_file_hash = get_file_hash(uploaded_file)
+                result = load_dataframe(uploaded_file)
                 
-                if 'last_main_file_hash' not in st.session_state or \
-                   current_file_hash != st.session_state['last_main_file_hash']:
-                    st.session_state['last_main_file_hash'] = current_file_hash
-                    st.success("✅ Main dataset successfully loaded from upload.")
+                # Handle multi-sheet Excel
+                if isinstance(result, dict) and result.get("__multi_sheet__"):
+                    df = _handle_multisheet_inline(uploaded_file, "main_data")
+                    if df is None:
+                        return None  # User hasn't selected yet
+                else:
+                    df = result
                 
-                st.session_state['data'] = df
-                if 'enriched_df' not in st.session_state:
-                    st.session_state['enriched_df'] = df.copy()
-                return df
+                if df is not None:
+                    current_file_hash = get_file_hash(uploaded_file)
+                    
+                    if 'last_main_file_hash' not in st.session_state or \
+                       current_file_hash != st.session_state['last_main_file_hash']:
+                        st.session_state['last_main_file_hash'] = current_file_hash
+                        # Clear any stale multi-sheet cache from a previous file
+                        st.session_state.pop('main_data_loaded_df', None)
+                        st.success("✅ Main dataset successfully loaded from upload.")
+                    
+                    st.session_state['data'] = df
+                    if 'enriched_df' not in st.session_state:
+                        st.session_state['enriched_df'] = df.copy()
+                    return df
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
                 return None
@@ -113,14 +207,26 @@ def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
                     file_path = saved_path
                     uploaded_file.seek(0) # Reset for loading
 
-                df = load_dataframe(uploaded_file)
-                current_file_hash = get_file_hash(uploaded_file)
+                result = load_dataframe(uploaded_file)
                 
-                if 'last_enrichment_file_hash' not in st.session_state or \
-                   current_file_hash != st.session_state['last_enrichment_file_hash']:
-                    st.session_state['last_enrichment_file_hash'] = current_file_hash
-                    st.success("✅ Enrichment dataset successfully loaded from upload.")
-                return df, file_path
+                # Handle multi-sheet Excel
+                if isinstance(result, dict) and result.get("__multi_sheet__"):
+                    df = _handle_multisheet_inline(uploaded_file, "enrichment_data")
+                    if df is None:
+                        return None, None  # User hasn't selected yet
+                else:
+                    df = result
+                
+                if df is not None:
+                    current_file_hash = get_file_hash(uploaded_file)
+                    
+                    if 'last_enrichment_file_hash' not in st.session_state or \
+                       current_file_hash != st.session_state['last_enrichment_file_hash']:
+                        st.session_state['last_enrichment_file_hash'] = current_file_hash
+                        # Clear any stale multi-sheet cache from a previous file
+                        st.session_state.pop('enrichment_data_loaded_df', None)
+                        st.success("✅ Enrichment dataset successfully loaded from upload.")
+                    return df, file_path
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
                 return None, None
