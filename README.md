@@ -232,4 +232,4 @@ See the `documentation/` folder for detailed guides:
 
 ## 📄 License
 
-[MIT License](LICENSE)
+[Apache 2.0](LICENSE)
