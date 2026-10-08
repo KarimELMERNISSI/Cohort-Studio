@@ -144,6 +144,7 @@ cython_debug/
 Thumbs.db
 
 # Project specific
+.agents/
 data/
 main.dist/
 main.build/
@@ -151,3 +152,4 @@ main.build/
 *_trace.json
 correlation_matrix.xlsx
 execution_log.txt
+

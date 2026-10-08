@@ -20,6 +20,7 @@ import time
 import logging
 import re
 from rapidfuzz import process
+import pandas as pd
 
 # Import prompt functions
 from prompts import (

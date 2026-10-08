@@ -1607,7 +1607,7 @@ def show_educational_content():
         st.subheader("Parametric Tests")
         st.caption("Assume data follows a specific distribution (usually Normal). More powerful if assumptions are met.")
         
-        st.markdown("""
+        st.markdown(r"""
         **1. Student's t-test**
         *   **Use**: Compare means of 2 independent groups.
         *   **Assumptions**: Normality, Equal Variances.
@@ -1628,7 +1628,7 @@ def show_educational_content():
         st.subheader("Non-Parametric Tests")
         st.caption("Do not assume a specific distribution. Use ranks instead of raw values. Robust to outliers.")
         
-        st.markdown("""
+        st.markdown(r"""
         **1. Mann-Whitney U Test**
         *   **Use**: Compare distributions of 2 independent groups.
         *   **Assumptions**: Independent samples, similar distribution shapes.
@@ -1647,7 +1647,7 @@ def show_educational_content():
         
     st.divider()
     st.subheader("Effect Size Interpretation")
-    st.markdown("""
+    st.markdown(r"""
     **P-value** tells you *if* there is a difference. **Effect Size** tells you *how big* the difference is.
     
     | Test | Effect Size Metric | Small | Medium | Large |

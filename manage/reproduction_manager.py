@@ -89,10 +89,8 @@ def reproduce_trace(trace_file):
                     # identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
                     # additional_columns = list(set(enrichment_df.columns) - identifier_set)
                     
-                    # Re-calculate additional columns as they are not stored in params (or maybe they should be?)
-                    # In the original code: additional_columns = list(set(enrichment_df.columns) - identifier_set)
-                    # We can re-compute it.
-                    identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
+                    identifier = params.get("identifier") or params.get("left_id_names")
+                    identifier_set = {identifier} if isinstance(identifier, str) else set(identifier if identifier else [])
                     additional_columns = list(set(enrichment_df.columns) - identifier_set)
 
                     current_df = eed.add_data(
