@@ -29,14 +29,9 @@ class DocumentsMixin:
 
     def extract_custom_graph_from_doc(self, file_name, progress_callback=None):
         """
-        Uses Gemini Native File API to extract a knowledge graph from a specific document.
+        Extract a Knowledge Graph of key entities and relationships from a specific document.
+        Supports both Gemini File API and universal text-based LLM extraction (Ollama, OpenAI, Mistral).
         """
-        # Import types locally to avoid import issues
-        try:
-            from google.genai import types
-        except ImportError:
-            return None, "Google GenAI types not available."
-            
         if not self.initialized:
             return None, "RAG System not initialized."
             
@@ -44,106 +39,135 @@ class DocumentsMixin:
         if not os.path.exists(file_path):
             return None, f"File {file_name} not found."
             
-        if progress_callback: progress_callback(10, f"Uploading {file_name} to Gemini...")
+        prompt_text = """
+        Role: Expert Information Architect.
+        Task: Analyze this document and extract a Knowledge Graph of key entities and their relationships.
         
-        try:
-            client = self.llm.client 
-            
-            with open(file_path, "rb"):
-                uploaded_file = client.files.upload(file=file_path)
-            
-            while uploaded_file.state.name == "PROCESSING":
-                if progress_callback: progress_callback(20, "Processing file...")
-                time.sleep(2)
-                uploaded_file = client.files.get(name=uploaded_file.name)
-                
-            if uploaded_file.state.name == "FAILED":
-                return None, "File processing failed by Google."
-                
-            if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
-            
-            prompt_text = """
-            Role: Expert Information Architect.
-            Task: Analyze this document and extract a Knowledge Graph of key entities and their relationships.
-            
-            Instructions:
-            1. Identify core entities (Concepts, Methods, Metrics, Findings, Diseases, Treatments).
-            2. Identify relationships between them.
-            3. NAMING CONVENTION: Use the **Canonical/Standard** name for each entity. 
-               - E.g., Use "Heart Failure" instead of "HF". 
-               - Deduplicate within the document (do not create separate nodes for acronyms).
-            4. EXHAUSTIVE EXTRACTION: For each entity, scan the ENTIRE document.
-               - Collect ALL page numbers.
-               - Select the BEST definition and representative quote.
-            5. SCIENTIFIC SUMMARY: Analyze the document type (e.g. Clinical Study, Review, Protocol) and generate a structured summary.
-            
-            Return JSON:
-            {
-                "summary": {
-                    "title": "Inferred Document Title",
-                    "doc_type": "Study Type (e.g. Cohort Study, Review)",
-                    "objective": "Primary goal/hypothesis of the study",
-                    "methods": "Key methodology, population, study design",
-                    "key_findings": "Primary results and outcomes",
-                    "significance": "Clinical or scientific implications",
-                    "top_concepts": ["List of 3-5 most important concepts"]
-                },
-                "nodes": [
-                    {
-                        "id": "Canonical Name",
-                        "type": "Concept/Metric/Finding/etc",
-                        "description": "Comprehensive Definition",
-                        "source_text": "Representative quote...",
-                        "page_reference": "1, 3, 5"
-                    }
-                ],
-                "edges": [
-                    {
-                        "source": "Source Node ID",
-                        "target": "Target Node ID",
-                        "relation": "relationship_type",
-                        "description": "Context of relationship"
-                    }
-                ],
-                "formulas": [
-                    {
-                        "name": "Formula Name",
-                        "expression": "Math expression",
-                        "page": "Page X",
-                        "description": "Explanation"
-                    }
-                ]
-            }
-            """
-            
-            response = client.models.generate_content(
-                model=self.llm.model_name,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part.from_uri(
-                                file_uri=uploaded_file.uri,
-                                mime_type=uploaded_file.mime_type
-                            ),
-                            types.Part.from_text(text=prompt_text)
-                        ]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2
-                )
-            )
-            
-            try:
-                client.files.delete(name=uploaded_file.name)
-            except Exception:
-                pass
+        Instructions:
+        1. Identify core entities (Concepts, Methods, Metrics, Findings, Diseases, Treatments).
+        2. Identify relationships between them.
+        3. NAMING CONVENTION: Use the **Canonical/Standard** name for each entity. 
+           - E.g., Use "Heart Failure" instead of "HF". 
+           - Deduplicate within the document (do not create separate nodes for acronyms).
+        4. EXHAUSTIVE EXTRACTION: For each entity, scan the ENTIRE document.
+           - Collect ALL page numbers.
+           - Select the BEST definition and representative quote.
+        5. SCIENTIFIC SUMMARY: Analyze the document type (e.g. Clinical Study, Review, Protocol) and generate a structured summary.
+        
+        Return JSON ONLY:
+        {
+            "summary": {
+                "title": "Inferred Document Title",
+                "doc_type": "Study Type (e.g. Cohort Study, Review)",
+                "objective": "Primary goal/hypothesis of the study",
+                "methods": "Key methodology, population, study design",
+                "key_findings": "Primary results and outcomes",
+                "significance": "Clinical or scientific implications",
+                "top_concepts": ["List of 3-5 most important concepts"]
+            },
+            "nodes": [
+                {
+                    "id": "Canonical Name",
+                    "type": "Concept/Metric/Finding/etc",
+                    "description": "Comprehensive Definition",
+                    "source_text": "Representative quote...",
+                    "page_reference": "1, 3, 5"
+                }
+            ],
+            "edges": [
+                {
+                    "source": "Source Node ID",
+                    "target": "Target Node ID",
+                    "relation": "relationship_type",
+                    "description": "Context of relationship"
+                }
+            ],
+            "formulas": [
+                {
+                    "name": "Formula Name",
+                    "expression": "Math expression",
+                    "page": "Page X",
+                    "description": "Explanation"
+                }
+            ]
+        }
+        """
 
-            json_str = response.text
+        try:
+            # Check if Gemini File API is available on the client
+            has_gemini_file_api = (
+                hasattr(self, 'llm') and 
+                hasattr(self.llm, 'client') and 
+                self.llm.client is not None and 
+                hasattr(self.llm.client, 'files')
+            )
+
+            if has_gemini_file_api:
+                from google.genai import types
+                if progress_callback: progress_callback(10, f"Uploading {file_name} to Gemini...")
+                
+                client = self.llm.client
+                with open(file_path, "rb"):
+                    uploaded_file = client.files.upload(file=file_path)
+                
+                while uploaded_file.state.name == "PROCESSING":
+                    if progress_callback: progress_callback(20, "Processing file...")
+                    time.sleep(2)
+                    uploaded_file = client.files.get(name=uploaded_file.name)
+                    
+                if uploaded_file.state.name == "FAILED":
+                    return None, "File processing failed by Google."
+                    
+                if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
+                
+                clean_model = getattr(self.llm, "model_name", "gemini-1.5-flash")
+                if clean_model.startswith("models/"):
+                    clean_model = clean_model[7:]
+
+                response = client.models.generate_content(
+                    model=clean_model,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_uri(
+                                    file_uri=uploaded_file.uri,
+                                    mime_type=uploaded_file.mime_type
+                                ),
+                                types.Part.from_text(text=prompt_text)
+                            ]
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.2
+                    )
+                )
+                
+                try:
+                    client.files.delete(name=uploaded_file.name)
+                except Exception:
+                    pass
+
+                json_str = response.text
+            else:
+                # Universal provider-agnostic text extraction (Ollama, OpenAI, Mistral)
+                if progress_callback: progress_callback(20, f"Reading {file_name}...")
+                from manage.rag import PDFDocumentLoader
+                loader = PDFDocumentLoader(file_path)
+                docs = loader.load_single_pdf(file_path)
+                if not docs:
+                    return None, f"Could not extract text from {file_name}."
+
+                if progress_callback: progress_callback(40, "Extracting Knowledge Graph with AI...")
+                doc_text = "\n\n".join([f"--- Page {d.metadata.get('page', 1)} ---\n{d.page_content}" for d in docs[:30]])
+                
+                full_prompt = f"{prompt_text}\n\nDocument text to analyze:\n{doc_text[:35000]}"
+                response = self.llm.invoke(full_prompt)
+                json_str = response.content if hasattr(response, 'content') else str(response)
+
             cleaned_json = self._clean_json_response(json_str)
-            parsed_data = json.loads(cleaned_json)
+            parsed_data = self._parse_json_safe(cleaned_json)
             
             if isinstance(parsed_data, list):
                 if len(parsed_data) > 0 and isinstance(parsed_data[0], dict):
@@ -158,6 +182,7 @@ class DocumentsMixin:
             
         except Exception as e:
             return None, str(e)
+
 
     def extract_merged_graph_from_docs(self, doc_list, progress_callback=None):
         """
@@ -342,7 +367,6 @@ class DocumentsMixin:
         try:
             return chain.invoke(query)
         except Exception as e:
-            print(f"DEBUG: RAG Chat Error: {e}")
-            import traceback
-            traceback.print_exc()
+            import logging
+            logging.getLogger(__name__).error("RAG Chat Error: %s", e, exc_info=True)
             return f"System Error: {str(e)}"

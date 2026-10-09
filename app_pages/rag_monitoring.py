@@ -34,7 +34,7 @@ except ImportError:
 
 def render_rag_monitoring():
     """Main entry point for the RAG Monitoring page."""
-    st.title("🔍 RAG Quality Monitor")
+    st.title("RAG Quality Monitor")
     st.markdown("Monitor and assess the quality of RAG outputs over time.")
     
     # Check if evaluator exists
@@ -173,7 +173,7 @@ def render_quality_overview(evaluator):
     # Hallucination rate warning
     hall_rate = metrics.get("hallucination_rate", {}).get("rate", 0)
     if hall_rate > 0.1:
-        st.warning(f"⚠️ Hallucination rate is {hall_rate*100:.1f}%. Consider reviewing prompts.")
+        st.warning(f"Hallucination rate is {hall_rate*100:.1f}%. Consider reviewing prompts.")
 
 
 def render_evaluation_details(evaluator):
@@ -244,7 +244,7 @@ def render_evaluation_details(evaluator):
                 st.text(eval_result.get("faithfulness_reasoning", "")[:200])
                 
                 if eval_result.get("has_hallucination"):
-                    st.error("⚠️ Hallucination detected!")
+                    st.error("Hallucination detected!")
                     claims = eval_result.get("hallucination_claims", [])
                     for claim in claims[:3]:
                         st.write(f"- {claim}")
@@ -278,7 +278,7 @@ def render_embedding_health(evaluator):
         st.info("No test cases defined yet. Add test cases to track embedding quality.")
     
     # Add test case form
-    with st.expander("➕ Add Test Case"):
+    with st.expander("Add Test Case"):
         with st.form("add_test_case"):
             query = st.text_input("Query")
             concepts = st.text_input("Expected Concepts (comma-separated)")
@@ -317,10 +317,10 @@ def render_run_evaluation(evaluator):
         rag_available = rag.initialized
     
     if not rag_available:
-        st.warning("⚠️ RAG system not initialized. Please initialize it first from the Data Insight page.")
+        st.warning("RAG system not initialized. Please initialize it first from the Data Insight page.")
         
         # Demo mode option
-        st.info("💡 You can run a demo evaluation without the full RAG system to test the monitoring pipeline.")
+        st.info("You can run a demo evaluation without the full RAG system to test the monitoring pipeline.")
         if st.button("Run Demo Evaluation"):
             run_demo_evaluation(evaluator)
         return
@@ -367,7 +367,7 @@ def render_run_evaluation(evaluator):
             else:
                 selected = [t["id"] for t in test_cases]
             
-            if st.button("▶️ Run Test Suite", type="secondary"):
+            if st.button("Run Test Suite", type="secondary"):
                 run_test_suite_with_progress(evaluator, rag, test_cases, selected)
         else:
             st.info("No test cases defined. Add test cases in the Embedding Health tab.")
@@ -443,7 +443,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
         status_text.empty()
         
         # Display results
-        st.success(f"✅ Evaluation complete! Overall score: **{result.get('overall_score', 0):.1f}/10**")
+        st.success(f"Evaluation complete! Overall score: **{result.get('overall_score', 0):.1f}/10**")
         
         # Score breakdown
         col1, col2, col3 = st.columns(3)
@@ -461,7 +461,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"❌ Evaluation failed: {str(e)}")
+        st.error(f"Evaluation failed: {str(e)}")
 
 
 def run_test_suite_with_progress(evaluator, rag, test_cases: list, selected_ids: list):
@@ -588,7 +588,7 @@ def run_demo_evaluation(evaluator):
     
     progress_bar.progress(100, text="Demo complete!")
     
-    st.success(f"✅ Demo evaluation logged! Score: **{result['overall_score']}/10**")
+    st.success(f"Demo evaluation logged! Score: **{result['overall_score']}/10**")
     st.info("This was a simulated evaluation. Initialize the RAG system for real evaluations.")
 
 

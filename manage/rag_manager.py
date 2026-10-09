@@ -53,13 +53,14 @@ logging.getLogger('chromadb.telemetry.product.posthog').setLevel(logging.CRITICA
 
 # Try importing RAG dependencies
 try:
-    import google.genai as genai
-    from google.genai import types
-    from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_chroma import Chroma
-    from utils.custom_gemini import CustomGeminiChat, CustomGeminiEmbeddings
-
+    from manage.rag import (
+        ConnectorFactory,
+        ProviderConfig,
+        ProviderType,
+        PDFDocumentLoader,
+    )
     from langchain_core.runnables import RunnablePassthrough
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
@@ -67,7 +68,7 @@ try:
 except ImportError as e:
     RAG_AVAILABLE = False
     MISSING_LIBS_ERROR = str(e)
-    genai = None
+
 
 
 class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
@@ -104,10 +105,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         - suggest_alternative_formula
     """
     
-    def __init__(self, documents_dir="DOCUMENTS", api_key=None):
+    def __init__(self, documents_dir="DOCUMENTS", api_key=None, provider="gemini", base_url=None):
         self.documents_dir = documents_dir
         self.api_key = api_key
+        self.provider = provider
+        self.base_url = base_url
         self.client = None
+        self.llm = None
         self.vector_store = None
         self.qa_chain = None
         self.initialized = False
@@ -123,30 +127,26 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # Formulas Registry
         self.formulas_registry = {}
         
-        if api_key:
+        if api_key and provider == "gemini":
             os.environ["GOOGLE_API_KEY"] = api_key
-            if genai:
-                self.client = genai.Client(api_key=api_key)
 
     def is_available(self):
         """Check if RAG dependencies are available."""
         return RAG_AVAILABLE
 
-    def get_available_models(self):
-        """Get list of available Gemini models."""
-        if not self.api_key or not genai:
-            return []
+    def get_available_models(self, provider: str = "gemini", base_url: str = None):
+        """Get list of available models for the specified provider."""
         try:
-            if not self.client:
-                self.client = genai.Client(api_key=self.api_key)
-                
-            models = []
-            for m in self.client.models.list():
-                if "gemini" in m.name.lower(): 
-                    models.append(m.name)
-            return models
+            cfg = ProviderConfig(
+                provider=ProviderType(provider.lower()),
+                api_key=self.api_key,
+                base_url=base_url or self.base_url,
+            )
+            connector = ConnectorFactory.get_llm_connector(cfg)
+            return connector.get_available_models()
         except Exception:
             return []
+
 
     def _clean_json_response(self, text):
         """
@@ -220,21 +220,38 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 }
             }
 
-    def initialize_system(self, model_name="models/gemini-flash-latest", adherence_score=0.5, temperature=0.3, dataset_columns=None, use_existing_db=False, progress_callback=None, selected_files=None, embedding_model="models/embedding-001"):
-        """Initialize the RAG system with documents and LLM."""
+    def initialize_system(
+        self,
+        model_name="gemini-1.5-flash",
+        adherence_score=0.5,
+        temperature=0.3,
+        dataset_columns=None,
+        use_existing_db=False,
+        progress_callback=None,
+        selected_files=None,
+        embedding_model="models/gemini-embedding-001",
+        provider="gemini",
+        base_url=None,
+    ):
+        """Initialize the RAG system with documents, embeddings and LLM."""
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
         
-        if not self.api_key:
-            return False, "Google API Key is required."
+        provider_clean = (provider or "gemini").lower()
+        self.provider = provider_clean
+        self.base_url = base_url
+
+        if provider_clean in ["gemini", "openai", "mistral"] and not self.api_key:
+            return False, f"{provider_clean.capitalize()} API Key is required."
 
         try:
-            # 1. Load Documents
+            # 1. Load Documents using native PDFDocumentLoader
             if progress_callback: progress_callback(10, "Loading documents...")
             if not os.path.exists(self.documents_dir):
                 os.makedirs(self.documents_dir)
                 return False, f"Documents directory '{self.documents_dir}' created. Please add PDF files."
 
+            loader = PDFDocumentLoader(self.documents_dir)
             if selected_files:
                 documents = []
                 for file_name in selected_files:
@@ -243,35 +260,28 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                         if file_name in files:
                             file_path = os.path.join(root, file_name)
                             break
-                    
-                    if file_path and file_path.endswith('.pdf'):
-                        try:
-                            loader = PyPDFLoader(file_path)
-                            file_docs = loader.load()
-                            documents.extend(file_docs)
-                        except Exception:
-                            pass
+                    if file_path:
+                        documents.extend(loader.load_single_pdf(file_path))
             else:
-                loader = DirectoryLoader(self.documents_dir, glob="**/*.pdf", loader_cls=PyPDFLoader)
-                documents = loader.load()
+                documents = loader.load(recursive=True)
             
             if not documents:
                 return False, "No PDF documents found in the DOCUMENTS folder (or none selected)."
-
-            for doc in documents:
-                if 'page' in doc.metadata:
-                    doc.metadata['page'] += 1
 
             # 2. Split Text
             if progress_callback: progress_callback(30, "Splitting text...")
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             texts = text_splitter.split_documents(documents)
 
-            # 3. Create Embeddings & Vector Store
-            if progress_callback: progress_callback(50, "Initializing embeddings...")
-            embeddings = CustomGeminiEmbeddings(
-                api_key=self.api_key, 
-                model=embedding_model
+            # 3. Create Connectors (Embeddings & LLM)
+            if progress_callback: progress_callback(50, "Initializing connectors & embeddings...")
+            self.llm, embeddings = ConnectorFactory.create_connectors(
+                provider=provider_clean,
+                model_name=model_name,
+                embedding_model=embedding_model,
+                api_key=self.api_key,
+                base_url=base_url,
+                temperature=temperature,
             )
             
             from utils.data_paths import get_chroma_dir
@@ -317,8 +327,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                         return False, f"Failed to create vector store: {e}"
 
                     if not self.vector_store:
-                         return False, "Failed to initialize vector store (Unknown Error)."
-
+                        return False, "Failed to initialize vector store (Unknown Error)."
 
                     start_index = batch_size if self.vector_store._collection.count() > 0 else 0
                     
@@ -334,28 +343,25 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                         while retry_count < max_retries:
                             try:
                                 self.vector_store.add_documents(batch)
-                                time.sleep(1.5)
+                                time.sleep(0.5)
                                 break
                             except Exception:
                                 retry_count += 1
-                                time.sleep(2 * retry_count)
+                                time.sleep(1.0 * retry_count)
 
-            # 4. Setup LLM & Chain
+            # 4. Analyze Global Context
             if progress_callback: progress_callback(95, "Setting up LLM chains...")
-            clean_model_name = model_name.replace("models/", "") if model_name.startswith("models/") else model_name
-            self.llm = CustomGeminiChat(api_key=self.api_key, model=clean_model_name, temperature=temperature)
-            
-            # 5. Analyze Global Context
             self.global_context = self._analyze_global_context(texts, dataset_columns)
 
-            # 6. Initialize Roles and QA Chain
+            # 5. Initialize Roles and QA Chain
             self._update_internal_state(adherence_score)
             
             self.initialized = True
-            return True, f"RAG System Initialized Successfully. Processed {len(documents)} pages and {len(texts)} chunks."
+            return True, f"RAG System Initialized Successfully ({provider_clean.upper()}). Processed {len(documents)} pages and {len(texts)} chunks."
 
         except Exception as e:
             return False, f"Error initializing RAG: {str(e)}"
+
 
     def update_adherence_score(self, adherence_score):
         """Updates the adherence score and rebuilds the chain without full re-initialization."""

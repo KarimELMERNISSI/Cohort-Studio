@@ -4,15 +4,19 @@ import re
 import os
 import logging
 import bcrypt
+from typing import Optional, List, Dict, Tuple, Any, Union
+import pandas as pd
 from utils.data_paths import get_datasets_dir, get_stats_dir
+
+logger = logging.getLogger(__name__)
 
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
-    def __init__(self, db_path=":memory:"):
-        self.dataset_dir = get_datasets_dir()
-        self.stats_dir = get_stats_dir()
-        self.db_path = os.path.join(self.dataset_dir, "cohort_data.duckdb")
-        self.user_db_path = os.path.join(self.dataset_dir, "users.duckdb")
+    def __init__(self, db_path: str = ":memory:") -> None:
+        self.dataset_dir: str = get_datasets_dir()
+        self.stats_dir: str = get_stats_dir()
+        self.db_path: str = os.path.join(self.dataset_dir, "cohort_data.duckdb")
+        self.user_db_path: str = os.path.join(self.dataset_dir, "users.duckdb")
         
         # Directories are created by get_*_dir() functions
         
@@ -63,7 +67,7 @@ class DBManager:
             finally:
                 con.close()
 
-    def create_user(self, username, password, auto_activate=False):
+    def create_user(self, username: str, password: str, auto_activate: bool = False) -> Tuple[bool, str]:
         """Create a new user. Admin is auto-activated, others need approval."""
         con = self._get_user_connection()
         if con:
@@ -94,7 +98,7 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
 
-    def verify_user(self, username, password):
+    def verify_user(self, username: str, password: str) -> Tuple[bool, str]:
         """Verify user credentials and check if account is active."""
         con = self._get_user_connection()
         if con:
@@ -121,7 +125,7 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
 
-    def get_all_users(self):
+    def get_all_users(self) -> List[str]:
         """Get list of all registered usernames."""
         con = self._get_user_connection()
         if con:
@@ -135,7 +139,7 @@ class DBManager:
                 con.close()
         return []
     
-    def get_all_users_with_status(self):
+    def get_all_users_with_status(self) -> List[Dict[str, Any]]:
         """Get list of all users with their activation status."""
         con = self._get_user_connection()
         if con:
@@ -161,7 +165,7 @@ class DBManager:
                 con.close()
         return []
     
-    def activate_user(self, username):
+    def activate_user(self, username: str) -> Tuple[bool, str]:
         """Activate a user account (admin only)."""
         con = self._get_user_connection()
         if con:
@@ -178,7 +182,7 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
     
-    def deactivate_user(self, username):
+    def deactivate_user(self, username: str) -> Tuple[bool, str]:
         """Deactivate a user account (admin only). Cannot deactivate admin."""
         if username == 'admin':
             return False, "Cannot deactivate admin account"
@@ -198,7 +202,7 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
 
-    def update_user_password(self, username, new_password):
+    def update_user_password(self, username: str, new_password: str) -> Tuple[bool, str]:
         """Update a user's password."""
         con = self._get_user_connection()
         if con:
@@ -218,7 +222,7 @@ class DBManager:
                 con.close()
         return False, "Database connection failed"
 
-    def delete_user(self, username):
+    def delete_user(self, username: str) -> Tuple[bool, str]:
         """Delete a user account. Protects admin from deletion."""
         if username == 'admin':
             return False, "Cannot delete admin account"
@@ -247,7 +251,7 @@ class DBManager:
             logging.error(f"Failed to connect to DuckDB: {e}")
             return None
 
-    def _get_next_version(self, base_name):
+    def _get_next_version(self, base_name: str) -> int:
         """Determines the next version number for a given base name."""
         files = glob.glob(os.path.join(self.dataset_dir, f"{base_name}_v*.parquet"))
         if not files:
@@ -263,7 +267,7 @@ class DBManager:
                 continue
         return max(versions) + 1 if versions else 1
 
-    def save_dataframe(self, df, name="main_data", folder=None):
+    def save_dataframe(self, df: pd.DataFrame, name: str = "main_data", folder: Optional[str] = None) -> Tuple[bool, str]:
         """Persists a pandas DataFrame to a Parquet file via DuckDB (Low level)."""
         con = self._get_connection()
         if con is None:
@@ -278,7 +282,7 @@ class DBManager:
         finally:
             con.close()
 
-    def save_dataset(self, df, base_name="dataset", username=None):
+    def save_dataset(self, df: pd.DataFrame, base_name: str = "dataset", username: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
         """Persists a pandas DataFrame to a Parquet file with automatic versioning."""
         con = self._get_connection()
         if con is None:
@@ -301,7 +305,7 @@ class DBManager:
         finally:
             con.close()
 
-    def load_dataframe(self, name="main_data", folder=None):
+    def load_dataframe(self, name: str = "main_data", folder: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], str]:
         """Loads a Parquet file into a pandas DataFrame via DuckDB (Low level)."""
         con = self._get_connection()
         if con is None:
@@ -316,7 +320,7 @@ class DBManager:
         finally:
             con.close()
 
-    def load_dataset(self, file_name):
+    def load_dataset(self, file_name: str) -> Tuple[Optional[pd.DataFrame], str]:
         """
         Loads a Parquet file into a pandas DataFrame via DuckDB.
         
@@ -332,17 +336,16 @@ class DBManager:
         """
         return self.load_dataframe(file_name)
             
-    def get_available_tables(self):
+    def get_available_tables(self) -> List[str]:
         """List available parquet files in the current directory."""
         files = glob.glob("*.parquet")
         return [f.replace(".parquet", "") for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
 
-    def get_available_datasets(self, username=None):
+    def get_available_datasets(self, username: Optional[str] = None) -> List[str]:
         """
         List available parquet files in the current directory, sorted by modification time.
         Filters by username if provided (unless admin).
         """
-        # files = glob.glob("*.parquet")
         files = glob.glob(os.path.join(self.dataset_dir, "*.parquet"))
         # Filter out stats files, temp files, and User DB
         dataset_files = [f for f in files if not os.path.basename(f).startswith("stats_") and not os.path.basename(f).startswith("tmp_") and not os.path.basename(f) == "users.parquet" and not os.path.basename(f) == "users.duckdb"]
@@ -357,7 +360,7 @@ class DBManager:
         
         return all_files
 
-    def save_stats(self, df, dataset_name, stats_type):
+    def save_stats(self, df: pd.DataFrame, dataset_name: str, stats_type: str) -> Tuple[bool, str]:
         """Save statistical results to parquet cache."""
         return self.save_dataframe(df, f"stats_{stats_type}_{dataset_name}", folder=self.stats_dir)
 

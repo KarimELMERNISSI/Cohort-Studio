@@ -246,7 +246,7 @@ def load_graph(name):
 # ==========================================
 
 def app():
-    # st.title("📄 Document Knowledge Graph") # Removed per user preference previously
+    # st.title("Document Knowledge Graph") # Removed per user preference previously
     
     rag_manager = st.session_state.get('rag_manager')
     # Use persistence even if RAG not active? Preferably yes, but RAG required for new generation.
@@ -260,7 +260,7 @@ def app():
     if saved_graphs:
         with st.sidebar.expander("📂 Load Saved Analysis", expanded=False):
             selected_load = st.selectbox("Select Analysis", [""] + saved_graphs, index=0)
-            if selected_load and st.button("📂 Load Graph"):
+            if selected_load and st.button("Load Graph"):
                 payload, err = load_graph(selected_load)
                 if err:
                     st.sidebar.error(f"Load failed: {err}")
@@ -314,7 +314,7 @@ def app():
     if st.session_state.doc_graph_json:
         with st.sidebar.expander("💾 Save Analysis", expanded=True):
             save_name = st.text_input("Analysis Name", placeholder="e.g. Heart Failure Study")
-            if st.button("💾 Save Graph"):
+            if st.button("Save Graph"):
                 if not save_name:
                     st.sidebar.error("Please enter a name.")
                 else:
@@ -372,7 +372,7 @@ def app():
                 w.show(key="doc_graph_widget", graph_layout=Layout.HIERARCHIC)
                 
             with col_details:
-                st.subheader("🔍 Node Details")
+                st.subheader("Node Details")
                 st.info("Select an entity to verify its source(s) in the documents.")
                 
                 with st.expander("Explore Entities", expanded=True):
@@ -421,7 +421,7 @@ def app():
         with tab_chat:
             st.subheader("Chat with Visible Documents (v1.1)")
             
-            if st.button("🗑️ Clear Chat History"):
+            if st.button("Clear Chat History"):
                 st.session_state.doc_chat_history = []
                 st.rerun()
             
@@ -454,11 +454,11 @@ def app():
             st.info("Check if variables in your loaded dataset are defined or discussed in these documents.")
             
             if "working_df" not in st.session_state:
-                st.warning("⚠️ No dataset loaded. Please go to 'Data Preparation' to load a CSV first.")
+                st.warning("No dataset loaded. Please go to 'Data Preparation' to load a CSV first.")
             else:
                 df_cols = list(st.session_state["working_df"].columns)
                 
-                if st.button("🔍 Check Coverage"):
+                if st.button("Check Coverage"):
                     with st.spinner("Matching dataset variables to knowledge graph nodes..."):
                         # Use filtered graph
                         coverage_results = rag_manager.match_columns_to_graph(df_cols, filtered_graph)
@@ -508,17 +508,17 @@ def app():
                         
                         c1, c2 = st.columns(2)
                         with c1:
-                            st.markdown("#### 🎯 Objective")
+                            st.markdown("#### Objective")
                             st.write(s.get('objective', ''))
                             
-                            st.markdown("#### 🔬 Methods")
+                            st.markdown("#### Methods")
                             st.write(s.get('methods', ''))
                         
                         with c2:
-                            st.markdown("#### 📊 Key Findings")
+                            st.markdown("#### Key Findings")
                             st.write(s.get('key_findings', ''))
                             
-                            st.markdown("#### 💡 Clinical Significance")
+                            st.markdown("#### Clinical Significance")
                             st.write(s.get('significance', ''))
                             
                         if s.get("top_concepts"):
@@ -527,4 +527,4 @@ def app():
                             st.markdown(" ".join([f"`{c}`" for c in s.get("top_concepts", [])]))
                         
     else:
-        st.info("👈 Select a document and click 'Generate Graph' to start.")
+        st.info("Select a document and click 'Generate Graph' to start.")
