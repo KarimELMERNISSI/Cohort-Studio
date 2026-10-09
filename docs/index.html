@@ -36,10 +36,12 @@
       <ul class="nav-menu">
         <li><a href="#features" class="nav-link">Features</a></li>
         <li><a href="#biostatistics" class="nav-link">Biostatistics</a></li>
+        <li><a href="#decision-guide" class="nav-link">Decision Guide</a></li>
+        <li><a href="#use-cases" class="nav-link">Use Cases</a></li>
         <li><a href="#benchmark" class="nav-link">Benchmark</a></li>
         <li><a href="#architecture" class="nav-link">Architecture</a></li>
         <li><a href="#docs" class="nav-link">Documentation</a></li>
-        <li><a href="#install" class="nav-link">Quickstart</a></li>
+        <li><a href="#citation" class="nav-link">Cite</a></li>
       </ul>
 
       <div class="nav-actions">
@@ -132,6 +134,30 @@
           <div class="stat-val"><span class="stat-val-accent">100%</span> Reproducible</div>
           <div class="stat-label">Pipeline Trace Replay</div>
           <div class="stat-desc">Complete multi-step transformation replay engine with automated Word .docx dossiers.</div>
+        </div>
+      </div>
+
+      <!-- Regulatory & Clinical Standards Ribbon -->
+      <div class="standards-bar">
+        <div class="standard-badge">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>STROBE &amp; CONSORT Reporting Aligned</span>
+        </div>
+        <div class="standard-badge">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>FDA 21 CFR Part 11 Audit Trail Integrity</span>
+        </div>
+        <div class="standard-badge">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>Good Epidemiological Practice (GEP) Ready</span>
+        </div>
+        <div class="standard-badge">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>Zero Telemetry · Air-Gapped Hospital Privacy</span>
+        </div>
+        <div class="standard-badge">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>Standard Ontologies: UMLS, SNOMED, LOINC</span>
         </div>
       </div>
     </div>
@@ -491,6 +517,176 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
     </div>
   </section>
 
+  <!-- Biostatistical Decision Engine Guide -->
+  <section id="decision-guide" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Analytical Guidance</span>
+        <h2 class="section-title">Automated Biostatistical Test Decision Guide</h2>
+        <p class="section-desc">
+          CMP automatically screens sample size, data topology, normality, and equality of variances to recommend and compute the methodologically sound test adhering to STROBE and CONSORT standards.
+        </p>
+      </div>
+
+      <div class="decision-table-wrapper">
+        <table class="decision-table">
+          <thead>
+            <tr>
+              <th>Analytical Scenario</th>
+              <th>Assumption Profile</th>
+              <th>Standard Parametric Route</th>
+              <th>Robust / Non-Parametric Route</th>
+              <th>Effect Size Metric</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>2 Independent Treatment Groups</strong></td>
+              <td>Normality (Shapiro-Wilk / D'Agostino) &amp; Equal Variances (Levene)</td>
+              <td><span class="test-pill">Student's t-test</span></td>
+              <td><span class="test-pill robust">Welch's t-test</span> (unequal variance) or <span class="test-pill robust">Mann-Whitney U</span></td>
+              <td>Hedges' <em>g</em> (exact gamma corrected) or Cohen's <em>d</em></td>
+            </tr>
+            <tr>
+              <td><strong>&ge;3 Clinical Cohort Strata</strong></td>
+              <td>Omnibus normality &amp; Homoscedasticity</td>
+              <td><span class="test-pill">One-Way ANOVA</span> + Tukey HSD</td>
+              <td><span class="test-pill robust">Welch's ANOVA</span> + <span class="test-pill robust">Games-Howell</span> or <span class="test-pill robust">Kruskal-Wallis</span></td>
+              <td>Eta-squared (&eta;&sup2;) &amp; Omega-squared (&omega;&sup2;)</td>
+            </tr>
+            <tr>
+              <td><strong>Baseline Covariate Adjustment</strong></td>
+              <td>Linearity &amp; Homogeneity of Regression Slopes</td>
+              <td><span class="test-pill">Multivariate ANCOVA</span></td>
+              <td>F-test on Treatment &times; Covariate interaction before reporting adjusted means</td>
+              <td>Partial Eta-squared (Partial &eta;&sup2;)</td>
+            </tr>
+            <tr>
+              <td><strong>2&times;2 Contingency &amp; Rare Outcomes</strong></td>
+              <td>Zero-cell occurrence in control or exposed arms</td>
+              <td><span class="test-pill">Risk Ratio (RR)</span> (Cohort)</td>
+              <td><span class="test-pill robust">Haldane-Anscombe (+0.5) Odds Ratio</span></td>
+              <td>Wald 95% Logit CI with small-sample log-odds adjustment</td>
+            </tr>
+            <tr>
+              <td><strong>Missingness Pattern Diagnostics</strong></td>
+              <td>Permutation test of mean differences across missing patterns</td>
+              <td>Complete Case Analysis (if MCAR holds)</td>
+              <td><span class="test-pill robust">Heuristic Little's MCAR</span> + Pairwise MAR Dependency Tests</td>
+              <td>Normalized distance metric &amp; missingness correlation</td>
+            </tr>
+            <tr>
+              <td><strong>Diagnostic Biomarker Cutoffs</strong></td>
+              <td>Binary disease ground truth vs continuous biomarker assay</td>
+              <td>ROC Curve Profiling &amp; AUC Area</td>
+              <td><span class="test-pill robust">Youden's Index J</span> Optimization</td>
+              <td>Sensitivity, Specificity, PPV/NPV, Likelihood Ratios (LR+, LR-)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Clinical Research Archetypes & Use Cases -->
+  <section id="use-cases" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Clinical Scenarios</span>
+        <h2 class="section-title">Engineered for Real-World Clinical Research</h2>
+        <p class="section-desc">
+          From multi-center prospective registries to rare disease observational studies, CMP delivers end-to-end auditability and mathematical rigor.
+        </p>
+      </div>
+
+      <div class="use-cases-grid">
+        <!-- Card 1 -->
+        <div class="use-case-card">
+          <div class="use-case-header">
+            <span class="use-case-tag cardio">Cardiovascular Cohort</span>
+            <h3 class="use-case-title">Prospective Longitudinal Registry</h3>
+            <div class="use-case-subtitle">12,500 Patients · Multi-Year Follow-Up</div>
+          </div>
+          <div class="use-case-body">
+            <p class="use-case-desc">
+              Analyzes primary cardiovascular endpoints adjusting for baseline hypertension, statin therapy, and age. Diagnoses missing longitudinal lipid panels using Little's MCAR before applying multivariate imputation.
+            </p>
+            <div class="use-case-specs">
+              <div class="spec-item">
+                <span class="spec-label">Primary Method:</span>
+                <span class="spec-value">ANCOVA with slope validation</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Missingness:</span>
+                <span class="spec-value">Little's MCAR Permutation</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Lineage:</span>
+                <span class="spec-value">JSON Trace Replay Engine</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="use-case-card">
+          <div class="use-case-header">
+            <span class="use-case-tag onco">Oncology Multi-Center</span>
+            <h3 class="use-case-title">Biomarker Screening &amp; Phenotyping</h3>
+            <div class="use-case-subtitle">3,420 Patients · High-Dimensional Assays</div>
+          </div>
+          <div class="use-case-body">
+            <p class="use-case-desc">
+              Harmonizes heterogeneous EHR lab exports with UMLS semantic mappings. Resolves missing proteomic values via MissForest, stratifies molecular subgroups with PCA/FAMD clustering, and optimizes diagnostic ROC thresholds.
+            </p>
+            <div class="use-case-specs">
+              <div class="spec-item">
+                <span class="spec-label">Imputation:</span>
+                <span class="spec-value">MICE &amp; MissForest Random Forest</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Phenotyping:</span>
+                <span class="spec-value">FAMD + GMM / DBSCAN</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Accuracy:</span>
+                <span class="spec-value">ROC AUC, Youden's J, LR+/LR-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="use-case-card">
+          <div class="use-case-header">
+            <span class="use-case-tag rare">Rare Pediatric Cohort</span>
+            <h3 class="use-case-title">Small-Sample Inference &amp; Regulatory Dossier</h3>
+            <div class="use-case-subtitle">48 Patients · Zero-Cell Rare Outcomes</div>
+          </div>
+          <div class="use-case-body">
+            <p class="use-case-desc">
+              Avoids infinite odds ratios using the Haldane-Anscombe continuity correction (+0.5). Computes exact unbiased Hedges' g effect sizes and generates a signed Microsoft Word (.docx) transformation dossier for institutional review boards.
+            </p>
+            <div class="use-case-specs">
+              <div class="spec-item">
+                <span class="spec-label">Contingency:</span>
+                <span class="spec-value">Haldane-Anscombe 2x2</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Effect Size:</span>
+                <span class="spec-value">Hedges' g (Exact Gamma)</span>
+              </div>
+              <div class="spec-item">
+                <span class="spec-label">Deliverable:</span>
+                <span class="spec-value">Signed Word (.docx) Dossier</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Architectural Blueprint -->
   <section id="architecture" class="section">
     <div class="container">
@@ -635,6 +831,54 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
     </div>
   </section>
 
+  <!-- Academic Citation -->
+  <section id="citation" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Academic Attribution</span>
+        <h2 class="section-title">Citing Cohort Monitoring Package</h2>
+        <p class="section-desc">
+          If you utilize CMP in clinical trials, observational cohorts, or epidemiological publications, please cite the software package.
+        </p>
+      </div>
+
+      <div class="citation-card">
+        <div class="citation-header">
+          <div class="citation-header-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            BibTeX Citation
+          </div>
+          <button class="copy-btn" data-clipboard-text="@software{elmernissi2026cohortmonitoring,
+  author = {El Mernissi, Karim},
+  title = {Cohort Monitoring Package: Clinical Cohort Intelligence and Epidemiological Analytics Platform},
+  year = {2026},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package}},
+  version = {0.2.0}
+}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            Copy BibTeX
+          </button>
+        </div>
+        <div class="citation-body">
+          <p class="citation-text">
+            <strong>APA Format:</strong> El Mernissi, K. (2026). <em>Cohort Monitoring Package: Clinical Cohort Intelligence and Epidemiological Analytics Platform</em> (Version 0.2.0) [Computer software]. GitHub. https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package
+          </p>
+          <pre class="citation-code"><code>@software{elmernissi2026cohortmonitoring,
+  author = {El Mernissi, Karim},
+  title = {Cohort Monitoring Package: Clinical Cohort Intelligence and Epidemiological Analytics Platform},
+  year = {2026},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package}},
+  version = {0.2.0}
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Quickstart & Installation -->
   <section id="install" class="section">
     <div class="container">
@@ -754,8 +998,11 @@ docker compose logs -f</code></pre>
             <ul>
               <li><a href="#features">Features</a></li>
               <li><a href="#biostatistics">Biostatistics Suite</a></li>
+              <li><a href="#decision-guide">Decision Guide</a></li>
+              <li><a href="#use-cases">Clinical Use Cases</a></li>
               <li><a href="#benchmark">Benchmark</a></li>
               <li><a href="#architecture">Architecture</a></li>
+              <li><a href="#citation">Citation (BibTeX)</a></li>
             </ul>
           </div>
 
