@@ -18,13 +18,22 @@ import streamlit as st
 from io import BytesIO
 from PIL import Image
 from utils.multipage import MultiPageApp
-from app_pages import home, data_preparation, statistical_tests, visualization, data_enrichment, data_monitoring, reproduce_analysis, epidemiology, data_insight, yfiles_test, document_insight, about, users_management
+import importlib
+from typing import Callable
+import warnings
 
-# Lazy import for RAG monitoring to avoid performance impact
-def load_rag_monitoring():
-    """Lazy loader for RAG monitoring page - only imported when accessed."""
-    from app_pages import rag_monitoring
-    return rag_monitoring.render_rag_monitoring
+# Filter expected statistical edge-case warnings
+warnings.filterwarnings("ignore", message=".*sample arguments is too small.*")
+warnings.filterwarnings("ignore", message=".*SmallSampleWarning.*")
+warnings.filterwarnings("ignore", message=".*An input array is constant.*")
+
+def lazy_page(module_name: str, func_name: str = "app") -> Callable:
+    """Returns a callable that lazily imports and executes a page module only when accessed."""
+    def _page_runner():
+        mod = importlib.import_module(module_name)
+        page_func = getattr(mod, func_name)
+        page_func()
+    return _page_runner
 
 from manage.db_manager import DBManager
 import time
@@ -38,8 +47,8 @@ def check_auth():
     if st.session_state.user_authenticated:
         with st.sidebar:
             st.divider()
-            st.write(f"👤 User: **{st.session_state.username}**")
-            if st.button("Logout", use_container_width=True):
+            st.write(f"User: **{st.session_state.username}**")
+            if st.button("Logout", width="stretch"):
                 st.session_state.user_authenticated = False
                 st.session_state.username = None
                 st.rerun()
@@ -54,11 +63,11 @@ def check_auth():
     with st.sidebar:
         # Centered Logo
         try:
-             st.image("assets/karim-app-logo.png", use_container_width=True)
+             st.image("assets/karim-app-logo.png", width="stretch")
         except:
              pass
              
-        st.title("🔐 Access")
+        st.title("User Access")
         
         tab_login, tab_signup = st.tabs(["Login", "Sign Up"])
         
@@ -66,7 +75,7 @@ def check_auth():
             with st.form("login_form"):
                 username = st.text_input("Username")
                 password = st.text_input("Password", type="password")
-                submit_login = st.form_submit_button("Login", use_container_width=True)
+                submit_login = st.form_submit_button("Login", width="stretch")
                 
                 if submit_login:
                     success, msg = db.verify_user(username, password)
@@ -84,7 +93,7 @@ def check_auth():
                 new_user = st.text_input("New Username")
                 new_pass = st.text_input("New Password", type="password")
                 confirm_pass = st.text_input("Confirm Password", type="password")
-                submit_signup = st.form_submit_button("Create Account", use_container_width=True)
+                submit_signup = st.form_submit_button("Create Account", width="stretch")
                 
                 if submit_signup:
                     if new_pass != confirm_pass:
@@ -94,7 +103,7 @@ def check_auth():
                     else:
                         success, msg = db.create_user(new_user, new_pass)
                         if success:
-                            st.success("Account created! Please login.")
+                            st.success("Account created. Please log in.")
                         else:
                             st.error(msg)
                             
@@ -102,46 +111,37 @@ def check_auth():
 
 def main():
 
-    # Fetch icons from URLs
-    #imrb_icon = requests.get("https://github.com/KarimELMERNISSI/MetaboSign/blob/main/images/metabosign_icon.png?raw=true").content
-    imrb_icon = "assets/karim-app-logo.png" #Image.open("imrb-logo.png")
-    
+    imrb_icon = "assets/karim-app-logo.png"
     
     st.set_page_config(
-        page_title="Statistical Analysis Dashboard",
-        page_icon="📊",
+        page_title="Cohort Monitoring & Analytics Platform",
+        page_icon=imrb_icon,
         layout="wide"
     )
 
     if not check_auth():
         st.stop()  # Do not continue if check_auth is not True.
     
-    
-
     # Set default page based on user type
     default_page = "Users Management" if st.session_state.get('username') == 'admin' else None
     app = MultiPageApp(default_page=default_page)
     
-    # Register pages
-    app.add_page("Main View", home.app, imrb_icon ) #"🏠") # INGESTION & DESCRIPTION
-    app.add_page("Data Validation & Monitoring", data_monitoring.app, "🔍") #👁️ CONTROL & VALIDATION
-    app.add_page("Data Enrichment", data_enrichment.app, "🔄") # ENRICHMENT
-    app.add_page("Data Insight", data_insight.app, "🧠") # INTELLIGENCE -> DATA INSIGHT
-    app.add_page("Documents Insight", document_insight.app, "📄") # INTELLIGENCE -> DOC INSIGHT
-    app.add_page("Epidemiology & Hypothesis", epidemiology.app, "🧬") # ANALYSIS -> HYPOTHESIS TESTING, POWER ANALYSIS, etc
-
-    app.add_page("Visualization", visualization.app, "📈") # DIFFUSION -> VISUALIZATION / REPORT
-    app.add_page("Reproduce Analysis", reproduce_analysis.app, "🔁") # REPRODUCIBILITY
-
-    app.add_page("RAG Quality Monitor", load_rag_monitoring(), "📊") # RAG QUALITY MONITOR (OPTIONAL - more for myself)
+    # Register pages lazily with clean typography
+    app.add_page("Main View", lazy_page("app_pages.home"), icon="")
+    app.add_page("Data Validation & Monitoring", lazy_page("app_pages.data_monitoring"), icon="")
+    app.add_page("Data Enrichment", lazy_page("app_pages.data_enrichment"), icon="")
+    app.add_page("Data Insight", lazy_page("app_pages.data_insight"), icon="")
+    app.add_page("Documents Insight", lazy_page("app_pages.document_insight"), icon="")
+    app.add_page("Epidemiology & Hypothesis", lazy_page("app_pages.epidemiology"), icon="")
+    app.add_page("Visualization", lazy_page("app_pages.visualization"), icon="")
+    app.add_page("Reproduce Analysis", lazy_page("app_pages.reproduce_analysis"), icon="")
+    app.add_page("RAG Quality Monitor", lazy_page("app_pages.rag_monitoring", "render_rag_monitoring"), icon="")
     
     # Admin-only pages
     if st.session_state.get('username') == 'admin':
-        app.add_page("Users Management", users_management.app, "👥") # ADMIN ONLY
+        app.add_page("Users Management", lazy_page("app_pages.users_management"), icon="")
     
-    app.add_page("About", about.app, "ℹ️") # ABOUT
-    #app.add_page("yFiles Test", yfiles_test.app, "🧪")
-    #app.add_page("Statistical Tests", statistical_tests.app, "📊🔧")
+    app.add_page("About", lazy_page("app_pages.about"), icon="")
     
     app.run()
 

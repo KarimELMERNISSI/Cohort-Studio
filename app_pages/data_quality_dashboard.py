@@ -841,13 +841,13 @@ def render_dashboard(df, config):
                         color='Outliers',
                         color_continuous_scale='Oranges'
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                 with col2:
-                    st.dataframe(outlier_df, use_container_width=True)
+                    st.dataframe(outlier_df, width="stretch")
                 
                 # --- Visualization Options ---
                 st.divider()
-                st.markdown("### 📊 Visual Inspection")
+                st.markdown("### Visual Inspection")
                 
                 viz_col1, viz_col2 = st.columns(2)
                 with viz_col1:
@@ -899,7 +899,7 @@ def render_dashboard(df, config):
                             showlegend=False,
                             height=450
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
                     
                 elif viz_type == "Violin Plot" and viz_columns:
                     valid_cols = [c for c in viz_columns if c in df.columns]
@@ -928,7 +928,7 @@ def render_dashboard(df, config):
                             showlegend=False,
                             height=450
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
                     
                 elif viz_type == "Scatter (with outliers)" and viz_columns:
                     valid_cols = [c for c in viz_columns if c in df.columns]
@@ -991,9 +991,9 @@ def render_dashboard(df, config):
                             title=f"Scatter Plot ({n_cols} columns) - {method_label} Outliers in Red",
                             height=450
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch")
             else:
-                st.success("✅ No statistical outliers detected with the selected method.")
+                st.success("No statistical outliers detected with the selected method.")
         else:
             st.info("No numerical columns to analyze.")
 
@@ -1163,7 +1163,7 @@ def render_dashboard(df, config):
             if duplicates > 0:
                 st.warning(f"Found {duplicates} duplicate rows.")
                 with st.expander("Show Duplicates"):
-                    st.dataframe(df[df.duplicated()].head(50))
+                    st.dataframe(df[df.duplicated()].head(50), width="stretch")
             else:
                 st.success("No duplicate rows found.")
 

@@ -14,13 +14,7 @@ from rapidfuzz import fuzz
 import os
 import re
 from pandas.api.types import is_numeric_dtype
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder, OneHotEncoder, OrdinalEncoder
-from sklearn.manifold import TSNE
-import umap
 import enrich.data_imputation as edi
-import prince
 import logging
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
@@ -42,7 +36,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.Dat
     cache_key = f"{key_prefix}_loaded_df"
     cache_path_key = f"{key_prefix}_loaded_path"
     if cache_key in st.session_state and st.session_state[cache_key] is not None:
-        st.success(f"✅ Multi-sheet data loaded ({st.session_state[cache_key].shape[0]} rows × {st.session_state[cache_key].shape[1]} columns)")
+        st.success(f"Multi-sheet data loaded ({st.session_state[cache_key].shape[0]} rows × {st.session_state[cache_key].shape[1]} columns)")
         return st.session_state[cache_key]
     
     uploaded_file.seek(0)
@@ -67,7 +61,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.Dat
             sheet_names,
             key=f"{key_prefix}_single_sheet"
         )
-        if st.button("📥 Load Sheet", key=f"{key_prefix}_btn_load_single"):
+        if st.button("Load Sheet", key=f"{key_prefix}_btn_load_single"):
             df = _load_excel_with_selection(file_bytes, sheet_names, [selected_sheet])
             if df is not None:
                 st.session_state[cache_key] = df
@@ -100,7 +94,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.Dat
                 st.warning("No common columns found. Sheets will be concatenated vertically.")
                 merge_key = None
             
-            if st.button("📥 Merge & Load Sheets", key=f"{key_prefix}_btn_merge"):
+            if st.button("Merge & Load Sheets", key=f"{key_prefix}_btn_merge"):
                 df = _load_excel_with_selection(file_bytes, sheet_names, selected_sheets, merge_key)
                 if df is not None:
                     st.session_state[cache_key] = df
@@ -115,7 +109,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.Dat
 def handle_main_data_upload() -> Optional[pd.DataFrame]:
     """Handle the upload or path input for the main dataset."""
     if 'data' in st.session_state and st.session_state.data is not None:
-        st.success("✅ Main dataset loaded from session")
+        st.success("Main dataset loaded from session")
         return st.session_state.data
 
     upload_method = st.radio("Choose upload method for Main Dataset:", ["Upload File", "Enter File Path"], key='main_data_method')
@@ -148,7 +142,7 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
                         st.session_state['last_main_file_hash'] = current_file_hash
                         # Clear any stale multi-sheet cache from a previous file
                         st.session_state.pop('main_data_loaded_df', None)
-                        st.success("✅ Main dataset successfully loaded from upload.")
+                        st.success("Main dataset successfully loaded from upload.")
                     
                     st.session_state['data'] = df
                     if 'enriched_df' not in st.session_state:
@@ -163,7 +157,7 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
         if file_path:
             try:
                 df = load_dataframe(file_path)
-                st.success("✅ Main dataset successfully loaded from provided path.")
+                st.success("Main dataset successfully loaded from provided path.")
                 st.session_state['data'] = df
                 if 'enriched_df' not in st.session_state:
                     st.session_state['enriched_df'] = df.copy()
@@ -225,7 +219,7 @@ def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
                         st.session_state['last_enrichment_file_hash'] = current_file_hash
                         # Clear any stale multi-sheet cache from a previous file
                         st.session_state.pop('enrichment_data_loaded_df', None)
-                        st.success("✅ Enrichment dataset successfully loaded from upload.")
+                        st.success("Enrichment dataset successfully loaded from upload.")
                     return df, file_path
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
@@ -243,7 +237,7 @@ def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
         if file_path_input:
             try:
                 df = load_dataframe(file_path_input)
-                st.success("✅ Enrichment dataset successfully loaded from provided path.")
+                st.success("Enrichment dataset successfully loaded from provided path.")
                 return df, file_name
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
@@ -369,7 +363,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "Enriched with external data",
                         output_dataset_path=snapshot_path
                     )
-                st.success("✅ Enrichment completed successfully!")
+                st.success("Enrichment completed successfully!")
             except Exception as e:
                 st.error(f"Error performing enrichment: {str(e)}")
     else:
@@ -417,7 +411,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                                        additional_columns=additional_columns,
                                        conflict_resolution=conflict_resolution
                                        )
-                st.success("✅ Enrichment completed successfully!")
+                st.success("Enrichment completed successfully!")
             except Exception as e:
                 st.error(f"Error performing enrichment: {str(e)}")
     
@@ -507,11 +501,11 @@ def display_results(enriched_df: pd.DataFrame, title: str=None ,key_base='k'):
                         st.session_state.transformation_manager.save_trace(trace_path)
                         st.info(f"Transformation trace saved to {trace_path}")
 
-                    st.success(f"✅ Dataset saved as {saved_name} and ready for analysis!")
+                    st.success(f"Dataset saved as {saved_name} and ready for analysis!")
                 else:
                     st.error(f"Failed to save dataset: {msg}")
             else:
-                 st.success("✅ Dataset loaded to session (Persistence unavailable)!")
+                 st.success("Dataset loaded to session (Persistence unavailable)!")
 
 
 def display_external_data_results(enriched_df: pd.DataFrame, filtered_main_data: pd.DataFrame):
@@ -953,7 +947,7 @@ def display_column_suggestions(suggestions, formula_key="formula_input"):
                     help=help_text,
                     on_click=update_formula_callback,
                     args=(col, formula_key),
-                    use_container_width=True
+                    width="stretch"
                 )
     else:
         st.info("No matching columns found. Try typing part of a column name.")
@@ -1358,7 +1352,7 @@ def define_new_variables(main_data):
     st.subheader("Define New Variable")
 
     # AI Suggestions Section
-    with st.expander("🤖 AI Variable Suggestions (RAG)", expanded=False):
+    with st.expander("AI Variable Suggestions (RAG)", expanded=False):
         if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
             
             use_specific = st.toggle("🔍 Specific Search", value=True)
@@ -1371,7 +1365,7 @@ def define_new_variables(main_data):
                     search_hint = st.text_input("Concept Search:", placeholder="e.g. 'BSA' or 'Diabetes Risk'", help="Enter a medical concept, variable name, or clinical score you want to find.")
                 else:
                     search_hint = None
-                    st.info("🚀 **Exploratory Mode**: The AI will scan your dataset to suggest generally useful medical scores (e.g. BMI, Charlson) based on available variables.")
+                    st.info("**Exploratory Mode**: The AI will scan your dataset to suggest generally useful medical scores (e.g. BMI, Charlson) based on available variables.")
 
             with col_mode:
                 if use_specific:
@@ -1386,7 +1380,7 @@ def define_new_variables(main_data):
                     st.caption("Standard Medical Indices")
 
             # -- ROW 2: Configuration --
-            with st.expander("⚙️ Advanced Configuration", expanded=True):
+            with st.expander("Advanced Configuration", expanded=True):
                 col_conf_1, col_conf_2 = st.columns([1, 1])
                 
                 with col_conf_1:
@@ -1405,7 +1399,7 @@ def define_new_variables(main_data):
 
             # -- ROW 3: Action --
             st.write("")
-            if st.button("✨ Generate AI Suggestions", type="primary", use_container_width=True):
+            if st.button("Generate AI Suggestions", type="primary", width="stretch"):
                 progress_bar = st.progress(0, text="Starting analysis...")
                 
                 def update_progress(percent, text):
@@ -1458,7 +1452,7 @@ def define_new_variables(main_data):
                     progress_bar.empty()
                     
                     if debug_mode:
-                        with st.expander("🕵️ Debug: Raw LLM Output", expanded=True):
+                        with st.expander("Debug: Raw LLM Output", expanded=True):
                             st.code(suggestions_text, language="json")
 
                 except TypeError:
@@ -1600,7 +1594,7 @@ def define_new_variables(main_data):
                             # Check for missing variables
                             missing_vars = sugg.get('missing_variables', [])
                             if missing_vars:
-                                st.error(f"⚠️ Missing required variables: {', '.join(missing_vars)}")
+                                st.error(f"Missing required variables: {', '.join(missing_vars)}")
                                 
                                 col_fix1, col_fix2 = st.columns(2)
                                 with col_fix1:
@@ -1645,16 +1639,16 @@ def define_new_variables(main_data):
                             st.markdown("**📚 Source Information**")
                             
                             if source_type == "Document":
-                                st.info(f"**Source:** {citation}", icon="📄")
+                                st.info(f"**Source:** {citation}", icon="")
                                 if explanation:
                                     st.caption(f"_{explanation}_")
                                     
                             elif source_type == "Hybrid":
-                                st.warning(f"**Hybrid Source:** {citation}", icon="⚠️")
+                                st.warning(f"**Hybrid Source:** {citation}", icon="")
                                 st.markdown(f"**Logic:** {explanation}")
                                 
                             elif source_type == "Model Knowledge":
-                                st.info(f"**Model Knowledge:** {explanation}", icon="🧠")
+                                st.info(f"**Model Knowledge:** {explanation}", icon="")
                                 
                             else:
                                 st.info(explanation or citation, icon="ℹ️")
@@ -1760,7 +1754,7 @@ def define_new_variables(main_data):
                 succ, e, temp_main_data = evaluate_formula_safely(computation_formula, variable_name, main_data)
                 
                 if succ:
-                    st.success(f"✨ Variable '{variable_name}' successfully computed! Review the preview below.")
+                    st.success(f"Variable '{variable_name}' successfully computed! Review the preview below.")
                     
                     # Store preview info in session state
                     st.session_state.preview_new_variable = {
@@ -1782,7 +1776,7 @@ def define_new_variables(main_data):
         
         # Check if the current inputs match the preview (optional, but good UX)
         if variable_name != preview_info['name'] or computation_formula != preview_info['formula']:
-            st.warning("⚠️ Inputs have changed since last computation. Please click 'Compute & Preview' again.")
+            st.warning("Inputs have changed since last computation. Please click 'Compute & Preview' again.")
         else:
             st.write("### New Variable Preview")
             
@@ -1827,7 +1821,7 @@ def define_new_variables(main_data):
                         description=f"Computed new variable: {var_name}"
                     )
                 
-                st.success(f"✨ Variable '{var_name}' successfully added to the dataset!")
+                st.success(f"Variable '{var_name}' successfully added to the dataset!")
                 st.session_state.preview_new_variable = None # Reset preview
                 st.rerun()
     
@@ -2199,7 +2193,7 @@ def compute_transformations(dataframe):
         # CHECK FOR MISSING VALUES (Elegant Error Handling)
         if transformation_type in ["Dimensionality Reduction", "Clustering"]:
              if dataframe[columns].isnull().any().any():
-                 st.error("❌ **Input columns contain missing values (NaNs).**\n\n"
+                 st.error("**Input columns contain missing values (NaNs).**\n\n"
                           "Dimensionality reduction (PCA, t-SNE, etc.) and Clustering require complete data to function correctly.\n\n"
                           "👉 **Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
                  return
@@ -2257,7 +2251,7 @@ def compute_transformations(dataframe):
                 prep_data, valid_idx = prepare_data_for_clustering(dataframe[columns], numeric_cols)
                 
                 if len(prep_data) < 2:
-                    st.error("❌ Not enough valid data points for clustering.")
+                    st.error("Not enough valid data points for clustering.")
                     return
                 
                 # Run Clustering
@@ -2342,7 +2336,7 @@ def compute_transformations(dataframe):
             # Create final result DataFrame
             if new_columns:
                 result_df = pd.DataFrame(new_columns, index=dataframe.index)
-                st.success("✨ Transformations applied successfully!")
+                st.success("Transformations applied successfully!")
                 st.dataframe(result_df, width='stretch')
 
                 # Update the session state
@@ -2380,7 +2374,7 @@ def compute_transformations(dataframe):
 
                 return result_df
             else:
-                st.warning("⚠️ No transformations were applied.")
+                st.warning("No transformations were applied.")
 
         except Exception as e:
             st.error(f"Error applying transformation: {str(e)}")
@@ -2739,7 +2733,7 @@ def app():
             st.session_state['enriched_df'] = st.session_state['data'].copy()
     # 1. Add External Data
     with main_tab:
-        with st.expander("📥 Upload External Data", expanded=True):
+        with st.expander("Upload External Data", expanded=True):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -2770,7 +2764,7 @@ def app():
                     )
                     filtered_enrichment_data = enrichment_data[selected_columns_enrichment]
 
-        with st.expander("🔄 Enrichment Configuration", expanded=False):
+        with st.expander("Enrichment Configuration", expanded=False):
             if main_data is not None and enrichment_data is not None:
                 enriched_df = configure_enrichment(
                     main_df=filtered_main_data,
@@ -2784,7 +2778,7 @@ def app():
                 st.warning("Please upload both datasets first.")
 
 
-        with st.expander("📊 Results", expanded=False):
+        with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None and 'filtered_main_data' in locals():
                 display_external_data_results(st.session_state['enriched_df'], filtered_main_data)
             else:
@@ -2809,7 +2803,7 @@ def app():
             cols_with_missing = missing_counts[missing_counts > 0].index.tolist()
             
             if not cols_with_missing:
-                st.success("✅ No missing values found in the current dataset.")
+                st.success("No missing values found in the current dataset.")
             else:
                 col_target, col_rag = st.columns([1, 2])
                 with col_target:
@@ -2817,7 +2811,7 @@ def app():
                 
                 # AI Suggestions
                 if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
-                    with st.expander("🤖 AI Imputation Suggestions (RAG)", expanded=True):
+                    with st.expander("AI Imputation Suggestions (RAG)", expanded=True):
                         
                         # Mode Selection
                         suggestion_mode = st.radio(
@@ -2900,7 +2894,7 @@ def app():
                             filled_count = original_missing - new_missing
                             
                             if filled_count > 0:
-                                st.success(f"✅ Successfully filled {filled_count} missing values in '{target_var}'!")
+                                st.success(f"Successfully filled {filled_count} missing values in '{target_var}'!")
                                 st.session_state['enriched_df'] = main_data
                                 
                                 # Snapshot
@@ -2919,7 +2913,7 @@ def app():
                                 )
                                 st.rerun()
                             else:
-                                st.warning("⚠️ Formula computed successfully but didn't fill any missing values (check data overlap).")
+                                st.warning("Formula computed successfully but didn't fill any missing values (check data overlap).")
                         else:
                             st.error(f"Formula Error: {result_or_error}")
                             
@@ -2945,13 +2939,13 @@ def app():
                 st.metric("Total Missing Values", f"{total_missing}", delta=f"{missing_percent:.2f}%")
             with col_metrics2:
                 if missing_percent > 0:
-                    st.info("💡 **Tip:** For complex datasets with correlated variables, **MICE** or **MissForest** often yield better results than simple Mean/Median imputation.")
+                    st.info("**Tip:** For complex datasets with correlated variables, **MICE** or **MissForest** often yield better results than simple Mean/Median imputation.")
             
             if missing_percent > 0:
                 with st.expander("View Missing Values Details"):
                     st.dataframe(missing_counts[missing_counts > 0].rename("Missing Count"), width='stretch')
             else:
-                st.success("✅ No missing values detected! You can skip this step unless you want to re-process.")
+                st.success("No missing values detected! You can skip this step unless you want to re-process.")
 
             # Parameter selection
             st.subheader("Select Imputation Parameters")
@@ -2979,7 +2973,7 @@ def app():
                 num_scaler = st.checkbox("Scale Numerical Columns?", value=False)
 
             # --- Advanced Settings ---
-            with st.expander("⚙️ Advanced Settings (Remainder Columns)"):
+            with st.expander("Advanced Settings (Remainder Columns)"):
                 remainder_option = st.radio(
                     "Handle Remainder Columns",
                     options=["Auto-detect", "Specify", "None"],
@@ -3061,18 +3055,18 @@ def app():
 
                         styled_df = df_imputed.style.apply(highlight_imputed, mask=imputed_mask, axis=None)
                         st.write("Preview of Imputed Data:")
-                        st.dataframe(styled_df)
+                        st.dataframe(styled_df, width="stretch")
                         #st.write(st.session_state['enriched_df'].info(verbose=True))
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
         
-        with st.expander("📊 Results", expanded=False):
+        with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None:
                 display_imputation_results(st.session_state['enriched_df'], main_data=st.session_state['working_df'])
 
     # 3. Define New Variables
     with define_var_tab:
-        with st.expander(":abacus: Apply Common Transformations to Multiple Selected Variables", expanded=True):
+        with st.expander("Apply Common Transformations to Multiple Selected Variables", expanded=True):
             
             transformed_data = compute_transformations(st.session_state['enriched_df'])
             # If transformations were successfully applied, merge the data
@@ -3082,19 +3076,19 @@ def app():
                     main_data = st.session_state['enriched_df']
                     st.success("Transformed data has been successfully added to the main dataset.")
                     st.subheader("Show Updated Dataset")
-                    st.dataframe(main_data) #st.session_state['enriched_df'])
+                    st.dataframe(main_data, width="stretch") #st.session_state['enriched_df'])
             else:
                 st.warning("No transformation to apply.")
             
 
-        with st.expander("⚙️ Variable Computation", expanded=True):
+        with st.expander("Variable Computation", expanded=True):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None:
                 main_data = define_new_variables(main_data) #) st.session_state['enriched_df']
                 #st.session_state['enriched_df'] = main_data
             else:
                 st.warning("No enriched dataset")
             
-        with st.expander("📊 Results", expanded=False):
+        with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None and main_data is not None:
                 display_new_variables_results(main_data, main_data=st.session_state['working_df']) #st.session_state['enriched_df'] st.session_state['data']
                 
@@ -3115,6 +3109,6 @@ def app():
                 #     if st.button("Use This Dataset for Further Analysis ", width='stretch'):
                 #         st.session_state.data = st.session_state['enriched_df']
                 #         st.session_state.working_df = st.session_state['enriched_df']
-                #         st.success("✅ Dataset saved and ready for further analysis!")
+                #         st.success("Dataset saved and ready for further analysis!")
             else:
                 st.warning("No dataset available. Please upload data first.")

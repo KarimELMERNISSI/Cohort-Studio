@@ -66,7 +66,7 @@ class RenameColumnsComponent:
         st.subheader("Rename Columns")
 
         # AI Suggestion Section
-        with st.expander("🤖 AI Renaming Suggestions (RAG)", expanded=False):
+        with st.expander("AI Renaming Suggestions (RAG)", expanded=False):
             if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
                 # deep_analysis = st.checkbox("Enable Deep Taxonomy (Slower, includes formulas)", value=False)
                 
@@ -134,7 +134,7 @@ class RenameColumnsComponent:
         # Variable Taxonomy Section
         # Apply AI suggestions if available
         if 'ai_renaming_suggestions' in st.session_state:
-            st.info("💡 AI Suggestions available. Click 'Apply' next to the suggestion to use it.")
+            st.info("AI Suggestions available. Click 'Apply' next to the suggestion to use it.")
 
         # Layout for search, sorting, and type filter
         col1, col2, col3 = st.columns([1, 2, 2])
@@ -194,7 +194,7 @@ class RenameColumnsComponent:
                     if 'ai_renaming_suggestions' in st.session_state and col in st.session_state['ai_renaming_suggestions']:
                         suggested = st.session_state['ai_renaming_suggestions'][col]
                         if suggested != current_val:
-                            st.caption(f"💡 AI Suggestion: **{suggested}**")
+                            st.caption(f"AI Suggestion: **{suggested}**")
                             st.button("Apply", key=f"apply_ai_{col}", on_click=apply_ai_rename, args=(col, suggested))
 
                 with col_info:
@@ -241,7 +241,7 @@ class RenameColumnsComponent:
                 st.info("No changes made to column names.")
 
         st.write("Updated DataFrame:")
-        st.dataframe(st.session_state["working_df"])
+        st.dataframe(st.session_state["working_df"], width="stretch")
         
 
         return st.session_state["working_df"]
@@ -461,6 +461,21 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
             date_stats["Fill Percentage"] = date_stats["Fill Percentage"].round(2)
 
     return numerical_stats, categorical_stats, date_stats
+
+@st.cache_data(show_spinner="Generating Correlation Excel file...")
+def _cached_corr_excel_bytes(data, targets, predictors, group_column, method):
+    temp_file = "correlation_matrix"
+    ecm.custom_corr_mat_to_excel(
+        data=data,
+        targets=targets,
+        predictors=predictors,
+        group_column=group_column,
+        file_name=temp_file,
+        method=method,
+        threshold="Negligible"
+    )
+    with open(f"{temp_file}.xlsx", "rb") as f:
+        return f.read()
 
 def run_benchmark(df, analyzer):
     st.subheader("Performance Benchmark: Pandas vs DuckDB")
@@ -783,7 +798,7 @@ def app():
         with col_title:
             st.title("Dataset Statistics")
         with col_reset:
-             if st.button("🔄 Reset Cache", help="Force full recomputation of statistics"):
+             if st.button("Reset Cache", help="Force full recomputation of statistics"):
                 # 1. Clear Disk Cache
                 if 'db_manager' in st.session_state:
                     st.session_state.db_manager.clear_all_stats()
@@ -835,7 +850,7 @@ def app():
                         filtered_df = filtered_df[filtered_df['clinical_anomalies_any'] == False]
 
                 st.dataframe(filtered_df.head(), width='stretch', hide_index=True)
-                st.write(f"📊 **Filtered Data Overview:** {filtered_df.shape[0]:,} rows and {filtered_df.shape[1]:,} columns selected.")
+                st.write(f"**Filtered Data Overview:** {filtered_df.shape[0]:,} rows and {filtered_df.shape[1]:,} columns selected.")
 
                 #st.subheader("Data session")
                 #st.dataframe(st.session_state["data"].head(), width='stretch', hide_index=True)
@@ -972,7 +987,7 @@ def app():
 
                 if not current_date_stats.empty:
                     st.divider()
-                    st.markdown("#### 📅 Date Statistics")
+                    st.markdown("#### Date Statistics")
                     st.dataframe(current_date_stats,
                                 width='stretch', 
                                 column_config={
@@ -1165,7 +1180,10 @@ def app():
                     data_for_corr = filtered_df[unique_cols].select_dtypes(include=[np.number])
                     
                     if not data_for_corr.empty:
-                        corr_matrix_precalc = data_for_corr.corr(method=corr_method)
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", category=Warning)
+                            corr_matrix_precalc = data_for_corr.corr(method=corr_method)
                     else:
                         corr_matrix_precalc = pd.DataFrame() # Empty if no data
 
@@ -1190,22 +1208,17 @@ def app():
                         st.plotly_chart(fig, width='stretch')
                         
                         # Define output file name
-                        file_name = "correlation_matrix"
-                        # Generate Excel file
-                        
+                        excel_data = _cached_corr_excel_bytes(
+                            filtered_df,
+                            targets,
+                            predictors,
+                            group_column,
+                            corr_method
+                        )
                         st.download_button(
-                            on_click=ecm.custom_corr_mat_to_excel(
-                            data=filtered_df,
-                            targets=targets,
-                            predictors=predictors,
-                            group_column=group_column,
-                            file_name=file_name,
-                            method=corr_method,
-                            threshold="Negligible"
-                            ),
-                            label="Download Correlation Matrix",
-                            data=open(f"{file_name}.xlsx", "rb"),
-                            file_name=f"{file_name}.xlsx",
+                            label="Download Correlation Matrix (.xlsx)",
+                            data=excel_data,
+                            file_name="correlation_matrix.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
 

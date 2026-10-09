@@ -90,7 +90,7 @@ def app():
                             skipped_cols.append(col)
                 
                 if skipped_cols:
-                    st.warning(f"⚠️ Log transformation skipped for columns with negative values: {', '.join(skipped_cols)}")
+                    st.warning(f"Log transformation skipped for columns with negative values: {', '.join(skipped_cols)}")
                     
             elif transformation == "Z-Score Standardization":
                 for col in numeric_cols:
@@ -105,7 +105,7 @@ def app():
                         if max_val > min_val:
                             df_analysis[col] = (df_analysis[col] - min_val) / (max_val - min_val)
         
-        st.info(f"ℹ️ **{transformation}** applied to numeric variables for the analysis below.")
+        st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
 
     tabs = st.tabs(["Analysis", "Power & Sample Size", "Z-Score & Reference", "Test Guide & Education"])
 
@@ -147,7 +147,7 @@ def run_univariate_analysis(df, analyzer):
         return
         
     if len(selected_groups) < 2:
-        st.warning("⚠️ Please select at least 2 groups to perform a comparison.")
+        st.warning("Please select at least 2 groups to perform a comparison.")
         return
 
     # Filter Dataframe based on selected groups
@@ -250,7 +250,7 @@ def run_univariate_analysis(df, analyzer):
     
     # Download Button
     st.download_button(
-        label="📥 Download Summary Table (Excel)",
+        label="Download Summary Table (Excel)",
         data=to_excel(results_df),
         file_name=f"epidemiology_results_{group_col}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -270,7 +270,7 @@ def run_univariate_analysis(df, analyzer):
         subset_cols.append("P-Value (Adj)")
         
     st.dataframe(
-        display_df.style.applymap(lambda x: 'background-color: #d4edda' if isinstance(x, (float, int)) and x < 0.05 else '', subset=subset_cols)
+        display_df.style.map(lambda x: 'background-color: #d4edda' if isinstance(x, (float, int)) and x < 0.05 else '', subset=subset_cols)
                         .format(format_dict),
         column_config={
             "Assumptions": st.column_config.ListColumn("Assumptions & Warnings", width="large"),
@@ -285,7 +285,7 @@ def run_univariate_analysis(df, analyzer):
     )
     
     # ============ NEW: Epidemiological Interpretation Summary ============
-    st.subheader("📊 Results Interpretation")
+    st.subheader("Results Interpretation")
     
     # Categorize results by significance and effect size
     def classify_result(row):
@@ -333,20 +333,20 @@ def run_univariate_analysis(df, analyzer):
             # Significant + Large Effect
             if sig_large:
                 st.markdown(f"""
-                <div style="background-color: #c8e6c9; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #4caf50;">
-                    <strong>✅ Statistically AND Clinically Significant ({len(sig_large)})</strong><br/>
+                <div style="background-color: #f1f8e9; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #43a047;">
+                    <strong style="color: #2e7d32;">Statistically and Clinically Significant ({len(sig_large)})</strong><br/>
                     <span style="font-size: 0.9em;">{', '.join(sig_large[:5])}{' ...' if len(sig_large) > 5 else ''}</span><br/>
-                    <em style="font-size: 0.8em; color: #2e7d32;">→ Strong evidence for real effect. Consider for clinical decision-making.</em>
+                    <span style="font-size: 0.8em; color: #558b2f;">Strong statistical evidence paired with meaningful effect magnitude. Prioritize for clinical translation.</span>
                 </div>
                 """, unsafe_allow_html=True)
             
             # Non-Significant + Small Effect
             if nonsig_small:
                 st.markdown(f"""
-                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #81c784;">
-                    <strong>✅ True Negatives ({len(nonsig_small)})</strong><br/>
+                <div style="background-color: #f9fbe7; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #9e9d24;">
+                    <strong style="color: #558b2f;">True Negatives / No Effect ({len(nonsig_small)})</strong><br/>
                     <span style="font-size: 0.9em;">{', '.join(nonsig_small[:5])}{' ...' if len(nonsig_small) > 5 else ''}</span><br/>
-                    <em style="font-size: 0.8em; color: #388e3c;">→ No evidence of effect. Consistent with null hypothesis.</em>
+                    <span style="font-size: 0.8em; color: #689f38;">Negligible effect size and non-significant p-value, consistent with the null hypothesis.</span>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -354,20 +354,20 @@ def run_univariate_analysis(df, analyzer):
             # Significant + Small Effect
             if sig_small:
                 st.markdown(f"""
-                <div style="background-color: #fff3e0; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #ff9800;">
-                    <strong>⚠️ Statistically Significant but Small Effect ({len(sig_small)})</strong><br/>
+                <div style="background-color: #fff8e1; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #ffb300;">
+                    <strong style="color: #f57f17;">Statistically Significant with Small Effect ({len(sig_small)})</strong><br/>
                     <span style="font-size: 0.9em;">{', '.join(sig_small[:5])}{' ...' if len(sig_small) > 5 else ''}</span><br/>
-                    <em style="font-size: 0.8em; color: #e65100;">→ May be due to large sample size. Evaluate clinical relevance carefully.</em>
+                    <span style="font-size: 0.8em; color: #b78103;">Likely detected due to sample size. Verify whether this magnitude meets minimum clinically important difference (MCID).</span>
                 </div>
                 """, unsafe_allow_html=True)
             
             # Non-Significant + Large Effect
             if nonsig_large:
                 st.markdown(f"""
-                <div style="background-color: #ffcdd2; padding: 15px; border-radius: 10px; margin: 5px 0; border-left: 4px solid #f44336;">
-                    <strong>❌ Possibly Underpowered ({len(nonsig_large)})</strong><br/>
+                <div style="background-color: #ffebee; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #e53935;">
+                    <strong style="color: #c62828;">Potentially Underpowered / Indeterminate ({len(nonsig_large)})</strong><br/>
                     <span style="font-size: 0.9em;">{', '.join(nonsig_large[:5])}{' ...' if len(nonsig_large) > 5 else ''}</span><br/>
-                    <em style="font-size: 0.8em; color: #c62828;">→ Effect may exist but study too small. Check Power tab!</em>
+                    <span style="font-size: 0.8em; color: #b71c1c;">Substantial effect size without reaching alpha=0.05. High risk of Type II error; inspect power analysis tab.</span>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -376,13 +376,14 @@ def run_univariate_analysis(df, analyzer):
         n_total = len(results_df)
         st.caption(f"**Summary**: {n_sig}/{n_total} variables show p < 0.05 | {len(sig_large)} with meaningful effect size")
     
-    with st.expander("ℹ️ Methodological Guidance"):
+    with st.expander("Methodological Guidance"):
         st.markdown("""
-        **📐 Effect Size Interpretation** (indicates the magnitude of the difference):
+        **Effect Size Standards** (Magnitude of difference):
         
         | Test | Effect Size | Small | Medium | Large |
         |:-----|:------------|:-----:|:------:|:-----:|
-        | T-test | Cohen's d | 0.2 | 0.5 | 0.8 |
+        | T-test | Cohen's d / Hedges' g | 0.2 | 0.5 | 0.8 |
+
         | Mann-Whitney | Rank-Biserial r | 0.1 | 0.3 | 0.5 |
         | ANOVA | η² | 0.01 | 0.06 | 0.14 |
         | Kruskal-Wallis | η²H | 0.01 | 0.06 | 0.14 |
@@ -445,8 +446,58 @@ def run_univariate_analysis(df, analyzer):
             else:
                 st.write("No significant pairwise differences found after correction.")
 
+        # Epidemiological 2x2 Risk & Association Panel
+        if is_categorical and "epi_2x2" in detail_res:
+            epi = detail_res["epi_2x2"]
+            st.subheader("Epidemiological Risk & Association Analysis (2x2)")
+            
+            col_tbl, col_metrics = st.columns([1, 1])
+            with col_tbl:
+                st.markdown("##### 2x2 Contingency Table")
+                tbl_df = pd.DataFrame(
+                    [
+                        [epi["a"], epi["b"], epi["a"] + epi["b"]],
+                        [epi["c"], epi["d"], epi["c"] + epi["d"]],
+                        [epi["a"] + epi["c"], epi["b"] + epi["d"], epi["n_total"]],
+                    ],
+                    index=["Exposed / Group 1", "Unexposed / Group 2", "Total"],
+                    columns=["Event +", "Event -", "Total"],
+                )
+                st.table(tbl_df)
+                if epi.get("haldane_applied"):
+                    st.caption("Note: Haldane-Anscombe continuity correction (+0.5) applied due to zero cell count.")
+
+            with col_metrics:
+                st.markdown("##### Risk & Association Estimates")
+                c_or, c_rr = st.columns(2)
+                with c_or:
+                    or_ci = epi["odds_ratio_ci"]
+                    st.metric("Odds Ratio (OR)", f"{epi['odds_ratio']:.2f}")
+                    st.caption(f"95% CI: **[{or_ci['lower']:.2f}, {or_ci['upper']:.2f}]**")
+                with c_rr:
+                    rr_ci = epi["relative_risk_ci"]
+                    st.metric("Risk Ratio (RR)", f"{epi['relative_risk']:.2f}")
+                    st.caption(f"95% CI: **[{rr_ci['lower']:.2f}, {rr_ci['upper']:.2f}]**")
+
+                c_rd, c_nnt = st.columns(2)
+                with c_rd:
+                    rd_ci = epi["risk_difference_ci"]
+                    st.metric("Risk Difference (RD)", f"{epi['risk_difference']*100:.1f}%")
+                    st.caption(f"95% CI: **[{rd_ci['lower']*100:.1f}%, {rd_ci['upper']*100:.1f}%]**")
+                with c_nnt:
+                    nnt_val = epi.get("nnt")
+                    st.metric("NNT / NNH", f"{nnt_val:.1f}" if nnt_val is not None else "N/A")
+                    st.caption("Number Needed to Treat / Harm")
+
+            # Methodological & Clinical Guidance
+            if epi.get("guidance"):
+                st.markdown("##### Clinical Epidemiological Guidance")
+                for note in epi["guidance"]:
+                    st.info(note)
+
         # Visualizations
         visualize_result(df_analysis_filtered, group_col, selected_detail, analyzer)
+
         
         # Diagnostic Plots (Q-Q Plot)
         if is_numeric:
@@ -470,7 +521,7 @@ def run_multivariate_analysis(df, analyzer):
     st.header("Multivariate Analysis (ANCOVA)")
     
     # Educational Introduction
-    with st.expander("📚 What is ANCOVA?", expanded=False):
+    with st.expander("What is ANCOVA?", expanded=False):
         st.markdown("""
         ### Analysis of Covariance (ANCOVA)
         
@@ -507,7 +558,7 @@ def run_multivariate_analysis(df, analyzer):
         """)
     
     # Model Configuration
-    st.subheader("📊 Model Configuration")
+    st.subheader("Model Configuration")
     
     col1, col2, col3 = st.columns(3)
     
@@ -545,13 +596,13 @@ def run_multivariate_analysis(df, analyzer):
                 st.caption("⚠️ No covariates selected (equivalent to One-way ANOVA)")
         
     if not target_col or not group_col:
-        st.info("👆 Please select a Target and a Grouping variable to proceed.")
+        st.info("Please select a Target and a Grouping variable to proceed.")
         return
     
     # Run Button
     col_btn1, col_btn2 = st.columns([1, 3])
     with col_btn1:
-        run_button = st.button("🚀 Run ANCOVA", type="primary", use_container_width=True)
+        run_button = st.button("Run ANCOVA", type="primary", width="stretch")
     with col_btn2:
         st.caption("This will fit an OLS regression model and compute Type II ANOVA table.")
         
@@ -569,7 +620,7 @@ def perform_ancova(df, target, group, covariates):
     
     n_missing = len(df) - len(data)
     if n_missing > 0:
-        st.warning(f"⚠️ {n_missing} rows with missing values were excluded from analysis.")
+        st.warning(f"{n_missing} rows with missing values were excluded from analysis.")
 
     try:
         # Sanitize column names for statsmodels formula
@@ -592,7 +643,7 @@ def perform_ancova(df, target, group, covariates):
         model = smf.ols(formula, data=data_safe).fit()
         
         # ============ Results Section ============
-        st.subheader("📈 ANCOVA Results")
+        st.subheader("ANCOVA Results")
         
         # ANOVA Table
         anova_table = sm.stats.anova_lm(model, typ=2)
@@ -617,11 +668,11 @@ def perform_ancova(df, target, group, covariates):
                 'F-statistic': '{:.3f}',
                 'P-value': '{:.4f}',
                 'Partial η²': '{:.3f}'
-            }).applymap(
+            }).map(
                 lambda x: 'background-color: #c8e6c9' if isinstance(x, float) and x < 0.05 else '',
                 subset=['P-value']
             ),
-            use_container_width=True
+            width="stretch"
         )
         
         # Extract and interpret group effect
@@ -631,7 +682,7 @@ def perform_ancova(df, target, group, covariates):
         eta_sq = group_row["Partial η²"]
         
         # Interpretation box
-        st.markdown("#### 🔍 Results Interpretation")
+        st.markdown("#### Results Interpretation")
         
         # Effect size interpretation
         if eta_sq < 0.01:
@@ -653,7 +704,7 @@ def perform_ancova(df, target, group, covariates):
             if p_value < 0.05:
                 st.markdown(f"""
                 <div style="background-color: #c8e6c9; padding: 18px; border-radius: 10px; border-left: 4px solid #4caf50;">
-                    <h4 style="margin:0; color: #2e7d32;">✅ Significant Group Effect</h4>
+                    <h4 style="margin:0; color: #2e7d32;">Significant Group Effect</h4>
                     <p style="margin: 10px 0 5px 0;">
                         <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
                         <strong>p = {p_value:.4f}</strong>
@@ -666,7 +717,7 @@ def perform_ancova(df, target, group, covariates):
             else:
                 st.markdown(f"""
                 <div style="background-color: #fff3e0; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
-                    <h4 style="margin:0; color: #e65100;">⚠️ No Significant Group Effect</h4>
+                    <h4 style="margin:0; color: #e65100;">No Significant Group Effect</h4>
                     <p style="margin: 10px 0 5px 0;">
                         <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
                         <strong>p = {p_value:.4f}</strong>
@@ -680,7 +731,7 @@ def perform_ancova(df, target, group, covariates):
         with col_res2:
             st.markdown(f"""
             <div style="background-color: {eta_color}; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
-                <h4 style="margin:0; color: #5d4037;">📏 Effect Size</h4>
+                <h4 style="margin:0; color: #5d4037;">Effect Size</h4>
                 <p style="margin: 10px 0 5px 0;">
                     <strong>Partial η² = {eta_sq:.3f}</strong> ({eta_interp} effect)
                 </p>
@@ -692,7 +743,7 @@ def perform_ancova(df, target, group, covariates):
         
         # Covariate effects
         if covariates:
-            st.markdown("#### 📐 Covariate Effects")
+            st.markdown("#### Covariate Effects")
             cov_data = []
             for cov in covariates_safe:
                 if cov in anova_table.index:
@@ -705,20 +756,20 @@ def perform_ancova(df, target, group, covariates):
                         "β (coefficient)": f"{cov_beta:.3f}",
                         "P-value": f"{cov_p:.4f}",
                         "Partial η²": f"{cov_eta:.3f}",
-                        "Significant?": "✅" if cov_p < 0.05 else "❌"
+                        "Significant?": "Yes (p < 0.05)" if cov_p < 0.05 else "No"
                     })
             
             if cov_data:
-                st.dataframe(pd.DataFrame(cov_data), use_container_width=True, hide_index=True)
-                st.caption("**β coefficient**: For each 1-unit increase in the covariate, the target changes by β units (holding other variables constant).")
+                st.dataframe(pd.DataFrame(cov_data), width="stretch", hide_index=True)
+                st.caption("**β coefficient**: Change in target per 1-unit increase in covariate, holding other variables constant.")
         
         # Full model summary (collapsible)
-        with st.expander("📋 Full Model Summary (OLS Regression)"):
+        with st.expander("Full Model Summary (OLS Regression)"):
             st.write(model.summary())
-            st.caption("**R²** = proportion of variance explained by the model. **Adj. R²** = adjusted for number of predictors.")
+            st.caption("**R²** = proportion of variance explained by model. **Adj. R²** = penalized for number of predictors.")
             
-        # ============ Visualizations ============
-        st.subheader("📊 Visualizations")
+        # ============ Visualizations & Diagnostics ============
+        st.subheader("Visualizations & Diagnostics")
         
         viz_tabs = st.tabs(["Adjusted Means", "Raw vs Adjusted", "Model Diagnostics"])
         
@@ -735,53 +786,67 @@ def perform_ancova(df, target, group, covariates):
             data_adj['Adjusted ' + target] = y_adj
             
             fig = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, 
-                         title=f"Adjusted {target} by {group} (Covariates held at mean)",
+                         title=f"Adjusted {target} by {group} (Covariates evaluated at group means)",
                          points="outliers")
             fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-            st.caption("📌 Adjusted values = Original values minus covariate effects (evaluated at covariate means).")
+            st.plotly_chart(fig, width="stretch")
+            st.caption("Adjusted values = Original values minus covariate effects evaluated at covariate means.")
         
         with viz_tabs[1]:
             col_viz1, col_viz2 = st.columns(2)
             with col_viz1:
                 fig_raw = px.box(data, x=group, y=target, color=group, title=f"Raw {target} by {group}")
                 fig_raw.update_layout(showlegend=False)
-                st.plotly_chart(fig_raw, use_container_width=True)
-                st.caption("**Raw (unadjusted)** distributions")
+                st.plotly_chart(fig_raw, width="stretch")
+                st.caption("Raw (unadjusted) observed distributions")
             with col_viz2:
                 fig_adj = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, title=f"Adjusted {target} by {group}")
                 fig_adj.update_layout(showlegend=False)
-                st.plotly_chart(fig_adj, use_container_width=True)
-                st.caption("**Adjusted** distributions (confounders removed)")
+                st.plotly_chart(fig_adj, width="stretch")
+                st.caption("Adjusted distributions with covariate confounding controlled")
         
         with viz_tabs[2]:
-            st.markdown("#### Model Assumption Checks")
+            st.markdown("#### Methodological Assumptions Verification")
+            
+            # Formally check ANCOVA assumptions using epidemiology engine
+            from utils.epidemiology_utils import check_ancova_assumptions
+            ancova_diag = check_ancova_assumptions(data, target=target, group=group, covariates=covariates)
+
+            # 1. Homogeneity of Regression Slopes
+            if covariates and ancova_diag.homogeneity_of_slopes_pvalue is not None:
+                st.markdown("##### 1. Homogeneity of Regression Slopes (Parallel Slopes)")
+                if ancova_diag.slopes_homogeneous:
+                    st.success(
+                        f"Parallel slopes assumption validated (Interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} >= 0.05). "
+                        "The covariate effect is uniform across groups; standard ANCOVA adjusted means are statistically valid."
+                    )
+                else:
+                    st.warning(
+                        f"Violation of parallel slopes detected (Interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} < 0.05). "
+                        "The covariate effect differs significantly by group. Standard ANCOVA adjusted means may be misleading. "
+                        "Consider moderation analysis or reporting group-specific slopes."
+                    )
+
+            # 2. Residual Normality and Homoscedasticity Plots
+            st.markdown("##### 2. Residual Distribution & Homoscedasticity")
             col_diag1, col_diag2 = st.columns(2)
             
             with col_diag1:
                 fig_qq = vu.create_qq_plot(model.resid, title="Q-Q Plot of Residuals")
-                st.plotly_chart(fig_qq, use_container_width=True)
-                st.caption("✅ Points on diagonal = Normality assumption met")
+                st.plotly_chart(fig_qq, width="stretch")
+                norm_status = "Residual normality confirmed" if ancova_diag.residuals_normal else "Residuals deviate from normality"
+                st.caption(f"{norm_status} (p = {ancova_diag.residual_normality_pvalue:.4f})")
             
             with col_diag2:
                 fig_rvf = px.scatter(x=model.fittedvalues, y=model.resid, 
                                      labels={'x': 'Fitted Values', 'y': 'Residuals'},
                                      title="Residuals vs Fitted Values")
                 fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
-                st.plotly_chart(fig_rvf, use_container_width=True)
-                st.caption("✅ Random scatter around 0 = Homoscedasticity assumption met")
-            
-            # Check homogeneity of regression slopes if covariates present
-            if covariates:
-                with st.expander("🔬 Advanced: Homogeneity of Regression Slopes"):
-                    st.markdown("""
-                    **Assumption**: The relationship between each covariate and the outcome should be the **same across all groups**.
-                    
-                    To test this formally, you would fit a model with interaction terms:
-                    `Target ~ Group * Covariate`
-                    
-                    If the interaction is significant, ANCOVA assumptions may be violated.
-                    """)
+                st.plotly_chart(fig_rvf, width="stretch")
+                homo_status = "Homoscedasticity confirmed" if ancova_diag.homoscedastic else "Heteroscedasticity detected"
+                homo_p_str = f"p = {ancova_diag.homoscedasticity_pvalue:.4f}" if ancova_diag.homoscedasticity_pvalue is not None else "N/A"
+                st.caption(f"{homo_status} ({homo_p_str})")
+
         
     except Exception as e:
         st.error(f"An error occurred during ANCOVA computation: {e}")
@@ -792,7 +857,7 @@ def visualize_result(df, group_col, target, analyzer):
     
     if is_numeric:
         # Reference Lines Configuration
-        with st.expander("📏 Reference Lines & Thresholds"):
+        with st.expander("Reference Lines & Thresholds"):
             st.caption("Add horizontal reference lines (e.g., clinical thresholds, normal range limits).")
             col_ref1, col_ref2, col_ref3 = st.columns([2, 2, 1])
             with col_ref1:
@@ -895,7 +960,7 @@ def run_zscore_analysis(df, analyzer):
     st.header("Z-Score Standardization & Reference Analysis")
     
     # Educational Introduction
-    with st.expander("📚 What is Z-Score Standardization?", expanded=False):
+    with st.expander("What is Z-Score Standardization?", expanded=False):
         st.markdown("""
         ### Understanding Z-Scores in Epidemiology
         
@@ -924,31 +989,31 @@ def run_zscore_analysis(df, analyzer):
                 <td style="border: 1px solid #ddd; padding: 8px;"><strong>Z > +2</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; background-color: #ffcdd2;">Abnormally High</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">> 97.7%</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">🔴 Outside normal range</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #c62828;">Outside normal range</td>
             </tr>
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;"><strong>+1 < Z ≤ +2</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; background-color: #fff3e0;">Mildly Elevated</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">84.1% - 97.7%</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">🟠 Borderline</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #ef6c00;">Borderline high</td>
             </tr>
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;"><strong>-1 ≤ Z ≤ +1</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; background-color: #c8e6c9;">Normal Range</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">15.9% - 84.1%</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">🟢 Within normal limits</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #2e7d32;">Within normal limits</td>
             </tr>
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;"><strong>-2 ≤ Z < -1</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; background-color: #fff3e0;">Mildly Low</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">2.3% - 15.9%</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">🟠 Borderline</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #ef6c00;">Borderline low</td>
             </tr>
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;"><strong>Z < -2</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; background-color: #ffcdd2;">Abnormally Low</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">< 2.3%</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">🔴 Outside normal range</td>
+                <td style="border: 1px solid #ddd; padding: 8px; color: #c62828;">Outside normal range</td>
             </tr>
         </table>
         """, unsafe_allow_html=True)
@@ -969,13 +1034,13 @@ def run_zscore_analysis(df, analyzer):
         """)
     
     # Configuration Section
-    st.subheader("⚙️ Configuration")
+    st.subheader("Configuration")
     
     col1, col2 = st.columns(2)
     
     with col1:
         target_vars = st.multiselect(
-            "📊 Select Variables to Standardize",
+            "Select Variables to Standardize",
             options=analyzer.numeric_cols,
             default=analyzer.numeric_cols[:3] if len(analyzer.numeric_cols) >= 3 else analyzer.numeric_cols,
             help="Select continuous variables to calculate Z-scores for."
@@ -983,7 +1048,7 @@ def run_zscore_analysis(df, analyzer):
         
     with col2:
         ref_method = st.selectbox(
-            "📐 Reference Population Method",
+            "Reference Population Method",
             ["Internal Control Group", "Whole Cohort (Standardization)", "Manual Reference Values"],
             help="Define the mean and standard deviation used for Z-score calculation."
         )
@@ -998,30 +1063,31 @@ def run_zscore_analysis(df, analyzer):
         with col_ref1:
             potential_groupers = [c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20]
             ref_group_col = st.selectbox(
-                "👥 Select Grouping Variable",
+                "Select Grouping Variable",
                 options=potential_groupers,
                 help="Variable that identifies groups (e.g., Case/Control, Treatment/Placebo)"
             )
         with col_ref2:
             if ref_group_col:
                 ref_group_val = st.selectbox(
-                    "🎯 Select Reference Group (Control)",
+                    "Select Reference Group (Control)",
                     options=df[ref_group_col].unique(),
                     help="The group to use as reference (mean=0, SD=1 for this group)"
                 )
                 
         if ref_group_col and ref_group_val:
             ref_n = len(df[df[ref_group_col] == ref_group_val])
-            st.caption(f"📌 Reference group: **{ref_group_val}** (n = {ref_n})")
+            st.caption(f"Reference group: **{ref_group_val}** (n = {ref_n})")
             
     elif ref_method == "Whole Cohort (Standardization)":
-        st.info("📌 Using the entire cohort mean and SD as reference. All Z-scores will have mean ≈ 0 and SD ≈ 1.")
+        st.info("Using the entire cohort mean and SD as reference. All Z-scores will have mean ≈ 0 and SD ≈ 1.")
         
     elif ref_method == "Manual Reference Values":
-        st.info("📌 Enter published or population-based reference values below.")
+
+        st.info("Enter published or population-based reference values below.")
 
     if not target_vars:
-        st.warning("👆 Please select at least one variable to standardize.")
+        st.warning("Please select at least one variable to standardize.")
         return
     
     # Create a configuration key to detect changes
@@ -1032,7 +1098,7 @@ def run_zscore_analysis(df, analyzer):
     
     col_btn1, col_btn2 = st.columns([1, 3])
     with col_btn1:
-        run_button = st.button("🚀 Calculate Z-Scores", type="primary", use_container_width=True)
+        run_button = st.button("Calculate Z-Scores", type="primary", width="stretch")
     with col_btn2:
         st.caption("This will standardize selected variables against the reference population.")
     
@@ -1047,7 +1113,7 @@ def run_zscore_analysis(df, analyzer):
     has_cached_results = 'zscore_results' in st.session_state and st.session_state.get('zscore_config_key') == config_key
     
     if not has_cached_results and not run_button:
-        st.info("👆 Click 'Calculate Z-Scores' to compute standardized values.")
+        st.info("Click 'Calculate Z-Scores' to compute standardized values.")
         return
     
     # Calculate Z-Scores (only if needed)
@@ -1094,7 +1160,7 @@ def run_zscore_analysis(df, analyzer):
         target_vars = cached['target_vars']
 
     # ============ Results Section ============
-    st.subheader("📈 Results")
+    st.subheader("Results")
     
     # Summary Statistics
     st.markdown("#### Summary of Z-Scores")
@@ -1121,14 +1187,14 @@ def run_zscore_analysis(df, analyzer):
         })
     
     summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    st.dataframe(summary_df, width="stretch", hide_index=True)
     
     # Interpretation helper
     total_abnormal = sum([int(row["n Abnormal (|Z|>2)"]) for row in summary_data])
     if total_abnormal > 0:
-        st.warning(f"⚠️ **{total_abnormal} observations** have Z-scores outside ±2 SD (potentially abnormal values)")
+        st.warning(f"**{total_abnormal} observations** have Z-scores outside ±2 SD (potentially abnormal values)")
     else:
-        st.success("✅ All observations are within ±2 SD of the reference mean")
+        st.success("All observations are within ±2 SD of the reference mean")
     
     # Download buttons
     col_dl1, col_dl2 = st.columns(2)
@@ -1148,9 +1214,9 @@ def run_zscore_analysis(df, analyzer):
         )
 
     # ============ Visualization Section ============
-    st.subheader("📊 Visualizations")
+    st.subheader("Visualizations")
     
-    viz_tabs = st.tabs(["📊 Group Comparison", "🌡️ Heatmap", "👤 Individual Profile"])
+    viz_tabs = st.tabs(["Group Comparison", "Heatmap", "Individual Profile"])
     
     with viz_tabs[0]:
         st.markdown("#### Forest Plot: Mean Z-Scores by Group")
@@ -1247,11 +1313,11 @@ def run_zscore_analysis(df, analyzer):
                     xaxis=dict(range=[-4, 4], dtick=1),
                     margin=dict(l=150)  # More space for variable names
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 
                 # Explanatory note
                 # Scientific interpretation
-                with st.expander("📖 How to Interpret this Forest Plot", expanded=False):
+                with st.expander("How to Interpret this Forest Plot", expanded=False):
                     st.markdown("""
                     ### Forest Plot Interpretation Guide
                     
@@ -1279,7 +1345,7 @@ def run_zscore_analysis(df, analyzer):
         st.markdown("#### Heatmap: Z-Score Distribution Across Samples")
         
         if len(z_df) > 500:
-            st.info(f"📌 Downsampling from {len(z_df)} to 500 rows for performance.")
+            st.info(f"Downsampling from {len(z_df)} to 500 rows for performance.")
             heatmap_df = z_df.sample(500, random_state=42)
         else:
             heatmap_df = z_df
@@ -1297,27 +1363,27 @@ def run_zscore_analysis(df, analyzer):
             aspect="auto"
         )
         fig.update_layout(height=500)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         # Scientific interpretation
-        with st.expander("📖 How to Interpret this Heatmap", expanded=False):
+        with st.expander("How to Interpret this Heatmap", expanded=False):
             st.markdown("""
             ### Heatmap Interpretation Guide
             
             **What this shows:** Z-scores for all samples (rows) across all variables (columns).
             
-            | Color | Z-Score | Meaning |
-            |:------|:--------|:--------|
-            | 🔵 Dark Blue | < -2 | Abnormally LOW (< 2.3 percentile) |
-            | 🔵 Light Blue | -2 to -1 | Mildly low |
-            | ⬜ White | -1 to +1 | Normal range |
-            | 🔴 Light Red | +1 to +2 | Mildly elevated |
-            | 🔴 Dark Red | > +2 | Abnormally HIGH (> 97.7 percentile) |
+            | Shading | Z-Score | Meaning |
+            |:--------|:--------|:--------|
+            | Dark Blue | < -2 | Abnormally LOW (< 2.3 percentile) |
+            | Light Blue | -2 to -1 | Mildly low |
+            | White | -1 to +1 | Normal range |
+            | Light Red | +1 to +2 | Mildly elevated |
+            | Dark Red | > +2 | Abnormally HIGH (> 97.7 percentile) |
             
             **Patterns to Look For:**
-            - **Horizontal bands (rows):** Individual with multiple abnormal values → systemic issue
-            - **Vertical bands (columns):** Variable abnormal across many samples → measurement issue or population shift
-            - **Clusters:** Groups of similar profiles → potential subpopulations
+            - **Horizontal bands (rows):** Individual with multiple abnormal values -> systemic issue
+            - **Vertical bands (columns):** Variable abnormal across many samples -> measurement issue or population shift
+            - **Clusters:** Groups of similar profiles -> potential subpopulations
             
             **Epidemiological Use:**
             - Identify outlier individuals for case review
@@ -1373,7 +1439,7 @@ def run_zscore_analysis(df, analyzer):
             yaxis_range=[min(min(values) - 0.5, -3), max(max(values) + 0.5, 3)],
             template="plotly_white"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         # Interpretation table for this individual
         n_abnormal = sum(1 for v in values if abs(v) > 2)
@@ -1381,14 +1447,14 @@ def run_zscore_analysis(df, analyzer):
         
         col_interp1, col_interp2, col_interp3 = st.columns(3)
         with col_interp1:
-            st.metric("🔴 Abnormal (|Z| > 2)", n_abnormal)
+            st.metric("Abnormal (|Z| > 2)", n_abnormal)
         with col_interp2:
-            st.metric("🟠 Borderline (1 < |Z| ≤ 2)", n_borderline)
+            st.metric("Borderline (1 < |Z| ≤ 2)", n_borderline)
         with col_interp3:
-            st.metric("🟢 Normal (|Z| ≤ 1)", len(values) - n_abnormal - n_borderline)
+            st.metric("Normal (|Z| ≤ 1)", len(values) - n_abnormal - n_borderline)
         
         # Scientific interpretation
-        with st.expander("📖 How to Interpret Individual Profiles", expanded=False):
+        with st.expander("How to Interpret Individual Profiles", expanded=False):
             st.markdown("""
             ### Individual Profile Interpretation Guide
             
@@ -1418,16 +1484,16 @@ def run_zscore_analysis(df, analyzer):
             """)
 
 def show_educational_content():
-    st.header("📚 Statistical Test Guide")
+    st.header("Statistical Test Guide")
     
-    with st.expander("🧭 Choosing the Right Test - Decision Tree", expanded=True):
+    with st.expander("Choosing the Right Test - Decision Tree", expanded=True):
         st.markdown("### Step-by-Step Test Selection Guide")
         st.caption("Follow this decision tree to select the appropriate statistical test for your analysis.")
         
         # ============ NODE 1: Number of Groups ============
         st.markdown("""
         <div style="background-color: #e3f2fd; padding: 20px; border-radius: 12px; border: 2px solid #1976d2; margin: 10px 0;">
-            <h4 style="margin:0; color: #1976d2;">🔷 Node 1: How many groups are you comparing?</h4>
+            <h4 style="margin:0; color: #1976d2;">Node 1: How many groups are you comparing?</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Count the number of distinct categories in your grouping variable.</p>
             <p style="margin: 0; font-size: 0.9em; color: #555;">
                 <em>Example: Treatment vs Control = 2 groups | Low/Medium/High dose = 3 groups</em>
@@ -1437,9 +1503,9 @@ def show_educational_content():
         
         col_2g, col_3g = st.columns(2)
         with col_2g:
-            st.markdown("##### ➡️ **2 Groups** → Go to Node 2A")
+            st.markdown("##### **2 Groups** → Go to Node 2A")
         with col_3g:
-            st.markdown("##### ➡️ **3+ Groups** → Go to Node 2B")
+            st.markdown("##### **3+ Groups** → Go to Node 2B")
         
         st.markdown("---")
         
@@ -1449,7 +1515,7 @@ def show_educational_content():
         with col_2a:
             st.markdown("""
             <div style="background-color: #fff3e0; padding: 18px; border-radius: 12px; border: 2px solid #f57c00; margin: 5px 0;">
-                <h4 style="margin:0; color: #f57c00;">🔶 Node 2A: What type of variable is your outcome? (2 Groups)</h4>
+                <h4 style="margin:0; color: #f57c00;">Node 2A: What type of variable is your outcome? (2 Groups)</h4>
                 <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong></p>
                 <ul style="margin: 5px 0; font-size: 0.9em;">
                     <li><strong>Numeric (Continuous)</strong>: Age, blood pressure, BMI, lab values</li>
@@ -1458,13 +1524,13 @@ def show_educational_content():
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("##### ➡️ **Numeric** → Go to Node 3A")
-            st.markdown("##### ➡️ **Categorical** → Go to Node 3C")
+            st.markdown("##### **Numeric** → Go to Node 3A")
+            st.markdown("##### **Categorical** → Go to Node 3C")
         
         with col_2b:
             st.markdown("""
             <div style="background-color: #fff3e0; padding: 18px; border-radius: 12px; border: 2px solid #f57c00; margin: 5px 0;">
-                <h4 style="margin:0; color: #f57c00;">🔶 Node 2B: What type of variable is your outcome? (3+ Groups)</h4>
+                <h4 style="margin:0; color: #f57c00;">Node 2B: What type of variable is your outcome? (3+ Groups)</h4>
                 <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong></p>
                 <ul style="margin: 5px 0; font-size: 0.9em;">
                     <li><strong>Numeric (Continuous)</strong>: Age, blood pressure, BMI, lab values</li>
@@ -1473,15 +1539,15 @@ def show_educational_content():
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("##### ➡️ **Numeric** → Go to Node 3B")
-            st.markdown("##### ➡️ **Categorical** → Use **Chi-Square Test** ✅")
+            st.markdown("##### **Numeric** → Go to Node 3B")
+            st.markdown("##### **Categorical** → Use **Chi-Square Test** ")
         
         st.markdown("---")
         
         # ============ NODE 3: Normality Check ============
         st.markdown("""
         <div style="background-color: #e8f5e9; padding: 20px; border-radius: 12px; border: 2px solid #4caf50; margin: 10px 0;">
-            <h4 style="margin:0; color: #388e3c;">🔷 Node 3: Is your data normally distributed?</h4>
+            <h4 style="margin:0; color: #388e3c;">Node 3: Is your data normally distributed?</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criteria:</strong></p>
             <table style="width:100%; font-size: 0.9em; margin-top: 10px;">
                 <tr>
@@ -1527,7 +1593,7 @@ def show_educational_content():
         # ============ NODE 3C: Categorical Decision ============
         st.markdown("""
         <div style="background-color: #f3e5f5; padding: 18px; border-radius: 12px; border: 2px solid #9c27b0; margin: 10px 0;">
-            <h4 style="margin:0; color: #7b1fa2;">🟣 Node 3C: Categorical Variable - Check Expected Frequencies</h4>
+            <h4 style="margin:0; color: #7b1fa2;">Node 3C: Categorical Variable - Check Expected Frequencies</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Calculate expected cell counts in the contingency table.</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
                 <li><strong>All expected counts ≥ 5</strong> → Use <strong>Chi-Square Test</strong> ✅</li>
@@ -1544,7 +1610,7 @@ def show_educational_content():
         # ============ NODE 4: Equal Variances (2 Groups) ============
         st.markdown("""
         <div style="background-color: #fce4ec; padding: 18px; border-radius: 12px; border: 2px solid #e91e63; margin: 10px 0;">
-            <h4 style="margin:0; color: #c2185b;">🔷 Node 4: Are variances equal between groups? (2 Groups)</h4>
+            <h4 style="margin:0; color: #c2185b;">Node 4: Are variances equal between groups? (2 Groups)</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
                 <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>Student's t-test</strong> ✅</li>
@@ -1561,7 +1627,7 @@ def show_educational_content():
         # ============ NODE 5: Equal Variances (3+ Groups) ============
         st.markdown("""
         <div style="background-color: #fce4ec; padding: 18px; border-radius: 12px; border: 2px solid #e91e63; margin: 10px 0;">
-            <h4 style="margin:0; color: #c2185b;">🔷 Node 5: Are variances equal between groups? (3+ Groups)</h4>
+            <h4 style="margin:0; color: #c2185b;">Node 5: Are variances equal between groups? (3+ Groups)</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
                 <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>One-way ANOVA</strong> ✅</li>
@@ -1575,7 +1641,7 @@ def show_educational_content():
         # ============ FINAL: Post-Hoc Tests ============
         st.markdown("""
         <div style="background-color: #e0f7fa; padding: 18px; border-radius: 12px; border: 2px solid #00bcd4; margin: 10px 0;">
-            <h4 style="margin:0; color: #0097a7;">📌 After the Test: Post-Hoc Analysis (for 3+ Groups)</h4>
+            <h4 style="margin:0; color: #0097a7;">After the Test: Post-Hoc Analysis (for 3+ Groups)</h4>
             <p style="margin: 10px 0 5px 0;"><strong>If the global test is significant (p < 0.05):</strong></p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
                 <li><strong>After ANOVA</strong> → Run <strong>Tukey's HSD</strong> (Honestly Significant Difference)</li>
@@ -1589,7 +1655,7 @@ def show_educational_content():
         
         # Legend
         st.markdown("---")
-        st.markdown("#### 📋 Summary Table")
+        st.markdown("#### Summary Table")
         st.markdown("""
         | Scenario | Normal Data | Non-Normal Data |
         |:---------|:-----------:|:---------------:|
@@ -1664,7 +1730,7 @@ def show_educational_content():
     
     # Key Assumptions Section
     st.divider()
-    st.subheader("🔍 Key Assumptions to Check")
+    st.subheader("Key Assumptions to Check")
     st.markdown("""
     | Assumption | Why It Matters | How to Check |
     | :--- | :--- | :--- |
@@ -1678,10 +1744,10 @@ def show_educational_content():
     
     # NEW: Epidemiological Interpretation Tables
     st.divider()
-    st.subheader("📋 Epidemiological Interpretation Guide")
+    st.subheader("Epidemiological Interpretation Guide")
     
     # Tab system for different tables
-    epi_tabs = st.tabs(["🎯 P-value vs Effect Size", "⚠️ Type I & II Errors", "📊 Odds Ratio Guide", "📏 Sample Size Rules"])
+    epi_tabs = st.tabs(["P-value vs Effect Size", "Type I & II Errors", "Odds Ratio Guide", "Sample Size Rules"])
     
     with epi_tabs[0]:
         st.markdown("### Statistical Significance vs Clinical Significance")
@@ -1828,7 +1894,7 @@ def run_power_analysis(df, analyzer):
     st.markdown("Calculate sample size or power for your study design.")
     
     # ============ Epidemiological Context ============
-    with st.expander("📋 Understanding Power Analysis", expanded=False):
+    with st.expander("Understanding Power Analysis", expanded=False):
         st.markdown("""
         ### Why Power Matters in Epidemiology
         
@@ -1880,7 +1946,7 @@ def run_power_analysis(df, analyzer):
     auto_fill_data = None
 
     # 1. Import from Analysis Results
-    with st.expander("📥 Import from Analysis Results", expanded=False):
+    with st.expander("Import from Analysis Results", expanded=False):
         st.caption("Select a result from the 'Univariate Analysis' tab to auto-fill parameters.")
         
         if 'epidemiology_results' in st.session_state and st.session_state['epidemiology_results']:
@@ -1970,7 +2036,7 @@ def run_power_analysis(df, analyzer):
                         elif es_type_res == "Odds Ratio":
                             st.session_state['es_type_chi2'] = "Cohen's w"
                             st.session_state['chi2_w'] = 0.3
-                            st.toast("⚠️ Odds Ratio cannot be directly converted to Cohen's w. Defaulted to Medium effect (0.3). Please adjust manually.")
+                            st.toast("Odds Ratio cannot be directly converted to Cohen's w. Defaulted to Medium effect (0.3). Please adjust manually.")
                         else:
                             st.session_state['es_type_chi2'] = "Cohen's w"
                             st.session_state['chi2_w'] = es_val
@@ -1992,11 +2058,11 @@ def run_power_analysis(df, analyzer):
                              # Clear selected groups to force a refresh/reset based on the new group column
                              st.session_state.pop('power_selected_groups', None)
 
-                    st.success("✅ Parameters loaded! The calculator fields below have been updated.")
+                    st.success("Parameters loaded! The calculator fields below have been updated.")
                     st.rerun()  # Refresh UI to show updated values
 
     # 2. Auto-fill from Dataset (Group Structure)
-    with st.expander("📊 Auto-fill Group Structure from Dataset", expanded=True):
+    with st.expander("Auto-fill Group Structure from Dataset", expanded=True):
         st.caption("Select a grouping variable from your current dataset to auto-fill sample sizes and group counts.")
         
         # Filter for categorical variables suitable for grouping

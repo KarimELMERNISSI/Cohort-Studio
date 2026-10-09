@@ -28,21 +28,21 @@ def app():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.info("📊 **Data Quality & Monitoring**")
+        st.info("**Data Quality & Monitoring**")
         st.markdown("""
         *   **Global Data Quality Score**: A unified metric aggregating key quality dimensions into a single health indicator.
         *   **Quality Scorecards**: Detailed breakdown of the global score across 6 pillars: **Completeness**, **Consistency**, **Statistical Validity**, **Uniformity**, **Clinical Validity**, and **Uniqueness**.
         *   **Granular Inspection**: Drill-down tools to investigate scorecard flags, including **Advanced Outlier Detection** (Z-Score, Isolation Forest), **Integrity Checks**, and **Cohort Version Comparison**.
         """)
 
-        st.success("🔎 **Descriptive Analytics**")
+        st.success("**Descriptive Analytics**")
         st.markdown("""
         *   **Univariate Statistics**: Comprehensive summary statistics for quantitative (Mean, Median, SD, Normality tests) and qualitative variables (Frequencies).
         *   **Correlation Reports**: Interactive correlation matrices and cluster maps to identify variable relationships.
         *   **Distribution Analysis**: Visual exploration of variable distributions via histograms, violin plots, and density curves.
         """)
         
-        st.warning("🤖 **AI & Knowledge Discovery**")
+        st.warning("**AI & Knowledge Discovery**")
         st.markdown("""
         *   **RAG-Powered Insights**: Chat with documents and extract key concepts automatically.
         *   **Taxonomy Generation**: Discover variable relationships and build knowledge graphs.
@@ -50,7 +50,7 @@ def app():
         """)
     
     with col2:
-        st.info("🧪 **Data Enrichment**")
+        st.info("**Data Enrichment**")
         st.markdown("""
         *   **Dataset Aggregation**: Seamlessly merge and harmonize multiple datasets into a single master cohort with one click.
         *   **Custom Variable Creation**: specific computed variables and derived scoring systems, manually or with **AI assistance**.
@@ -58,7 +58,7 @@ def app():
         *   **Dimensionality Reduction**: Apply PCA, UMAP, and t-SNE for high-dimensional feature exploration.
         """)
 
-        st.success("📈 **Epidemiology & Inferential Statistics**")
+        st.success("**Epidemiology & Inferential Statistics**")
         st.markdown("""
         *   **Hypothesis Testing**: Automated selection of appropriate parametric/non-parametric tests (T-test, ANOVA, Chi-Square, etc.).
         *   **Multivariate Analysis**: Perform ANCOVA and regression models to adjust for confounding variables.
@@ -66,7 +66,7 @@ def app():
         *   **Power Analysis**: Sample size calculation and statistical power estimation.
         """)
         
-        st.warning("🔄 **Reproducibility & Reporting**")
+        st.warning("**Reproducibility & Reporting**")
         st.markdown("""
         *   **Version Control**: Built-in dataset versioning (DuckDB) and trace management.
         *   **Analysis Replay**: Reproduce exact analysis states and settings.

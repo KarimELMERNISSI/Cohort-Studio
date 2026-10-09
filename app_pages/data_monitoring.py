@@ -868,7 +868,7 @@ def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional
         if uploaded_file is not None:
             try:
                 df = load_dataframe(uploaded_file)
-                st.success("✅ Dataset successfully loaded.")
+                st.success("Dataset successfully loaded.")
                 return df, uploaded_file.name
             except Exception as e:
                 st.error(f"Error loading file: {str(e)}")
@@ -884,7 +884,7 @@ def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional
             if os.path.exists(file_path_input):
                 try:
                     df = load_dataframe(file_path_input)
-                    st.success("✅ Dataset successfully loaded.")
+                    st.success("Dataset successfully loaded.")
                     return df, file_path_input
                 except Exception as e:
                     st.error(f"Error loading file: {str(e)}")
@@ -1407,7 +1407,7 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
         hover_data=[plot_df.index],
         opacity=0.7
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 
@@ -1629,7 +1629,7 @@ def display_mask_family(config):
         with grid[i % cols_per_row]:
             if is_numeric:
                 # Expander for numeric configuration
-                with st.expander(f"🔢 {key}", expanded=False):
+                with st.expander(f"{key}", expanded=False):
                     # Numeric details
                     st.markdown(f"**Type:** 🔢 <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
 
@@ -1646,20 +1646,20 @@ def display_mask_family(config):
                     strategy = value.get('strategy', None)
                     if strategy is not None:
                         st.markdown(f"**Validation Strategy:** {strategy}")
-                    st.success("✅ Numeric Validation Active")
+                    st.success("Numeric Validation Active")
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
             else:
                 # Expander for non-numeric configuration
-                with st.expander(f"📝 {key}", expanded=False):
+                with st.expander(f"{key}", expanded=False):
                     # Non-numeric details
                     st.markdown(f"**Type:** 📝 <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
 
                     expression = value.get('expression', "No expression defined")
                     #st.markdown("**Validation Expression:**")
                     st.code(expression, language='python')
-                    st.warning("⚠️ Custom Expression Validation")
+                    st.warning("Custom Expression Validation")
 
                     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1679,7 +1679,7 @@ def display_mask_family_alt(config):
             return
 
     # Top-level expander for all configurations
-    with st.expander("📂 View Mask Families Configuration", expanded=False):
+    with st.expander("View Mask Families Configuration", expanded=False):
         for i, (key, value) in enumerate(config.items()):
             # Skip invalid entries
             if not isinstance(value, dict):
@@ -1694,7 +1694,7 @@ def display_mask_family_alt(config):
             st.markdown(
                 f"""
                 <div style="border: {border_color}; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">{'🔢' if is_numeric else '📝'} {key}</h4>
+                    <h4 style="margin: 0;">{'' if is_numeric else ''} {key}</h4>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1712,14 +1712,14 @@ def display_mask_family_alt(config):
 
                 strategy = value.get('strategy', "None")
                 st.markdown(f"**Validation Strategy:** {strategy}")
-                st.success("✅ Numeric Validation Active")
+                st.success("Numeric Validation Active")
 
             # Non-Numeric Configuration
             else:
                 expression = value.get('expression', "No expression defined")
                 st.markdown("**Validation Expression:**")
                 st.code(expression, language='python')
-                st.warning("⚠️ Custom Expression Validation")
+                st.warning("Custom Expression Validation")
 
             st.divider()  # Divider between items
 
@@ -1881,7 +1881,7 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
             st.session_state.data = df_masked
             st.session_state.working_df = df_masked
                 
-            st.success("✅ Dataset saved and ready for further analysis!")
+            st.success("Dataset saved and ready for further analysis!")
             # Debug outputs to confirm updates
             #st.write("Updated working DataFrame:")
             #st.dataframe(st.session_state.working_df)
@@ -1944,7 +1944,7 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                     label_visibility="collapsed"
                 )
             with col_btn:
-                generate_clicked = st.button("✨ Generate", key=f"ai_gen_{family_name}", type="primary")
+                generate_clicked = st.button("Generate", key=f"ai_gen_{family_name}", type="primary")
 
             if generate_clicked:
                 if 'data' not in st.session_state or st.session_state.data is None:
@@ -1988,11 +1988,11 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                         # Validation & Proxy Logic
                         missing_vars = item.get('missing_variables', [])
                         if missing_vars:
-                            st.warning(f"⚠️ Missing variables: {', '.join(missing_vars)}")
+                            st.warning(f"Missing variables: {', '.join(missing_vars)}")
                             c_fix1, c_fix2 = st.columns([1,1])
                             with c_fix1:
                                 proxy_key = f"proxy_{family_name}_{i}_{missing_vars[0]}"
-                                if st.button(f"🔍 Find Proxy for '{missing_vars[0]}'", key=proxy_key):
+                                if st.button(f"Find Proxy for '{missing_vars[0]}'", key=proxy_key):
                                     with st.spinner("Finding proxy..."):
                                         columns = list(st.session_state.data.columns)
                                         res = st.session_state.rag_manager.suggest_proxy_variable(missing_vars[0], columns)
@@ -2288,7 +2288,7 @@ def app():
             date_cols_standardized.append(f"{col} ({', '.join(used_notes)})")
             
             if loss > len(df) * 0.05: # >5% loss
-                st.warning(f"⚠️ High data loss in '{col}': {loss} rows could not be parsed.")
+                st.warning(f"High data loss in '{col}': {loss} rows could not be parsed.")
 
             # IMPORTANT: Since we modified the data in place (potentially fixing thousands of rows), 
             # we MUST invalidate any cached statistics that might have been computed on the "bad" data.
@@ -2304,10 +2304,10 @@ def app():
             # Note: Removed redundant 'else' block and 'res_primary' logic.
             
         if date_cols_standardized:
-            st.info(f"📅 **Date Consistency Applied**: {', '.join(date_cols_standardized)}")
+            st.info(f"**Date Consistency Applied**: {', '.join(date_cols_standardized)}")
             
         if parsing_report:
-            with st.expander("⚠️ Date Parsing Issues Detected", expanded=True):
+            with st.expander("Date Parsing Issues Detected", expanded=True):
                 st.warning("Some values could not be converted to dates. Please check the examples below:")
                 for col, examples in parsing_report.items():
                     st.write(f"**{col}**: Failed to parse strings like `{examples}`")
@@ -2349,12 +2349,12 @@ def app():
                                             columns_to_highlight=anom_cols
                                         )
                     st.write("Updated Dataset:")
-                    st.dataframe(styled_df)
+                    st.dataframe(styled_df, width="stretch")
             else:
                 st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
         if 'anom_cols' in locals() and detect:
-            with st.expander("📊 Results", expanded=False):
+            with st.expander("Results", expanded=False):
                 display_results_with_anomaly(df=df,anomaly_col=f"{anomaly_family}_any", st=st)
             
     with tab2:
@@ -2381,12 +2381,12 @@ def app():
                                             columns_to_highlight=inc_cols
                                         )
                     st.write("Updated Dataset:")
-                    st.dataframe(styled_df)
+                    st.dataframe(styled_df, width="stretch")
             else:
                 st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
         if 'inc_cols' in locals() and check_inc:
-            with st.expander("📊 Results", expanded=False):
+            with st.expander("Results", expanded=False):
                 display_results_with_inclusion(df=df,inclusion_col=f"{inclusion_family}_all", st=st)
 
 
@@ -2395,14 +2395,14 @@ def app():
         with st.expander("Outliers Handler"):
             df = add_outlier_handling_ui(df, analyzer.numeric_cols)
         
-        with st.expander("📊 Results", expanded=False):
+        with st.expander("Results", expanded=False):
             display_results_with_outliers(filtered_df=df, st=st)
     #    st.json(st.session_state.config["mask_families"])
     #    add_mask_family(st.session_state.config, st)
 
     with tab4:
         # 1. Add External Data
-        with st.expander("📥 Upload de Data Files To Compare", expanded=True):
+        with st.expander("Upload de Data Files To Compare", expanded=True):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -2422,7 +2422,7 @@ def app():
                     st.info(f"Rows: {len(data_c2)} | Columns: {len(data_c2.columns)}")
 
 
-        with st.expander("🔄 Process Comparison", expanded=False):
+        with st.expander("Process Comparison", expanded=False):
             if data_c1 is not None and data_c2 is not None:
                 st.write("---------------\n PROCESS COMPARISON \n --------------")
                 
@@ -2448,12 +2448,12 @@ def app():
                     )
                     
                     if not row_ids:
-                        st.warning("⚠️ Please select at least one common identifier (e.g., subject_id) to proceed.")
+                        st.warning("Please select at least one common identifier (e.g., subject_id) to proceed.")
                     else:
                         run_comp = st.button("Run Comparison", key="run_comparison_bt", width='stretch')
 
 
-        with st.expander("📊 Results", expanded=True):
+        with st.expander("Results", expanded=True):
             if 'run_comp' in locals() and run_comp:
                 #st.write(f"column_to_check size: {len(column_to_check)}")
                 result_comp = mc.process_comparison_st(comparison_name='comp1',
@@ -2480,7 +2480,7 @@ def app():
                     # Reorder the columns
                     comparison_result_filtered = comparison_result_filtered[new_column_order]
                     styled_df = comparison_result_filtered.style.apply(mc.highlight_modifications_tuples, args=("summary", rows_only_in_df1, rows_only_in_df2, modified_common_ids, common_id), axis=1)
-                    st.dataframe(styled_df)
+                    st.dataframe(styled_df, width="stretch")
 
                     # Prepare Excel writer
                     if st.download_button(

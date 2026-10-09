@@ -632,7 +632,7 @@ def app():
             success, info = load_and_repair_taxonomy(target_path, rag_manager if rag_active else None)
             
             if success:
-                st.toast(f"Loaded {info} formulas and synced!", icon="✅")
+                st.toast(f"Loaded {info} formulas and synced!", icon="")
                 # Trigger a single rerun to refresh UI with new state
                 st.rerun()
             else:
@@ -687,7 +687,7 @@ def app():
                     json.dump(formulas_registry, f, indent=2)
                 
                 st.session_state["loaded_path"] = new_path # Update context
-                st.toast(f"Saved Version v{next_v}!", icon="💾")
+                st.toast(f"Saved Version v{next_v}!", icon="")
                 st.rerun() 
             except Exception as e:
                 st.sidebar.error(f"Save failed: {e}")
@@ -707,7 +707,7 @@ def app():
                     loaded_formulas_path = os.path.join(os.path.dirname(loaded_path), "formulas_metadata.json")
                     with open(loaded_formulas_path, "w") as f:
                          json.dump(formulas_registry, f, indent=2)
-                    st.toast(f"Overwritten {current_v_name}!", icon="💾")
+                    st.toast(f"Overwritten {current_v_name}!", icon="")
                 except Exception as e:
                     st.sidebar.error(f"Overwrite failed: {e}")
     else:
@@ -724,7 +724,7 @@ def app():
             st.caption("Expand graph with external knowledge.")
             enrich_dist = st.slider("Neighborhood Distance", 1, 3, 1, help="Depth of external variables to find.")
             
-            if st.button("✨ Enrich Taxonomy"):
+            if st.button("Enrich Taxonomy"):
                 if not rag_active:
                      st.error("RAG System Required")
                 else:
@@ -769,10 +769,10 @@ def app():
                             st.session_state["enrichment_candidates"] = candidates
                             st.session_state["enrichment_formulas"] = formulas
                             st.sidebar.success(f"Found {len(candidates)} vars & {len(formulas)} formulas! Review in Overview tab.")
-                            st.toast(f"Found {len(candidates)} new items!", icon="✨")
+                            st.toast(f"Found {len(candidates)} new items!", icon="")
                         else:
                             st.sidebar.info("No new candidates found.")
-        if st.button("🚀 New Taxonomy", help="Generate fresh taxonomy from dataset"):
+        if st.button("New Taxonomy", help="Generate fresh taxonomy from dataset"):
             if not rag_active:
                  st.sidebar.error("RAG Required")
             elif "working_df" not in st.session_state:
@@ -813,12 +813,12 @@ def app():
     
     # Case A: No Taxonomy (Empty State)
     if not taxonomy:
-        st.info("👋 Welcome to Data Interpretation")
+        st.info("Welcome to Data Interpretation")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📂 Load Existing")
+            st.subheader("Load Existing")
             if os.path.exists("taxonomy_metadata.json"):
                  st.info("Legacy `taxonomy_metadata.json` found in root. Consider moving it to data/taxonomy.")
             
@@ -843,16 +843,16 @@ def app():
                 st.warning("No saved taxonomy files found in `data/taxonomy/`.")
 
         with col2:
-            st.subheader("✨ Generate New")
+            st.subheader("Generate New")
             if not rag_active:
-                st.warning("⚠️ RAG System is not initialized.")
+                st.warning("RAG System is not initialized.")
                 st.markdown("You need to initialize the AI system to generate a new taxonomy from your data.")
             else:
                 if "working_df" not in st.session_state:
                     st.error("No dataset loaded. Please go to Home page.")
                 else:
                     st.markdown("Analyze your dataset to generate a medical knowledge graph.")
-                    if st.button("🚀 Generate Taxonomy", type="primary", width='stretch'):
+                    if st.button("Generate Taxonomy", type="primary", width='stretch'):
                         # ... Generation Logic ...
                         progress_bar = st.progress(0, text="Starting taxonomy generation...")
                         def update_progress(percent, text):
@@ -1022,7 +1022,7 @@ def app():
                 st.info("No new variables to add (all found concepts already exist or were unified).")
 
             if formulas:
-                st.success(f"➕ {len(formulas)} New Formulas identified connecting these variables.")
+                st.success(f"{len(formulas)} New Formulas identified connecting these variables.")
                 with st.expander("View Formulas"):
                     st.json(formulas)
             
@@ -1075,7 +1075,7 @@ def app():
                     st.session_state.enrichment_candidates = {}
                     st.session_state["enrichment_formulas"] = {}
                     
-                    st.toast(f"Merged {count} vars & {len(new_formulas)} formulas!", icon="🎉")
+                    st.toast(f"Merged {count} vars & {len(new_formulas)} formulas!", icon="")
                     time.sleep(1)
                     st.rerun()
             
@@ -1095,7 +1095,7 @@ def app():
             with col_content:
                 if selected_var_name:
                     var_data = filtered_vars[selected_var_name]
-                    st.subheader(f"📌 {var_data.get('standard_name', selected_var_name)}")
+                    st.subheader(f"{var_data.get('standard_name', selected_var_name)}")
                     st.caption(f"Original Name: `{selected_var_name}`")
                     st.markdown(f"**Category:** `{var_data.get('category', 'Uncategorized')}`")
                     st.divider()
@@ -1155,7 +1155,7 @@ def app():
         graph_source = filtered_vars
 
         if len(graph_source) > 150:
-            st.warning(f"⚠️ Rendering {len(graph_source)} variables. The graph might be slow.")
+            st.warning(f"Rendering {len(graph_source)} variables. The graph might be slow.")
 
         # Pass FULL taxonomy as reference to allow finding hidden nodes
         nodes, edges = get_graph_data(graph_source, formulas_registry, full_taxonomy_ref=taxonomy, formula_search_query=f_query)
@@ -1225,7 +1225,7 @@ def app():
                 d1, d2 = st.columns(2)
                 with d1:
                     st.write("**Nodes by Type**")
-                    st.dataframe(pd.DataFrame(list(node_counts.items()), columns=["Type", "Count"]), hide_index=True)
+                    st.dataframe(pd.DataFrame(list(node_counts.items()), columns=["Type", "Count"]), width="stretch", hide_index=True)
                 with d2:
                     st.write("**Edge Summary**")
                     st.info(f"Visualizing interactions between {len(nodes)} entities.")
@@ -1306,7 +1306,7 @@ def app():
                                     if role == "Category":
                                         st.info(f"Groups all variables belonging to '{label}' category.")
                                     elif role == "Formula":
-                                        st.markdown("#### 🧮 Formula Details")
+                                        st.markdown("#### Formula Details")
                                         
                                         # Try to resolve valid Formula ID
                                         f_id = sel_id.replace("FORM_", "")
@@ -1316,7 +1316,7 @@ def app():
                                             # Rich Display from Registry
                                             c_fd1, c_fd2 = st.columns(2)
                                             # Math Display
-                                            st.markdown("#### 📐 Formula Content")
+                                            st.markdown("#### Formula Content")
                                             if f_data.get('markdown_formula'):
                                                 st.latex(f_data['markdown_formula'])
                                             elif f_data.get('expression'):
@@ -1344,7 +1344,7 @@ def app():
 
     # --- TAB 3: FORMULA DETAILS (NEW) ---
     with tab_formulas:
-        st.subheader("🧮 Formula Taxonomy")
+        st.subheader("Formula Taxonomy")
         
         # Filter Formulas (Query comes from Sidebar)
         # f_query is defined in sidebar section above
@@ -1363,7 +1363,7 @@ def app():
             if not filtered_forms:
                 st.warning("No formulas found.")
                 if not formulas_registry:
-                    st.info("💡 Hint: Try reloading the Taxonomy (vX) from the sidebar to fetch definitions.")
+                    st.info("Hint: Try reloading the Taxonomy (vX) from the sidebar to fetch definitions.")
                 sel_fdata = None
             else:
                 st.markdown(f"**Found {len(filtered_forms)} formulas**")
@@ -1381,7 +1381,7 @@ def app():
                 st.divider()
                 
                 # Math Display
-                st.markdown("#### 📐 Formula Content")
+                st.markdown("#### Formula Content")
                 if sel_fdata.get('markdown_formula'):
                     st.latex(sel_fdata['markdown_formula'])
                 elif sel_fdata.get('expression'):
@@ -1403,7 +1403,7 @@ def app():
                     st.markdown(f"`{sel_fdata.get('output_variable', 'Unknown')}`")
                 
                 if sel_fdata.get('references'):
-                    st.markdown("#### 📚 References")
+                    st.markdown("#### References")
                     for ref in sel_fdata['references']:
                         st.markdown(f"- {ref}")
             else:
@@ -1411,10 +1411,10 @@ def app():
     
     # --- TAB 5: POPULATION CLUSTERING ---
     with tab_clustering:
-        st.subheader("🔬 Population Clustering & Dimensionality Reduction")
+        st.subheader("Population Clustering & Dimensionality Reduction")
         
         # Educational Introduction
-        with st.expander("📚 What is Clustering Analysis?", expanded=False):
+        with st.expander("What is Clustering Analysis?", expanded=False):
             st.markdown("""
             ### Understanding Clustering in Epidemiology
             
@@ -1471,7 +1471,7 @@ def app():
         
         # Check if data is loaded
         if "working_df" not in st.session_state:
-            st.warning("⚠️ Please load a dataset from the Main View page first.")
+            st.warning("Please load a dataset from the Main View page first.")
         else:
             df = st.session_state["working_df"]
             
@@ -1480,12 +1480,12 @@ def app():
             categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
             
             if len(numeric_cols) < 2:
-                st.error("❌ Need at least 2 numeric variables for clustering.")
+                st.error("Need at least 2 numeric variables for clustering.")
             else:
                 # Configuration Panel
                 st.markdown("### ⚙️ Configuration")
                 
-                with st.expander("🛠️ Analysis Configuration", expanded=True):
+                with st.expander("Analysis Configuration", expanded=True):
                     col_cfg1, col_cfg2 = st.columns(2)
                     
                     with col_cfg1:
@@ -1528,10 +1528,10 @@ def app():
                         )
                 
                 if len(selected_vars) < 2:
-                    st.warning("👆 Please select at least 2 variables (can be mixed numeric/categorical).")
+                    st.warning("Please select at least 2 variables (can be mixed numeric/categorical).")
                 else:
                     # Run Analysis Button
-                    if st.button("🚀 Run Clustering Analysis", type="primary", width='content'):
+                    if st.button("Run Clustering Analysis", type="primary", width='content'):
                         with st.spinner("Running analysis..."):
                             try:
                                 # Prepare dataify variable types in selection
@@ -1547,7 +1547,7 @@ def app():
                                 )
                                 
                                 if len(prep_data) < 10:
-                                    st.error("❌ Not enough valid samples after removing missing values.")
+                                    st.error("Not enough valid samples after removing missing values.")
                                 else:
                                     # Run dimensionality reduction
                                     if dim_method == "PCA":
@@ -1600,10 +1600,10 @@ def app():
                                         'cluster_method': cluster_method,
                                         'selected_vars': selected_vars
                                     }
-                                    st.success(f"✅ Analysis complete! Found {len(set(labels)) - (1 if -1 in labels else 0)} clusters.")
+                                    st.success(f"Analysis complete! Found {len(set(labels)) - (1 if -1 in labels else 0)} clusters.")
                             
                             except Exception as e:
-                                st.error(f"❌ Error: {str(e)}")
+                                st.error(f"Error: {str(e)}")
                     
                     # Display results if available
                     if 'clustering_results' in st.session_state:
@@ -1616,7 +1616,7 @@ def app():
                         st.markdown("### 📊 Results")
                         
                         # Visualization tabs
-                        viz_tabs = st.tabs(["📈 Scatter Plot", "📊 Cluster Profiles", "📉 Optimal K"])
+                        viz_tabs = st.tabs(["Scatter Plot", "Cluster Profiles", "Optimal K"])
                         
                         with viz_tabs[0]:
                             import plotly.express as px
@@ -1669,10 +1669,10 @@ def app():
                             )
                             fig.update_layout(height=500)
                             fig.update_traces(marker=dict(size=8, opacity=0.7))
-                            st.plotly_chart(fig)
+                            st.plotly_chart(fig, width="stretch")
                             
                             # Interpretation
-                            with st.expander("📖 How to Interpret"):
+                            with st.expander("How to Interpret"):
                                 st.markdown("""
                                 **Reading the Plot:**
                                 - Each point = one sample
@@ -1687,7 +1687,7 @@ def app():
                                 """)
                         
                             with viz_tabs[1]:
-                                st.markdown("##### 📌 Cluster Profiles")
+                                st.markdown("##### Cluster Profiles")
                                 st.caption("Mean values (numeric) and Mode (categorical) for each cluster.")
                                 
                                 # Access selections from session state or logic above (need to be robust)
@@ -1702,17 +1702,17 @@ def app():
                                     numeric_cols=current_numeric,
                                     categorical_cols=current_categorical
                                 )
-                                st.dataframe(profiles)
+                                st.dataframe(profiles, width="stretch")
                             
                                 # Download
                                 st.download_button(
-                                    "📥 Download Profiles",
+                                    "Download Profiles",
                                     data=profiles.to_csv(),
                                     file_name="cluster_profiles.csv",
                                     mime="text/csv"
                                 )
                                 
-                                with st.expander("📖 How to Interpret"):
+                                with st.expander("How to Interpret"):
                                     st.markdown("""
                                     **Reading Cluster Profiles:**
                                     - Each row = one cluster
@@ -1763,9 +1763,9 @@ def app():
                                 )
                                 st.plotly_chart(fig, width='content')
                                 
-                                st.info(f"📌 **Recommended K (by Silhouette):** {opt_analysis['optimal_k_silhouette']}")
+                                st.info(f"**Recommended K (by Silhouette):** {opt_analysis['optimal_k_silhouette']}")
                                 
-                                with st.expander("📖 How to Choose K"):
+                                with st.expander("How to Choose K"):
                                     st.markdown("""
                                     **Elbow Method:** Look for "bend" in the curve
                                     - Steep drop → adding clusters helps
@@ -1793,14 +1793,14 @@ def app():
             
     # --- TAB 6: REFINEMENT ---
     with tab_refine:
-        st.subheader("🛠️ Taxonomy Refinement")
+        st.subheader("Taxonomy Refinement")
         
         if not rag_active:
-            st.warning("⚠️ AI System Required")
+            st.warning("AI System Required")
             st.info("Refining the taxonomy requires the RAG system to be initialized.")
         else:
             # --- Refine Existing Variable ---
-            with st.expander("🔧 Refine Existing Variable (AI)", expanded=False):
+            with st.expander("Refine Existing Variable (AI)", expanded=False):
                 st.caption("Select variables to refine, provide natural language feedback, and let the AI update the taxonomy.")
                 
                 vars_to_refine = st.multiselect(
@@ -1850,7 +1850,7 @@ def app():
 
             # --- NEW: Add Missing Concept Node ---
             st.divider()
-            with st.expander("➕ Add Missing Concept Node (AI)", expanded=False):
+            with st.expander("Add Missing Concept Node (AI)", expanded=False):
                 st.caption("Use AI to find and add specific derived concepts (e.g. medical scores, ratios) to the taxonomy.")
                 
                 
@@ -2046,7 +2046,7 @@ def app():
                                         if rag_manager:
                                             rag_manager.variable_taxonomy = st.session_state.offline_taxonomy
                                         
-                                        st.toast(f"Added {new_var_id} to taxonomy!", icon="✅")
+                                        st.toast(f"Added {new_var_id} to taxonomy!", icon="")
 
                                         # Clear suggestions to reset state?
                                         del st.session_state['refine_suggestions_text']

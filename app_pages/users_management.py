@@ -18,7 +18,7 @@ def app():
     # Double-check admin access (should already be filtered in main.py)
     username = st.session_state.get('username')
     if username != 'admin':
-        st.error("⛔ Access Denied. Admin privileges required.")
+        st.error("Access Denied. Admin privileges required.")
         st.stop()
     
     st.markdown("Manage user accounts - activate, reset passwords, or delete users.")
@@ -49,10 +49,10 @@ def app():
     pending_count = sum(1 for u in users if u['status'] == 'Pending Approval')
     
     if pending_count > 0:
-        st.warning(f"⏳ **{pending_count} user(s) awaiting approval**")
+        st.warning(f"**{pending_count} user(s) awaiting approval**")
     
     # --- Users Table ---
-    st.subheader("📋 Registered Users")
+    st.subheader("Registered Users")
     
     # Header
     cols = st.columns([2, 2, 2, 2])
@@ -90,35 +90,35 @@ def app():
             if uname == 'admin':
                 st.markdown("—")  # Admin is always active
             elif is_active:
-                if st.button("⏸ Deactivate", key=f"deact_{uname}", help=f"Deactivate {uname}"):
+                if st.button("Deactivate", key=f"deact_{uname}", help=f"Deactivate {uname}"):
                     success, msg = db.deactivate_user(uname)
                     if success:
-                        st.toast(msg, icon="✅")
+                        st.toast(msg, icon="")
                         st.rerun()
                     else:
                         st.error(msg)
             else:
-                if st.button("✅ Activate", key=f"act_{uname}", help=f"Approve {uname}", type="primary"):
+                if st.button("Activate", key=f"act_{uname}", help=f"Approve {uname}", type="primary"):
                     success, msg = db.activate_user(uname)
                     if success:
-                        st.toast(msg, icon="✅")
+                        st.toast(msg, icon="")
                         st.rerun()
                     else:
                         st.error(msg)
         
         with cols[3]:
             if uname != 'admin':
-                if st.button("🗑️", key=f"delete_{uname}", help=f"Delete user {uname}"):
+                if st.button("", key=f"delete_{uname}", help=f"Delete user {uname}"):
                     st.session_state[f"confirm_delete_{uname}"] = True
     
     # --- Delete Confirmation Dialogs ---
     for user in users:
         uname = user['username']
         if st.session_state.get(f"confirm_delete_{uname}", False):
-            st.warning(f"⚠️ Are you sure you want to delete user **{uname}**?")
+            st.warning(f"Are you sure you want to delete user **{uname}**?")
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("✅ Yes, Delete", key=f"confirm_yes_{uname}"):
+                if st.button("Yes, Delete", key=f"confirm_yes_{uname}"):
                     success, msg = db.delete_user(uname)
                     if success:
                         st.success(msg)
@@ -127,14 +127,14 @@ def app():
                     else:
                         st.error(msg)
             with col2:
-                if st.button("❌ Cancel", key=f"confirm_no_{uname}"):
+                if st.button("Cancel", key=f"confirm_no_{uname}"):
                     st.session_state[f"confirm_delete_{uname}"] = False
                     st.rerun()
     
     st.divider()
     
     # --- Password Reset Section ---
-    st.subheader("🔐 Reset User Password")
+    st.subheader("Reset User Password")
     
     # Filter out admin from password reset
     non_admin_users = [u['username'] for u in users if u['username'] != 'admin']
@@ -161,7 +161,7 @@ def app():
                 help="Re-enter the new password to confirm"
             )
             
-            submit = st.form_submit_button("🔄 Reset Password", use_container_width=True)
+            submit = st.form_submit_button("Reset Password", width="stretch")
             
             if submit:
                 if not new_password:

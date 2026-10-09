@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, OneHotEncoder, LabelEncoder, OrdinalEncoder
-from sklearn.manifold import TSNE
-import umap
-import prince
 
 def apply_variable_transformation(dataframe, params):
     transformation_type = params.get("transformation_type")
@@ -44,6 +41,7 @@ def apply_variable_transformation(dataframe, params):
             scaled_data = scaler.fit_transform(dataframe[columns])
 
         if transformation == "PCA":
+            import prince
             model = prince.PCA(
                 n_components=n_components,
                 rescale_with_mean=True,
@@ -55,14 +53,17 @@ def apply_variable_transformation(dataframe, params):
             transformed_data = model.fit_transform(dataframe[columns])
 
         elif transformation == "t-SNE":
+            from sklearn.manifold import TSNE
             model = TSNE(n_components=n_components, perplexity=perplexity,
                         learning_rate=learning_rate, random_state=42)
             transformed_data = model.fit_transform(scaled_data)
         elif transformation == "UMAP":
+            import umap
             model = umap.UMAP(n_components=n_components, n_neighbors=n_neighbors,
                             min_dist=min_dist, random_state=42)
             transformed_data = model.fit_transform(scaled_data)
         else:  # FAMD
+            import prince
             model = prince.FAMD(n_components=n_components, random_state=42)
             transformed_data = model.fit_transform(dataframe[columns])
 

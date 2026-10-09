@@ -121,7 +121,7 @@ def app():
         missing_files = list(missing_files_map.values())
         
         if missing_files:
-            with st.expander("⚠️ Missing Resources", expanded=True):
+            with st.expander("Missing Resources", expanded=True):
                 st.warning("The following files referenced in the trace could not be found.")
 
                 # --- NEW: Artifact Folder Selection & Fixes ---
@@ -209,7 +209,7 @@ def app():
                         for f in folder_files:
                             file_map[f.lower()] = f
                             
-                        with st.expander(f"📄 View files in `{os.path.basename(artifact_folder)}` ({len(folder_files)} files)", expanded=False):
+                        with st.expander(f"View files in `{os.path.basename(artifact_folder)}` ({len(folder_files)} files)", expanded=False):
                             st.write(folder_files)
                     except Exception as e:
                         st.error(f"Could not list files: {e}")
@@ -246,7 +246,7 @@ def app():
                                  # Persist this resolution in session state to prevent loops on rerun
                                  st.session_state['resolved_paths'][item['path']] = candidate
                                  
-                                 st.toast(f"Resolved: {filename} -> {os.path.basename(candidate)}", icon="✅")
+                                 st.toast(f"Resolved: {filename} -> {os.path.basename(candidate)}", icon="")
                                  files_to_remove.append(path_key)
                                  resolved_count += 1
                     
@@ -255,7 +255,7 @@ def app():
                         del missing_files_map[k]
                     
                     if resolved_count > 0:
-                        st.info(f"✅ Batch resolved {resolved_count} files!")
+                        st.info(f"Batch resolved {resolved_count} files!")
                         if not missing_files_map:
                              st.balloons()
                              st.rerun() # All done!
@@ -287,7 +287,7 @@ def app():
                                 
                                 # Persist resolution
                                 st.session_state['resolved_paths'][item['path']] = save_path
-                                st.toast(f"Uploaded & Resolved: {uploaded_missing.name}", icon="✅")
+                                st.toast(f"Uploaded & Resolved: {uploaded_missing.name}", icon="")
                                 st.rerun()
 
                         with cols[2]:
@@ -329,7 +329,7 @@ def app():
                                     candidate = os.path.join(artifact_folder, selected_artifact)
                                     if os.path.exists(candidate):
                                         st.session_state['resolved_paths'][item['path']] = candidate
-                                        st.toast(f"Selected: {selected_artifact}", icon="✅")
+                                        st.toast(f"Selected: {selected_artifact}", icon="")
                                         st.rerun()
                             else:
                                 st.empty()
@@ -351,7 +351,7 @@ def app():
                                 if valid_path:
                                      # Persist resolution
                                      st.session_state['resolved_paths'][item['path']] = valid_path
-                                     st.toast(f"Path Verified: {os.path.basename(valid_path)}", icon="✅")
+                                     st.toast(f"Path Verified: {os.path.basename(valid_path)}", icon="")
                                      st.rerun() 
 
                     st.info("Uploaded files are automatically saved to `data/uploads/`, which is checked during reproduction.")
@@ -673,22 +673,22 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     fill_value = params.get("fill_value")
 
                     if strategy == "Drop rows":
-                        current_df.dropna(subset=columns, inplace=True)
+                        current_df = current_df.dropna(subset=columns)
                     elif strategy == "Fill with mean":
                         for col in columns:
-                            current_df[col].fillna(current_df[col].mean(), inplace=True)
+                            current_df[col] = current_df[col].fillna(current_df[col].mean())
                     elif strategy == "Fill with median":
                         for col in columns:
-                            current_df[col].fillna(current_df[col].median(), inplace=True)
+                            current_df[col] = current_df[col].fillna(current_df[col].median())
                     elif strategy == "Fill with mode":
                         for col in columns:
                             # Safely handle mode if empty
                             mode_val = current_df[col].mode()
                             if not mode_val.empty:
-                                current_df[col].fillna(mode_val[0], inplace=True)
+                                current_df[col] = current_df[col].fillna(mode_val[0])
                     elif strategy == "Fill with value":
-                         for col in columns:
-                            current_df[col].fillna(fill_value, inplace=True)
+                        for col in columns:
+                            current_df[col] = current_df[col].fillna(fill_value)
 
                 # ... Add other replay handlers as needed ...
                     
