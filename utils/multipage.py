@@ -567,23 +567,18 @@ class MultiPageApp:
         Returns:
             A string suitable for use in Markdown or plain text, depending on `is_widget`.
         """
-        # Case 1: Emoji
-        if isinstance(icon, str) and len(icon) <= 4:  # Assume emoji
-            return f"{icon} {page_name}"
+        if not icon:
+            return page_name
 
-        # Case 2: Image
         if isinstance(icon, Image.Image):
-            # Convert image to Base64 string
             buffered = BytesIO()
-            icon.thumbnail((60, 60))  # Resize to a smaller size for sidebar
+            icon.thumbnail((60, 60))
             icon.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
 
             if is_widget:
-                # For widgets, return plain text without HTML
-                return f"📊 {page_name}"
+                return page_name
             else:
-                # Return an HTML string for rendering in Markdown
                 return f"""
                 <div style="display: flex; align-items: center;">
                     <img src="data:image/png;base64,{img_str}" style="margin-right:10px;" width="20"/>
@@ -591,9 +586,10 @@ class MultiPageApp:
                 </div>
                 """
 
-        # Case 3: Default fallback
-        return f"📄 {page_name}"  # Fallback to a default emoji
+        if isinstance(icon, str) and icon.strip():
+            return f"{icon} {page_name}"
 
+        return page_name
 
 
     def _render_icon(self, icon: Union[str, Image.Image], width: int = 30) -> str:
@@ -601,25 +597,26 @@ class MultiPageApp:
         Render icons for the page title (HTML-supported).
         
         Args:
-            icon: Icon to render (emoji or PIL Image)
+            icon: Icon to render
             width: Width of the icon in pixels
         
         Returns:
-            Rendered HTML for display
+            Rendered HTML for display, or empty string if no icon.
         """
-        if isinstance(icon, str):
-            return icon  # Emojis work directly
-        
+        if not icon:
+            return ""
+
         if isinstance(icon, Image.Image):
-            # Convert the image to a base64-encoded string for rendering in HTML
             buffered = BytesIO()
-            icon.thumbnail((width, width))  # Resize while maintaining aspect ratio
+            icon.thumbnail((width, width))
             icon.save(buffered, format="PNG")
             img_str = base64.b64encode(buffered.getvalue()).decode()
-            
             return f'<img src="data:image/png;base64,{img_str}" width="{width}" height="{width}" style="vertical-align:middle; margin-right:10px;">'
-        
-        return "📄"
+
+        if isinstance(icon, str) and icon.strip():
+            return f"{icon} "
+
+        return ""
 
 
     def _handle_data_upload(self) -> None:
@@ -659,9 +656,12 @@ class MultiPageApp:
                 st.write(f"Rows: {len(st.session_state.data)}")
                 st.write(f"Columns: {len(st.session_state.data.columns)}")
 
-        # Render page title with icon
+        # Render page title
         icon_html = self._render_icon(self.pages[selected_page].icon, width=40)
-        st.markdown(f"<h1 style='display: flex; align-items: center;'>{icon_html} {selected_page}</h1>", unsafe_allow_html=True)
+        if icon_html:
+            st.markdown(f"<h1 style='display: flex; align-items: center;'>{icon_html} {selected_page}</h1>", unsafe_allow_html=True)
+        else:
+            st.title(selected_page)
         
 
         # Execute the function for the selected page
@@ -669,7 +669,7 @@ class MultiPageApp:
 
         # Add Logo at the bottom of sidebar
         st.sidebar.markdown("---")
-        st.sidebar.image("assets/karim-app-logo.png", use_container_width=True)
+        st.sidebar.image("assets/karim-app-logo.png", width="stretch")
 
 
     # def run(self) -> None:

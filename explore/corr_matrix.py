@@ -10,7 +10,13 @@ import scipy.spatial.distance as ssd
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import networkx as nx
+import warnings
 from yfiles_graphs_for_streamlit import Node, Edge, EdgeStyle, DashStyle, NodeStyle, NodeShape
+
+# Filter statistical edge-case warnings
+warnings.filterwarnings("ignore", message=".*sample arguments is too small.*")
+warnings.filterwarnings("ignore", message=".*SmallSampleWarning.*")
+warnings.filterwarnings("ignore", message=".*An input array is constant.*")
 
 ####################################### CORRELATION MATRIX ###########################################
 
@@ -58,7 +64,9 @@ def plotly_corr_mat(
     else:
         # Calculate the correlation matrix
         data_filtered = data[unique_cols]
-        corr_matrix = data_filtered.corr(method=method).loc[predictors, targets]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=Warning)
+            corr_matrix = data_filtered.corr(method=method).loc[predictors, targets]
 
     # Initialize variables for clustering
     row_order = corr_matrix.index.tolist()
@@ -298,7 +306,9 @@ def plotly_corr_network(
     if data_filtered.empty:
         return go.Figure()
 
-    corr_matrix = data_filtered.corr(method=method)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=Warning)
+        corr_matrix = data_filtered.corr(method=method)
 
     # 2. Define Thresholds (Same as Excel export)
     strength_data = {
@@ -483,7 +493,9 @@ def get_yfiles_network_data(data, targets, predictors, method="pearson", thresho
         if data_filtered.empty:
             return [], []
 
-        corr_matrix = data_filtered.corr(method=method)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=Warning)
+            corr_matrix = data_filtered.corr(method=method)
 
     # Thresholds
     strength_data = {
@@ -1009,16 +1021,24 @@ def _compute_corr_and_counts(data, targets, predictors, method):
     
     for predictor in predictors:
         for target in targets:
-            # Count valid rows (non-NaN) for this pair
-            valid_rows = data[[predictor, target]].dropna().shape[0]
+            pair_df = data[[predictor, target]].dropna()
+            valid_rows = len(pair_df)
             counts.loc[predictor, target] = valid_rows
             
-            # Only compute correlation if there are more than 1 valid rows
-            if valid_rows > 1:
-                correlations.loc[predictor, target] = data[[predictor, target]].corr(method=method).iloc[0, 1]
-                # 'auto' to be decided here later (Kendall's Tau should be preferred over Spearman's correlation when there is very little data and many rank ties, if 'auto' mode' to select most suitable method based on data)
+            # Only compute correlation if there are at least 2 valid observations and non-zero variance
+            if (
+                valid_rows > 1 
+                and pair_df[predictor].nunique() > 1 
+                and pair_df[target].nunique() > 1
+            ):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=Warning)
+                    try:
+                        val = pair_df.corr(method=method).iloc[0, 1]
+                        correlations.loc[predictor, target] = val if pd.notna(val) else None
+                    except Exception:
+                        correlations.loc[predictor, target] = None
             else:
-                # Set correlation as NaN but keep the count
-                correlations.loc[predictor, target] = None  # Or use float('nan')
+                correlations.loc[predictor, target] = None
     
     return correlations, counts

@@ -1,139 +1,180 @@
-import streamlit as st
-import pandas as pd
+"""
+Reproduction Manager Module.
+
+Decouples data trace execution from Streamlit presentation logic, providing:
+- execute_trace_pipeline: Pure data pipeline execution engine (headless, testable).
+- reproduce_trace: Streamlit interactive runner for UI-based workflow replay.
+"""
+
 import json
+import logging
+from typing import Dict, Any, Optional, Tuple, Callable
+from pathlib import Path
+import pandas as pd
+
 import enrich.external_data as eed
 from app_pages.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
 from utils.path_utils import resolve_path
 
-def reproduce_trace(trace_file):
+logger = logging.getLogger(__name__)
+
+
+def execute_trace_pipeline(
+    trace_data: Dict[str, Any],
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """
+    Execute a serialized transformation trace against the source dataset.
+    
+    Args:
+        trace_data: Dictionary parsed from the trace JSON specification.
+        progress_callback: Optional callback reporting (percent: int, message: str).
+        
+    Returns:
+        Tuple of (result_dataframe, error_message). On failure, result_dataframe is None.
+    """
+    source_dataset = trace_data.get("source_dataset")
+    steps = trace_data.get("steps", [])
+
+    if not source_dataset:
+        return None, "Trace missing 'source_dataset' field."
+
+    # 1. Resolve and load the source dataset
+    resolved_source = resolve_path(source_dataset)
+    if not resolved_source:
+        return None, f"Source file not found: {source_dataset}"
+
+    db_manager = DBManager()
+    if hasattr(db_manager, "load_dataset"):
+        df, msg = db_manager.load_dataset(resolved_source)
+    else:
+        try:
+            if resolved_source.endswith(".csv"):
+                df, msg = pd.read_csv(resolved_source), "Success"
+            elif resolved_source.endswith(".xlsx"):
+                df, msg = pd.read_excel(resolved_source), "Success"
+            else:
+                df, msg = None, f"Unsupported file extension: {resolved_source}"
+        except Exception as read_err:
+            df, msg = None, str(read_err)
+
+    if df is None:
+        return None, f"Failed to load source dataset ({source_dataset}): {msg}"
+
+    current_df = df.copy()
+    total_steps = len(steps)
+
+    # 2. Iterate through sequential trace steps
+    for i, step in enumerate(steps):
+        func_name = step.get("function")
+        params = step.get("params", {})
+        description = step.get("description", func_name)
+
+        if progress_callback:
+            progress_callback(int((i / max(total_steps, 1)) * 100), f"Step {i+1}: {description}")
+
+        try:
+            if func_name == "enrichment":
+                enrichment_file_path = params.get("enrichment_file_path")
+                resolved_enrich = resolve_path(enrichment_file_path)
+                if not resolved_enrich:
+                    return None, f"Could not find enrichment file: {enrichment_file_path}"
+
+                if resolved_enrich.endswith(".xlsx"):
+                    enrichment_df = pd.read_excel(resolved_enrich)
+                else:
+                    enrichment_df = pd.read_csv(resolved_enrich)
+
+                identifier = params.get("identifier") or params.get("left_id_names")
+                identifier_set = {identifier} if isinstance(identifier, str) else set(identifier if identifier else [])
+                additional_columns = list(set(enrichment_df.columns) - identifier_set)
+
+                current_df = eed.add_data(
+                    df=current_df,
+                    additional_df=enrichment_df,
+                    left_id_names=identifier,
+                    right_id_names=identifier,
+                    additional_cols=additional_columns,
+                    strategy=params.get("strategy"),
+                    conflict_resolution=params.get("conflict_resolution"),
+                )
+
+            elif func_name == "imputation":
+                from app_pages.data_enrichment import apply_imputer
+                current_df, _ = apply_imputer(
+                    data=current_df,
+                    numerical_imputation_method=params.get("numerical_imputation_method"),
+                    categorical_imputation_method=params.get("categorical_imputation_method"),
+                    cat_encoder=params.get("cat_encoder"),
+                    num_scaler=params.get("num_scaler"),
+                    remainder_columns=params.get("remainder_columns"),
+                    remainder_strategy=params.get("remainder_strategy"),
+                    remainder_threshold=params.get("remainder_threshold"),
+                )
+
+            elif func_name == "variable_transformation":
+                result_df = apply_variable_transformation(current_df, params)
+                if result_df is not None:
+                    current_df = pd.concat([current_df, result_df], axis=1)
+
+            else:
+                logger.warning(f"Skipping unknown pipeline step: {func_name}")
+
+        except Exception as step_err:
+            err_msg = f"Error during step {i+1} ({func_name}): {step_err}"
+            logger.error(err_msg)
+            return None, err_msg
+
+    if progress_callback:
+        progress_callback(100, "Pipeline Execution Complete")
+
+    return current_df, None
+
+
+def reproduce_trace(trace_file: Any) -> None:
+    """
+    Streamlit interactive wrapper for executing trace pipelines.
+    
+    Args:
+        trace_file: File-like object containing trace JSON.
+    """
+    import streamlit as st
+
     try:
         trace = json.load(trace_file)
     except Exception as e:
         st.error(f"Invalid JSON file: {e}")
         return
 
-    source_dataset = trace.get("source_dataset")
+    source_dataset = trace.get("source_dataset", "Unknown")
     steps = trace.get("steps", [])
 
     st.info(f"Source Dataset: {source_dataset}")
-    st.info(f"Number of Steps: {len(steps)}")
+    st.info(f"Configured Pipeline Steps: {len(steps)}")
 
-    if st.button("Start Reproduction"):
-        # Load source dataset
-        db_manager = DBManager()
-        if hasattr(db_manager, "load_dataset"):
-            # Resolve path first
-            resolved_source = resolve_path(source_dataset)
-            if resolved_source:
-                df, msg = db_manager.load_dataset(resolved_source)
-            else:
-                df, msg = None, f"Source file not found: {source_dataset}"
-        else:
-            # Fallback if db_manager doesn't have load_dataset directly (depending on impl)
-            resolved_source = resolve_path(source_dataset)
-            if resolved_source:
-                try:
-                    if resolved_source.endswith('.csv'):
-                        df = pd.read_csv(resolved_source)
-                        msg = "Success"
-                    elif resolved_source.endswith('.xlsx'):
-                        df = pd.read_excel(resolved_source)
-                        msg = "Success"
-                    else:
-                        df, msg = None, "Unknown format"
-                except Exception as e:
-                    df, msg = None, str(e)
-            else:
-                df, msg = None, "File not found"
-        
-        if df is None:
-            st.error(f"Could not load source dataset: {msg}")
+    if st.button("Start Reproduction", key="btn_start_reproduce"):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+        def on_progress(pct: int, msg: str):
+            progress_bar.progress(pct)
+            status_text.text(msg)
+
+        with st.spinner("Executing reproduction trace..."):
+            result_df, err = execute_trace_pipeline(trace, progress_callback=on_progress)
+
+        progress_bar.empty()
+        status_text.empty()
+
+        if err:
+            st.error(err)
             return
 
-        st.success(f"Loaded source dataset: {source_dataset}")
-        
-        current_df = df.copy()
-        
-        progress_bar = st.progress(0)
-        
-        # Import here to avoid circular dependency
-        from app_pages.data_enrichment import apply_imputer
-        
-        for i, step in enumerate(steps):
-            func_name = step['function']
-            params = step['params']
-            description = step.get('description', func_name)
-            
-            st.write(f"Step {i+1}: {description}")
-            
-            try:
-                if func_name == "enrichment":
-                    # Need to load enrichment file
-                    enrichment_file_path = params.get("enrichment_file_path")
-                    resolved_enrich = resolve_path(enrichment_file_path)
+        st.success("Reproduction Pipeline Complete")
+        st.dataframe(result_df.head(), width="stretch")
 
-                    if not resolved_enrich:
-                        st.error(f"Could not load enrichment file: {enrichment_file_path}. Please ensure the file is accessible.")
-                        return
-
-                    # Try to load enrichment df
-                    try:
-                        if resolved_enrich.endswith('.xlsx'):
-                            enrichment_df = pd.read_excel(resolved_enrich) 
-                        else:
-                            enrichment_df = pd.read_csv(resolved_enrich)
-                    except Exception as e:
-                        st.error(f"Could not load enrichment file: {resolved_enrich} (Original: {enrichment_file_path}). Error: {e}")
-                        return
-                    # identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
-                    # additional_columns = list(set(enrichment_df.columns) - identifier_set)
-                    
-                    identifier = params.get("identifier") or params.get("left_id_names")
-                    identifier_set = {identifier} if isinstance(identifier, str) else set(identifier if identifier else [])
-                    additional_columns = list(set(enrichment_df.columns) - identifier_set)
-
-                    current_df = eed.add_data(
-                        df=current_df,
-                        additional_df=enrichment_df,
-                        left_id_names=identifier,
-                        right_id_names=identifier,
-                        additional_cols=additional_columns,
-                        strategy=params.get("strategy"),
-                        conflict_resolution=params.get("conflict_resolution")
-                    )
-                    
-                elif func_name == "imputation":
-                    current_df, _ = apply_imputer(
-                        data=current_df,
-                        numerical_imputation_method=params.get("numerical_imputation_method"),
-                        categorical_imputation_method=params.get("categorical_imputation_method"),
-                        cat_encoder=params.get("cat_encoder"),
-                        num_scaler=params.get("num_scaler"),
-                        remainder_columns=params.get("remainder_columns"),
-                        remainder_strategy=params.get("remainder_strategy"),
-                        remainder_threshold=params.get("remainder_threshold"),
-                        progress_placeholder=st.empty()
-                    )
-                    
-                elif func_name == "variable_transformation":
-                    result_df = apply_variable_transformation(current_df, params)
-                    if result_df is not None:
-                        current_df = pd.concat([current_df, result_df], axis=1)
-                
-                else:
-                    st.warning(f"Unknown function: {func_name}")
-            
-            except Exception as e:
-                st.error(f"Error in step {i+1}: {e}")
-                return
-
-            progress_bar.progress((i + 1) / len(steps))
-
-        st.success("Reproduction Complete!")
-        st.dataframe(current_df.head())
-        
-        # Option to save
-        if st.button("Save Reproduced Dataset"):
-            db_manager.save_dataset(current_df, base_name=f"reproduced_{source_dataset}")
-            st.success("Saved!")
+        db_manager = DBManager()
+        if st.button("Save Reproduced Dataset", key="btn_save_reproduce", width="stretch"):
+            db_manager.save_dataset(result_df, base_name=f"reproduced_{source_dataset}")
+            st.success("Dataset saved successfully.")

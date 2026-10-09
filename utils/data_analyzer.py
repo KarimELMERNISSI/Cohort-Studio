@@ -4,8 +4,25 @@ Data Analyzer Module.
 Provides the DataAnalyzer class for analyzing and categorizing DataFrame columns.
 This is a consolidated module combining functionality from home.py and visualization_utils.py.
 """
+from dataclasses import dataclass, field
+from typing import List, Dict, Tuple, Optional, Any
 import pandas as pd
 import numpy as np
+
+
+@dataclass(frozen=True)
+class DatasetProfile:
+    """Immutable representation of categorized DataFrame columns."""
+    total_rows: int
+    total_columns: int
+    numeric_cols: List[str] = field(default_factory=list)
+    categorical_cols: List[str] = field(default_factory=list)
+    date_cols: List[str] = field(default_factory=list)
+    binary_cols: List[str] = field(default_factory=list)
+    low_cardinality_numeric_cols: List[str] = field(default_factory=list)
+    high_cardinality_cat_cols: List[str] = field(default_factory=list)
+    timedelta_cols: List[str] = field(default_factory=list)
+    date_formats: Dict[str, str] = field(default_factory=dict)
 
 
 class DataAnalyzer:
@@ -22,18 +39,28 @@ class DataAnalyzer:
     - timedelta_cols: Time interval columns
     """
     
-    def __init__(self, df):
+    def __init__(self, df: pd.DataFrame) -> None:
         """
         Initialize the analyzer with a DataFrame.
         
         Args:
             df: pandas DataFrame to analyze
         """
-        self.df = df
-        self.date_formats = {}
+        self.df: pd.DataFrame = df
+        self.date_formats: Dict[str, str] = {}
+        self.numeric_cols: List[str] = []
+        self.categorical_cols: List[str] = []
+        self.date_cols: List[str] = []
+        self.binary_cols: List[str] = []
+        self.num_binary_cols: List[str] = []
+        self.non_num_binary_cols: List[str] = []
+        self.low_cardinality_numeric_cols: List[str] = []
+        self.non_binary_low_cardinality_numeric_cols: List[str] = []
+        self.timedelta_cols: List[str] = []
+        self.high_cardinality_cat_cols: List[str] = []
         self.analyze_columns()
     
-    def refresh(self, df):
+    def refresh(self, df: pd.DataFrame) -> None:
         """
         Refresh the column metadata based on the latest DataFrame state.
         
@@ -43,11 +70,27 @@ class DataAnalyzer:
         self.df = df
         self.date_formats = {}
         self.analyze_columns()
+
+    @property
+    def profile(self) -> DatasetProfile:
+        """Returns an immutable snapshot of the current dataset profile."""
+        return DatasetProfile(
+            total_rows=len(self.df),
+            total_columns=len(self.df.columns),
+            numeric_cols=list(self.numeric_cols),
+            categorical_cols=list(self.categorical_cols),
+            date_cols=list(self.date_cols),
+            binary_cols=list(self.binary_cols),
+            low_cardinality_numeric_cols=list(self.low_cardinality_numeric_cols),
+            high_cardinality_cat_cols=list(self.high_cardinality_cat_cols),
+            timedelta_cols=list(self.timedelta_cols),
+            date_formats=dict(self.date_formats),
+        )
     
-    def analyze_columns(self):
+    def analyze_columns(self) -> None:
         """Analyze and categorize columns by data type."""
         self.numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
-        self.categorical_cols = self.df.select_dtypes(include=['object', 'category']).columns.tolist()
+        self.categorical_cols = self.df.select_dtypes(include=['object', 'category', 'string']).columns.tolist()
         self.date_cols = self._detect_date_columns()
         self.binary_cols, self.num_binary_cols, self.non_num_binary_cols = self._detect_binary_columns()
         self.low_cardinality_numeric_cols = self._detect_low_cardinality_numeric_columns()
@@ -73,9 +116,9 @@ class DataAnalyzer:
 
         self.high_cardinality_cat_cols = self._detect_high_cardinality_cat_columns()
     
-    def _detect_date_columns(self):
+    def _detect_date_columns(self) -> List[str]:
         """Detect columns that are likely dates, with additional checks for accuracy."""
-        date_cols = []
+        date_cols: List[str] = []
         formats = [
             "%d/%m/%Y",
             "%m/%d/%Y",
@@ -99,7 +142,7 @@ class DataAnalyzer:
                 continue
 
             # Proceed only if column is of object or string type
-            if pd.api.types.is_object_dtype(self.df[col]):
+            if pd.api.types.is_object_dtype(self.df[col]) or pd.api.types.is_string_dtype(self.df[col]):
                 is_date_column = False
                 
                 non_null_values = self.df[col].dropna().astype(str)
@@ -187,7 +230,7 @@ class DataAnalyzer:
         
         return date_cols
 
-    def _detect_binary_columns(self):
+    def _detect_binary_columns(self) -> Tuple[List[str], List[str], List[str]]:
         """
         Detect columns with only two unique values, including numeric columns.
         
@@ -201,16 +244,16 @@ class DataAnalyzer:
                           if self.df[col].nunique() == 2]
         return all_binary, num_binary, non_num_binary
     
-    def _detect_low_cardinality_numeric_columns(self):
+    def _detect_low_cardinality_numeric_columns(self) -> List[str]:
         """Detect numeric columns with <= 10 unique values to treat as categorical."""
         return [col for col in self.numeric_cols if self.df[col].nunique() <= 10]
     
-    def _detect_high_cardinality_cat_columns(self):
+    def _detect_high_cardinality_cat_columns(self) -> List[str]:
         """Detect categorical columns with many unique values."""
         return [col for col in self.categorical_cols 
                 if self.df[col].nunique() > 0.5 * len(self.df)]
 
-    def get_suitable_columns(self, plot_type):
+    def get_suitable_columns(self, plot_type: str) -> Dict[str, Any]:
         """
         Get suitable columns for different plot types.
         

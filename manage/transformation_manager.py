@@ -1,13 +1,15 @@
 import json
 import logging
-from datetime import datetime
-import pandas as pd
-import streamlit as st
 import os
+from datetime import datetime
+from typing import Optional, List, Dict, Tuple, Any, Union
+import pandas as pd
 from utils.data_paths import get_traces_dir
 
+logger = logging.getLogger(__name__)
+
 class TransformationManager:
-    def __init__(self, trace_dir=None):
+    def __init__(self, trace_dir: Optional[str] = None) -> None:
         """
         Initialize the TransformationManager.
         
@@ -17,14 +19,14 @@ class TransformationManager:
              Directory where transformation traces will be stored.
              Defaults to DATA_ROOT/traces via data_paths utility.
         """
-        self.trace_dir = trace_dir if trace_dir else get_traces_dir()
-        self.history = []
-        self.source_dataset = None
-        self.session_id = None
+        self.trace_dir: str = trace_dir if trace_dir else get_traces_dir()
+        self.history: List[Dict[str, Any]] = []
+        self.source_dataset: Optional[str] = None
+        self.session_id: Optional[str] = None
         
         # Ensure trace directory exists (get_traces_dir already does this)
 
-    def initialize_session(self, dataset_name, username=None):
+    def initialize_session(self, dataset_name: str, username: Optional[str] = None) -> None:
         """Initializes a new session trace."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = "".join([c for c in dataset_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
@@ -37,10 +39,10 @@ class TransformationManager:
 
         self.source_dataset = dataset_name
         self.history = []
-        logging.info(f"TransformationManager: Session initialized {self.session_id}")
+        logger.info("TransformationManager: Session initialized %s", self.session_id)
         self.save_trace()
 
-    def get_trace_path(self):
+    def get_trace_path(self) -> Optional[str]:
         """Generates the trace file path based on the session ID."""
         if not self.session_id:
             return None

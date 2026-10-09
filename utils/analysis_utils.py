@@ -131,21 +131,24 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
             sample_info = {"N1": n1, "N2": n2, "Ratio": n2/n1 if n1 > 0 else 0}
             
             # Execution
+            from utils.epidemiology_utils import compute_cohens_d_with_ci
+            d_res = compute_cohens_d_with_ci(groups_data[0], groups_data[1])
+            
             if use_test == "Student's t-test":
                 test_name = "Student's t-test"
                 statistic, p_value = stats.ttest_ind(*groups_data)
-                effect_size = compute_cohens_d(groups_data[0], groups_data[1])
+                effect_size = d_res.estimate
                 effect_size_type = "Cohen's d"
             elif use_test == "Welch's t-test":
                 test_name = "Welch's t-test"
                 statistic, p_value = stats.ttest_ind(*groups_data, equal_var=False)
-                effect_size = compute_cohens_d(groups_data[0], groups_data[1])
+                effect_size = d_res.estimate
                 effect_size_type = "Cohen's d"
             elif use_test == "Mann-Whitney U":
                 test_name = "Mann-Whitney U"
                 statistic, p_value = stats.mannwhitneyu(*groups_data)
                 # Rank-Biserial Correlation r = 1 - (2U)/(n1*n2)
-                effect_size = 1 - (2 * statistic) / (n1 * n2)
+                effect_size = 1 - (2 * statistic) / (n1 * n2) if (n1 * n2) > 0 else 0
                 effect_size_type = "Rank-Biserial r"
 
         else: # > 2 groups
@@ -153,16 +156,18 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
             k = len(groups_data)
             sample_info = {"N_Total": n_total, "k_Groups": k, "N_Per_Group": n_total/k}
 
+            from utils.epidemiology_utils import compute_eta_and_omega_squared
+            eta_omega = compute_eta_and_omega_squared(groups_data)
+
             if use_test == "ANOVA":
                 test_name = "ANOVA"
                 statistic, p_value = stats.f_oneway(*groups_data)
-                effect_size = compute_eta_squared(groups_data)
+                effect_size = eta_omega["eta_squared"]
                 effect_size_type = "Eta Squared"
             elif use_test == "Kruskal-Wallis":
                 test_name = "Kruskal-Wallis"
                 statistic, p_value = stats.kruskal(*groups_data)
                 # Eta-Squared H (η²H) for Kruskal-Wallis (Tomczak & Tomczak, 2014)
-                # Formula: η²H = (H - k + 1) / (n - k)
                 effect_size = (statistic - k + 1) / (n_total - k) if (n_total - k) > 0 else 0
                 effect_size_type = "η²H"
 
@@ -172,7 +177,7 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         n_total = contingency_table.sum().sum()
         r, c = contingency_table.shape
         min_dim = min(r-1, c-1)
-        sample_info = {"N_Total": n_total, "N_Cats": (r-1)*(c-1) + 1, "Min_Dim": min_dim} # Approx df+1 or just cells
+        sample_info = {"N_Total": n_total, "N_Cats": (r-1)*(c-1) + 1, "Min_Dim": min_dim}
         
         # Check expected frequencies for Fisher's Exact
         chi2, p, dof, expected = stats.chi2_contingency(contingency_table)
@@ -187,31 +192,41 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         else:
             use_test = manual_test
 
+        epi_2x2_data = None
+        if contingency_table.shape == (2, 2):
+            from utils.epidemiology_utils import calculate_2x2_epidemiology_metrics
+            try:
+                epi_res = calculate_2x2_epidemiology_metrics(contingency_table)
+                epi_2x2_data = epi_res.model_dump()
+            except Exception as e_epi:
+                logger.debug(f"2x2 epidemiology calculation notice: {e_epi}")
+
         if use_test == "Fisher's Exact":
             test_name = "Fisher's Exact"
-            # Fisher is typically for 2x2. If larger, we might need Monte Carlo or just Chi2 with warning.
             if contingency_table.shape == (2, 2):
                 statistic, p_value = stats.fisher_exact(contingency_table)
-                # Fisher returns odds ratio as statistic
-                effect_size = statistic # Odds Ratio
+                effect_size = epi_2x2_data["odds_ratio"] if epi_2x2_data else statistic
                 effect_size_type = "Odds Ratio"
             else:
-                # Fallback for larger tables if Fisher requested but not 2x2
                 test_name = "Chi-Square (Fisher N/A for >2x2)"
                 statistic, p_value, dof, expected = stats.chi2_contingency(contingency_table)
                 effect_size = compute_cramers_v(contingency_table)
                 effect_size_type = "Cramer's V"
-                reasoning.append("Fisher's Exact not available for >2x2 tables in this version. Used Chi-Square.")
+                reasoning.append("Fisher's Exact not available for >2x2 tables. Used Chi-Square.")
 
         else:
             test_name = "Chi-Square"
             statistic, p_value, dof, expected = stats.chi2_contingency(contingency_table)
-            effect_size = compute_cramers_v(contingency_table)
-            effect_size_type = "Cramer's V"
+            if contingency_table.shape == (2, 2) and epi_2x2_data:
+                effect_size = epi_2x2_data["odds_ratio"]
+                effect_size_type = "Odds Ratio"
+            else:
+                effect_size = compute_cramers_v(contingency_table)
+                effect_size_type = "Cramer's V"
             
         assumption_notes = reasoning
 
-    return {
+    ret_dict = {
         "Variable": target,
         "Test Used": test_name,
         "Statistic": statistic,
@@ -221,6 +236,10 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         "Assumptions": "; ".join(assumption_notes),
         "Sample Info": sample_info
     }
+    if 'epi_2x2_data' in locals() and epi_2x2_data:
+        ret_dict["epi_2x2"] = epi_2x2_data
+    return ret_dict
+
 
 def recommend_statistical_test(df, group_col, target_col, numeric_cols, categorical_cols, binary_cols):
     # Returns a recommended test and the reasoning based on data properties.
@@ -344,20 +363,15 @@ def perform_post_hoc(df, group_col, target_col, test_type):
     return None
 
 def compute_cohens_d(group1, group2):
-    # Compute Cohen's d for two independent groups.
-    n1, n2 = len(group1), len(group2)
-    var1, var2 = np.var(group1, ddof=1), np.var(group2, ddof=1)
-    pooled_se = np.sqrt(((n1 - 1) * var1 + (n2 - 1) * var2) / (n1 + n2 - 2))
-    if pooled_se == 0: return 0
-    return (np.mean(group1) - np.mean(group2)) / pooled_se
+    """Compute Cohen's d for two independent groups."""
+    from utils.epidemiology_utils import compute_cohens_d_with_ci
+    return compute_cohens_d_with_ci(group1, group2).estimate
 
 def compute_eta_squared(groups_data):
-    # Compute Eta Squared for ANOVA.
-    all_data = np.concatenate(groups_data)
-    grand_mean = np.mean(all_data)
-    sst = np.sum((all_data - grand_mean)**2)
-    ssb = sum(len(g) * (np.mean(g) - grand_mean)**2 for g in groups_data)
-    return ssb / sst if sst != 0 else 0
+    """Compute Eta Squared for ANOVA."""
+    from utils.epidemiology_utils import compute_eta_and_omega_squared
+    return compute_eta_and_omega_squared(groups_data)["eta_squared"]
+
 
 def compute_cramers_v(confusion_matrix):
     # Compute Cramer's V for categorical association.

@@ -21,7 +21,8 @@ class TraceDocumenter:
                 with open(trace_source, 'r') as f:
                     self.trace = json.load(f)
             except Exception as e:
-                print(f"Error loading trace file: {e}")
+                import logging
+                logging.getLogger(__name__).error("Error loading trace file: %s", e)
         
     def generate_report(self):
         """

@@ -41,13 +41,16 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
     # Drop the 'top' and 'freq' columns
     stats_df = stats_df.drop(['top', 'freq'], axis=1, errors='ignore')
 
+    # Vectorized computation of distinct value counts
+    col_uniques = df.nunique()
+
     # Identify categorical columns based on the number of distinct values
     categorical_columns = df.select_dtypes(include=['object', 'category', 'bool']).columns
     if exclude_columns:
         categorical_columns = [col for col in categorical_columns if col not in exclude_columns]
 
     for col in categorical_columns:
-        if df[col].nunique() < qual_var_threshold:  # Adjust the threshold as needed
+        if col_uniques.get(col, 0) < qual_var_threshold:  # Adjust the threshold as needed
             # Calculate top categories and their percentages for each categorical column
             value_counts = df[col].value_counts()
             percentage_counts = (value_counts / len(df)) * 100
@@ -59,7 +62,7 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
                 stats_df.at[col, f'top_{i}_representation'] = representation
     
     stats_df['fill_percentage'] = (1 - df.isnull().mean()) * 100  # Calculate fill percentage
-    stats_df['nb_modalities'] = df.apply(lambda x: x.nunique())
+    stats_df['nb_modalities'] = col_uniques
     stats_df['variable_type'] = df.dtypes
 
     # Helper to safely convert Timestamp/Timedelta to string for Arrow compatibility
@@ -69,8 +72,8 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
                  return str(val)
         return val
 
-    # Apply conversion to the entire stats DataFrame
-    stats_df = stats_df.applymap(safe_str_conversion)
+    # Apply conversion to the entire stats DataFrame (map replaces deprecated applymap in pandas 3.0)
+    stats_df = stats_df.map(safe_str_conversion)
 
     # Force conversion of potential mixed-type columns to string to prevent ArrowInvalid
     mixed_type_cols = ['min', 'max', '25%', '50%', '75%']
@@ -223,7 +226,7 @@ def produce_latex_table(df, columns=None, filename="output.tex", unicode_latex_m
     
     # Define multi-level columns
     if has_multi_index:
-        df.drop(list(df.filter(regex='top|unique')), axis=1, inplace=True) # LAAAAAAAAA
+        df = df.drop(list(df.filter(regex='top|unique')), axis=1) # LAAAAAAAAA
         print("####--> in : ",df.columns)
         #df.drop(columns=[(col, subcol) for (col,subcol) in df.columns if not (subcol.endswith('unique') or subcol.str.contains('top'))])
         column_tuples = [('INFO', col, subcol) if subcol in ['nb_modalities','count', 'fill_percentage','variable_type'] else ('DESCRIPTIVE STATISTICS', col, subcol) if not (subcol.endswith('_p_value') or subcol.endswith('_statistic')) else ('AB TESTING', col, subcol) for (col, subcol) in df.columns]
@@ -356,7 +359,7 @@ def produce_xlsx_table(df, columns=None, filename="output.xlsx", title='Data Rep
     
     # Define multi-level columns
     if has_multi_index:
-        df.drop(list(df.filter(regex='top|unique')), axis=1, inplace=True) # LAAAAAAAAA
+        df = df.drop(list(df.filter(regex='top|unique')), axis=1) # LAAAAAAAAA
         print("####--> in : ",df.columns)
         #df.drop(columns=[(col, subcol) for (col,subcol) in df.columns if not (subcol.endswith('unique') or subcol.str.contains('top'))])
         column_tuples = [('INFO', col, subcol) if subcol in ['nb_modalities','count', 'fill_percentage','variable_type'] else ('DESCRIPTIVE STATISTICS', col, subcol) if not (subcol.endswith('_p_value') or subcol.endswith('_statistic')) else ('AB TESTING', col, subcol) for (col, subcol) in df.columns]
@@ -457,7 +460,7 @@ def produce_html_table(df, columns=None, filename="output.html", title='Data Rep
     
     # Define multi-level columns
     if has_multi_index:
-        df.drop(list(df.filter(regex='top|unique')), axis=1, inplace=True) # LAAAAAAAAA
+        df = df.drop(list(df.filter(regex='top|unique')), axis=1) # LAAAAAAAAA
         print("####--> in : ",df.columns)
         #df.drop(columns=[(col, subcol) for (col,subcol) in df.columns if not (subcol.endswith('unique') or subcol.str.contains('top'))])
         column_tuples = [('INFO', col, subcol) if subcol in ['nb_modalities', 'count', 'fill_percentage','variable_type'] else ('DESCRIPTIVE STATISTICS', col, subcol) if not (subcol.endswith('_p_value') or subcol.endswith('_statistic')) else ('AB TESTING', col, subcol) for (col, subcol) in df.columns]

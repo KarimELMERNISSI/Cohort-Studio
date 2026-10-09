@@ -1,7 +1,11 @@
+import logging
+from typing import Optional, Dict, List, Any, Union
 import pandas as pd
 import numpy as np
 from pandas.api.types import is_numeric_dtype, is_datetime64_any_dtype
 import enrich.custom_metrics_and_filters as ecm
+
+logger = logging.getLogger(__name__)
 
 class DataQualityAuditor:
     """
@@ -13,31 +17,34 @@ class DataQualityAuditor:
     - Clinical Validity: Compliance with declared anomaly criteria.
     """
 
-    def __init__(self, df, config=None):
-        self.df = df
+    def __init__(self, df: pd.DataFrame, config: Optional[Any] = None) -> None:
+        self.df: pd.DataFrame = df
         self.config = config
-        self.metrics = {}
-        self.advice = []
+        self.metrics: Dict[str, float] = {}
+        self.advice: List[Dict[str, str]] = []
+        self.clinical_anomalies_df = None
+        self.clinical_anomalies_booleans = None
+        self.uniformity_details: List[Dict[str, str]] = []
 
-    def compute_completeness(self):
+    def compute_completeness(self) -> float:
         """Calculates the percentage of non-missing values."""
         total_cells = self.df.size
         if total_cells == 0:
             return 0.0
         missing_cells = self.df.isnull().sum().sum()
         score = (1 - (missing_cells / total_cells)) * 100
-        return round(score, 2)
+        return round(float(score), 2)
 
-    def compute_uniqueness(self):
+    def compute_uniqueness(self) -> float:
         """Calculates the percentage of unique rows."""
         total_rows = len(self.df)
         if total_rows == 0:
             return 0.0
         unique_rows = len(self.df.drop_duplicates())
         score = (unique_rows / total_rows) * 100
-        return round(score, 2)
+        return round(float(score), 2)
 
-    def compute_validity(self, method=None, params=None):
+    def compute_validity(self, method: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> float:
         """
         Calculates a validity score based on the absence of outliers in numerical columns.
         
@@ -55,10 +62,10 @@ class DataQualityAuditor:
         if params is None:
             params = {"multiplier": 1.5} if method == "iqr" else {}
         
-        print(f"[DEBUG compute_validity] method={method}, params={params}")
+        logger.debug("compute_validity method=%s, params=%s", method, params)
         
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
-        print(f"[DEBUG compute_validity] numeric_cols={list(numeric_cols)}")
+        logger.debug("compute_validity numeric_cols=%s", list(numeric_cols))
         
         if len(numeric_cols) == 0:
             return 100.0  # No numeric columns to be invalid
@@ -110,7 +117,7 @@ class DataQualityAuditor:
                 
                 total_outliers += outliers
                 total_numeric_values += len(data)
-                print(f"[DEBUG compute_validity] col={col}, outliers={outliers}, total_outliers={total_outliers}")
+                logger.debug("compute_validity col=%s, outliers=%s, total=%s", col, outliers, total_outliers)
         
         # Multivariate ML methods
         elif method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
@@ -121,7 +128,7 @@ class DataQualityAuditor:
                 from sklearn.preprocessing import StandardScaler
                 
                 ml_data = self.df[numeric_cols].dropna()
-                print(f"[DEBUG compute_validity] ML method, data shape={ml_data.shape}")
+                logger.debug("compute_validity ML method, data shape=%s", ml_data.shape)
                 
                 if len(ml_data) > 10:
                     scaler = StandardScaler()
@@ -141,30 +148,30 @@ class DataQualityAuditor:
                     
                     total_outliers = (predictions == -1).sum()
                     total_numeric_values = len(ml_data)
-                    print(f"[DEBUG compute_validity] ML outliers={total_outliers}")
+                    logger.debug("compute_validity ML outliers=%s", total_outliers)
                 else:
-                    print(f"[DEBUG compute_validity] Not enough data for ML: {len(ml_data)}")
+                    logger.debug("compute_validity not enough data for ML: %s", len(ml_data))
                     return 100.0  # Not enough data
             except ImportError as e:
-                print(f"[DEBUG compute_validity] ImportError: {e}")
+                logger.warning("compute_validity ImportError: %s, falling back to IQR", e)
                 # Fall back to IQR if sklearn not available
                 return self.compute_validity(method="iqr")
 
         if total_numeric_values == 0:
-            print(f"[DEBUG compute_validity] total_numeric_values=0, returning 100")
+            logger.debug("compute_validity total_numeric_values=0, returning 100")
             return 100.0
 
         # Score penalizes outliers
         score = (1 - (total_outliers / total_numeric_values)) * 100
-        print(f"[DEBUG compute_validity] total_outliers={total_outliers}, total_values={total_numeric_values}, score={score}")
-        return round(score, 2)
+        logger.debug("compute_validity total_outliers=%s, total_values=%s, score=%s", total_outliers, total_numeric_values, score)
+        return round(float(score), 2)
 
-    def compute_consistency(self):
+    def compute_consistency(self) -> float:
         """
-        Approximates consistency by checking if object columns could be converted to numeric or datetime.
-        If a column is 'object' but contains mostly numbers, it might be inconsistent formatting.
+        Approximates consistency by checking if text/object columns could be converted to numeric or datetime.
+        If a column is text but contains mostly numbers, it might be inconsistent formatting.
         """
-        object_cols = self.df.select_dtypes(include=['object']).columns
+        object_cols = self.df.select_dtypes(include=['object', 'string']).columns
         if len(object_cols) == 0:
             return 100.0
 
@@ -190,7 +197,7 @@ class DataQualityAuditor:
         score = (1 - (inconsistent_cols / len(object_cols))) * 100
         return round(score, 2)
 
-    def compute_clinical_validity(self):
+    def compute_clinical_validity(self) -> Optional[float]:
         """
         Calculates a score based on declared anomaly criteria (if available).
         Score = 100 - (% of rows triggering at least one anomaly).
@@ -252,17 +259,17 @@ class DataQualityAuditor:
             return round(score, 2)
             
         except Exception as e:
-            print(f"Error computing clinical validity: {e}")
+            logger.error("Error computing clinical validity: %s", e)
             return None
 
-    def compute_uniformity(self):
+    def compute_uniformity(self) -> float:
         """
         Checks for string uniformity issues:
         - Leading/trailing whitespace.
         - Inconsistent capitalization (e.g., 'Male' vs 'male').
         """
         self.uniformity_details = []
-        object_cols = self.df.select_dtypes(include=['object']).columns
+        object_cols = self.df.select_dtypes(include=['object', 'string']).columns
         if len(object_cols) == 0:
             return 100.0
         
@@ -385,7 +392,7 @@ class DataQualityAuditor:
         cols_with_missing = [col for col in self.df.columns if self.df[col].isnull().any()]
         
         if not cols_with_missing:
-            return {"p_value": 1.0, "interpretation": "No missing data (MCAR trivially true)"}
+            return {"p_value": 1.0, "interpretation": "No missing data (MCAR trivially true)", "is_mcar": True}
             
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
         
@@ -407,7 +414,7 @@ class DataQualityAuditor:
                     except: pass
         
         if not p_values:
-             return {"p_value": 1.0, "interpretation": "Insufficient data to test MCAR"}
+             return {"p_value": 1.0, "interpretation": "Insufficient data to test MCAR", "is_mcar": True}
              
         # Combine p-values (Fisher's method would be better, but simple min with Bonferroni is conservative)
         # Here we just return the minimum p-value as a signal of the strongest dependency found.
@@ -423,7 +430,11 @@ class DataQualityAuditor:
             "is_mcar": is_mcar
         }
 
-    def run_audit(self, validity_method=None, validity_params=None):
+    def run_audit(
+        self, 
+        validity_method: Optional[str] = None, 
+        validity_params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Optional[float]]:
         """Runs all checks and populates metrics and advice.
         
         Parameters:

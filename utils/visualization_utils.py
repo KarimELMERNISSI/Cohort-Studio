@@ -1015,7 +1015,10 @@ def create_correlation_matrix_streamlit(
     data_filtered = data[cols]
 
     # Calculate the correlation matrix
-    corr_matrix = data_filtered.corr(method=method)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=Warning)
+        corr_matrix = data_filtered.corr(method=method)
 
     # Initialize variables for clustering
     row_order = corr_matrix.index.tolist()
