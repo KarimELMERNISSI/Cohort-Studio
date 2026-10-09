@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cohort Monitoring Package — Clinical Cohort Intelligence & Epidemiological Analytics</title>
+  <meta name="description" content="Open-source clinical cohort intelligence and epidemiological analytics platform. High-performance DuckDB Parquet versioning, biostatistical diagnostics, and model-agnostic medical RAG.">
+  <meta name="keywords" content="clinical cohorts, epidemiology, biostatistics, duckdb, parquet, streamlit, medical rag, data quality, data science">
+  <meta property="og:title" content="Cohort Monitoring Package — Clinical Cohort Intelligence">
+  <meta property="og:description" content="High-performance DuckDB Parquet versioning, biostatistical diagnostics, and model-agnostic medical RAG in an intuitive, production-ready interface.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://karimelmernissi.github.io/Cohort-Monitoring-Package/">
+  <meta property="og:image" content="assets/logo.png">
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" href="assets/logo.png">
+</head>
+<body>
+  <div class="bg-glow-top"></div>
+  <div class="bg-glow-middle"></div>
+
+  <!-- Header & Navigation -->
+  <header class="header">
+    <div class="container nav-wrapper">
+      <a href="#" class="brand">
+        <img src="assets/logo.png" alt="Cohort Monitoring Package Logo" class="brand-logo">
+        <span class="brand-text">Cohort Monitoring</span>
+        <span class="brand-tag">v0.2.0</span>
+      </a>
+
+      <ul class="nav-menu">
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#biostatistics" class="nav-link">Biostatistics</a></li>
+        <li><a href="#benchmark" class="nav-link">Benchmark</a></li>
+        <li><a href="#architecture" class="nav-link">Architecture</a></li>
+        <li><a href="#docs" class="nav-link">Documentation</a></li>
+        <li><a href="#install" class="nav-link">Quickstart</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="#install" class="btn btn-primary btn-sm">Get Started</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="badge-pill">
+        <span class="badge-dot"></span>
+        <span>Python 3.14+ · DuckDB 1.5+ · 69/69 Unit Tests Passing (100%)</span>
+      </div>
+
+      <h1 class="hero-title">
+        High-Performance <span class="text-gradient">Clinical Cohort Intelligence</span> & Epidemiological Analytics
+      </h1>
+
+      <p class="hero-desc">
+        Zero-lock-in DuckDB Parquet versioning, rigorous biostatistical diagnostics, and model-agnostic medical RAG in an open-source, production-ready platform.
+      </p>
+
+      <div class="hero-cta">
+        <a href="#install" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          Quick Start Installation
+        </a>
+        <a href="#features" class="btn btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Explore Features
+        </a>
+      </div>
+
+      <!-- Quickstart Copy Box -->
+      <div class="terminal-box">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+          </div>
+          <span class="terminal-title">bash · quickstart with uv</span>
+          <button class="copy-btn" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git && cd Cohort-Monitoring-Package && uv sync && uv run streamlit run main.py">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copy
+          </button>
+        </div>
+        <div class="terminal-content">
+          <div>
+            <span class="terminal-prompt">$</span>
+            <span>git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git &amp;&amp; uv sync</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Metric Tiles -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val"><span class="stat-val-accent">DuckDB</span> 1.5+</div>
+          <div class="stat-label">Zero-Lock-In Storage</div>
+          <div class="stat-desc">Columnar Parquet snapshots with automatic atomic version increments.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val"><span class="stat-val-accent">69 / 69</span></div>
+          <div class="stat-label">Automated Tests Passed</div>
+          <div class="stat-desc">100% pass rate across biostatistics, auth, DuckDB, RAG and lineage.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val"><span class="stat-val-accent">4</span> Providers</div>
+          <div class="stat-label">Model-Agnostic RAG</div>
+          <div class="stat-desc">Air-gapped local Ollama, Google Gemini, OpenAI &amp; Mistral connectors.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val"><span class="stat-val-accent">100%</span> Reproducible</div>
+          <div class="stat-label">Pipeline Trace Replay</div>
+          <div class="stat-desc">Complete multi-step transformation replay engine with automated Word .docx dossiers.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Feature Showcase -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Core Capabilities</span>
+        <h2 class="section-title">Designed for Clinical Research Rigor</h2>
+        <p class="section-desc">
+          Replace disjointed notebooks and opaque spreadsheet workflows with an integrated, auditable epidemiological platform.
+        </p>
+      </div>
+
+      <div class="showcase-tabs">
+        <button class="tab-btn active" data-tab="tab-duckdb">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          DuckDB Parquet Engine
+        </button>
+        <button class="tab-btn" data-tab="tab-biostat">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+          Biostatistics &amp; Epidemiology
+        </button>
+        <button class="tab-btn" data-tab="tab-rag">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          Model-Agnostic RAG
+        </button>
+        <button class="tab-btn" data-tab="tab-quality">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          Quality &amp; Reproducibility
+        </button>
+      </div>
+
+      <!-- Tab 1: DuckDB -->
+      <div id="tab-duckdb" class="showcase-panel active">
+        <div class="panel-content">
+          <h3 class="panel-title">Columnar Parquet Persistence &amp; Automated Versioning</h3>
+          <p class="panel-desc">
+            DuckDB powers in-process columnar transformations and exports datasets directly to versioned Parquet files. Zero connection lock-in, transactional stability, and multi-user data isolation.
+          </p>
+          <ul class="panel-features">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Atomic Versioning:</strong> Saves version snapshots (e.g. <code>cardio_cohort_v1</code>, <code>v2</code>) with metadata.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Ultra-Fast Statistics Cache:</strong> Pre-calculates numerical and categorical aggregates in Parquet format.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Isolated User Namespaces:</strong> Row-level privacy and directory boundaries enforced per research account.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="panel-code">
+          <pre><code><span class="token-cm"># Native DuckDB Parquet Persistence with Versioning</span>
+<span class="token-kw">from</span> manage.db_manager <span class="token-kw">import</span> DBManager
+
+db = DBManager()
+
+<span class="token-cm"># Persist snapshot with automatic version increment</span>
+ok, msg, version_id = db.save_dataset(
+    df=clinical_df, 
+    base_name=<span class="token-str">"diabetic_cohort"</span>, 
+    username=<span class="token-str">"dr_smith"</span>
+)
+<span class="token-fn">print</span>(version_id)  <span class="token-cm"># -> "dr_smith_diabetic_cohort_v2"</span>
+
+<span class="token-cm"># Reload dataset with zero-copy DuckDB execution</span>
+df_loaded, msg = db.load_dataset(<span class="token-str">"diabetic_cohort_v2"</span>)</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 2: Biostat -->
+      <div id="tab-biostat" class="showcase-panel">
+        <div class="panel-content">
+          <h3 class="panel-title">Statistically Rigorous Epidemiological Inference</h3>
+          <p class="panel-desc">
+            Automates the selection between parametric and non-parametric tests while computing clinical effect sizes, adjusting for covariates (ANCOVA), and diagnosing missingness patterns.
+          </p>
+          <ul class="panel-features">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>2x2 Contingency Epidemiology:</strong> Relative Risk, Odds Ratio with Haldane-Anscombe zero-cell correction.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Effect Sizes:</strong> Cohen's d, Hedges' g (small-sample correction), Eta-squared (&eta;&sup2;), and Omega-squared (&omega;&sup2;).</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Missingness Diagnostics:</strong> Little's MCAR permutation test with pairwise MAR dependency tests.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="panel-code">
+          <pre><code><span class="token-cm"># Epidemiological 2x2 Trial & Effect Size Analysis</span>
+<span class="token-kw">from</span> explore.epidemiology_stats <span class="token-kw">import</span> (
+    calculate_2x2_epidemiology, 
+    calculate_effect_size
+)
+
+<span class="token-cm"># Cohort Risk Ratio with small-sample correction</span>
+epi_res = calculate_2x2_epidemiology(
+    table_df=table_2x2,
+    study_type=<span class="token-str">"cohort"</span>,
+    correction=<span class="token-str">"haldane_anscombe"</span>
+)
+<span class="token-fn">print</span>(f<span class="token-str">"RR: {epi_res['relative_risk']} (CI: {epi_res['rr_ci_lower']}-{epi_res['rr_ci_upper']})"</span>)
+
+<span class="token-cm"># Hedges' g with exact unbiased gamma approximation</span>
+eff = calculate_effect_size(group_a, group_b, method=<span class="token-str">"hedges_g"</span>)
+<span class="token-fn">print</span>(f<span class="token-str">"Hedges' g: {eff['effect_size']} ({eff['magnitude']})"</span>)</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 3: RAG -->
+      <div id="tab-rag" class="showcase-panel">
+        <div class="panel-content">
+          <h3 class="panel-title">Model-Agnostic Medical RAG Architecture</h3>
+          <p class="panel-desc">
+            Directly connect your chosen LLM backend—from cloud providers like Google Gemini, OpenAI, and Mistral, to local air-gapped Ollama instances for strictly privacy-compliant hospital deployments.
+          </p>
+          <ul class="panel-features">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Air-Gapped Ollama:</strong> On-premise local inference with Llama 3, Mistral, or Qwen without external API calls.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Medical Semantic Renaming:</strong> AI suggestions mapped to UMLS, LOINC, and SNOMED CT clinical codes.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Knowledge Graph Refinement:</strong> Generates and repairs yFiles biomedical concept taxonomy graphs.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="panel-code">
+          <pre><code><span class="token-cm"># Pluggable RAG Connector (Local Ollama or Cloud Gemini)</span>
+<span class="token-kw">from</span> manage.rag_connectors <span class="token-kw">import</span> ConnectorFactory
+<span class="token-kw">from</span> manage.rag_schemas <span class="token-kw">import</span> RAGProviderConfig
+
+<span class="token-cm"># Air-Gapped Hospital On-Premise Deployment</span>
+ollama_config = RAGProviderConfig(
+    provider=<span class="token-str">"ollama"</span>,
+    base_url=<span class="token-str">"http://localhost:11434"</span>,
+    chat_model=<span class="token-str">"llama3:8b"</span>
+)
+connector = ConnectorFactory.create(ollama_config)
+chat_model = connector.get_chat_model()
+embeddings = connector.get_embeddings()</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 4: Quality & Reproducibility -->
+      <div id="tab-quality" class="showcase-panel">
+        <div class="panel-content">
+          <h3 class="panel-title">Quality Scoring, Audit Trails &amp; Deterministic Reproducibility</h3>
+          <p class="panel-desc">
+            Evaluate cohort health across completeness, uniqueness, consistency, and clinical rules while ensuring complete workflow reproducibility. Rather than producing only static documentation, CMP captures deterministic execution traces that re-execute entire multi-step transformation pipelines (enrichment joins, MICE/MissForest imputations, feature scaling), alongside generating signed Word (.docx) audit dossiers.
+          </p>
+          <ul class="panel-features">
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Multi-Dimensional Scoring:</strong> Completeness, Uniqueness, Uniformity, and IQR / ML Outlier Validity.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Clinical Anomaly Rules:</strong> Evaluates boolean mask expressions to highlight biologically implausible values.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>End-to-End Pipeline Reproduction:</strong> Deterministic replay engine re-executes complete multi-step transformations (enrichment joins, MICE/MissForest imputers, mathematical transforms) headless or interactively to reproduce exact analytical datasets.</span>
+            </li>
+            <li>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span><strong>Signed Word (.docx) Dossiers:</strong> Auto-generates audit certificates and transformation parameter manifests ready for peer review.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="panel-code">
+          <pre><code><span class="token-cm"># 1. Multi-Dimensional Quality Audit</span>
+<span class="token-kw">from</span> explore.data_quality_auditor <span class="token-kw">import</span> DataQualityAuditor
+auditor = DataQualityAuditor(df=cohort_df, config=rules_config)
+metrics = auditor.run_audit(validity_method=<span class="token-str">"iqr"</span>)
+
+<span class="token-cm"># 2. Re-Execute Complete Transformation Pipeline</span>
+<span class="token-kw">from</span> manage.reproduction_manager <span class="token-kw">import</span> execute_trace_pipeline
+
+<span class="token-cm"># Deterministically replays joins, imputers & transforms</span>
+reproduced_df, err = execute_trace_pipeline(trace_data)
+<span class="token-kw">assert</span> err <span class="token-kw">is None</span>
+<span class="token-fn">print</span>(f<span class="token-str">"Pipeline reproduced: {reproduced_df.shape}"</span>)</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detailed Benchmark Matrix (Solon Style) -->
+  <section id="benchmark" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Comparative Benchmark</span>
+        <h2 class="section-title">Cohort Monitoring Package vs Alternatives</h2>
+        <p class="section-desc">
+          How our architecture measures up against traditional manual Python/R scripts and commercial EDC platforms.
+        </p>
+      </div>
+
+      <div class="comparison-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Evaluation Dimension</th>
+              <th>Ad-Hoc Scripts / Notebooks</th>
+              <th>Commercial EDC (REDCap / Medidata)</th>
+              <th class="highlight-col">Cohort Monitoring Package</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Storage Engine</strong></td>
+              <td>In-memory Pandas / CSVs <span class="badge-tag loss">Slow on scale</span></td>
+              <td>Row-based SQL / Cloud RDBMS <span class="badge-tag neutral">Proprietary</span></td>
+              <td class="highlight-col">Embedded DuckDB Columnar Parquet <span class="badge-tag win">Zero-Lock-in</span></td>
+            </tr>
+            <tr>
+              <td><strong>Dataset Versioning</strong></td>
+              <td>Manual copies or Git LFS <span class="badge-tag loss">Fragile</span></td>
+              <td>Audit log only (no snapshot storage) <span class="badge-tag neutral">Limited</span></td>
+              <td class="highlight-col">Automated Zero-Copy Versioning (_v1, _v2) <span class="badge-tag win">Native</span></td>
+            </tr>
+            <tr>
+              <td><strong>Biostatistical Test Guidance</strong></td>
+              <td>Manual script assembly <span class="badge-tag loss">Manual</span></td>
+              <td>Add-on export required <span class="badge-tag loss">External</span></td>
+              <td class="highlight-col">Automated Normality &amp; Test Recommendation <span class="badge-tag win">Built-in</span></td>
+            </tr>
+            <tr>
+              <td><strong>Missingness Diagnostics</strong></td>
+              <td>Custom R or Python code <span class="badge-tag neutral">Ad-hoc</span></td>
+              <td>None <span class="badge-tag loss">Unavailable</span></td>
+              <td class="highlight-col">Automated Little's MCAR &amp; Pairwise MAR <span class="badge-tag win">Automated</span></td>
+            </tr>
+            <tr>
+              <td><strong>Clinical Anomaly Rules</strong></td>
+              <td>Hardcoded if-else statements <span class="badge-tag loss">Fragile</span></td>
+              <td>Form field validation rules <span class="badge-tag neutral">Basic</span></td>
+              <td class="highlight-col">Declarative Expression Masks &amp; Highlight Grid <span class="badge-tag win">Configurable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Model-Agnostic Medical RAG</strong></td>
+              <td>Disconnected LLM chats <span class="badge-tag loss">None</span></td>
+              <td>None <span class="badge-tag loss">None</span></td>
+              <td class="highlight-col">Local Ollama, Gemini, OpenAI, Mistral <span class="badge-tag win">Air-Gapped Capable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Pipeline Audit &amp; Replay</strong></td>
+              <td>Jupyter cells (non-linear, fragile) <span class="badge-tag loss">High Risk</span></td>
+              <td>Static PDF log (no execution replay) <span class="badge-tag neutral">Static</span></td>
+              <td class="highlight-col">Full Pipeline Re-Execution (Headless &amp; UI) + Word Dossiers <span class="badge-tag win">Full Replay</span></td>
+            </tr>
+            <tr>
+              <td><strong>Test Suite &amp; Reliability</strong></td>
+              <td>Typically unverified <span class="badge-tag loss">Untested</span></td>
+              <td>Vendor validation package <span class="badge-tag neutral">Vendor SLA</span></td>
+              <td class="highlight-col">69/69 Automated Pytest Suite Passing (100%) <span class="badge-tag win">Transparent</span></td>
+            </tr>
+            <tr>
+              <td><strong>Cost &amp; License</strong></td>
+              <td>Open, but maintenance overhead <span class="badge-tag neutral">High Effort</span></td>
+              <td>Expensive annual SaaS seat pricing <span class="badge-tag loss">Commercial</span></td>
+              <td class="highlight-col">Free &amp; Open Source (Apache 2.0) <span class="badge-tag win">Free</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Biostatistics Rigor Showcase -->
+  <section id="biostatistics" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Methodological Excellence</span>
+        <h2 class="section-title">Built-In Clinical Biostatistics Suite</h2>
+        <p class="section-desc">
+          Automated decision engines adhering to STROBE and CONSORT reporting guidelines.
+        </p>
+      </div>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
+          </div>
+          <h3 class="arch-title">Parametric &amp; Non-Parametric</h3>
+          <p class="arch-desc">
+            Shapiro-Wilk and D'Agostino normality screening routes data between Student's t-test, Welch's t-test (unequal variances), Mann-Whitney U, One-Way ANOVA, Kruskal-Wallis, Welch's ANOVA, and Games-Howell post-hoc tests.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+          </div>
+          <h3 class="arch-title">2x2 Cohort &amp; Case-Control</h3>
+          <p class="arch-desc">
+            Relative Risk (RR), Odds Ratio (OR), and Risk Difference (RD) calculations featuring Haldane-Anscombe zero-cell continuity corrections (+0.5) to prevent infinite odds ratios in rare clinical outcomes.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+          </div>
+          <h3 class="arch-title">Clinical Effect Sizes</h3>
+          <p class="arch-desc">
+            Computes Cohen's d, Hedges' g (with exact unbiased gamma factor for small cohort sizes), Eta-squared (&eta;&sup2;), and Omega-squared (&omega;&sup2;) to evaluate medical impact beyond statistical significance.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+          </div>
+          <h3 class="arch-title">Little's MCAR Diagnostics</h3>
+          <p class="arch-desc">
+            Heuristic Little's MCAR missingness permutation test combined with bivariate MAR tests. Identifies whether variable omissions are completely at random or dependent on clinical covariates.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line></svg>
+          </div>
+          <h3 class="arch-title">Multivariate ANCOVA</h3>
+          <p class="arch-desc">
+            Evaluates treatment efficacy while adjusting for continuous clinical covariates. Automatically validates the assumption of homogeneity of regression slopes before reporting adjusted means.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M16 12l-4-4-4 4M12 16V8"></path></svg>
+          </div>
+          <h3 class="arch-title">Diagnostic Test Accuracy</h3>
+          <p class="arch-desc">
+            Complete screening benchmark: Sensitivity, Specificity, Positive/Negative Predictive Value (PPV/NPV), Youden's Index J, Positive/Negative Likelihood Ratios (LR+, LR-), and ROC AUC curve profiling.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architectural Blueprint -->
+  <section id="architecture" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">System Design</span>
+        <h2 class="section-title">Clean, Modular Layered Architecture</h2>
+        <p class="section-desc">
+          Strict separation of concerns across presentation, domain calculation, orchestration, and persistence layers.
+        </p>
+      </div>
+
+      <div class="arch-grid">
+        <div class="arch-card">
+          <h3 class="arch-title">1. Presentation Layer</h3>
+          <p class="arch-desc">
+            Streamlit 1.65+ multi-page application with responsive layouts, accessible typography, Plotly clinical graphics, and zero unprofessional emoji noise.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <h3 class="arch-title">2. Domain &amp; Computation</h3>
+          <p class="arch-desc">
+            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, MICE and MissForest imputation pipelines, and biostatistical engines.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <h3 class="arch-title">3. Orchestration &amp; Pipeline Replay</h3>
+          <p class="arch-desc">
+            <code>TransformationManager</code> lineage logger, <code>reproduction_manager</code> headless/UI pipeline replay engine, and <code>TraceDocumenter</code> Word (.docx) audit dossier generator.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <h3 class="arch-title">4. Persistence Layer</h3>
+          <p class="arch-desc">
+            Embedded DuckDB 1.5+ Parquet storage with versioning, bcrypt credential verification, and on-demand connection cycling preventing Windows file locks.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <h3 class="arch-title">5. RAG &amp; Intelligence</h3>
+          <p class="arch-desc">
+            Provider-agnostic connector factory supporting local Ollama, Google Gemini, OpenAI, and Mistral with Pydantic response validation and schema fallback.
+          </p>
+        </div>
+
+        <div class="arch-card">
+          <h3 class="arch-title">6. Security &amp; Isolation</h3>
+          <p class="arch-desc">
+            Role-based user authorization with mandatory administrative account approval, isolated dataset directories, and air-gapped deployment capability.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Complete Documentation Index -->
+  <section id="docs" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Documentation Hub</span>
+        <h2 class="section-title">Comprehensive Methodological Guides</h2>
+        <p class="section-desc">
+          Detailed documentation and tutorials located in the repository's <code>documentation/</code> directory.
+        </p>
+      </div>
+
+      <div class="docs-grid">
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/00_Researcher_Handbook.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 00</div>
+          <div class="doc-name">Researcher Handbook</div>
+          <div class="doc-summary">Core methodology, cohort philosophy, and phase-by-phase execution guide.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/01_Home.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 01</div>
+          <div class="doc-name">Ingestion &amp; Benchmarks</div>
+          <div class="doc-summary">Automatic encoding resolution, delimiter detection, and DuckDB benchmark.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/02_Data_Validation.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 02</div>
+          <div class="doc-name">Quality &amp; Anomaly Audits</div>
+          <div class="doc-summary">Completeness scores, clinical anomaly masks, outlier clipping, and diffs.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/03_Data_Enrichment.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 03</div>
+          <div class="doc-name">Data Enrichment</div>
+          <div class="doc-summary">MICE &amp; MissForest imputation, PCA/FAMD, scaling, and clustering.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/04_Visualization.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 04</div>
+          <div class="doc-name">Interactive Plotting</div>
+          <div class="doc-summary">Plotly clinical graphics with integrated hypothesis test overlays.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/05_Epidemiology.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 05</div>
+          <div class="doc-name">Epidemiology &amp; Statistics</div>
+          <div class="doc-summary">Hypothesis testing, ANCOVA, effect sizes, power analysis, and MCAR test.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/06_Data_Insight.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 06</div>
+          <div class="doc-name">Knowledge Graphs &amp; Taxonomy</div>
+          <div class="doc-summary">Induce and refine biomedical variable graphs using yFiles.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/07_Document_Insight.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 07</div>
+          <div class="doc-name">Document Intelligence &amp; RAG</div>
+          <div class="doc-summary">Literature extraction, PDF chat, study variable coverage verification.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/08_Reproduction.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 08</div>
+          <div class="doc-name">Reproduction &amp; Reporting</div>
+          <div class="doc-summary">Complete pipeline reproduction, deterministic trace replay engine, and Word report dossiers.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/09_Clustering.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 09</div>
+          <div class="doc-name">Population Stratification</div>
+          <div class="doc-summary">K-Means, DBSCAN, Gaussian Mixture Models, and clinical subgroup analysis.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/10_Developer_Guide.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 10</div>
+          <div class="doc-name">Developer Guide</div>
+          <div class="doc-summary">Software architecture, custom adapters, testing workflows, and contributing.</div>
+        </a>
+
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/Tutorials.md" target="_blank" rel="noopener noreferrer" class="doc-item">
+          <div class="doc-num">GUIDE 11</div>
+          <div class="doc-name">End-to-End Tutorials</div>
+          <div class="doc-summary">Step-by-step clinical trial and cohort observational workflows.</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart & Installation -->
+  <section id="install" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Deployment</span>
+        <h2 class="section-title">Install in Seconds</h2>
+        <p class="section-desc">
+          Run locally with UV or Pip, or deploy into production with Docker.
+        </p>
+      </div>
+
+      <div class="deploy-card">
+        <div class="deploy-nav">
+          <button class="deploy-tab active" data-deploy="deploy-uv">uv (Recommended)</button>
+          <button class="deploy-tab" data-deploy="deploy-pip">pip &amp; venv</button>
+          <button class="deploy-tab" data-deploy="deploy-docker">Docker</button>
+          <button class="deploy-tab" data-deploy="deploy-compose">Docker Compose</button>
+        </div>
+
+        <div class="deploy-body">
+          <!-- Snippet: uv -->
+          <div id="deploy-uv" class="deploy-snippet active">
+            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
+cd Cohort-Monitoring-Package
+uv sync
+uv run streamlit run main.py">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy
+            </button>
+            <pre><code><span class="token-cm"># 1. Clone the repository</span>
+git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
+cd Cohort-Monitoring-Package
+
+<span class="token-cm"># 2. Sync virtual environment and lockfile</span>
+uv sync
+
+<span class="token-cm"># 3. Launch the platform</span>
+uv run streamlit run main.py</code></pre>
+          </div>
+
+          <!-- Snippet: pip -->
+          <div id="deploy-pip" class="deploy-snippet">
+            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
+cd Cohort-Monitoring-Package
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run main.py">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy
+            </button>
+            <pre><code><span class="token-cm"># 1. Clone repository</span>
+git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
+cd Cohort-Monitoring-Package
+
+<span class="token-cm"># 2. Create Python 3.14+ environment</span>
+python -m venv .venv
+source .venv/bin/activate  <span class="token-cm"># On Windows: .venv\Scripts\activate</span>
+
+<span class="token-cm"># 3. Install packages &amp; start</span>
+pip install -r requirements.txt
+streamlit run main.py</code></pre>
+          </div>
+
+          <!-- Snippet: docker -->
+          <div id="deploy-docker" class="deploy-snippet">
+            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="docker build -t cohort-monitoring .
+docker run -d -p 8501:8501 -v $(pwd)/data:/app/data --name cohort-platform cohort-monitoring">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy
+            </button>
+            <pre><code><span class="token-cm"># Build container image</span>
+docker build -t cohort-monitoring .
+
+<span class="token-cm"># Run container with persistent data volume</span>
+docker run -d \
+  -p 8501:8501 \
+  -v $(pwd)/data:/app/data \
+  --name cohort-platform \
+  cohort-monitoring</code></pre>
+          </div>
+
+          <!-- Snippet: compose -->
+          <div id="deploy-compose" class="deploy-snippet">
+            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="docker compose up -d">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy
+            </button>
+            <pre><code><span class="token-cm"># Start services in detached mode</span>
+docker compose up -d
+
+<span class="token-cm"># Monitor running container logs</span>
+docker compose logs -f</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="brand">
+            <img src="assets/logo.png" alt="Cohort Monitoring Package Logo" class="brand-logo">
+            <span class="brand-text">Cohort Monitoring Package</span>
+          </div>
+          <p>
+            An open-source, enterprise-grade clinical research and epidemiological data platform built on Python 3.14, DuckDB, and Streamlit.
+          </p>
+        </div>
+
+        <div class="footer-links-group">
+          <div class="footer-col">
+            <h4>Platform</h4>
+            <ul>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#biostatistics">Biostatistics Suite</a></li>
+              <li><a href="#benchmark">Benchmark</a></li>
+              <li><a href="#architecture">Architecture</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h4>Documentation</h4>
+            <ul>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/00_Researcher_Handbook.md" target="_blank" rel="noopener noreferrer">Researcher Handbook</a></li>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/05_Epidemiology.md" target="_blank" rel="noopener noreferrer">Epidemiology Guide</a></li>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/10_Developer_Guide.md" target="_blank" rel="noopener noreferrer">Developer Guide</a></li>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/Tutorials.md" target="_blank" rel="noopener noreferrer">Tutorials</a></li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <h4>Community &amp; Code</h4>
+            <ul>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a></li>
+              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache 2.0 License</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          &copy; 2026 Karim El Mernissi. Released under the Apache 2.0 License.
+        </div>
+        <div>
+          Authored for clinical epidemiologists, biostatisticians, and health data scientists worldwide.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
