@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 from docx import Document
+
 from manage.trace_documenter import TraceDocumenter
 
 

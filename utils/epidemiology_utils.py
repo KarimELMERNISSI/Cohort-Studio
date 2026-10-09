@@ -8,14 +8,15 @@ Provides mathematically rigorous, STROBE/CONSORT compliant statistical engines:
 - Diagnostic Test Accuracy (Sensitivity, Specificity, PPV, NPV, Likelihood Ratios with Wilson CIs)
 """
 
-import math
 import logging
-from typing import Dict, Any, Optional, Tuple, List, Union
+import math
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.stats import norm, chi2, f as f_dist
 from pydantic import BaseModel, Field
+from scipy import stats
+from scipy.stats import norm
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,8 @@ class Contingency2x2Result(BaseModel):
     risk_difference: float = Field(..., description="Risk Difference (Absolute Risk Reduction)")
     risk_difference_ci: ConfidenceInterval = Field(..., description="Wald 95% CI for Risk Difference")
     
-    nnt: Optional[float] = Field(default=None, description="Number Needed to Treat / Harm (1 / |RD|)")
-    attributable_fraction_exposed: Optional[float] = Field(
+    nnt: float | None = Field(default=None, description="Number Needed to Treat / Harm (1 / |RD|)")
+    attributable_fraction_exposed: float | None = Field(
         default=None, description="Attributable Fraction in Exposed (RR - 1) / RR"
     )
 
@@ -63,38 +64,38 @@ class Contingency2x2Result(BaseModel):
     fisher_exact_pvalue: float = Field(..., description="Two-sided Fisher Exact test p-value")
 
     # Methodological Guidance
-    guidance: List[str] = Field(default_factory=list, description="Clinical epidemiological guidance notes")
+    guidance: list[str] = Field(default_factory=list, description="Clinical epidemiological guidance notes")
 
 
 class EffectSizeResult(BaseModel):
     """Standardized effect size estimates with confidence intervals."""
     metric: str = Field(..., description="Name of effect size metric")
     estimate: float = Field(..., description="Point estimate")
-    ci: Optional[ConfidenceInterval] = Field(default=None, description="95% Confidence Interval")
-    hedges_g: Optional[float] = Field(default=None, description="Bias-corrected Hedges' g (for small samples)")
+    ci: ConfidenceInterval | None = Field(default=None, description="95% Confidence Interval")
+    hedges_g: float | None = Field(default=None, description="Bias-corrected Hedges' g (for small samples)")
     interpretation: str = Field(..., description="Clinical magnitude (negligible, small, medium, large)")
     guidance: str = Field(default="", description="Epidemiological reporting guidance")
 
 
 class ANCOVADiagnosticsResult(BaseModel):
     """Diagnostic tests and assumptions verification for ANCOVA."""
-    homogeneity_of_slopes_pvalue: Optional[float] = Field(
+    homogeneity_of_slopes_pvalue: float | None = Field(
         default=None, description="Interaction p-value (Group x Covariate). Must be >= 0.05 for ANCOVA validity"
     )
     slopes_homogeneous: bool = Field(
         default=True, description="True if parallel slopes assumption holds"
     )
-    residual_normality_pvalue: Optional[float] = Field(
+    residual_normality_pvalue: float | None = Field(
         default=None, description="Normality test p-value for model residuals"
     )
     residuals_normal: bool = Field(default=True, description="True if residuals pass normality check")
-    homoscedasticity_pvalue: Optional[float] = Field(
+    homoscedasticity_pvalue: float | None = Field(
         default=None, description="Equal variance test p-value (Breusch-Pagan)"
     )
     homoscedastic: bool = Field(default=True, description="True if variance is homogeneous")
     partial_eta_squared: float = Field(default=0.0, description="Partial Eta Squared effect size")
-    warnings: List[str] = Field(default_factory=list, description="Assumption violation warnings")
-    guidance: List[str] = Field(default_factory=list, description="Clinical guidance for interpretation")
+    warnings: list[str] = Field(default_factory=list, description="Assumption violation warnings")
+    guidance: list[str] = Field(default_factory=list, description="Clinical guidance for interpretation")
 
 
 class DiagnosticTestResult(BaseModel):
@@ -116,8 +117,8 @@ class DiagnosticTestResult(BaseModel):
     npv: float = Field(..., description="Negative Predictive Value")
     npv_ci: ConfidenceInterval = Field(...)
     
-    lr_positive: Optional[float] = Field(default=None, description="Positive Likelihood Ratio (Sens / (1 - Spec))")
-    lr_negative: Optional[float] = Field(default=None, description="Negative Likelihood Ratio ((1 - Sens) / Spec)")
+    lr_positive: float | None = Field(default=None, description="Positive Likelihood Ratio (Sens / (1 - Spec))")
+    lr_negative: float | None = Field(default=None, description="Negative Likelihood Ratio ((1 - Sens) / Spec)")
     youden_index: float = Field(..., description="Youden's Index J = Sensitivity + Specificity - 1")
 
 
@@ -126,7 +127,7 @@ class DiagnosticTestResult(BaseModel):
 # =============================================================================
 
 def calculate_2x2_epidemiology_metrics(
-    table_or_counts: Union[pd.DataFrame, np.ndarray, Tuple[int, int, int, int]],
+    table_or_counts: pd.DataFrame | np.ndarray | tuple[int, int, int, int],
     exposure_label: str = "Exposed",
     outcome_label: str = "Outcome",
     alpha: float = 0.05,
@@ -160,7 +161,7 @@ def calculate_2x2_epidemiology_metrics(
 
     n_total = a + b + c + d
     z_crit = norm.ppf(1.0 - alpha / 2.0)
-    guidance: List[str] = []
+    guidance: list[str] = []
 
     # Haldane-Anscombe 0.5 correction check for zero cells
     haldane_applied = False
@@ -276,8 +277,8 @@ def calculate_2x2_epidemiology_metrics(
 # =============================================================================
 
 def compute_cohens_d_with_ci(
-    group1: Union[pd.Series, np.ndarray, List[float]],
-    group2: Union[pd.Series, np.ndarray, List[float]],
+    group1: pd.Series | np.ndarray | list[float],
+    group2: pd.Series | np.ndarray | list[float],
     alpha: float = 0.05,
 ) -> EffectSizeResult:
     """
@@ -364,7 +365,7 @@ def compute_cohens_d_with_ci(
     )
 
 
-def compute_eta_and_omega_squared(groups_data: List[Union[np.ndarray, List[float]]]) -> Dict[str, Any]:
+def compute_eta_and_omega_squared(groups_data: list[np.ndarray | list[float]]) -> dict[str, Any]:
     """
     Compute Eta-squared (η²) and Omega-squared (ω²) for One-Way ANOVA.
     Omega-squared provides an unbiased population effect size for clinical studies.
@@ -415,7 +416,7 @@ def check_ancova_assumptions(
     df: pd.DataFrame,
     target: str,
     group: str,
-    covariates: List[str],
+    covariates: list[str],
 ) -> ANCOVADiagnosticsResult:
     """
     Rigorously verify ANCOVA epidemiological assumptions:
@@ -455,8 +456,8 @@ def check_ancova_assumptions(
     group_s = safe_map[group]
     cov_s = [safe_map[c] for c in covariates]
 
-    warnings: List[str] = []
-    guidance: List[str] = []
+    warnings: list[str] = []
+    guidance: list[str] = []
 
     # 1. Base ANCOVA Model
     cov_formula_part = " + ".join(cov_s) if cov_s else ""
@@ -473,7 +474,7 @@ def check_ancova_assumptions(
         partial_eta = ss_group / (ss_group + ss_resid) if (ss_group + ss_resid) > 0 else 0.0
 
     # 2. Homogeneity of Slopes Test (Interaction Model)
-    homog_p: Optional[float] = None
+    homog_p: float | None = None
     slopes_homogeneous = True
 
     if cov_s:
@@ -518,7 +519,7 @@ def check_ancova_assumptions(
         )
 
     # 4. Homoscedasticity Check (Breusch-Pagan)
-    homo_p: Optional[float] = None
+    homo_p: float | None = None
     homoscedastic = True
     try:
         bp_test = het_breuschpagan(residuals, base_model.model.exog)
@@ -549,7 +550,7 @@ def check_ancova_assumptions(
 # 4. DIAGNOSTIC TEST ACCURACY METRICS
 # =============================================================================
 
-def _wilson_score_interval(p: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
+def _wilson_score_interval(p: float, n: int, alpha: float = 0.05) -> tuple[float, float]:
     """Compute Wilson score interval for proportions."""
     if n == 0:
         return 0.0, 0.0

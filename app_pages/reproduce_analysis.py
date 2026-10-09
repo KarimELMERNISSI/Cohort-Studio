@@ -1,17 +1,19 @@
-import streamlit as st
-import pandas as pd
-import os
+import difflib
 import json
-from manage.db_manager import DBManager
-from manage.trace_documenter import TraceDocumenter
+import os
+
+import pandas as pd
+import streamlit as st
+
 # Import necessary modules for reproduction logic
 import enrich.external_data as eed
-from app_pages.transformation_logic import apply_variable_transformation
 from app_pages.data_enrichment import apply_imputer, evaluate_formula_safely
+from app_pages.transformation_logic import apply_variable_transformation
+from manage.db_manager import DBManager
+from manage.trace_documenter import TraceDocumenter
 from utils.multipage import load_dataframe
-from utils.multipage import load_dataframe
-from utils.path_utils import resolve_path, normalize_path
-import difflib
+from utils.path_utils import normalize_path, resolve_path
+
 
 def app():
     
@@ -279,7 +281,7 @@ def app():
                         
                         with cols[1]:
                             # File Uploader
-                            uploaded_missing = st.file_uploader(f"Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
+                            uploaded_missing = st.file_uploader("Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
                             if uploaded_missing:
                                 save_path = os.path.join("data/uploads", uploaded_missing.name)
                                 with open(save_path, "wb") as f:
@@ -336,7 +338,7 @@ def app():
 
                         with cols[3]:
                             # Manual Input
-                            manual_path = st.text_input(f"Or enter path", key=f"pre_manual_{item['path']}")
+                            manual_path = st.text_input("Or enter path", key=f"pre_manual_{item['path']}")
                             if manual_path:
                                 # Auto-fix Windows paths
                                 manual_path_fixed = manual_path.replace("\\", "/")

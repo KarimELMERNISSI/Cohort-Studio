@@ -1,23 +1,17 @@
-import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
-from scipy import stats
-from itertools import combinations
 import re
-from matplotlib.colors import to_rgba
-import streamlit as st
-import statsmodels.api as sm
-from sklearn.preprocessing import LabelEncoder
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import zscore
-from matplotlib.patches import Patch
-import scipy.cluster.hierarchy as sch
-from plotly.subplots import make_subplots
+from itertools import combinations
+
+import numpy as np
+import pandas as pd
 import plotly.colors as pc
 import plotly.figure_factory as ff
+import plotly.graph_objects as go
 import statsmodels.stats.multitest as smt
-from utils.data_analyzer import DataAnalyzer
+import streamlit as st
+from matplotlib.colors import to_rgba
+from scipy import stats
+from scipy.stats import zscore
+
 
 def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", correction_method="None", alpha=0.05):
     """
@@ -40,7 +34,7 @@ def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", cor
                 stat, p = stats.mannwhitneyu(x, y, alternative='two-sided')
                 test_name = "Mann-Whitney"
             return stat, p, test_name
-        except Exception as e:
+        except Exception:
             return np.nan, 1.0, "Error"
 
     # 1. Compute all stats
@@ -207,7 +201,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
                         break # Found minimal conflicts at this level, stop searching deeper
                 
                 if incompatible_tuples:
-                    msg += f"\n\nThe following minimal subsets of variables have no overlapping data (incompatible):\n"
+                    msg += "\n\nThe following minimal subsets of variables have no overlapping data (incompatible):\n"
                     for tup in incompatible_tuples[:10]: # Limit output
                          msg += f"- {', '.join(tup)}\n"
                     if len(incompatible_tuples) > 10:
@@ -670,11 +664,11 @@ def add_significance_annotations(fig, data_list, significant_pairs, row=None, co
 
         # Add star above bracket
         if p < 0.001:
-            sig_text = "*** (p={:.3e})".format(p)
+            sig_text = f"*** (p={p:.3e})"
         elif p < 0.01:
-            sig_text = "** (p={:.3f})".format(p)
+            sig_text = f"** (p={p:.3f})"
         elif p < 0.05:
-            sig_text = "* (p={:.3f})".format(p)
+            sig_text = f"* (p={p:.3f})"
         else:
             sig_text = "ns"
 
@@ -963,7 +957,7 @@ def create_roc_curve(df, true_col, score_col, pos_label=None):
     """
     Generates a ROC Curve.
     """
-    from sklearn.metrics import roc_curve, auc
+    from sklearn.metrics import auc, roc_curve
     
     y_true = df[true_col]
     y_score = df[score_col]
@@ -1196,11 +1190,6 @@ def create_correlation_matrix_streamlit(
     return fig
 
 
-import plotly.graph_objects as go
-import plotly.figure_factory as ff
-import pandas as pd
-import numpy as np
-import streamlit as st
 
 def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=False, show_dendrograms=False, show_row_labels=True, show_col_labels=True, figsize=None):
     """

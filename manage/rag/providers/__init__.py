@@ -9,17 +9,17 @@ Modules:
 """
 
 from .gemini import GeminiChatConnector, GeminiEmbeddingConnector
+from .mistral import MistralChatConnector, MistralEmbeddingConnector
 from .ollama import OllamaChatConnector, OllamaEmbeddingConnector
 from .openai import OpenAIChatConnector, OpenAIEmbeddingConnector
-from .mistral import MistralChatConnector, MistralEmbeddingConnector
 
 __all__ = [
     "GeminiChatConnector",
     "GeminiEmbeddingConnector",
+    "MistralChatConnector",
+    "MistralEmbeddingConnector",
     "OllamaChatConnector",
     "OllamaEmbeddingConnector",
     "OpenAIChatConnector",
     "OpenAIEmbeddingConnector",
-    "MistralChatConnector",
-    "MistralEmbeddingConnector",
 ]

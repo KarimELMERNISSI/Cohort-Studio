@@ -1,11 +1,10 @@
 # pages/statistical_tests.py
-import streamlit as st
-import streamlit as st
-import json
-import re
-from typing import Dict, Any, Optional
+from typing import Any
 
-def add_statistical_test(config: Dict[str, Any], st_container):
+import streamlit as st
+
+
+def add_statistical_test(config: dict[str, Any], st_container):
     """
     Add a new statistical test with flexible group/target configuration.
     

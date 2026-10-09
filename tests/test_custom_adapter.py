@@ -1,5 +1,7 @@
 import os
+
 from langchain_core.prompts import ChatPromptTemplate
+
 from utils.custom_gemini import CustomGeminiChat, CustomGeminiEmbeddings
 
 API_KEY = os.environ.get("GOOGLE_API_KEY", "dummy_key")

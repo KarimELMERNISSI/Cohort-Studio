@@ -1,11 +1,10 @@
-import streamlit as st
-import pandas as pd
 import json
 import os
 import re
-import networkx as nx
-import glob
 import time
+
+import pandas as pd
+import streamlit as st
 
 TAXONOMY_DIR = os.path.join("data", "taxonomy")
 
@@ -44,14 +43,29 @@ def get_taxonomy_versions(username=None):
             
     return sorted(versions, key=lambda x: x[0], reverse=True)
 # Ensure clean imports consistent with your environment
-from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle, NodeStyle, NodeShape
+from yfiles_graphs_for_streamlit import (
+    DashStyle,
+    Edge,
+    EdgeStyle,
+    LabelStyle,
+    Layout,
+    Node,
+    NodeShape,
+    NodeStyle,
+    StreamlitGraphWidget,
+)
 
 # Lazy-compatible imports for clustering (module itself is light)
 from utils.clustering_utils import (
-    prepare_data_for_clustering, 
-    run_pca, run_tsne, run_umap, run_famd,
-    fit_kmeans, fit_dbscan, fit_gaussian_mixture,
-    optimal_k_analysis, compute_cluster_profiles
+    compute_cluster_profiles,
+    fit_dbscan,
+    fit_gaussian_mixture,
+    fit_kmeans,
+    prepare_data_for_clustering,
+    run_famd,
+    run_pca,
+    run_tsne,
+    run_umap,
 )
 
 # ==========================================
@@ -195,7 +209,7 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
             f_desc = f_data.get('description', '')
             
             # Check match
-            search_text = f"{f_name} {f_desc} {str(f_data.get('input_variables', []))} {str(f_data.get('output_variable', ''))}".lower()
+            search_text = f"{f_name} {f_desc} {f_data.get('input_variables', [])!s} {f_data.get('output_variable', '')!s}".lower()
             if formula_search_query in search_text:
                 # Add inputs
                 for inp in f_data.get('input_variables', []):
@@ -253,7 +267,7 @@ def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None
             # --- FORMULA QUERY FILTER ---
             if formula_search_query:
                 # Check name, description, and inputs/outputs
-                search_text = f"{f_name} {f_desc} {str(f_data.get('input_variables', []))} {str(f_data.get('output_variable', ''))}".lower()
+                search_text = f"{f_name} {f_desc} {f_data.get('input_variables', [])!s} {f_data.get('output_variable', '')!s}".lower()
                 if formula_search_query not in search_text:
                     continue
 
@@ -697,7 +711,7 @@ def app():
         if loaded_path and os.path.exists(loaded_path):
             current_v_name = os.path.basename(loaded_path)
             # Use a simpler label or icon to save space
-            if col_p2.button(f"⚠️ Overwrite"):
+            if col_p2.button("⚠️ Overwrite"):
                 try:
                     with open(loaded_path, "w") as f:
                         json.dump(taxonomy, f, indent=2)
@@ -919,7 +933,7 @@ def app():
         # Search Match
         if deep_search:
              # Broad search
-             search_text = f"{var} {data.get('standard_name', '')} {data.get('description', '')} {data.get('category', '')} {str(data.get('related_formulas', []))} {data.get('clinical_usage', '')}".lower()
+             search_text = f"{var} {data.get('standard_name', '')} {data.get('description', '')} {data.get('category', '')} {data.get('related_formulas', [])!s} {data.get('clinical_usage', '')}".lower()
         else:
              # Narrow search (Names only)
              search_text = f"{var} {data.get('standard_name', '')}".lower()
@@ -1603,7 +1617,7 @@ def app():
                                     st.success(f"Analysis complete! Found {len(set(labels)) - (1 if -1 in labels else 0)} clusters.")
                             
                             except Exception as e:
-                                st.error(f"Error: {str(e)}")
+                                st.error(f"Error: {e!s}")
                     
                     # Display results if available
                     if 'clustering_results' in st.session_state:
@@ -1725,8 +1739,9 @@ def app():
                                     """)
                         
                         with viz_tabs[2]:
-                            from utils.clustering_utils import optimal_k_analysis
                             import plotly.graph_objects as go
+
+                            from utils.clustering_utils import optimal_k_analysis
                             
                             # Only for K-Means/GMM
                             if results['cluster_method'] != "DBSCAN":

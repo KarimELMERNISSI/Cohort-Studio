@@ -1,18 +1,14 @@
+import datetime
 import logging
-import streamlit as st
-from scipy import stats
+import os
+import subprocess
+
 import numpy as np
 import pandas as pd
-import subprocess
-import os
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.impute import SimpleImputer
-import enrich.data_imputation as edi
-from sklearn.impute import KNNImputer
-import seaborn as sns
-from openpyxl.styles import PatternFill, Font
-from matplotlib.colors import to_hex
-import datetime
+import streamlit as st
+from scipy import stats
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.impute import KNNImputer, SimpleImputer
 
 #from statsmodels.multivariate.manova import MANOVA
 # PENSER A REALISER UN LOG DES SELECTIONS ET TRANSFORMATIONS APPLIQUEES AUX DONNEES -- IDEE + D'INTEGRITE DANS LES DONNEES, RENDRE REPRODUCTIBLE TOUS LES BIAIS DUS A DES CHOIX ARBITRAIRE SUR LES DONNEES INITIALES. GENERER UN RAPPORT D'INTEGRITE : DATA TRANS ET SELECT SUMMARY
@@ -612,7 +608,7 @@ def handle_missing_values(df, variables=None, target_variable=None, strategy=Non
     Returns:
     - pandas.DataFrame: DataFrame with missing values handled based on the specified strategy.
     """
-    print(f"\n handle_missing_values : start \n ")
+    print("\n handle_missing_values : start \n ")
     if target_variable and variables:
         all_variables = variables + [target_variable]
         df_filtered = df[all_variables].copy()
@@ -698,7 +694,7 @@ def chi2_test(df, variables, target_variable, missing_strategy=None, test_name='
         if missing_strategy:
             df = handle_missing_values(df, variables, target_variable, missing_strategy).copy()
     except Exception as e:
-        logging.error(f"Error occurred during data preprocessing: {str(e)}")
+        logging.error(f"Error occurred during data preprocessing: {e!s}")
         return chi2_results
 
     for cat_var in variables:
@@ -707,7 +703,7 @@ def chi2_test(df, variables, target_variable, missing_strategy=None, test_name='
             chi2, p_value, _, _ = stats.chi2_contingency(contingency_table)
             chi2_results[cat_var] = {f'{test_name}_statistic': chi2, f'{test_name}_p_value': p_value}
         except Exception as e:
-            logging.error(f"Error occurred while computing chi-square test for variable '{cat_var}': {str(e)}")
+            logging.error(f"Error occurred while computing chi-square test for variable '{cat_var}': {e!s}")
 
     return chi2_results
 
@@ -749,7 +745,7 @@ def fisher_exact_test(df, variables, target_variable, missing_strategy='remove',
             # Store the results in the dictionary
             fisher_results[variable] = {f'{test_name}_statistic': fisher_statistic, f'{test_name}_p_value': fisher_p_value}
         except Exception as e:
-            logging.error(f"Error occurred while computing Fisher's exact test for variable {variable} on {target_variable}: {str(e)}")
+            logging.error(f"Error occurred while computing Fisher's exact test for variable {variable} on {target_variable}: {e!s}")
 
     return fisher_results
 
@@ -828,7 +824,7 @@ def wilcoxon_rank_sum_test_with_descriptive(df, variables, target_variable=None,
                     f'{test_name}_p_value': wilcoxon_p_value
                 }
         except Exception as e:
-            logging.error(f"Error occurred while computing Wilcoxon rank sum test for variable '{variable}': {str(e)}")
+            logging.error(f"Error occurred while computing Wilcoxon rank sum test for variable '{variable}': {e!s}")
 
     return wilcoxon_results
 
@@ -900,7 +896,7 @@ def t_test_with_descriptive(df, variables, target_variable=None, control_group=N
                 }
             
         except Exception as e:
-            logging.error(f"Error occurred while computing t-test for variable '{variable}': {str(e)}")
+            logging.error(f"Error occurred while computing t-test for variable '{variable}': {e!s}")
 
     return t_test_results
 
@@ -971,7 +967,7 @@ def kruskal_wallis_test_with_descriptive(groups=None, variables=None, missing_st
                     f'{test_name}_p_value': p_value
                 }
         except Exception as e:
-            logging.error(f"Error occurred while computing Kruskal-Wallis test for variable '{variable}': {str(e)}")
+            logging.error(f"Error occurred while computing Kruskal-Wallis test for variable '{variable}': {e!s}")
 
     return kruskal_results
 
@@ -1036,7 +1032,7 @@ def anova_test_with_descriptive(groups=None, variables=None,  missing_strategy='
                     f'{test_name}_p_value': p_value
                 }
         except Exception as e:
-            logging.error(f"Error occurred while computing ANOVA test for variable '{variable}': {str(e)}")
+            logging.error(f"Error occurred while computing ANOVA test for variable '{variable}': {e!s}")
 
     return anova_results
 
@@ -1245,6 +1241,6 @@ def process_test(df, test_name, test_info, config=None,multi_index=False): # con
             result_df = pd.DataFrame.from_dict(result).transpose()
         return result_df
     except Exception as e:
-        logging.error(f"An unexpected error occurred for test: {test_name}. Error: {str(e)}")
+        logging.error(f"An unexpected error occurred for test: {test_name}. Error: {e!s}")
         return None
     

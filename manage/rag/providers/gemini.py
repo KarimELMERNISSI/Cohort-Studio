@@ -5,15 +5,16 @@ Utilizes the modern `google-genai` SDK (v2.x) with retry logic,
 temperature controls, and embedding integration.
 """
 
-import time
-import random
 import logging
-from typing import List, Optional, Any, Dict
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+import random
+import time
+from typing import Any
 
-from ..base import BaseLLMConnector, BaseEmbeddingConnector
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+
+from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class GeminiChatConnector(BaseLLMConnector):
     def model_name(self) -> str:
         return self.config.model_name
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         """Query Gemini API for available text models."""
         if not self.client or not GEMINI_AVAILABLE:
             return ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
@@ -65,9 +66,9 @@ class GeminiChatConnector(BaseLLMConnector):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         if not GEMINI_AVAILABLE or not self.client:
@@ -105,8 +106,7 @@ class GeminiChatConnector(BaseLLMConnector):
         )
 
         clean_model = self.config.model_name
-        if clean_model.startswith("models/"):
-            clean_model = clean_model[7:]
+        clean_model = clean_model.removeprefix("models/")
 
         max_retries = self.config.max_retries
         base_delay = 2.0
@@ -143,7 +143,7 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
         if GEMINI_AVAILABLE and config.api_key:
             self.client = genai.Client(api_key=config.api_key)
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         if not self.client or not GEMINI_AVAILABLE:
             return ["models/gemini-embedding-001", "models/text-embedding-004"]
         try:
@@ -155,12 +155,12 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
         except Exception:
             return ["models/gemini-embedding-001", "models/text-embedding-004"]
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not self.client:
             raise ValueError("Google GenAI client not initialized. Check API key.")
         
         clean_model = self.config.embedding_model
-        results: List[List[float]] = []
+        results: list[list[float]] = []
         for text in texts:
             try:
                 response = self.client.models.embed_content(
@@ -173,7 +173,7 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
                 raise
         return results
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         if not self.client:
             raise ValueError("Google GenAI client not initialized. Check API key.")
         

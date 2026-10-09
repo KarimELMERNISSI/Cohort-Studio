@@ -5,22 +5,20 @@ Validates provider configuration, factory instantiation, error resilience,
 and native PDF loader functionality across Gemini, Ollama, OpenAI, and Mistral.
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+from langchain_core.messages import HumanMessage
 
 from manage.rag import (
-    ProviderType,
-    ProviderConfig,
-    RAGConfig,
     ConnectorFactory,
     PDFDocumentLoader,
+    ProviderConfig,
+    ProviderType,
+    RAGConfig,
 )
 from manage.rag.providers.gemini import GeminiChatConnector, GeminiEmbeddingConnector
+from manage.rag.providers.mistral import MistralChatConnector, MistralEmbeddingConnector
 from manage.rag.providers.ollama import OllamaChatConnector, OllamaEmbeddingConnector
 from manage.rag.providers.openai import OpenAIChatConnector, OpenAIEmbeddingConnector
-from manage.rag.providers.mistral import MistralChatConnector, MistralEmbeddingConnector
-from langchain_core.messages import HumanMessage
 
 
 class TestRAGSchemas:

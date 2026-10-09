@@ -6,7 +6,7 @@ ensuring validation, serialization, and support for multi-provider configuration
 """
 
 from enum import Enum
-from typing import Optional, Dict, Any, List
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -46,11 +46,11 @@ class ProviderConfig(BaseModel):
         default="models/gemini-embedding-001",
         description="Model identifier for vector embeddings."
     )
-    api_key: Optional[str] = Field(
+    api_key: str | None = Field(
         default=None,
         description="API Key for authenticated endpoints (None for local Ollama)."
     )
-    base_url: Optional[str] = Field(
+    base_url: str | None = Field(
         default=None,
         description="Base API endpoint URL (e.g., 'http://localhost:11434' for Ollama)."
     )
@@ -71,14 +71,14 @@ class ProviderConfig(BaseModel):
         le=10,
         description="Maximum retry attempts on network error."
     )
-    extra_headers: Dict[str, str] = Field(
+    extra_headers: dict[str, str] = Field(
         default_factory=dict,
         description="Custom HTTP headers."
     )
 
     @field_validator("base_url")
     @classmethod
-    def sanitize_base_url(cls, v: Optional[str]) -> Optional[str]:
+    def sanitize_base_url(cls, v: str | None) -> str | None:
         """Strip trailing slashes for consistent endpoint path appending."""
         if v:
             return v.rstrip("/")

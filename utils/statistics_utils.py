@@ -3,8 +3,8 @@ Statistics Utilities.
 
 Functions for statistical analysis including normality tests.
 """
-import streamlit as st
 import numpy as np
+import streamlit as st
 from scipy import stats
 
 

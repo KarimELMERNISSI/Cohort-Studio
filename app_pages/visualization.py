@@ -1,16 +1,18 @@
-import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
-from scipy import stats
-from plotly.subplots import make_subplots
-from app_pages import data_monitoring as dm
 import logging
-from manage.db_manager import DBManager
-import utils.visualization_utils as vu
-from utils.visualization_utils import DataAnalyzer
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
 import plotly.figure_factory as ff
+import plotly.graph_objects as go
+import streamlit as st
+from plotly.subplots import make_subplots
+from scipy import stats
+
+import utils.visualization_utils as vu
+from app_pages import data_monitoring as dm
+from manage.db_manager import DBManager
+from utils.visualization_utils import DataAnalyzer
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -87,13 +89,13 @@ def app():
         # Apply filters based on checkbox states
         if filter_on_inclusion:
             if "study_inclusion_all" not in df.columns:
-                st.warning(f"The inclusion criteria are missing and need to be defined first.")
+                st.warning("The inclusion criteria are missing and need to be defined first.")
             else:
                 df = df[df['study_inclusion_all'] == True]
 
         if filter_out_anomaly:
             if "clinical_anomalies_any" not in df.columns:
-                st.warning(f"The anomaly criteria are missing and need to be defined first.")
+                st.warning("The anomaly criteria are missing and need to be defined first.")
             else:
                 df = df[df['clinical_anomalies_any'] == False]
 
@@ -133,11 +135,7 @@ def app():
         for category, info in plot_categories.items():
             requirements_met = True
             for req_type, req_count in info["requirements"].items():
-                if req_type == "numeric" and len(analyzer.numeric_cols) < req_count:
-                    requirements_met = False
-                elif req_type == "categorical" and len(analyzer.categorical_cols) < req_count:
-                    requirements_met = False
-                elif req_type == "date" and len(analyzer.date_cols) < req_count:
+                if req_type == "numeric" and len(analyzer.numeric_cols) < req_count or req_type == "categorical" and len(analyzer.categorical_cols) < req_count or req_type == "date" and len(analyzer.date_cols) < req_count:
                     requirements_met = False
             if requirements_met:
                 available_categories.append(category)
@@ -1104,7 +1102,7 @@ def app():
                                             row_group_map[col] = f"Sig ({test_name}, p<{pval_threshold})"
                                         else:
                                             row_group_map[col] = f"Not Sig (p>={pval_threshold})"
-                                    except Exception as e:
+                                    except Exception:
                                         row_group_map[col] = "Error"
                                         
                             elif row_group_option == "Manual Selection" and manual_groups:
@@ -1213,9 +1211,9 @@ def app():
                                 except Exception as e:
                                     st.error(f"Error processing data: {e}")
 
-                if 'fig_clustermap' in st.session_state and st.session_state['fig_clustermap']:
+                if st.session_state.get('fig_clustermap'):
                     fig = st.session_state['fig_clustermap']
-                elif 'fig_clustermap_error' in st.session_state and st.session_state['fig_clustermap_error']:
+                elif st.session_state.get('fig_clustermap_error'):
                     st.error(f"Failed to generate clustermap: {st.session_state['fig_clustermap_error']}")
 
             elif plot_type == "Sankey Diagram":
@@ -1504,7 +1502,7 @@ def app():
 
 
                     elif plot_type == "ROC Curve":
-                        from sklearn.metrics import roc_curve, auc
+                        from sklearn.metrics import auc, roc_curve
                         y_true = df[true_col].dropna()
                         y_score = df[score_col].dropna()
                         # Align indices
@@ -1526,5 +1524,5 @@ def app():
                         st.write(f"**Specificity at Best Threshold:** {1-fpr[ix]:.4f}")
 
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            st.error(f"An error occurred: {e!s}")
             st.write("Please try different variables or plot settings.")

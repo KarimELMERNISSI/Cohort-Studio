@@ -9,11 +9,12 @@ Provides dashboards for:
 - Manual evaluation triggers
 """
 
-import streamlit as st
 import json
-from datetime import datetime, timedelta
-from pathlib import Path
 import sys
+from datetime import datetime
+from pathlib import Path
+
+import streamlit as st
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -278,24 +279,23 @@ def render_embedding_health(evaluator):
         st.info("No test cases defined yet. Add test cases to track embedding quality.")
     
     # Add test case form
-    with st.expander("Add Test Case"):
-        with st.form("add_test_case"):
-            query = st.text_input("Query")
-            concepts = st.text_input("Expected Concepts (comma-separated)")
-            ground_truth = st.text_area("Ground Truth Answer (optional)")
-            
-            if st.form_submit_button("Add Test Case"):
-                if query and concepts:
-                    concept_list = [c.strip() for c in concepts.split(",")]
-                    test_id = evaluator.add_test_case(
-                        query=query,
-                        expected_concepts=concept_list,
-                        ground_truth=ground_truth or None
-                    )
-                    st.success(f"Added test case: {test_id}")
-                    st.rerun()
-                else:
-                    st.error("Query and concepts are required")
+    with st.expander("Add Test Case"), st.form("add_test_case"):
+        query = st.text_input("Query")
+        concepts = st.text_input("Expected Concepts (comma-separated)")
+        ground_truth = st.text_area("Ground Truth Answer (optional)")
+        
+        if st.form_submit_button("Add Test Case"):
+            if query and concepts:
+                concept_list = [c.strip() for c in concepts.split(",")]
+                test_id = evaluator.add_test_case(
+                    query=query,
+                    expected_concepts=concept_list,
+                    ground_truth=ground_truth or None
+                )
+                st.success(f"Added test case: {test_id}")
+                st.rerun()
+            else:
+                st.error("Query and concepts are required")
 
 
 def render_run_evaluation(evaluator):
@@ -461,7 +461,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Evaluation failed: {str(e)}")
+        st.error(f"Evaluation failed: {e!s}")
 
 
 def run_test_suite_with_progress(evaluator, rag, test_cases: list, selected_ids: list):

@@ -9,9 +9,10 @@ This module provides functions for:
 All heavy imports are done lazily to avoid slowing app startup.
 """
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Tuple, Optional, Dict, Any, List
 
 
 def standardize_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -21,10 +22,10 @@ def standardize_data(df: pd.DataFrame) -> pd.DataFrame:
 
 def prepare_data_for_clustering(
     df: pd.DataFrame, 
-    numeric_cols: List[str], 
-    categorical_cols: Optional[List[str]] = None,
+    numeric_cols: list[str], 
+    categorical_cols: list[str] | None = None,
     handle_missing: str = "drop"
-) -> Tuple[pd.DataFrame, pd.Index]:
+) -> tuple[pd.DataFrame, pd.Index]:
     """
     Prepare data for clustering: handle missing values, standardize.
     
@@ -57,7 +58,7 @@ def prepare_data_for_clustering(
 
 # ============ DIMENSIONALITY REDUCTION ============
 
-def run_pca(data: pd.DataFrame, n_components: int = 2) -> Tuple[np.ndarray, Dict[str, Any]]:
+def run_pca(data: pd.DataFrame, n_components: int = 2) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Run PCA on the data.
     
@@ -85,7 +86,7 @@ def run_tsne(
     perplexity: float = 30.0,
     max_iter: int = 1000,
     max_samples: int = 5000
-) -> Tuple[np.ndarray, Dict[str, Any]]:
+) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Run t-SNE on the data.
     Note: t-SNE is slow for large datasets, so we sample if needed.
@@ -133,7 +134,7 @@ def run_umap(
     n_neighbors: int = 15,
     min_dist: float = 0.1,
     max_samples: int = 10000
-) -> Tuple[np.ndarray, Dict[str, Any]]:
+) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Run UMAP on the data.
     
@@ -176,7 +177,7 @@ def run_umap(
 def run_famd(
     data: pd.DataFrame,
     n_components: int = 2
-) -> Tuple[np.ndarray, Dict[str, Any]]:
+) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Run FAMD (Factor Analysis of Mixed Data) for mixed numeric/categorical data.
     
@@ -264,7 +265,7 @@ def run_famd(
 
 # ============ CLUSTERING ============
 
-def fit_kmeans(embeddings: np.ndarray, n_clusters: int = 3) -> Tuple[np.ndarray, Dict[str, Any]]:
+def fit_kmeans(embeddings: np.ndarray, n_clusters: int = 3) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Fit K-Means clustering.
     
@@ -286,7 +287,7 @@ def fit_kmeans(embeddings: np.ndarray, n_clusters: int = 3) -> Tuple[np.ndarray,
     return labels, info
 
 
-def fit_dbscan(embeddings: np.ndarray, eps: float = 0.5, min_samples: int = 5) -> Tuple[np.ndarray, Dict[str, Any]]:
+def fit_dbscan(embeddings: np.ndarray, eps: float = 0.5, min_samples: int = 5) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Fit DBSCAN clustering.
     
@@ -312,7 +313,7 @@ def fit_dbscan(embeddings: np.ndarray, eps: float = 0.5, min_samples: int = 5) -
     return labels, info
 
 
-def fit_gaussian_mixture(embeddings: np.ndarray, n_components: int = 3) -> Tuple[np.ndarray, Dict[str, Any]]:
+def fit_gaussian_mixture(embeddings: np.ndarray, n_components: int = 3) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Fit Gaussian Mixture Model.
     
@@ -341,7 +342,7 @@ def fit_gaussian_mixture(embeddings: np.ndarray, n_components: int = 3) -> Tuple
 def optimal_k_analysis(
     embeddings: np.ndarray, 
     k_range: range = range(2, 11)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compute elbow and silhouette metrics for different K values.
     
@@ -381,8 +382,8 @@ def optimal_k_analysis(
 def compute_cluster_profiles(
     df: pd.DataFrame,
     labels: np.ndarray,
-    numeric_cols: List[str],
-    categorical_cols: Optional[List[str]] = None
+    numeric_cols: list[str],
+    categorical_cols: list[str] | None = None
 ) -> pd.DataFrame:
     """
     Compute mean/mode of variables per cluster.

@@ -5,9 +5,10 @@ Provides robust JSON parsing, schema validation, and structured LLM invocation
 with retry and repair capabilities.
 """
 import json
-import re
 import logging
-from typing import TypeVar, Type, Optional, Any, Dict
+import re
+from typing import Any, TypeVar
+
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -127,9 +128,9 @@ def parse_json_safe(text: str, default: Any = None) -> Any:
 
 def validate_and_parse(
     text: str,
-    schema: Type[T],
+    schema: type[T],
     strict: bool = False
-) -> tuple[Optional[T], Optional[str]]:
+) -> tuple[T | None, str | None]:
     """
     Parse JSON and validate against Pydantic schema.
     
@@ -167,7 +168,7 @@ def validate_and_parse(
             return None, error_msg
             
     except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
+        error_msg = f"Unexpected error: {e!s}"
         logger.error(error_msg)
         return None, error_msg
 
@@ -244,9 +245,9 @@ class StructuredOutputHelper:
     def invoke_with_schema(
         self,
         prompt: str,
-        schema: Type[T],
+        schema: type[T],
         repair_on_fail: bool = True
-    ) -> tuple[Optional[T], Optional[str]]:
+    ) -> tuple[T | None, str | None]:
         """
         Invoke LLM and parse response with schema validation.
         
@@ -295,7 +296,7 @@ class StructuredOutputHelper:
         self,
         prompt: str,
         default: Any = None
-    ) -> tuple[Any, Optional[str]]:
+    ) -> tuple[Any, str | None]:
         """
         Invoke LLM and parse as generic JSON without schema.
         

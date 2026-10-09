@@ -1,7 +1,8 @@
 ######################################## PACKAGES ########################################
-import pandas as pd # for Dataframes manipulation
-import ast # dynamic python script interpretation
+import ast  # dynamic python script interpretation
 import logging  # Added for logging
+
+import pandas as pd  # for Dataframes manipulation
 
 ######################################## CUSTOM CONDITIONAL MASKS FUNCTIONS DEFINITION ######################################## 
 
@@ -22,7 +23,7 @@ def create_mask(df, condition, mask_name):
         if "expression" in condition:
             print("create_mask:expression:",condition)
             return create_expression_mask(df, condition["expression"])
-        elif "numeric" in condition and condition["numeric"]:
+        elif condition.get("numeric"):
             print("numeric create_mask:numeric:",condition)
             lower_bound = condition.get("lower_bound")
             upper_bound = condition.get("upper_bound")
@@ -62,7 +63,7 @@ def create_expression_mask(df, expression):
         # Return the result as a boolean Series
         return pd.Series(result, index=df.index, dtype=bool)
     except Exception as e:
-        raise ValueError(f"Error in evaluating expression: {str(e)}")
+        raise ValueError(f"Error in evaluating expression: {e!s}")
 
 
 def create_numeric_mask(series, lower_bound=None, upper_bound=None, strategy=None, exclude_na = True): 
@@ -94,10 +95,10 @@ def create_numeric_mask(series, lower_bound=None, upper_bound=None, strategy=Non
         if exclude_na and series.isna().any():
             mask[series.isna()] = False
         if lower_bound is not None and upper_bound is None:
-            print(f"create_numeric_mask: lower_bound is not None")
+            print("create_numeric_mask: lower_bound is not None")
             mask &= series >= lower_bound
         if upper_bound is not None and lower_bound is None:
-            print(f"create_numeric_mask: upper_bound is not None")
+            print("create_numeric_mask: upper_bound is not None")
             mask &= series <= upper_bound
         if strategy == 'include':
             print(f"create_numeric_mask: including values between {lower_bound} and {upper_bound}")
@@ -209,7 +210,7 @@ def apply_computation(df, column_name, computation_expr):
         if computed_col is not None:
             df[column_name] = computed_col
     except Exception as e:
-        logging.warning(f"An error occurred while applying new column computation: {str(e)} - As a consequence, the column won't be added")
+        logging.warning(f"An error occurred while applying new column computation: {e!s} - As a consequence, the column won't be added")
 
 
 def create_computation(df, expression):
@@ -235,4 +236,4 @@ def create_computation(df, expression):
         result = eval(compiled_expr, globals(), {'df': df})
         return result
     except Exception as e:
-        raise ValueError(f"Error in evaluating expression: {str(e)}")
+        raise ValueError(f"Error in evaluating expression: {e!s}")

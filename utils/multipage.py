@@ -1,21 +1,22 @@
 # multipage.py
-import streamlit as st
-from typing import Dict, Any, Callable, Optional, Union
-from dataclasses import dataclass
-import pandas as pd
-import io
-import functools
-
-import hashlib
-import manage.file_handling as mf
-import os
-from pathlib import Path
-import requests
-from io import BytesIO
-from PIL import Image
 import base64
-from manage.transformation_manager import TransformationManager
+import functools
+import hashlib
+import io
+import os
+from collections.abc import Callable
+from io import BytesIO
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import requests
+import streamlit as st
+from PIL import Image
+
+import manage.file_handling as mf
 from app_pages.rag_sidebar import render_rag_sidebar
+from manage.transformation_manager import TransformationManager
 
 # @dataclass
 # class Page:
@@ -117,7 +118,7 @@ def detect_separator(text: str) -> str:
     return ','  # Default to comma if no clear separator found
 
 
-def load_csv_with_separator(file_bytes: bytes, encoding: str, num_lines: int = 30) -> Optional[pd.DataFrame]:
+def load_csv_with_separator(file_bytes: bytes, encoding: str, num_lines: int = 30) -> pd.DataFrame | None:
     """
     Load a CSV from bytes with automatic delimiter detection.
     
@@ -147,11 +148,11 @@ def load_csv_with_separator(file_bytes: bytes, encoding: str, num_lines: int = 3
         return df
 
     except Exception as e:
-        st.error(f"Error loading CSV file: {str(e)}")
+        st.error(f"Error loading CSV file: {e!s}")
         return None
 
 
-def load_dataframe(uploaded_file) -> Optional[pd.DataFrame]:
+def load_dataframe(uploaded_file) -> pd.DataFrame | None:
     """
     Load DataFrame from uploaded Streamlit file.
     
@@ -202,7 +203,7 @@ def load_dataframe(uploaded_file) -> Optional[pd.DataFrame]:
                     # Multiple sheets detected: return sentinel so caller shows UI
                     return {"__multi_sheet__": True, "sheet_names": sheet_names}
             except Exception as e:
-                st.error(f"Error reading Excel file: {str(e)}")
+                st.error(f"Error reading Excel file: {e!s}")
                 return None
         elif file_extension == 'parquet':
             try:
@@ -210,19 +211,19 @@ def load_dataframe(uploaded_file) -> Optional[pd.DataFrame]:
                 st.success("Parquet file loaded successfully!")
                 return df
             except Exception as e:
-                st.error(f"Error reading Parquet file: {str(e)}")
+                st.error(f"Error reading Parquet file: {e!s}")
                 return None
         else:
             st.error(f"Unsupported file format: {file_extension}")
             return None
 
     except Exception as e:
-        st.error(f"Error loading file: {str(e)}")
+        st.error(f"Error loading file: {e!s}")
         return None
 
 
 def _load_excel_with_selection(file_bytes: bytes, sheet_names: list, selected_sheets: list, 
-                               merge_key: str = None) -> Optional[pd.DataFrame]:
+                               merge_key: str = None) -> pd.DataFrame | None:
     """
     Load one or more sheets from an Excel file.
     
@@ -271,11 +272,11 @@ def _load_excel_with_selection(file_bytes: bytes, sheet_names: list, selected_sh
                        f"{concat_df.shape[0]} rows × {concat_df.shape[1]} columns")
             return concat_df
     except Exception as e:
-        st.error(f"Error loading Excel sheets: {str(e)}")
+        st.error(f"Error loading Excel sheets: {e!s}")
         return None
 
 
-def create_empty_config() -> Dict[str, Any]:
+def create_empty_config() -> dict[str, Any]:
     """Create an empty configuration structure."""
     return {
         "mask_families": {},
@@ -482,12 +483,12 @@ def handle_data_upload():
 
 
 class Page:
-    def __init__(self, title: str, function: Callable, icon: Union[str, Path] = "📄"):
+    def __init__(self, title: str, function: Callable, icon: str | Path = "📄"):
         self.title = title  # Internal page title
         self.function = function
         self.icon = self._process_icon(icon)
 
-    def _process_icon(self, icon: Union[str, bytes, Image.Image]) -> Union[str, Image.Image]:
+    def _process_icon(self, icon: str | bytes | Image.Image) -> str | Image.Image:
         """
         Process the icon, supporting emojis, file paths, URLs, and image bytes
         
@@ -531,7 +532,7 @@ class Page:
 
 class MultiPageApp:
     def __init__(self, default_page: str = None):
-        self.pages: Dict[str, Page] = {}
+        self.pages: dict[str, Page] = {}
         self.default_page = default_page
         self.initialize_session_state()
 
@@ -543,7 +544,7 @@ class MultiPageApp:
             st.session_state.config = create_empty_config()
 
 
-    def add_page(self, title: str, function: Callable, icon: Union[str, Path] = "📄") -> None:
+    def add_page(self, title: str, function: Callable, icon: str | Path = "📄") -> None:
         """
         Add a new page to the app with a custom display label and icon.
         
@@ -555,7 +556,7 @@ class MultiPageApp:
         self.pages[title] = Page(title=title, function=function, icon=icon)
 
 
-    def _render_sidebar_icon(self, icon: Union[str, Image.Image], page_name: str, is_widget: bool = False) -> str:
+    def _render_sidebar_icon(self, icon: str | Image.Image, page_name: str, is_widget: bool = False) -> str:
         """
         Render icons for the sidebar using Markdown or plain text for widgets.
         
@@ -592,7 +593,7 @@ class MultiPageApp:
         return page_name
 
 
-    def _render_icon(self, icon: Union[str, Image.Image], width: int = 30) -> str:
+    def _render_icon(self, icon: str | Image.Image, width: int = 30) -> str:
         """
         Render icons for the page title (HTML-supported).
         
@@ -624,7 +625,7 @@ class MultiPageApp:
         try:
             handle_data_upload()
         except Exception as e:
-            st.error(f"Error uploading file: {str(e)}")
+            st.error(f"Error uploading file: {e!s}")
 
 
     def run(self) -> None:

@@ -6,12 +6,13 @@ and Mistral Embeddings via Mistral OpenAI-compatible API.
 """
 
 import logging
-from typing import List, Optional, Any
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from typing import Any
 
-from ..base import BaseLLMConnector, BaseEmbeddingConnector
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+
+from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class MistralChatConnector(BaseLLMConnector):
     def _llm_type(self) -> str:
         return "mistral-chat"
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         if not self.client or not MISTRAL_AVAILABLE:
             return ["mistral-small-latest", "mistral-large-latest", "codestral-latest"]
         try:
@@ -57,9 +58,9 @@ class MistralChatConnector(BaseLLMConnector):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         if not MISTRAL_AVAILABLE:
@@ -92,7 +93,7 @@ class MistralChatConnector(BaseLLMConnector):
             content = response.choices[0].message.content or ""
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
         except Exception as e:
-            err = f"Mistral API Error: {str(e)}"
+            err = f"Mistral API Error: {e!s}"
             logger.error(err)
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {err}"))])
 
@@ -112,10 +113,10 @@ class MistralEmbeddingConnector(BaseEmbeddingConnector):
                 timeout=config.timeout_seconds,
             )
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         return ["mistral-embed"]
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not self.client:
             raise ValueError("Mistral client not initialized. Check API key.")
         try:
@@ -128,6 +129,6 @@ class MistralEmbeddingConnector(BaseEmbeddingConnector):
             logger.error(f"Mistral embedding error: {e}")
             raise
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         results = self.embed_documents([text])
         return results[0] if results else []

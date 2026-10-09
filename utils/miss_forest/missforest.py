@@ -1,24 +1,21 @@
+import warnings
+from collections.abc import Iterable
 from copy import deepcopy
-from typing import Union
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from lightgbm import LGBMClassifier
-from lightgbm import LGBMRegressor
+from lightgbm import LGBMClassifier, LGBMRegressor
+from sklearn.base import BaseEstimator
+from tqdm import tqdm
+
 from utils.miss_forest._errors import NotFittedError
+from utils.miss_forest._label_encoding import _label_encoding, _rev_label_encoding
+from utils.miss_forest._metrics import nrmse, pfc
 from utils.miss_forest._validate import (
     _is_estimator,
     _validate_single_datatype_features,
 )
-from utils.miss_forest._label_encoding import (
-    _label_encoding,
-    _rev_label_encoding
-)
-from utils.miss_forest._metrics import pfc, nrmse
-from typing import Any, Tuple, Iterable, Dict
-from sklearn.base import BaseEstimator
-from tqdm import tqdm
-import warnings
-
 
 lgbm_clf = LGBMClassifier(verbosity=-1)
 lgbm_rgr = LGBMRegressor(verbosity=-1)
@@ -71,8 +68,8 @@ class MissForest:
         Calls class methods `fit` and `transform` on `x`.
     """
 
-    def __init__(self, clf: Union[Any, BaseEstimator] = lgbm_clf,
-                 rgr: Union[Any, BaseEstimator] = lgbm_rgr,
+    def __init__(self, clf: Any | BaseEstimator = lgbm_clf,
+                 rgr: Any | BaseEstimator = lgbm_rgr,
                  initial_guess: str = "median", max_iter: int = 5,
                  early_stopping=True, progress_bar=None) -> None:
         """
@@ -133,7 +130,7 @@ class MissForest:
         self._is_fitted = False
 
     @staticmethod
-    def _get_missing_rows(x: pd.DataFrame) -> Dict[Any, pd.Index]:
+    def _get_missing_rows(x: pd.DataFrame) -> dict[Any, pd.Index]:
         """Gather the indices of any rows that have missing values.
 
         Parameters
@@ -159,7 +156,7 @@ class MissForest:
 
     def _get_map_and_rev_map(
             self, x: pd.DataFrame
-    ) -> Union[Tuple[Dict[Any, int], Dict[int, Any]], Tuple[Dict, Dict]]:
+    ) -> tuple[dict[Any, int], dict[int, Any]] | tuple[dict, dict]:
         """Gets the encodings and the reverse encodings of categorical
         variables.
 
@@ -192,7 +189,7 @@ class MissForest:
 
     def _compute_initial_imputations(self, x: pd.DataFrame,
                                      categorical: Iterable[Any]
-                                     ) -> Dict[Any, Union[str, np.float64]]:
+                                     ) -> dict[Any, str | np.float64]:
         """Computes and stores the initial imputation values for each feature
         in `x`.
 
@@ -234,7 +231,7 @@ class MissForest:
 
     @staticmethod
     def _initial_impute(x: pd.DataFrame,
-                        initial_imputations: Dict[Any, Union[str, np.float64]]
+                        initial_imputations: dict[Any, str | np.float64]
                         ) -> pd.DataFrame:
         """Imputes the values of features using the mean or median for
         numerical variables; otherwise, uses the mode for imputation.
@@ -259,7 +256,7 @@ class MissForest:
     @staticmethod
     def _add_unseen_categories(
             x, mappings
-    ) -> Union[Tuple[Dict[Any, int], Dict[int, Any]], Tuple[Dict, Dict]]:
+    ) -> tuple[dict[Any, int], dict[int, Any]] | tuple[dict, dict]:
         """Updates mappings and reverse mappings based on any unseen
         categories encountered.
 

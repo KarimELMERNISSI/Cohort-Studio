@@ -1,25 +1,26 @@
 # pages/data_monitoring.py
-import streamlit as st
-import pandas as pd
-from io import BytesIO
-import numpy as np
+import json
+import os
 import time
+from io import BytesIO
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import streamlit as st
 from scipy import stats
-from utils.data_analyzer import DataAnalyzer
-from utils.config_loader import transform_expression, create_empty_config
+
+import monitor.changes as mc
+import monitor.outliers as mo
+import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from enrich import custom_metrics_and_filters as ecm
-import monitor.outliers as mo
-import monitor.changes as mc
-import utils.clustering_utils as cu
-from typing import Dict, Any, Optional, Union, List, Tuple, Callable
-import os
-import re
-import json
-from utils.multipage import load_dataframe, get_file_hash
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
+from utils.config_loader import create_empty_config, transform_expression
+from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
+from utils.multipage import load_dataframe
 
 #############################################################################################
 
@@ -784,7 +785,7 @@ class OutlierHandler:
 
 ######################################## handle data for comparisons
 
-def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]:
     """
     Handle data selection from various sources.
 
@@ -871,7 +872,7 @@ def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional
                 st.success("Dataset successfully loaded.")
                 return df, uploaded_file.name
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+                st.error(f"Error loading file: {e!s}")
                 return None, None
 
     elif selection_method == "Enter File Path":
@@ -887,7 +888,7 @@ def data_selection(tmp:str, label:str) -> Tuple[Optional[pd.DataFrame], Optional
                     st.success("Dataset successfully loaded.")
                     return df, file_path_input
                 except Exception as e:
-                    st.error(f"Error loading file: {str(e)}")
+                    st.error(f"Error loading file: {e!s}")
                     return None, None
             else:
                 st.error("File not found.")
@@ -1035,7 +1036,7 @@ def display_combined_information(df, df_processed, summary, selected_cols, detec
             with cols[0]:
                 # Outlier Summary Section
                 stats = summary.get(col, {})
-                st.markdown(f"**Outlier Summary**")
+                st.markdown("**Outlier Summary**")
                 st.markdown(f"- **Total outliers**: {stats.get('total_outliers', 'N/A')}")
                 st.markdown(f"- **Percentage of outliers**: {stats.get('percentage_outliers', 0):.2f}%")
             
@@ -1057,7 +1058,7 @@ def display_combined_information(df, df_processed, summary, selected_cols, detec
                         st.markdown(f"- **Min Change ({change_measure})**: {format_change(min_change, change_measure)}")
                         st.markdown(f"- **Max Change ({change_measure})**: {format_change(max_change, change_measure)}")
                     else:
-                        st.markdown(f"- Impact can't be measured for categorical data.")
+                        st.markdown("- Impact can't be measured for categorical data.")
             
             st.markdown("---")
 
@@ -1124,7 +1125,7 @@ def display_combined_information(df, df_processed, summary, selected_cols, detec
                     {'selector': 'tbody tr:hover', 'props': [('background-color', '#f1f1f1')]},
                 ]
             )
-            .set_properties(**{'width': '100%', 'border': '1px solid #ddd'})
+            .set_properties(width='100%', border='1px solid #ddd')
         )
 
         # Render the table in Streamlit
@@ -1362,10 +1363,10 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
                 title = f"FAMD Projection (Explained Variance: {info.get('total_variance_explained', 0):.2%})"
 
     except ImportError as e:
-        st.error(f"Dependency missing: {str(e)}")
+        st.error(f"Dependency missing: {e!s}")
         return
     except Exception as e:
-        st.error(f"Error running {projection_method}: {str(e)}")
+        st.error(f"Error running {projection_method}: {e!s}")
         return
 
     if embeddings is None:
@@ -1441,13 +1442,13 @@ def display_results_with_outliers(filtered_df: pd.DataFrame, st):
 
 ##### COMMON PART
 
-def ensure_family_exists(config: Dict[str, Any], family_name: str):
+def ensure_family_exists(config: dict[str, Any], family_name: str):
     """Ensure the specified family exists in the configuration."""
     if family_name not in config["mask_families"]:
         config["mask_families"][family_name] = {}
 
 
-def validate_mask_name(config: Dict[str, Any], family_name: str, mask_name: str, st_container):
+def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str, st_container):
     """Validate the mask name and handle duplicates."""
     if not mask_name:
         st_container.warning("⚠️ Please provide a mask name.")
@@ -1564,7 +1565,7 @@ def handle_family_operator(st_container, base_key: str):
     return {"operator": operator, "threshold": threshold}
 
 
-def add_mask_family(config: Dict[str, Any], st_container):
+def add_mask_family(config: dict[str, Any], st_container):
     st_container.subheader("Add New Mask Family")
 
     # Family Selection
@@ -2022,12 +2023,12 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                                     "numeric": False,
                                     "expression": expression
                                 }
-                                st.success(f"Added!")
+                                st.success("Added!")
                                 time.sleep(0.5)
                                 st.rerun()
                         st.divider()
 
-def add_domain_expert_based_anomaly_mask(config: Dict[str, Any], st_container):
+def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     st_container.subheader("Define New Anomaly Criterion")
 
     st_container.info(
@@ -2109,7 +2110,7 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
 
 ##### INCLUSION PART
 
-def add_study_inclusion_mask(config: Dict[str, Any], st_container):
+def add_study_inclusion_mask(config: dict[str, Any], st_container):
     st_container.subheader("Define New Study Inclusion Criterion")
 
     st_container.info(

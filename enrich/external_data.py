@@ -1,8 +1,9 @@
-import os
-import manage.file_handling as mf
-import pandas as pd # for Dataframes manipulation
 import logging  # Added for logging
+import os
 
+import pandas as pd  # for Dataframes manipulation
+
+import manage.file_handling as mf
 
 # def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
 #     """
@@ -227,7 +228,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
         logging.error(f"Value error: {e}")
         return df
     except Exception as e:
-        logging.error(f"An unexpected error occurred during data enrichment: {str(e)}")
+        logging.error(f"An unexpected error occurred during data enrichment: {e!s}")
         return df
 
 
@@ -286,7 +287,7 @@ def process_data_enrichment(df, additional_data_info):
         logging.error(f"Key error: {e}")
         return df
     except Exception as e:
-        logging.error(f"An unexpected error occurred during data enrichment: {additional_data_info}. Error: {str(e)}")
+        logging.error(f"An unexpected error occurred during data enrichment: {additional_data_info}. Error: {e!s}")
         return df
 
 

@@ -1,9 +1,9 @@
 ######################################## PACKAGES ########################################
-import os # for path etc
-
-import pandas as pd # for Dataframes manipulation
-from detect_delimiter import detect
 import logging  # Added for logging
+import os  # for path etc
+
+import pandas as pd  # for Dataframes manipulation
+from detect_delimiter import detect
 
 ######################################## LOAD DATAFRAME FROM FILES ########################################
 
@@ -123,7 +123,7 @@ def load_csv_with_separator(file_path, encoding, num_lines=30):
         df = pd.read_csv(file_path, sep=most_represented_separator, encoding=encoding)
         return df
     except Exception as e:
-        logging.error(f"Error loading CSV file '{file_path}': {str(e)}")
+        logging.error(f"Error loading CSV file '{file_path}': {e!s}")
         return None
 
 
@@ -153,7 +153,7 @@ def load_dataframe(file_path, encoding='utf-8'):
         try:
             df = load_csv_with_separator(file_path, encoding, num_lines=30)
         except Exception as e:
-            logging.error(f"Error reading CSV file '{file_path}': {str(e)}")
+            logging.error(f"Error reading CSV file '{file_path}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")
@@ -165,7 +165,7 @@ def load_dataframe(file_path, encoding='utf-8'):
         try:
             df = pd.read_excel(file_path, engine='openpyxl')
         except Exception as e:
-            logging.error(f"Error reading Excel file '{file_path}': {str(e)}")
+            logging.error(f"Error reading Excel file '{file_path}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")
@@ -177,7 +177,7 @@ def load_dataframe(file_path, encoding='utf-8'):
         try:
             df = pd.read_parquet(file_path)
         except Exception as e:
-            logging.error(f"Error reading Parquet file '{file_path}': {str(e)}")
+            logging.error(f"Error reading Parquet file '{file_path}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")

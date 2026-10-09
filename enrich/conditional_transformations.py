@@ -1,8 +1,9 @@
 ######################################## PACKAGES ########################################
+import ast  # dynamic python script interpretation
 import logging  # Added for logging
-import ast # dynamic python script interpretation
-import pandas as pd # for Dataframes manipulation
-import numpy as np # extend some specific Dataframes manipulation
+
+import numpy as np  # extend some specific Dataframes manipulation
+import pandas as pd  # for Dataframes manipulation
 
 ######################################## TRANSFORMATION FUNCTIONS DEFINITION ######################################## 
 
@@ -141,7 +142,7 @@ def retrieve_transform_column_names(config):
             tr_col_names.append(transformation["target_column"])
         return tr_col_names
     except Exception as e:
-        logging.error(f"Error in listing transformation columns: {str(e)}")
+        logging.error(f"Error in listing transformation columns: {e!s}")
         return None
     
 
@@ -191,7 +192,7 @@ def create_condition_mask(df, expression):
         result = eval(compiled_expr, globals(), {'df': df})
         return pd.Series(result, index=df.index, dtype=bool)
     except Exception as e:
-        raise ValueError(f"Error in evaluating expression: {str(e)}")
+        raise ValueError(f"Error in evaluating expression: {e!s}")
 
 
 def create_transformation(df, expression, condition_column, parameter_column, condition, conversion_rate):
@@ -221,7 +222,7 @@ def create_transformation(df, expression, condition_column, parameter_column, co
         result = eval(compiled_expr, globals(), {'df': df, 'condition_column':condition_column, 'parameter_column':parameter_column,'condition':condition,'conversion_rate':conversion_rate})
         return result
     except Exception as e:
-        raise ValueError(f"Error in evaluating expression: {str(e)}")
+        raise ValueError(f"Error in evaluating expression: {e!s}")
 
 
 def apply_transformation(df, condition, parameter_column, transformed_column, conversion_rate, transformation_expr):
@@ -258,5 +259,5 @@ def apply_transformation(df, condition, parameter_column, transformed_column, co
         df.loc[condition, transformed_column] = create_transformation(df=df, expression=transformation_expr,condition_column=condition.name,parameter_column=parameter_column, condition=condition,conversion_rate=conversion_rate)
         print("\ntransf: ____ cond:",condition,"\n_____param:", parameter_column, "\n____rate:", conversion_rate)
     except Exception as e:
-        raise ValueError(f"Error in applying transformation: {str(e)}")
+        raise ValueError(f"Error in applying transformation: {e!s}")
 

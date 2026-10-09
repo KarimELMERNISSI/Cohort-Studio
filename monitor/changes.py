@@ -1,9 +1,10 @@
 ######################################## PACKAGES ########################################
-import os # for path etc
-import pandas as pd # for Dataframes manipulation
 import logging  # Added for logging
-import manage.file_handling as mf
+import os  # for path etc
 
+import pandas as pd  # for Dataframes manipulation
+
+import manage.file_handling as mf
 
 ######################################## FUNCTIONS FOR EXCEL SPECIFIC FUNCTIONALITIES ########################################
 
@@ -161,7 +162,7 @@ def compare_dataframes(df1, df2, id_column, exception_list):
 
         return merged_df
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {str(e)}")
+        logging.error(f"An unexpected error occurred: {e!s}")
         return None
 
 
@@ -214,7 +215,7 @@ def process_comparison(comparison_name, comparison_info, config, exclude_cols=No
 
         return df1, df2, common_id_name, comparison_result_filtered, common_id_only_in_df1, common_id_only_in_df2, common_id_modified, output_file
     except Exception as e:
-        logging.error(f"An unexpected error occurred for comparison: {comparison_name}. Error: {str(e)}")
+        logging.error(f"An unexpected error occurred for comparison: {comparison_name}. Error: {e!s}")
         return None
 
 def process_comparisons_from_config(config, exclude_cols_stats):
@@ -337,5 +338,5 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         logging.error(f"Missing key in comparison_info: {key_error}")
         return None
     except Exception as e:
-        logging.error(f"An unexpected error occurred for '{comparison_name}': {str(e)}")
+        logging.error(f"An unexpected error occurred for '{comparison_name}': {e!s}")
         return None

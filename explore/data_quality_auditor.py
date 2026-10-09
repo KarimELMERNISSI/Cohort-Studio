@@ -1,8 +1,9 @@
 import logging
-from typing import Optional, Dict, List, Any, Union
-import pandas as pd
+from typing import Any
+
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_any_dtype
+import pandas as pd
+
 import enrich.custom_metrics_and_filters as ecm
 
 logger = logging.getLogger(__name__)
@@ -17,14 +18,14 @@ class DataQualityAuditor:
     - Clinical Validity: Compliance with declared anomaly criteria.
     """
 
-    def __init__(self, df: pd.DataFrame, config: Optional[Any] = None) -> None:
+    def __init__(self, df: pd.DataFrame, config: Any | None = None) -> None:
         self.df: pd.DataFrame = df
         self.config = config
-        self.metrics: Dict[str, float] = {}
-        self.advice: List[Dict[str, str]] = []
+        self.metrics: dict[str, float] = {}
+        self.advice: list[dict[str, str]] = []
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
-        self.uniformity_details: List[Dict[str, str]] = []
+        self.uniformity_details: list[dict[str, str]] = []
 
     def compute_completeness(self) -> float:
         """Calculates the percentage of non-missing values."""
@@ -44,7 +45,7 @@ class DataQualityAuditor:
         score = (unique_rows / total_rows) * 100
         return round(float(score), 2)
 
-    def compute_validity(self, method: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> float:
+    def compute_validity(self, method: str | None = None, params: dict[str, Any] | None = None) -> float:
         """
         Calculates a validity score based on the absence of outliers in numerical columns.
         
@@ -122,9 +123,9 @@ class DataQualityAuditor:
         # Multivariate ML methods
         elif method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
             try:
+                from sklearn.cluster import DBSCAN
                 from sklearn.ensemble import IsolationForest
                 from sklearn.neighbors import LocalOutlierFactor
-                from sklearn.cluster import DBSCAN
                 from sklearn.preprocessing import StandardScaler
                 
                 ml_data = self.df[numeric_cols].dropna()
@@ -197,7 +198,7 @@ class DataQualityAuditor:
         score = (1 - (inconsistent_cols / len(object_cols))) * 100
         return round(score, 2)
 
-    def compute_clinical_validity(self) -> Optional[float]:
+    def compute_clinical_validity(self) -> float | None:
         """
         Calculates a score based on declared anomaly criteria (if available).
         Score = 100 - (% of rows triggering at least one anomaly).
@@ -432,9 +433,9 @@ class DataQualityAuditor:
 
     def run_audit(
         self, 
-        validity_method: Optional[str] = None, 
-        validity_params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Optional[float]]:
+        validity_method: str | None = None, 
+        validity_params: dict[str, Any] | None = None
+    ) -> dict[str, float | None]:
         """Runs all checks and populates metrics and advice.
         
         Parameters:

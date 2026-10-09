@@ -1,6 +1,6 @@
 
 import pandas as pd
-import numpy as np
+
 
 def smart_parse_dates(series):
     """

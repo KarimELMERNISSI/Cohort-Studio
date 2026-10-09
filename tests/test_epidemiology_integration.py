@@ -8,16 +8,17 @@ Tests end-to-end analytical pipelines:
 - Missingness pattern analysis (Little's MCAR test)
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
+import statsmodels.stats.multitest as smt
+
 from utils.analysis_utils import (
     analyze_variable,
-    recommend_statistical_test,
-    perform_post_hoc,
     littles_mcar_test,
+    perform_post_hoc,
+    recommend_statistical_test,
 )
-import statsmodels.stats.multitest as smt
 
 
 @pytest.fixture

@@ -8,8 +8,9 @@ Decouples data trace execution from Streamlit presentation logic, providing:
 
 import json
 import logging
-from typing import Dict, Any, Optional, Tuple, Callable
-from pathlib import Path
+from collections.abc import Callable
+from typing import Any
+
 import pandas as pd
 
 import enrich.external_data as eed
@@ -21,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 def execute_trace_pipeline(
-    trace_data: Dict[str, Any],
-    progress_callback: Optional[Callable[[int, str], None]] = None,
-) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    trace_data: dict[str, Any],
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> tuple[pd.DataFrame | None, str | None]:
     """
     Execute a serialized transformation trace against the source dataset.
     

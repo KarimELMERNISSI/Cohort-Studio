@@ -1,10 +1,12 @@
 """
 Unit tests for DataAnalyzer and DatasetProfile.
 """
-import pytest
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
+import pytest
+
 from utils.data_analyzer import DataAnalyzer, DatasetProfile
 
 

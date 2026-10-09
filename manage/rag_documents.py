@@ -5,7 +5,6 @@ Contains all document processing, knowledge graph extraction and chat methods.
 This is part of the RAGManager class composition pattern.
 """
 import os
-import json
 import time
 
 
@@ -121,8 +120,7 @@ class DocumentsMixin:
                 if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
                 
                 clean_model = getattr(self.llm, "model_name", "gemini-1.5-flash")
-                if clean_model.startswith("models/"):
-                    clean_model = clean_model[7:]
+                clean_model = clean_model.removeprefix("models/")
 
                 response = client.models.generate_content(
                     model=clean_model,
@@ -315,9 +313,9 @@ class DocumentsMixin:
         Chat with specific document(s) using the vector store.
         doc_names: string or list of strings.
         """
-        from langchain_core.runnables import RunnablePassthrough
         from langchain_core.output_parsers import StrOutputParser
         from langchain_core.prompts import ChatPromptTemplate
+        from langchain_core.runnables import RunnablePassthrough
         
         if not self.initialized or not self.vector_store:
             return "System not initialized or no database available."
@@ -369,4 +367,4 @@ class DocumentsMixin:
         except Exception as e:
             import logging
             logging.getLogger(__name__).error("RAG Chat Error: %s", e, exc_info=True)
-            return f"System Error: {str(e)}"
+            return f"System Error: {e!s}"

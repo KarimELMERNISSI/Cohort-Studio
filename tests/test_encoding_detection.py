@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from manage.file_handling import detect_encoding
 
 

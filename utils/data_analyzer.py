@@ -5,9 +5,10 @@ Provides the DataAnalyzer class for analyzing and categorizing DataFrame columns
 This is a consolidated module combining functionality from home.py and visualization_utils.py.
 """
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional, Any
-import pandas as pd
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -15,14 +16,14 @@ class DatasetProfile:
     """Immutable representation of categorized DataFrame columns."""
     total_rows: int
     total_columns: int
-    numeric_cols: List[str] = field(default_factory=list)
-    categorical_cols: List[str] = field(default_factory=list)
-    date_cols: List[str] = field(default_factory=list)
-    binary_cols: List[str] = field(default_factory=list)
-    low_cardinality_numeric_cols: List[str] = field(default_factory=list)
-    high_cardinality_cat_cols: List[str] = field(default_factory=list)
-    timedelta_cols: List[str] = field(default_factory=list)
-    date_formats: Dict[str, str] = field(default_factory=dict)
+    numeric_cols: list[str] = field(default_factory=list)
+    categorical_cols: list[str] = field(default_factory=list)
+    date_cols: list[str] = field(default_factory=list)
+    binary_cols: list[str] = field(default_factory=list)
+    low_cardinality_numeric_cols: list[str] = field(default_factory=list)
+    high_cardinality_cat_cols: list[str] = field(default_factory=list)
+    timedelta_cols: list[str] = field(default_factory=list)
+    date_formats: dict[str, str] = field(default_factory=dict)
 
 
 class DataAnalyzer:
@@ -47,17 +48,17 @@ class DataAnalyzer:
             df: pandas DataFrame to analyze
         """
         self.df: pd.DataFrame = df
-        self.date_formats: Dict[str, str] = {}
-        self.numeric_cols: List[str] = []
-        self.categorical_cols: List[str] = []
-        self.date_cols: List[str] = []
-        self.binary_cols: List[str] = []
-        self.num_binary_cols: List[str] = []
-        self.non_num_binary_cols: List[str] = []
-        self.low_cardinality_numeric_cols: List[str] = []
-        self.non_binary_low_cardinality_numeric_cols: List[str] = []
-        self.timedelta_cols: List[str] = []
-        self.high_cardinality_cat_cols: List[str] = []
+        self.date_formats: dict[str, str] = {}
+        self.numeric_cols: list[str] = []
+        self.categorical_cols: list[str] = []
+        self.date_cols: list[str] = []
+        self.binary_cols: list[str] = []
+        self.num_binary_cols: list[str] = []
+        self.non_num_binary_cols: list[str] = []
+        self.low_cardinality_numeric_cols: list[str] = []
+        self.non_binary_low_cardinality_numeric_cols: list[str] = []
+        self.timedelta_cols: list[str] = []
+        self.high_cardinality_cat_cols: list[str] = []
         self.analyze_columns()
     
     def refresh(self, df: pd.DataFrame) -> None:
@@ -116,9 +117,9 @@ class DataAnalyzer:
 
         self.high_cardinality_cat_cols = self._detect_high_cardinality_cat_columns()
     
-    def _detect_date_columns(self) -> List[str]:
+    def _detect_date_columns(self) -> list[str]:
         """Detect columns that are likely dates, with additional checks for accuracy."""
-        date_cols: List[str] = []
+        date_cols: list[str] = []
         formats = [
             "%d/%m/%Y",
             "%m/%d/%Y",
@@ -230,7 +231,7 @@ class DataAnalyzer:
         
         return date_cols
 
-    def _detect_binary_columns(self) -> Tuple[List[str], List[str], List[str]]:
+    def _detect_binary_columns(self) -> tuple[list[str], list[str], list[str]]:
         """
         Detect columns with only two unique values, including numeric columns.
         
@@ -244,16 +245,16 @@ class DataAnalyzer:
                           if self.df[col].nunique() == 2]
         return all_binary, num_binary, non_num_binary
     
-    def _detect_low_cardinality_numeric_columns(self) -> List[str]:
+    def _detect_low_cardinality_numeric_columns(self) -> list[str]:
         """Detect numeric columns with <= 10 unique values to treat as categorical."""
         return [col for col in self.numeric_cols if self.df[col].nunique() <= 10]
     
-    def _detect_high_cardinality_cat_columns(self) -> List[str]:
+    def _detect_high_cardinality_cat_columns(self) -> list[str]:
         """Detect categorical columns with many unique values."""
         return [col for col in self.categorical_cols 
                 if self.df[col].nunique() > 0.5 * len(self.df)]
 
-    def get_suitable_columns(self, plot_type: str) -> Dict[str, Any]:
+    def get_suitable_columns(self, plot_type: str) -> dict[str, Any]:
         """
         Get suitable columns for different plot types.
         

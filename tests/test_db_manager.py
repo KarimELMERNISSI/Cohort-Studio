@@ -1,16 +1,18 @@
 """
 Unit tests for DBManager (User Authentication and DuckDB Dataset Persistence).
 """
-import pytest
+from collections.abc import Generator
 from pathlib import Path
+
 import pandas as pd
-from typing import Generator
+import pytest
+
 import utils.data_paths as dp
 from manage.db_manager import DBManager
 
 
 @pytest.fixture
-def isolated_db_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[DBManager, None, None]:
+def isolated_db_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[DBManager]:
     """Provides a DBManager instance configured within an isolated temporary directory."""
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     manager = DBManager()

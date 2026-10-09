@@ -9,41 +9,35 @@ This is the main RAGManager class that composes functionality from mixin classes
 The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code.
 """
-import os
-import shutil
-import streamlit as st
-from pathlib import Path
 import ast
 import json
-import hashlib
-import time
 import logging
+import os
 import re
-from rapidfuzz import process
+import shutil
+import time
+
 import pandas as pd
+from rapidfuzz import process
 
 # Import prompt functions
 from prompts import (
-    context_analysis,
-    column_renaming,
-    taxonomy_simple,
-    formula_enrichment,
     anomaly_criteria_prompt,
+    context_analysis,
 )
-
-# Import mixins
-from .rag_taxonomy import TaxonomyMixin
-from .rag_documents import DocumentsMixin
-from .rag_computed_vars import ComputedVarsMixin
 
 # Import LLM utilities for reliable parsing
 from utils.llm_utils import (
-    parse_json_safe,
-    validate_and_parse,
     StructuredOutputHelper,
     clean_json_response,
+    parse_json_safe,
 )
 
+from .rag_computed_vars import ComputedVarsMixin
+from .rag_documents import DocumentsMixin
+
+# Import mixins
+from .rag_taxonomy import TaxonomyMixin
 
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY_IMPL"] = "false"
@@ -53,17 +47,18 @@ logging.getLogger('chromadb.telemetry.product.posthog').setLevel(logging.CRITICA
 
 # Try importing RAG dependencies
 try:
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_chroma import Chroma
-    from manage.rag import (
-        ConnectorFactory,
-        ProviderConfig,
-        ProviderType,
-        PDFDocumentLoader,
-    )
-    from langchain_core.runnables import RunnablePassthrough
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+    from langchain_core.runnables import RunnablePassthrough
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    from manage.rag import (
+        ConnectorFactory,
+        PDFDocumentLoader,
+        ProviderConfig,
+        ProviderType,
+    )
     RAG_AVAILABLE = True
 except ImportError as e:
     RAG_AVAILABLE = False
@@ -360,7 +355,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return True, f"RAG System Initialized Successfully ({provider_clean.upper()}). Processed {len(documents)} pages and {len(texts)} chunks."
 
         except Exception as e:
-            return False, f"Error initializing RAG: {str(e)}"
+            return False, f"Error initializing RAG: {e!s}"
 
 
     def update_adherence_score(self, adherence_score):
@@ -372,7 +367,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             self._update_internal_state(adherence_score)
             return True, "Adherence score updated."
         except Exception as e:
-            return False, f"Error updating adherence score: {str(e)}"
+            return False, f"Error updating adherence score: {e!s}"
 
     def _update_internal_state(self, adherence_score):
         """Updates internal state using the Modern LangChain 0.3 Architecture."""
@@ -607,7 +602,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             try:
                 refinements = json.loads(cleaned_response)
             except json.JSONDecodeError as e:
-                return updated_taxonomy, f"JSON Error in refinement: {str(e)}"
+                return updated_taxonomy, f"JSON Error in refinement: {e!s}"
             
             for var, new_data in refinements.items():
                 if var in updated_taxonomy:
@@ -619,7 +614,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return updated_taxonomy, None
             
         except Exception as e:
-            return updated_taxonomy, f"Refinement Eror: {str(e)}"
+            return updated_taxonomy, f"Refinement Eror: {e!s}"
 
     def suggest_anomaly_criteria(self, description, columns, sample_data=None, mode="anomaly"):
         """

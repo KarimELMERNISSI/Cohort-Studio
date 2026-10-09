@@ -1,17 +1,24 @@
 ######################################## PACKAGES ########################################
 import pandas as pd
+from lightgbm import LGBMClassifier, LGBMRegressor  #used for MissForest
 from sklearn.base import TransformerMixin
-from sklearn.experimental import enable_iterative_imputer  # Explicitly enable experimental features
-from sklearn.impute import IterativeImputer  # Now import IterativeImputer
-from lightgbm import LGBMClassifier, LGBMRegressor #used for MissForest
+from sklearn.compose import ColumnTransformer  # split some of our processing to specific columns
+from sklearn.impute import (  # to use basic (median, mean, most_frequent, constant, etc.) and knn imputers
+    IterativeImputer,  # Now import IterativeImputer
+    KNNImputer,
+    SimpleImputer,
+)
+from sklearn.pipeline import Pipeline  # to make our data pre-processing pipeline
+from sklearn.preprocessing import (  # preprocess non numerical variables and scale numerical ones
+    OneHotEncoder,
+    StandardScaler,
+)
+
+from utils.data_analyzer import DataAnalyzer
+
 #from missforest import MissForest # our MissForest adaptation is based on this package
 from utils.miss_forest.missforest import MissForest
-from sklearn.impute import SimpleImputer, KNNImputer # to use basic (median, mean, most_frequent, constant, etc.) and knn imputers
-from sklearn.preprocessing import OneHotEncoder, StandardScaler # preprocess non numerical variables and scale numerical ones
-from sklearn.compose import ColumnTransformer # split some of our processing to specific columns
-from sklearn.pipeline import Pipeline # to make our data pre-processing pipeline
-import streamlit as st
-from utils.data_analyzer import DataAnalyzer
+
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 class MissForestTransformer(TransformerMixin):
@@ -220,15 +227,15 @@ def get_feature_names(preprocessor, column_names, num_scaler=False, cat_encoder=
 
     # Check if the preprocessor is a ColumnTransformer or Pipeline
     if isinstance(preprocessor, ColumnTransformer):
-        debug_print(f"IN ColumnTransformer", debug=debug)
+        debug_print("IN ColumnTransformer", debug=debug)
         # Check for scalers and encoders in the pipeline
         if 'num_scaler' in preprocessor.named_transformers_ and num_scaler:
-            debug_print(f"IN 'num_scaler' ColumnTransformer", debug=debug)
+            debug_print("IN 'num_scaler' ColumnTransformer", debug=debug)
             if hasattr(preprocessor.named_transformers_['num_scaler'], 'get_feature_names_out'):
                 debug_print(f"Scaling numerical columns: {column_names}", debug=debug)
                 new_cols = preprocessor.named_transformers_['num_scaler'].get_feature_names_out(column_names).tolist()
         elif 'cat_encoder' in preprocessor.named_transformers_ and cat_encoder:
-            debug_print(f"IN 'cat_encoder' ColumnTransformer")
+            debug_print("IN 'cat_encoder' ColumnTransformer")
             if hasattr(preprocessor.named_transformers_['cat_encoder'], 'get_feature_names_out'):
                 debug_print(f"Encoding categorical columns: {column_names}", debug=debug)
                 new_cols = preprocessor.named_transformers_['cat_encoder'].get_feature_names_out(column_names).tolist()
@@ -240,18 +247,18 @@ def get_feature_names(preprocessor, column_names, num_scaler=False, cat_encoder=
             elif ('preprocess_selection' in preprocessor.named_transformers_):
                 new_cols = get_feature_names(preprocessor.named_transformers_['preprocess_selection'], column_names, num_scaler=num_scaler, cat_encoder=cat_encoder, debug=debug)
             else:
-                debug_print(f"IN ColumnTransformer, no change")
+                debug_print("IN ColumnTransformer, no change")
                 
     elif isinstance(preprocessor, Pipeline):
         # Check for scalers and encoders in the pipeline
-        debug_print(f"IN Pipeline", debug=debug)
+        debug_print("IN Pipeline", debug=debug)
         if 'num_scaler' in preprocessor.named_steps and num_scaler:
-            debug_print(f"IN 'num_scaler' Pipeline", debug=debug)
+            debug_print("IN 'num_scaler' Pipeline", debug=debug)
             if hasattr(preprocessor.named_steps['num_scaler'], 'get_feature_names_out'):
                 debug_print(f"Scaling numerical columns: {column_names}", debug=debug)
                 new_cols = preprocessor.named_steps['num_scaler'].get_feature_names_out(column_names).tolist()
         elif 'cat_encoder' in preprocessor.named_steps and cat_encoder:
-            debug_print(f"IN 'cat_encoder' Pipeline", debug=debug)
+            debug_print("IN 'cat_encoder' Pipeline", debug=debug)
             if hasattr(preprocessor.named_steps['cat_encoder'], 'get_feature_names_out'):
                 debug_print(f"Encoding categorical columns: {column_names}", debug=debug)
                 new_cols = preprocessor.named_steps['cat_encoder'].get_feature_names_out(column_names).tolist()
@@ -259,7 +266,7 @@ def get_feature_names(preprocessor, column_names, num_scaler=False, cat_encoder=
             if ('scaling_x_encoding' in preprocessor.named_steps):
                 new_cols = get_feature_names(preprocessor.named_steps['scaling_x_encoding'], column_names, num_scaler=num_scaler, cat_encoder=cat_encoder, debug=debug)
             else:
-                debug_print(f"IN Pipeline, no change", debug=debug) 
+                debug_print("IN Pipeline, no change", debug=debug) 
                 
     debug_print(f"New columns after transformations: {new_cols}", debug=debug)
 
@@ -339,7 +346,7 @@ def get_imputer(numerical_imputation_method='mean',
     analyzer = DataAnalyzer(data)
     
     # Debugging block to print intermediate values
-    print(f"\n-----------\n----------- DEBUG INFO -----------")
+    print("\n-----------\n----------- DEBUG INFO -----------")
     print(f"\nanalyzer.numeric_cols (type: {type(analyzer.numeric_cols)}): {analyzer.numeric_cols}")
     print(f"\nanalyzer.categorical_cols (type: {type(analyzer.categorical_cols)}): {analyzer.categorical_cols}")
     print(f"\nanalyzer.binary_cols (type: {type(analyzer.binary_cols)}): {analyzer.binary_cols}")
@@ -364,7 +371,7 @@ def get_imputer(numerical_imputation_method='mean',
     )
 
     print(f"\nSelected numerical_cols (type: {type(numerical_cols)}): {numerical_cols.tolist()}")
-    print(f"----------- END DEBUG INFO -----------\n-----------\n")
+    print("----------- END DEBUG INFO -----------\n-----------\n")
     #categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
     #numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
     print(f"\n-----------\n-----------\n categorical_cols {categorical_cols}\n-----------\n numeric:{numerical_cols}\n-----------\n-----------\n")
@@ -517,7 +524,7 @@ def get_imputer_in_progress(numerical_imputation_method='mean',
     analyzer = DataAnalyzer(data)
     
     # Debugging block to print intermediate values
-    print(f"\n-----------\n----------- DEBUG INFO -----------")
+    print("\n-----------\n----------- DEBUG INFO -----------")
     print(f"\nanalyzer.numeric_cols (type: {type(analyzer.numeric_cols)}): {analyzer.numeric_cols}")
     print(f"\nanalyzer.categorical_cols (type: {type(analyzer.categorical_cols)}): {analyzer.categorical_cols}")
     print(f"\nanalyzer.binary_cols (type: {type(analyzer.binary_cols)}): {analyzer.binary_cols}")
@@ -542,7 +549,7 @@ def get_imputer_in_progress(numerical_imputation_method='mean',
     )
 
     print(f"\nSelected numerical_cols (type: {type(numerical_cols)}): {numerical_cols.tolist()}")
-    print(f"----------- END DEBUG INFO -----------\n-----------\n")
+    print("----------- END DEBUG INFO -----------\n-----------\n")
     #categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
     #numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
     print(f"\n-----------\n-----------\n categorical_cols {categorical_cols}\n-----------\n numeric:{numerical_cols}\n-----------\n-----------\n")

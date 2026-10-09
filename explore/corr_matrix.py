@@ -1,17 +1,16 @@
+import warnings
+
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-from openpyxl.styles import PatternFill, Font
-from matplotlib.colors import to_hex
 import plotly.express as px
-import scipy.cluster.hierarchy as sch
-import scipy.spatial.distance as ssd
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
-import networkx as nx
-import warnings
-from yfiles_graphs_for_streamlit import Node, Edge, EdgeStyle, DashStyle, NodeStyle, NodeShape
+import seaborn as sns
+from matplotlib.colors import to_hex
+from openpyxl.styles import Font, PatternFill
+from yfiles_graphs_for_streamlit import Edge, Node
 
 # Filter statistical edge-case warnings
 warnings.filterwarnings("ignore", message=".*sample arguments is too small.*")
@@ -698,8 +697,7 @@ def add_correlation_strength_table(writer, method, sheet_name='Correlation Stren
         column = col[0].column_letter  # Get the column name
         for cell in col:
             try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))  # Cast to string for length calculation
+                max_length = max(max_length, len(str(cell.value)))  # Cast to string for length calculation
             except:
                 pass
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust
@@ -788,6 +786,7 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
 
 from functools import cache
 
+
 @cache
 def generate_palette(style: str = "blue_white_red") -> list:
     """
@@ -803,7 +802,6 @@ def generate_palette(style: str = "blue_white_red") -> list:
     Returns:
     list of str: List of 256 color hex codes.
     """
-    import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
     
     if style == "blue_white_red":
@@ -937,8 +935,7 @@ def _write_corr_to_sheet(
         column = col[0].column_letter  # Get the column name
         for cell in col:
             try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))  # Cast to string for length calculation
+                max_length = max(max_length, len(str(cell.value)))  # Cast to string for length calculation
             except:
                 pass
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust

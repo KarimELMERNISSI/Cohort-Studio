@@ -9,6 +9,7 @@ This page allows administrators to:
 """
 
 import streamlit as st
+
 from manage.db_manager import DBManager
 
 

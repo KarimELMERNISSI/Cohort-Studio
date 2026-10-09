@@ -1,5 +1,6 @@
 """Scan all .py files and print top-level imported module names (third-party only)."""
-import os, re, sys
+import os
+import re
 
 STDLIB = {
     'abc','ast','asyncio','base64','bisect','collections','concurrent','contextlib',

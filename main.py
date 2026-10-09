@@ -13,14 +13,15 @@
 #     └── data_operations.py
 
 # main.py
-import streamlit as st
-#import requests
-from io import BytesIO
-from PIL import Image
-from utils.multipage import MultiPageApp
 import importlib
-from typing import Callable
 import warnings
+
+#import requests
+from collections.abc import Callable
+
+import streamlit as st
+
+from utils.multipage import MultiPageApp
 
 # Filter expected statistical edge-case warnings
 warnings.filterwarnings("ignore", message=".*sample arguments is too small.*")
@@ -35,8 +36,10 @@ def lazy_page(module_name: str, func_name: str = "app") -> Callable:
         page_func()
     return _page_runner
 
-from manage.db_manager import DBManager
 import time
+
+from manage.db_manager import DBManager
+
 
 def check_auth():
     """Manages authentication with sidebar login/signup."""
@@ -71,41 +74,39 @@ def check_auth():
         
         tab_login, tab_signup = st.tabs(["Login", "Sign Up"])
         
-        with tab_login:
-            with st.form("login_form"):
-                username = st.text_input("Username")
-                password = st.text_input("Password", type="password")
-                submit_login = st.form_submit_button("Login", width="stretch")
-                
-                if submit_login:
-                    success, msg = db.verify_user(username, password)
+        with tab_login, st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("Login", width="stretch")
+            
+            if submit_login:
+                success, msg = db.verify_user(username, password)
+                if success:
+                    st.session_state.user_authenticated = True
+                    st.session_state.username = username
+                    st.success(msg)
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        
+        with tab_signup, st.form("signup_form"):
+            new_user = st.text_input("New Username")
+            new_pass = st.text_input("New Password", type="password")
+            confirm_pass = st.text_input("Confirm Password", type="password")
+            submit_signup = st.form_submit_button("Create Account", width="stretch")
+            
+            if submit_signup:
+                if new_pass != confirm_pass:
+                    st.error("Passwords do not match")
+                elif len(new_pass) < 4:
+                    st.error("Password must be at least 4 characters")
+                else:
+                    success, msg = db.create_user(new_user, new_pass)
                     if success:
-                        st.session_state.user_authenticated = True
-                        st.session_state.username = username
-                        st.success(msg)
-                        time.sleep(0.5)
-                        st.rerun()
+                        st.success("Account created. Please log in.")
                     else:
                         st.error(msg)
-        
-        with tab_signup:
-            with st.form("signup_form"):
-                new_user = st.text_input("New Username")
-                new_pass = st.text_input("New Password", type="password")
-                confirm_pass = st.text_input("Confirm Password", type="password")
-                submit_signup = st.form_submit_button("Create Account", width="stretch")
-                
-                if submit_signup:
-                    if new_pass != confirm_pass:
-                        st.error("Passwords do not match")
-                    elif len(new_pass) < 4:
-                        st.error("Password must be at least 4 characters")
-                    else:
-                        success, msg = db.create_user(new_user, new_pass)
-                        if success:
-                            st.success("Account created. Please log in.")
-                        else:
-                            st.error(msg)
                             
     return False
 

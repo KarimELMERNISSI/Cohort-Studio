@@ -1,14 +1,16 @@
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import plotly.figure_factory as ff
+import plotly.graph_objects as go
 import scipy.cluster.hierarchy as sch
-from explore.data_quality_auditor import DataQualityAuditor
-import utils.analysis_utils as au
 import statsmodels.stats.multitest as smt
+import streamlit as st
+
+import utils.analysis_utils as au
 import utils.visualization_utils as vu
+from explore.data_quality_auditor import DataQualityAuditor
+
 
 def render_dashboard(df, config):
     """
@@ -427,14 +429,14 @@ def render_dashboard(df, config):
                                     
                                     # Detailed Interpretation
                                     if mcar_result['p_value'] < 0.05:
-                                        st.error(f"""
+                                        st.error("""
                                         **Result: Likely Not MCAR** (p < 0.05)
                                         
                                         The test rejects the null hypothesis. The missingness pattern appears to be systematic (MAR or MNAR).
                                         You should investigate potential dependencies using the **MAR Indicator** tab.
                                         """)
                                     else:
-                                        st.success(f"""
+                                        st.success("""
                                         **Result: Likely MCAR** (p >= 0.05)
                                         
                                         The test fails to reject the null hypothesis. There is no strong evidence against the data being Missing Completely at Random.
@@ -670,7 +672,7 @@ def render_dashboard(df, config):
             # Callback to trigger rerun when method/params change
             def on_method_change():
                 """Callback when method or params change - updates session state."""
-                pass  # Session state is already updated by widget, rerun happens automatically
+                # Session state is already updated by widget, rerun happens automatically
             
             # --- Method Selection UI ---
             col1, col2 = st.columns(2)
@@ -778,9 +780,9 @@ def render_dashboard(df, config):
                     st.warning("Please select at least 2 columns for multivariate analysis.")
                 else:
                     try:
+                        from sklearn.cluster import DBSCAN
                         from sklearn.ensemble import IsolationForest
                         from sklearn.neighbors import LocalOutlierFactor
-                        from sklearn.cluster import DBSCAN
                         from sklearn.preprocessing import StandardScaler
                         
                         # Prepare data

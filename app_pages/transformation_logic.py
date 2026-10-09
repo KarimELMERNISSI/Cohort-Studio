@@ -1,6 +1,13 @@
-import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, OneHotEncoder, LabelEncoder, OrdinalEncoder
+import pandas as pd
+from sklearn.preprocessing import (
+    LabelEncoder,
+    MinMaxScaler,
+    OneHotEncoder,
+    OrdinalEncoder,
+    StandardScaler,
+)
+
 
 def apply_variable_transformation(dataframe, params):
     transformation_type = params.get("transformation_type")
@@ -79,7 +86,12 @@ def apply_variable_transformation(dataframe, params):
         new_columns.update(result_df.to_dict(orient="list"))
 
     elif transformation_type in ["Clustering", "Cluster-Based"]:
-        from utils.clustering_utils import prepare_data_for_clustering, fit_kmeans, fit_dbscan, fit_gaussian_mixture
+        from utils.clustering_utils import (
+            fit_dbscan,
+            fit_gaussian_mixture,
+            fit_kmeans,
+            prepare_data_for_clustering,
+        )
         
         # Clustering params
         n_clusters = params.get("n_clusters", 3)

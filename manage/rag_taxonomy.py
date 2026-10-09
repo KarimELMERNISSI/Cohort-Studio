@@ -95,9 +95,9 @@ class TaxonomyMixin:
         for var_name, var_data in taxonomy.items():
             if var_name in col_map:
                 col_info = col_map[var_name]
-                if "stats" in col_info and col_info["stats"]:
+                if col_info.get("stats"):
                     var_data["stats"] = col_info["stats"]
-                elif "top_values" in col_info and col_info["top_values"]:
+                elif col_info.get("top_values"):
                     var_data["stats"] = col_info["top_values"]
         return taxonomy
 
@@ -168,13 +168,13 @@ class TaxonomyMixin:
             try:
                 taxonomy = json.loads(cleaned_response)
             except json.JSONDecodeError as e:
-                return None, f"JSON Parsing Error: {str(e)}. Raw output: {response.content[:500]}..."
+                return None, f"JSON Parsing Error: {e!s}. Raw output: {response.content[:500]}..."
             
             taxonomy = self._merge_stats(taxonomy, columns_info)
             self.variable_taxonomy = taxonomy
             return taxonomy, None
         except Exception as e:
-            return None, f"Generation Error: {str(e)}"
+            return None, f"Generation Error: {e!s}"
 
     def _generate_advanced_taxonomy(self, columns_info, existing_mapping, progress_callback):
         """Orchestrates the multi-step taxonomy generation pipeline."""

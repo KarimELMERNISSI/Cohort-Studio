@@ -1,20 +1,26 @@
 # pages/home.py
-import streamlit as st
-import pandas as pd
-from io import BytesIO
+import json
+import time
+
+import duckdb
 import numpy as np
-from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle
+import pandas as pd
+import streamlit as st
+from yfiles_graphs_for_streamlit import (
+    DashStyle,
+    EdgeStyle,
+    LabelStyle,
+    Layout,
+    StreamlitGraphWidget,
+)
+
 import explore.corr_matrix as ecm
-import utils.visualization_utils as vu
-from utils.export_utils import to_excel, to_excel_sheets
-from utils.statistics_utils import normality_test, show_test_guidelines
-from utils.data_analyzer import DataAnalyzer
-import os
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
-import json
-import duckdb
-import time
+from utils.data_analyzer import DataAnalyzer
+from utils.export_utils import to_excel, to_excel_sheets
+from utils.statistics_utils import normality_test
+
 
 class RenameColumnsComponent:
     """A Streamlit component for renaming DataFrame columns with sorting, searching, type filtering, and top values display."""
@@ -839,13 +845,13 @@ def app():
                 # Apply filters based on checkbox states
                 if filter_on_inclusion:
                     if "study_inclusion_all" not in filtered_df.columns:
-                        st.warning(f"The inclusion criteria are missing and need to be defined first.")
+                        st.warning("The inclusion criteria are missing and need to be defined first.")
                     else:
                         filtered_df = filtered_df[filtered_df['study_inclusion_all'] == True]
 
                 if filter_out_anomaly:
                     if "clinical_anomalies_any" not in filtered_df.columns:
-                        st.warning(f"The anomaly criteria are missing and need to be defined first.")
+                        st.warning("The anomaly criteria are missing and need to be defined first.")
                     else:
                         filtered_df = filtered_df[filtered_df['clinical_anomalies_any'] == False]
 
@@ -952,7 +958,7 @@ def app():
                         )
                     
                     # Filter columns for all groups
-                    for category in quant_dict.keys():
+                    for category in quant_dict:
                         quant_dict[category] = quant_dict[category][selected_quant_columns]
 
                     # Display the first table as an example
@@ -1095,7 +1101,7 @@ def app():
                         selected_category = st.selectbox(label="Select grouping value:", options=qual_dict.keys(), index=0, key='qual_group_value')
 
                     # Filter columns for all groups
-                    for category in qual_dict.keys():
+                    for category in qual_dict:
                         qual_dict[category] = qual_dict[category][selected_qual_columns]
 
                     # Display the first table as an example

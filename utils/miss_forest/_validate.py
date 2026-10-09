@@ -1,11 +1,13 @@
-from typing import Any, Union
-from sklearn.base import BaseEstimator
-import pandas as pd
+from typing import Any
+
 import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator
+
 from utils.miss_forest._errors import MultipleDataTypesError
 
 
-def _is_estimator(estimator: Union[Any, BaseEstimator]) -> bool:
+def _is_estimator(estimator: Any | BaseEstimator) -> bool:
     """Checks if the argument `estimator` is an object that implements the
     scikit-learn estimator API.
 
@@ -22,8 +24,8 @@ def _is_estimator(estimator: Union[Any, BaseEstimator]) -> bool:
     """
     try:
         # Check if class methods `fit` and `predict` exist and callable.
-        is_has_fit_method = callable(getattr(estimator, "fit"))
-        is_has_predict_method = callable(getattr(estimator, "predict"))
+        is_has_fit_method = callable(estimator.fit)
+        is_has_predict_method = callable(estimator.predict)
 
         return is_has_fit_method and is_has_predict_method
     except AttributeError:

@@ -1,8 +1,9 @@
-import streamlit as st
 import pandas as pd
-from explore.data_quality_auditor import DataQualityAuditor
-from manage.transformation_manager import TransformationManager
+import streamlit as st
+
 from app_pages.data_enrichment import save_snapshot
+from explore.data_quality_auditor import DataQualityAuditor
+
 
 def app():
     if st.session_state.data is None:
@@ -79,7 +80,7 @@ def app():
                             output_dataset_path=snapshot_path
                         )
                 except Exception as e:
-                    st.error(f"Error during conversion: {str(e)}")
+                    st.error(f"Error during conversion: {e!s}")
     
     with st.expander("Handle Missing Values"):
         handle_missing_values()
@@ -151,4 +152,4 @@ def handle_missing_values():
                         output_dataset_path=snapshot_path
                     )
             except Exception as e:
-                st.error(f"Error handling missing values: {str(e)}")
+                st.error(f"Error handling missing values: {e!s}")

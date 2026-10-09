@@ -1,10 +1,10 @@
-import streamlit as st
-import pandas as pd
 import numpy as np
-from scipy import stats
+import pandas as pd
 import statsmodels.stats.multitest as smt
+import streamlit as st
+from scipy import stats
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
-import utils.visualization_utils as vu
+
 
 def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_cols, group_col_options=None, default_group_col="None", target_col_options=None, key_prefix=""):
     """

@@ -4,23 +4,19 @@ Computed Variables Mixin for RAGManager.
 Contains all computed variable suggestion and validation methods.
 This is part of the RAGManager class composition pattern.
 """
-import json
-import re
 import ast
 import hashlib
+import json
 import logging
+import re
+
+from utils.llm_utils import parse_json_safe, validate_and_parse
 
 # Import Pydantic schemas for structured output
 from .rag_schemas import (
-    TheoreticalConcept,
-    TheoreticalConceptList,
-    ComputedVariableSuggestion,
-    SuggestionResponse,
-    ProxyVariable,
     AlternativeFormula,
-    FormulaCorrection,
+    ProxyVariable,
 )
-from utils.llm_utils import parse_json_safe, validate_and_parse
 
 logger = logging.getLogger(__name__)
 

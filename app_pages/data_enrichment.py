@@ -1,32 +1,32 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import json
-from matplotlib import pyplot as plt
-from typing import Dict, Any, Optional, Union, List, Tuple, Callable
-from io import BytesIO
+import ast
 import io
-import functools
-from utils.multipage import load_dataframe, get_file_hash, _load_excel_with_selection
-import enrich.external_data as eed
-from utils.data_analyzer import DataAnalyzer
-from rapidfuzz import fuzz
+import json
+import logging
 import os
 import re
-from pandas.api.types import is_numeric_dtype
-import enrich.data_imputation as edi
-import logging
-from manage.db_manager import DBManager
-from manage.transformation_manager import TransformationManager
-from manage.trace_documenter import TraceDocumenter
 from datetime import datetime
+from io import BytesIO
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+from matplotlib import pyplot as plt
+from rapidfuzz import fuzz
+
+import enrich.data_imputation as edi
+import enrich.external_data as eed
+from manage.db_manager import DBManager
+from manage.trace_documenter import TraceDocumenter
+from manage.transformation_manager import TransformationManager
+from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
-import ast
+from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 
 # Note: DataTransformationEngine class was removed (dead code)
 # See git history if needed
 
-def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.DataFrame]:
+def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> pd.DataFrame | None:
     """Handle multi-sheet Excel files inline with a selection UI.
     
     Persists the loaded DataFrame in session state so it survives Streamlit re-runs.
@@ -106,7 +106,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> Optional[pd.Dat
     return None
 
 
-def handle_main_data_upload() -> Optional[pd.DataFrame]:
+def handle_main_data_upload() -> pd.DataFrame | None:
     """Handle the upload or path input for the main dataset."""
     if 'data' in st.session_state and st.session_state.data is not None:
         st.success("Main dataset loaded from session")
@@ -149,7 +149,7 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
                         st.session_state['enriched_df'] = df.copy()
                     return df
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+                st.error(f"Error loading file: {e!s}")
                 return None
     else:
         file_path = st.text_input("Enter file path for the main dataset:", key='main_data_path')
@@ -163,11 +163,11 @@ def handle_main_data_upload() -> Optional[pd.DataFrame]:
                     st.session_state['enriched_df'] = df.copy()
                 return df
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+                st.error(f"Error loading file: {e!s}")
                 return None
     return None
 
-def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
+def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
     """Handle the upload or path input for the enrichment dataset."""
     upload_method = st.radio("Choose upload method for Enrichment Dataset:", ["Upload File", "Enter File Path"], key='enrichment_data_method')
     
@@ -222,7 +222,7 @@ def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
                         st.success("Enrichment dataset successfully loaded from upload.")
                     return df, file_path
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+                st.error(f"Error loading file: {e!s}")
                 return None, None
     else:
         # Get folder path and file name from user input
@@ -240,12 +240,12 @@ def handle_enrichment_data_upload() -> Optional[Union[pd.DataFrame, str]]:
                 st.success("Enrichment dataset successfully loaded from provided path.")
                 return df, file_name
             except Exception as e:
-                st.error(f"Error loading file: {str(e)}")
+                st.error(f"Error loading file: {e!s}")
                 return None, None
     return None, None
 
 
-def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> Optional[pd.DataFrame]:
+def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
     """Configure and perform the data enrichment."""
     st.subheader("Enrichment Configuration")
     
@@ -365,7 +365,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     )
                 st.success("Enrichment completed successfully!")
             except Exception as e:
-                st.error(f"Error performing enrichment: {str(e)}")
+                st.error(f"Error performing enrichment: {e!s}")
     else:
         col1, col2 = st.columns(2)
         
@@ -413,7 +413,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                                        )
                 st.success("Enrichment completed successfully!")
             except Exception as e:
-                st.error(f"Error performing enrichment: {str(e)}")
+                st.error(f"Error performing enrichment: {e!s}")
     
     return enriched_df
 
@@ -725,7 +725,7 @@ def calculate_similarity_score(input_token: str, column_name: str) -> int:
     return int(base_score)
 
 
-def tokenize_formula(formula: str) -> List[str]:
+def tokenize_formula(formula: str) -> list[str]:
     """
     Tokenizes the formula, treating quoted variables as single tokens and splitting others by operators.
     
@@ -771,7 +771,7 @@ def tokenize_formula(formula: str) -> List[str]:
     return tokens
 
 
-def suggest_columns(computation_formula: str, column_names: List[str], threshold: int = 40, max_suggestions: int = 6) -> List[Tuple[str, int]]:
+def suggest_columns(computation_formula: str, column_names: list[str], threshold: int = 40, max_suggestions: int = 6) -> list[tuple[str, int]]:
     """
     Suggest column names based on similarity to the input formula with enhanced
     prefix matching, including handling quoted variable names as unique tokens.
@@ -991,10 +991,8 @@ def is_number(token):
         return False
     
 
-import ast
-from utils.date_parser import smart_parse_dates
 
-def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> Tuple[bool, str, List[str], List[str]]:
+def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tuple[bool, str, list[str], list[str]]:
     """
     Parses formula using Python AST to safely extract variables and constants 
     regardless of spacing.
@@ -1132,7 +1130,7 @@ def extract_constant_value(constant_token: str) -> str:
     return constant_token[9:-1]  # len('constant(') == 9
 
 
-def create_variables_dict(dataset: pd.DataFrame, identified_columns: List[str], constant_tokens: List[str]) -> Dict[str, pd.Series]:
+def create_variables_dict(dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]) -> dict[str, pd.Series]:
     """
     Create a dictionary mapping variable names to their corresponding Series
     for both regular columns and constants.
@@ -1287,7 +1285,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
 
     except Exception as e:
         return False, (
-            f"Error evaluating formula: {str(e)}\n"
+            f"Error evaluating formula: {e!s}\n"
             f"Make sure your formula uses valid column names and operators (+, -, *, /, etc.)."
         ), dataset
 
@@ -1433,7 +1431,7 @@ def define_new_variables(main_data):
                                 removed_count = len(cols_to_use) - len(filtered_cols)
                                 cols_to_use = filtered_cols
                                 filtering_msg = f"ℹ️ Automatically filtered {removed_count} irrelevant columns (IDs, unique strings) to improve AI focus."
-                        except Exception as e:
+                        except Exception:
                             pass # Fallback to all columns if analysis fails
 
                     if filtering_msg:
@@ -1485,7 +1483,7 @@ def define_new_variables(main_data):
                             st.write(suggestions_text) # Fallback
 
             # Display Domain Analysis
-            if 'ai_domain_analysis' in st.session_state and st.session_state['ai_domain_analysis']:
+            if st.session_state.get('ai_domain_analysis'):
                 da = st.session_state['ai_domain_analysis']
                 st.info(f"**Dataset Domain:** {da.get('dataset_domain', 'N/A')} | **Document Domain:** {da.get('document_domain', 'N/A')}")
                 if 'relevant_domains' in da:
@@ -1561,15 +1559,15 @@ def define_new_variables(main_data):
                                     dot_code += f'  "{inp}" -> "{target_name}";\n'
                                 
                                 if not has_inputs:
-                                     dot_code += f'  "No Inputs" [shape=plaintext];\n'
-                            except Exception as e:
-                                dot_code += f'  "Error" [shape=plaintext];\n'
+                                     dot_code += '  "No Inputs" [shape=plaintext];\n'
+                            except Exception:
+                                dot_code += '  "Error" [shape=plaintext];\n'
                             
                             dot_code += '}'
                             st.graphviz_chart(dot_code, width='stretch')
 
                         with col_formula:
-                            if 'markdown_formula' in sugg and sugg['markdown_formula']:
+                            if sugg.get('markdown_formula'):
                                 # Clean formula for st.latex (remove $$ wrappers if present)
                                 raw_formula = sugg['markdown_formula']
                                 clean_formula = raw_formula.replace('$$', '').replace('$', '').strip()
@@ -1610,7 +1608,7 @@ def define_new_variables(main_data):
                                                 st.caption(proxy_res.get('explanation'))
                                 
                                 with col_fix2:
-                                    if st.button(f"Find Alternative Formula", key=f"alt_{i}_{sugg.get('name', 'unknown')}"):
+                                    if st.button("Find Alternative Formula", key=f"alt_{i}_{sugg.get('name', 'unknown')}"):
                                         with st.spinner(f"Finding alternative for {sugg.get('title')}..."):
                                             alt_res = st.session_state.rag_manager.suggest_alternative_formula(sugg.get('title'), missing_vars[0], list(main_data.columns))
                                             if alt_res.get('alternative_found'):
@@ -1767,7 +1765,7 @@ def define_new_variables(main_data):
                     st.error(f"Computation failed: {e}")
             
             except Exception as e:
-                st.error(f"Error computing variable: {str(e)}")
+                st.error(f"Error computing variable: {e!s}")
                 st.info("Make sure your formula uses valid column names and operators (+, -, *, /, etc.).")
 
     # Display Preview and Add Button
@@ -2244,7 +2242,12 @@ def compute_transformations(dataframe):
                 new_columns.update(result_df.to_dict(orient="list"))
 
             elif transformation_type == "Clustering":
-                from utils.clustering_utils import prepare_data_for_clustering, fit_kmeans, fit_dbscan, fit_gaussian_mixture
+                from utils.clustering_utils import (
+                    fit_dbscan,
+                    fit_gaussian_mixture,
+                    fit_kmeans,
+                    prepare_data_for_clustering,
+                )
                 
                 # Prepare Data (handles standardization)
                 numeric_cols = dataframe[columns].select_dtypes(include=np.number).columns.tolist()
@@ -2377,7 +2380,7 @@ def compute_transformations(dataframe):
                 st.warning("No transformations were applied.")
 
         except Exception as e:
-            st.error(f"Error applying transformation: {str(e)}")
+            st.error(f"Error applying transformation: {e!s}")
             return None
         
 
@@ -2918,7 +2921,7 @@ def app():
                             st.error(f"Formula Error: {result_or_error}")
                             
                     except Exception as e:
-                        st.error(f"Execution Error: {str(e)}")
+                        st.error(f"Execution Error: {e!s}")
 
 
         # --- TAB 2: Global Imputation ---

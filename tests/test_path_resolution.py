@@ -1,12 +1,12 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock
 
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.path_utils import resolve_path
+
 
 class TestPathResolution(unittest.TestCase):
     

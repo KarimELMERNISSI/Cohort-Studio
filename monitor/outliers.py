@@ -1,16 +1,22 @@
 ######################################## PACKAGES ########################################
-import sys # some system functions
-import os # for path etc
-import pandas as pd # for Dataframes manipulation
-import numpy as np # extend some specific Dataframes manipulation
-from sklearn.neighbors import LocalOutlierFactor # Local Outlier Factor for outliers detection - density neighborhood based
-from sklearn.cluster import DBSCAN # Density-Based Spatial Clustering of Applications with Noise
-from sklearn.ensemble import IsolationForest # Isolation Forest for outliers detection - isolation by forest successive splits 
-from sklearn.impute import SimpleImputer # basic imputation
-from sklearn.pipeline import Pipeline # building pipelines
-import enrich.data_imputation as edi
-from sklearn.preprocessing import OneHotEncoder, StandardScaler # preprocess non numerical variables and scale numerical ones
+import numpy as np  # extend some specific Dataframes manipulation
+import pandas as pd  # for Dataframes manipulation
+from sklearn.cluster import DBSCAN  # Density-Based Spatial Clustering of Applications with Noise
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import (
+    IsolationForest,  # Isolation Forest for outliers detection - isolation by forest successive splits 
+)
+from sklearn.neighbors import (
+    LocalOutlierFactor,  # Local Outlier Factor for outliers detection - density neighborhood based
+)
+from sklearn.pipeline import Pipeline  # building pipelines
+from sklearn.preprocessing import (  # preprocess non numerical variables and scale numerical ones
+    OneHotEncoder,
+    StandardScaler,
+)
+
+import enrich.data_imputation as edi
+
 
 ######################################## DEBUG ########################################
 # Helper function for controlled debug printing

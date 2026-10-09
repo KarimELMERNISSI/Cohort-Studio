@@ -1,22 +1,23 @@
-import streamlit as st
-import pandas as pd
+import re
+from io import BytesIO
+
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy import stats
-from scipy.stats import t as t_dist
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from utils.data_analyzer import DataAnalyzer
-import utils.visualization_utils as vu
-import utils.analysis_utils as au
-from io import BytesIO
-import statsmodels.stats.multitest as smt
-from statsmodels.stats.power import TTestIndPower, FTestAnovaPower, GofChisquarePower
-import matplotlib.pyplot as plt
-import statsmodels.formula.api as smf
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
-import re
 import statsmodels.api as sm
-import itertools
+import statsmodels.formula.api as smf
+import statsmodels.stats.multitest as smt
+import streamlit as st
+from scipy import stats
+from scipy.stats import t as t_dist
+from statsmodels.stats.power import FTestAnovaPower, GofChisquarePower, TTestIndPower
+
+import utils.analysis_utils as au
+import utils.visualization_utils as vu
+from utils.data_analyzer import DataAnalyzer
+
 
 def to_excel(df):
     """
@@ -439,7 +440,7 @@ def run_univariate_analysis(df, analyzer):
         # Post-Hoc Analysis
         if detail_res['P-Value'] < 0.05 and detail_res['Test Used'] in ["ANOVA", "Kruskal-Wallis"]:
             st.subheader("Post-Hoc Analysis")
-            st.markdown(f"Since the global test is significant, we perform post-hoc tests to see which groups differ.")
+            st.markdown("Since the global test is significant, we perform post-hoc tests to see which groups differ.")
             ph_res = au.perform_post_hoc(df_analysis_filtered, group_col, selected_detail, detail_res['Test Used'])
             if ph_res is not None and not ph_res.empty:
                 st.dataframe(ph_res, width="stretch")
@@ -953,7 +954,7 @@ def visualize_result(df, group_col, target, analyzer):
         
         fig = px.bar(counts, x=group_col, y='percentage', color=target, 
                      title=f"Distribution of {target} by {group_col} (%)",
-                     text=counts['percentage'].apply(lambda x: '{0:1.2f}%'.format(x)))
+                     text=counts['percentage'].apply(lambda x: f'{x:1.2f}%'))
         st.plotly_chart(fig, width='stretch')
 
 def run_zscore_analysis(df, analyzer):
@@ -1949,7 +1950,7 @@ def run_power_analysis(df, analyzer):
     with st.expander("Import from Analysis Results", expanded=False):
         st.caption("Select a result from the 'Univariate Analysis' tab to auto-fill parameters.")
         
-        if 'epidemiology_results' in st.session_state and st.session_state['epidemiology_results']:
+        if st.session_state.get('epidemiology_results'):
             results_list = st.session_state['epidemiology_results']
             # Create options
             options = {f"{r['Variable']} ({r['Test Used']})": r for r in results_list}

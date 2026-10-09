@@ -1,13 +1,14 @@
-from typing import Any, List, Optional, Dict
-import time
 import random
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+import time
+from typing import Any
+
 from google import genai
 from google.genai import types
-from langchain_core.embeddings import Embeddings 
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 
 class CustomGeminiEmbeddings(Embeddings):
@@ -18,7 +19,7 @@ class CustomGeminiEmbeddings(Embeddings):
         self.client = genai.Client(api_key=api_key)
         self.model = model
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of documents."""
         # Batch processing might be needed for large lists, 
         # but here is the simple implementation.
@@ -32,7 +33,7 @@ class CustomGeminiEmbeddings(Embeddings):
             results.append(response.embeddings[0].values)
         return results
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         """Embed a single query."""
         response = self.client.models.embed_content(
             model=self.model,
@@ -63,9 +64,9 @@ class CustomGeminiChat(BaseChatModel):
 
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         

@@ -7,15 +7,16 @@ and evaluation components.
 """
 
 from abc import abstractmethod
-from typing import List, Optional, Any, Dict
-from langchain_core.language_models.chat_models import BaseChatModel
+from typing import Any
+
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.outputs import ChatResult
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from pydantic import Field
 
-from .schemas import ProviderConfig, ProviderType
+from .schemas import ProviderConfig
 
 
 class BaseLLMConnector(BaseChatModel):
@@ -37,20 +38,18 @@ class BaseLLMConnector(BaseChatModel):
     @abstractmethod
     def _llm_type(self) -> str:
         """Provider identifier string for LangChain introspection."""
-        pass
 
     @abstractmethod
     def _generate(
         self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
         """Core execution method converting messages to model completion."""
-        pass
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         """
         Retrieve available text generation models for this provider.
         Default fallback returns the configured model.
@@ -72,16 +71,14 @@ class BaseEmbeddingConnector(Embeddings):
         self.config = config
 
     @abstractmethod
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Compute embeddings for a batch of text strings."""
-        pass
 
     @abstractmethod
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         """Compute an embedding for a single search query."""
-        pass
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         """
         Retrieve available embedding models for this provider.
         Default fallback returns the configured model.

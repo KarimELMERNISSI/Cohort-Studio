@@ -5,8 +5,9 @@ Usage:
 If arguments are omitted, prompts interactively.
 """
 
-import sys
 import getpass
+import sys
+
 from manage.db_manager import DBManager
 
 

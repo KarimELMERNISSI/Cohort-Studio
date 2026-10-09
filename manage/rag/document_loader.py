@@ -5,12 +5,11 @@ Replaces deprecated `langchain_community.document_loaders` with native `pypdf` e
 improving performance, eliminating deprecation warnings, and resiliently handling errors.
 """
 
-import os
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
-from pypdf import PdfReader
+
 from langchain_core.documents import Document
+from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class PDFDocumentLoader:
     objects with complete metadata (source, filename, page, total_pages).
     """
 
-    def __init__(self, file_or_dir_path: Union[str, Path]):
+    def __init__(self, file_or_dir_path: str | Path):
         """
         Initialize the loader with a file or directory path.
         
@@ -32,7 +31,7 @@ class PDFDocumentLoader:
         """
         self.path = Path(file_or_dir_path)
 
-    def load_single_pdf(self, file_path: Union[str, Path]) -> List[Document]:
+    def load_single_pdf(self, file_path: str | Path) -> list[Document]:
         """
         Extract text from an individual PDF file page by page.
         
@@ -47,7 +46,7 @@ class PDFDocumentLoader:
             logger.warning(f"Skipping non-PDF file: {path}")
             return []
 
-        documents: List[Document] = []
+        documents: list[Document] = []
         try:
             reader = PdfReader(str(path))
             total_pages = len(reader.pages)
@@ -75,7 +74,7 @@ class PDFDocumentLoader:
 
         return documents
 
-    def load(self, recursive: bool = True) -> List[Document]:
+    def load(self, recursive: bool = True) -> list[Document]:
         """
         Load all PDF documents from the initialized path.
         
@@ -92,7 +91,7 @@ class PDFDocumentLoader:
         if self.path.is_file():
             return self.load_single_pdf(self.path)
 
-        documents: List[Document] = []
+        documents: list[Document] = []
         pattern = "**/*.pdf" if recursive else "*.pdf"
         pdf_files = sorted(self.path.glob(pattern))
 

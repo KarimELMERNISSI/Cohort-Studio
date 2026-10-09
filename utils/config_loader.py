@@ -1,10 +1,11 @@
 
 import re
-import os
-from typing import Dict, Any
+from typing import Any
+
 from utils.data_paths import get_data_root
 
-def create_empty_config() -> Dict[str, Any]:
+
+def create_empty_config() -> dict[str, Any]:
     """
     Create an empty configuration structure.
     

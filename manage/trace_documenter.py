@@ -1,12 +1,12 @@
 
-import os
 import json
+import os
 from datetime import datetime
+
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
+from docx.shared import Pt, RGBColor
+
 
 class TraceDocumenter:
     def __init__(self, trace_source):

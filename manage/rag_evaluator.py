@@ -8,21 +8,19 @@ Provides comprehensive evaluation metrics for the RAG system including:
 - Logging and tracking of evaluation results
 """
 
+import hashlib
 import json
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
-import hashlib
+from typing import Any
 
 # Import prompt functions
 from prompts.evaluation import (
+    detect_hallucination,
+    evaluate_answer_relevance,
     evaluate_context_relevance,
     evaluate_faithfulness,
-    evaluate_answer_relevance,
-    detect_hallucination,
 )
-
 from utils.data_paths import get_rag_eval_logs_dir
 
 
@@ -94,9 +92,9 @@ class RAGEvaluator:
     def evaluate_retrieval_quality(
         self,
         query: str,
-        retrieved_chunks: List[str],
+        retrieved_chunks: list[str],
         k: int = 5
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Evaluate the quality of retrieved context.
         
@@ -130,9 +128,9 @@ class RAGEvaluator:
     
     def calculate_semantic_similarity(
         self,
-        query_embedding: List[float],
-        chunk_embeddings: List[List[float]]
-    ) -> Dict[str, float]:
+        query_embedding: list[float],
+        chunk_embeddings: list[list[float]]
+    ) -> dict[str, float]:
         """
         Calculate semantic similarity between query and chunks.
         
@@ -174,7 +172,7 @@ class RAGEvaluator:
         context: str,
         response: str,
         function_name: str = "generic"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Evaluate the quality of generated response.
         
@@ -227,7 +225,7 @@ class RAGEvaluator:
         
         return results
     
-    def validate_json_output(self, response: str) -> Dict[str, Any]:
+    def validate_json_output(self, response: str) -> dict[str, Any]:
         """
         Validate if the response contains valid JSON.
         
@@ -269,8 +267,8 @@ class RAGEvaluator:
         context: str,
         response: str,
         function_name: str = "generic",
-        retrieved_chunks: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        retrieved_chunks: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Run full evaluation on a RAG query-response pair.
         
@@ -320,7 +318,7 @@ class RAGEvaluator:
         
         return results
     
-    def log_result(self, result: Dict[str, Any]):
+    def log_result(self, result: dict[str, Any]):
         """
         Log evaluation result to file and update summary.
         
@@ -385,7 +383,7 @@ class RAGEvaluator:
         
         self._save_summary(summary)
     
-    def _parse_evaluation_response(self, response: str, metric_type: str) -> Dict[str, Any]:
+    def _parse_evaluation_response(self, response: str, metric_type: str) -> dict[str, Any]:
         """Parse LLM evaluation response into structured format."""
         try:
             # Try to parse as JSON
@@ -408,7 +406,7 @@ class RAGEvaluator:
     
     # ==================== TEST SUITE ====================
     
-    def load_test_suite(self) -> List[Dict[str, Any]]:
+    def load_test_suite(self) -> list[dict[str, Any]]:
         """Load the test suite from file."""
         if self.test_suite_file.exists():
             with open(self.test_suite_file, "r", encoding="utf-8") as f:
@@ -416,7 +414,7 @@ class RAGEvaluator:
                 return data.get("test_cases", [])
         return []
     
-    def save_test_suite(self, test_cases: List[Dict[str, Any]]):
+    def save_test_suite(self, test_cases: list[dict[str, Any]]):
         """Save test cases to file."""
         data = {
             "created_at": datetime.now().isoformat(),
@@ -428,9 +426,9 @@ class RAGEvaluator:
     def add_test_case(
         self,
         query: str,
-        expected_concepts: List[str],
-        ground_truth: Optional[str] = None,
-        expected_sources: Optional[List[str]] = None
+        expected_concepts: list[str],
+        ground_truth: str | None = None,
+        expected_sources: list[str] | None = None
     ):
         """Add a new test case to the suite."""
         test_cases = self.load_test_suite()
@@ -447,7 +445,7 @@ class RAGEvaluator:
         self.save_test_suite(test_cases)
         return test_id
     
-    def run_test_suite(self, rag_manager) -> Dict[str, Any]:
+    def run_test_suite(self, rag_manager) -> dict[str, Any]:
         """
         Run all test cases against the RAG system.
         
@@ -481,11 +479,11 @@ class RAGEvaluator:
     
     # ==================== METRICS RETRIEVAL ====================
     
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get the current metrics summary."""
         return self._load_summary()
     
-    def get_recent_evaluations(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_recent_evaluations(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent evaluation results."""
         if not self.results_file.exists():
             return []
@@ -500,7 +498,7 @@ class RAGEvaluator:
         
         return evaluations[-limit:]
     
-    def get_metrics_by_date(self, days: int = 7) -> Dict[str, Any]:
+    def get_metrics_by_date(self, days: int = 7) -> dict[str, Any]:
         """Get metrics aggregated by date for the last N days."""
         from datetime import timedelta
         

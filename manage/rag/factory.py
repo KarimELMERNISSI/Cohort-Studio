@@ -6,14 +6,14 @@ providing a single entry point for model-agnostic execution.
 """
 
 import logging
-from typing import Optional, Tuple, Dict, Any
+from typing import Any
 
-from .schemas import ProviderConfig, ProviderType
-from .base import BaseLLMConnector, BaseEmbeddingConnector
+from .base import BaseEmbeddingConnector, BaseLLMConnector
 from .providers.gemini import GeminiChatConnector, GeminiEmbeddingConnector
+from .providers.mistral import MistralChatConnector, MistralEmbeddingConnector
 from .providers.ollama import OllamaChatConnector, OllamaEmbeddingConnector
 from .providers.openai import OpenAIChatConnector, OpenAIEmbeddingConnector
-from .providers.mistral import MistralChatConnector, MistralEmbeddingConnector
+from .schemas import ProviderConfig, ProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -78,13 +78,13 @@ class ConnectorFactory:
     def create_connectors(
         cls,
         provider: str = "gemini",
-        model_name: Optional[str] = None,
-        embedding_model: Optional[str] = None,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        model_name: str | None = None,
+        embedding_model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
         temperature: float = 0.3,
         **kwargs: Any,
-    ) -> Tuple[BaseLLMConnector, BaseEmbeddingConnector]:
+    ) -> tuple[BaseLLMConnector, BaseEmbeddingConnector]:
         """
         Convenience factory method constructing both connectors from keyword arguments.
         """

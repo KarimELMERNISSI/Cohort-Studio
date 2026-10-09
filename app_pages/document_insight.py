@@ -1,7 +1,18 @@
-import streamlit as st
 import json
 import os
-from yfiles_graphs_for_streamlit import StreamlitGraphWidget, Node, Edge, EdgeStyle, DashStyle, Layout, LabelStyle, NodeStyle, NodeShape
+
+import streamlit as st
+from yfiles_graphs_for_streamlit import (
+    DashStyle,
+    Edge,
+    EdgeStyle,
+    LabelStyle,
+    Layout,
+    Node,
+    NodeShape,
+    NodeStyle,
+    StreamlitGraphWidget,
+)
 
 # ==========================================
 # 1. GRAPH HELPER FUNCTIONS (Adapted for Docs)
@@ -175,8 +186,6 @@ def get_edge_label_style(edge):
 # ==========================================
 # 2. PERSISTENCE HELPERS
 # ==========================================
-import os
-import json
 import datetime
 
 GRAPH_STORAGE_DIR = os.path.join("data", "knowledge_graphs")

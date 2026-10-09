@@ -9,10 +9,11 @@ Provides a unified, provider-agnostic interface for configuring:
 """
 
 import os
+
 import streamlit as st
 from dotenv import load_dotenv
 
-from manage.rag import ProviderType, ProviderConfig, ConnectorFactory
+from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 
 load_dotenv()
 

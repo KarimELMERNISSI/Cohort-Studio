@@ -1,8 +1,7 @@
 import ast
 import os
-import sys
 import textwrap
-import re
+
 
 def get_annotation(node):
     """Recursively stringify type annotations."""
