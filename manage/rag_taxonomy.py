@@ -223,24 +223,8 @@ class TaxonomyMixin:
             
         vars_desc = "\n".join(vars_desc_list[:50])
         
-        prompt = f"""
-        Role: Medical Data Scientist.
-        
-        Task: Analyze the variables to identify semantic relationships (correlations, risk factors) for a Knowledge Graph.
-        
-        Variables:
-        {vars_desc}
-        
-        Instructions:
-        For each variable, identify OTHER variables from the list that are directly related (e.g., risk factors, co-morbidities).
-        Do NOT analyze formulas (we already have those). Focus on clinical associations.
-        
-        JSON Output Format:
-        {{
-            "original_var_name": ["related_var_1", "related_var_2"],
-            ...
-        }}
-        """
+        from prompts import graph_metadata
+        prompt = graph_metadata(vars_desc=vars_desc)
         
         try:
             response = self.llm.invoke(prompt)
@@ -332,34 +316,8 @@ class TaxonomyMixin:
             
         vars_desc = "\n".join(vars_desc_list)
         
-        prompt = f"""
-        Role: Medical Expert.
-        
-        Task: Provide clinical context and detailed descriptions for the provided variables.
-        
-        Variables:
-        {vars_desc}
-        
-        Instructions:
-        For each variable, provide:
-        1. "description": A clear, medical definition.
-        2. "clinical_usage": How this variable is used in clinical practice (e.g., diagnosis, monitoring, prognosis).
-        3. "category": A broad category (e.g., Demographics, Vitals, Lab Test, Comorbidity).
-        4. "topic": A specific medical topic (e.g., "Cardiovascular Health", "Renal Function", "Diabetes Management").
-        5. "proxy_variables": A list of potential proxy variables or synonyms often used interchangeably or as surrogates.
-        
-        Return JSON:
-        {{
-            "original_var_name": {{
-                "description": "...",
-                "clinical_usage": "...",
-                "category": "...",
-                "topic": "...",
-                "proxy_variables": ["...", "..."]
-            }}
-        }}
-        }}
-        """
+        from prompts import contextualize_variables
+        prompt = contextualize_variables(vars_desc=vars_desc)
         try:
             response = self.llm.invoke(prompt)
             cleaned_response = self._clean_json_response(response.content)
@@ -394,26 +352,11 @@ class TaxonomyMixin:
 
         dataset_desc = "\n".join([f"{k}: {v.get('standard_name', '')}" for k, v in taxonomy.items()])
         
-        prompt = f"""
-        Role: Data Mapping Expert.
-        
-        Task: Map 'External' variables found in formulas to existing variables in the dataset.
-        
-        External Variables (Unresolved):
-        {list(unresolved_vars)}
-        
-        Dataset Dictionary (Key: Standard Name):
-        {dataset_desc}
-        
-        Instructions:
-        For each External Variable, determine if it corresponds to an existing Dataset Key (likely via synonym or abbreviation).
-        
-        Return JSON mapping:
-        {{
-            "External_Name_1": "Dataset_Key_X", 
-            "External_Name_2": null  // if no match found
-        }}
-        """
+        from prompts import resolve_formula_links
+        prompt = resolve_formula_links(
+            unresolved_vars=str(list(unresolved_vars)),
+            dataset_desc=dataset_desc
+        )
         
         try:
             response = self.llm.invoke(prompt)
@@ -460,23 +403,11 @@ class TaxonomyMixin:
         new_keys_str = ", ".join(list(new_candidates.keys()))
         exist_sample = ", ".join(list(existing_keys)[:100]) 
         
-        prompt = f"""
-        Role: Clinical Data Standardizer.
-        Task: Identify synonyms in a list of variable IDs and map them to a single canonical ID.
-        
-        New Variables: {new_keys_str}
-        Existing Variables (Context): {exist_sample}
-        
-        Instructions:
-        1. Look for synonyms among "New Variables" (e.g. 'bmi', 'body_mass_index').
-        2. Look for synonyms between "New Variables" and "Existing Variables".
-        3. If a synonym exists, choose the MOST STANDARD medical acronym or name as the 'canonical_id'.
-        4. If the canonical ID is already in "Existing Variables", map to that.
-        5. If duplicates found (e.g. 'bsa_dubois' and 'bsa_mosteller' are NOT synonyms, keep both), do NOT map distinct variants.
-        
-        Return JSON mapping {{ "alias_id": "canonical_id" }}
-        Only include entries that need re-mapping.
-        """
+        from prompts import unify_synonyms
+        prompt = unify_synonyms(
+            new_keys_str=new_keys_str,
+            exist_sample=exist_sample
+        )
         try:
             resp = self.llm.invoke(prompt)
             clean = self._clean_json_response(resp.content)

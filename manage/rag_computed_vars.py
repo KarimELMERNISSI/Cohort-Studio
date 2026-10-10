@@ -21,6 +21,51 @@ from .rag_schemas import (
 logger = logging.getLogger(__name__)
 
 
+def parse_formula_vars(formula_str: str) -> tuple[set[str], bool]:
+    """
+    Parses variable identifiers from a formula expression using Python AST.
+    
+    Handles:
+    - Standard variable identifiers (e.g., `weight`, `height`)
+    - Power operator normalization (`^` to `**`)
+    - Escaped column names enclosed in double quotes (e.g., `""Systolic BP""`)
+    - Column names enclosed in backticks (e.g., `` `Diastolic BP` ``)
+    
+    Args:
+        formula_str: Mathematical expression string to parse.
+        
+    Returns:
+        tuple[set[str], bool]: Set of extracted variable names and syntax validity flag.
+    """
+    found: set[str] = set()
+    try:
+        temp_fmt = formula_str.strip()
+        # Normalize power operator if model output ^ instead of **
+        temp_fmt = re.sub(r'(?<=\w)\s*\^\s*(?=\w|\d|\()', ' ** ', temp_fmt)
+
+        q_vars: dict[str, str] = {}
+        # Match ""var"" or `var`
+        q_matches = re.findall(r'""([^"]+)""|`([^`]+)`', temp_fmt)
+        idx = 0
+        for m_double, m_backtick in q_matches:
+            match_val = m_double if m_double else m_backtick
+            placeholder = f"__quoted_var_{idx}__"
+            q_vars[placeholder] = match_val
+            if m_double:
+                temp_fmt = temp_fmt.replace(f'""{m_double}""', placeholder)
+            elif m_backtick:
+                temp_fmt = temp_fmt.replace(f'`{m_backtick}`', placeholder)
+            idx += 1
+        
+        tree = ast.parse(temp_fmt, mode='eval')
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                found.add(q_vars.get(node.id, node.id))
+        return found, True
+    except Exception:
+        return set(), False
+
+
 class ComputedVarsMixin:
     """
     Mixin class containing computed variable functionality for RAGManager.
@@ -37,19 +82,8 @@ class ComputedVarsMixin:
 
     def _expand_search_hint(self, search_hint):
         """Pre-processing: Expand acronyms or ambiguous terms to standard medical concepts."""
-        if not search_hint or len(search_hint) > 20:
-            return search_hint
-            
-        prompt = f"""
-        Role: Medical Terminology Expert.
-        Input: "{search_hint}"
-        
-        Task: 
-        1. If the input is a medical acronym or abbreviation (e.g. BSA, BMI, eGFR, SBP), return the STANDARD FULL NAME (e.g. Body Surface Area).
-        2. If it is already a full name or not a known medical acronym, return it exactly as is.
-        
-        Return ONLY the expanded/standard name. No bolding, no extra text.
-        """
+        from prompts import expand_search_hint
+        prompt = expand_search_hint(search_hint=search_hint)
         try:
             expanded = self.llm.invoke(prompt).content.strip().strip('"').strip("'")
             if len(expanded) < 60:
@@ -125,31 +159,15 @@ class ComputedVarsMixin:
             Do NOT suggest formulas where ALL inputs are missing from this list.
             """
 
-        prompt = f"""
-        Role: {self.current_role}
-        Constraint: {self.adherence_guidance}
-        
-        Context from Documents:
-        {context_text[:3000]}
-        
-        {scoping_instruction}
-        
-        Task: {task_desc}
-        
-        Generate {count} distinct medical concepts. For each, provide the standard mathematical formula using standard variable names (e.g. 'Weight', 'Height').
-        
-        Return JSON List:
-        [
-            {{
-                "concept_name": "Name of the variable",
-                "standard_formula": "Mathematical formula using standard terms",
-                "required_inputs": ["List", "of", "standard", "inputs"],
-                "clinical_relevance": "Why is this useful?",
-                "source": "Exact filename and page number if from context, else 'Standard Medical Knowledge'",
-                "logic": "Brief explanation of the formula derivation"
-            }}
-        ]
-        """
+        from prompts import theoretical_formulas
+        prompt = theoretical_formulas(
+            current_role=self.current_role,
+            adherence_guidance=self.adherence_guidance,
+            context_text=context_text[:3000],
+            task_desc=task_desc,
+            count=count,
+            scoping_instruction=scoping_instruction
+        )
         try:
             response = self.llm.invoke(prompt)
             # Use robust JSON parsing
@@ -187,54 +205,15 @@ class ComputedVarsMixin:
                - Return this in the 'suggestion_category' field.
             """
 
-        prompt = f"""
-        Role: Expert Data Engineer.
-        Task: Implement the following Theoretical Concepts using the Available Dataset Columns.
-        
-        Available Columns: [{columns_str}]
-        {taxonomy_context}
-        Theoretical Concepts: {concepts_str}
-        
-        CRITICAL SYNTAX RULES (Interpreter Constraints):
-        1. **AUTHORIZED OPERATORS**: You may use: +, -, *, /, ** (for power), (, ).
-        2. **FUNCTIONS**: You MUST use the 'np.' prefix for mathematical functions.
-           - Correct: np.sqrt(x), np.log(x), np.exp(x), np.abs(x), np.floor(x)
-           - Wrong: sqrt(x), log(x), ln(x), square_root(x)
-        3. **SPACING**: You MUST put a single space around every operator.
-           - Correct: " ( Weight / Height ) ** 2 "
-           - Wrong: "Weight/Height**2"
-        4. **VARIABLE NAMES**: 
-           - If a variable name contains spaces or special characters, you MUST enclose it in double double-quotes. **CRITICAL** to use "" "" for variable names with spaces or special characters. Do not use single quotes.
-           - Examples: ""Weight (kg)"" / ""Height (m)""
-           - If it is a simple name, you can use it directly: Weight / Height
-        5. **DATE DIFFERENCE**: You MUST use simple formula for date difference.
-           - Correct: ( ""Visit Date"" - Birthdate ) / 365.25
-           - Wrong: (VisitDate - Birthdate).dt.days / 365.25
-        Instructions:
-        1. Map 'required_inputs' to 'Available Columns'.
-        2. Handle Unit Conversions (e.g. m to cm, lbs to kg) directly in the formula.
-        3. {missing_instr}
-        4. Select the top {limit} feasible suggestions.
-        5. **CRITICAL**: You MUST preserve the 'source' and 'logic' information from the Theoretical Concepts into 'source_citation' and 'source_explanation'.
-        {category_instruction}
-        
-        Return JSON Object:
-        {{
-            "suggestions": [
-                {{
-                    "name": "snake_case_name",
-                    "title": "Readable Title",
-                    "formula": " Spaced Formula ",
-                    "missing_variables": ["list", "if", "any"],
-                    "description": "Clinical relevance",
-                    "suggestion_category": "Category Name",
-                    "source_type": "Document" or "Model Knowledge" or "Hybrid",
-                    "source_citation": "Filename.pdf (Pages X, Y) or 'Model Knowledge'",
-                    "source_explanation": "Briefly explain the logic or source of the formula."
-                }}
-            ]
-        }}
-        """
+        from prompts import map_formulas
+        prompt = map_formulas(
+            columns_str=columns_str,
+            concepts_str=concepts_str,
+            missing_instr=missing_instr,
+            limit=limit,
+            taxonomy_context=taxonomy_context,
+            category_instruction=category_instruction
+        )
         try:
             response = self.llm.invoke(prompt)
             cleaned = self._clean_json_response(response.content)
@@ -272,25 +251,6 @@ class ComputedVarsMixin:
         
         known_globals = {'np', 'pd', 'log', 'exp', 'sqrt', 'abs', 'min', 'max', 'constant'} 
 
-        def parse_formula_vars(formula_str):
-            """Helper to parse variables from formula, handling quoted names."""
-            found = set()
-            try:
-                temp_fmt = formula_str
-                q_vars = {}
-                q_matches = re.findall(r'""([^"]+)""', temp_fmt)
-                for i, match in enumerate(q_matches):
-                    placeholder = f"__quoted_var_{i}__"
-                    q_vars[placeholder] = match
-                    temp_fmt = temp_fmt.replace(f'""{match}""', placeholder)
-                
-                tree = ast.parse(temp_fmt, mode='eval')
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.Name):
-                        found.add(q_vars.get(node.id, node.id))
-                return found, True
-            except Exception:
-                return set(), False
 
         total_sugg = len(suggestions)
         for idx, sugg in enumerate(suggestions):
@@ -314,20 +274,12 @@ class ComputedVarsMixin:
                 if progress_callback:
                     progress_callback(current_prog, f"Aligning variables for suggestion {idx+1}...")
                 
-                fix_query = f"""
-                Role: Code Fixer.
-                The formula "{formula}" contains variables that do not match the dataset: {missing}.
-                
-                Available Variables: {columns}
-                
-                Task: Rewrite the formula by replacing the missing variables with their exact counterparts from the Available Variables list.
-                - Fix typos, case sensitivity, or slight naming variations (e.g. 'Weight' -> 'Weight_kg').
-                - Ensure Python/NumPy syntax (use 'np.' for functions).
-                - If a variable name contains spaces, enclose it in double double-quotes (e.g. ""Variable Name"").
-                - If a variable is truly missing and has no match, keep it as is.
-                
-                Return ONLY the corrected formula string.
-                """
+                from prompts import fix_formula_variables
+                fix_query = fix_formula_variables(
+                    formula=formula,
+                    missing=missing,
+                    columns=columns
+                )
                 try:
                     corrected_formula = self.llm.invoke(fix_query).content.strip().strip('"').strip("'")
                     
@@ -362,23 +314,10 @@ class ComputedVarsMixin:
             try:
                 formulas_to_convert = {s['name']: s['formula'] for s in validated}
                 
-                markdown_prompt = f"""
-                Task: Convert these Python formulas into standard LaTeX/Markdown mathematical notation.
-                
-                Input Formulas:
-                {json.dumps(formulas_to_convert, indent=2)}
-                
-                Instructions:
-                1. Return a JSON object where keys are the variable names and values are the LaTeX strings.
-                2. Use standard LaTeX notation (e.g. \\frac{{}}, \\sqrt{{}}, \\times).
-                3. Remove 'np.' prefixes.
-                4. Use readable variable names (remove underscores if it improves readability).
-                5. Do NOT wrap in $$ or $.
-                
-                Example:
-                Input: "np.sqrt( Weight_kg / (Height_m ** 2) )"
-                Output: "\\sqrt{{\\frac{{Weight}}{{Height^2}}}}"
-                """
+                from prompts import markdown_formula
+                markdown_prompt = markdown_formula(
+                    formulas_json=json.dumps(formulas_to_convert, indent=2)
+                )
                 
                 md_response = self.llm.invoke(markdown_prompt)
                 md_map = parse_json_safe(md_response.content, default={})
@@ -456,42 +395,15 @@ class ComputedVarsMixin:
         if search_hint:
             hint_instruction = f"\nUSER HINT: {search_hint}\nFocus specifically on relationships related to this hint."
 
-        prompt = f"""
-        Role: Medical Data Expert.
-        Task: Suggest physiological formulas or regression-like heuristics to ESTIMATE missing values for '{target_variable}'.
-        
-        {scope_desc} for Input: [{columns_str}]{stats_context}
-        Target Variable to Impute: {target_variable}
-        {hint_instruction}
-        
-        Instructions:
-        1. Identify standard relationships where '{target_variable}' is the OUTPUT.
-        2. Example: If Target is 'Weight', suggest 'BMI * (Height**2)'.
-        3. If statistics show mismatched units (e.g. g/L vs mg/dL), include the conversion factor in the formula.
-        4. Only suggest formulas using the provided {scope_desc}.
-        5. Provide {num_suggestions} distinct options.
-        6. **CRITICAL SYNTAX RULES**:
-           - Use **Python/Pandas** syntax ONLY. 
-           - **DO NOT** use SQL (No `CASE WHEN`).
-           - **DO NOT** use `df['col']` or `df.col`. Refer to columns directly.
-           - For column names with **spaces, dots (.), or special characters**, you MUST enclose them in **double double quotes** (e.g. `""LDLc.2""`, `""My Var""`).
-           - For simple column names (letters/numbers/underscores only), use them directly (e.g. `Weight`, `BMI_2`).
-           - For conditional logic, use `np.where(condition, value_if_true, value_if_false)`.
-           - Example: `np.where(""LDLc.2"" == 'mmol/L', ""LDLc.1"" * 0.387, ""LDLc.1"")`
-           - Use `**` for power (e.g. `Height**2`), not `^`.
-        
-        Return JSON Object:
-        {{
-            "suggestions": [
-                {{
-                    "name": "Imputed_{target_variable}",
-                    "formula": "Formula using available columns",
-                    "reasoning": "Why this relationship holds (e.g. standard Definition)",
-                    "confidence": "High/Medium/Low"
-                }}
-            ]
-        }}
-        """
+        from prompts import imputation_formulas
+        prompt = imputation_formulas(
+            scope_desc=scope_desc,
+            columns_str=columns_str,
+            target_variable=target_variable,
+            stats_context=stats_context,
+            hint_instruction=hint_instruction,
+            num_suggestions=num_suggestions
+        )
         try:
             response = self.llm.invoke(prompt)
             cleaned = self._clean_json_response(response.content)

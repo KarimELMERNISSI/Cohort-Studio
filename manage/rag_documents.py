@@ -38,59 +38,8 @@ class DocumentsMixin:
         if not os.path.exists(file_path):
             return None, f"File {file_name} not found."
             
-        prompt_text = """
-        Role: Expert Information Architect.
-        Task: Analyze this document and extract a Knowledge Graph of key entities and their relationships.
-        
-        Instructions:
-        1. Identify core entities (Concepts, Methods, Metrics, Findings, Diseases, Treatments).
-        2. Identify relationships between them.
-        3. NAMING CONVENTION: Use the **Canonical/Standard** name for each entity. 
-           - E.g., Use "Heart Failure" instead of "HF". 
-           - Deduplicate within the document (do not create separate nodes for acronyms).
-        4. EXHAUSTIVE EXTRACTION: For each entity, scan the ENTIRE document.
-           - Collect ALL page numbers.
-           - Select the BEST definition and representative quote.
-        5. SCIENTIFIC SUMMARY: Analyze the document type (e.g. Clinical Study, Review, Protocol) and generate a structured summary.
-        
-        Return JSON ONLY:
-        {
-            "summary": {
-                "title": "Inferred Document Title",
-                "doc_type": "Study Type (e.g. Cohort Study, Review)",
-                "objective": "Primary goal/hypothesis of the study",
-                "methods": "Key methodology, population, study design",
-                "key_findings": "Primary results and outcomes",
-                "significance": "Clinical or scientific implications",
-                "top_concepts": ["List of 3-5 most important concepts"]
-            },
-            "nodes": [
-                {
-                    "id": "Canonical Name",
-                    "type": "Concept/Metric/Finding/etc",
-                    "description": "Comprehensive Definition",
-                    "source_text": "Representative quote...",
-                    "page_reference": "1, 3, 5"
-                }
-            ],
-            "edges": [
-                {
-                    "source": "Source Node ID",
-                    "target": "Target Node ID",
-                    "relation": "relationship_type",
-                    "description": "Context of relationship"
-                }
-            ],
-            "formulas": [
-                {
-                    "name": "Formula Name",
-                    "expression": "Math expression",
-                    "page": "Page X",
-                    "description": "Explanation"
-                }
-            ]
-        }
-        """
+        from prompts import document_graph
+        prompt_text = document_graph()
 
         try:
             # Check if Gemini File API is available on the client
@@ -218,9 +167,15 @@ class DocumentsMixin:
                 if not nid: continue
                 nid_lower = nid.lower()
                 
+                page_ref = n.get("page_reference", "Unknown")
+                if isinstance(page_ref, list):
+                    page_str = ", ".join(str(p) for p in page_ref)
+                else:
+                    page_str = str(page_ref) if page_ref is not None else "Unknown"
+
                 citation = {
                     "doc": doc,
-                    "page": n.get("page_reference", "Unknown"),
+                    "page": page_str,
                     "text": n.get("source_text", "")
                 }
                 

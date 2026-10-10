@@ -28,6 +28,7 @@ from .expand_search_hint import expand_search_hint
 from .fix_formula_variables import fix_formula_variables
 from .formula_enrichment import formula_enrichment
 from .graph_metadata import graph_metadata
+from .imputation_formulas import imputation_formulas
 from .map_formulas import map_formulas
 from .markdown_formula import markdown_formula
 from .refine_taxonomy import refine_taxonomy
@@ -51,6 +52,7 @@ __all__ = [
     "expand_search_hint",
     "theoretical_formulas",
     "map_formulas",
+    "imputation_formulas",
     "fix_formula_variables",
     "markdown_formula",
     "refine_taxonomy",

@@ -6,7 +6,8 @@ def map_formulas(
     concepts_str: str,
     missing_instr: str,
     limit: int,
-    taxonomy_context: str = ""
+    taxonomy_context: str = "",
+    category_instruction: str = ""
 ) -> str:
     """
     Maps theoretical formula concepts to actual dataset columns.
@@ -17,6 +18,7 @@ def map_formulas(
         missing_instr: Instruction for handling missing variables
         limit: Number of top suggestions to return
         taxonomy_context: Optional taxonomy context for variable understanding
+        category_instruction: Optional instruction for classifying into existing categories
     
     Returns:
         Formatted prompt string
@@ -47,6 +49,7 @@ Instructions:
 3. {missing_instr}
 4. Select the top {limit} feasible suggestions.
 5. **CRITICAL**: You MUST preserve the 'source' and 'logic' information from the Theoretical Concepts into 'source_citation' and 'source_explanation'.
+{category_instruction}
 
 Return JSON Object:
 {{
@@ -57,6 +60,7 @@ Return JSON Object:
             "formula": " Spaced Formula ",
             "missing_variables": ["list", "if", "any"],
             "description": "Clinical relevance",
+            "suggestion_category": "Category Name",
             "source_type": "Document" or "Model Knowledge" or "Hybrid",
             "source_citation": "Filename.pdf (Pages X, Y) or 'Model Knowledge'",
             "source_explanation": "Briefly explain the logic or source of the formula."

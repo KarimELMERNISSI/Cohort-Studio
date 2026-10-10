@@ -41,19 +41,22 @@ Instructions:
 
 Return JSON with the NEW variables and NEW formulas:
 {{
-    "variables": {{
+    "new_variables": {{
         "new_variable_id_snake_case": {{
             "standard_name": "Standard Name",
             "description": "Why this is needed",
-            "node_type": "Input-External", 
+            "formula": "Python-syntax formula",
+            "input_variables": ["input_var_id_1", "input_var_id_2"],
+            "node_type": "Derived-Internal", 
             "category": "Suggested Category",
             "clinical_usage": "Reason for inclusion"
         }}
     }},
-    "formulas": {{
+    "new_formulas": {{
         "new_formula_id": {{
             "name": "Formula Name (e.g. BMI)",
             "description": "Calculation logic",
+            "expression": "Math expression",
             "output_variable": "output_var_id",
             "input_variables": ["input_var_id_1", "input_var_id_2"]
         }}

@@ -24,6 +24,8 @@ from rapidfuzz import process
 from prompts import (
     anomaly_criteria_prompt,
     context_analysis,
+    refine_taxonomy,
+    wise_enrichment,
 )
 
 # Import LLM utilities for reliable parsing
@@ -476,45 +478,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         except Exception:
             context_text = ""
         
-        prompt = f"""
-        Role: {self.current_role}
-        Constraint: {self.adherence_guidance}
-        
-        Task: Suggest new computed variables that can be derived from the existing dataset.
-        
-        Existing Variables:
-        {vars_desc}
-        
-        Context from Documents:
-        {context_text[:3000]}
-        
-        Instructions:
-        1. Identify standard medical formulas that use 2+ of the existing variables.
-        2. Suggest at most {distance * 3} new variables.
-        3. For each, provide formula using exact variable names from the list.
-        
-        Return JSON:
-        {{
-            "new_variables": {{
-                "variable_id": {{
-                    "standard_name": "...",
-                    "description": "...",
-                    "formula": "Python-syntax formula",
-                    "input_variables": ["...", "..."],
-                    "category": "...",
-                    "node_type": "Derived-Internal"
-                }}
-            }},
-            "new_formulas": {{
-                "formula_id": {{
-                    "name": "...",
-                    "expression": "...",
-                    "input_variables": ["...", "..."],
-                    "output_variable": "..."
-                }}
-            }}
-        }}
-        """
+        prompt = wise_enrichment(
+            level=distance,
+            rag_context=context_text[:3000],
+            vars_context=vars_desc,
+            adherence_instruction=self.adherence_guidance,
+        )
         
         if progress_callback: progress_callback(50, "Generating enrichment suggestions...")
         
@@ -523,8 +492,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             cleaned = self._clean_json_response(response.content)
             data = json.loads(cleaned)
             
-            new_candidates = data.get("new_variables", {})
-            new_formulas = data.get("new_formulas", {})
+            new_candidates = data.get("new_variables") or data.get("variables", {})
+            new_formulas = data.get("new_formulas") or data.get("formulas", {})
             
             # Set node types
             for v in new_candidates.values():
@@ -569,32 +538,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             
         context_block = "\n---\n".join(refinement_context)
         
-        prompt = f"""
-        Role: Medical Data Expert & Taxonomy Refiner.
-        
-        Task: Refine the taxonomy for the following variables based on specific USER FEEDBACK.
-        
-        Instructions:
-        1. Review the "Current Taxonomy" and "USER FEEDBACK" for each variable.
-        2. Update the taxonomy fields to address the feedback.
-        3. Keep existing valid information if it doesn't conflict with the feedback.
-        
-        Variables to Refine:
-        {context_block}
-        
-        Return JSON:
-        {{
-            "variable_name": {{
-                "standard_name": "...",
-                "description": "...",
-                "category": "...",
-                "clinical_usage": "...",
-                "related_formulas": ["..."],
-                "topic": "...",
-                "proxy_variables": ["..."]
-            }}
-        }}
-        """
+        prompt = refine_taxonomy(context_block=context_block)
         
         try:
             response = self.llm.invoke(prompt)
@@ -614,7 +558,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return updated_taxonomy, None
             
         except Exception as e:
-            return updated_taxonomy, f"Refinement Eror: {e!s}"
+            return updated_taxonomy, f"Refinement Error: {e!s}"
 
     def suggest_anomaly_criteria(self, description, columns, sample_data=None, mode="anomaly"):
         """
