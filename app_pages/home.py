@@ -20,7 +20,7 @@ from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
-from utils.statistics_utils import normality_test
+from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 
 
 class RenameColumnsComponent:
@@ -297,13 +297,18 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
     if dataset_name and _db_manager:
         cached_num, _ = _db_manager.load_stats(dataset_name, "numerical")
         cached_cat, _ = _db_manager.load_stats(dataset_name, "categorical")
+        cached_date, _ = _db_manager.load_stats(dataset_name, "date")
         
         # Simple validation: if cached stats exist and have same number of columns as current analysis
         # (This is a basic check; for production, hash the dataframe content)
         if cached_num is not None and cached_cat is not None:
             # Check if columns match roughly to ensure we aren't loading stale stats for modified data
             # This is optional but recommended
-            return cached_num, cached_cat
+            return (
+                sanitize_dataframe_for_arrow(cached_num),
+                sanitize_dataframe_for_arrow(cached_cat),
+                sanitize_dataframe_for_arrow(cached_date) if cached_date is not None else pd.DataFrame(),
+            )
 
     # Work with copies to avoid modifying original
     df = df.copy()
@@ -313,58 +318,73 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
     if exclude_columns:
         df = df.drop(columns=exclude_columns, errors='ignore')
     
-    # Handle date columns by converting to datetime if not already in that format
     # Handle date columns by converting to datetime using smart parser
     from utils.date_parser import smart_parse_dates
     for col in analyzer.date_cols:
-        parsed_series, _ = smart_parse_dates(df[col])
-        df[col] = parsed_series
+        if col in df:
+            parsed_series, _ = smart_parse_dates(df[col])
+            df[col] = parsed_series
 
     # Round Low-Cardinality Numercial Values
     for col in analyzer.low_cardinality_numeric_cols:
-        df[col] = df[col].round(2)
+        if col in df:
+            df[col] = df[col].round(2)
+
     # Initialize statistics DataFrames
-    numerical_df = df[analyzer.numeric_cols + analyzer.date_cols + analyzer.timedelta_cols]
-    categorical_df = df[analyzer.categorical_cols + analyzer.low_cardinality_numeric_cols]
+    # Quantitative statistics strictly include numeric columns (excluding dates and timedeltas to prevent mixed-type ArrowInvalid errors)
+    numeric_feature_cols = [
+        col for col in analyzer.numeric_cols 
+        if col in df and col not in analyzer.date_cols and col not in analyzer.timedelta_cols
+    ]
+    numerical_df = df[numeric_feature_cols] if numeric_feature_cols else pd.DataFrame()
+    categorical_feature_cols = [
+        col for col in (analyzer.categorical_cols + analyzer.low_cardinality_numeric_cols)
+        if col in df
+    ]
+    categorical_df = df[categorical_feature_cols] if categorical_feature_cols else pd.DataFrame()
     
-    # Numerical statistics (including date columns)
-    numerical_stats = numerical_df.describe().round(2).transpose()
+    # Numerical statistics (quantitative variables only)
+    if not numerical_df.empty:
+        numerical_stats = numerical_df.describe().round(2).transpose()
+    else:
+        numerical_stats = pd.DataFrame(
+            columns=['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max']
+        )
     
     # Calculate std safely
     try:
-        numeric_only = numerical_df.select_dtypes(include=[np.number])
+        numeric_only = numerical_df.select_dtypes(include=[np.number]) if not numerical_df.empty else pd.DataFrame()
         if not numeric_only.empty:
             std_vals = numeric_only.std()
             # Ensure numeric type before rounding
             if not pd.api.types.is_numeric_dtype(std_vals):
                 std_vals = pd.to_numeric(std_vals, errors='coerce')
             numerical_stats['std'] = std_vals.round(2)
+        else:
+            numerical_stats['std'] = np.nan
     except Exception:
         numerical_stats['std'] = np.nan
 
-    #Normality tests
-    # Add columns for p-values of different normality tests
-    numerical_stats["Shapiro-Wilk p-value"] = numerical_df.select_dtypes(include=[np.number]).apply(normality_test, axis=0, method='shapiro')
-    numerical_stats["D'Agostino's K² p-value"] = numerical_df.select_dtypes(include=[np.number]).apply(normality_test, axis=0, method='dagostino')
-    numerical_stats["Kolmogorov-Smirnov p-value"] = numerical_df.select_dtypes(include=[np.number]).apply(normality_test, axis=0, method='ks')
-    #numerical_stats["Anderson-Darling significance level"] = numerical_df.select_dtypes(include=[np.number]).apply(normality_test, axis=0, method='anderson')
-    
-    # Add columns to indicate whether the data is NOT normal (p < 0.05) for each test
-    numerical_stats["Not Normal (Shapiro-Wilk)"] = numerical_stats["Shapiro-Wilk p-value"] < 0.05
-    numerical_stats["Not Normal (D'Agostino K²)"] = numerical_stats["D'Agostino's K² p-value"] < 0.05
-    numerical_stats["Not Normal (KS)"] = numerical_stats["Kolmogorov-Smirnov p-value"] < 0.05
-    #numerical_stats["Not Normal (Anderson-Darling)"] = numerical_stats["Anderson-Darling significance level"] < 0.05
+    # Normality tests
+    if not numerical_df.empty:
+        num_cols_for_tests = numerical_df.select_dtypes(include=[np.number])
+        numerical_stats["Shapiro-Wilk p-value"] = num_cols_for_tests.apply(normality_test, axis=0, method='shapiro')
+        numerical_stats["D'Agostino's K² p-value"] = num_cols_for_tests.apply(normality_test, axis=0, method='dagostino')
+        numerical_stats["Kolmogorov-Smirnov p-value"] = num_cols_for_tests.apply(normality_test, axis=0, method='ks')
+        numerical_stats["Not Normal (Shapiro-Wilk)"] = numerical_stats["Shapiro-Wilk p-value"] < 0.05
+        numerical_stats["Not Normal (D'Agostino K²)"] = numerical_stats["D'Agostino's K² p-value"] < 0.05
+        numerical_stats["Not Normal (KS)"] = numerical_stats["Kolmogorov-Smirnov p-value"] < 0.05
+        numerical_stats['nb_modalities'] = numerical_df.apply(lambda x: x.nunique())
+        numerical_stats['fill_percentage'] = (1 - numerical_df.isnull().mean()) * 100
+    else:
+        for col_name in [
+            "Shapiro-Wilk p-value", "D'Agostino's K² p-value", "Kolmogorov-Smirnov p-value",
+            "Not Normal (Shapiro-Wilk)", "Not Normal (D'Agostino K²)", "Not Normal (KS)",
+            "nb_modalities", "fill_percentage"
+        ]:
+            numerical_stats[col_name] = pd.Series(dtype=float if "p-value" in col_name or col_name == "fill_percentage" else object)
 
-    # Set the variable type as 'Numeric' or 'Date' based on column type
-    numerical_stats['variable_type'] = [
-        'Date' if col in analyzer.date_cols else
-        'Time Interval' if col in analyzer.timedelta_cols else
-        'Numeric'
-        for col in numerical_stats.index
-        ]
-    numerical_stats['nb_modalities'] = numerical_df.apply(lambda x: x.nunique())
-    numerical_stats['fill_percentage'] = (1 - numerical_df.isnull().mean()) * 100
-
+    numerical_stats['variable_type'] = 'Numeric'
     
     # Remove low-cardinality numeric columns from numerical stats (added to categorical stats below)
     for col in analyzer.low_cardinality_numeric_cols:
@@ -372,12 +392,19 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
             numerical_stats.drop(index=col, inplace=True)
 
     # Categorical statistics
-    categorical_stats = categorical_df.describe(include='all').round(2).transpose()
-    # categorical_stats.drop(columns=['min','std'], inplace=True)
-    columns_to_drop = ['min','std']
+    if not categorical_df.empty:
+        categorical_stats = categorical_df.describe(include='all').round(2).transpose()
+    else:
+        categorical_stats = pd.DataFrame()
+
+    columns_to_drop = ['min', 'std']
     categorical_stats.drop(columns=[col for col in columns_to_drop if col in categorical_stats.columns], inplace=True)
-    categorical_stats['nb_modalities'] = categorical_df.apply(lambda x: x.nunique())
-    categorical_stats['fill_percentage'] = (1 - categorical_df.isnull().mean()) * 100
+    if not categorical_df.empty:
+        categorical_stats['nb_modalities'] = categorical_df.apply(lambda x: x.nunique())
+        categorical_stats['fill_percentage'] = (1 - categorical_df.isnull().mean()) * 100
+    else:
+        categorical_stats['nb_modalities'] = pd.Series(dtype=int)
+        categorical_stats['fill_percentage'] = pd.Series(dtype=float)
     categorical_stats['variable_type'] = 'Categorical'
 
     # Add high-cardinality categorical columns
@@ -412,12 +439,17 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
     # Format float columns to 2 decimals for cleaner display
     float_columns = numerical_stats.select_dtypes(include='float').columns
     numerical_stats[float_columns] = numerical_stats[float_columns].round(2)
-    float_columns = categorical_stats.select_dtypes(include='float').columns
-    categorical_stats[float_columns] = categorical_stats[float_columns].round(2)
+    if not categorical_stats.empty:
+        float_columns = categorical_stats.select_dtypes(include='float').columns
+        categorical_stats[float_columns] = categorical_stats[float_columns].round(2)
 
     columns_to_move = ['fill_percentage', 'variable_type', 'nb_modalities', 'count' ]
     categorical_stats = move_columns_to_front(categorical_stats, columns_to_move)
     numerical_stats = move_columns_to_front(numerical_stats, columns_to_move)
+
+    # Sanitize DataFrames for PyArrow compatibility
+    numerical_stats = sanitize_dataframe_for_arrow(numerical_stats)
+    categorical_stats = sanitize_dataframe_for_arrow(categorical_stats)
 
     # Cache the computed stats
     if dataset_name and _db_manager:
@@ -466,6 +498,9 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
             date_stats = pd.DataFrame(date_data).set_index("Feature")
             # Round fill %
             date_stats["Fill Percentage"] = date_stats["Fill Percentage"].round(2)
+            date_stats = sanitize_dataframe_for_arrow(date_stats)
+            if dataset_name and _db_manager:
+                _db_manager.save_stats(date_stats, dataset_name, "date")
 
     return numerical_stats, categorical_stats, date_stats
 

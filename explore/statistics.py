@@ -10,6 +10,7 @@ from scipy import stats
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.impute import KNNImputer, SimpleImputer
 
+from utils.statistics_utils import sanitize_dataframe_for_arrow
 #from statsmodels.multivariate.manova import MANOVA
 # PENSER A REALISER UN LOG DES SELECTIONS ET TRANSFORMATIONS APPLIQUEES AUX DONNEES -- IDEE + D'INTEGRITE DANS LES DONNEES, RENDRE REPRODUCTIBLE TOUS LES BIAIS DUS A DES CHOIX ARBITRAIRE SUR LES DONNEES INITIALES. GENERER UN RAPPORT D'INTEGRITE : DATA TRANS ET SELECT SUMMARY
 ######################################## GENERATE A DESCRIPTIVE STATISTICS FILE ########################################
@@ -41,7 +42,7 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
     col_uniques = df.nunique()
 
     # Identify categorical columns based on the number of distinct values
-    categorical_columns = df.select_dtypes(include=['object', 'category', 'bool']).columns
+    categorical_columns = df.select_dtypes(include=['object', 'category', 'bool', 'string', 'str']).columns
     if exclude_columns:
         categorical_columns = [col for col in categorical_columns if col not in exclude_columns]
 
@@ -59,7 +60,7 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
     
     stats_df['fill_percentage'] = (1 - df.isnull().mean()) * 100  # Calculate fill percentage
     stats_df['nb_modalities'] = col_uniques
-    stats_df['variable_type'] = df.dtypes
+    stats_df['variable_type'] = df.dtypes.astype(str)
 
     # Helper to safely convert Timestamp/Timedelta to string for Arrow compatibility
     def safe_str_conversion(val):
@@ -72,10 +73,12 @@ def get_statistics_dataframe(df, _analyzer=None, nb_top_categories=4, exclude_co
     stats_df = stats_df.map(safe_str_conversion)
 
     # Force conversion of potential mixed-type columns to string to prevent ArrowInvalid
-    mixed_type_cols = ['min', 'max', '25%', '50%', '75%']
+    mixed_type_cols = ['mean', 'std', 'min', 'max', '25%', '50%', '75%']
     for col in mixed_type_cols:
         if col in stats_df.columns:
             stats_df[col] = stats_df[col].astype(str)
+
+    stats_df = sanitize_dataframe_for_arrow(stats_df)
 
     if multi_index:
         stats_df = create_multiindex_dataframe(result=stats_df.transpose(), super_column=super_column)

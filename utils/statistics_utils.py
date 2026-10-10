@@ -3,9 +3,60 @@ Statistics Utilities.
 
 Functions for statistical analysis including normality tests.
 """
+import datetime
 import numpy as np
+import pandas as pd
+import pyarrow as pa
 import streamlit as st
 from scipy import stats
+
+
+def sanitize_dataframe_for_arrow(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    """
+    Sanitize a pandas DataFrame so it can be converted to PyArrow without ArrowInvalid errors.
+
+    Ensures columns containing mixed types (e.g. numeric values mixed with Timestamp or Timedelta objects)
+    are safely converted to uniform types (such as strings), while preserving purely numeric and boolean dtypes.
+
+    Args:
+        df: Input pandas DataFrame to sanitize.
+
+    Returns:
+        pd.DataFrame | None: Sanitized DataFrame guaranteed to be compatible with PyArrow and Streamlit.
+    """
+    if df is None or getattr(df, "empty", False):
+        return df
+
+    clean_df = df.copy()
+
+    for col in clean_df.columns:
+        series = clean_df[col]
+        # Only object dtype columns can hold problematic heterogeneous Python objects
+        if series.dtype == "object":
+            # Check for temporal or timedelta objects
+            has_temporal = series.apply(
+                lambda x: isinstance(x, (pd.Timestamp, pd.Timedelta, datetime.datetime, datetime.date, np.datetime64))
+            ).any()
+            if has_temporal:
+                clean_df[col] = series.apply(lambda x: str(x) if pd.notna(x) else None).astype(str)
+            else:
+                # Attempt to convert to numeric if all non-null values are numeric
+                try:
+                    clean_df[col] = pd.to_numeric(series, errors="raise")
+                except (ValueError, TypeError):
+                    pass
+
+    # Fail-safe validation against pyarrow
+    try:
+        pa.Table.from_pandas(clean_df)
+    except Exception:
+        for col in clean_df.columns:
+            try:
+                pa.array(clean_df[col], from_pandas=True)
+            except Exception:
+                clean_df[col] = clean_df[col].astype(str)
+
+    return clean_df
 
 
 def normality_test(column, method='dagostino'):

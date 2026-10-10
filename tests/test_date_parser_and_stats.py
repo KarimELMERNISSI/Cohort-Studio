@@ -7,10 +7,14 @@ and normality screening methods (Shapiro-Wilk, D'Agostino, KS, Anderson-Darling)
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
+from app_pages.home import get_statistics_dataframe as home_get_stats
+from explore.statistics import get_statistics_dataframe as explore_get_stats
+from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
-from utils.statistics_utils import normality_test
+from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 
 
 class TestSmartDateParser:
@@ -96,3 +100,76 @@ class TestNormalityUtilities:
         null_col = pd.Series([np.nan, np.nan, np.nan])
         res = normality_test(null_col, method="shapiro")
         assert np.isnan(res)
+
+
+class TestPyArrowStatisticsCompatibility:
+    """Test suite ensuring descriptive statistics DataFrames serialize cleanly to PyArrow."""
+
+    def test_sanitize_dataframe_for_arrow_mixed_timestamps(self) -> None:
+        """Mixed float and Timestamp objects (ArrowInvalid trigger) are sanitized safely."""
+        df_mixed = pd.DataFrame({
+            "mean": [25.5, pd.Timestamp("2017-11-16 16:20:00")],
+            "feature": ["age", "event_date"],
+        })
+        sanitized = sanitize_dataframe_for_arrow(df_mixed)
+        table = pa.Table.from_pandas(sanitized)
+        assert table.num_rows == 2
+
+    def test_sanitize_dataframe_for_arrow_mixed_timedeltas(self) -> None:
+        """Mixed float and Timedelta objects serialize to PyArrow without exception."""
+        df_timedeltas = pd.DataFrame({
+            "mean": [12.0, pd.Timedelta(days=5, hours=2)],
+            "feature": ["metric", "followup_duration"],
+        })
+        sanitized = sanitize_dataframe_for_arrow(df_timedeltas)
+        table = pa.Table.from_pandas(sanitized)
+        assert table.num_rows == 2
+
+    def test_sanitize_dataframe_preserves_numeric_dtypes(self) -> None:
+        """Purely numeric columns retain native float and integer dtypes."""
+        df_numeric = pd.DataFrame({
+            "mean": [10.5, 20.3],
+            "count": [100, 200],
+        })
+        sanitized = sanitize_dataframe_for_arrow(df_numeric)
+        assert sanitized["mean"].dtype == np.float64
+        assert sanitized["count"].dtype == np.int64
+        table = pa.Table.from_pandas(sanitized)
+        assert table.schema.field("mean").type == pa.float64()
+
+    def test_home_get_statistics_dataframe_arrow_compatibility(self) -> None:
+        """Descriptive statistics in home.py with datetime columns serialize to PyArrow without ArrowInvalid."""
+        df_clinical = pd.DataFrame({
+            "patient_id": [f"PT_{i:03d}" for i in range(30)],
+            "age": [float(20 + i) for i in range(30)],
+            "sbp": [120.0 + float(i % 10) for i in range(30)],
+            "admission_date": pd.date_range("2017-01-01", periods=30, freq="W"),
+            "discharge_date": pd.date_range("2017-01-15", periods=30, freq="W"),
+            "category": ["Group_A" if i % 2 == 0 else "Group_B" for i in range(30)],
+        })
+        analyzer = DataAnalyzer(df_clinical)
+        num_stats, cat_stats, date_stats = home_get_stats(df_clinical, analyzer)
+
+        # PyArrow conversion must succeed for all three statistical tables
+        t_num = pa.Table.from_pandas(num_stats)
+        assert t_num.num_rows > 0
+        assert "admission_date" not in num_stats.index  # Dates separated into date_stats
+
+        t_cat = pa.Table.from_pandas(cat_stats)
+        assert t_cat.num_rows > 0
+
+        t_date = pa.Table.from_pandas(date_stats)
+        assert t_date.num_rows == 2
+        assert "admission_date" in date_stats.index
+        assert "discharge_date" in date_stats.index
+
+    def test_explore_get_statistics_dataframe_arrow_compatibility(self) -> None:
+        """Descriptive statistics in explore/statistics.py serializes cleanly with mixed column types."""
+        df_mixed = pd.DataFrame({
+            "score": [1.0, 2.5, 3.8, 4.2],
+            "event_time": pd.to_datetime(["2017-01-01", "2017-02-01", "2017-03-01", "2017-04-01"]),
+            "status": ["Active", "Paused", "Active", "Completed"],
+        })
+        stats_df = explore_get_stats(df_mixed)
+        table = pa.Table.from_pandas(stats_df)
+        assert table.num_rows == 3
