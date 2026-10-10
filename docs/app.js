@@ -22,6 +22,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // 1b. Clinical Visualization Tab Switching
+  const visTabBtns = document.querySelectorAll('.vis-tab-btn[data-vis-tab]');
+  const visPanels = document.querySelectorAll('.vis-tab-panel');
+
+  visTabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-vis-tab');
+
+      visTabBtns.forEach(b => b.classList.remove('active'));
+      visPanels.forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+    });
+  });
+
   // 2. Deployment Snippet Tab Switching
   const deployTabs = document.querySelectorAll('.deploy-tab[data-deploy]');
   const deploySnippets = document.querySelectorAll('.deploy-snippet');

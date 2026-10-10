@@ -9,6 +9,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from scipy import stats
 
+import utils.export_utils as eu
 import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from manage.db_manager import DBManager
@@ -1346,7 +1347,53 @@ def app():
                 if plot_type not in ["Clustermap", "Correlation Matrix"]:
                     fig = vu.add_custom_hovertemplate(fig, df=df)
                 
-                st.plotly_chart(fig, width='content')
+                plot_filename = f"{plot_type.lower().replace(' ', '_')}_export"
+                plot_config = eu.get_publication_plot_config(filename=plot_filename, format_type="svg", scale=3)
+                st.plotly_chart(fig, width='content', config=plot_config)
+
+                with st.expander("Figure Export & Publication Options", expanded=False):
+                    st.caption("Download publication-quality figures, standalone interactive graphics, or underlying cohort data slices.")
+                    exp_col1, exp_col2, exp_col3, exp_col4 = st.columns(4)
+                    with exp_col1:
+                        html_data = eu.fig_to_html_str(fig)
+                        st.download_button(
+                            label="Interactive HTML (.html)",
+                            data=html_data,
+                            file_name=f"{plot_filename}.html",
+                            mime="text/html",
+                            help="Self-contained interactive figure with full zoom, hover, and pan capabilities.",
+                            key="btn_dl_fig_html"
+                        )
+                    with exp_col2:
+                        json_data = eu.fig_to_json_str(fig)
+                        st.download_button(
+                            label="Plotly Figure JSON (.json)",
+                            data=json_data,
+                            file_name=f"{plot_filename}.json",
+                            mime="application/json",
+                            help="Serialized JSON specification of traces and layouts for programmatic embedding.",
+                            key="btn_dl_fig_json"
+                        )
+                    with exp_col3:
+                        csv_bytes = eu.to_csv_bytes(df)
+                        st.download_button(
+                            label="Filtered Cohort CSV (.csv)",
+                            data=csv_bytes,
+                            file_name=f"{plot_filename}_cohort.csv",
+                            mime="text/csv",
+                            help="Export the active filtered cohort subset used to render this graphic.",
+                            key="btn_dl_fig_csv"
+                        )
+                    with exp_col4:
+                        excel_bytes = eu.to_excel(df)
+                        st.download_button(
+                            label="Filtered Cohort Excel (.xlsx)",
+                            data=excel_bytes,
+                            file_name=f"{plot_filename}_cohort.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            help="Export the active filtered cohort subset to formatted Excel format.",
+                            key="btn_dl_fig_xlsx"
+                        )
 
                 with st.expander("Statistical Insights"):
                     if plot_type == "Histogram":

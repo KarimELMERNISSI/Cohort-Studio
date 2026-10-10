@@ -36,6 +36,7 @@
       <ul class="nav-menu">
         <li><a href="#exploration" class="nav-link">Exploration Suite</a></li>
         <li><a href="#decision-tree" class="nav-link">Decision Tree &amp; Matrix</a></li>
+        <li><a href="#visualization" class="nav-link">Visualisation &amp; Export</a></li>
         <li><a href="#rag-evaluation" class="nav-link">RAGAS Evaluation</a></li>
         <li><a href="#reproducibility" class="nav-link">Reproducibility</a></li>
         <li><a href="#use-cases" class="nav-link">Use Cases</a></li>
@@ -616,6 +617,399 @@ famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</spa
     </div>
   </section>
 
+  <!-- Clinical Visualisation & Fast Figure Export Suite -->
+  <section id="visualization" class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Publication-Grade Visual Analytics</span>
+        <h2 class="section-title">Clinical Visualisation &amp; 1-Click Fast Figure Export</h2>
+        <p class="section-desc">
+          Tailored for clinical epidemiology and observational health studies. Combine automated hypothesis significance overlays, exclusive hierarchical clustermaps with minimal conflict diagnostics, and zero-latency multi-format figure exports for peer-reviewed manuscripts.
+        </p>
+      </div>
+
+      <!-- 4 Visualization Pillars Grid -->
+      <div class="vis-pillars-grid">
+        <div class="vis-pillar-card">
+          <span class="card-kicker">01 // DISTRIBUTION &amp; COMPARISON</span>
+          <h3 class="vis-title">Box &amp; Violin Plots with Automated Hypothesis Overlays</h3>
+          <p class="vis-desc">
+            Seamlessly transitions between discrete histograms, frequency polygons, and kernel density estimation (KDE). Automates parametric (Student's t-test / ANOVA) or non-parametric (Mann-Whitney U / Kruskal-Wallis) group comparisons with Bonferroni and Benjamini-Hochberg FDR adjustments, rendered directly with publication significance brackets.
+          </p>
+          <ul class="vis-points">
+            <li><strong>Dynamic Orientation:</strong> Instant vertical or horizontal flipping for presentation flexibility.</li>
+            <li><strong>Significance Brackets:</strong> Direct figure annotations with formatted p-values (***, **, *, ns).</li>
+            <li><strong>Tabulated Summaries:</strong> Cross-tabulated five-number summary statistics with formatted styling.</li>
+          </ul>
+        </div>
+
+        <div class="vis-pillar-card">
+          <span class="card-kicker">02 // HIERARCHICAL CLUSTERING &amp; DIAGNOSTICS</span>
+          <h3 class="vis-title">Interactive Clustermap &amp; Minimal Conflict Search</h3>
+          <p class="vis-desc">
+            Uncover hidden phenotypic co-regulations in complex biomarker panels with dual row and column interactive Plotly dendrograms, sample group coloring tracks, and Z-score transformations. Features an exclusive Minimal Conflict Search diagnostic that identifies the exact minimal subset of variables lacking shared patient observations.
+          </p>
+          <ul class="vis-points">
+            <li><strong>Matrix Standardization:</strong> Automated log and Z-score transformations across continuous assays.</li>
+            <li><strong>Color Track Annotation:</strong> Categorical grouping bars for patient cohorts and clinical phenotypes.</li>
+            <li><strong>Conflict Search Diagnostic:</strong> Automatically detects and flags non-overlapping missing feature pairs.</li>
+          </ul>
+        </div>
+
+        <div class="vis-pillar-card">
+          <span class="card-kicker">03 // CLINICAL ACCURACY &amp; AGREEMENT</span>
+          <h3 class="vis-title">Diagnostic ROC AUC &amp; Bland-Altman Method Comparison</h3>
+          <p class="vis-desc">
+            Rigorous diagnostic biomarker evaluation. Empirical Receiver Operating Characteristic (ROC) curves compute Area Under the Curve (AUC), optimal Youden's J decision threshold, sensitivity, specificity, and likelihood ratios (LR+/LR-). Bland-Altman plots evaluate instrument agreement with mean bias and 95% Limits of Agreement (LoA).
+          </p>
+          <ul class="vis-points">
+            <li><strong>Optimal Cutoff Determination:</strong> Computes Youden's J statistic [J = Sensitivity + Specificity - 1].</li>
+            <li><strong>Diagnostic Accuracy:</strong> Reports sensitivity, specificity, and positive/negative likelihood ratios.</li>
+            <li><strong>Limits of Agreement:</strong> Bland-Altman mean bias with 95% LoA [&plusmn; 1.96 SD] confidence intervals.</li>
+          </ul>
+        </div>
+
+        <div class="vis-pillar-card">
+          <span class="card-kicker">04 // RELATIONAL FLOWS &amp; TAXONOMIES</span>
+          <h3 class="vis-title">Correlation Heatmaps, Sankey Flows &amp; Hierarchies</h3>
+          <p class="vis-desc">
+            Pairwise Pearson, Spearman rank, and Kendall correlation matrices with hierarchical clustering reordering and automatic p-value significance masking. Multi-stage Sankey flow diagrams chart longitudinal patient treatment transitions and adverse event pathways, while Sunburst, Icicle, and Treemap charts visualize nested ICD-10 hierarchies.
+          </p>
+          <ul class="vis-points">
+            <li><strong>Significance Masking:</strong> Automatically suppresses non-significant correlation pairs (p &ge; 0.05).</li>
+            <li><strong>Longitudinal Sankey:</strong> Maps patient transitions across sequential trial visit milestones.</li>
+            <li><strong>Hierarchical Breakdowns:</strong> Deep multi-level Sunburst and Icicle charts for disease taxonomies.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Interactive Visual Showcase -->
+      <div class="vis-showcase-box">
+        <div class="vis-tabs">
+          <button class="vis-tab-btn active" data-vis-tab="vtab-box">Box Plot &amp; Significance Brackets</button>
+          <button class="vis-tab-btn" data-vis-tab="vtab-clustermap">Clustermap &amp; Conflict Finder</button>
+          <button class="vis-tab-btn" data-vis-tab="vtab-roc">Diagnostic ROC Curve &amp; Youden's J</button>
+          <button class="vis-tab-btn" data-vis-tab="vtab-bland">Bland-Altman Agreement Plot</button>
+          <button class="vis-tab-btn" data-vis-tab="vtab-code">Python Automation API</button>
+        </div>
+
+        <!-- Tab 1: Box Plot & Significance -->
+        <div id="vtab-box" class="vis-tab-panel active">
+          <div class="chart-mockup">
+            <div class="chart-mockup-header">
+              <div class="chart-mockup-title">Biomarker Distribution by Treatment Arm // Systolic Blood Pressure (mmHg)</div>
+              <div class="chart-mockup-meta">
+                <span class="mockup-pill">Test: Mann-Whitney U</span>
+                <span class="mockup-pill emerald">Correction: Benjamini-Hochberg (FDR)</span>
+                <span class="mockup-pill">&alpha; = 0.05</span>
+              </div>
+            </div>
+
+            <!-- Visual SVG Mockup of Box Plot with Significance Brackets -->
+            <div style="background: rgba(3, 7, 18, 0.7); border-radius: var(--radius-sm); padding: 20px; margin-bottom: 20px; overflow-x: auto;">
+              <svg width="100%" height="260" viewBox="0 0 760 260" style="display: block; min-width: 650px;">
+                <!-- Gridlines -->
+                <line x1="80" y1="40" x2="720" y2="40" stroke="#1e293b" stroke-dasharray="4,4"/>
+                <line x1="80" y1="90" x2="720" y2="90" stroke="#1e293b" stroke-dasharray="4,4"/>
+                <line x1="80" y1="140" x2="720" y2="140" stroke="#1e293b" stroke-dasharray="4,4"/>
+                <line x1="80" y1="190" x2="720" y2="190" stroke="#1e293b" stroke-dasharray="4,4"/>
+                <!-- Y-axis labels -->
+                <text x="65" y="45" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">180</text>
+                <text x="65" y="95" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">160</text>
+                <text x="65" y="145" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">140</text>
+                <text x="65" y="195" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">120</text>
+                <!-- Axis lines -->
+                <line x1="80" y1="20" x2="80" y2="210" stroke="#334155" stroke-width="1.5"/>
+                <line x1="80" y1="210" x2="720" y2="210" stroke="#334155" stroke-width="1.5"/>
+
+                <!-- Significance Bracket: Control vs Arm B (p < 0.001 ***) -->
+                <path d="M 200 48 L 200 32 L 600 32 L 600 48" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+                <rect x="340" y="22" width="120" height="20" rx="4" fill="#070b14" stroke="#38bdf8" stroke-width="1"/>
+                <text x="400" y="36" fill="#38bdf8" font-family="JetBrains Mono" font-size="11" font-weight="600" text-anchor="middle">p &lt; 0.001 ***</text>
+
+                <!-- Significance Bracket: Control vs Arm A (p = 0.032 *) -->
+                <path d="M 200 82 L 200 68 L 400 68 L 400 82" fill="none" stroke="#10b981" stroke-width="1.5"/>
+                <rect x="255" y="58" width="90" height="18" rx="4" fill="#070b14" stroke="#10b981" stroke-width="1"/>
+                <text x="300" y="71" fill="#10b981" font-family="JetBrains Mono" font-size="10.5" font-weight="600" text-anchor="middle">p = 0.032 *</text>
+
+                <!-- Group 1: Control (Center: x=200) -->
+                <!-- Whiskers -->
+                <line x1="200" y1="92" x2="200" y2="198" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="180" y1="92" x2="220" y2="92" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="180" y1="198" x2="220" y2="198" stroke="#94a3b8" stroke-width="1.5"/>
+                <!-- Box -->
+                <rect x="165" y="112" width="70" height="66" rx="4" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="2"/>
+                <!-- Median line -->
+                <line x1="165" y1="144" x2="235" y2="144" stroke="#f8fafc" stroke-width="2.5"/>
+                <!-- X-label -->
+                <text x="200" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Control Arm (N=420)</text>
+
+                <!-- Group 2: Treatment Arm A (Center: x=400) -->
+                <!-- Whiskers -->
+                <line x1="400" y1="110" x2="400" y2="204" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="380" y1="110" x2="420" y2="110" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="380" y1="204" x2="420" y2="204" stroke="#94a3b8" stroke-width="1.5"/>
+                <!-- Box -->
+                <rect x="365" y="130" width="70" height="58" rx="4" fill="rgba(16, 185, 129, 0.25)" stroke="#10b981" stroke-width="2"/>
+                <!-- Median line -->
+                <line x1="365" y1="158" x2="435" y2="158" stroke="#f8fafc" stroke-width="2.5"/>
+                <!-- X-label -->
+                <text x="400" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Treatment Arm A (N=415)</text>
+
+                <!-- Group 3: Treatment Arm B (Center: x=600) -->
+                <!-- Whiskers -->
+                <line x1="600" y1="130" x2="600" y2="208" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="580" y1="130" x2="620" y2="130" stroke="#94a3b8" stroke-width="1.5"/>
+                <line x1="580" y1="208" x2="620" y2="208" stroke="#94a3b8" stroke-width="1.5"/>
+                <!-- Box -->
+                <rect x="565" y="152" width="70" height="46" rx="4" fill="rgba(168, 85, 247, 0.25)" stroke="#a855f7" stroke-width="2"/>
+                <!-- Median line -->
+                <line x1="565" y1="176" x2="635" y2="176" stroke="#f8fafc" stroke-width="2.5"/>
+                <!-- X-label -->
+                <text x="600" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Treatment Arm B (N=412)</text>
+              </svg>
+            </div>
+
+            <!-- Tabulated Summary Statistics -->
+            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: #94a3b8; overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border-subtle); color: #cbd5e1;">
+                    <th style="padding: 8px 12px;">Cohort Arm</th>
+                    <th style="padding: 8px 12px;">Count</th>
+                    <th style="padding: 8px 12px;">Mean &plusmn; SD</th>
+                    <th style="padding: 8px 12px;">Median (IQR)</th>
+                    <th style="padding: 8px 12px;">Min – Max</th>
+                    <th style="padding: 8px 12px;">Pairwise vs Control</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.08);">
+                    <td style="padding: 8px 12px; color: #38bdf8; font-weight: 600;">Control</td>
+                    <td style="padding: 8px 12px;">420</td>
+                    <td style="padding: 8px 12px;">146.2 &plusmn; 16.4</td>
+                    <td style="padding: 8px 12px;">144.0 (132.0 – 158.0)</td>
+                    <td style="padding: 8px 12px;">108 – 192</td>
+                    <td style="padding: 8px 12px; color: var(--text-muted);">Reference</td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.08);">
+                    <td style="padding: 8px 12px; color: #10b981; font-weight: 600;">Treatment Arm A</td>
+                    <td style="padding: 8px 12px;">415</td>
+                    <td style="padding: 8px 12px;">139.8 &plusmn; 14.8</td>
+                    <td style="padding: 8px 12px;">138.0 (128.0 – 150.0)</td>
+                    <td style="padding: 8px 12px;">102 – 184</td>
+                    <td style="padding: 8px 12px; color: #10b981;">p = 0.032 * (FDR)</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 12px; color: #c084fc; font-weight: 600;">Treatment Arm B</td>
+                    <td style="padding: 8px 12px;">412</td>
+                    <td style="padding: 8px 12px;">131.4 &plusmn; 12.6</td>
+                    <td style="padding: 8px 12px;">130.0 (122.0 – 140.0)</td>
+                    <td style="padding: 8px 12px;">98 – 174</td>
+                    <td style="padding: 8px 12px; color: #c084fc;">p &lt; 0.001 *** (FDR)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Clustermap & Conflict Finder -->
+        <div id="vtab-clustermap" class="vis-tab-panel">
+          <div class="chart-mockup">
+            <div class="chart-mockup-header">
+              <div class="chart-mockup-title">Hierarchical Clustermap &amp; Conflict Finder // 24-Biomarker Inflammatory Panel</div>
+              <div class="chart-mockup-meta">
+                <span class="mockup-pill">Distance: Correlation</span>
+                <span class="mockup-pill">Linkage: Average</span>
+                <span class="mockup-pill emerald">Scaling: Column Z-Score</span>
+              </div>
+            </div>
+
+            <!-- Diagnostics Alert -->
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 18px; font-family: var(--font-mono); font-size: 0.825rem; color: #10b981;">
+              <strong>[PASS] Minimal Conflict Search:</strong> Validated 24/24 continuous features across 1,248 complete patient records. Zero non-overlapping feature pairs detected.
+            </div>
+
+            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px;">
+              Interactive dual-dendrogram clustermap automatically reorders features and patients into co-regulated phenotypic clusters. If missing values create disjoint observation sets, the <strong>Minimal Conflict Search</strong> identifies the minimal conflict tuple (e.g. <code>['Troponin_T', 'NT_proBNP']</code>) to avoid clustering errors.
+            </p>
+
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono); font-size: 0.825rem; color: #cbd5e1;">
+              <span style="color:#64748b;">// Clustermap Phenotype Cluster Identifiers:</span><br>
+              <span style="color:#38bdf8;">Cluster 1:</span> High IL-6, hs-CRP, TNF-&alpha; &rarr; Resistant Hypertension / Systemic Inflammation Phenotype (N=312)<br>
+              <span style="color:#10b981;">Cluster 2:</span> Normal Cytokines, Elevated LDL-C, ApoB &rarr; Atherogenic Dyslipidemia Phenotype (N=488)<br>
+              <span style="color:#c084fc;">Cluster 3:</span> Baseline Homogeneous Biomarker Profile &rarr; Normotensive Controls (N=448)
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Diagnostic ROC & Youden's J -->
+        <div id="vtab-roc" class="vis-tab-panel">
+          <div class="chart-mockup">
+            <div class="chart-mockup-header">
+              <div class="chart-mockup-title">Diagnostic Accuracy Evaluation // Novel Inflammatory Index vs 30-Day MACE</div>
+              <div class="chart-mockup-meta">
+                <span class="mockup-pill emerald">AUC = 0.914</span>
+                <span class="mockup-pill purple">Youden's J = 0.746</span>
+                <span class="mockup-pill">DeLong 95% CI: [0.887, 0.941]</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
+              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Area Under Curve</div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #10b981;">0.914</div>
+                <div style="font-size: 0.75rem; color: #94a3b8;">High Diagnostic Power</div>
+              </div>
+              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Optimal Cutoff</div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">14.20 mg/L</div>
+                <div style="font-size: 0.75rem; color: #94a3b8;">Youden's J Threshold</div>
+              </div>
+              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Sensitivity at Cutoff</div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #c084fc;">89.1%</div>
+                <div style="font-size: 0.75rem; color: #94a3b8;">True Positive Rate</div>
+              </div>
+              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Specificity at Cutoff</div>
+                <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">85.5%</div>
+                <div style="font-size: 0.75rem; color: #94a3b8;">True Negative Rate</div>
+              </div>
+            </div>
+
+            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6;">
+              Calculates likelihood ratios at the optimal Youden's J discrimination boundary: 
+              <strong>Positive Likelihood Ratio (LR+) = 6.14</strong> (confers substantial increase in post-test disease probability); 
+              <strong>Negative Likelihood Ratio (LR-) = 0.13</strong> (confers decisive rule-out value).
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 4: Bland-Altman Agreement -->
+        <div id="vtab-bland" class="vis-tab-panel">
+          <div class="chart-mockup">
+            <div class="chart-mockup-header">
+              <div class="chart-mockup-title">Bland-Altman Agreement Analysis // Digital Cuff vs Invasive Arterial Line</div>
+              <div class="chart-mockup-meta">
+                <span class="mockup-pill">N = 650 Comparisons</span>
+                <span class="mockup-pill emerald">Mean Bias: +1.40 mmHg</span>
+                <span class="mockup-pill purple">Limits of Agreement: [-5.40, +8.20]</span>
+              </div>
+            </div>
+
+            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px;">
+              Evaluates method agreement across the full physiological dynamic range (90 – 210 mmHg). Verifies absence of proportional bias via linear regression of differences on means (r = 0.041, p = 0.298), confirming clinical interchangeability under AAMI/ESH/ISO standards.
+            </p>
+
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono); font-size: 0.825rem; color: #cbd5e1;">
+              <span style="color:#38bdf8;">Mean Bias (&Delta;):</span> +1.40 mmHg (95% CI: [+1.14, +1.66])<br>
+              <span style="color:#10b981;">Upper Limit of Agreement (+1.96 SD):</span> +8.20 mmHg (95% CI: [+7.75, +8.65])<br>
+              <span style="color:#10b981;">Lower Limit of Agreement (-1.96 SD):</span> -5.40 mmHg (95% CI: [-5.85, -4.95])<br>
+              <span style="color:#c084fc;">Outlier Observations outside &plusmn;1.96 SD:</span> 31 / 650 (4.77%, within theoretical 5% expectation)
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Python Automation API -->
+        <div id="vtab-code" class="vis-tab-panel">
+          <div class="code-snippet-box">
+            <pre><code class="language-python"><span class="token-kw">import</span> pandas <span class="token-kw">as</span> pd
+<span class="token-kw">import</span> utils.visualization_utils <span class="token-kw">as</span> vu
+<span class="token-kw">import</span> utils.export_utils <span class="token-kw">as</span> eu
+
+<span class="token-cm"># 1. Load active cohort dataset</span>
+df = pd.read_parquet(<span class="token-str">"datasets/cardio_registry_v3.parquet"</span>)
+
+<span class="token-cm"># 2. Generate publication-ready box plot with hypothesis test overlay</span>
+fig = vu.create_boxplot_with_significance_streamlit(
+    df=df,
+    x_col=<span class="token-str">"treatment_group"</span>,
+    y_cols=[<span class="token-str">"systolic_bp"</span>, <span class="token-str">"ldl_cholesterol"</span>],
+    test_type=<span class="token-str">"Auto-Detect"</span>,  <span class="token-cm"># Auto-routes to Mann-Whitney or ANOVA</span>
+    correction_method=<span class="token-str">"Benjamini-Hochberg (FDR)"</span>,
+    alpha=0.05,
+)
+
+<span class="token-cm"># 3. 1-Click fast export: standalone interactive HTML for clinical trial monitors</span>
+html_markup = eu.fig_to_html_str(fig)
+<span class="token-kw">with</span> <span class="token-fn">open</span>(<span class="token-str">"figure_1_blood_pressure.html"</span>, <span class="token-str">"w"</span>, encoding=<span class="token-str">"utf-8"</span>) <span class="token-kw">as</span> f:
+    f.write(html_markup)
+
+<span class="token-cm"># 4. Generate 300+ DPI publication vector config for modebar download</span>
+modebar_config = eu.get_publication_plot_config(
+    filename=<span class="token-str">"figure_1_blood_pressure"</span>,
+    format_type=<span class="token-str">"svg"</span>,  <span class="token-cm"># Vector SVG format</span>
+    scale=3,  <span class="token-cm"># 300+ DPI raster equivalent</span>
+)</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fast 1-Click Multi-Format Export Suite -->
+      <div class="export-suite-card">
+        <div class="export-header">
+          <span class="export-tag">Zero-Friction Distribution</span>
+          <h3 class="export-title">1-Click Fast Multi-Format Export Suite</h3>
+          <p class="export-subtitle">
+            No external CLI utilities or server roundtrips required. Download publication-ready graphics, interactive web bundles, and slice data directly in 1 click.
+          </p>
+        </div>
+
+        <div class="export-grid">
+          <div class="export-card">
+            <span class="export-card-badge">VECTOR // 300+ DPI</span>
+            <h4 class="export-card-name">Scalable Vector (SVG)</h4>
+            <p class="export-card-desc">
+              Infinite-resolution vector graphics with selectable text and clean lines. Meets strict author guidelines for Nature, NEJM, Lancet, and JAMA.
+            </p>
+            <div class="export-specs">
+              <div>Engine: <span>Client Canvas SVG</span></div>
+              <div>Resolution: <span>Lossless Vector</span></div>
+            </div>
+          </div>
+
+          <div class="export-card">
+            <span class="export-card-badge">RASTER // HIGH-RES</span>
+            <h4 class="export-card-name">High-DPI Raster (PNG)</h4>
+            <p class="export-card-desc">
+              Pre-configured at 3x scaling (3600 x 2400 px) for razor-sharp presentation slides, conference posters, and institutional monographs.
+            </p>
+            <div class="export-specs">
+              <div>Scale: <span>3x Native Canvas</span></div>
+              <div>Output: <span>300+ DPI Equivalent</span></div>
+            </div>
+          </div>
+
+          <div class="export-card">
+            <span class="export-card-badge">STANDALONE WEB</span>
+            <h4 class="export-card-name">Interactive HTML (.html)</h4>
+            <p class="export-card-desc">
+              Self-contained HTML package preserving full zoom, pan, tooltip inspection, and trace isolation to share with medical monitors without Python.
+            </p>
+            <div class="export-specs">
+              <div>Dependencies: <span>0 (Self-Contained)</span></div>
+              <div>Interactivity: <span>100% Preserved</span></div>
+            </div>
+          </div>
+
+          <div class="export-card">
+            <span class="export-card-badge">DATA &amp; SPECIFICATION</span>
+            <h4 class="export-card-name">JSON &amp; Excel/CSV Slices</h4>
+            <p class="export-card-desc">
+              Exports full Plotly JSON trace schemas for programmatic dashboards, plus active cohort subsets and cross-tabulated statistics in Excel (.xlsx) or CSV.
+            </p>
+            <div class="export-specs">
+              <div>Format: <span>Plotly JSON / Excel</span></div>
+              <div>Auditability: <span>Exact Cohort Slice</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Scientific RAG & RAGAS Triad Evaluation -->
   <section id="rag-evaluation" class="section">
     <div class="container">
@@ -1056,8 +1450,8 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
 
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/04_Visualization.md" target="_blank" rel="noopener noreferrer" class="doc-item">
           <div class="doc-num">GUIDE 04</div>
-          <div class="doc-name">Interactive Plotting</div>
-          <div class="doc-summary">Plotly clinical graphics with integrated hypothesis test overlays.</div>
+          <div class="doc-name">Visualisation &amp; Fast Export</div>
+          <div class="doc-summary">Plotly clinical graphics, hypothesis overlays, exclusive clustermaps, and multi-format exports.</div>
         </a>
 
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/05_Epidemiology.md" target="_blank" rel="noopener noreferrer" class="doc-item">
@@ -1277,6 +1671,7 @@ docker compose logs -f</code></pre>
             <ul>
               <li><a href="#exploration">Exploration Suite</a></li>
               <li><a href="#decision-tree">Decision Tree &amp; Matrix</a></li>
+              <li><a href="#visualization">Visualisation &amp; Export</a></li>
               <li><a href="#rag-evaluation">RAGAS Evaluation</a></li>
               <li><a href="#reproducibility">Reproducibility</a></li>
               <li><a href="#use-cases">Clinical Use Cases</a></li>
