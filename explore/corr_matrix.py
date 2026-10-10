@@ -1,3 +1,5 @@
+from io import BytesIO
+import re
 import warnings
 
 import matplotlib.pyplot as plt
@@ -496,6 +498,9 @@ def get_yfiles_network_data(data, targets, predictors, method="pearson", thresho
             warnings.simplefilter("ignore", category=Warning)
             corr_matrix = data_filtered.corr(method=method)
 
+    if corr_matrix is None or corr_matrix.empty:
+        return [], []
+
     # Thresholds
     strength_data = {
         'pearson': [0.00, 0.10, 0.40, 0.70, 0.90],
@@ -680,12 +685,15 @@ def add_correlation_strength_table(writer, method, sheet_name='Correlation Stren
     bold_font = Font(bold=True)
 
     # Determine the column for the selected method to be bolded
-    if method == 'pearson':
+    method_lower = str(method).lower()
+    if method_lower == 'pearson':
         column_to_bold = 'B'  # Pearson is in column B
-    elif method == 'spearman':
+    elif method_lower == 'spearman':
         column_to_bold = 'C'  # Spearman is in column C
-    elif method == 'kendall':
+    elif method_lower == 'kendall':
         column_to_bold = 'D'  # Kendall is in column D
+    else:
+        column_to_bold = 'B'
 
     # Bold the relevant row in the column corresponding to the method
     for row in range(2, len(strength_df) + 2):  # +2 to account for header row
@@ -723,12 +731,30 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     Returns:
     None
     """
+    empty_summary = pd.DataFrame(columns=['Predictor', 'Target', 'Correlation', 'AbsCorrelation', 'Strength'])
+
+    if correlations is None or correlations.empty:
+        empty_summary.to_excel(writer, sheet_name=sheet_name, index=False)
+        return
+
     # Flatten the correlation matrix and extract the pairs with correlation values
     corr_flat = correlations.stack().reset_index()
+    if corr_flat.empty:
+        empty_summary.to_excel(writer, sheet_name=sheet_name, index=False)
+        return
+
     corr_flat.columns = ['Predictor', 'Target', 'Correlation']
 
     # Remove self-correlations (where Predictor == Target)
     corr_flat = corr_flat[corr_flat['Predictor'] != corr_flat['Target']]
+
+    # Coerce numeric correlations and drop missing/non-numeric pairs
+    corr_flat['Correlation'] = pd.to_numeric(corr_flat['Correlation'], errors='coerce')
+    corr_flat = corr_flat.dropna(subset=['Correlation'])
+
+    if corr_flat.empty:
+        empty_summary.to_excel(writer, sheet_name=sheet_name, index=False)
+        return
 
     # Sort by absolute correlation value in descending order
     corr_flat['AbsCorrelation'] = corr_flat['Correlation'].abs()
@@ -742,7 +768,8 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     }
 
     # Map the selected method to the appropriate thresholds
-    selected_thresholds = strength_data[method]
+    method_key = str(method).lower()
+    selected_thresholds = strength_data.get(method_key, strength_data['pearson'])
 
     # Categorize correlation strengths based on absolute values
     def categorize_strength(value):
@@ -763,16 +790,16 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     strength_order = ['negligible', 'weak', 'moderate', 'strong', 'very strong']
 
     # Filter based on the threshold
-    filter_index = strength_order.index(threshold.lower())
-    filtered_strengths = strength_order[filter_index:]
-    
-    # Filter the data to include only the desired strength categories
-    if corr_flat_sorted.empty:
-        corr_flat_filtered = pd.DataFrame(columns=corr_flat_sorted.columns)
+    threshold_str = str(threshold).lower()
+    if threshold_str in strength_order:
+        filter_index = strength_order.index(threshold_str)
+        filtered_strengths = strength_order[filter_index:]
     else:
-        # Ensure Strength column is treated as string
-        corr_flat_sorted['Strength'] = corr_flat_sorted['Strength'].astype(str)
-        corr_flat_filtered = corr_flat_sorted[corr_flat_sorted['Strength'].str.lower().isin(filtered_strengths)]
+        filtered_strengths = strength_order
+
+    # Filter the data to include only the desired strength categories
+    corr_flat_sorted['Strength'] = corr_flat_sorted['Strength'].astype(str)
+    corr_flat_filtered = corr_flat_sorted[corr_flat_sorted['Strength'].str.lower().isin(filtered_strengths)]
 
     # Limit to top N correlations
     if top_n:
@@ -944,7 +971,15 @@ def _write_corr_to_sheet(
     print(f'Correlation matrix with custom formatting saved to {sheet_name}')
 
 
-def custom_corr_mat_to_excel(data, targets, predictors, group_column=None, file_name='correlation_matrix', method='pearson', threshold='Strong'):
+def custom_corr_mat_to_excel(
+    data,
+    targets,
+    predictors,
+    group_column=None,
+    file_name='correlation_matrix',
+    method='pearson',
+    threshold='Strong'
+):
     """
     Calculate the correlation matrix for the given targets and predictors, and write it to an Excel file
     with conditional formatting based on float values for the correlation matrix.
@@ -955,45 +990,57 @@ def custom_corr_mat_to_excel(data, targets, predictors, group_column=None, file_
     targets (list): List of target column names.
     predictors (list): List of predictor column names.
     group_column (str): Optional. Column name to group data by. A sheet will be created for each group.
-    file_name (str): Name of the Excel file to write to (default is 'correlation_matrix.xlsx').
+    file_name (str or BytesIO): Name of the Excel file or BytesIO buffer to write to.
     method (str): Correlation method ('pearson', 'spearman', etc.).
+    threshold (str): Correlation strength threshold for the summary chart.
 
     Returns:
     None
     """
-    file_name = f"{file_name}.xlsx"
-    
+    if isinstance(file_name, str):
+        target_file = file_name if file_name.endswith('.xlsx') else f"{file_name}.xlsx"
+    else:
+        target_file = file_name
+
+    method_clean = str(method).lower()
+
+    # Guard against empty targets, predictors, or data to guarantee a valid workbook with at least one sheet
+    if not targets or not predictors or data is None or getattr(data, "empty", False):
+        with pd.ExcelWriter(target_file, engine='openpyxl') as writer:
+            pd.DataFrame({"Status": ["No data or variables selected for correlation analysis."]}).to_excel(
+                writer, sheet_name="Correlation Summary", index=False
+            )
+        return
+
     # Create a Pandas Excel writer object
-    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+    with pd.ExcelWriter(target_file, engine='openpyxl') as writer:
         
         # If no grouping column is provided, calculate the global correlation matrix
         if group_column is None:
-            correlations, counts = _compute_corr_and_counts(data, targets, predictors, method)
-            _write_corr_to_sheet(writer, correlations, counts, sheet_name=f"Global({method})", method=method)
+            correlations, counts = _compute_corr_and_counts(data, targets, predictors, method=method_clean)
+            _write_corr_to_sheet(writer, correlations, counts, sheet_name=f"Global({method_clean})", method=method_clean)
         
         else:
             # 1. Global correlation matrix (all data)
-            correlations, counts = _compute_corr_and_counts(data, targets, predictors, method)
-            _write_corr_to_sheet(writer, correlations, counts, sheet_name=f"Global({method})", method=method)
+            correlations, counts = _compute_corr_and_counts(data, targets, predictors, method=method_clean)
+            _write_corr_to_sheet(writer, correlations, counts, sheet_name=f"Global({method_clean})", method=method_clean)
             
             # 2. Grouped correlation matrices
-            for group_value, group_data in data.groupby(group_column, observed=False):  # Suppress observed warning
-                # Filter the data for the current group
-                group_correlations, group_counts = _compute_corr_and_counts(group_data, targets, predictors, method)
-                
-                # Create a new sheet for the current group, truncate if name exceeds 31 characters
-                sheet_name = f"{group_column}_{group_value}({method})"
-                if len(sheet_name) > 31:
-                    sheet_name = sheet_name[:31]
-                _write_corr_to_sheet(writer, group_correlations, group_counts, sheet_name=sheet_name, method=method)
+            for group_value, group_data in data.groupby(group_column, observed=False):
+                group_correlations, group_counts = _compute_corr_and_counts(group_data, targets, predictors, method=method_clean)
+                raw_sheet_name = f"{group_column}_{group_value}({method_clean})"
+                clean_sheet_name = re.sub(r'[\/\\?*:[\]]', '_', str(raw_sheet_name))[:31].strip()
+                if not clean_sheet_name:
+                    clean_sheet_name = "Group"
+                _write_corr_to_sheet(writer, group_correlations, group_counts, sheet_name=clean_sheet_name, method=method_clean)
 
         # Add a chart for sorted correlation scores
-        add_correlation_chart_openpyxl(writer, correlations, method=method, threshold=threshold)
+        add_correlation_chart_openpyxl(writer, correlations, method=method_clean, threshold=threshold)
 
         # Add the correlation strength information
-        add_correlation_strength_table(writer, method=method)
+        add_correlation_strength_table(writer, method=method_clean)
     
-    print(f'Correlation matrix saved to {file_name}')
+    print(f'Correlation matrix saved to {target_file}')
 
 
 def _compute_corr_and_counts(data, targets, predictors, method):
@@ -1011,13 +1058,34 @@ def _compute_corr_and_counts(data, targets, predictors, method):
     pd.DataFrame: Matrix of counts (number of valid rows used for each correlation).
     """
     # Initialize an empty correlation matrix
-    correlations = pd.DataFrame(index=predictors, columns=targets)
+    correlations = pd.DataFrame(index=predictors, columns=targets, dtype=object)
     
     # Create a count matrix for non-NaN values
-    counts = pd.DataFrame(index=predictors, columns=targets)
+    counts = pd.DataFrame(index=predictors, columns=targets, dtype=object)
     
     for predictor in predictors:
         for target in targets:
+            # Handle diagonal (self-correlation) explicitly to prevent duplicate column indexing
+            if predictor == target:
+                if predictor in data.columns:
+                    series = data[predictor].dropna()
+                    valid_rows = int(len(series))
+                    counts.loc[predictor, target] = valid_rows
+                    if valid_rows > 1 and series.nunique() > 1:
+                        correlations.loc[predictor, target] = 1.0
+                    else:
+                        correlations.loc[predictor, target] = None
+                else:
+                    counts.loc[predictor, target] = 0
+                    correlations.loc[predictor, target] = None
+                continue
+
+            # Handle missing columns gracefully
+            if predictor not in data.columns or target not in data.columns:
+                counts.loc[predictor, target] = 0
+                correlations.loc[predictor, target] = None
+                continue
+
             pair_df = data[[predictor, target]].dropna()
             valid_rows = len(pair_df)
             counts.loc[predictor, target] = valid_rows
@@ -1032,7 +1100,7 @@ def _compute_corr_and_counts(data, targets, predictors, method):
                     warnings.simplefilter("ignore", category=Warning)
                     try:
                         val = pair_df.corr(method=method).iloc[0, 1]
-                        correlations.loc[predictor, target] = val if pd.notna(val) else None
+                        correlations.loc[predictor, target] = float(val) if pd.notna(val) else None
                     except Exception:
                         correlations.loc[predictor, target] = None
             else:

@@ -4,6 +4,7 @@ Export Utilities.
 Functions for exporting DataFrames to various formats (Excel, etc.)
 """
 from io import BytesIO
+import re
 
 import pandas as pd
 
@@ -20,7 +21,10 @@ def to_excel(df):
     """
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=True, sheet_name='Sheet1')
+        if df is None or getattr(df, "empty", False):
+            pd.DataFrame({"Status": ["No data available"]}).to_excel(writer, index=False, sheet_name='Sheet1')
+        else:
+            df.to_excel(writer, index=True, sheet_name='Sheet1')
     return output.getvalue()
 
 
@@ -35,9 +39,16 @@ def to_excel_sheets(dataframes_dict: dict[str, pd.DataFrame]) -> bytes:
         bytes: Multi-sheet Excel workbook as bytes.
     """
     output = BytesIO()
+    if not dataframes_dict:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            pd.DataFrame({"Status": ["No data available"]}).to_excel(writer, sheet_name="Summary", index=False)
+        return output.getvalue()
+
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         for sheet_name, df in dataframes_dict.items():
-            safe_name = str(sheet_name)[:27]
+            safe_name = re.sub(r'[\/\\?*:[\]]', '_', str(sheet_name))[:31].strip()
+            if not safe_name:
+                safe_name = "Sheet"
             df.to_excel(writer, sheet_name=safe_name, index=True)
     return output.getvalue()
 

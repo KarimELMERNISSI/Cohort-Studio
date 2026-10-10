@@ -70,6 +70,41 @@ class TestExportUtils:
         assert "Baseline" in xls.sheet_names
         assert "FollowUp" in xls.sheet_names
 
+    def test_to_excel_empty_or_none(self) -> None:
+        """Empty DataFrame or None exports safely with fallback sheet instead of crashing."""
+        bytes_empty = to_excel(pd.DataFrame())
+        assert isinstance(bytes_empty, bytes)
+        assert len(bytes_empty) > 0
+
+        bytes_none = to_excel(None)
+        assert isinstance(bytes_none, bytes)
+        assert len(bytes_none) > 0
+
+    def test_to_excel_sheets_empty_dict(self) -> None:
+        """Empty dictionary exports safely with a default sheet instead of raising IndexError."""
+        excel_bytes = to_excel_sheets({})
+        assert isinstance(excel_bytes, bytes)
+        assert len(excel_bytes) > 0
+        xls = pd.ExcelFile(BytesIO(excel_bytes))
+        assert len(xls.sheet_names) >= 1
+        assert "Summary" in xls.sheet_names
+
+    def test_to_excel_sheets_sanitizes_sheet_names(self, sample_df: pd.DataFrame) -> None:
+        """Special characters in sheet names are sanitized to prevent openpyxl exceptions."""
+        sheets = {
+            "Group:2024/01/01[Arm*A]?": sample_df,
+            "A" * 50: sample_df,
+        }
+        excel_bytes = to_excel_sheets(sheets)
+        assert isinstance(excel_bytes, bytes)
+        assert len(excel_bytes) > 0
+        xls = pd.ExcelFile(BytesIO(excel_bytes))
+        assert len(xls.sheet_names) == 2
+        for name in xls.sheet_names:
+            assert len(name) <= 31
+            for char in [":", "/", "\\", "?", "*", "[", "]"]:
+                assert char not in name
+
     def test_to_csv_bytes(self, sample_df: pd.DataFrame) -> None:
         """Converts DataFrame to UTF-8 CSV bytes."""
         csv_bytes = to_csv_bytes(sample_df, index=False)
