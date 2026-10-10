@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const targetEl = document.querySelector(targetId);
       if (targetEl) {
         e.preventDefault();
-        const headerOffset = 80;
+        const headerOffset = 84;
         const elementPosition = targetEl.getBoundingClientRect().top;
         const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
 
@@ -107,4 +107,38 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // 5. Scroll-spy for Top Navigation
+  const navLinks = document.querySelectorAll('.nav-menu .nav-link');
+  const sections = Array.from(navLinks)
+    .map(link => {
+      const id = link.getAttribute('href');
+      if (id && id.startsWith('#') && id.length > 1) {
+        const el = document.querySelector(id);
+        return el ? { link, el } : null;
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  if ('IntersectionObserver' in window && sections.length > 0) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const activeId = '#' + entry.target.id;
+          navLinks.forEach(link => {
+            if (link.getAttribute('href') === activeId) {
+              link.classList.add('active');
+            } else {
+              link.classList.remove('active');
+            }
+          });
+        }
+      });
+    }, {
+      rootMargin: '-25% 0px -65% 0px'
+    });
+
+    sections.forEach(s => observer.observe(s.el));
+  }
 });

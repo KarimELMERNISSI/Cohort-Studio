@@ -1,7 +1,7 @@
 # Cohort Monitoring Package
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![Test Suite](https://img.shields.io/badge/tests-128%2F128%20passed-success.svg?logo=pytest&logoColor=white)](tests/)
+[![Test Suite](https://img.shields.io/badge/tests-165%2F165%20passed-success.svg?logo=pytest&logoColor=white)](tests/)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
@@ -233,26 +233,27 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-====================== 128 passed, 7 warnings in 68.08s ======================
-Pass rate: 100% (128 passed out of 128 tests)
+====================== 165 passed, 8 warnings in 74.20s ======================
+Pass rate: 100% (165 passed out of 165 tests)
 ```
 
 | Test Module | Coverage Scope | Status |
 | :--- | :--- | :--- |
 | [`tests/test_epidemiology_stats.py`](tests/test_epidemiology_stats.py) | 2x2 Contingency, Effect Sizes, ANCOVA, Diagnostic Accuracy | **PASSED** |
 | [`tests/test_epidemiology_integration.py`](tests/test_epidemiology_integration.py) | Two-group, ANOVA, Little's MCAR, Multiple corrections | **PASSED** |
-| [`tests/test_statistics_utils.py`](tests/test_statistics_utils.py) | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation | **PASSED** |
+| [`tests/test_date_parser_and_stats.py`](tests/test_date_parser_and_stats.py) | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation, Date Ingestion | **PASSED** |
+| [`tests/test_corr_matrix.py`](tests/test_corr_matrix.py) | Mixed-type Correlation Matrix (Pearson, Spearman, Cramér's V) | **PASSED** |
 | [`tests/test_export_utils.py`](tests/test_export_utils.py) | Vector SVG, 300+ DPI PNG, Standalone HTML, Plotly JSON, CSV/Excel export | **PASSED** |
 | [`tests/test_db_manager.py`](tests/test_db_manager.py) | bcrypt Auth, Activation, DuckDB Parquet persistence | **PASSED** |
-| [`tests/test_iam.py`](tests/test_iam.py) | Pluggable IAM contract, DefaultAuthService, BetterAuth sidecar evaluation | **PASSED** |
+| [`tests/test_iam_framework.py`](tests/test_iam_framework.py) | Pluggable IAM contract, DefaultAuthService, BetterAuth sidecar evaluation | **PASSED** |
 | [`tests/test_transformation_manager.py`](tests/test_transformation_manager.py) | Session lineage, complex parameter serialization, traces | **PASSED** |
 | [`tests/test_reproduction_manager.py`](tests/test_reproduction_manager.py) | Headless pipeline re-execution (`execute_trace_pipeline`), snapshot replay | **PASSED** |
 | [`tests/test_data_quality_auditor.py`](tests/test_data_quality_auditor.py) | Completeness, Uniqueness, Outlier validity, MCAR heuristics | **PASSED** |
 | [`tests/test_data_analyzer.py`](tests/test_data_analyzer.py) | `DatasetProfile` immutability, type categorization, charts | **PASSED** |
 | [`tests/test_rag_connectors.py`](tests/test_rag_connectors.py) | Gemini, Ollama, OpenAI, Mistral factory & failover | **PASSED** |
 | [`tests/test_rag_evaluator.py`](tests/test_rag_evaluator.py) | RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision | **PASSED** |
+| [`tests/test_rag_pipeline_steps.py`](tests/test_rag_pipeline_steps.py) | RAG retrieval, prompt augmentation, grounding validation | **PASSED** |
 | [`tests/test_clustering_utils.py`](tests/test_clustering_utils.py) | K-Means, DBSCAN, GMM, Silhouette score, cluster stratification | **PASSED** |
-| [`tests/test_date_parser.py`](tests/test_date_parser.py) | Multi-format clinical date ingestion, timezone normalization | **PASSED** |
 | [`tests/test_trace_documenter.py`](tests/test_trace_documenter.py) | Microsoft Word `.docx` transformation report generation | **PASSED** |
 
 ---
