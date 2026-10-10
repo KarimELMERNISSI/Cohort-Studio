@@ -226,7 +226,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         use_existing_db=False,
         progress_callback=None,
         selected_files=None,
-        embedding_model="models/text-embedding-004",
+        embedding_model="models/gemini-embedding-2",
         provider="gemini",
         base_url=None,
     ):

@@ -50,19 +50,31 @@ class GeminiChatConnector(BaseLLMConnector):
 
     def get_available_models(self) -> list[str]:
         """Query Gemini API for available text models."""
+        fallback = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ]
         if not self.client or not GEMINI_AVAILABLE:
-            return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            return fallback
         try:
             models = []
             for m in self.client.models.list():
                 name_lower = m.name.lower()
                 if "gemini" in name_lower or "gemma" in name_lower:
                     if "imagen" not in name_lower and "veo" not in name_lower and "embedding" not in name_lower:
-                        models.append(m.name)
-            return models or ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
+                        clean_name = m.name.removeprefix("models/")
+                        models.append(clean_name)
+            return models or fallback
         except Exception as e:
             logger.warning(f"Could not fetch Gemini models list: {e}")
-            return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            return fallback
 
     def _generate(
         self,
@@ -144,42 +156,60 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
             self.client = genai.Client(api_key=config.api_key)
 
     def get_available_models(self) -> list[str]:
+        fallback = [
+            "models/gemini-embedding-2",
+            "models/text-embedding-005",
+            "models/text-embedding-004",
+            "models/gemini-embedding-001",
+        ]
         if not self.client or not GEMINI_AVAILABLE:
-            return ["models/text-embedding-004", "models/gemini-embedding-001"]
+            return fallback
         try:
             embed_models = []
             for m in self.client.models.list():
                 if "embedding" in m.name.lower():
                     embed_models.append(m.name)
-            return embed_models or ["models/text-embedding-004", "models/gemini-embedding-001"]
+            return embed_models or fallback
         except Exception:
-            return ["models/text-embedding-004", "models/gemini-embedding-001"]
+            return fallback
+
+    def _embed_single(self, text: str) -> list[float]:
+        """Embeds single text with automatic fallback across supported Gemini models."""
+        models_to_try = [
+            self.config.embedding_model,
+            "models/gemini-embedding-2",
+            "models/text-embedding-005",
+            "models/text-embedding-004",
+        ]
+        seen = set()
+        deduped = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+        last_err = None
+        for m in deduped:
+            try:
+                response = self.client.models.embed_content(
+                    model=m,
+                    contents=text
+                )
+                if hasattr(response, "embeddings") and response.embeddings:
+                    return response.embeddings[0].values
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Embedding attempt with {m} failed: {e}. Trying fallback model...")
+                continue
+        logger.error(f"All Gemini embedding attempts failed: {last_err}")
+        if last_err:
+            raise last_err
+        return []
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not self.client:
             raise ValueError("Google GenAI client not initialized. Check API key.")
         
-        clean_model = self.config.embedding_model
-        results: list[list[float]] = []
-        for text in texts:
-            try:
-                response = self.client.models.embed_content(
-                    model=clean_model,
-                    contents=text
-                )
-                results.append(response.embeddings[0].values)
-            except Exception as e:
-                logger.error(f"Gemini embedding error: {e}")
-                raise
-        return results
+        return [self._embed_single(text) for text in texts]
 
     def embed_query(self, text: str) -> list[float]:
         if not self.client:
             raise ValueError("Google GenAI client not initialized. Check API key.")
         
-        clean_model = self.config.embedding_model
-        response = self.client.models.embed_content(
-            model=clean_model,
-            contents=text
-        )
-        return response.embeddings[0].values
+        return self._embed_single(text)

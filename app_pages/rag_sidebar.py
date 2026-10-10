@@ -118,22 +118,39 @@ def render_rag_sidebar():
                 st.session_state.rag_manager.api_key = api_key
                 os.environ["GOOGLE_API_KEY"] = api_key
 
-            gemini_model_options = [
+            base_gemini_models = [
                 "gemini-2.5-flash",
                 "gemini-2.5-pro",
+                "gemini-3.8-flash",
+                "gemini-3.5-flash",
+                "gemini-flash-latest",
+                "gemini-pro-latest",
                 "gemini-2.0-flash",
                 "gemini-1.5-flash",
                 "gemini-1.5-pro",
-                "gemini-flash-latest",
             ]
+            
+            # Dynamically fetch available models from Google API if initialized
+            if api_key and hasattr(st.session_state.rag_manager, "get_available_models"):
+                try:
+                    live_models = st.session_state.rag_manager.get_available_models("gemini")
+                    if live_models:
+                        for lm in live_models:
+                            if lm not in base_gemini_models:
+                                base_gemini_models.append(lm)
+                except Exception:
+                    pass
+
             selected_model = st.selectbox(
                 "Gemini Model",
-                options=gemini_model_options,
+                options=base_gemini_models,
                 index=0,
                 key="rag_gemini_model_select"
             )
 
             gemini_embed_options = [
+                "models/gemini-embedding-2",
+                "models/text-embedding-005",
                 "models/text-embedding-004",
                 "models/gemini-embedding-001",
             ]

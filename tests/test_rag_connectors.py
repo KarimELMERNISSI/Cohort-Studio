@@ -28,7 +28,7 @@ class TestRAGSchemas:
         cfg = ProviderConfig()
         assert cfg.provider == ProviderType.GEMINI
         assert cfg.model_name == "gemini-2.5-flash"
-        assert cfg.embedding_model == "models/text-embedding-004"
+        assert cfg.embedding_model == "models/gemini-embedding-2"
         assert cfg.temperature == 0.3
         assert cfg.max_retries == 3
 

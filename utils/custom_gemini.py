@@ -15,31 +15,42 @@ class CustomGeminiEmbeddings(Embeddings):
     """
     Custom embedding class that uses the modern Google GenAI SDK (v1.0+).
     """
-    def __init__(self, api_key: str, model: str = "models/text-embedding-004"):
+    def __init__(self, api_key: str, model: str = "models/gemini-embedding-2"):
         self.client = genai.Client(api_key=api_key)
         self.model = model
 
+    def _embed_single(self, text: str) -> list[float]:
+        models_to_try = [
+            self.model,
+            "models/gemini-embedding-2",
+            "models/text-embedding-005",
+            "models/text-embedding-004",
+        ]
+        seen = set()
+        deduped = [m for m in models_to_try if not (m in seen or seen.add(m))]
+        last_err = None
+        for m in deduped:
+            try:
+                response = self.client.models.embed_content(
+                    model=m,
+                    contents=text
+                )
+                if hasattr(response, "embeddings") and response.embeddings:
+                    return response.embeddings[0].values
+            except Exception as e:
+                last_err = e
+                continue
+        if last_err:
+            raise last_err
+        return []
+
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Embed a list of documents."""
-        # Batch processing might be needed for large lists, 
-        # but here is the simple implementation.
-        results = []
-        for text in texts:
-            response = self.client.models.embed_content(
-                model=self.model,
-                contents=text
-            )
-            # The new SDK returns an object with an 'embedding' attribute
-            results.append(response.embeddings[0].values)
-        return results
+        """Embed a list of documents with fallback support."""
+        return [self._embed_single(text) for text in texts]
 
     def embed_query(self, text: str) -> list[float]:
-        """Embed a single query."""
-        response = self.client.models.embed_content(
-            model=self.model,
-            contents=text
-        )
-        return response.embeddings[0].values
+        """Embed a single query with fallback support."""
+        return self._embed_single(text)
 
 
 class CustomGeminiChat(BaseChatModel):

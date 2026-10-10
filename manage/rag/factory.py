@@ -95,13 +95,13 @@ class ConnectorFactory:
 
         # Default model pairings if not explicitly supplied
         default_models = {
-            ProviderType.GEMINI: ("gemini-2.5-flash", "models/text-embedding-004"),
+            ProviderType.GEMINI: ("gemini-2.5-flash", "models/gemini-embedding-2"),
             ProviderType.OLLAMA: ("llama3.2:latest", "nomic-embed-text:latest"),
             ProviderType.OPENAI: ("gpt-4o-mini", "text-embedding-3-small"),
             ProviderType.MISTRAL: ("mistral-small-latest", "mistral-embed"),
             ProviderType.CUSTOM: ("gpt-4o-mini", "text-embedding-3-small"),
         }
-        def_llm, def_embed = default_models.get(ptype, ("gemini-2.5-flash", "models/text-embedding-004"))
+        def_llm, def_embed = default_models.get(ptype, ("gemini-2.5-flash", "models/gemini-embedding-2"))
 
         config = ProviderConfig(
             provider=ptype,
