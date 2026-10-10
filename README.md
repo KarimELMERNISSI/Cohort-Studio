@@ -1,7 +1,7 @@
 # Cohort Monitoring Package
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![Test Suite](https://img.shields.io/badge/tests-69%2F69%20passed-success.svg?logo=pytest&logoColor=white)](tests/)
+[![Test Suite](https://img.shields.io/badge/tests-128%2F128%20passed-success.svg?logo=pytest&logoColor=white)](tests/)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
@@ -126,6 +126,17 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Replay Verification**: Full (data re-execution) and Fast (parameter audit) replay capabilities with cross-platform path resolution.
 - **Word Dossier Generation**: Export publication-ready Microsoft Word (`.docx`) audit dossiers summarizing cohort transformations.
 
+### 7. Interactive Clinical Visualisation & 1-Click Fast Figure Export
+- **Multi-Modal Clinical Plots**: Distributions (KDE, box, violin, eCDF), cohort stratification, correlation heatmaps, Bland-Altman agreement plots, and ROC curves with optimal Youden's $J$ cutoffs.
+- **Integrated Hypothesis Test Overlays**: Automated routing to parametric (Student's t / ANOVA) or non-parametric (Mann-Whitney U / Kruskal-Wallis) tests with Bonferroni / Benjamini-Hochberg FDR adjustments rendered directly on plots with publication brackets.
+- **Publication Graphics Export**: 1-click export of figures in vector SVG, 300+ DPI raster PNG, standalone interactive HTML (`.html`), and full serialized Plotly JSON (`.json`) schemas.
+- **Underlying Analytical Data Extraction**: One-click download of the exact plotted subset as raw tabular CSV (`.csv`) or Microsoft Excel (`.xlsx`) datasets.
+
+### 8. Pluggable Modular IAM Architecture
+- **Protocol-First Contract**: `AuthService` protocol defining authentication, user creation, session verification, and role-based permissions (`Role.ADMIN`, `Role.RESEARCHER`, `Role.AUDITOR`).
+- **Default In-Process Adapter**: `DefaultAuthService` powered by embedded DuckDB and bcrypt hashing for zero-dependency, local-first environments.
+- **Extensible Identity Adapters**: Drop-in architectural support for external enterprise IAM (Better Auth HTTP sidecar, Keycloak OIDC, LDAP) without leaking dependencies or degrading core analytical throughput.
+
 ---
 
 ## Installation & Quick Start
@@ -222,19 +233,26 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-======================= 69 passed, 6 warnings in 58.78s =======================
-Pass rate: 100% (69 passed out of 69 tests)
+====================== 128 passed, 7 warnings in 68.08s ======================
+Pass rate: 100% (128 passed out of 128 tests)
 ```
 
 | Test Module | Coverage Scope | Status |
 | :--- | :--- | :--- |
 | [`tests/test_epidemiology_stats.py`](tests/test_epidemiology_stats.py) | 2x2 Contingency, Effect Sizes, ANCOVA, Diagnostic Accuracy | **PASSED** |
 | [`tests/test_epidemiology_integration.py`](tests/test_epidemiology_integration.py) | Two-group, ANOVA, Little's MCAR, Multiple corrections | **PASSED** |
+| [`tests/test_statistics_utils.py`](tests/test_statistics_utils.py) | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation | **PASSED** |
+| [`tests/test_export_utils.py`](tests/test_export_utils.py) | Vector SVG, 300+ DPI PNG, Standalone HTML, Plotly JSON, CSV/Excel export | **PASSED** |
 | [`tests/test_db_manager.py`](tests/test_db_manager.py) | bcrypt Auth, Activation, DuckDB Parquet persistence | **PASSED** |
+| [`tests/test_iam.py`](tests/test_iam.py) | Pluggable IAM contract, DefaultAuthService, BetterAuth sidecar evaluation | **PASSED** |
 | [`tests/test_transformation_manager.py`](tests/test_transformation_manager.py) | Session lineage, complex parameter serialization, traces | **PASSED** |
+| [`tests/test_reproduction_manager.py`](tests/test_reproduction_manager.py) | Headless pipeline re-execution (`execute_trace_pipeline`), snapshot replay | **PASSED** |
 | [`tests/test_data_quality_auditor.py`](tests/test_data_quality_auditor.py) | Completeness, Uniqueness, Outlier validity, MCAR heuristics | **PASSED** |
 | [`tests/test_data_analyzer.py`](tests/test_data_analyzer.py) | `DatasetProfile` immutability, type categorization, charts | **PASSED** |
 | [`tests/test_rag_connectors.py`](tests/test_rag_connectors.py) | Gemini, Ollama, OpenAI, Mistral factory & failover | **PASSED** |
+| [`tests/test_rag_evaluator.py`](tests/test_rag_evaluator.py) | RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision | **PASSED** |
+| [`tests/test_clustering_utils.py`](tests/test_clustering_utils.py) | K-Means, DBSCAN, GMM, Silhouette score, cluster stratification | **PASSED** |
+| [`tests/test_date_parser.py`](tests/test_date_parser.py) | Multi-format clinical date ingestion, timezone normalization | **PASSED** |
 | [`tests/test_trace_documenter.py`](tests/test_trace_documenter.py) | Microsoft Word `.docx` transformation report generation | **PASSED** |
 
 ---
@@ -254,6 +272,8 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 - [**08_Reproduction.md**](documentation/08_Reproduction.md): Deterministic trace replay, session auditing, and Word report compilation.
 - [**09_Clustering.md**](documentation/09_Clustering.md): Algorithmic population stratification guidelines.
 - [**10_Developer_Guide.md**](documentation/10_Developer_Guide.md): Architecture specifications, plugin connectors, and development guidelines.
+- [**11_RAG_Scientific_Evaluation.md**](documentation/11_RAG_Scientific_Evaluation.md): RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision, and benchmark audit procedures.
+- [**12_IAM_Architecture_and_BetterAuth_Evaluation.md**](documentation/12_IAM_Architecture_and_BetterAuth_Evaluation.md): Pluggable authentication architecture, enterprise Better Auth sidecar evaluation, and latency benchmarking.
 - [**Tutorials.md**](documentation/Tutorials.md): End-to-end clinical case study walkthroughs.
 
 ---
