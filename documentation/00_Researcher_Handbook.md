@@ -1,10 +1,10 @@
-# 📖 Researcher Handbook
+# Researcher Handbook
 
 Welcome to the **Cohort Monitoring Package**. This handbook walks you through the application's philosophy and the recommended workflow for cohort data analysis — from raw data ingestion to publication-ready outputs.
 
 ---
 
-## 🎯 Philosophy
+## Philosophy
 
 This application is built around three principles:
 
@@ -14,13 +14,13 @@ This application is built around three principles:
 
 ---
 
-## 🗺️ Workflow Phases
+## Workflow Phases
 
 The application is organised into seven phases, mirroring the natural flow of cohort research. You can navigate freely between phases using the sidebar.
 
 ### Phase 1 — Ingestion & Setup
 
-**Page**: Main View (🏠)
+**Page**: Main View 
 
 | Step | Action |
 | --- | --- |
@@ -29,11 +29,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 1.3 | **Rename columns** manually or with AI assistance for standardisation. |
 | 1.4 | **Save an initial version** to create a baseline snapshot. |
 
-📄 See: [01_Home.md](01_Home.md)
+See: [01_Home.md](01_Home.md)
 
 ### Phase 2 — Quality Control
 
-**Page**: Data Validation & Monitoring (🔍)
+**Page**: Data Validation & Monitoring 
 
 | Step | Action |
 | --- | --- |
@@ -45,11 +45,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 2.6 | **Check conformity** (duplicates, consistency, uniformity). |
 | 2.7 | **Compare** the cleaned dataset against the original. |
 
-📄 See: [02_Data_Validation.md](02_Data_Validation.md)
+See: [02_Data_Validation.md](02_Data_Validation.md)
 
 ### Phase 3 — Enrichment & Preparation
 
-**Page**: Data Enrichment (🔄)
+**Page**: Data Enrichment 
 
 | Step | Action |
 | --- | --- |
@@ -60,11 +60,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 3.5 | Run **population clustering** (K-Means, DBSCAN, GMM). |
 | 3.6 | Explore **AI variable suggestions** for computed indices. |
 
-📄 See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clustering.md)
+See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clustering.md)
 
 ### Phase 4 — Exploration & Visualisation
 
-**Page**: Visualisation (📈)
+**Page**: Visualisation 
 
 | Step | Action |
 | --- | --- |
@@ -74,11 +74,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 4.4 | Use **integrated statistical tests** for quick significance checks. |
 | 4.5 | **Export** publication-ready figures. |
 
-📄 See: [04_Visualization.md](04_Visualization.md)
+See: [04_Visualization.md](04_Visualization.md)
 
 ### Phase 5 — Statistical Analysis
 
-**Page**: Epidemiology & Hypothesis (🧬)
+**Page**: Epidemiology & Hypothesis 
 
 | Step | Action |
 | --- | --- |
@@ -88,11 +88,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 5.4 | Perform **power & sample size** calculations. |
 | 5.5 | Compute **Z-scores** for standardised comparisons. |
 
-📄 See: [05_Epidemiology.md](05_Epidemiology.md)
+See: [05_Epidemiology.md](05_Epidemiology.md)
 
 ### Phase 6 — Knowledge & Literature
 
-**Pages**: Data Insight (🧠), Documents Insight (📄)
+**Pages**: Data Insight , Documents Insight 
 
 | Step | Action |
 | --- | --- |
@@ -102,11 +102,11 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 6.4 | **Chat** with documents for targeted literature queries. |
 | 6.5 | Run **dataset coverage analysis** against uploaded papers. |
 
-📄 See: [06_Data_Insight.md](06_Data_Insight.md), [07_Document_Insight.md](07_Document_Insight.md)
+See: [06_Data_Insight.md](06_Data_Insight.md), [07_Document_Insight.md](07_Document_Insight.md)
 
 ### Phase 7 — Reproducibility & Reporting
 
-**Page**: Reproduce Analysis (🔁)
+**Page**: Reproduce Analysis 
 
 | Step | Action |
 | --- | --- |
@@ -115,17 +115,17 @@ The application is organised into seven phases, mirroring the natural flow of co
 | 7.3 | **Generate reports** (`.docx`) from trace files. |
 | 7.4 | **Share** traces and reports with collaborators. |
 
-📄 See: [08_Reproduction.md](08_Reproduction.md)
+See: [08_Reproduction.md](08_Reproduction.md)
 
 ---
 
-## ⚙️ System Administration
+## System Administration
 
 Administrative features for managing users and monitoring system health.
 
 ### User Management
 
-**Page**: Users Management (👥) — *Visible only to Admins*
+**Page**: Users Management  — *Visible only to Admins*
 
 | Step | Action |
 | --- | --- |
@@ -134,11 +134,11 @@ Administrative features for managing users and monitoring system health.
 | A.3 | **Deactivate** or **Delete** users as needed. |
 | A.4 | **Reset Passwords** for users who cannot log in. |
 
-📄 See: [10_Developer_Guide.md](10_Developer_Guide.md)
+See: [10_Developer_Guide.md](10_Developer_Guide.md)
 
 ### RAG Quality Monitoring
 
-**Page**: RAG Quality Monitor (📊) — *Optional*
+**Page**: RAG Quality Monitor — *Optional*
 
 | Step | Action |
 | --- | --- |
@@ -148,7 +148,7 @@ Administrative features for managing users and monitoring system health.
 
 ---
 
-## 💡 Best Practices
+## Best Practices
 
 1. **Save versions frequently** — After each major transformation, save a new dataset version.
 2. **Use AI suggestions as starting points** — Always review and validate AI-generated outputs.

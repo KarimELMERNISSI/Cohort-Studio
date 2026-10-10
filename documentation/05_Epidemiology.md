@@ -1,10 +1,10 @@
-# 🧬 Epidemiology & Hypothesis Testing
+# Epidemiology & Hypothesis Testing
 
 The **Epidemiology & Hypothesis** page provides a complete statistical analysis toolkit — from univariate tests to multivariate modelling, power calculations, and Z-score standardisation. The system auto-recommends appropriate tests based on your data characteristics.
 
 ---
 
-## 🧪 Hypothesis Testing
+## Hypothesis Testing
 
 ### Test Selection
 
@@ -52,7 +52,7 @@ Results include effect size magnitude labels (small / medium / large) based on s
 
 ---
 
-## 📊 Multivariate Analysis (ANCOVA)
+## Multivariate Analysis (ANCOVA)
 
 Analysis of Covariance adjusts group comparisons for confounding variables.
 
@@ -63,7 +63,6 @@ Analysis of Covariance adjusts group comparisons for confounding variables.
 3. **Covariates** — continuous variables to control for.
 
 ### Output
-
 - Adjusted group means.
 - F-statistic, p-value, and partial η² for the group effect.
 - Covariate coefficients and their significance.
@@ -71,7 +70,7 @@ Analysis of Covariance adjusts group comparisons for confounding variables.
 
 ---
 
-## ⚡ Power & Sample Size Analysis
+## Power & Sample Size Analysis
 
 Estimate the sample size needed to detect a meaningful effect, or the power of your current sample.
 
@@ -92,7 +91,7 @@ Estimate the sample size needed to detect a meaningful effect, or the power of y
 
 ---
 
-## 📐 Z-Score Standardisation
+## Z-Score Standardisation
 
 Convert raw variable values into Z-scores relative to a reference population or the sample itself.
 
@@ -104,14 +103,12 @@ Convert raw variable values into Z-scores relative to a reference population or 
 | **Reference-based** | User provides external reference mean and standard deviation (e.g. population norms). |
 
 ### Output
-
 - New column(s) appended with the Z-score transformation.
 - Distribution plot of Z-scores for visual inspection.
 
 ---
 
-## 💡 Usage Tips
-
+## Methodological Guidance
 - Use the **Test Recommendation Helper** to identify the most appropriate test based on your variable types and sample characteristics.
 - Always check **normality** (Shapiro-Wilk) before choosing parametric tests.
 - For multiple comparisons, always apply a correction method to control false positives.

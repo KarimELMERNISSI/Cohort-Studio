@@ -16,7 +16,7 @@ def app():
 
     # --- Vision Section ---
     st.markdown("""
-    ### 🚀 Vision
+    ### Vision
     
     This application bridges the gap between complex data science and medical research. 
     It offers a **professional-grade environment** that empowers researchers to streamline the entire data lifecycle—from raw ingestion to publication-ready analysis.
@@ -76,7 +76,7 @@ def app():
     st.divider()
     
     # --- Footer ---
-    st.markdown("### 📬 Contact Information")
+    st.markdown("### Contact Information")
     
     col_contact, col_links = st.columns([1, 3])
     with col_contact:

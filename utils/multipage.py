@@ -22,7 +22,7 @@ from manage.transformation_manager import TransformationManager
 # class Page:
 #     title: str
 #     function: Callable
-#     icon: str = "📄"
+#     icon: str = ""
 
 def detect_encoding(file_content: bytes, num_lines: int = 100) -> str:
     """
@@ -357,7 +357,7 @@ def _finalize_upload(df, uploaded_file, is_new_file=True):
 
 def _render_sheet_selection_ui(sheet_names: list, file_bytes: bytes, uploaded_file):
     """Render the multi-sheet selection UI and return the loaded DataFrame or None."""
-    st.markdown(f"📑 **{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
+    st.markdown(f"**{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
 
     load_mode = st.radio(
         "How would you like to load this file?",
@@ -372,7 +372,7 @@ def _render_sheet_selection_ui(sheet_names: list, file_bytes: bytes, uploaded_fi
             sheet_names,
             key="excel_single_sheet_select"
         )
-        if st.button("📥 Load Sheet", key="btn_load_single_sheet"):
+        if st.button("Load Sheet", key="btn_load_single_sheet"):
             df = _load_excel_with_selection(file_bytes, sheet_names, [selected_sheet])
             if df is not None:
                 _finalize_upload(df, uploaded_file)
@@ -412,7 +412,7 @@ def _render_sheet_selection_ui(sheet_names: list, file_bytes: bytes, uploaded_fi
                 st.warning("No common columns found across selected sheets. Sheets will be concatenated vertically.")
                 merge_key = None
 
-            if st.button("📥 Merge & Load Sheets", key="btn_load_merge_sheets"):
+            if st.button("Merge & Load Sheets", key="btn_load_merge_sheets"):
                 df = _load_excel_with_selection(file_bytes, sheet_names, selected_sheets, merge_key)
                 if df is not None:
                     _finalize_upload(df, uploaded_file)
@@ -483,7 +483,7 @@ def handle_data_upload():
 
 
 class Page:
-    def __init__(self, title: str, function: Callable, icon: str | Path = "📄"):
+    def __init__(self, title: str, function: Callable, icon: str | Path = ""):
         self.title = title  # Internal page title
         self.function = function
         self.icon = self._process_icon(icon)
@@ -522,11 +522,11 @@ class Page:
                 return Image.open(icon)
             
             # Fallback
-            return "📊"
+            return ""
         
         except Exception as e:
             print(f"Error processing icon: {e}")
-            return "📄"
+            return ""
         
 
 
@@ -544,14 +544,14 @@ class MultiPageApp:
             st.session_state.config = create_empty_config()
 
 
-    def add_page(self, title: str, function: Callable, icon: str | Path = "📄") -> None:
+    def add_page(self, title: str, function: Callable, icon: str | Path = "") -> None:
         """
         Add a new page to the app with a custom display label and icon.
         
         Args:
             title (str): The title of the page
             function (Callable): The function to render the page
-            icon (Union[str, Path], optional): An emoji or path to an image file. Defaults to "📄".
+            icon (Union[str, Path], optional): An emoji or path to an image file. Defaults to empty string.
         """
         self.pages[title] = Page(title=title, function=function, icon=icon)
 

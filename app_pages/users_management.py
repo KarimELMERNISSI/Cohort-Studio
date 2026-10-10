@@ -77,15 +77,15 @@ def app():
         
         with cols[0]:
             if uname == 'admin':
-                st.markdown(f"👑 **{uname}**")
+                st.markdown(f"**{uname}** `(Admin)`")
             else:
-                st.markdown(f"👤 {uname}")
+                st.markdown(f"**{uname}**")
         
         with cols[1]:
             if status == 'Active':
-                st.markdown("🟢 **Active**")
+                st.markdown(":green[**Active**]")
             else:
-                st.markdown("🟡 **Pending**")
+                st.markdown(":orange[**Pending**]")
         
         with cols[2]:
             if uname == 'admin':
@@ -180,7 +180,7 @@ def app():
     
     # --- Admin Info ---
     st.divider()
-    with st.expander("ℹ️ About User Management"):
+    with st.expander("About User Management"):
         st.markdown("""
         **User Activation:**
         - New users start with **Pending Approval** status

@@ -11,7 +11,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
     Renders the Analysis Configuration expander.
     Returns a dictionary with the selected configuration.
     """
-    with st.expander("📊 Analysis Configuration", expanded=True):
+    with st.expander("Analysis Configuration", expanded=True):
         col1, col2 = st.columns(2)
         
         with col1:

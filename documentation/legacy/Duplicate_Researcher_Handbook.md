@@ -1,10 +1,10 @@
-# 📘 Cohort Monitoring Application: Researcher's Handbook
+# Cohort Monitoring Application: Researcher's Handbook
 
 ## 1. Introduction
 
 Welcome to the **Cohort Monitoring Package**. This application is designed to be your "Co-Pilot" for clinical and epidemiological research. It does not just analyze data; it enforces rigorous methodological standards (reproducibility, traceability, validity) while automating the tedious parts of data cleaning and enrichment.
 
-### 🌟 Key Philosophy
+### Key Philosophy
 
 * **Traceability**: Every click is recorded. Your analysis is reproducible by design.
 * **Enrichment over Deletion**: Don't just drop rows; impute, transform, and understand them.
@@ -16,26 +16,26 @@ Welcome to the **Cohort Monitoring Package**. This application is designed to be
 
 *Goal: Assess if your data is fit for purpose.*
 
-### 📥 Import & Load
+### Import & Load
 
 * **Supported Formats**: CSV, Excel, Parquet.
 * **Snapshots**: Load previous sessions (`.parquet`) to resume work instantly.
 * **Descriptive Statistics**: Instant summary tables for Quantitative (Mean, SD, Distribution) and Qualitative (Counts, Frequencies) variables.
 * **Correlation Preview**: Early detection of relationships between variables.
 
-### 🏥 Quality Audit (Health Check)
+### Quality Audit (Health Check)
 
 Before touching a single variable, check the patient's vital signs:
 
 * **Global Score (0-100)**: A weighted composite index of your dataset's health:
-  * *Clinical Validity*: **Weighted 2x** (Most critical).
-  * *Completeness & Consistency*: Weighted 1x.
+* *Clinical Validity*: **Weighted 2x** (Most critical).
+* *Completeness & Consistency*: Weighted 1x.
 * **Completeness**: Are critical fields empty?
 * **Consistency**: Do "Dates" look like dates and "Age" look like a number?
 * **Statistical Validity**: Detection of univariate outliers (Z-Score) and multivariate anomalies (Isolation Forest).
 * **Clinical Validity**: Customizable rules (e.g., `BMI > 10` and `BMI < 60`) flag biologically impossible values.
 
-### 🕵️ Missingness Detective
+### Missingness Detective
 
 * **Pattern Analysis**: Is data missing at random (MCAR)?
 * **Little's Test**: A p-value > 0.05 suggests you can safely impute without bias.
@@ -50,14 +50,14 @@ Before touching a single variable, check the patient's vital signs:
 
 Use the **Configuration Editor** (`config_form.py`) to standardize your study logic. This ensures that every team member applies the exact same criteria.
 
-### 🎭 Mask Families (Inclusion Criteria)
+### Mask Families (Inclusion Criteria)
 
 Define reusable filters for your study population:
 
 * **Range Masks**: e.g., `Adults` = Age [18, 99].
 * **Logic Masks**: e.g., `Enrolled` = `Status == 'Active' AND Consent == True`.
 
-### 🔄 Unit Standardization
+### Unit Standardization
 
 Automatically unify mixed units to preventing analysis errors:
 
@@ -70,12 +70,12 @@ Automatically unify mixed units to preventing analysis errors:
 
 *Goal: Transform raw data into analytical variables. This is where you create value.*
 
-### 🧹 Step 1: Cleaning & Imputation
+### Step 1: Cleaning & Imputation
 
 * **Strategy**: Choose between `MICE` (Iterative), `KNN` (Similarity), or `Simple` (Mean/Median).
 * **AI Suggestion**: The Assistant analyzes variable names to recommend the statistically appropriate method.
 
-### 🧪 Step 2: Advanced Variable Creation
+### Step 2: Advanced Variable Creation
 
 Move beyond simple columns. Create clinically meaningful indices.
 
@@ -89,14 +89,14 @@ Move beyond simple columns. Create clinically meaningful indices.
 *Concept: Turn 50 correlated variables into 3 "Super-Variables" that capture the underlying trend.*
 
 * **PCA (Principal Component Analysis)**:
-  * *Usage*: For purely numerical data (e.g., 30 Lab values).
-  * *Output*: Creates `PC1`, `PC2` scores representing the major axes of variance.
+* *Usage*: For purely numerical data (e.g., 30 Lab values).
+* *Output*: Creates `PC1`, `PC2` scores representing the major axes of variance.
 * **FAMD (Factor Analysis of Mixed Data)**:
-  * *Usage*: The "Medical Standard". Handles **both** categorical (Sex, Treatment) and numerical (Age, BP) data simultaneously.
-  * *Interpretation*: The "Contributions" table reveals which real variables drive the synthetic score.
+* *Usage*: The "Medical Standard". Handles **both** categorical (Sex, Treatment) and numerical (Age, BP) data simultaneously.
+* *Interpretation*: The "Contributions" table reveals which real variables drive the synthetic score.
 * **t-SNE / UMAP**:
-  * *Usage*: Non-linear cluster finding (e.g., finding patient phenotypic subgroups).
-  * *Parameters*: Tune `Perplexity` (t-SNE) or `Neighbors` (UMAP) to balance local vs global structure.
+* *Usage*: Non-linear cluster finding (e.g., finding patient phenotypic subgroups).
+* *Parameters*: Tune `Perplexity` (t-SNE) or `Neighbors` (UMAP) to balance local vs global structure.
 
 ---
 
@@ -104,13 +104,13 @@ Move beyond simple columns. Create clinically meaningful indices.
 
 *Goal: See the patterns.*
 
-### 📊 Plotting Suite
+### Plotting Suite
 
 * **Distributions**: Histogram, Density, Violin Plots. (Check: Is my data normal?)
 * **Comparisons**: Box Plots with **auto-calculated P-values**.
 * **Correlations**: Heatmaps & Scatter plots.
 
-### 🏎️ Performance Mode
+### Performance Mode
 
 * **Pandas vs DuckDB**: For datasets >100k rows, run the benchmark. The app will verify results and switch to DuckDB (SQL-based) for instant chart rendering if it's faster.
 
@@ -120,20 +120,20 @@ Move beyond simple columns. Create clinically meaningful indices.
 
 *Goal: Prove your hypothesis.*
 
-### ⚖️ Univariate Analysis
+### Univariate Analysis
 
 Compare groups (e.g., Treatment vs Placebo).
 
 * **Auto-Selector**: The app picks the right test (T-Test, Wilcoxon, ANOVA, Kruskal) based on normality and group count.
 * **Correction Methods**:
-  * **Bonferroni**: Strict control of Family-Wise Error Rate (FWER).
-  * **Benjamini-Hochberg (FDR)**: Balanced approach for exploratory analysis.
+* **Bonferroni**: Strict control of Family-Wise Error Rate (FWER).
+* **Benjamini-Hochberg (FDR)**: Balanced approach for exploratory analysis.
 * **Effect Size Classified**: Results are automatically tagged:
-  * ✅ **Clean**: Significant + Large Effect (Cohen's d > 0.8).
-  * ⚠️ **Caution**: Significant but Small Effect (likely due to large N).
-  * ❌ **Underpowered**: Non-significant but Large Effect (N too small).
+* **Clean**: Significant + Large Effect (Cohen's d > 0.8).
+* **Caution**: Significant but Small Effect (likely due to large N).
+* **Underpowered**: Non-significant but Large Effect (N too small).
 
-### 📈 Multivariate Analysis (GLM/ANCOVA)
+### Multivariate Analysis (GLM/ANCOVA)
 
 "Adjust for Confounders."
 
@@ -146,18 +146,18 @@ Compare groups (e.g., Treatment vs Placebo).
 
 *Goal: Contextualize your findings.*
 
-### 🧠 Data Insight (The Steward)
+### Data Insight (The Steward)
 
 * **Lineage**: Click any variable to see its history: *Raw -> Imputed -> Transformed*.
 * **Orphan Check**: Find created variables that you forgot to use in the analysis.
 
-### 📚 RAG (Document Chat)
+### RAG (Document Chat)
 
 * **Upload**: Protocols, Papers, PDFs.
 * **Query**: "What is the exclusion criteria for Heart Failure in the attached PDF?"
 * **Coverage**: "Does my CSV contain all the variables mentioned in Table 1 of the paper?"
 
-### 🛡️ RAG Quality Monitor (Trust Center)
+### RAG Quality Monitor (Trust Center)
 
 Trust but verify.
 
@@ -171,19 +171,19 @@ Trust but verify.
 
 *Goal: Science that stands the test of time.*
 
-### 🔁 The Trace System
+### The Trace System
 
 Every project generates a `.json` "Recipe File".
 
 1. **Fast Mode (Replay)**: Reloads intermediate Snapshots. fast.
 2. **Full Reproducibility**: Re-runs the *entire* cleaning pipeline from the raw csv. Proof of correctness.
 
-### 💾 Dataset Versioning
+### Dataset Versioning
 
 * **Snapshots**: Save `V1_Raw`, `V2_Imputed`, `V3_Final`.
 * **Rollback**: Made a mistake? One-click restore to yesterday's version.
 
-### ✅ Best Practices Checklist
+### Best Practices Checklist
 
 1. **One Header**: Ensure your CSV has a single header row.
 2. **ISO Dates**: Use `YYYY-MM-DD` to help the auto-detector.

@@ -391,7 +391,7 @@ def run_univariate_analysis(df, analyzer):
         | Chi-Square | Cramér's V | 0.1 | 0.3 | 0.5 |
         | Fisher's Exact | Odds Ratio | 1 = No effect | >1 Increased | <1 Decreased |
         
-        **🔬 Multiple Testing Correction**:
+        **Multiple Testing Correction**:
         - **Bonferroni**: Very conservative. Controls Family-Wise Error Rate (FWER). Best for confirmatory analysis.
         - **Benjamini-Hochberg (FDR)**: Controls False Discovery Rate. Recommended for exploratory analysis.
         """)
@@ -544,7 +544,7 @@ def run_multivariate_analysis(df, analyzer):
         
         st.markdown("""
         <div style="background-color: #e8f5e9; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #4caf50;">
-            <strong>💡 Key Interpretation:</strong><br/>
+            <strong>Key Interpretation:</strong><br/>
             ANCOVA answers: "Is there a group difference <em>after adjusting for</em> the covariates?"
         </div>
         """, unsafe_allow_html=True)
@@ -565,21 +565,21 @@ def run_multivariate_analysis(df, analyzer):
     
     with col1:
         target_col = st.selectbox(
-            "🎯 Target Variable (Y)",
+            "Target Variable (Y)",
             options=analyzer.numeric_cols,
             help="The continuous dependent variable you want to compare across groups."
         )
         
     with col2:
         group_col = st.selectbox(
-            "👥 Grouping Variable (Factor)",
+            "Grouping Variable (Factor)",
             options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 10],
             help="The main categorical variable defining your groups (e.g., Treatment, Sex)."
         )
         
     with col3:
         covariates = st.multiselect(
-            "📐 Covariates (Confounders)",
+            "Covariates (Confounders)",
             options=[c for c in analyzer.numeric_cols if c != target_col],
             help="Continuous variables to adjust for (e.g., Age, Baseline score). These are potential confounders."
         )
@@ -594,7 +594,7 @@ def run_multivariate_analysis(df, analyzer):
             if covariates:
                 st.caption(f"**Adjusting for:** {', '.join(covariates)}")
             else:
-                st.caption("⚠️ No covariates selected (equivalent to One-way ANOVA)")
+                st.caption("No covariates selected (equivalent to One-way ANOVA)")
         
     if not target_col or not group_col:
         st.info("Please select a Target and a Grouping variable to proceed.")
@@ -1201,14 +1201,14 @@ def run_zscore_analysis(df, analyzer):
     col_dl1, col_dl2 = st.columns(2)
     with col_dl1:
         st.download_button(
-            label="📥 Download Z-Score Data",
+            label="Download Z-Score Data",
             data=to_excel(z_df[list(df.columns) + z_cols]),
             file_name="z_score_data.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     with col_dl2:
         st.download_button(
-            label="📥 Download Summary Table",
+            label="Download Summary Table",
             data=to_excel(summary_df),
             file_name="z_score_summary.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1463,9 +1463,9 @@ def run_zscore_analysis(df, analyzer):
             
             | Zone | Clinical Interpretation |
             |:-----|:------------------------|
-            | 🟢 Green bars | Values within normal limits |
-            | 🟠 Orange bars | Borderline values - monitor |
-            | 🔴 Red bars | Abnormal values - investigate |
+            | Green bars | Values within normal limits |
+            | Orange bars | Borderline values - monitor |
+            | Red bars | Abnormal values - investigate |
             
             **Clinical Decision Rules:**
             - **All green:** Normal profile, routine follow-up
@@ -1559,12 +1559,12 @@ def show_educational_content():
                 <tr>
                     <td style="padding: 5px;">Shapiro-Wilk Test</td>
                     <td style="padding: 5px;">Run on each group separately</td>
-                    <td style="padding: 5px;">p > 0.05 → Normal ✅ | p < 0.05 → Non-Normal ❌</td>
+                    <td style="padding: 5px;">p > 0.05 → Normal | p < 0.05 → Non-Normal</td>
                 </tr>
                 <tr>
                     <td style="padding: 5px;">Q-Q Plot</td>
                     <td style="padding: 5px;">Visual inspection</td>
-                    <td style="padding: 5px;">Points on diagonal → Normal ✅ | Curved → Non-Normal ❌</td>
+                    <td style="padding: 5px;">Points on diagonal → Normal | Curved → Non-Normal</td>
                 </tr>
                 <tr>
                     <td style="padding: 5px;">Sample Size Rule</td>
@@ -1579,14 +1579,14 @@ def show_educational_content():
         
         with col_3a:
             st.markdown("##### Node 3A (2 Groups, Numeric):")
-            st.markdown("➡️ **Normal** → Go to Node 4")
-            st.markdown("➡️ **Non-Normal** → Use **Mann-Whitney U Test** ✅")
+            st.markdown("**Normal** → Go to Node 4")
+            st.markdown("**Non-Normal** → Use **Mann-Whitney U Test**")
             st.caption("_Mann-Whitney compares ranks, not means. Robust to outliers._")
         
         with col_3b:
             st.markdown("##### Node 3B (3+ Groups, Numeric):")
-            st.markdown("➡️ **Normal** → Go to Node 5")
-            st.markdown("➡️ **Non-Normal** → Use **Kruskal-Wallis Test** ✅")
+            st.markdown("**Normal** → Go to Node 5")
+            st.markdown("**Non-Normal** → Use **Kruskal-Wallis Test**")
             st.caption("_Kruskal-Wallis is the non-parametric alternative to ANOVA._")
         
         st.markdown("---")
@@ -1597,8 +1597,8 @@ def show_educational_content():
             <h4 style="margin:0; color: #7b1fa2;">Node 3C: Categorical Variable - Check Expected Frequencies</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Calculate expected cell counts in the contingency table.</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
-                <li><strong>All expected counts ≥ 5</strong> → Use <strong>Chi-Square Test</strong> ✅</li>
-                <li><strong>Any expected count < 5</strong> → Use <strong>Fisher's Exact Test</strong> ✅</li>
+                <li><strong>All expected counts ≥ 5</strong> → Use <strong>Chi-Square Test</strong></li>
+                <li><strong>Any expected count < 5</strong> → Use <strong>Fisher's Exact Test</strong></li>
             </ul>
             <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #555;">
                 <em>Expected count = (Row Total × Column Total) / Grand Total</em>
@@ -1614,8 +1614,8 @@ def show_educational_content():
             <h4 style="margin:0; color: #c2185b;">Node 4: Are variances equal between groups? (2 Groups)</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
-                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>Student's t-test</strong> ✅</li>
-                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's t-test</strong> ✅</li>
+                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>Student's t-test</strong></li>
+                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's t-test</strong></li>
             </ul>
             <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #555;">
                 <em>Welch's t-test is robust to unequal variances (heteroscedasticity) and is often recommended as the default choice.</em>
@@ -1631,8 +1631,8 @@ def show_educational_content():
             <h4 style="margin:0; color: #c2185b;">Node 5: Are variances equal between groups? (3+ Groups)</h4>
             <p style="margin: 10px 0 5px 0;"><strong>Decision Criterion:</strong> Levene's Test for Equality of Variances</p>
             <ul style="margin: 5px 0; font-size: 0.9em;">
-                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>One-way ANOVA</strong> ✅</li>
-                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's ANOVA</strong> or <strong>Kruskal-Wallis</strong> ✅</li>
+                <li><strong>Levene p > 0.05</strong> → Variances are equal → Use <strong>One-way ANOVA</strong></li>
+                <li><strong>Levene p < 0.05</strong> → Variances are unequal → Use <strong>Welch's ANOVA</strong> or <strong>Kruskal-Wallis</strong></li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -1726,7 +1726,7 @@ def show_educational_content():
     | **Chi-Square** | Cramér's V | 0.1 | 0.3 | 0.5 |
     | **Fisher's Exact** | Odds Ratio | - | - | - |
     
-    > 💡 **Tip**: An Odds Ratio of 1 means no association. OR > 1 indicates increased odds, OR < 1 indicates decreased odds.
+    > **Tip**: An Odds Ratio of 1 means no association. OR > 1 indicates increased odds, OR < 1 indicates decreased odds.
     """)
     
     # Key Assumptions Section
@@ -1740,7 +1740,7 @@ def show_educational_content():
     | **Homogeneity of Variance** | Groups should have similar variances | Levene's test |
     | **Sample Size** | n ≥ 30 per group for CLT to apply | Check group sizes |
     
-    > ⚠️ **Small samples (n < 30)**: Prefer non-parametric tests or verify normality carefully.
+    > **Small samples (n < 30)**: Prefer non-parametric tests or verify normality carefully.
     """)
     
     # NEW: Epidemiological Interpretation Tables
@@ -1766,24 +1766,24 @@ def show_educational_content():
             <tr>
                 <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">p < 0.05<br/>(Significant)</td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #fff3e0;">
-                    <strong>⚠️ Statistically significant</strong><br/>
+                    <strong>Statistically significant</strong><br/>
                     but likely NOT clinically meaningful<br/>
                     <em>→ May be due to large sample size</em>
                 </td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
-                    <strong>✅ Both statistically AND clinically significant</strong><br/>
+                    <strong>Both statistically AND clinically significant</strong><br/>
                     <em>→ Strong evidence for real effect</em>
                 </td>
             </tr>
             <tr>
                 <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">p ≥ 0.05<br/>(Not Significant)</td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #e8f5e9;">
-                    <strong>✅ True negative</strong><br/>
+                    <strong>True negative</strong><br/>
                     No effect detected, none exists<br/>
                     <em>→ Consistent with null hypothesis</em>
                 </td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #ffcdd2;">
-                    <strong>❌ Possibly underpowered</strong><br/>
+                    <strong>Possibly underpowered</strong><br/>
                     Effect may exist but study too small<br/>
                     <em>→ Check power, consider larger study</em>
                 </td>
@@ -1809,12 +1809,12 @@ def show_educational_content():
             <tr>
                 <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">Reject H₀<br/>(p < α)</td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #ffcdd2;">
-                    <strong>❌ Type I Error (α)</strong><br/>
+                    <strong>Type I Error (α)</strong><br/>
                     False Positive<br/>
                     <em>Probability = α (usually 0.05)</em>
                 </td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
-                    <strong>✅ Correct Decision</strong><br/>
+                    <strong>Correct Decision</strong><br/>
                     True Positive (Power = 1-β)<br/>
                     <em>Goal: Power ≥ 0.80</em>
                 </td>
@@ -1822,12 +1822,12 @@ def show_educational_content():
             <tr>
                 <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">Fail to Reject H₀<br/>(p ≥ α)</td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #c8e6c9;">
-                    <strong>✅ Correct Decision</strong><br/>
+                    <strong>Correct Decision</strong><br/>
                     True Negative<br/>
                     <em>Probability = 1-α</em>
                 </td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #fff3e0;">
-                    <strong>⚠️ Type II Error (β)</strong><br/>
+                    <strong>Type II Error (β)</strong><br/>
                     False Negative<br/>
                     <em>Missed real effect</em>
                 </td>
@@ -1862,7 +1862,7 @@ def show_educational_content():
         | 3.0 - 10.0 | Strong |
         | > 10.0 | Very Strong |
         
-        > 💡 **Note**: Same thresholds apply for OR < 1 (use 1/OR for comparison)
+        > **Note**: Same thresholds apply for OR < 1 (use 1/OR for comparison)
         """)
         
         st.info("**Confidence Interval**: If 95% CI includes 1, the OR is NOT statistically significant")
@@ -1887,7 +1887,7 @@ def show_educational_content():
         | Medium (d = 0.5) | ~65 |
         | Large (d = 0.8) | ~25 |
         
-        > 📌 **Use the Power & Sample Size tab** for precise calculations based on your data!
+        > **Use the Power & Sample Size tab** for precise calculations based on your data!
         """)
 
 def run_power_analysis(df, analyzer):
@@ -2267,7 +2267,7 @@ def run_power_analysis(df, analyzer):
 
     elif test_type == "Mann-Whitney U (Non-parametric)":
         st.subheader("Mann-Whitney U Parameters")
-        st.info("ℹ️ Uses Noether's formula (1987) based on the probability P(X < Y).")
+        st.info("Uses Noether's formula (1987) based on the probability P(X < Y).")
         
         with c2:
             if 'mwu_p_xy' not in st.session_state: st.session_state['mwu_p_xy'] = 0.64

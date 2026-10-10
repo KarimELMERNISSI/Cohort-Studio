@@ -100,7 +100,7 @@ def app():
                 df = df[df['clinical_anomalies_any'] == False]
 
         st.dataframe(df.head(), width='stretch', hide_index=True)
-        st.write(f"📊 **Filtered Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns selected.")
+        st.write(f"**Filtered Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns selected.")
 
     # Outliers Handler
     with st.expander("Outliers Handler"):
@@ -309,7 +309,7 @@ def app():
 
         if plot_type in plot_info:
             info = plot_info[plot_type]
-            with st.expander(f"ℹ️ Guide: {info['title']}", expanded=True):
+            with st.expander(f"Guide: {info['title']}", expanded=True):
                 st.markdown(f"**Description:** {info['desc']}")
                 st.markdown(f"**Inputs:** {info['inputs']}")
                 st.markdown(f"**When to use:** {info['usage']}")
@@ -492,9 +492,9 @@ def app():
                                 
                                 # Display Table
                                 if sig_pairs:
-                                    expander_title = f"**:green[📊 Statistical Results for {y_col} (Significant)]**"
+                                    expander_title = f"**:green[Statistical Results for {y_col} (Significant)]**"
                                 else:
-                                    expander_title = f"📊 Statistical Results for {y_col}"
+                                    expander_title = f"Statistical Results for {y_col}"
 
                                 with st.expander(expander_title, expanded=False):
                                     cols_to_drop = ["g1_index", "g2_index"]
@@ -617,9 +617,9 @@ def app():
                                 
                                 # Display Table
                                 if sig_pairs:
-                                    expander_title = f"**:green[📊 Statistical Results for {y_col} (Significant)]**"
+                                    expander_title = f"**:green[Statistical Results for {y_col} (Significant)]**"
                                 else:
-                                    expander_title = f"📊 Statistical Results for {y_col}"
+                                    expander_title = f"Statistical Results for {y_col}"
 
                                 with st.expander(expander_title, expanded=False):
                                     cols_to_drop = ["g1_index", "g2_index"]

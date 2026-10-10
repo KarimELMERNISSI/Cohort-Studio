@@ -531,13 +531,13 @@ def run_benchmark(df, analyzer):
         
         # Verification (Basic Check)
         # We check if the count matches for the first column as a proxy
-        match_stats = "✅ Match"
+        match_stats = "Match"
         if selects and res:
             # Pandas count is float, DuckDB is int. Compare with tolerance or cast.
             pd_count = stats_pd.iloc[0]['count']
             dd_count = res[0] # First element is COUNT(col1)
             if abs(pd_count - dd_count) > 0:
-                 match_stats = "✅ Match (Approx)" # Counts should match exactly but let's be safe
+                 match_stats = "Match (Approx)" # Counts should match exactly but let's be safe
         
         results.append({"Task": "Basic Stats (Numerical)", "Pandas (s)": time_pd_stats, "DuckDB (s)": time_dd_stats, "Speedup": f"{time_pd_stats/time_dd_stats:.2f}x" if time_dd_stats > 0 else "N/A", "Status": match_stats})
         
@@ -564,7 +564,7 @@ def run_benchmark(df, analyzer):
         progress_bar.progress(70)
         
         # Verification
-        match_cat = "✅ Match"
+        match_cat = "Match"
         # Check first categorical column
         if analyzer.categorical_cols:
             first_col = analyzer.categorical_cols[0]
@@ -573,7 +573,7 @@ def run_benchmark(df, analyzer):
             # Compare top 1 value and count
             if len(pd_top) > 0 and len(dd_top) > 0:
                 if str(pd_top.index[0]) != str(dd_top[0][0]) or pd_top.iloc[0] != dd_top[0][1]:
-                     match_cat = "⚠️ Mismatch"
+                     match_cat = "Mismatch"
 
         results.append({"Task": "Categorical Stats (Top 5)", "Pandas (s)": time_pd_cat, "DuckDB (s)": time_dd_cat, "Speedup": f"{time_dd_cat/time_pd_cat:.2f}x" if time_dd_cat > 0 else "N/A", "Status": match_cat})
 
@@ -606,14 +606,14 @@ def run_benchmark(df, analyzer):
             progress_bar.progress(90)
             
             # Verification
-            match_group = "✅ Match"
+            match_group = "Match"
             # Compare first group count
             if not pd_group.empty and dd_group:
                 # Sort pandas to ensure order matches DuckDB's ORDER BY
                 pd_group_sorted = pd_group.sort_index()
                 # Check first group
                 if pd_group_sorted.iloc[0]['count'] != dd_group[0][1]:
-                     match_group = "⚠️ Mismatch"
+                     match_group = "Mismatch"
 
             results.append({"Task": f"Grouped Stats (by {group_col})", "Pandas (s)": time_pd_group, "DuckDB (s)": time_dd_group, "Speedup": f"{time_pd_group/time_dd_group:.2f}x" if time_dd_group > 0 else "N/A", "Status": match_group})
 
@@ -648,14 +648,14 @@ def run_benchmark(df, analyzer):
         progress_bar.progress(100)
         
         # Verification
-        match_corr = "✅ Match"
+        match_corr = "Match"
         # Compare one value
         if not corr_pd.empty and res:
             # First correlation value (self-correlation should be 1.0)
             # DuckDB returns a flat list of results.
             # CORR(c1, c1) is the first one.
             if abs(res[0][0] - 1.0) > 0.0001:
-                 match_corr = "⚠️ Mismatch"
+                 match_corr = "Mismatch"
         
         results.append({"Task": "Correlation Matrix", "Pandas (s)": time_pd_corr, "DuckDB (s)": time_dd_corr, "Speedup": f"{time_pd_corr/time_dd_corr:.2f}x" if time_dd_corr > 0 else "N/A", "Status": match_corr})
         
@@ -707,7 +707,7 @@ def app():
         st.session_state.rag_manager = RAGManager()
 
     # RAG Configuration Sidebar - MOVED TO GLOBAL SIDEBAR (utils/multipage.py -> app_pages/rag_sidebar.py)
-    # with st.sidebar.expander("🧠 RAG & AI Settings", expanded=False):
+    # with st.sidebar.expander("RAG & AI Settings", expanded=False):
     #     ... (Code moved)
 
     # Dataset Management Sidebar (Automatic Versioning)

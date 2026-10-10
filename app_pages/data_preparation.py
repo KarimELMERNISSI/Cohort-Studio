@@ -13,7 +13,7 @@ def app():
     st.subheader("Data Preparation & Quality Assessment")
 
     # --- Data Quality Scorecard ---
-    with st.expander("📊 Data Quality Scorecard", expanded=True):
+    with st.expander("Data Quality Scorecard", expanded=True):
         # Pass config if available
         config = st.session_state.get("config", None)
         auditor = DataQualityAuditor(st.session_state.data, config=config)
@@ -33,7 +33,7 @@ def app():
             col.metric(name, f"{value}%", help=help_text)
 
         # Display Advice
-        st.markdown("### 💡 Improvement Advice")
+        st.markdown("### Improvement Advice")
         for item in advice_list:
             if item['severity'] == 'high':
                 st.error(f"**{item['category']}:** {item['message']}")

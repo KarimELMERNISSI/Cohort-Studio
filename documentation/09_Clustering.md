@@ -1,10 +1,10 @@
-# 🔬 Population Clustering
+# Population Clustering
 
 Population clustering helps identify natural subgroups within your cohort based on shared characteristics. This guide covers the clustering algorithms available in the **Data Enrichment** page (under **Create New Variables → Clustering**) and how to interpret the results.
 
 ---
 
-## 🔄 Preprocessing
+## Preprocessing
 
 Before clustering, the pipeline applies two automatic preprocessing steps:
 
@@ -13,7 +13,7 @@ Before clustering, the pipeline applies two automatic preprocessing steps:
 
 ---
 
-## 📐 Dimensionality Reduction (Optional Pre-step)
+## Dimensionality Reduction (Optional Pre-step)
 
 For high-dimensional data, reducing dimensions before clustering can improve results and enable visualisation.
 
@@ -28,7 +28,7 @@ For high-dimensional data, reducing dimensions before clustering can improve res
 
 ---
 
-## 🧩 Clustering Algorithms
+## Clustering Algorithms
 
 ### K-Means
 
@@ -65,7 +65,7 @@ For high-dimensional data, reducing dimensions before clustering can improve res
 
 ---
 
-## 📊 Interpreting Results
+## Interpreting Results
 
 After clustering, a new column is appended to the dataset with the cluster label. To understand what each cluster represents:
 
@@ -76,7 +76,7 @@ After clustering, a new column is appended to the dataset with the cluster label
 
 ---
 
-## ⚠️ Common Pitfalls
+## Common Pitfalls
 
 | Pitfall | Recommendation |
 | --- | --- |
@@ -87,7 +87,7 @@ After clustering, a new column is appended to the dataset with the cluster label
 
 ---
 
-## 🔗 Related Documentation
+## Related Documentation
 
 - [03_Data_Enrichment.md](03_Data_Enrichment.md) — Where clustering is configured and applied.
 - [02_Data_Validation.md](02_Data_Validation.md) — Outlier detection before clustering.

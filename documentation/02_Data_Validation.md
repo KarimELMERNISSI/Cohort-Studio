@@ -1,10 +1,10 @@
-# 📋 Data Validation & Monitoring
+# Data Validation & Monitoring
 
 The **Data Validation & Monitoring** page provides a comprehensive data quality framework. It detects clinical anomalies, applies inclusion/exclusion criteria, identifies statistical and ML-based outliers, and compares dataset versions — all tracked through an integrated Data Quality Score.
 
 ---
 
-## 🧩 Completeness
+## Completeness
 
 Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, MAR, MNAR).
 
@@ -24,7 +24,7 @@ Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, M
 
 ---
 
-## 🏥 Clinical Anomalies
+## Clinical Anomalies
 
 The system checks your dataset for values that are clinically impossible or suspect based on rules defined in `config/config.json`.
 
@@ -43,7 +43,7 @@ The system checks your dataset for values that are clinically impossible or susp
 
 ---
 
-## ✅ Inclusion Criteria
+## Yes Inclusion Criteria
 
 Define and apply inclusion/exclusion criteria to filter your cohort. Criteria are organised into **mask families** — groups of related conditions combined with logical operators.
 
@@ -69,7 +69,7 @@ Define and apply inclusion/exclusion criteria to filter your cohort. Criteria ar
 
 ---
 
-## 📉 Outlier Detection & Handling
+## Outlier Detection & Handling
 
 Detect and manage outliers using six methods spanning statistical and machine learning approaches.
 
@@ -104,14 +104,13 @@ After applying a handling strategy, the system reports the impact on each variab
 ### Outlier Visualisation
 
 A 2-D projection scatter plot overlays detected outliers onto a reduced representation of the data. Supported projection methods:
-
 - PCA, FAMD, t-SNE, UMAP
 
 Outlier points are colour-coded for easy visual inspection.
 
 ---
 
-## 🔄 Dataset Comparison
+## Dataset Comparison
 
 Compare two dataset versions side by side. Data sources include:
 
@@ -124,7 +123,7 @@ The comparison highlights differences in shape, column overlap, and value-level 
 
 ---
 
-## 🔍 Conformity & Consistency
+## Conformity & Consistency
 
 Checks for data structure and formatting issues beyond simple value errors.
 
@@ -148,7 +147,7 @@ Detects specific string formatting issues in text columns:
 - **Whitespace**: Leading or trailing spaces.
 - **Capitalization**: Inconsistent casing (e.g., "Male" vs "male").
 
-## 📊 Data Quality Dashboard
+## Data Quality Dashboard
 
 The Data Quality Score aggregates results from all validation checks into a single overview:
 

@@ -1,14 +1,14 @@
-# 🛠️ Developer Guide
+# Developer Guide
 
 This guide covers the architecture, design patterns, and key subsystems of the Cohort Monitoring Package for developers who want to understand, extend, or maintain the application.
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ```text
 ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│  Streamlit   │───▶│   App Pages      │───▶│  Backend         │
+│  Streamlit   │───│   App Pages      │───│  Backend         │
 │  Frontend    │    │  (app_pages/)    │    │  Managers        │
 │              │    │                  │    │  (manage/)       │
 └──────────────┘    └──────────────────┘    └──────────────────┘
@@ -26,7 +26,7 @@ This guide covers the architecture, design patterns, and key subsystems of the C
 
 ---
 
-## 🧠 RAG Manager (Mixin Pattern)
+## RAG Manager (Mixin Pattern)
 
 The RAG system is structured using the **Mixin composition pattern** to keep each concern in its own module:
 
@@ -46,7 +46,7 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
 
 ---
 
-## 🔐 Authentication & User Management
+## Authentication & User Management
 
 ### Account Lifecycle
 
@@ -62,7 +62,6 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 | **Deleted** | Permanently removed from the database. |
 
 ### Implementation
-
 - Passwords are hashed with **bcrypt** before storage.
 - User records are stored in the DuckDB database (`db_manager.py`).
 - The `is_active` field controls login eligibility.
@@ -78,7 +77,7 @@ Per-user isolation is enforced via:
 
 ---
 
-## 📋 Pydantic Response Schemas
+## Pydantic Response Schemas
 
 All structured LLM responses are validated against Pydantic models defined in `manage/rag_schemas.py`:
 
@@ -98,7 +97,7 @@ All structured LLM responses are validated against Pydantic models defined in `m
 
 ---
 
-## 🔧 LLM Utilities (`utils/llm_utils.py`)
+## LLM Utilities (`utils/llm_utils.py`)
 
 Robust JSON parsing pipeline for LLM responses:
 
@@ -110,7 +109,7 @@ Robust JSON parsing pipeline for LLM responses:
 
 ---
 
-## 📊 Data Analysis Utilities
+## Data Analysis Utilities
 
 ### `utils/data_analyzer.py` — DataAnalyzer
 
@@ -125,12 +124,10 @@ Classifies DataFrame columns into semantic types:
 | `low_cardinality_numeric_cols` | Numerical columns with few unique values (may be coded categories). |
 
 ### `utils/statistics_utils.py`
-
 - Normality tests (Shapiro-Wilk, D'Agostino).
 - Test selection guidelines based on sample size and distribution.
 
 ### `utils/visualization_utils.py`
-
 - Plotly chart generators with statistical overlays.
 - Palette generation (`generate_palette()`, cached with `@functools.cache`).
 
@@ -141,7 +138,7 @@ Classifies DataFrame columns into semantic types:
 
 ---
 
-## 🔁 Trace & Reproduction System
+## Trace & Reproduction System
 
 ### TransformationManager
 
@@ -154,7 +151,6 @@ Manages the recording of analysis steps:
 ### TraceDocumenter
 
 Generates `.docx` reports from trace JSON files using `python-docx`:
-
 - Session metadata header.
 - Step-by-step table with function, parameters, and description.
 - Downloadable via Streamlit's file download button.
@@ -165,7 +161,7 @@ Handles trace replay with path resolution for cross-platform compatibility.
 
 ---
 
-## 📊 RAG Quality Monitor
+## RAG Quality Monitor
 
 The `rag_monitoring.py` page provides a dashboard for monitoring RAG system health:
 
@@ -179,7 +175,7 @@ This is primarily a developer and admin tool for diagnosing RAG performance issu
 
 ---
 
-## 📁 Configuration
+## Configuration
 
 ### `config/config.json`
 
@@ -197,7 +193,7 @@ Stores the `GOOGLE_API_KEY` for local development (not committed to version cont
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Follow the existing Mixin pattern when adding new RAG capabilities.
 2. Validate all LLM responses with Pydantic schemas.

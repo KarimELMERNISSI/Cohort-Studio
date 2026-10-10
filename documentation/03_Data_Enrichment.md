@@ -1,10 +1,10 @@
-# 🔄 Data Enrichment
+# Data Enrichment
 
 The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to engineering new variables through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system for full reproducibility.
 
 ---
 
-## 📥 Import External Data
+## Import External Data
 
 Merge additional data sources into your main dataset.
 
@@ -18,11 +18,11 @@ Merge additional data sources into your main dataset.
 
 ---
 
-## 🛠️ Handle Missing Data
+## Handle Missing Data
 
 Two complementary approaches are available for imputation.
 
-### 🎯 Targeted Imputation
+### Targeted Imputation
 
 Manually fix specific columns using formulas or AI-assisted suggestions.
 
@@ -38,7 +38,7 @@ Manually fix specific columns using formulas or AI-assisted suggestions.
 | **Free Thinking (Auto)** | Scans all available columns to suggest formulas automatically. |
 | **Guided (with Hints)** | User provides a clue (e.g. "unit conversion") and selects context columns for more focused suggestions. |
 
-### 🤖 Global Imputation
+### Global Imputation
 
 Apply statistical or ML-based strategies to all missing values simultaneously.
 
@@ -62,7 +62,7 @@ After imputation, an **imputation mask** highlights which values were filled, an
 
 ---
 
-## ⚙️ Create New Variables
+## Create New Variables
 
 Engineer new features via transformations, dimensionality reduction, encoding, scaling, or clustering.
 
@@ -114,10 +114,9 @@ All new columns follow a configurable naming pattern (e.g. `{method_applied}_{in
 
 ---
 
-## 🤖 AI Variable Discovery
+## AI Variable Discovery
 
 The RAG system can suggest **computed variables** that are clinically or statistically meaningful based on:
-
 - Existing column names and data types.
 - Uploaded research documentation.
 - Known medical formulas and indices.
@@ -126,7 +125,7 @@ Suggestions include the variable name, formula, reasoning, and expected units.
 
 ---
 
-## 💾 Dataset Versioning & Persistence
+## Dataset Versioning & Persistence
 
 The sidebar provides:
 
@@ -136,8 +135,7 @@ The sidebar provides:
 
 ---
 
-## 💡 Tips
-
+## Practical Guidance
 - Run **Global Imputation** before **Dimensionality Reduction** or **Clustering** — these methods require complete data.
 - Use **Targeted Imputation** with AI suggestions for domain-specific formulas (e.g. computing BMI from weight and height).
 - Check the **imputation mask** after global imputation to verify which values were filled.

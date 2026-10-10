@@ -74,17 +74,10 @@
 
       <div class="hero-cta">
         <a href="#install" class="btn btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"></polyline>
-            <line x1="12" y1="19" x2="20" y2="19"></line>
-          </svg>
           Quick Start Installation
         </a>
         <a href="#features" class="btn btn-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-          Explore Features
+          Explore Capabilities
         </a>
       </div>
 
@@ -140,23 +133,23 @@
       <!-- Regulatory & Clinical Standards Ribbon -->
       <div class="standards-bar">
         <div class="standard-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span class="badge-dot"></span>
           <span>STROBE &amp; CONSORT Reporting Aligned</span>
         </div>
         <div class="standard-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span class="badge-dot"></span>
           <span>FDA 21 CFR Part 11 Audit Trail Integrity</span>
         </div>
         <div class="standard-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span class="badge-dot"></span>
           <span>Good Epidemiological Practice (GEP) Ready</span>
         </div>
         <div class="standard-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span class="badge-dot"></span>
           <span>Zero Telemetry · Air-Gapped Hospital Privacy</span>
         </div>
         <div class="standard-badge">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span class="badge-dot"></span>
           <span>Standard Ontologies: UMLS, SNOMED, LOINC</span>
         </div>
       </div>
@@ -175,22 +168,10 @@
       </div>
 
       <div class="showcase-tabs">
-        <button class="tab-btn active" data-tab="tab-duckdb">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-          DuckDB Parquet Engine
-        </button>
-        <button class="tab-btn" data-tab="tab-biostat">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-          Biostatistics &amp; Epidemiology
-        </button>
-        <button class="tab-btn" data-tab="tab-rag">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-          Model-Agnostic RAG
-        </button>
-        <button class="tab-btn" data-tab="tab-quality">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          Quality &amp; Reproducibility
-        </button>
+        <button class="tab-btn active" data-tab="tab-duckdb">DuckDB Parquet Engine</button>
+        <button class="tab-btn" data-tab="tab-biostat">Biostatistics &amp; Epidemiology</button>
+        <button class="tab-btn" data-tab="tab-rag">Model-Agnostic RAG</button>
+        <button class="tab-btn" data-tab="tab-quality">Quality &amp; Reproducibility</button>
       </div>
 
       <!-- Tab 1: DuckDB -->
@@ -202,15 +183,12 @@
           </p>
           <ul class="panel-features">
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Atomic Versioning:</strong> Saves version snapshots (e.g. <code>cardio_cohort_v1</code>, <code>v2</code>) with metadata.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Ultra-Fast Statistics Cache:</strong> Pre-calculates numerical and categorical aggregates in Parquet format.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Isolated User Namespaces:</strong> Row-level privacy and directory boundaries enforced per research account.</span>
             </li>
           </ul>
@@ -243,15 +221,12 @@ df_loaded, msg = db.load_dataset(<span class="token-str">"diabetic_cohort_v2"</s
           </p>
           <ul class="panel-features">
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>2x2 Contingency Epidemiology:</strong> Relative Risk, Odds Ratio with Haldane-Anscombe zero-cell correction.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Effect Sizes:</strong> Cohen's d, Hedges' g (small-sample correction), Eta-squared (&eta;&sup2;), and Omega-squared (&omega;&sup2;).</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Missingness Diagnostics:</strong> Little's MCAR permutation test with pairwise MAR dependency tests.</span>
             </li>
           </ul>
@@ -286,15 +261,12 @@ eff = calculate_effect_size(group_a, group_b, method=<span class="token-str">"he
           </p>
           <ul class="panel-features">
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Air-Gapped Ollama:</strong> On-premise local inference with Llama 3, Mistral, or Qwen without external API calls.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Medical Semantic Renaming:</strong> AI suggestions mapped to UMLS, LOINC, and SNOMED CT clinical codes.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Knowledge Graph Refinement:</strong> Generates and repairs yFiles biomedical concept taxonomy graphs.</span>
             </li>
           </ul>
@@ -325,19 +297,15 @@ embeddings = connector.get_embeddings()</code></pre>
           </p>
           <ul class="panel-features">
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Multi-Dimensional Scoring:</strong> Completeness, Uniqueness, Uniformity, and IQR / ML Outlier Validity.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Clinical Anomaly Rules:</strong> Evaluates boolean mask expressions to highlight biologically implausible values.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>End-to-End Pipeline Reproduction:</strong> Deterministic replay engine re-executes complete multi-step transformations (enrichment joins, MICE/MissForest imputers, mathematical transforms) headless or interactively to reproduce exact analytical datasets.</span>
             </li>
             <li>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
               <span><strong>Signed Word (.docx) Dossiers:</strong> Auto-generates audit certificates and transformation parameter manifests ready for peer review.</span>
             </li>
           </ul>
@@ -455,9 +423,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
 
       <div class="arch-grid">
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>
-          </div>
+          <div class="arch-kicker">01 // HYPOTHESIS TESTING</div>
           <h3 class="arch-title">Parametric &amp; Non-Parametric</h3>
           <p class="arch-desc">
             Shapiro-Wilk and D'Agostino normality screening routes data between Student's t-test, Welch's t-test (unequal variances), Mann-Whitney U, One-Way ANOVA, Kruskal-Wallis, Welch's ANOVA, and Games-Howell post-hoc tests.
@@ -465,9 +431,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
         </div>
 
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-          </div>
+          <div class="arch-kicker">02 // 2×2 CONTINGENCY</div>
           <h3 class="arch-title">2x2 Cohort &amp; Case-Control</h3>
           <p class="arch-desc">
             Relative Risk (RR), Odds Ratio (OR), and Risk Difference (RD) calculations featuring Haldane-Anscombe zero-cell continuity corrections (+0.5) to prevent infinite odds ratios in rare clinical outcomes.
@@ -475,9 +439,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
         </div>
 
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-          </div>
+          <div class="arch-kicker">03 // CLINICAL EFFECT SIZES</div>
           <h3 class="arch-title">Clinical Effect Sizes</h3>
           <p class="arch-desc">
             Computes Cohen's d, Hedges' g (with exact unbiased gamma factor for small cohort sizes), Eta-squared (&eta;&sup2;), and Omega-squared (&omega;&sup2;) to evaluate medical impact beyond statistical significance.
@@ -485,9 +447,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
         </div>
 
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
-          </div>
+          <div class="arch-kicker">04 // MISSINGNESS DIAGNOSTICS</div>
           <h3 class="arch-title">Little's MCAR Diagnostics</h3>
           <p class="arch-desc">
             Heuristic Little's MCAR missingness permutation test combined with bivariate MAR tests. Identifies whether variable omissions are completely at random or dependent on clinical covariates.
@@ -495,9 +455,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
         </div>
 
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line></svg>
-          </div>
+          <div class="arch-kicker">05 // MULTIVARIATE COVARIANCE</div>
           <h3 class="arch-title">Multivariate ANCOVA</h3>
           <p class="arch-desc">
             Evaluates treatment efficacy while adjusting for continuous clinical covariates. Automatically validates the assumption of homogeneity of regression slopes before reporting adjusted means.
@@ -505,9 +463,7 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
         </div>
 
         <div class="arch-card">
-          <div class="arch-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M16 12l-4-4-4 4M12 16V8"></path></svg>
-          </div>
+          <div class="arch-kicker">06 // DIAGNOSTIC ACCURACY</div>
           <h3 class="arch-title">Diagnostic Test Accuracy</h3>
           <p class="arch-desc">
             Complete screening benchmark: Sensitivity, Specificity, Positive/Negative Predictive Value (PPV/NPV), Youden's Index J, Positive/Negative Likelihood Ratios (LR+, LR-), and ROC AUC curve profiling.
@@ -845,7 +801,6 @@ reproduced_df, err = execute_trace_pipeline(trace_data)
       <div class="citation-card">
         <div class="citation-header">
           <div class="citation-header-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
             BibTeX Citation
           </div>
           <button class="copy-btn" data-clipboard-text="@software{elmernissi2026cohortmonitoring,

@@ -48,10 +48,10 @@ def render_rag_monitoring():
     
     # Tabs for different views
     tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Quality Overview",
-        "📋 Evaluation Details", 
-        "🧬 Embedding Health",
-        "🧪 Run Evaluation"
+        "Quality Overview",
+        "Evaluation Details", 
+        "Embedding Health",
+        "Run Evaluation"
     ])
     
     with tab1:
@@ -343,7 +343,7 @@ def render_run_evaluation(evaluator):
             else:
                 query = st.text_input("Search Hint / Query", placeholder="e.g., BMI, cardiovascular risk")
             
-            run_eval = st.form_submit_button("▶️ Run Evaluation", type="primary")
+            run_eval = st.form_submit_button("Run Evaluation", type="primary")
             
             if run_eval and query:
                 run_single_evaluation(evaluator, rag, query, eval_function)
@@ -390,7 +390,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
         
         # Step 2: Retrieve context
         progress_bar.progress(25, text="Retrieving context from documents...")
-        status_text.info("📚 Searching documents...")
+        status_text.info("Searching documents...")
         
         try:
             docs = rag.vector_store.similarity_search(query, k=3)
@@ -402,7 +402,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
         
         # Step 3: Generate response based on function
         progress_bar.progress(45, text=f"Running {eval_function}...")
-        status_text.info(f"🤖 Executing {eval_function}...")
+        status_text.info(f"Executing {eval_function}...")
         
         if eval_function == "suggest_computed_variables":
             # Use actual RAG function
@@ -419,11 +419,11 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
         
         # Step 4: Evaluate context relevance
         progress_bar.progress(60, text="Evaluating context relevance...")
-        status_text.info("🔍 Assessing context quality...")
+        status_text.info("Assessing context quality...")
         
         # Step 5: Evaluate faithfulness
         progress_bar.progress(75, text="Checking faithfulness...")
-        status_text.info("✅ Checking response groundedness...")
+        status_text.info("Checking response groundedness...")
         
         # Step 6: Run full evaluation
         progress_bar.progress(85, text="Computing final scores...")
@@ -601,7 +601,7 @@ def render_export_options(evaluator):
     with col1:
         summary = evaluator.get_summary()
         st.download_button(
-            label="📥 Download Summary (JSON)",
+            label="Download Summary (JSON)",
             data=json.dumps(summary, indent=2),
             file_name=f"rag_eval_summary_{datetime.now().strftime('%Y%m%d')}.json",
             mime="application/json"
@@ -610,7 +610,7 @@ def render_export_options(evaluator):
     with col2:
         evaluations = evaluator.get_recent_evaluations(limit=1000)
         st.download_button(
-            label="📥 Download All Evaluations",
+            label="Download All Evaluations",
             data=json.dumps(evaluations, indent=2),
             file_name=f"rag_evaluations_{datetime.now().strftime('%Y%m%d')}.json",
             mime="application/json"

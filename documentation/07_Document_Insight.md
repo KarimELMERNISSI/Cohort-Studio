@@ -1,20 +1,19 @@
-# 📄 Documents Insight
+# Documents Insight
 
 The **Documents Insight** page enables you to analyse research PDFs using AI — generate structured summaries, chat with documents via retrieval-augmented Q&A, build knowledge graphs from extracted concepts, and check how well your dataset variables are covered in the literature.
 
 ---
 
-## 📁 Document Selection
+## Document Selection
 
 Upload one or more PDF files. Documents are processed and indexed into the RAG vector store (ChromaDB) for retrieval.
-
 - Supported format: `.pdf`
 - Documents are stored per-user for data isolation.
 - Previously uploaded documents can be reused across sessions.
 
 ---
 
-## 📝 Document Summariser
+## Document Summariser
 
 Generate structured summaries from each uploaded paper.
 
@@ -31,7 +30,7 @@ Summaries are generated via RAG and displayed in a dedicated tab for quick revie
 
 ---
 
-## 🌐 Knowledge Graph from Documents
+## Knowledge Graph from Documents
 
 Build an interactive knowledge graph from concepts extracted across all uploaded PDFs.
 
@@ -50,7 +49,7 @@ Build an interactive knowledge graph from concepts extracted across all uploaded
 
 ---
 
-## 💬 Chat with Documents
+## Chat with Documents
 
 Ask questions about the uploaded documents using retrieval-augmented Q&A.
 
@@ -68,7 +67,7 @@ Ask questions about the uploaded documents using retrieval-augmented Q&A.
 
 ---
 
-## 📊 Dataset Coverage Analysis
+## Dataset Coverage Analysis
 
 Check how well your dataset's variables are represented in the uploaded literature.
 
@@ -76,9 +75,9 @@ Check how well your dataset's variables are represented in the uploaded literatu
 
 | Column | Coverage | Source |
 | --- | --- | --- |
-| `hdl_cholesterol` | ✅ Covered | Paper A (p. 3), Paper B (p. 7) |
-| `homa_ir` | ✅ Covered | Paper A (p. 5) |
-| `patient_id` | ❌ Not covered | — |
+| `hdl_cholesterol` | Covered | Paper A (p. 3), Paper B (p. 7) |
+| `homa_ir` | Covered | Paper A (p. 5) |
+| `patient_id` | Not covered | — |
 
 This helps identify:
 
@@ -88,8 +87,7 @@ This helps identify:
 
 ---
 
-## 💡 Tips
-
+## Practical Guidance
 - Upload all relevant papers **before** generating the taxonomy on the Data Insight page — the RAG system uses them for better variable classification.
 - Use the **Chat** feature for quick literature queries instead of manually searching PDFs.
 - The **Coverage Analysis** is especially useful when preparing study protocols or grant applications.

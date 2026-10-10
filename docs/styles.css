@@ -415,6 +415,44 @@ body {
   line-height: 1.4;
 }
 
+/* Regulatory Standards Ribbon */
+.standards-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 36px;
+}
+
+.standard-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+  transition: all var(--transition-fast);
+}
+
+.standard-badge:hover {
+  border-color: var(--border-accent);
+  color: var(--text-primary);
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
 /* Section Common Styling */
 .section {
   padding: 80px 0;
@@ -532,22 +570,27 @@ body {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 28px;
 }
 
 .panel-features li {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  position: relative;
+  padding-left: 18px;
   font-size: 0.925rem;
   color: var(--text-primary);
+  line-height: 1.5;
 }
 
-.panel-features svg {
-  color: var(--accent-emerald);
-  flex-shrink: 0;
-  margin-top: 2px;
+.panel-features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-sky);
 }
 
 .panel-code {
@@ -668,16 +711,19 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-.arch-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  background: rgba(14, 165, 233, 0.12);
+.arch-kicker {
+  font-family: var(--font-mono);
+  font-size: 0.725rem;
+  font-weight: 700;
   color: var(--accent-sky);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(14, 165, 233, 0.08);
+  border: 1px solid rgba(14, 165, 233, 0.2);
 }
 
 .arch-title {

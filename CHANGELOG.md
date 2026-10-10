@@ -6,7 +6,7 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [2.2.0] - 2026-02-10
 
-### 📚 Documentation Overhaul
+### Documentation Overhaul
 
 - **README.md** — Added clustering, user management, RAG quality monitor, DBSCAN outlier detection, document summariser, replay modes, full configuration table, and expanded tech stack.
 - **02_Data_Validation.md** — Added DBSCAN, outlier visualisation (2-D projection), handling strategy matrix, and impact analysis measures.
@@ -25,7 +25,7 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [2.1.0] - 2026-01-02
 
-### 🚀 Architecture Improvements
+### Architecture Improvements
 
 #### RAG Manager Refactoring
 
@@ -38,12 +38,12 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 - **NEW** `manage/rag_schemas.py` - Pydantic models for type-safe LLM responses
 - **NEW** `utils/llm_utils.py` - Robust JSON parsing with:
-  - Multi-strategy parsing (markdown extraction, bracket balancing)
-  - Automatic repair (trailing commas, unmatched brackets)
-  - Schema validation with Pydantic
-  - Retry mechanism with LLM self-repair
+- Multi-strategy parsing (markdown extraction, bracket balancing)
+- Automatic repair (trailing commas, unmatched brackets)
+- Schema validation with Pydantic
+- Retry mechanism with LLM self-repair
 
-### 🛠️ Utility Extraction
+### Utility Extraction
 
 #### Home Page Modularization
 
@@ -51,13 +51,11 @@ All notable changes to the Cohort Monitoring Package are documented here.
 - **NEW** `utils/export_utils.py` - Excel export functions
 - **NEW** `utils/statistics_utils.py` - Normality tests and guidelines
 
-### 📈 Performance
-
+### Performance
 - Added `@st.cache_data` for `get_statistics_dataframe()`
 - Added `@functools.cache` for `generate_palette()`
 
-### 📚 Documentation
-
+### Documentation
 - Updated README with architecture diagrams
 - **NEW** Developer Guide (`documentation/10_Developer_Guide.md`)
 - **NEW** CHANGELOG.md
@@ -67,7 +65,6 @@ All notable changes to the Cohort Monitoring Package are documented here.
 ## [2.0.0] - 2025-12-22
 
 ### Features
-
 - RAG Quality Monitoring Dashboard
 - Document Knowledge Graph
 - Taxonomy Generation
@@ -78,7 +75,6 @@ All notable changes to the Cohort Monitoring Package are documented here.
 ## [1.0.0] - 2025-11-01
 
 ### Initial Release
-
 - Data loading and versioning
 - Data quality checks
 - Visualization suite

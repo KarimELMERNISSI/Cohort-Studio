@@ -1377,7 +1377,7 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
     if used_features:
         dropped_cols = list(set(data_viz.columns) - set(used_features))
         if dropped_cols:
-            st.info(f"ℹ️ **Note**: The following columns were excluded from {projection_method} (incompatible data type): {', '.join(dropped_cols)}")
+            st.info(f"**Note**: The following columns were excluded from {projection_method} (incompatible data type): {', '.join(dropped_cols)}")
 
     # Create DataFrame for plotting
     plot_df = pd.DataFrame(embeddings, columns=['Dim1', 'Dim2'], index=data_viz.index)
@@ -1451,7 +1451,7 @@ def ensure_family_exists(config: dict[str, Any], family_name: str):
 def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str, st_container):
     """Validate the mask name and handle duplicates."""
     if not mask_name:
-        st_container.warning("⚠️ Please provide a mask name.")
+        st_container.warning("Please provide a mask name.")
         return False
     if mask_name in config["mask_families"][family_name]:
         overwrite = st_container.radio(
@@ -1507,7 +1507,7 @@ def handle_numeric_mask_input(st_container, base_key:str):
 def handle_expression_mask_input(st_container, base_key: str):
     """Collect expression mask inputs from the user."""
     
-    with st_container.expander("ℹ️ Expression Help & Examples", expanded=False):
+    with st_container.expander("Expression Help & Examples", expanded=False):
         st.markdown("""
         Write a Python boolean expression. Use `df` to refer to the dataframe.
         
@@ -1531,7 +1531,7 @@ def handle_expression_mask_input(st_container, base_key: str):
     )
     
     if not expression.strip():
-        # st_container.warning("⚠️ Expression is empty.") # Don't error immediately, let them type
+        # st_container.warning("Expression is empty.") # Don't error immediately, let them type
         return None
         
     if use_simplified_mask_expression:
@@ -1571,7 +1571,7 @@ def add_mask_family(config: dict[str, Any], st_container):
     # Family Selection
     family_name = st_container.text_input("Family Name", placeholder="Enter family name")
     if not family_name:
-        st_container.warning("⚠️ Please provide a family name.")
+        st_container.warning("Please provide a family name.")
         return
     ensure_family_exists(config, family_name)
 
@@ -1592,7 +1592,7 @@ def add_mask_family(config: dict[str, Any], st_container):
 
     if mask_details and st_container.button("Add Mask"):
         config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"✅ Mask '{mask_name}' added to family '{family_name}'.")
+        st_container.success(f"Mask '{mask_name}' added to family '{family_name}'.")
     
     st_container.json(config["mask_families"][family_name])
 
@@ -1632,7 +1632,7 @@ def display_mask_family(config):
                 # Expander for numeric configuration
                 with st.expander(f"{key}", expanded=False):
                     # Numeric details
-                    st.markdown(f"**Type:** 🔢 <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
+                    st.markdown(f"**Type:** <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
 
                     col1, col2 = st.columns(2)
                     with col1:
@@ -1655,7 +1655,7 @@ def display_mask_family(config):
                 # Expander for non-numeric configuration
                 with st.expander(f"{key}", expanded=False):
                     # Non-numeric details
-                    st.markdown(f"**Type:** 📝 <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
+                    st.markdown(f"**Type:** <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
 
                     expression = value.get('expression', "No expression defined")
                     #st.markdown("**Validation Expression:**")
@@ -1930,7 +1930,7 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
     Renders the AI assistant for generating criteria.
     """
     if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
-        with st_container.expander("🤖 AI Assistant (Beta)", expanded=False):
+        with st_container.expander("AI Assistant (Beta)", expanded=False):
             st.markdown(
                 "Describe what you want to flag or include using natural language. "
                 "The AI will generate the Python expressions for you."
@@ -2070,7 +2070,7 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     if mask_details and st_container.button("Add Anomaly Criterion"):
         config["mask_families"][family_name][mask_name] = mask_details
         #st.session_state.config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"✅ Anomaly mask '{mask_name}' added to family '{family_name}'.")
+        st_container.success(f"Anomaly mask '{mask_name}' added to family '{family_name}'.")
     
     #st_container.json(config["mask_families"][family_name])
 
@@ -2151,7 +2151,7 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
 
     if mask_details and st_container.button("Add Inclusion Criterion"):
         config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"✅ Inclusion mask '{mask_name}' added to family '{family_name}'.")
+        st_container.success(f"Inclusion mask '{mask_name}' added to family '{family_name}'.")
 
 
 def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):

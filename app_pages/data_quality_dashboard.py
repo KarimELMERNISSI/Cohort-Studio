@@ -38,7 +38,7 @@ def render_dashboard(df, config):
     print(f"[DEBUG render_dashboard] metrics={metrics}")
 
     # --- Global Score Calculation ---
-    with st.expander("⚙️ Score Weights Configuration", expanded=False):
+    with st.expander("Score Weights Configuration", expanded=False):
         st.write("Adjust the importance of each metric for the Global Score:")
         weights = {}
         total_weight = 0
@@ -135,27 +135,27 @@ def render_dashboard(df, config):
 
     # --- 2. Actionable Advice ---
     if advice_list:
-        with st.expander("💡 AI-Driven Recommendations & Best Practices", expanded=True):
+        with st.expander("AI-Driven Recommendations & Best Practices", expanded=True):
             
             # Split into two columns: Specific Advice vs General Best Practices
             col_advice, col_best_practices = st.columns([1.5, 1])
             
             with col_advice:
-                st.markdown("### 🛠️ Recommended Actions")
+                st.markdown("### Recommended Actions")
                 for item in advice_list:
-                    severity_icon = {
-                        "high": "🔴",
-                        "medium": "🟠",
-                        "low": "🟡",
-                        "success": "🟢"
-                    }.get(item['severity'], "⚪")
+                    severity_badge = {
+                        "high": ":red[**[HIGH]**]",
+                        "medium": ":orange[**[MEDIUM]**]",
+                        "low": ":blue[**[LOW]**]",
+                        "success": ":green[**[OPTIMAL]**]"
+                    }.get(item['severity'], ":gray[**[INFO]**]")
                     
                     with st.container(border=True):
-                        st.markdown(f"**{severity_icon} {item['category']}**")
+                        st.markdown(f"{severity_badge} **{item['category']}**")
                         st.markdown(item['message'])
             
             with col_best_practices:
-                st.markdown("### 🏆 Data Quality Best Practices")
+                st.markdown("### Data Quality Best Practices")
                 st.info("""
                 **1. Completeness**
                 Aim for >95%. Use *MICE* or *MissForest* imputation for critical variables instead of dropping rows.
@@ -174,10 +174,10 @@ def render_dashboard(df, config):
 
     # --- 3. Detailed Analysis Tabs ---
     tab1, tab2, tab3, tab4 = st.tabs([
-        "🧩 Completeness (Missing)", 
-        "📉 Validity (Outliers)", 
-        "🏥 Clinical Validity",
-        "🔍 Conformity"
+        "Completeness (Missing)", 
+        "Validity (Outliers)", 
+        "Clinical Validity",
+        "Conformity"
     ])
 
     # --- Tab 1: Completeness ---
@@ -212,9 +212,9 @@ def render_dashboard(df, config):
             st.divider()
             
             # --- Advanced Analysis ---
-            st.markdown("### 🕵️ Advanced Diagnosis")
+            st.markdown("### Advanced Diagnosis")
             
-            diag_tabs = st.tabs(["👁️ Visual Diagnosis", "🧪 Statistical Diagnosis (MCAR & MAR)"])
+            diag_tabs = st.tabs(["Visual Diagnosis", "Statistical Diagnosis (MCAR & MAR)"])
             
             # A. Visual Diagnosis
             with diag_tabs[0]:
@@ -241,7 +241,7 @@ def render_dashboard(df, config):
                     show_col_labels = st.checkbox("Show Column Labels", value=True, key="nm_show_col_labels")
                 
                 # Row Filtering
-                st.markdown("##### 🔍 Filter Rows by Missingness")
+                st.markdown("##### Filter Rows by Missingness")
                 row_missing_pct = df.isnull().mean(axis=1) * 100
                 min_miss, max_miss = st.slider(
                     "Filter Rows by % Missing",
@@ -279,7 +279,7 @@ def render_dashboard(df, config):
                         st.error(f"Error generating Nullity Matrix: {e}")
                         
                     # --- Distribution Plot ---
-                    st.markdown("##### 📊 Distribution of Row Missingness")
+                    st.markdown("##### Distribution of Row Missingness")
                     # Create a histogram of row missingness
                     # We use the FULL dataframe for context, or filtered? 
                     # User asked for "complement", usually helpful to see where the data lies.
@@ -396,7 +396,7 @@ def render_dashboard(df, config):
                 if not numeric_cols:
                     st.warning("No numerical variables found in the dataset. Little's MCAR test requires numerical data.")
                 else:
-                    with st.expander("⚙️ Test Configuration", expanded=True):
+                    with st.expander("Test Configuration", expanded=True):
                         mcar_vars = st.multiselect(
                             "Select Variables for MCAR Test",
                             options=numeric_cols,
@@ -455,7 +455,7 @@ def render_dashboard(df, config):
                         temp_df['Missingness_Status'] = temp_df[target_col].isnull().map({True: 'Missing', False: 'Observed'})
                         
                         # Configuration
-                        with st.expander("⚙️ Analysis Configuration", expanded=True):
+                        with st.expander("Analysis Configuration", expanded=True):
                             # Predictors
                             all_cols = [c for c in df.columns if c != target_col and c != 'Missingness_Status']
                             predictors = st.multiselect("Select Predictor Variables", options=all_cols, default=all_cols[:5] if len(all_cols) > 5 else all_cols)
@@ -535,7 +535,7 @@ def render_dashboard(df, config):
                                     is_sig = top_res['P-Value (Adj)'] < 0.05 if correction != "None" else top_res['P-Value'] < 0.05
                                     
                                     if is_sig:
-                                        st.markdown(f"### 🔍 Top Influencer: {top_res['Variable']}")
+                                        st.markdown(f"### Top Influencer: {top_res['Variable']}")
                                         st.caption(f"Missingness in **{target_col}** is most strongly associated with **{top_res['Variable']}**.")
                                         
                                         if top_res['Variable'] in numeric_cols:
@@ -571,7 +571,7 @@ def render_dashboard(df, config):
                     2.  **Pattern Correlations**: Is the *missingness* of a predictor linked to the missingness of a target?
                     """)
                     
-                    with st.expander("⚙️ Scan Configuration", expanded=True):
+                    with st.expander("Scan Configuration", expanded=True):
                         # Targets: Variables with missing data
                         scan_targets = st.multiselect(
                             "Select Target Variables (Missing Data)",
@@ -715,7 +715,7 @@ def render_dashboard(df, config):
                     params = {"lower": lower, "upper": upper}
                 else:
                     # ML methods - show info
-                    st.info("ℹ️ Multivariate methods analyze patterns across all selected columns.")
+                    st.info("Multivariate methods analyze patterns across all selected columns.")
                     params = {}
             
             # Check if params changed - if so, trigger rerun to update scorecard
@@ -723,7 +723,7 @@ def render_dashboard(df, config):
             st.session_state['validity_outlier_params'] = params
             
             # Show guidance about score synchronization
-            st.caption("💡 **Tip:** The health scorecard above will update automatically when you change detection settings.")
+            st.caption("**Tip:** The health scorecard above will update automatically when you change detection settings.")
             
             # --- Column Selection (for ML methods) ---
             if detection_method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
@@ -872,7 +872,7 @@ def render_dashboard(df, config):
                     else:
                         # ML methods - automatically use the analysis columns
                         viz_columns = selected_cols
-                        st.info(f"📊 Displaying columns from analysis: {', '.join(selected_cols[:5])}{'...' if len(selected_cols) > 5 else ''}")
+                        st.info(f"Displaying columns from analysis: {', '.join(selected_cols[:5])}{'...' if len(selected_cols) > 5 else ''}")
                 
                 # Generate visualization
                 if viz_type == "Box Plot" and viz_columns:
@@ -1009,7 +1009,7 @@ def render_dashboard(df, config):
                 
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
                     # --- Summary Report ---
-                    st.markdown("### 📊 Violations Summary")
+                    st.markdown("### Violations Summary")
                     
                     # Calculate stats
                     summary_stats = []
@@ -1076,7 +1076,7 @@ def render_dashboard(df, config):
                     
                     st.divider()
 
-                    st.markdown("### 📋 Detailed Anomaly Report")
+                    st.markdown("### Detailed Anomaly Report")
                     st.markdown("The table below shows rows that triggered at least one anomaly. Cells causing the anomaly are highlighted (where applicable).")
                     
                     # Define styling function
@@ -1103,7 +1103,7 @@ def render_dashboard(df, config):
                     # Download button
                     csv = auditor.clinical_anomalies_df.to_csv(index=True).encode('utf-8')
                     st.download_button(
-                        label="📥 Download Anomaly Report",
+                        label="Download Anomaly Report",
                         data=csv,
                         file_name='clinical_anomalies.csv',
                         mime='text/csv',
@@ -1114,7 +1114,7 @@ def render_dashboard(df, config):
                     clinical_config = auditor.config["mask_families"].get("clinical_anomalies", {})
                     if clinical_config:
                         st.divider()
-                        st.markdown("### 📜 Applied Clinical Criteria")
+                        st.markdown("### Applied Clinical Criteria")
                         st.markdown("The following rules were used to detect anomalies:")
                         
                         # Use card-based layout similar to Data Monitoring page
@@ -1130,8 +1130,8 @@ def render_dashboard(df, config):
                             
                             with grid[i % cols_per_row]:
                                 if is_numeric:
-                                    with st.expander(f"🔢 {name}", expanded=False):
-                                        st.markdown(f"**Type:** 🔢 <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
+                                    with st.expander(f"{name}", expanded=False):
+                                        st.markdown(f"**Type:** <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
                                         
                                         c1, c2 = st.columns(2)
                                         with c1:
@@ -1144,12 +1144,12 @@ def render_dashboard(df, config):
                                         if rule.get('strategy'):
                                             st.markdown(f"**Strategy:** {rule['strategy']}")
                                 else:
-                                    with st.expander(f"📝 {name}", expanded=False):
-                                        st.markdown(f"**Type:** 📝 <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
+                                    with st.expander(f"{name}", expanded=False):
+                                        st.markdown(f"**Type:** <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
                                         st.code(rule.get('expression', 'N/A'), language='python')
 
                 else:
-                    st.info("👉 Go to the **'Data Validation & Monitoring'** page to inspect specific rows and rules.")
+                    st.info("Go to the **'Data Validation & Monitoring'** page to inspect specific rows and rules.")
             else:
                 st.success("All rows comply with the declared clinical rules.")
         else:
@@ -1201,7 +1201,7 @@ def render_dashboard(df, config):
                     st.warning("Inconsistent text formatting detected.")
                     
                     if hasattr(auditor, 'uniformity_details') and auditor.uniformity_details:
-                        st.markdown("### 📝 Uniformity Issues")
+                        st.markdown("### Uniformity Issues")
                         uniformity_df = pd.DataFrame(auditor.uniformity_details)
                         st.dataframe(uniformity_df, width='stretch', hide_index=True)
                     else:

@@ -46,7 +46,7 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> pd.DataFrame | 
     xls = pd.ExcelFile(io.BytesIO(file_bytes), engine='openpyxl')
     sheet_names = xls.sheet_names
     
-    st.markdown(f"📑 **{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
+    st.markdown(f"**{len(sheet_names)} sheets detected:** {', '.join(sheet_names)}")
     
     load_mode = st.radio(
         "How would you like to load this file?",
@@ -929,13 +929,9 @@ def display_column_suggestions(suggestions, formula_key="formula_input"):
             tier = int(score / 10)
             
             # Icons just for the label
-            if score >= 80: score_icon = "🟢"
-            elif score >= 60: score_icon = "🟠"
-            else: score_icon = "⚪"
-
             with cols[idx % 3]:
                 # Label
-                label = f"{col}  \n{score_icon} Score: {score}"
+                label = f"{col}  \nScore: {score}%"
                 
                 # Help text starts with [Tier: X] to trigger the CSS
                 help_text = f"[Tier: {tier}] [Match Info] Click to insert '{col}' into formula"
@@ -1274,7 +1270,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
                 return False, f"Variable '{variable_name}' already exists.", dataset
 
             dataset[variable_name] = result
-            return True, f"✨ Variable '{variable_name}' successfully added.", dataset
+            return True, f"Variable '{variable_name}' successfully added.", dataset
 
         # Handle cases where result is not a valid pandas Series
         return False, (
@@ -1353,7 +1349,7 @@ def define_new_variables(main_data):
     with st.expander("AI Variable Suggestions (RAG)", expanded=False):
         if 'rag_manager' in st.session_state and st.session_state.rag_manager.initialized:
             
-            use_specific = st.toggle("🔍 Specific Search", value=True)
+            use_specific = st.toggle("Specific Search", value=True)
 
             # -- ROW 1: Search & Strategy --
             col_input, col_mode = st.columns([1, 1], gap="medium")
@@ -1430,7 +1426,7 @@ def define_new_variables(main_data):
                             if len(filtered_cols) < len(cols_to_use) and len(filtered_cols) > 5:
                                 removed_count = len(cols_to_use) - len(filtered_cols)
                                 cols_to_use = filtered_cols
-                                filtering_msg = f"ℹ️ Automatically filtered {removed_count} irrelevant columns (IDs, unique strings) to improve AI focus."
+                                filtering_msg = f"Automatically filtered {removed_count} irrelevant columns (IDs, unique strings) to improve AI focus."
                         except Exception:
                             pass # Fallback to all columns if analysis fails
 
@@ -1634,7 +1630,7 @@ def define_new_variables(main_data):
                                     explanation = info.get('verbatim_extract') or info.get('inference_logic') or ''
 
                             st.markdown("---")
-                            st.markdown("**📚 Source Information**")
+                            st.markdown("**Source Information**")
                             
                             if source_type == "Document":
                                 st.info(f"**Source:** {citation}", icon="")
@@ -1649,7 +1645,7 @@ def define_new_variables(main_data):
                                 st.info(f"**Model Knowledge:** {explanation}", icon="")
                                 
                             else:
-                                st.info(explanation or citation, icon="ℹ️")
+                                st.info(explanation or citation)
 
                         if st.button("Apply to Editor", key=f"apply_var_{i}_{sugg.get('name', 'unknown')}", width='stretch'):
                             st.session_state.variable_name_input = sugg.get('name', '')
@@ -2175,7 +2171,7 @@ def compute_transformations(dataframe):
                 min_samples = st.slider("Min Samples", 2, 20, 5, key="cldb_min")
         
         st.info("""
-        💡 **Methodological Note:**
+        **Methodological Note:**
         - **Standardization**: Input variables will be automatically standardized (Z-score) to ensure equal weight in distance calculations.
         - **Missing Values**: Rows with ANY missing values in selected columns will be excluded from the analysis (Complete Case Analysis). Ensure you have imputed missing data beforehand if needed.
         """)
@@ -2193,7 +2189,7 @@ def compute_transformations(dataframe):
              if dataframe[columns].isnull().any().any():
                  st.error("**Input columns contain missing values (NaNs).**\n\n"
                           "Dimensionality reduction (PCA, t-SNE, etc.) and Clustering require complete data to function correctly.\n\n"
-                          "👉 **Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
+                          "**Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
                  return
 
         try:
@@ -2651,7 +2647,7 @@ def app():
                             doc = TraceDocumenter(trace_path)
                             buf = doc.generate_report()
                             st.download_button(
-                                label="📄 Download Report",
+                                label="Download Report",
                                 data=buf,
                                 file_name=f"report_{selected_dataset}.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -2690,7 +2686,7 @@ def app():
                         documenter = TraceDocumenter(tmp_path)
                         report_buffer = documenter.generate_report()
                         st.download_button(
-                            label="📄 Download Report",
+                            label="Download Report",
                             data=report_buffer,
                             file_name="uploaded_trace_report.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -2714,7 +2710,7 @@ def app():
                                 documenter = TraceDocumenter(trace_path)
                                 report_buffer = documenter.generate_report()
                                 st.download_button(
-                                    label="📄 Download Transformation Report (.docx)",
+                                    label="Download Transformation Report (.docx)",
                                     data=report_buffer,
                                     file_name=f"trace_report_{selected_data['session_id']}.docx",
                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -2726,9 +2722,9 @@ def app():
 
     # Main navigation tabs
     main_tab, impute_tab, define_var_tab = st.tabs([
-    "📥 Import External Data",
-    "🛠️ Handle Missing Data",
-    "⚙️ Create New Variables"
+    "Import External Data",
+    "Handle Missing Data",
+    "Create New Variables"
     ])
 
     if 'data' in st.session_state and st.session_state.data is not None:
@@ -2792,8 +2788,8 @@ def app():
     with impute_tab:
         
         tab_targeted, tab_global = st.tabs([
-            "🎯 Targeted Imputation (Custom Formula)", 
-            "🤖 Global Imputation (Auto-MICE/KNN/Mean)"
+            "Targeted Imputation (Custom Formula)", 
+            "Global Imputation (Auto-MICE/KNN/Mean)"
         ])
         
         # --- TAB 1: Targeted Imputation ---
@@ -2967,7 +2963,7 @@ def app():
                 )
             
             if categorical_imputation_method == numerical_imputation_method:
-                st.info(f"ℹ️ {categorical_imputation_method} has been chosen for both numerical and categorical columns, a unified approach will be used.")
+                st.info(f"{categorical_imputation_method} has been chosen for both numerical and categorical columns, a unified approach will be used.")
             
             col3, col4 = st.columns(2)
             with col3:

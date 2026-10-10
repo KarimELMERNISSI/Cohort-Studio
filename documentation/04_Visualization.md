@@ -1,10 +1,10 @@
-# 📊 Visualisation
+# Visualisation
 
 The **Visualisation** page provides an interactive plotting suite powered by Plotly. Charts include integrated statistical testing, flexible data controls, and customisation options for publication-ready figures.
 
 ---
 
-## 📈 Chart Types
+## Chart Types
 
 ### Distribution Plots
 
@@ -33,7 +33,7 @@ The **Visualisation** page provides an interactive plotting suite powered by Plo
 
 ---
 
-## 🧪 Integrated Statistical Testing
+## Integrated Statistical Testing
 
 Statistical tests are automatically applied and overlaid on applicable charts:
 
@@ -48,7 +48,7 @@ Significance brackets and p-values are rendered directly on the plot.
 
 ---
 
-## 🎛️ Data Controls
+## Data Controls
 
 | Control | Description |
 | --- | --- |
@@ -59,7 +59,7 @@ Significance brackets and p-values are rendered directly on the plot.
 
 ---
 
-## 🎨 Customisation
+## Customisation
 
 | Option | Description |
 | --- | --- |
@@ -70,7 +70,7 @@ Significance brackets and p-values are rendered directly on the plot.
 
 ---
 
-## 📤 Export
+## Export
 
 Charts can be exported in multiple formats:
 
@@ -82,8 +82,7 @@ Charts can be exported in multiple formats:
 
 ---
 
-## 💡 Tips
-
+## Practical Guidance
 - Use **Box Plots** with a grouping variable to quickly identify significant differences between subgroups.
 - Enable **statistical annotations** to get p-values directly on the figure — useful for presentations and publications.
 - **Bland-Altman** plots require exactly two measurement columns; ensure both are numerical and on the same scale.

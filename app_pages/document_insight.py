@@ -267,7 +267,7 @@ def app():
     username = st.session_state.get('username')
     saved_graphs = get_saved_graphs(username)
     if saved_graphs:
-        with st.sidebar.expander("📂 Load Saved Analysis", expanded=False):
+        with st.sidebar.expander("Load Saved Analysis", expanded=False):
             selected_load = st.selectbox("Select Analysis", [""] + saved_graphs, index=0)
             if selected_load and st.button("Load Graph"):
                 payload, err = load_graph(selected_load)
@@ -286,7 +286,7 @@ def app():
         docs = rag_manager.get_available_documents()
     
     if not docs and (not rag_manager or not rag_manager.initialized):
-        st.sidebar.warning("⚠️ AI System not initialized. You can only load saved graphs.")
+        st.sidebar.warning("AI System not initialized. You can only load saved graphs.")
     
     selected_docs = st.sidebar.multiselect("Choose Document(s)", docs, default=st.session_state.get("doc_graph_source", []))
     
@@ -298,7 +298,7 @@ def app():
         
     # Generate Button
     if rag_manager and rag_manager.initialized:
-        if st.sidebar.button("✨ Generate Graph", type="primary", disabled=len(selected_docs)==0):
+        if st.sidebar.button("Generate Graph", type="primary", disabled=len(selected_docs)==0):
             progress_bar = st.progress(0, text="Starting extraction...")
             def update_progress(p, t):
                 progress_bar.progress(p, text=t)
@@ -321,7 +321,7 @@ def app():
         
     # --- PERSISTENCE: SAVE ---
     if st.session_state.doc_graph_json:
-        with st.sidebar.expander("💾 Save Analysis", expanded=True):
+        with st.sidebar.expander("Save Analysis", expanded=True):
             save_name = st.text_input("Analysis Name", placeholder="e.g. Heart Failure Study")
             if st.button("Save Graph"):
                 if not save_name:
@@ -340,13 +340,13 @@ def app():
         # --- NEW: Filter by Document ---
         st.divider()
         all_graph_docs = sorted(list(set(st.session_state.doc_graph_source))) # or iterate citations to be safe
-        visible_docs = st.sidebar.multiselect("👁️ Filter Visible Documents", all_graph_docs, default=all_graph_docs)
+        visible_docs = st.sidebar.multiselect("Filter Visible Documents", all_graph_docs, default=all_graph_docs)
         
         # Apply Filtering
         filtered_graph = filter_graph_by_docs(st.session_state.doc_graph_json, visible_docs)
         
         # Create Tabs
-        tab_graph, tab_formulas, tab_coverage, tab_summary, tab_chat = st.tabs(["🕸️ Knowledge Graph", "🧮 Explicit Formulas", "📊 Dataset Coverage", "📝 Document Summary", "💬 Chat with Document"])
+        tab_graph, tab_formulas, tab_coverage, tab_summary, tab_chat = st.tabs(["Knowledge Graph", "Explicit Formulas", "Dataset Coverage", "Document Summary", "Chat with Document"])
         
         with tab_graph:
             col_graph, col_details = st.columns([2, 1])
@@ -398,7 +398,7 @@ def app():
                             st.markdown(f"**Description:** {node_data.get('description')}")
                             
                             st.divider()
-                            st.caption("📚 Documents & Citations:")
+                            st.caption("Documents & Citations:")
                             
                             citations = node_data.get('citations', [])
                             # Backward compatibility if single doc extraction exists in session
@@ -485,7 +485,7 @@ def app():
                         match_info = res[col]
                         found = match_info["match_found"]
                         
-                        icon = "✅" if found else "❌"
+                        icon = "Covered" if found else "Missing"
                         # Use container/expander for clean look
                         with st.expander(f"{icon} {col}", expanded=found):
                             if found:
@@ -511,7 +511,7 @@ def app():
             else:
                 for s in summaries:
                     with st.container(border=True):
-                        st.markdown(f"### 📄 {s.get('doc', 'Unknown Document')}")
+                        st.markdown(f"### {s.get('doc', 'Unknown Document')}")
                         st.caption(f"**Title**: {s.get('title', 'N/A')}")
                         st.caption(f"**Type**: {s.get('doc_type', 'N/A')}")
                         

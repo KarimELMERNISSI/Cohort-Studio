@@ -1,10 +1,10 @@
-# 🧠 Data Insight — Taxonomy (Knowledge Graph)
+# Data Insight — Taxonomy (Knowledge Graph)
 
 The **Data Insight** page generates, visualises, and refines a **Taxonomy** (knowledge graph) from your dataset's variables. The Taxonomy captures how variables relate to clinical domains, computed formulas, and broader scientific concepts — powered by RAG and the Gemini LLM.
 
 ---
 
-## 🌐 Taxonomy Overview
+## Taxonomy Overview
 
 A Taxonomy is a structured graph where:
 
@@ -19,7 +19,7 @@ Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from
 
 ---
 
-## ⚙️ Taxonomy Generation
+## Taxonomy Generation
 
 ### Steps
 
@@ -37,7 +37,7 @@ Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from
 
 ---
 
-## 🔧 Taxonomy Refinement
+## Taxonomy Refinement
 
 After initial generation, several tools are available to improve the taxonomy:
 
@@ -52,12 +52,11 @@ After initial generation, several tools are available to improve the taxonomy:
 - **Add Missing Concept Nodes** — The AI scans the taxonomy for concepts implied by the variables but not yet present (e.g. computed indices like HOMA-IR). Newly added concepts are automatically assigned to the most appropriate existing category.
 
 ### Manual Editing
-
 - Add, rename, or delete nodes and edges directly in the UI.
 
 ---
 
-## 🗂️ Taxonomy Versioning
+## Taxonomy Versioning
 
 | Action | Description |
 | --- | --- |
@@ -69,7 +68,7 @@ Versions are stored per-user and per-dataset for isolation.
 
 ---
 
-## 📊 Visualisation
+## Visualisation
 
 The taxonomy is rendered as an interactive graph using **yFiles**:
 
@@ -81,7 +80,7 @@ The taxonomy is rendered as an interactive graph using **yFiles**:
 
 ---
 
-## 📤 Export
+## Export
 
 | Format | Description |
 | --- | --- |
@@ -91,8 +90,7 @@ The taxonomy is rendered as an interactive graph using **yFiles**:
 
 ---
 
-## 💡 Tips
-
+## Practical Guidance
 - Upload relevant research papers **before** generating the taxonomy — the RAG system uses them to produce more accurate classifications.
 - Use the **Repair** function after any manual edits to ensure structural integrity.
 - Save a version before and after major refinements to allow easy rollback.

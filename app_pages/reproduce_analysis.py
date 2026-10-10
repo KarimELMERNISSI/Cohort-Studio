@@ -18,7 +18,7 @@ from utils.path_utils import normalize_path, resolve_path
 def app():
     
     # Option to upload trace directly
-    uploaded_trace = st.file_uploader("📂 Upload Trace File (.json)", type=["json"])
+    uploaded_trace = st.file_uploader("Upload Trace File (.json)", type=["json"])
     
     trace_data = None
     selected_trace_file = None
@@ -171,7 +171,7 @@ def app():
                 if suggested_folder:
                      help_text += f" Found likely candidate: `{suggested_folder}`"
 
-                artifact_folder_input = st.text_input("📂 Select Artifact Root Folder (Optional batch resolution)", 
+                artifact_folder_input = st.text_input("Select Artifact Root Folder (Optional batch resolution)", 
                                               value=suggested_folder if suggested_folder else "",
                                               help=help_text)
                 
@@ -179,14 +179,14 @@ def app():
                 if artifact_folder_input:
                      artifact_folder = artifact_folder_input.replace("\\", "/")
                      if artifact_folder != artifact_folder_input:
-                          st.caption(f"ℹ️ Auto-corrected path to: `{artifact_folder}`")
+                          st.caption(f"Auto-corrected path to: `{artifact_folder}`")
                 else:
                      artifact_folder = artifact_folder_input
 
                 # Check for remaining Windows path issues (e.g. C:)
                 if artifact_folder and (":/" in artifact_folder) and os.name == 'posix':
                     st.warning(
-                        "⚠️ You entered a Windows-style absolute path (e.g., `C:/...`). "
+                        "You entered a Windows-style absolute path (e.g., `C:/...`). "
                         "Since the app is running in Docker (Linux), it cannot access your host's `C:` drive directly.\n\n"
                         "**Solution:**\n"
                         "1. Ensure your artifacts are inside the project's `data/` folder (mounted to `/app/data`).\n"
@@ -196,7 +196,7 @@ def app():
                 if artifact_folder and os.path.exists(artifact_folder):
                     # Handle if user pointed to a file instead of a folder
                     if os.path.isfile(artifact_folder):
-                         st.info(f"ℹ️ You selected a file (`{os.path.basename(artifact_folder)}`). Using its parent directory as the artifact folder.")
+                         st.info(f"You selected a file (`{os.path.basename(artifact_folder)}`). Using its parent directory as the artifact folder.")
                          artifact_folder = os.path.dirname(artifact_folder)
 
                     st.success(f"Scanning folder: `{artifact_folder}`")
@@ -371,7 +371,7 @@ def app():
             documenter = TraceDocumenter(trace_data)
             report_buffer = documenter.generate_report()
             st.download_button(
-                label="📄 Download Transformation Report (.docx)",
+                label="Download Transformation Report (.docx)",
                 data=report_buffer,
                 file_name=f"trace_report_{session_id}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -411,16 +411,16 @@ def app():
                     # Show available data links (Artifacts)
                     artifacts = []
                     if step.get('output_dataset_path') and os.path.exists(step.get('output_dataset_path')):
-                        artifacts.append(f"✅ Snapshot: `{os.path.basename(step.get('output_dataset_path'))}`")
+                        artifacts.append(f"Snapshot: `{os.path.basename(step.get('output_dataset_path'))}`")
                     
                     if step.get('stats_cat_path') and os.path.exists(step.get('stats_cat_path')):
-                        artifacts.append("📊 Categorical Stats")
+                        artifacts.append("Categorical Stats")
                     
                     if step.get('stats_num_path') and os.path.exists(step.get('stats_num_path')):
-                        artifacts.append("📈 Numerical Stats")
+                        artifacts.append("Numerical Stats")
                         
                     if step.get('corr_matrix_path') and os.path.exists(step.get('corr_matrix_path')):
-                        artifacts.append("📉 Correlation Matrix")
+                        artifacts.append("Correlation Matrix")
                     
                     if artifacts:
                         st.markdown(" | ".join(artifacts))

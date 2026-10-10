@@ -42,7 +42,7 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     for directory in search_dirs:
         candidate_path = os.path.join(directory, filename)
         if os.path.exists(candidate_path):
-            st.toast(f"Build-in path resolution found file: {candidate_path} (original: {original_path})", icon="🧠")
+            st.toast(f"Build-in path resolution found file: {candidate_path} (original: {original_path})", icon=None)
             return candidate_path
             
     return None

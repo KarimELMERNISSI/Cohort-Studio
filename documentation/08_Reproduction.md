@@ -1,10 +1,10 @@
-# 🔁 Reproduce Analysis
+# Reproduce Analysis
 
 The **Reproduce Analysis** page enables full reproducibility of data transformation sessions. Every analysis step is automatically recorded in a trace file, which can be replayed to recreate results or generate documentation reports.
 
 ---
 
-## 📋 Trace Management
+## Trace Management
 
 ### What Is a Trace?
 
@@ -19,14 +19,13 @@ A **trace** is a JSON file that captures every transformation applied during a s
 | **Steps** | Ordered list of transformations with parameters, descriptions, and snapshot paths. |
 
 ### Viewing Traces
-
 - Browse available traces from past sessions.
 - Select a specific trace to inspect its steps, parameters, and outputs.
 - Download the raw JSON trace file for external archiving.
 
 ---
 
-## ▶️ Replay Engine
+## Replay Engine
 
 Replay a trace to reproduce the exact sequence of transformations.
 
@@ -40,20 +39,18 @@ Replay a trace to reproduce the exact sequence of transformations.
 ### Path Resolution
 
 Traces include file paths to dataset snapshots. The replay engine handles **cross-platform portability**:
-
 - Relative paths are resolved against the project root.
 - Absolute paths are adapted to the current system.
 - Missing files are reported with clear error messages.
 
 ### Step-by-Step Execution
-
 - Steps are replayed sequentially with progress indication.
 - Each step shows: function name, parameters, description, and result.
 - On error, the replay pauses and reports which step failed and why.
 
 ---
 
-## 📄 Automated Reporting
+## Automated Reporting
 
 Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
@@ -73,7 +70,7 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
 ---
 
-## 💡 Tips
+## Practical Guidance
 
 - **Save traces regularly** — they are your audit trail for data provenance.
 - Use **Full Replay** when sharing analyses with collaborators who may not have the original dataset.

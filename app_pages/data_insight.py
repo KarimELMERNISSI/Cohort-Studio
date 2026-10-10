@@ -616,13 +616,13 @@ def app():
     rag_active = rag_manager is not None and rag_manager.initialized
 
     # --- 2. Sidebar Controls ---
-    st.sidebar.header("📂 Data Management")
+    st.sidebar.header("Data Management")
     
     # Mode Indicator
     if rag_active:
-        st.sidebar.success("🟢 AI System Active")
+        st.sidebar.success("AI System Active")
     else:
-        st.sidebar.warning("🔴 Offline Mode")
+        st.sidebar.warning("Offline Mode")
 
     # Persistence (Save/Load)
     col_p1, col_p2 = st.sidebar.columns(2)
@@ -631,7 +631,7 @@ def app():
     # Load Logic
     username = st.session_state.get('username')
     if not username:
-        st.sidebar.error("⚠️ No user detected. Please login.")
+        st.sidebar.error("No user detected. Please login.")
     avail_versions = get_taxonomy_versions(username)
     
     if avail_versions:
@@ -642,7 +642,7 @@ def app():
         selected_v_label = col_p1.selectbox("Select Version", v_options, index=0, label_visibility="collapsed")
         target_path = v_paths[selected_v_label]
         
-        if col_p1.button("📂 Load"):
+        if col_p1.button("Load"):
             success, info = load_and_repair_taxonomy(target_path, rag_manager if rag_active else None)
             
             if success:
@@ -684,7 +684,7 @@ def app():
             next_v = current_versions[0][0] + 1
         
         # Save Controls
-        if col_p2.button(f"💾 Save New (v{next_v})"):
+        if col_p2.button(f"Save New (v{next_v})"):
             try:
                 # User Isolation: Save to user folder
                 user_dir = get_user_taxonomy_dir(username)
@@ -711,7 +711,7 @@ def app():
         if loaded_path and os.path.exists(loaded_path):
             current_v_name = os.path.basename(loaded_path)
             # Use a simpler label or icon to save space
-            if col_p2.button("⚠️ Overwrite"):
+            if col_p2.button("Overwrite"):
                 try:
                     with open(loaded_path, "w") as f:
                         json.dump(taxonomy, f, indent=2)
@@ -725,12 +725,12 @@ def app():
                 except Exception as e:
                     st.sidebar.error(f"Overwrite failed: {e}")
     else:
-        col_p2.button("💾 Save", disabled=True)
+        col_p2.button("Save", disabled=True)
 
     st.sidebar.divider()
     
     # --- 4. Persistent Graph Actions ---
-    with st.sidebar.expander("⚡ Graph Actions", expanded=True):
+    with st.sidebar.expander("Graph Actions", expanded=True):
         
         # A. Enrichment (Only if taxonomy exists)
         if taxonomy:
@@ -910,7 +910,7 @@ def app():
     # Case B: Taxonomy Exists (Render Dashboard)
     
     # --- Sidebar Filters & Search ---
-    st.sidebar.header("🔍 Explore Data")
+    st.sidebar.header("Explore Data")
     search_query = st.sidebar.text_input("Search Variables", placeholder="Name...").lower()
     
     # Formula Search (Added here for consistency)
@@ -947,14 +947,14 @@ def app():
     
     # Export Button
     st.sidebar.download_button(
-        label="📥 Export JSON",
+        label="Export JSON",
         data=json.dumps(taxonomy, indent=2),
         file_name="variable_taxonomy.json",
         mime="application/json"
     )
 
     # --- Main Content Tabs ---
-    tab_graph, tab_overview, tab_details, tab_formulas, tab_clustering, tab_refine = st.tabs(["🕸️ Knowledge Graph", "📋 Overview", "🔍 Variable Details", "🧮 Formulas Details", "🔬 Population Clustering", "🛠️ Refinement"])
+    tab_graph, tab_overview, tab_details, tab_formulas, tab_clustering, tab_refine = st.tabs(["Knowledge Graph", "Overview", "Variable Details", "Formulas Details", "Population Clustering", "Refinement"])
     
     # --- TAB 1: OVERVIEW ---
     with tab_overview:
@@ -979,7 +979,7 @@ def app():
                 "Standard Name": data.get('standard_name', 'N/A'),
                 "Category": data.get('category', 'N/A'),
                 "Formulas": f_count,
-                "Context": "✅" if data.get('clinical_usage') else "❌"
+                "Context": "Documented" if data.get('clinical_usage') else "None"
             })
         
         st.dataframe(
@@ -1002,7 +1002,7 @@ def app():
 
         if candidates or formulas:
             st.divider()
-            st.markdown("### ✨ Enrichment Proposals")
+            st.markdown("### Enrichment Proposals")
             st.info("The AI has identified potential additions. Review and merge.")
             
             selected_vars = []
@@ -1042,7 +1042,7 @@ def app():
             
             c_merge, c_discard = st.columns([1, 4])
             
-            if c_merge.button("✅ Merge Selected", type="primary"):
+            if c_merge.button("Merge Selected", type="primary"):
                 # Filter Selected (already done above if candidates exist)
                 
                 if not selected_vars:
@@ -1093,7 +1093,7 @@ def app():
                     time.sleep(1)
                     st.rerun()
             
-            if c_discard.button("❌ Discard All"):
+            if c_discard.button("Discard All"):
                 st.session_state.enrichment_candidates = {}
                 st.rerun()
 
@@ -1113,12 +1113,12 @@ def app():
                     st.caption(f"Original Name: `{selected_var_name}`")
                     st.markdown(f"**Category:** `{var_data.get('category', 'Uncategorized')}`")
                     st.divider()
-                    st.markdown("### 📝 Definition")
+                    st.markdown("### Definition")
                     st.info(var_data.get('description', 'No description available.'))
                     
                     c1, c2 = st.columns(2)
                     with c1:
-                        st.markdown("### 🧮 Related Formulas")
+                        st.markdown("### Related Formulas")
                         formula_ids = var_data.get('related_formula_ids', [])
                         legacy_formulas = var_data.get('related_formulas', [])
                         
@@ -1135,7 +1135,7 @@ def app():
                         else:
                             st.caption("No known formulas.")
                     with c2:
-                        st.markdown("### 🏥 Clinical Usage")
+                        st.markdown("### Clinical Usage")
                         usage = var_data.get('clinical_usage', "")
                         if usage:
                             st.markdown(usage)
@@ -1152,7 +1152,7 @@ def app():
             with st.expander("Legend", expanded=False):
                 st.markdown("""
                 **Nodes:**  
-                🔵 **Input Var** 🟡 **Derived Var** 🛑 **Formula** ⬜ **Category**  
+                **Input Var** · **Derived Var** · **Formula** · **Category**  
                 <span style='color:#AECBFA'><b>●</b></span> **Ext. Input** <span style='color:#FEEFC3'><b>●</b></span> **Ext. Derived**
 
                 **Edges:**  
@@ -1287,7 +1287,7 @@ def app():
 
                 if selected_ids:
                     st.divider()
-                    st.markdown(f"### 🔎 Selection Details ({len(selected_ids)} items)")
+                    st.markdown(f"### Selection Details ({len(selected_ids)} items)")
                     
                     for sel_id in selected_ids:
                         with st.expander(f"Item: {sel_id}", expanded=True):
@@ -1344,11 +1344,11 @@ def app():
                                             
                                             c_in, c_out = st.columns(2)
                                             with c_in:
-                                                st.markdown("**📥 Inputs**")
+                                                st.markdown("**Inputs**")
                                                 for inv in f_data.get('input_variables', []):
                                                     st.markdown(f"- `{inv}`")
                                             with c_out:
-                                                st.markdown("**📤 Derived Variable**")
+                                                st.markdown("**Derived Variable**")
                                                 st.markdown(f"`{f_data.get('output_variable', 'Unknown')}`")
                                         else:
                                             # Fallback to Node Props
@@ -1409,11 +1409,11 @@ def app():
                 
                 c_in, c_out = st.columns(2)
                 with c_in:
-                    st.markdown("**📥 Inputs**")
+                    st.markdown("**Inputs**")
                     for inv in sel_fdata.get('input_variables', []):
                         st.markdown(f"- `{inv}`")
                 with c_out:
-                    st.markdown("**📤 Derived Variable**")
+                    st.markdown("**Derived Variable**")
                     st.markdown(f"`{sel_fdata.get('output_variable', 'Unknown')}`")
                 
                 if sel_fdata.get('references'):
@@ -1437,7 +1437,7 @@ def app():
             
             ---
             
-            #### 🎯 Clustering Algorithms
+            #### Clustering Algorithms
             
             | Method | How it Works | Best For | Output |
             |:-------|:-------------|:---------|:-------|
@@ -1459,13 +1459,13 @@ def app():
             
             ---
             
-            #### 📐 Dimensionality Reduction Methods
+            #### Dimensionality Reduction Methods
             
             | Method | What it Preserves | Speed | When to Use |
             |:-------|:------------------|:------|:------------|
-            | **PCA** | Global structure & variance | ⚡ Very fast | First exploration, interpretable axes |
-            | **t-SNE** | Local neighborhoods | 🐢 Slow | Visualizing clusters (< 3000 samples) |
-            | **UMAP** | Local + some global | 🚀 Fast | Large datasets, better than t-SNE |
+            | **PCA** | Global structure & variance | Very fast | First exploration, interpretable axes |
+            | **t-SNE** | Local neighborhoods | Slow | Visualizing clusters (< 3000 samples) |
+            | **UMAP** | Local + some global | Fast | Large datasets, better than t-SNE |
             
             ##### Key Differences
             
@@ -1475,7 +1475,7 @@ def app():
             
             ---
             
-            #### ⚠️ Important Caveats
+            #### Important Caveats
             
             1. **Standardization**: Variables are auto-standardized (mean=0, SD=1) before analysis
             2. **Missing values**: Rows with any missing value are dropped
@@ -1497,7 +1497,7 @@ def app():
                 st.error("Need at least 2 numeric variables for clustering.")
             else:
                 # Configuration Panel
-                st.markdown("### ⚙️ Configuration")
+                st.markdown("### Configuration")
                 
                 with st.expander("Analysis Configuration", expanded=True):
                     col_cfg1, col_cfg2 = st.columns(2)
@@ -1506,7 +1506,7 @@ def app():
                         # Combine lists for selection
                         all_candidates = numeric_cols + categorical_cols
                         selected_vars = st.multiselect(
-                            "📊 Select Analysis Variables",
+                            "Select Analysis Variables",
                             options=all_candidates,
                             default=numeric_cols[:min(3, len(numeric_cols))],
                             help="Choose numeric and categorical variables to include."
@@ -1514,14 +1514,14 @@ def app():
                         st.caption(f"Selected: {len(selected_vars)} variables")
                         
                         dim_method = st.selectbox(
-                            "📐 Dimensionality Reduction",
+                            "Dimensionality Reduction",
                             ["PCA", "FAMD", "t-SNE", "UMAP"],
                             help="Method to project data to 2D for visualization."
                         )
                         
                     with col_cfg2:
                         cluster_method = st.selectbox(
-                            "🎯 Clustering Algorithm",
+                            "Clustering Algorithm",
                             ["K-Means", "DBSCAN", "Gaussian Mixture"],
                             help="Algorithm to identify subgroups."
                         )
@@ -1536,7 +1536,7 @@ def app():
                             n_clusters = st.slider("Number of Components", 2, 10, 3)
                         
                         color_by = st.selectbox(
-                            "🎨 Color by (optional)",
+                            "Color by (optional)",
                             ["Cluster"] + categorical_cols[:10],
                             help="Color points by cluster or existing group variable."
                         )
@@ -1627,7 +1627,7 @@ def app():
                         valid_idx = results['valid_idx']
                         
                         st.markdown("---")
-                        st.markdown("### 📊 Results")
+                        st.markdown("### Results")
                         
                         # Visualization tabs
                         viz_tabs = st.tabs(["Scatter Plot", "Cluster Profiles", "Optimal K"])
@@ -1655,7 +1655,7 @@ def app():
                             if used_features:
                                 dropped = list(set(selected_vars) - set(used_features))
                                 if dropped:
-                                    st.info(f"ℹ️ Note: Columns excluded from projection: {', '.join(dropped)}")
+                                    st.info(f"Note: Columns excluded from projection: {', '.join(dropped)}")
 
                             # Axis labels
                             dim_info = results['dim_info']
@@ -1797,13 +1797,13 @@ def app():
                                     - 3-5 clusters often sufficient
                                     """)
                             else:
-                                st.info("ℹ️ DBSCAN automatically determines the number of clusters based on density.")
+                                st.info("DBSCAN automatically determines the number of clusters based on density.")
                                 st.markdown(f"""
                                 **DBSCAN Results:**
                                 - Clusters found: **{results['clust_info']['n_clusters']}**
                                 - Noise points: **{results['clust_info']['n_noise']}** ({results['clust_info']['noise_ratio']:.1%})
                                 
-                                💡 Adjust `eps` and `min_samples` to tune clustering.
+                                Adjust `eps` and `min_samples` to tune clustering.
                                 """)
             
     # --- TAB 6: REFINEMENT ---
@@ -1897,7 +1897,7 @@ def app():
                         st.warning("Please enter a concept name.")
                     else:
                         # Create a container for progress details
-                        status_container = st.status("🤖 AI Agent Working...", expanded=True)
+                        status_container = st.status("AI Agent Working...", expanded=True)
                         p_bar = status_container.progress(0, text="Initializing...")
                         
                         def update_progress(p, msg):
@@ -1932,7 +1932,7 @@ def app():
                             progress_callback=update_progress
                         )
                         
-                        status_container.update(label="✅ Generation Complete!", state="complete", expanded=False)
+                        status_container.update(label="Generation Complete!", state="complete", expanded=False)
                             
                         if err:
                             st.error(err)
@@ -1957,7 +1957,7 @@ def app():
                     if not s_list:
                         st.info("No suggestions returned.")
                     else:
-                        st.markdown("### 🤖 Suggested Concepts")
+                        st.markdown("### Suggested Concepts")
                         
                         for idx, item in enumerate(s_list):
                             with st.container(border=True):

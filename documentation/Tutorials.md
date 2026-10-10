@@ -1,4 +1,4 @@
-# 📘 Tutorials
+# Tutorials
 
 Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
@@ -13,8 +13,8 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 3. Click **Upload Dataset** and select your file (CSV, Excel, or Parquet).
 4. Review the **Dataset Statistics** panel to check shape, types, and missing values.
 5. Open the **Column Renaming** section:
-   - For AI-assisted renaming, click **Generate AI Suggestions** and review the proposed names.
-   - For manual renaming, edit names directly in the mapping table.
+- For AI-assisted renaming, click **Generate AI Suggestions** and review the proposed names.
+- For manual renaming, edit names directly in the mapping table.
 6. Click **Apply Renaming** to update the column names.
 7. In the sidebar, click **Save Dataset** to create your first version.
 
@@ -27,17 +27,17 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 1. Go to **Data Validation & Monitoring**.
 2. Review the **Data Quality Score** at the top of the page.
 3. In the **Clinical Anomalies** tab:
-   - Review flagged values.
-   - Decide whether to correct, remove, or retain them.
+- Review flagged values.
+- Decide whether to correct, remove, or retain them.
 4. In the **Inclusion Criteria** tab:
-   - Create a mask family (e.g. "Adult Patients").
-   - Add masks (e.g. `Age >= 18`).
-   - Apply the family to filter your cohort.
+- Create a mask family (e.g. "Adult Patients").
+- Add masks (e.g. `Age >= 18`).
+- Apply the family to filter your cohort.
 5. In the **Outlier Detection** tab:
-   - Select a detection method (e.g. IQR).
-   - Choose columns to analyse.
-   - Select a handling strategy (e.g. Tag).
-   - Review the outlier summary and visualisation.
+- Select a detection method (e.g. IQR).
+- Choose columns to analyse.
+- Select a handling strategy (e.g. Tag).
+- Review the outlier summary and visualisation.
 6. Save the cleaned dataset as a new version.
 
 ---
@@ -48,15 +48,15 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 1. Go to **Data Enrichment** → **Handle Missing Data** tab.
 2. **Targeted Imputation**:
-   - Select a column with missing values.
-   - Click **Generate Formula Suggestions** to get AI-powered formulas.
-   - Review suggestions and click **Use Formula** on the best option.
-   - Click **Apply Targeted Imputation**.
+- Select a column with missing values.
+- Click **Generate Formula Suggestions** to get AI-powered formulas.
+- Review suggestions and click **Use Formula** on the best option.
+- Click **Apply Targeted Imputation**.
 3. **Global Imputation**:
-   - Review the missing data overview.
-   - Select a numerical method (e.g. KNN) and a categorical method (e.g. Most Frequent).
-   - Click **Apply Global Imputation**.
-   - Review the imputation mask to see which values were filled.
+- Review the missing data overview.
+- Select a numerical method (e.g. KNN) and a categorical method (e.g. Most Frequent).
+- Click **Apply Global Imputation**.
+- Review the imputation mask to see which values were filled.
 4. Save the imputed dataset.
 
 ---
@@ -67,18 +67,18 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 1. Go to **Data Enrichment** → **Create New Variables** tab.
 2. **Encoding**:
-   - Select "Encoding" as transformation type.
-   - Choose "One-Hot Encoding" and select categorical columns.
-   - Set a naming pattern and click **Apply Transformation**.
+- Select "Encoding" as transformation type.
+- Choose "One-Hot Encoding" and select categorical columns.
+- Set a naming pattern and click **Apply Transformation**.
 3. **Dimensionality Reduction**:
-   - Select "Dimensionality Reduction" → "PCA".
-   - Choose numerical columns and set the number of components.
-   - Click **Apply Transformation** to create PCA columns.
+- Select "Dimensionality Reduction" → "PCA".
+- Choose numerical columns and set the number of components.
+- Click **Apply Transformation** to create PCA columns.
 4. **Clustering**:
-   - Select "Clustering" → "K-Means".
-   - Choose the columns to cluster on (e.g. PCA components).
-   - Set K (number of clusters).
-   - Click **Apply Transformation** to create a cluster label column.
+- Select "Clustering" → "K-Means".
+- Choose the columns to cluster on (e.g. PCA components).
+- Set K (number of clusters).
+- Click **Apply Transformation** to create a cluster label column.
 5. Visualise the clusters using the **Visualisation** page (scatter plot coloured by cluster label).
 
 ---
@@ -92,12 +92,12 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 3. Optionally upload research PDFs for richer context.
 4. Wait for the AI to analyse your variables and generate the graph.
 5. Explore the interactive graph:
-   - Click nodes to view details.
-   - Use the search bar to find specific variables.
+- Click nodes to view details.
+- Use the search bar to find specific variables.
 6. **Refine** the taxonomy:
-   - Use **Repair** to fix structural issues.
-   - Use **Enrich** to add AI descriptions to nodes.
-   - Use **Add Missing Concepts** to fill in implied clinical indices.
+- Use **Repair** to fix structural issues.
+- Use **Enrich** to add AI descriptions to nodes.
+- Use **Add Missing Concepts** to fill in implied clinical indices.
 7. **Save** the taxonomy as a named version.
 
 ---
@@ -109,16 +109,16 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 1. Go to **Documents Insight**.
 2. **Upload PDFs** of relevant research papers.
 3. In the **Summariser** tab:
-   - View structured summaries (objective, methods, findings, variables) for each paper.
+- View structured summaries (objective, methods, findings, variables) for each paper.
 4. In the **Knowledge Graph** tab:
-   - Explore extracted concepts and their relationships across papers.
-   - Filter by document to focus on specific papers.
+- Explore extracted concepts and their relationships across papers.
+- Filter by document to focus on specific papers.
 5. In the **Chat** tab:
-   - Ask questions like *"What variables are associated with cardiovascular risk?"*
-   - Review answers with source citations.
+- Ask questions like *"What variables are associated with cardiovascular risk?"*
+- Review answers with source citations.
 6. In the **Coverage** tab:
-   - Check which of your dataset columns are discussed in the literature.
-   - Identify gaps and opportunities.
+- Check which of your dataset columns are discussed in the literature.
+- Identify gaps and opportunities.
 
 ---
 
@@ -128,19 +128,19 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 1. Go to **Epidemiology & Hypothesis**.
 2. **Hypothesis Testing**:
-   - Select an outcome variable and a comparison variable.
-   - The system auto-recommends an appropriate test.
-   - Review results: test statistic, p-value, effect size, and interpretation.
+- Select an outcome variable and a comparison variable.
+- The system auto-recommends an appropriate test.
+- Review results: test statistic, p-value, effect size, and interpretation.
 3. **ANCOVA** (if needed):
-   - Select outcome, group variable, and covariates.
-   - Review adjusted means and covariate effects.
+- Select outcome, group variable, and covariates.
+- Review adjusted means and covariate effects.
 4. **Power Analysis**:
-   - Enter the expected effect size and desired power.
-   - View the required sample size.
-   - Inspect the power curve.
+- Enter the expected effect size and desired power.
+- View the required sample size.
+- Inspect the power curve.
 5. **Z-Score Standardisation**:
-   - Select a variable and provide reference values (or use sample-based).
-   - The Z-score column is appended to your dataset.
+- Select a variable and provide reference values (or use sample-based).
+- The Z-score column is appended to your dataset.
 
 ---
 
@@ -153,11 +153,11 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 3. Choose the outcome variable and a grouping variable.
 4. The system automatically applies the appropriate statistical test and overlays significance.
 5. Customise:
-   - Set a title, axis labels, and colour palette.
-   - Adjust font sizes for publication requirements.
+- Set a title, axis labels, and colour palette.
+- Adjust font sizes for publication requirements.
 6. **Export**:
-   - Click the camera icon in the Plotly toolbar for PNG/SVG.
-   - Use the HTML export for interactive sharing.
+- Click the camera icon in the Plotly toolbar for PNG/SVG.
+- Use the HTML export for interactive sharing.
 
 ---
 
@@ -183,15 +183,15 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 1. Log in with an **Administrator** account.
 2. Go to **Users Management** (sidebar).
 3. **Activate a New User**:
-   - Find the user with "Pending" status in the list.
-   - Click the **Activate** button.
-   - The user status changes to "Active" and they can now log in.
+- Find the user with "Pending" status in the list.
+- Click the **Activate** button.
+- The user status changes to "Active" and they can now log in.
 4. **Deactivate a User**:
-   - Click **Deactivate** to temporarily revoke access.
+- Click **Deactivate** to temporarily revoke access.
 5. **Reset Password**:
-   - Click **Reset Password** to generate a temporary password for the user.
+- Click **Reset Password** to generate a temporary password for the user.
 6. **Delete User**:
-   - Click **Delete** to permanently remove the account and their trace history.
+- Click **Delete** to permanently remove the account and their trace history.
 
 ---
 
@@ -201,12 +201,12 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 1. Go to **RAG Quality Monitor**.
 2. **Overview**:
-   - Check the "Knowledge Base Health" for total documents and chunks.
-   - Ensure "Embedding Dimension" matches your model (e.g. 1536 for OpenAI).
+- Check the "Knowledge Base Health" for total documents and chunks.
+- Ensure "Embedding Dimension" matches your model (e.g. 1536 for OpenAI).
 3. **Evaluation**:
-   - Go to the **Run Evaluation** tab.
-   - Enter a test question (e.g. "How is BMI calculated?").
-   - The system retrieves context and generates an answer.
-   - Rate the answer's **Accuracy** and **Faithfulness**.
+- Go to the **Run Evaluation** tab.
+- Enter a test question (e.g. "How is BMI calculated?").
+- The system retrieves context and generates an answer.
+- Rate the answer's **Accuracy** and **Faithfulness**.
 4. **Review Metrics**:
-   - Check the aggregate scores to see if the RAG system needs re-indexing or prompt tuning.
+- Check the aggregate scores to see if the RAG system needs re-indexing or prompt tuning.
