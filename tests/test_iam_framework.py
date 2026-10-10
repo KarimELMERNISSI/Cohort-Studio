@@ -203,6 +203,108 @@ class TestBetterAuthIAMProvider:
         assert ok is True
         assert "created" in msg.lower()
 
+    @patch("requests.Session.get")
+    def test_verify_session_endpoint(self, mock_get: MagicMock) -> None:
+        """Tests session token verification with Better Auth get-session."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "user": {
+                "username": "dr_curie",
+                "email": "curie@rad.org",
+                "role": "researcher",
+                "isActive": True,
+            }
+        }
+        mock_get.return_value = mock_resp
+
+        provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth", cache_ttl_seconds=60)
+        res = provider.verify_session("valid_token_abc")
+        assert res.success is True
+        assert res.user is not None
+        assert res.user.username == "dr_curie"
+
+        # Subsequent check hits cache
+        res_cached = provider.verify_session("valid_token_abc")
+        assert res_cached.success is True
+        assert mock_get.call_count == 1
+
+    @patch("requests.Session.get")
+    def test_get_and_list_users_endpoints(self, mock_get: MagicMock) -> None:
+        """Tests admin get_user and list_users via Better Auth."""
+        provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+
+        # Mock list_users
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "users": [
+                {"username": "admin", "role": "admin", "isActive": True},
+                {"username": "user1", "role": "researcher", "isActive": False},
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        users = provider.list_users()
+        assert len(users) == 2
+        assert users[0].role == UserRole.ADMIN
+        assert users[1].is_active is False
+
+        # Mock get_user
+        mock_get.return_value.json.return_value = {"username": "admin", "role": "admin", "isActive": True}
+        user = provider.get_user("admin")
+        assert user is not None
+        assert user.username == "admin"
+
+    @patch("requests.Session.post")
+    def test_activate_and_deactivate_endpoints(self, mock_post: MagicMock) -> None:
+        """Tests admin account activation and deactivation endpoints."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_post.return_value = mock_resp
+
+        provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+
+        act_ok, _ = provider.activate_user("analyst_jane")
+        assert act_ok is True
+
+        deact_ok, _ = provider.deactivate_user("analyst_jane")
+        assert deact_ok is True
+
+        # Admin cannot be deactivated
+        admin_deact_ok, _ = provider.deactivate_user("admin")
+        assert admin_deact_ok is False
+
+    @patch("requests.Session.delete")
+    @patch("requests.Session.post")
+    def test_delete_and_password_update_endpoints(
+        self, mock_post: MagicMock, mock_delete: MagicMock
+    ) -> None:
+        """Tests user account deletion and admin password update."""
+        mock_post.return_value = MagicMock(status_code=200)
+        mock_delete.return_value = MagicMock(status_code=200)
+
+        provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+
+        upd_ok, _ = provider.update_password("user_bob", "NewSecretPass!")
+        assert upd_ok is True
+
+        del_ok, _ = provider.delete_user("user_bob")
+        assert del_ok is True
+
+        # Admin cannot be deleted
+        admin_del_ok, _ = provider.delete_user("admin")
+        assert admin_del_ok is False
+
+    @patch("requests.Session.get")
+    def test_health_check_endpoint(self, mock_get: MagicMock) -> None:
+        """Tests Better Auth health check ping."""
+        mock_get.return_value = MagicMock(status_code=200)
+        provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+        healthy, msg = provider.health_check()
+        assert healthy is True
+        assert "healthy" in msg.lower()
+
 
 class TestIAMManager:
     """Test suite for IAMManager facade and environment configuration."""

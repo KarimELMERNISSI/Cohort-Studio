@@ -30,10 +30,12 @@ def normality_test(column, method='dagostino'):
             stat, p_value = stats.normaltest(column.dropna())
         
         elif method == 'ks':
-            stat, p_value = stats.kstest(
-                column.dropna(), 'norm', 
-                args=(np.mean(column.dropna()), np.std(column.dropna()))
-            )
+            clean_col = column.dropna()
+            std_val = float(np.std(clean_col))
+            if std_val == 0 or len(clean_col) == 0:
+                return np.nan
+            standardized = (clean_col - float(np.mean(clean_col))) / std_val
+            stat, p_value = stats.kstest(standardized, 'norm')
         
         elif method == 'anderson':
             result = stats.anderson(column.dropna(), dist='norm')

@@ -46,19 +46,19 @@ def execute_trace_pipeline(
     if not resolved_source:
         return None, f"Source file not found: {source_dataset}"
 
-    db_manager = DBManager()
-    if hasattr(db_manager, "load_dataset"):
-        df, msg = db_manager.load_dataset(resolved_source)
-    else:
-        try:
-            if resolved_source.endswith(".csv"):
-                df, msg = pd.read_csv(resolved_source), "Success"
-            elif resolved_source.endswith(".xlsx"):
-                df, msg = pd.read_excel(resolved_source), "Success"
-            else:
-                df, msg = None, f"Unsupported file extension: {resolved_source}"
-        except Exception as read_err:
-            df, msg = None, str(read_err)
+    try:
+        lower_src = resolved_source.lower()
+        if lower_src.endswith(".csv"):
+            df, msg = pd.read_csv(resolved_source), "Success"
+        elif lower_src.endswith((".xlsx", ".xls")):
+            df, msg = pd.read_excel(resolved_source), "Success"
+        elif lower_src.endswith(".parquet"):
+            df, msg = pd.read_parquet(resolved_source), "Success"
+        else:
+            db_manager = DBManager()
+            df, msg = db_manager.load_dataset(resolved_source)
+    except Exception as read_err:
+        df, msg = None, str(read_err)
 
     if df is None:
         return None, f"Failed to load source dataset ({source_dataset}): {msg}"
@@ -88,17 +88,18 @@ def execute_trace_pipeline(
                     enrichment_df = pd.read_csv(resolved_enrich)
 
                 identifier = params.get("identifier") or params.get("left_id_names")
-                identifier_set = {identifier} if isinstance(identifier, str) else set(identifier if identifier else [])
+                id_list = [identifier] if isinstance(identifier, str) else list(identifier if identifier else [])
+                identifier_set = set(id_list)
                 additional_columns = list(set(enrichment_df.columns) - identifier_set)
 
                 current_df = eed.add_data(
                     df=current_df,
                     additional_df=enrichment_df,
-                    left_id_names=identifier,
-                    right_id_names=identifier,
+                    left_id_names=id_list,
+                    right_id_names=id_list,
                     additional_cols=additional_columns,
-                    strategy=params.get("strategy"),
-                    conflict_resolution=params.get("conflict_resolution"),
+                    strategy=params.get("strategy", "left"),
+                    conflict_resolution=params.get("conflict_resolution", "keep"),
                 )
 
             elif func_name == "imputation":

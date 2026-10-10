@@ -94,6 +94,12 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
         DataFrame: The enriched DataFrame or the original if an error occurs.
     """
     try:
+        # Normalize single string identifiers to lists
+        if isinstance(left_id_names, str):
+            left_id_names = [left_id_names]
+        if isinstance(right_id_names, str):
+            right_id_names = [right_id_names]
+
         # Set default conflict_resolution if not provided
         if conflict_resolution is None:
             conflict_resolution = 'keep'
