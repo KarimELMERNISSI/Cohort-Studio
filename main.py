@@ -39,10 +39,19 @@ def lazy_page(module_name: str, func_name: str = "app") -> Callable:
 import time
 
 from manage.db_manager import DBManager
+from manage.iam import get_iam_manager
 
 
 def check_auth():
-    """Manages authentication with sidebar login/signup."""
+    """Manages authentication with modular IAM subsystem."""
+    iam = get_iam_manager()
+
+    # If IAM is explicitly disabled, bypass authentication
+    if not iam.is_enabled:
+        st.session_state.user_authenticated = True
+        st.session_state.username = "local_researcher"
+        return True
+
     if "user_authenticated" not in st.session_state:
         st.session_state.user_authenticated = False
         st.session_state.username = None

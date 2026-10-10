@@ -10,6 +10,9 @@ import pandas as pd
 
 from utils.data_paths import get_datasets_dir, get_stats_dir
 
+from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
+from manage.iam.schemas import UserCredentials
+
 logger = logging.getLogger(__name__)
 
 class DBManager:
@@ -20,230 +23,60 @@ class DBManager:
         self.db_path: str = os.path.join(self.dataset_dir, "cohort_data.duckdb")
         self.user_db_path: str = os.path.join(self.dataset_dir, "users.duckdb")
         
-        # Directories are created by get_*_dir() functions
-        
-        # Initialize User DB
-        self.init_user_db()
+        # Modular IAM Provider (Local DuckDB default)
+        self.iam_provider: LocalDuckDBIAMProvider = LocalDuckDBIAMProvider(db_path=self.user_db_path)
         
         # Don't keep a persistent connection - open/close as needed
 
     def _get_user_connection(self):
         """Get a new DuckDB connection for users DB."""
-        try:
-            return duckdb.connect(self.user_db_path)
-        except Exception as e:
-            logging.error(f"Failed to connect to User DuckDB: {e}")
-            return None
+        return self.iam_provider._get_connection()
 
     def init_user_db(self):
         """Initialize the users table with activation support."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                # Create table with is_active column
-                con.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
-                        username TEXT PRIMARY KEY,
-                        password_hash TEXT,
-                        is_active BOOLEAN DEFAULT FALSE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                
-                # Migration: Add is_active column if missing (for existing DBs)
-                try:
-                    con.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT FALSE")
-                except:
-                    pass  # Column already exists
-                
-                try:
-                    con.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-                except:
-                    pass  # Column already exists
-                
-                # Ensure admin is always active
-                con.execute("UPDATE users SET is_active = TRUE WHERE username = 'admin'")
-                
-            except Exception as e:
-                logging.error(f"Failed to init user DB: {e}")
-            finally:
-                con.close()
+        self.iam_provider._init_database()
 
     def create_user(self, username: str, password: str, auto_activate: bool = False) -> tuple[bool, str]:
         """Create a new user. Admin is auto-activated, others need approval."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                # Check if user exists
-                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
-                if res:
-                    return False, "Username already exists"
-                
-                # Hash password
-                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                
-                # Admin is always active, others start as inactive (pending approval)
-                is_active = True if username == 'admin' or auto_activate else False
-                
-                con.execute(
-                    "INSERT INTO users (username, password_hash, is_active) VALUES (?, ?, ?)", 
-                    [username, hashed, is_active]
-                )
-                
-                if is_active:
-                    return True, "User created and activated successfully"
-                else:
-                    return True, "Account created! Please wait for admin approval to access the app."
-            except Exception as e:
-                return False, f"Error creating user: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
+        return self.iam_provider.create_user(username, password, auto_activate=auto_activate)
 
     def verify_user(self, username: str, password: str) -> tuple[bool, str]:
         """Verify user credentials and check if account is active."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                res = con.execute(
-                    "SELECT password_hash, is_active FROM users WHERE username = ?", 
-                    [username]
-                ).fetchone()
-                
-                if res:
-                    stored_hash = res[0]
-                    is_active = res[1] if len(res) > 1 else True  # Backwards compatibility
-                    
-                    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-                        if is_active:
-                            return True, "Login successful"
-                        else:
-                            return False, "Account pending approval. Please contact administrator."
-                
-                return False, "Invalid username or password"
-            except Exception as e:
-                return False, f"Error verifying user: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
+        res = self.iam_provider.authenticate(UserCredentials(username=username, password=password))
+        return res.success, res.message
 
     def get_all_users(self) -> list[str]:
         """Get list of all registered usernames."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                res = con.execute("SELECT username FROM users ORDER BY username").fetchall()
-                return [row[0] for row in res]
-            except Exception as e:
-                logging.error(f"Error fetching users: {e}")
-                return []
-            finally:
-                con.close()
-        return []
-    
+        return [u.username for u in self.iam_provider.list_users()]
+
     def get_all_users_with_status(self) -> list[dict[str, Any]]:
         """Get list of all users with their activation status."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                res = con.execute("""
-                    SELECT username, is_active, created_at 
-                    FROM users 
-                    ORDER BY is_active ASC, username ASC
-                """).fetchall()
-                users = []
-                for row in res:
-                    users.append({
-                        'username': row[0],
-                        'is_active': row[1] if len(row) > 1 else True,
-                        'created_at': row[2] if len(row) > 2 else None,
-                        'status': 'Active' if (row[1] if len(row) > 1 else True) else 'Pending Approval'
-                    })
-                return users
-            except Exception as e:
-                logging.error(f"Error fetching users with status: {e}")
-                return []
-            finally:
-                con.close()
-        return []
-    
+        users = self.iam_provider.list_users()
+        return [
+            {
+                "username": u.username,
+                "is_active": u.is_active,
+                "created_at": u.created_at,
+                "status": "Active" if u.is_active else "Pending Approval",
+            }
+            for u in users
+        ]
+
     def activate_user(self, username: str) -> tuple[bool, str]:
         """Activate a user account (admin only)."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
-                if not res:
-                    return False, "User not found"
-                
-                con.execute("UPDATE users SET is_active = TRUE WHERE username = ?", [username])
-                return True, f"User '{username}' has been activated"
-            except Exception as e:
-                return False, f"Error activating user: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
-    
+        return self.iam_provider.activate_user(username)
+
     def deactivate_user(self, username: str) -> tuple[bool, str]:
         """Deactivate a user account (admin only). Cannot deactivate admin."""
-        if username == 'admin':
-            return False, "Cannot deactivate admin account"
-        
-        con = self._get_user_connection()
-        if con:
-            try:
-                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
-                if not res:
-                    return False, "User not found"
-                
-                con.execute("UPDATE users SET is_active = FALSE WHERE username = ?", [username])
-                return True, f"User '{username}' has been deactivated"
-            except Exception as e:
-                return False, f"Error deactivating user: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
+        return self.iam_provider.deactivate_user(username)
 
     def update_user_password(self, username: str, new_password: str) -> tuple[bool, str]:
         """Update a user's password."""
-        con = self._get_user_connection()
-        if con:
-            try:
-                # Check if user exists
-                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
-                if not res:
-                    return False, "User not found"
-                
-                # Hash new password
-                hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                con.execute("UPDATE users SET password_hash = ? WHERE username = ?", [hashed, username])
-                return True, f"Password updated for '{username}'"
-            except Exception as e:
-                return False, f"Error updating password: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
+        return self.iam_provider.update_password(username, new_password)
 
     def delete_user(self, username: str) -> tuple[bool, str]:
         """Delete a user account. Protects admin from deletion."""
-        if username == 'admin':
-            return False, "Cannot delete admin account"
-        
-        con = self._get_user_connection()
-        if con:
-            try:
-                # Check if user exists
-                res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
-                if not res:
-                    return False, "User not found"
-                
-                con.execute("DELETE FROM users WHERE username = ?", [username])
-                return True, f"User '{username}' deleted successfully"
-            except Exception as e:
-                return False, f"Error deleting user: {e}"
-            finally:
-                con.close()
-        return False, "Database connection failed"
+        return self.iam_provider.delete_user(username)
 
     def _get_connection(self):
         """Get a new DuckDB connection."""
