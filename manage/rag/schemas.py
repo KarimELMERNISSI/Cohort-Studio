@@ -25,8 +25,8 @@ class ProviderConfig(BaseModel):
     
     Attributes:
         provider: Provider identifier (gemini, ollama, openai, mistral, custom).
-        model_name: Name of the chat/completion model (e.g., 'gemini-1.5-flash', 'llama3.2', 'gpt-4o-mini').
-        embedding_model: Name of the embedding model (e.g., 'models/gemini-embedding-001', 'nomic-embed-text').
+        model_name: Name of the chat/completion model (e.g., 'gemini-2.5-flash', 'gemini-2.5-pro', 'llama3.2', 'gpt-4o-mini').
+        embedding_model: Name of the embedding model (e.g., 'models/text-embedding-004', 'nomic-embed-text').
         api_key: Optional API key for commercial cloud endpoints.
         base_url: Optional custom endpoint URL (crucial for Ollama or local inference servers).
         temperature: Sampling temperature for generation (0.0 to 1.0).
@@ -39,11 +39,11 @@ class ProviderConfig(BaseModel):
         description="The AI provider backend to use."
     )
     model_name: str = Field(
-        default="gemini-1.5-flash",
+        default="gemini-2.5-flash",
         description="Model identifier for text generation."
     )
     embedding_model: str = Field(
-        default="models/gemini-embedding-001",
+        default="models/text-embedding-004",
         description="Model identifier for vector embeddings."
     )
     api_key: str | None = Field(

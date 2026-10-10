@@ -51,7 +51,7 @@ class GeminiChatConnector(BaseLLMConnector):
     def get_available_models(self) -> list[str]:
         """Query Gemini API for available text models."""
         if not self.client or not GEMINI_AVAILABLE:
-            return ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         try:
             models = []
             for m in self.client.models.list():
@@ -59,10 +59,10 @@ class GeminiChatConnector(BaseLLMConnector):
                 if "gemini" in name_lower or "gemma" in name_lower:
                     if "imagen" not in name_lower and "veo" not in name_lower and "embedding" not in name_lower:
                         models.append(m.name)
-            return models or ["gemini-2.5-flash", "gemini-1.5-flash"]
+            return models or ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
         except Exception as e:
             logger.warning(f"Could not fetch Gemini models list: {e}")
-            return ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 
     def _generate(
         self,
@@ -145,15 +145,15 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
 
     def get_available_models(self) -> list[str]:
         if not self.client or not GEMINI_AVAILABLE:
-            return ["models/gemini-embedding-001", "models/text-embedding-004"]
+            return ["models/text-embedding-004", "models/gemini-embedding-001"]
         try:
             embed_models = []
             for m in self.client.models.list():
                 if "embedding" in m.name.lower():
                     embed_models.append(m.name)
-            return embed_models or ["models/gemini-embedding-001", "models/text-embedding-004"]
+            return embed_models or ["models/text-embedding-004", "models/gemini-embedding-001"]
         except Exception:
-            return ["models/gemini-embedding-001", "models/text-embedding-004"]
+            return ["models/text-embedding-004", "models/gemini-embedding-001"]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not self.client:

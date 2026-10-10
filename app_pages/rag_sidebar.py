@@ -120,6 +120,8 @@ def render_rag_sidebar():
 
             gemini_model_options = [
                 "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
                 "gemini-1.5-flash",
                 "gemini-1.5-pro",
                 "gemini-flash-latest",
@@ -132,8 +134,8 @@ def render_rag_sidebar():
             )
 
             gemini_embed_options = [
-                "models/gemini-embedding-001",
                 "models/text-embedding-004",
+                "models/gemini-embedding-001",
             ]
             selected_embedding_model = st.selectbox(
                 "Embedding Model",

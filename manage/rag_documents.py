@@ -68,7 +68,7 @@ class DocumentsMixin:
                     
                 if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
                 
-                clean_model = getattr(self.llm, "model_name", "gemini-1.5-flash")
+                clean_model = getattr(self.llm, "model_name", "gemini-2.5-flash")
                 clean_model = clean_model.removeprefix("models/")
 
                 response = client.models.generate_content(

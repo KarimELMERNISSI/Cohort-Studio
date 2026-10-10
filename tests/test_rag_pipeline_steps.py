@@ -331,7 +331,7 @@ class TestPydanticSchemas:
     def test_provider_config_sanitization(self):
         cfg = ProviderConfig(
             provider=ProviderType.GEMINI,
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.5-flash",
             base_url="https://generativelanguage.googleapis.com/",
         )
         assert cfg.base_url == "https://generativelanguage.googleapis.com"

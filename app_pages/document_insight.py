@@ -288,7 +288,9 @@ def app():
     if not docs and (not rag_manager or not rag_manager.initialized):
         st.sidebar.warning("AI System not initialized. You can only load saved graphs.")
     
-    selected_docs = st.sidebar.multiselect("Choose Document(s)", docs, default=st.session_state.get("doc_graph_source", []))
+    raw_default = st.session_state.get("doc_graph_source", [])
+    valid_defaults = [d for d in raw_default if d in docs] if isinstance(raw_default, list) else []
+    selected_docs = st.sidebar.multiselect("Choose Document(s)", docs, default=valid_defaults)
     
     # State Management for Graph
     if "doc_graph_json" not in st.session_state:

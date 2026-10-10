@@ -219,14 +219,14 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
     def initialize_system(
         self,
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash",
         adherence_score=0.5,
         temperature=0.3,
         dataset_columns=None,
         use_existing_db=False,
         progress_callback=None,
         selected_files=None,
-        embedding_model="models/gemini-embedding-001",
+        embedding_model="models/text-embedding-004",
         provider="gemini",
         base_url=None,
     ):
