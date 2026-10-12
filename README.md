@@ -93,10 +93,10 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ### 2. Clinical Biostatistics & Epidemiological Testing
 - **Normality & Distribution Profiling**: Shapiro-Wilk, D'Agostino-Pearson omnibus tests with automated test recommendation logic.
-- **Two-Group & Multi-Group Inference**: Student's t-test, Welch's t-test (unequal variances), Mann-Whitney U, One-Way ANOVA, Kruskal-Wallis, Welch's ANOVA, and Games-Howell post-hoc testing.
+- **Two-Group & Multi-Group Inference**: Welch's t-test by default (Student's t optional), Mann-Whitney U with the Hodges-Lehmann shift, Welch ANOVA (default) and one-way ANOVA, Kruskal-Wallis; pairwise comparisons report every pair with raw and adjusted p-values (Games-Howell, Tukey HSD, Dunn with Holm). Effect sizes with confidence intervals: Hedges' g (noncentral t), rank-biserial r, eta and omega squared, bias-corrected Cramer's V. Assumption checks are diagnostics, never gates.
 - **2x2 Contingency & Cohort Epidemiology**: Relative Risk (RR), Odds Ratio (OR), Risk Difference (RD) with Haldane-Anscombe small-sample / zero-cell corrections, Wald & logit confidence intervals, and rare disease guidance ($OR \approx RR$).
 - **Effect Sizes**: Cohen's $d$, Hedges' $g$ (small-sample bias correction), Eta-squared ($\eta^2$), Partial $\eta^2$, and Omega-squared ($\omega^2$).
-- **Missingness Diagnostics**: Heuristic Little's MCAR permutation test with pairwise missingness-versus-observed dependencies.
+- **Missingness Diagnostics**: Little's MCAR test on EM estimates of the mean and covariance (Little 1988) and a full-family scan of missingness-versus-observed dependencies with adjusted p-values.
 - **Multivariate ANCOVA**: Treatment comparisons adjusting for continuous baseline covariates, featuring automated test of homogeneity of regression slopes.
 - **Diagnostic Test Accuracy**: Sensitivity, Specificity, Positive/Negative Predictive Values (PPV/NPV), Diagnostic Odds Ratio, Youden's Index, Likelihood Ratios (LR+, LR-), and ROC AUC.
 - **Multiple Testing Corrections**: False Discovery Rate (Benjamini-Hochberg) and Family-Wise Error Rate (Bonferroni).

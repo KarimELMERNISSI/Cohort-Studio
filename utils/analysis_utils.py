@@ -2,10 +2,12 @@ import logging
 
 import numpy as np
 import pandas as pd
-import statsmodels.stats.multitest as smt
 import streamlit as st
 from scipy import stats
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from biostats.inference import LEGACY_NAMES, compare_groups, groups_from_frame
+from biostats.inference import recommend as _recommend_kind
+from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
+from biostats.posthoc import default_method, pairwise_comparisons
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +82,9 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
         with col4:
             correction_method = st.selectbox(
                 "Multiple Testing Correction",
-                ["None", "Bonferroni", "Benjamini-Hochberg (FDR)"],
-                help="Adjust P-values to control for Type I errors when testing multiple variables.",
+                list(CORRECTION_OPTIONS),
+                help="The family is the set of variables tested in this run. Holm controls the family-wise error rate and is "
+                     "more powerful than Bonferroni; Benjamini-Hochberg controls the false discovery rate (exploratory screens).",
                 key=f"{key_prefix}correction"
             )
             
@@ -120,65 +123,37 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     effect_size_type = "N/A"
     sample_info = {}
 
+    test_result = None
+    estimate = np.nan
+    estimate_ci_text = ""
+    effect_ci_text = ""
     if is_numeric:
-        # Use Recommendation Engine
-        rec_test, rec_reasoning = recommend_statistical_test(df, group_col, target, numeric_cols, categorical_cols, binary_cols)
-        reasoning = rec_reasoning
-        
-        # Determine Test to Run
-        if manual_test == "Auto-Detect":
-            use_test = rec_test
-        else:
-            use_test = manual_test
-            reasoning.append(f"User manually selected {manual_test}.")
-
-        # Collect Assumption Notes for Display
+        # Welch-first policy; assumptions are diagnostics, not gates (audit S7/S8). Engine: biostats.inference
+        groups = groups_from_frame(df, group_col, target)
+        kind = LEGACY_NAMES.get(manual_test, "auto")
+        reference = str(exposure_ref) if exposure_ref is not None and str(exposure_ref) in groups else None
+        test_result = compare_groups(groups, kind=kind, reference=reference, n_boot=200)
+        test_name = test_result.name
+        statistic = test_result.statistic if test_result.statistic is not None else np.nan
+        p_value = test_result.p_value if test_result.p_value is not None else np.nan
+        primary = test_result.primary_effect
+        if primary is not None:
+            effect_size = primary.estimate
+            effect_size_type = primary.name
+            effect_ci_text = primary.ci.as_text(3) if primary.ci else ""
+        if test_result.estimate is not None:
+            estimate = test_result.estimate
+            estimate_ci_text = test_result.estimate_ci.as_text(3) if test_result.estimate_ci else ""
+        reasoning = list(test_result.warnings) + [f"{c.name}: {c.detail}" for c in test_result.assumptions]
         assumption_notes = reasoning
-
-        if len(groups_data) == 2:
-            n1, n2 = len(groups_data[0]), len(groups_data[1])
-            sample_info = {"N1": n1, "N2": n2, "Ratio": n2/n1 if n1 > 0 else 0}
-            
-            # Execution
-            from utils.epidemiology_utils import compute_cohens_d_with_ci
-            d_res = compute_cohens_d_with_ci(groups_data[0], groups_data[1])
-            
-            if use_test == "Student's t-test":
-                test_name = "Student's t-test"
-                statistic, p_value = stats.ttest_ind(*groups_data)
-                effect_size = d_res.estimate
-                effect_size_type = "Cohen's d"
-            elif use_test == "Welch's t-test":
-                test_name = "Welch's t-test"
-                statistic, p_value = stats.ttest_ind(*groups_data, equal_var=False)
-                effect_size = d_res.estimate
-                effect_size_type = "Cohen's d"
-            elif use_test == "Mann-Whitney U":
-                test_name = "Mann-Whitney U"
-                statistic, p_value = stats.mannwhitneyu(*groups_data)
-                # Rank-Biserial Correlation r = 1 - (2U)/(n1*n2)
-                effect_size = 1 - (2 * statistic) / (n1 * n2) if (n1 * n2) > 0 else 0
-                effect_size_type = "Rank-Biserial r"
-
-        else: # > 2 groups
-            n_total = sum(len(g) for g in groups_data)
-            k = len(groups_data)
-            sample_info = {"N_Total": n_total, "k_Groups": k, "N_Per_Group": n_total/k}
-
-            from utils.epidemiology_utils import compute_eta_and_omega_squared
-            eta_omega = compute_eta_and_omega_squared(groups_data)
-
-            if use_test == "ANOVA":
-                test_name = "ANOVA"
-                statistic, p_value = stats.f_oneway(*groups_data)
-                effect_size = eta_omega["eta_squared"]
-                effect_size_type = "Eta Squared"
-            elif use_test == "Kruskal-Wallis":
-                test_name = "Kruskal-Wallis"
-                statistic, p_value = stats.kruskal(*groups_data)
-                # Eta-Squared H (η²H) for Kruskal-Wallis (Tomczak & Tomczak, 2014)
-                effect_size = (statistic - k + 1) / (n_total - k) if (n_total - k) > 0 else 0
-                effect_size_type = "η²H"
+        sizes = test_result.n_per_group
+        if len(sizes) == 2:
+            n1, n2 = sizes
+            sample_info = {"N1": n1, "N2": n2, "Ratio": n2 / n1 if n1 > 0 else 0}
+        else:
+            n_total = sum(sizes)
+            k = len(sizes)
+            sample_info = {"N_Total": n_total, "k_Groups": k, "N_Per_Group": n_total / k if k else 0}
 
     elif is_categorical:
         # Chi-Square or Fisher
@@ -244,6 +219,9 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         "P-Value": p_value,
         "Effect Size": effect_size,
         "Effect Type": effect_size_type,
+        "Effect CI": effect_ci_text,
+        "Estimate": estimate,
+        "Estimate CI": estimate_ci_text,
         "Assumptions": "; ".join(assumption_notes),
         "Sample Info": sample_info
     }
@@ -253,125 +231,38 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
 
 
 def recommend_statistical_test(df, group_col, target_col, numeric_cols, categorical_cols, binary_cols):
-    # Returns a recommended test and the reasoning based on data properties.
-    reasoning = []
-    
-    # 1. Check Data Types
-    is_numeric = target_col in numeric_cols
-    is_binary = target_col in binary_cols
-    groups = df[group_col].dropna().unique()
-    n_groups = len(groups)
-    
-    if not is_numeric and not is_binary:
-        return "Chi-Square", ["Target is categorical with >2 levels."]
-        
-    # 2. Check Sample Size & Balance
-    group_sizes = df[group_col].value_counts()
-    min_group_size = group_sizes.min()
-    reasoning.append(f"Smallest group size is {min_group_size}.")
-    
-    check_normality = True
-    if min_group_size < 30:
-        reasoning.append("Small sample size detected (<30). Central Limit Theorem may not apply.")
-    else:
-        reasoning.append("Large sample size (>30). Parametric tests are generally robust (CLT).")
-        # We still check normality but might be more lenient or prioritize variance
+    """Recommended test and reasoning: Welch-first for numeric outcomes (audit S7); chi-square family otherwise."""
+    from biostats.inference import DISPLAY_NAMES
 
-    # 3. Normality Check (Only if numeric)
-    if is_numeric:
-        clean_df = df[[group_col, target_col]].dropna()
-        groups_data = [clean_df[clean_df[group_col] == g][target_col] for g in groups]
-        
-        # Shapiro-Wilk or D'Agostino
-        normality_p_values = []
-        for g_data in groups_data:
-            if len(g_data) >= 3:
-                try:
-                    if len(g_data) > 5000:
-                        stat, p = stats.normaltest(g_data)
-                    else:
-                        stat, p = stats.shapiro(g_data)
-                    normality_p_values.append(p)
-                except:
-                    normality_p_values.append(0)
-        
-        is_normal = all(p > 0.05 for p in normality_p_values)
-        
-        if is_normal:
-            reasoning.append("Data appears Normally Distributed (Shapiro-Wilk p > 0.05).")
-        else:
-            reasoning.append("Data deviates from Normality (Shapiro-Wilk p < 0.05).")
+    if target_col not in numeric_cols:
+        return "Chi-Square", ["Target is categorical: chi-square family (Fisher's exact test when expected counts are small)."]
+    groups = groups_from_frame(df, group_col, target_col)
+    groups = {k: v for k, v in groups.items() if len(v) > 0}
+    if len(groups) < 2:
+        return "Unknown", ["Fewer than two groups with data."]
+    kind, reasons = _recommend_kind(groups)
+    sizes = {k: len(v) for k, v in groups.items()}
+    reasons = [f"Group sizes: {sizes}."] + reasons
+    return DISPLAY_NAMES[kind], reasons
 
-        # Homogeneity of Variance
-        try:
-            l_stat, l_p = stats.levene(*groups_data)
-            equal_var = l_p > 0.05
-            if equal_var:
-                reasoning.append("Variances are equal (Levene p > 0.05).")
-            else:
-                reasoning.append("Variances are unequal (Levene p < 0.05).")
-        except:
-            equal_var = False
-            reasoning.append("Could not test for equal variances.")
 
-        if n_groups == 2:
-            if is_normal:
-                if equal_var:
-                    return "Student's t-test", reasoning
-                else:
-                    return "Welch's t-test", reasoning
-            else:
-                return "Mann-Whitney U", reasoning
-        elif n_groups > 2:
-            if is_normal and equal_var:
-                return "ANOVA", reasoning
-            else:
-                return "Kruskal-Wallis", reasoning
+def compare_variable_result(df, group_col, target, manual_test="Auto-Detect", reference=None):
+    """Full :class:`biostats.TestResult` for a numeric variable (used by the result card)."""
+    groups = groups_from_frame(df, group_col, target)
+    if len([v for v in groups.values() if len(v) > 0]) < 2:
+        return None
+    return compare_groups(groups, kind=LEGACY_NAMES.get(manual_test, "auto"), reference=reference, n_boot=300)
 
-    return "Unknown", ["Could not determine appropriate test."]
 
-def perform_post_hoc(df, group_col, target_col, test_type):
-    # Runs post-hoc analysis based on the global test type.
-    clean_df = df[[group_col, target_col]].dropna()
-    
-    if test_type == "ANOVA":
-        # Tukey HSD
-        try:
-            tukey = pairwise_tukeyhsd(endog=clean_df[target_col], groups=clean_df[group_col], alpha=0.05)
-            # Convert to DataFrame for display
-            results = pd.DataFrame(data=tukey.summary().data[1:], columns=tukey.summary().data[0])
-            return results[results['reject'] == True] # Return only significant pairs
-        except Exception as e:
-            st.warning(f"Post-hoc failed: {e}")
-            return None
-        
-    elif test_type == "Kruskal-Wallis":
-        # Fallback to pairwise Mann-Whitney with Bonferroni correction
-        import itertools
-        groups = clean_df[group_col].unique()
-        pairs = []
-        p_vals = []
-        
-        for g1, g2 in itertools.combinations(groups, 2):
-            data1 = clean_df[clean_df[group_col] == g1][target_col]
-            data2 = clean_df[clean_df[group_col] == g2][target_col]
-            try:
-                _, p = stats.mannwhitneyu(data1, data2)
-                pairs.append(f"{g1} vs {g2}")
-                p_vals.append(p)
-            except:
-                pass
-            
-        if not p_vals:
-            return None
+def perform_post_hoc(df, group_col, target_col, test_type, adjust_method="holm"):
+    """Every pairwise comparison with raw and adjusted p-values; the method follows the omnibus test (audit S7)."""
+    groups = groups_from_frame(df, group_col, target_col)
+    try:
+        return pairwise_comparisons(groups, method=default_method(str(test_type)), adjust_method=adjust_method)
+    except Exception as exc:
+        logger.warning("Post-hoc comparison failed: %s", exc)
+        return None
 
-        # Apply correction
-        _, p_adj, _, _ = smt.multipletests(p_vals, method='bonferroni')
-        
-        results = pd.DataFrame({'Pair': pairs, 'P-adj': p_adj})
-        return results[results['P-adj'] < 0.05]
-        
-    return None
 
 def compute_cohens_d(group1, group2):
     """Compute Cohen's d for two independent groups."""
@@ -385,100 +276,17 @@ def compute_eta_squared(groups_data):
 
 
 def compute_cramers_v(confusion_matrix):
-    # Compute Cramer's V for categorical association.
-    chi2 = stats.chi2_contingency(confusion_matrix)[0]
-    n = confusion_matrix.sum().sum()
-    phi2 = chi2 / n
-    r, k = confusion_matrix.shape
-    return np.sqrt(phi2 / min(k-1, r-1)) if min(k-1, r-1) > 0 else 0
+    """Bias-corrected Cramer's V (Bergsma 2013) from the Pearson chi-square without Yates correction."""
+    from biostats.effect_sizes import cramers_v
+
+    return cramers_v(np.asarray(confusion_matrix, dtype=float), n_boot=0).estimate
+
 
 def littles_mcar_test(df):
-    # Performs Littles MCAR (Missing Completely At Random) test.
-    # H0: Data is MCAR
-    # H1: Data is not MCAR (MAR or MNAR)
-    # Returns: dict with 'statistic', 'df', 'p_value', 'result'
-    # Ensure only numeric data
-    df = df.select_dtypes(include=[np.number])
-    
-    if df.empty:
-        return {"error": "No numeric data available for MCAR test."}
-    
-    n, k = df.shape
-    
-    # 1. Estimate Mean and Covariance using EM Algorithm (Simplified)
-    # For Little's test, we need the MLE of mean and covariance under H0 (MCAR).
-    # We will use a basic iterative approach or available estimates.
-    
-    # Initial estimates (ignoring missing values)
-    mu_mle = df.mean().values
-    cov_mle = df.cov().values
-    
-    # 2. Compute Statistic
-    d2_total = 0
-    df_total = 0
-    
-    # Group by pattern
-    mask = df.isnull()
-    patterns = mask.apply(lambda x: tuple(x), axis=1)
-    grouped = df.groupby(patterns)
-    
-    for pattern, group in grouped:
-        # pattern is tuple of bools (True=Missing, False=Observed)
-        is_missing = np.array(pattern)
-        is_observed = ~is_missing
-        
-        # Number of observed variables in this pattern
-        p_j = np.sum(is_observed)
-        
-        if p_j == 0:
-            continue
-            
-        # Number of samples in this pattern
-        m_j = len(group)
-        
-        # Observed values in this pattern
-        obs_indices = np.where(is_observed)[0]
-        
-        # Observed Mean vector for this pattern (d_j)
-        y_bar_j = group.iloc[:, obs_indices].mean().values
-        
-        # Expected Mean vector (mu_j) - subset of global MLE
-        mu_j = mu_mle[obs_indices]
-        
-        # Difference
-        diff = y_bar_j - mu_j
-        
-        # Covariance for this pattern (Sigma_j) - subset of global MLE
-        sigma_jj = cov_mle[np.ix_(obs_indices, obs_indices)]
-        
-        # Calculate contribution: m_j * (diff.T * inv(sigma_jj) * diff)
-        try:
-            # Use pseudo-inverse for stability
-            inv_sigma_jj = np.linalg.pinv(sigma_jj)
-            d2_j = m_j * (diff.T @ inv_sigma_jj @ diff)
-            
-            d2_total += d2_j
-            df_total += p_j
-        except np.linalg.LinAlgError:
-            continue
-            
-    # Degrees of Freedom: sum(p_j) - k
-    final_df = df_total - k
-    
-    # P-Value
-    # If final_df <= 0, something is wrong (e.g. only complete cases or single pattern)
-    if final_df <= 0:
-        return {"error": "Insufficient degrees of freedom for MCAR test (df <= 0)."}
-        
-    p_value = 1 - stats.chi2.cdf(d2_total, final_df)
-    
-    return {
-        "statistic": d2_total,
-        "df": final_df,
-        "p_value": p_value,
-        "result": "Likely Not MCAR" if p_value < 0.05 else "Likely MCAR"
-    }
+    """Little's MCAR test on EM estimates of the mean and covariance (audit S15); see :mod:`biostats.mcar`."""
+    from biostats.mcar import littles_mcar_test as _littles
 
+    return _littles(df)
 
 
 def scan_missingness_dependencies(df, target_cols=None, predictor_cols=None, test_preference="Auto-Detect",

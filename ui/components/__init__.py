@@ -157,7 +157,79 @@ def help_popover(text: str, label: str = "How to read this") -> None:
         st.markdown(text)
 
 
+def glossary_popover(*terms: str, label: str = "Glossary") -> None:
+    """Definitions of the given terms (all terms when none are given)."""
+    from ui.guidance.glossary import GLOSSARY, define
+
+    with st.popover(label, icon=":material/dictionary:"):
+        items = [(t, define(t)) for t in terms] if terms else list(GLOSSARY.items())
+        for term, text in items:
+            if text:
+                st.markdown(f"**{term}** - {text}")
+
+
+# ----------------------------------------------------------------------------- results
+
+def _fmt(value: float | None, digits: int = 3) -> str:
+    return "n/a" if value is None else f"{value:.{digits}g}"
+
+
+def result_card(result: Any, *, title: str | None = None) -> None:
+    """Estimate -> CI -> p (raw/adjusted) -> n -> method and reference -> 'How to read this' (audit S9/U4)."""
+    from ui.guidance.interpretation import how_to_read
+
+    with st.container(border=True):
+        head, chip = st.columns([4, 1], vertical_alignment="center")
+        head.markdown(f"**{title or result.name}**")
+        with chip:
+            sig = result.significant
+            if sig is None:
+                status_chip("not computed", "na" if False else "neutral")
+            else:
+                status_chip("p < alpha" if sig else "p >= alpha", "info" if sig else "neutral")
+        cols = st.columns(3)
+        if result.estimate is not None:
+            cols[0].metric(result.estimate_label or "estimate", _fmt(result.estimate),
+                           help="The quantity of interest on the original scale, with its confidence interval below.")
+            if result.estimate_ci is not None:
+                cols[0].caption(f"95% CI {result.estimate_ci.as_text(3)} ({result.estimate_ci.method})")
+        elif result.primary_effect is not None:
+            eff = result.primary_effect
+            cols[0].metric(eff.name, _fmt(eff.estimate))
+            if eff.ci is not None:
+                cols[0].caption(f"95% CI {eff.ci.as_text(3)} ({eff.ci.method})")
+        p_text = _fmt(result.p_value, 2)
+        if result.p_adjusted is not None:
+            p_text += f" (adjusted {_fmt(result.p_adjusted, 2)}, {result.adjustment or 'adjusted'})"
+        stat = f"{result.statistic_label or 'statistic'} = {_fmt(result.statistic)}"
+        if result.df:
+            stat += ", df = " + ", ".join(f"{d:.4g}" for d in result.df)
+        cols[1].metric("p-value", p_text, help=stat)
+        n_text = ", ".join(f"{g}: {n}" for g, n in zip(result.groups, result.n_per_group, strict=False)) or str(result.n_total)
+        cols[2].metric("n", str(result.n_total), help=n_text)
+        if result.reference_group:
+            cols[2].caption(f"reference: {result.reference_group}; comparison: {result.comparison_group}")
+        if result.effect_sizes:
+            parts = []
+            for eff in result.effect_sizes:
+                text = f"{eff.name} = {_fmt(eff.estimate)}"
+                if eff.ci is not None:
+                    text += f" (95% CI {eff.ci.as_text(2)})"
+                if eff.magnitude():
+                    text += f", {eff.magnitude()}"
+                parts.append(text)
+            st.caption("Effect sizes: " + "; ".join(parts))
+        if result.assumptions:
+            chips = st.columns(min(4, len(result.assumptions)))
+            for i, check in enumerate(result.assumptions[:8]):
+                with chips[i % len(chips)]:
+                    status_chip(check.name, "neutral" if check.status == "na" else check.status)
+        if result.references:
+            st.caption("Method: " + " | ".join(result.references))
+        help_popover(how_to_read(result))
+
+
 __all__ = [
-    "confirm", "empty_state", "error_card", "help_popover", "long_op", "no_ai", "no_dataset", "no_results",
-    "page_header", "page_link", "section", "status_chip", "switch_to",
+    "confirm", "empty_state", "error_card", "glossary_popover", "help_popover", "long_op", "no_ai", "no_dataset", "no_results",
+    "page_header", "page_link", "result_card", "section", "status_chip", "switch_to",
 ]

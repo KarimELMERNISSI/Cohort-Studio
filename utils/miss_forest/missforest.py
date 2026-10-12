@@ -17,8 +17,11 @@ from utils.miss_forest._validate import (
     _validate_single_datatype_features,
 )
 
-lgbm_clf = LGBMClassifier(verbosity=-1)
-lgbm_rgr = LGBMRegressor(verbosity=-1)
+from biostats._types import RANDOM_STATE
+
+# Deterministic learners (audit S16): seeded and single-threaded histogram construction
+lgbm_clf = LGBMClassifier(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True)
+lgbm_rgr = LGBMRegressor(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True)
 
 
 class MissForest:

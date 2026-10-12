@@ -34,6 +34,7 @@ PAGES: tuple[PageDef, ...] = (
     PageDef("enrich", "enrich.py", "Enrich", "enrich", "Data", ":material/auto_fix_high:", chapter="03_Data_Enrichment"),
     PageDef("explore", "explore.py", "Statistics & correlations", "explore", "Explore", ":material/analytics:", chapter="01_Home"),
     PageDef("visualize", "visualize.py", "Visualize", "visualize", "Explore", ":material/bar_chart:", chapter="04_Visualization"),
+    PageDef("which_test", "which_test.py", "Which test?", "which-test", "Analyze", ":material/help_center:", chapter="05_Epidemiology"),
     PageDef("analyze", "analyze.py", "Hypothesis tests & epidemiology", "analyze", "Analyze", ":material/science:", chapter="05_Epidemiology"),
     PageDef("variable_map", "variable_map.py", "Variable map", "variable-map", "Knowledge", ":material/account_tree:", chapter="06_Data_Insight"),
     PageDef("documents", "documents.py", "Documents", "documents", "Knowledge", ":material/description:", chapter="07_Document_Insight"),

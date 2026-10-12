@@ -159,6 +159,9 @@ def plotly_corr_mat(
         y = y_vals,
         z = X_ordered.values,
         colorscale = selected_color,
+        zmid = 0,  # diverging scale centred on zero correlation (audit S13)
+        zmin = -1,
+        zmax = 1,
         colorbar=dict(len=0.4, thickness=10, x=1.05, y=0.4)
     )
     fig.add_trace(heatmap)
@@ -667,7 +670,10 @@ def custom_corr_mat_to_excel(
     print(f'Correlation matrix saved to {target_file}')
 
 
-def _compute_corr_and_counts(data, targets, predictors, method):
+MIN_PERIODS = 10  # pairwise correlations need at least this many complete pairs (audit S13)
+
+
+def _compute_corr_and_counts(data, targets, predictors, method, min_periods=MIN_PERIODS):
     """
     Compute the correlation matrix and count of valid (non-NaN) observations for each pair of variables.
 
@@ -714,10 +720,10 @@ def _compute_corr_and_counts(data, targets, predictors, method):
             valid_rows = len(pair_df)
             counts.loc[predictor, target] = valid_rows
             
-            # Only compute correlation if there are at least 2 valid observations and non-zero variance
+            # Enough complete pairs (threshold capped at the dataset size so tiny cohorts still work) and non-zero variance
             if (
-                valid_rows > 1 
-                and pair_df[predictor].nunique() > 1 
+                valid_rows >= max(2, min(min_periods, len(data)))
+and pair_df[predictor].nunique() > 1 
                 and pair_df[target].nunique() > 1
             ):
                 with warnings.catch_warnings():

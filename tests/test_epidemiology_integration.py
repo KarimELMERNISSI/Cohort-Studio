@@ -75,7 +75,9 @@ class TestEpidemiologyAnalysisPipeline:
         assert res["Variable"] == "biomarker"
         assert res["Test Used"] == "Student's t-test"
         assert res["P-Value"] < 0.001
-        assert res["Effect Type"] == "Cohen's d"
+        assert res["Effect Type"] == "Hedges' g"  # bias-corrected standardised mean difference with a CI (audit S8)
+        assert res["Effect CI"] and "to" in res["Effect CI"]
+        assert res["Estimate CI"]
         assert abs(res["Effect Size"]) > 0.8  # Strong effect
         assert "N1" in res["Sample Info"]
         assert "N2" in res["Sample Info"]
@@ -92,17 +94,18 @@ class TestEpidemiologyAnalysisPipeline:
             manual_test="ANOVA",
         )
 
-        assert res["Test Used"] == "ANOVA"
+        assert res["Test Used"] == "One-way ANOVA"
         assert res["P-Value"] < 0.001
-        assert res["Effect Type"] == "Eta Squared"
+        assert res["Effect Type"] == "eta squared"
         assert res["Effect Size"] > 0.14  # Large effect
 
         # Post-hoc pairwise comparison
         ph = perform_post_hoc(df, group_col="stage", target_col="sbp", test_type="ANOVA")
         assert ph is not None
         assert not ph.empty
-        assert "group1" in ph.columns and "group2" in ph.columns
-        assert "p-adj" in ph.columns
+        assert "group_1" in ph.columns and "group_2" in ph.columns
+        assert "p_adj" in ph.columns and "p_raw" in ph.columns
+        assert len(ph) == 3  # every pair is reported, not only the significant ones (audit S7)
 
     def test_categorical_2x2_epidemiology_pipeline(self, clinical_cohort_df):
         df = clinical_cohort_df

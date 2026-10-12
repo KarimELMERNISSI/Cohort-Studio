@@ -44,8 +44,15 @@ if not chapters:
 stems = [s for s, _ in chapters]
 wanted = st.session_state.get("handbook_chapter")
 default_index = stems.index(wanted) if wanted in stems else 0
-chosen = st.selectbox("Chapter", stems, index=default_index, format_func=lambda s: dict(chapters)[s], key="handbook_select")
+chosen = st.selectbox("Chapter", stems, index=default_index, format_func=lambda s: dict(chapters)[s], key="handbook_select",
+                      help="The chapter of the page you came from is selected by default.")
 st.session_state["handbook_chapter"] = chosen
+
+with st.expander("Glossary"):
+    from ui.guidance.glossary import GLOSSARY
+
+    for term, text in sorted(GLOSSARY.items(), key=lambda kv: kv[0].lower()):
+        st.markdown(f"**{term}** - {text}")
 
 text = (DOCS_DIR / f"{chosen}.md").read_text(encoding="utf-8")
 headings = [(len(m.group(1)), m.group(2).strip()) for m in re.finditer(r"^(#{2,3})\s+(.+)$", text, flags=re.MULTILINE)]

@@ -152,10 +152,11 @@ class DataAnalyzer:
                     
                 sample_size = min(10, len(non_null_values))
                 sample_values = non_null_values.sample(
-                    n=sample_size, 
-                    replace=(sample_size > len(non_null_values))
+                    n=sample_size,
+                    replace=(sample_size > len(non_null_values)),
+                    random_state=20260101,  # deterministic date detection (audit S16)
                 )
-                
+
                 date_regex = r'(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{4}[-/]\d{1,2}[-/]\d{1,2} \d{1,2}:\d{2}(:\d{2})?)'
                 
                 # Check for keyword strong signals in column name

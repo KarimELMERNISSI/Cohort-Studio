@@ -92,7 +92,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P2 | Science Tier A: the five wrong-number bugs | done (S4 stage 1: honest labelling, seeds, observed-rows fit; multiple imputation with pooling is P5) |
 | P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | done (`core/expressions`, `core/workspace`, lockout; migration script `dev_scripts/migrate_user_layout.py`) |
 | P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | done (`ui/`, `ingest/`, `core/state.py`, `app_pages/views/`) |
-| P5 | Science Tier B + UI-free biostats package + result cards + guidance | planned |
+| P5 | Science Tier B + UI-free biostats package + result cards + guidance | done (multiple imputation with Rubin pooling deferred to P8) |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | planned |
 | P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | planned |
 | P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement | planned |
@@ -113,7 +113,8 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
 | G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
 | S1–S5 wrong numbers | closed (S4 stage 1) | P2 (`biostats/`); multiple imputation in P5 |
-| S6–S16 soundness, missing methods | open | P5, P8 |
+| S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
+| S11 missing methods (survival, regression, MH, paired, agreement) | open | P8 |
 | E1 leaked key | open | owner action |
 | E2 Visualization import | closed | P0 |
 | E3 eval code execution | closed | P3 (`core/expressions` AST whitelist evaluator, `safe_format`) |
@@ -131,4 +132,5 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | U1–U3 login, navigation, onboarding, import | closed | P4 (`st.navigation`, Start page, sample cohort, import flow) |
 | U5 destructive actions | partially closed (cache reset, cached statistics) | P4; reindex/filter confirmations with the page refactors in P5/P6 |
 | U6 design | partially closed (theme tokens, components) | P4; `unsafe_allow_html` removal in P6 |
-| U4, U7, U8 feedback, guidance, copy | open | P5 (result cards, wizard, glossary), P6 |
+| U4, U7 feedback and guidance | closed for result cards, test chooser, glossary, handbook; Run buttons and long-operation status on the legacy pages in P6 | P5 |
+| U8 copy | open | P6 |

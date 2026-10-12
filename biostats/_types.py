@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,4 +29,95 @@ class CI(BaseModel):
         return f"{self.lower * scale:.{digits}f}{unit} to {self.upper * scale:.{digits}f}{unit}"
 
 
-__all__ = ["CI", "RANDOM_STATE"]
+# Cohen (1988) conventions, used only for the magnitude *label*; the CI carries the evidence.
+_MAGNITUDE_THRESHOLDS: dict[str, tuple[float, float, float]] = {
+    "d": (0.2, 0.5, 0.8),
+    "g": (0.2, 0.5, 0.8),
+    "r": (0.1, 0.3, 0.5),
+    "eta2": (0.01, 0.06, 0.14),
+    "omega2": (0.01, 0.06, 0.14),
+    "eta2_h": (0.01, 0.06, 0.14),
+    "v": (0.1, 0.3, 0.5),
+}
+
+
+class EffectSize(BaseModel):
+    """A standardised effect estimate with its interval and provenance."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str               # "Hedges' g", "rank-biserial r", "eta squared", ...
+    kind: str               # key of _MAGNITUDE_THRESHOLDS ("d", "g", "r", "eta2", "omega2", "eta2_h", "v") or "other"
+    estimate: float
+    ci: CI | None = None
+    n: int | None = None
+    reference: str = ""     # method citation
+    note: str = ""
+
+    def magnitude(self) -> str:
+        bounds = _MAGNITUDE_THRESHOLDS.get(self.kind)
+        if bounds is None:
+            return ""
+        value = abs(self.estimate)
+        small, medium, large = bounds
+        if value < small:
+            return "negligible"
+        if value < medium:
+            return "small"
+        if value < large:
+            return "medium"
+        return "large"
+
+
+class AssumptionCheck(BaseModel):
+    """A diagnostic, never a gate: the test runs regardless, the status informs interpretation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    status: Literal["ok", "caution", "violated", "na"]
+    detail: str = ""
+    p_value: float | None = None
+
+
+class TestResult(BaseModel):
+    """Result of a group comparison: estimate and CI first, then the test, then diagnostics."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    family: Literal["parametric", "nonparametric", "exact"] = "parametric"
+    statistic: float | None = None
+    statistic_label: str = ""
+    df: list[float] = Field(default_factory=list)
+    p_value: float | None = None
+    p_adjusted: float | None = None
+    adjustment: str | None = None
+    estimate: float | None = None
+    estimate_label: str = ""
+    estimate_ci: CI | None = None
+    effect_sizes: list[EffectSize] = Field(default_factory=list)
+    assumptions: list[AssumptionCheck] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    references: list[str] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list)
+    n_per_group: list[int] = Field(default_factory=list)
+    reference_group: str | None = None
+    comparison_group: str | None = None
+    alpha: float = 0.05
+
+    @property
+    def n_total(self) -> int:
+        return int(sum(self.n_per_group))
+
+    @property
+    def primary_effect(self) -> EffectSize | None:
+        return self.effect_sizes[0] if self.effect_sizes else None
+
+    @property
+    def significant(self) -> bool | None:
+        p = self.p_adjusted if self.p_adjusted is not None else self.p_value
+        return None if p is None else bool(p < self.alpha)
+
+
+__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "TestResult"]

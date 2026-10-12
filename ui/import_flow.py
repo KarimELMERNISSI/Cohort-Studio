@@ -86,7 +86,8 @@ def _render_options(draft: dict[str, Any]) -> ParseOptions:
                                      key=f"imp_dec_{draft['file_id']}", help="Use ',' for files exported from French/German locales.")
         thousands_label = next((k for k, v in THOUSANDS.items() if v == current.thousands), "none")
         fields["thousands"] = THOUSANDS[c4.selectbox("Thousands separator", list(THOUSANDS), index=list(THOUSANDS).index(thousands_label),
-                                                     key=f"imp_thou_{draft['file_id']}")]
+                                                     key=f"imp_thou_{draft['file_id']}",
+                                                     help="Character grouping thousands in numbers (e.g. 1 234,5 or 1,234.5).")]
     else:
         names = draft["sheet_names"]
         chosen = st.multiselect("Sheet(s)", names, default=list(current.sheets) or names[:1], key=f"imp_sheets_{draft['file_id']}",
@@ -97,7 +98,8 @@ def _render_options(draft: dict[str, Any]) -> ParseOptions:
             if common:
                 default_idx = common.index(current.merge_key) if current.merge_key in common else 0
                 fields["merge_key"] = st.selectbox("Merge key (shared identifier column)", common, index=default_idx,
-                                                   key=f"imp_merge_{draft['file_id']}")
+                                                   key=f"imp_merge_{draft['file_id']}",
+                                                   help="Rows of the selected sheets are joined on this column (outer join).")
             else:
                 st.warning("The selected sheets share no column name; they will be stacked vertically.")
                 fields["merge_key"] = None
@@ -106,9 +108,11 @@ def _render_options(draft: dict[str, Any]) -> ParseOptions:
 
     c5, c6, c7, c8 = st.columns(4)
     fields["header"] = int(c5.number_input("Header row (1 = first line)", min_value=1, max_value=100, value=current.header + 1,
-                                           key=f"imp_header_{draft['file_id']}")) - 1
+                                           key=f"imp_header_{draft['file_id']}",
+                                           help="The line holding the column names, counted after any skipped lines.")) - 1
     fields["skiprows"] = int(c6.number_input("Lines to skip before the header", min_value=0, max_value=1000, value=current.skiprows,
-                                             key=f"imp_skip_{draft['file_id']}"))
+                                             key=f"imp_skip_{draft['file_id']}",
+                                             help="Use this for files that start with titles or notes before the table."))
     fields["dayfirst"] = c7.checkbox("Dates are day-first (31/12/2024)", value=current.dayfirst, key=f"imp_dayfirst_{draft['file_id']}",
                                      help="European date order. Used when dates are parsed later.")
     na_text = c8.text_input("Missing-value tokens", value=", ".join(t for t in current.na_values if t),
@@ -189,7 +193,8 @@ def render_import_flow(state: AppState) -> None:
     c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
     name = c1.text_input("Dataset name", value=dataset_base_name(draft["name"]), key=f"imp_name_{draft['file_id']}",
                          help="Used for saved versions (name_v1, name_v2, ...) and in traces.")
-    save_now = c2.checkbox("Save as version v1 in my workspace", value=True, key=f"imp_save_{draft['file_id']}")
+    save_now = c2.checkbox("Save as version v1 in my workspace", value=True, key=f"imp_save_{draft['file_id']}",
+                           help="Stores the loaded table as a Parquet version you can reopen from the sidebar.")
     if st.button("Load dataset", type="primary", key=f"imp_load_{draft['file_id']}"):
         ref = state.load_parsed(result.df, filename=draft["name"], data=draft["data"], options=options,
                                 name=dataset_base_name(name))

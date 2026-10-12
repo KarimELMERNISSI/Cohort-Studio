@@ -80,21 +80,21 @@ def normality_test(column, method='dagostino'):
         elif method == 'dagostino':
             stat, p_value = stats.normaltest(column.dropna())
         
-        elif method == 'ks':
-            clean_col = column.dropna()
-            std_val = float(np.std(clean_col))
-            if std_val == 0 or len(clean_col) == 0:
+        elif method in ('ks', 'lilliefors'):
+            # Lilliefors: KS with estimated mean/SD uses its own null distribution (audit S12)
+            from biostats.normality import lilliefors_p
+
+            p_value = lilliefors_p(column.dropna())
+            if np.isnan(p_value):
                 return np.nan
-            standardized = (clean_col - float(np.mean(clean_col))) / std_val
-            stat, p_value = stats.kstest(standardized, 'norm')
-        
+
         elif method == 'anderson':
-            result = stats.anderson(column.dropna(), dist='norm')
-            for i, critical_value in enumerate(result.critical_values):
-                if result.statistic > critical_value:
-                    return result.significance_level[i] / 100.0
-            return result.significance_level[-1] / 100.0
-        
+            from biostats.normality import anderson_p
+
+            p_value = anderson_p(column.dropna())
+            if np.isnan(p_value):
+                return np.nan
+
         else:
             raise ValueError("Unknown method. Choose 'shapiro', 'dagostino', 'ks', or 'anderson'.")
         

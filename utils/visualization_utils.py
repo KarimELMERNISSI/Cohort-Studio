@@ -1,12 +1,10 @@
 import re
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
 import plotly.colors as pc
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
-import statsmodels.stats.multitest as smt
 import streamlit as st
 from matplotlib.colors import to_rgba
 from scipy import stats
@@ -15,66 +13,36 @@ from scipy.stats import zscore
 
 def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", correction_method="None", alpha=0.05):
     """
-    Compute pairwise comparisons and return a detailed DataFrame.
+    Pairwise comparisons for plot overlays, through the biostats engine so that brackets use the same
+    family and correction as the summary table (audit S6). Parametric = pairwise Welch t, non-parametric =
+    pairwise Mann-Whitney; the automatic strategy follows the Welch-first policy.
     """
-    n_groups = len(data_list)
-    results = []
-    
-    # Helper to get p-value and stat
-    def calculate_stat_p(x, y):
-        try:
-            if test_type == "Force Parametric (T-test/ANOVA)":
-                stat, p = stats.ttest_ind(x, y, nan_policy='omit')
-                test_name = "T-test"
-            elif test_type == "Force Non-Parametric (Mann-Whitney/Kruskal)":
-                stat, p = stats.mannwhitneyu(x, y, alternative='two-sided')
-                test_name = "Mann-Whitney"
-            else:
-                # Auto-Detect: Default to Mann-Whitney U
-                stat, p = stats.mannwhitneyu(x, y, alternative='two-sided')
-                test_name = "Mann-Whitney"
-            return stat, p, test_name
-        except Exception:
-            return np.nan, 1.0, "Error"
+    from biostats.multiplicity import normalize_method
+    from biostats.posthoc import pairwise_comparisons
 
-    # 1. Compute all stats
-    raw_p_values = []
-    temp_results = []
-
-    for i, j in combinations(range(n_groups), 2):
-        x, y = data_list[i], data_list[j]
-        if len(x) > 0 and len(y) > 0:
-            stat, p, test_name = calculate_stat_p(x, y)
-            raw_p_values.append(p)
-            temp_results.append({
-                "Group 1": group_labels[i],
-                "Group 2": group_labels[j],
-                "Test": test_name,
-                "Statistic": stat,
-                "P-Value": p,
-                "g1_index": i,
-                "g2_index": j
-            })
-
-    if not temp_results:
+    label = str(test_type)
+    method = "mannwhitney" if "Non-Parametric" in label or "non-parametric" in label else "welch"
+    try:
+        adjust = normalize_method(correction_method)
+    except ValueError:
+        adjust = "none"
+    groups = {str(lbl): np.asarray(vals, dtype=float) for lbl, vals in zip(group_labels, data_list, strict=False)}
+    index_of = {str(lbl): i for i, lbl in enumerate(group_labels)}
+    table = pairwise_comparisons(groups, method=method, adjust_method=adjust, alpha=alpha)
+    if table.empty:
         return pd.DataFrame()
+    rows = []
+    for _, r in table.iterrows():
+        p_adj = r["p_adj"]
+        rows.append({
+            "Group 1": r["group_1"], "Group 2": r["group_2"], "Test": r["method"], "Statistic": r["statistic"],
+            "P-Value": r["p_raw"], "g1_index": index_of[r["group_1"]], "g2_index": index_of[r["group_2"]],
+            "P-Value (Adj)": p_adj, "Significant": bool(p_adj == p_adj and p_adj < alpha),
+            "Significance Level": "***" if p_adj < 0.001 else "**" if p_adj < 0.01 else "*" if p_adj < 0.05 else "ns",
+            "Estimate": r["estimate"], "Effect": r["effect"], "Effect Name": r["effect_name"], "Adjustment": r["adjustment"],
+        })
+    return pd.DataFrame(rows)
 
-    # 2. Apply Correction
-    if correction_method == "Bonferroni":
-        _, p_corrected, _, _ = smt.multipletests(raw_p_values, alpha=alpha, method='bonferroni')
-    elif correction_method == "Benjamini-Hochberg (FDR)":
-        _, p_corrected, _, _ = smt.multipletests(raw_p_values, alpha=alpha, method='fdr_bh')
-    else:
-        p_corrected = raw_p_values
-
-    # 3. Build Final DataFrame
-    for res, p_adj in zip(temp_results, p_corrected):
-        res["P-Value (Adj)"] = p_adj
-        res["Significant"] = p_adj < alpha
-        res["Significance Level"] = "***" if p_adj < 0.001 else "**" if p_adj < 0.01 else "*" if p_adj < 0.05 else "ns"
-        results.append(res)
-
-    return pd.DataFrame(results)
 
 def compute_significant_pairs(data_list, test_type="Auto-Detect", correction_method="None", alpha=0.05, p_value_func=None):
     """
@@ -906,52 +874,25 @@ def create_qq_plot(data, title="Q-Q Plot"):
     return fig
 
 def create_bland_altman_plot(df, method1, method2, title="Bland-Altman Plot"):
-    """
-    Generates a Bland-Altman plot.
-    """
-    data1 = df[method1]
-    data2 = df[method2]
-    mean = np.mean([data1, data2], axis=0)
-    diff = data1 - data2
-    md = np.mean(diff)
-    sd = np.std(diff, axis=0)
+    """Bland-Altman plot with the bias, the limits of agreement (SD with ddof=1) and their confidence bands (audit S10)."""
+    from biostats.agreement import bland_altman
 
+    ba = bland_altman(df[method1], df[method2])
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=mean, y=diff, mode='markers', name='Differences'))
-    
-    # Mean Difference Line
-    fig.add_shape(type="line",
-        x0=min(mean), y0=md, x1=max(mean), y1=md,
-        line=dict(color="red", width=2, dash="dash"),
-        name="Mean Diff"
-    )
-    fig.add_trace(go.Scatter(x=[min(mean), max(mean)], y=[md, md], mode='lines', name='Mean Diff', line=dict(color='red', dash='dash'), showlegend=False))
-
-    # Limits of Agreement
-    upper_loa = md + 1.96 * sd
-    lower_loa = md - 1.96 * sd
-    
-    fig.add_shape(type="line",
-        x0=min(mean), y0=upper_loa, x1=max(mean), y1=upper_loa,
-        line=dict(color="green", width=2, dash="dot"),
-        name="+1.96 SD"
-    )
-    fig.add_trace(go.Scatter(x=[min(mean), max(mean)], y=[upper_loa, upper_loa], mode='lines', name='+1.96 SD', line=dict(color='green', dash='dot'), showlegend=False))
-
-    fig.add_shape(type="line",
-        x0=min(mean), y0=lower_loa, x1=max(mean), y1=lower_loa,
-        line=dict(color="green", width=2, dash="dot"),
-        name="-1.96 SD"
-    )
-    fig.add_trace(go.Scatter(x=[min(mean), max(mean)], y=[lower_loa, lower_loa], mode='lines', name='-1.96 SD', line=dict(color='green', dash='dot'), showlegend=False))
-
-    fig.update_layout(
-        title=title,
-        xaxis_title=f"Mean of {method1} and {method2}",
-        yaxis_title=f"Difference ({method1} - {method2})",
-        template="plotly_white"
-    )
+    fig.add_trace(go.Scatter(x=ba.means, y=ba.differences, mode="markers", name="Differences"))
+    x0, x1 = float(np.min(ba.means)), float(np.max(ba.means))
+    for y, name, dash in ((ba.bias, f"Bias {ba.bias:.3g} (95% CI {ba.bias_ci.lower:.3g} to {ba.bias_ci.upper:.3g})", "dash"),
+                          (ba.loa_upper, f"+1.96 SD {ba.loa_upper:.3g}", "dot"), (ba.loa_lower, f"-1.96 SD {ba.loa_lower:.3g}", "dot")):
+        fig.add_trace(go.Scatter(x=[x0, x1], y=[y, y], mode="lines", name=name, line={"dash": dash}))
+    for ci in (ba.bias_ci, ba.loa_upper_ci, ba.loa_lower_ci):
+        fig.add_trace(go.Scatter(x=[x0, x1, x1, x0], y=[ci.lower, ci.lower, ci.upper, ci.upper], fill="toself", mode="none",
+                                 fillcolor="rgba(31,95,139,0.10)", showlegend=False, hoverinfo="skip"))
+    fig.update_layout(title=title, xaxis_title=f"Mean of {method1} and {method2}", yaxis_title=f"Difference ({method1} - {method2})",
+                      template="plotly_white")
+    if ba.warnings:
+        fig.add_annotation(text=ba.warnings[0], xref="paper", yref="paper", x=0, y=1.08, showarrow=False, font={"size": 11})
     return fig
+
 
 def create_roc_curve(df, true_col, score_col, pos_label=None):
     """
@@ -976,9 +917,16 @@ def create_roc_curve(df, true_col, score_col, pos_label=None):
 
     fpr, tpr, thresholds = roc_curve(y_true, y_score, pos_label=pos_label)
     roc_auc = auc(fpr, tpr)
+    try:  # DeLong interval (audit S10)
+        from biostats.diagnostic import delong_auc
+
+        d = delong_auc(y_true.tolist(), y_score.tolist(), pos_label=pos_label)
+        auc_label = f"ROC curve (AUC = {roc_auc:.3f}, 95% CI {d['ci'].lower:.3f} to {d['ci'].upper:.3f}, DeLong)"
+    except Exception:
+        auc_label = f"ROC curve (AUC = {roc_auc:.3f})"
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name=f'ROC curve (area = {roc_auc:.2f})', line=dict(color='darkorange', width=2)))
+    fig.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name=auc_label, line=dict(color='darkorange', width=2)))
     fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', name='Random Chance', line=dict(color='navy', width=2, dash='dash')))
     
     fig.update_layout(

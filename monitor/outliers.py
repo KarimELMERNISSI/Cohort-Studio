@@ -1,5 +1,4 @@
 ######################################## PACKAGES ########################################
-import numpy as np  # extend some specific Dataframes manipulation
 import pandas as pd  # for Dataframes manipulation
 from sklearn.cluster import DBSCAN  # Density-Based Spatial Clustering of Applications with Noise
 from sklearn.compose import ColumnTransformer
@@ -16,6 +15,7 @@ from sklearn.preprocessing import (  # preprocess non numerical variables and sc
 )
 
 import enrich.data_imputation as edi
+from biostats._types import RANDOM_STATE
 
 
 ######################################## DEBUG ########################################
@@ -44,13 +44,37 @@ def find_outliers_zscore(series, threshold=3):
     Outliers are identified as values with absolute Z-score greater than the specified threshold.
     For non-numeric columns, it returns an empty Series with dtype=bool.
     """
-    if series.dtype in ['int64', 'float64']:
+    if _is_continuous(series):
         z_scores = (series - series.mean()) / series.std()
         outliers = (z_scores.abs() > threshold)
-        return outliers
+        return outliers.fillna(False)
     else:
-        # Return an empty Series for non-numeric columns
+        # Non-numeric, boolean or binary columns: outlier scores are meaningless (audit S14)
         return pd.Series(index=series.index, dtype=bool, data=False)
+
+
+def _is_continuous(series) -> bool:
+    """Numeric (any width, nullable included), not boolean, and more than two distinct values."""
+    return (
+        pd.api.types.is_numeric_dtype(series)
+        and not pd.api.types.is_bool_dtype(series)
+        and series.nunique(dropna=True) > 2
+    )
+
+
+def find_outliers_mad(series, threshold=3.5):
+    """
+    Robust outliers with the modified Z-score 0.6745 (x - median) / MAD (Iglewicz & Hoaglin 1993).
+    Unlike the mean/SD Z-score, the median and MAD are not inflated by the outliers themselves.
+    """
+    if not _is_continuous(series):
+        return pd.Series(index=series.index, dtype=bool, data=False)
+    median = series.median()
+    mad = (series - median).abs().median()
+    if mad == 0 or pd.isna(mad):
+        return pd.Series(index=series.index, dtype=bool, data=False)
+    modified_z = 0.6745 * (series - median) / mad
+    return (modified_z.abs() > threshold).fillna(False)
 
 
 def find_outliers_boxplot(series, tolerance=1.5):
@@ -73,23 +97,12 @@ def find_outliers_boxplot(series, tolerance=1.5):
     Values outside this range are considered potential outliers. For non-numeric columns,
     it returns an empty Series with dtype=bool.
     """
-    if series.dtype not in ['int64', 'float64']: 
-        # Skip non-numeric columns
+    if not _is_continuous(series):
+        # Non-numeric, boolean or binary columns (0/1 integers included): IQR = 0 would flag every positive case (audit S14)
         return pd.Series(index=series.index, dtype=bool, data=False)
-    else:
-        # Use boxplot statistics to identify potential outliers
-        lower_bound = series.quantile(0.25) - abs(tolerance) * (series.quantile(0.75) - series.quantile(0.25))
-        upper_bound = series.quantile(0.75) + abs(tolerance) * (series.quantile(0.75) - series.quantile(0.25))
-        outliers = (series < lower_bound) | (series > upper_bound)
-        ## Exclude binary case which are not well handled by this method
-        # Convert the expected set to a string representation to handle nan values
-        unique_values = series.unique()
-        unique_values_str = set(str(value) for value in unique_values)
-        expected_set_str = set(str(value) for value in {0.0, 1.0, np.nan})
-        if unique_values_str == expected_set_str:
-            return pd.Series(index=series.index, dtype=bool, data=False)
-        else:  
-            return outliers
+    lower_bound = series.quantile(0.25) - abs(tolerance) * (series.quantile(0.75) - series.quantile(0.25))
+    upper_bound = series.quantile(0.75) + abs(tolerance) * (series.quantile(0.75) - series.quantile(0.25))
+    return ((series < lower_bound) | (series > upper_bound)).fillna(False)
 
 
 # réfléchir à une alternative qui s'appuierait sur des quantiles bas de fréquence. Hypothèse d'outliers basée sur une sous-représentation
@@ -342,7 +355,7 @@ def find_isolation_forest_outliers(
     # Define the full pipeline with preprocessing and IsolationForest
     full_pipeline = Pipeline([
         ('data_preprocessing', preprocessor),
-        ('clf', IsolationForest(n_estimators=n_estimators, max_samples=max_samples, contamination=contamination))
+        ('clf', IsolationForest(n_estimators=n_estimators, max_samples=max_samples, contamination=contamination, random_state=RANDOM_STATE))
     ])
 
     full_pipeline.fit(data)
@@ -517,7 +530,7 @@ def find_isolation_forest_outliers(
 #     # Define the full pipeline with preprocessing and IsolationForest
 #     full_pipeline = Pipeline([
 #         ('data_preprocessing', imputer),
-#         ('clf', IsolationForest(n_estimators=n_estimators, max_samples=max_samples, contamination=contamination))
+#         ('clf', IsolationForest(n_estimators=n_estimators, max_samples=max_samples, contamination=contamination, random_state=RANDOM_STATE))
 #     ])
 
 #     full_pipeline.fit(data)

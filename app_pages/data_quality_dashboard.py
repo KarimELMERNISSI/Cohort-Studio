@@ -428,17 +428,20 @@ def render_dashboard(df, config):
                                     # Detailed Interpretation
                                     if mcar_result['p_value'] < 0.05:
                                         st.error("""
-                                        **Result: Likely Not MCAR** (p < 0.05)
-                                        
-                                        The test rejects the null hypothesis. The missingness pattern appears to be systematic (MAR or MNAR).
-                                        You should investigate potential dependencies using the **MAR Indicator** tab.
-                                        """)
+                                        **Evidence against MCAR** (p < 0.05)
+
+                                        Observed means differ between missingness patterns more than expected under MCAR, so the
+                                        mechanism is MAR or MNAR; Little's test cannot tell these two apart. Investigate which
+                                        variables predict missingness with the **MAR Indicator** below.
+""")
                                     else:
                                         st.success("""
-                                        **Result: Likely MCAR** (p >= 0.05)
-                                        
-                                        The test fails to reject the null hypothesis. There is no strong evidence against the data being Missing Completely at Random.
-                                        """)
+                                        **No evidence against MCAR** (p >= 0.05)
+
+                                        The test does not reject MCAR. This does not prove MCAR (the test has limited power for
+                                        small samples or weak dependencies) and it cannot distinguish MAR from MNAR; check the
+                                        dependency scan as well. Estimates use the EM mean and covariance (Little 1988).
+""")
                 st.markdown("#### Missing At Random (MAR) Indicator")
                 st.markdown("Checks if the missingness of a specific variable is influenced by the values of other variables.")
                 

@@ -8,7 +8,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-import statsmodels.stats.multitest as smt
 import streamlit as st
 from scipy import stats
 from scipy.stats import t as t_dist
@@ -29,7 +28,9 @@ from biostats.zscores import reference_zscores
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from utils.data_analyzer import DataAnalyzer
-from ui.components import no_dataset
+from app_pages.analysis_diagnostic import run_diagnostic_accuracy
+from biostats.multiplicity import adjust as adjust_pvalues
+from ui.components import no_dataset, result_card
 
 
 def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
@@ -213,7 +214,7 @@ def app():
         
         st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
 
-    tabs = st.tabs(["Analysis", "Power & Sample Size", "Z-Score & Reference", "Test Guide & Education"])
+    tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Power & Sample Size", "Z-Score & Reference", "Test Guide & Education"])
 
     with tabs[0]:
         if analysis_mode == "Univariate (Group Comparison)":
@@ -222,13 +223,16 @@ def app():
             run_multivariate_analysis(df_analysis, analyzer)
 
     with tabs[1]:
-        run_power_analysis(df, analyzer)
+        run_diagnostic_accuracy(df, analyzer)
 
     with tabs[2]:
+        run_power_analysis(df, analyzer)
+
+    with tabs[3]:
         # Use raw data for Z-Score tab as it has its own standardization logic
         run_zscore_analysis(df, analyzer)
 
-    with tabs[3]:
+    with tabs[4]:
         show_educational_content()
 
 def run_univariate_analysis(df, analyzer):
@@ -306,14 +310,10 @@ def run_univariate_analysis(df, analyzer):
     
     # Apply Multiple Testing Correction
     if correction_method != "None" and not results_df.empty:
-        p_values = results_df["P-Value"].fillna(1.0).values
-        if correction_method == "Bonferroni":
-            reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='bonferroni')
-        elif correction_method == "Benjamini-Hochberg (FDR)":
-            reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='fdr_bh')
-        
+        # One family: the variables tested in this run (audit S9); NaN p-values stay NaN
+        pvals_corrected = adjust_pvalues(results_df["P-Value"].tolist(), correction_method)
         results_df["P-Value (Adj)"] = pvals_corrected
-        results_df["Significant (Adj)"] = ["Yes" if p < 0.05 else "No" for p in pvals_corrected]
+        results_df["Significant (Adj)"] = ["Yes" if (p == p and p < 0.05) else "No" for p in pvals_corrected]
         
         # Reorder columns to show adjusted p-value next to original
         cols = list(results_df.columns)
@@ -346,12 +346,12 @@ def run_univariate_analysis(df, analyzer):
             results_df['Sample Info'] = results_df['Sample Info'].apply(fmt_sample)
 
     if correction_method != "None":
-        st.info("""
-        **Multiple Testing Correction Applied**
-        
-        When testing many variables, the chance of finding a "significant" result by random chance increases.
-        *   **Bonferroni**: Very conservative. Controls the Family-Wise Error Rate.
-        *   **Benjamini-Hochberg**: Controls the False Discovery Rate (FDR). Recommended for exploratory analysis.
+        st.info(f"""
+        **Multiple testing correction: {correction_method}**
+
+        The family is the set of variables tested in this run. Holm controls the family-wise error rate
+        (recommended for confirmatory comparisons), Benjamini-Hochberg controls the false discovery rate
+        (exploratory screens), Bonferroni is the conservative classic. Raw and adjusted p-values are both shown.
         """)
     
     # Download Button
@@ -368,7 +368,7 @@ def run_univariate_analysis(df, analyzer):
         display_df['Assumptions'] = display_df['Assumptions'].str.split('; ')
 
     # Style the dataframe
-    format_dict = {"P-Value": "{:.4f}", "Statistic": "{:.2f}", "Effect Size": "{:.3f}"}
+    format_dict = {"P-Value": "{:.4f}", "Statistic": "{:.2f}", "Effect Size": "{:.3f}", "Estimate": "{:.3f}"}
     subset_cols = ['P-Value']
     
     if "P-Value (Adj)" in results_df.columns:
@@ -402,13 +402,16 @@ def run_univariate_analysis(df, analyzer):
         es_type = row.get('Effect Type', '')
         
         # Determine if effect size is small/medium/large based on effect type
-        if es_type in ["Cohen's d", "Rank-Biserial r"]:
+        es_type_l = str(es_type).lower()
+        if "hedges" in es_type_l or "cohen" in es_type_l:
             is_large = es >= 0.5
-        elif es_type in ["Eta Squared", "η²H", "Epsilon Squared"]:
-            is_large = es >= 0.06
-        elif es_type == "Cramer's V":
+        elif "rank-biserial" in es_type_l:
             is_large = es >= 0.3
-        elif es_type == "Odds Ratio":
+        elif "eta" in es_type_l or "omega" in es_type_l or "epsilon" in es_type_l:
+            is_large = es >= 0.06
+        elif "cramer" in es_type_l:
+            is_large = es >= 0.3
+        elif "odds" in es_type_l:
             is_large = es >= 1.5 or es <= 0.67  # Moderate effect
         else:
             is_large = es >= 0.3  # Default
@@ -438,44 +441,35 @@ def run_univariate_analysis(df, analyzer):
         with col_int1:
             # Significant + Large Effect
             if sig_large:
-                st.markdown(f"""
-                <div style="background-color: #f1f8e9; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #43a047;">
-                    <strong style="color: #2e7d32;">Statistically and Clinically Significant ({len(sig_large)})</strong><br/>
-                    <span style="font-size: 0.9em;">{', '.join(sig_large[:5])}{' ...' if len(sig_large) > 5 else ''}</span><br/>
-                    <span style="font-size: 0.8em; color: #558b2f;">Strong statistical evidence paired with meaningful effect magnitude. Prioritize for clinical translation.</span>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"**p < 0.05 with a large observed effect ({len(sig_large)})**")
+                    st.caption(", ".join(sig_large[:5]) + (" ..." if len(sig_large) > 5 else ""))
+                    st.caption("Report the estimate with its confidence interval; a large point estimate with a wide interval is still uncertain.")
             
             # Non-Significant + Small Effect
             if nonsig_small:
-                st.markdown(f"""
-                <div style="background-color: #f9fbe7; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #9e9d24;">
-                    <strong style="color: #558b2f;">True Negatives / No Effect ({len(nonsig_small)})</strong><br/>
-                    <span style="font-size: 0.9em;">{', '.join(nonsig_small[:5])}{' ...' if len(nonsig_small) > 5 else ''}</span><br/>
-                    <span style="font-size: 0.8em; color: #689f38;">Negligible effect size and non-significant p-value, consistent with the null hypothesis.</span>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"**Not significant, small observed effect ({len(nonsig_small)})**")
+                    st.caption(", ".join(nonsig_small[:5]) + (" ..." if len(nonsig_small) > 5 else ""))
+                    st.caption("Compatible with no effect and with small effects: the interval shows which effects remain plausible. "
+                               "Absence of evidence is not evidence of absence.")
         
         with col_int2:
             # Significant + Small Effect
             if sig_small:
-                st.markdown(f"""
-                <div style="background-color: #fff8e1; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #ffb300;">
-                    <strong style="color: #f57f17;">Statistically Significant with Small Effect ({len(sig_small)})</strong><br/>
-                    <span style="font-size: 0.9em;">{', '.join(sig_small[:5])}{' ...' if len(sig_small) > 5 else ''}</span><br/>
-                    <span style="font-size: 0.8em; color: #b78103;">Likely detected due to sample size. Verify whether this magnitude meets minimum clinically important difference (MCID).</span>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"**p < 0.05 with a small observed effect ({len(sig_small)})**")
+                    st.caption(", ".join(sig_small[:5]) + (" ..." if len(sig_small) > 5 else ""))
+                    st.caption("Precisely estimated small effects reach significance in large samples; judge clinical relevance "
+                               "against a minimal important difference, not against the p-value.")
             
             # Non-Significant + Large Effect
             if nonsig_large:
-                st.markdown(f"""
-                <div style="background-color: #ffebee; padding: 14px; border-radius: 8px; margin: 5px 0; border-left: 4px solid #e53935;">
-                    <strong style="color: #c62828;">Potentially Underpowered / Indeterminate ({len(nonsig_large)})</strong><br/>
-                    <span style="font-size: 0.9em;">{', '.join(nonsig_large[:5])}{' ...' if len(nonsig_large) > 5 else ''}</span><br/>
-                    <span style="font-size: 0.8em; color: #b71c1c;">Substantial effect size without reaching alpha=0.05. High risk of Type II error; inspect power analysis tab.</span>
-                </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    st.markdown(f"**Inconclusive: large observed effect, p >= 0.05 ({len(nonsig_large)})**")
+                    st.caption(", ".join(nonsig_large[:5]) + (" ..." if len(nonsig_large) > 5 else ""))
+                    st.caption("The interval spans both no effect and a large effect: the sample cannot tell them apart. "
+                               "Report the interval and use the power tab to plan a confirmatory study.")
         
         # Summary stats
         n_sig = len(sig_large) + len(sig_small)
@@ -488,18 +482,21 @@ def run_univariate_analysis(df, analyzer):
         
         | Test | Effect Size | Small | Medium | Large |
         |:-----|:------------|:-----:|:------:|:-----:|
-        | T-test | Cohen's d / Hedges' g | 0.2 | 0.5 | 0.8 |
+        | Welch / Student t-test | Hedges' g (95% CI, noncentral t) | 0.2 | 0.5 | 0.8 |
+        | Mann-Whitney | rank-biserial r (bootstrap CI) | 0.1 | 0.3 | 0.5 |
+        | Welch ANOVA / ANOVA | eta squared (95% CI), omega squared | 0.01 | 0.06 | 0.14 |
+        | Kruskal-Wallis | eta squared (H) | 0.01 | 0.06 | 0.14 |
+        | Chi-square | bias-corrected Cramer's V | 0.1 | 0.3 | 0.5 |
+        | 2x2 tables | RR / OR / RD with 95% CI | 1 = no association | | |
 
-        | Mann-Whitney | Rank-Biserial r | 0.1 | 0.3 | 0.5 |
-        | ANOVA | η² | 0.01 | 0.06 | 0.14 |
-        | Kruskal-Wallis | η²H | 0.01 | 0.06 | 0.14 |
-        | Chi-Square | Cramér's V | 0.1 | 0.3 | 0.5 |
-        | Fisher's Exact | Odds Ratio | 1 = No effect | >1 Increased | <1 Decreased |
-        
-        **Multiple Testing Correction**:
-        - **Bonferroni**: Very conservative. Controls Family-Wise Error Rate (FWER). Best for confirmatory analysis.
-        - **Benjamini-Hochberg (FDR)**: Controls False Discovery Rate. Recommended for exploratory analysis.
-        """)
+        **Multiple testing correction** (family = the variables tested in this run):
+        - **Holm**: controls the family-wise error rate; uniformly more powerful than Bonferroni. Default.
+        - **Benjamini-Hochberg (FDR)**: controls the false discovery rate; suited to exploratory screens.
+        - **Bonferroni**: the conservative classic.
+
+        Pairwise comparisons after an omnibus test use Games-Howell (Welch ANOVA), Tukey HSD (ANOVA) or Dunn with Holm (Kruskal-Wallis);
+        every pair is reported with raw and adjusted p-values.
+""")
 
     # Detailed View
     st.subheader("Detailed Analysis & Visualization")
@@ -535,22 +532,29 @@ def run_univariate_analysis(df, analyzer):
         )
         
         with col_det2:
-            st.info(f"""
-            **{detail_res['Test Used']} Result**:
-            Statistic: **{detail_res['Statistic']:.4f}** | P-Value: **{detail_res['P-Value']:.4e}**
-            
-            *Assumptions/Reasoning*: {detail_res['Assumptions']}
-            """)
+            detail_result = au.compare_variable_result(df_analysis_filtered, group_col, selected_detail, manual_test=selected_test_method) if is_numeric else None
+            if detail_result is not None:
+                result_card(detail_result)
+            else:
+                st.info(f"**{detail_res['Test Used']}**: statistic {detail_res['Statistic']:.4f}, p = {detail_res['P-Value']:.4g}. {detail_res['Assumptions']}")
 
-        # Post-Hoc Analysis
-        if detail_res['P-Value'] < 0.05 and detail_res['Test Used'] in ["ANOVA", "Kruskal-Wallis"]:
-            st.subheader("Post-Hoc Analysis")
-            st.markdown("Since the global test is significant, we perform post-hoc tests to see which groups differ.")
+        # Pairwise comparisons: every pair with raw and adjusted p-values (audit S7)
+        if is_numeric and n_groups > 2:
+            st.subheader("Pairwise comparisons")
+            st.caption("All pairs are reported; the method follows the omnibus test (Games-Howell after Welch ANOVA, "
+                       "Tukey after ANOVA, Dunn with Holm after Kruskal-Wallis). Estimates are group 2 minus group 1.")
             ph_res = au.perform_post_hoc(df_analysis_filtered, group_col, selected_detail, detail_res['Test Used'])
             if ph_res is not None and not ph_res.empty:
-                st.dataframe(ph_res, width="stretch")
+                st.dataframe(
+                    ph_res.style.format({"estimate": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "statistic": "{:.3f}",
+                                         "p_raw": "{:.4f}", "p_adj": "{:.4f}", "effect": "{:.3f}"}, na_rep=""),
+                    width="stretch", hide_index=True,
+                )
+                refs = ph_res.attrs.get("references") or []
+                if refs:
+                    st.caption("Method: " + " | ".join(refs))
             else:
-                st.write("No significant pairwise differences found after correction.")
+                st.caption("Pairwise comparisons are not available for this variable.")
 
         # Epidemiological 2x2 Risk & Association Panel (explicit orientation, audit S1)
         if is_categorical and "epi_2x2" in detail_res:
@@ -881,7 +885,7 @@ def perform_ancova(df, target, group, covariates):
                 st.markdown("##### 1. Homogeneity of Regression Slopes (Parallel Slopes)")
                 if ancova_diag.slopes_homogeneous:
                     st.success(
-                        f"Parallel slopes assumption validated (Interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} >= 0.05). "
+                        f"No evidence against parallel slopes (interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} >= 0.05). "
                         "The covariate effect is uniform across groups; standard ANCOVA adjusted means are statistically valid."
                     )
                 else:
@@ -898,7 +902,7 @@ def perform_ancova(df, target, group, covariates):
             with col_diag1:
                 fig_qq = vu.create_qq_plot(model.resid, title="Q-Q Plot of Residuals")
                 st.plotly_chart(fig_qq, width="stretch")
-                norm_status = "Residual normality confirmed" if ancova_diag.residuals_normal else "Residuals deviate from normality"
+                norm_status = "No evidence against residual normality" if ancova_diag.residuals_normal else "Residuals deviate from normality"
                 st.caption(f"{norm_status} (p = {ancova_diag.residual_normality_pvalue:.4f})")
             
             with col_diag2:
@@ -907,7 +911,7 @@ def perform_ancova(df, target, group, covariates):
                                      title="Residuals vs Fitted Values")
                 fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
                 st.plotly_chart(fig_rvf, width="stretch")
-                homo_status = "Homoscedasticity confirmed" if ancova_diag.homoscedastic else "Heteroscedasticity detected"
+                homo_status = "No evidence of heteroscedasticity" if ancova_diag.homoscedastic else "Heteroscedasticity detected"
                 homo_p_str = f"p = {ancova_diag.homoscedasticity_pvalue:.4f}" if ancova_diag.homoscedasticity_pvalue is not None else "N/A"
                 st.caption(f"{homo_status} ({homo_p_str})")
 
@@ -937,7 +941,11 @@ def visualize_result(df, group_col, target, analyzer):
         groups = df[group_col].dropna().unique()
         if len(groups) >= 2:
             data_list = [df[df[group_col] == g][target].dropna().values for g in groups]
-            significant_pairs = vu.compute_significant_pairs(data_list)
+            significant_pairs = vu.compute_significant_pairs(
+                data_list,
+                test_type=st.session_state.get("test_pref", "Auto-Detect (Recommended)"),
+                correction_method=st.session_state.get("correction", "Holm (recommended)"),
+            )  # same family and correction as the summary table (audit S6)
             
             fig = vu.create_boxplot_with_significance_streamlit(
                 df=df,
@@ -1395,7 +1403,7 @@ def run_zscore_analysis(df, analyzer):
                     | Mean > +2 or < -2 | Group is **abnormally** different | Investigate clinically |
                     | Small CI | Precise estimate (large n or low variance) | High confidence |
                     | Large CI | Imprecise estimate (small n or high variance) | Interpret cautiously |
-                    | Groups overlap | No significant difference between groups | Similar profiles |
+                    | Groups overlap | Little evidence of a difference; check the confidence intervals | Similar profiles |
                     | Groups don't overlap | Likely significant difference | Compare further |
                     
                     **Epidemiological Use:**
@@ -1843,9 +1851,9 @@ def show_educational_content():
             <tr>
                 <td style="border: 1px solid #ddd; padding: 12px; font-weight: bold;">p ≥ 0.05<br/>(Not Significant)</td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #e8f5e9;">
-                    <strong>True negative</strong><br/>
-                    No effect detected, none exists<br/>
-                    <em>→ Consistent with null hypothesis</em>
+                    <strong>Correct non-rejection</strong><br/>
+                    No evidence of an effect (an effect may still exist)<br/>
+                    <em>→ Compatible with the null; judge by the interval and the power</em>
                 </td>
                 <td style="border: 1px solid #ddd; padding: 12px; background-color: #ffcdd2;">
                     <strong>Possibly underpowered</strong><br/>
@@ -2279,7 +2287,7 @@ def run_power_analysis(df, analyzer):
         )
         # Sync selector with session state if needed, but simpler to just let user select
     with col2:
-        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Achieved Power"])
+        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Power at this sample size"])
         
     st.divider()
     
@@ -2328,7 +2336,7 @@ def run_power_analysis(df, analyzer):
             nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_ttest", help="Number of observations in the first group.")
             if st.button("Calculate Power"):
                 power_val = analysis.solve_power(effect_size=effect_size, nobs1=nobs1, alpha=alpha, ratio=ratio)
-                st.success(f"Achieved Power: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                st.success(f"Power at this sample size: **{power_val:.4f}** ({power_val*100:.1f}%)")
 
     elif test_type == "Mann-Whitney U (Non-parametric)":
         st.subheader("Mann-Whitney U Parameters")
@@ -2382,7 +2390,7 @@ def run_power_analysis(df, analyzer):
                 z_alpha = stats.norm.ppf(1 - alpha/2)
                 z_beta = np.sqrt(N_total * 12 * c * (1-c) * (p_xy - 0.5)**2) - z_alpha
                 power_val = stats.norm.cdf(z_beta)
-                st.success(f"Achieved Power: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                st.success(f"Power at this sample size: **{power_val:.4f}** ({power_val*100:.1f}%)")
 
     elif test_type == "ANOVA (One-way)":
         st.subheader("ANOVA Parameters")
@@ -2412,7 +2420,7 @@ def run_power_analysis(df, analyzer):
             if st.button("Calculate Power"):
                 res = anova_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha)
                 st.success(
-                    f"Achieved Power: **{res.power:.4f}** ({res.power * 100:.1f}%) for {int(nobs_per_group)} per group "
+                    f"Power at this sample size: **{res.power:.4f}** ({res.power * 100:.1f}%) for {int(nobs_per_group)} per group "
                     f"({int(res.n_total)} in total)"
                 )
                 st.caption(res.method)
@@ -2451,7 +2459,7 @@ def run_power_analysis(df, analyzer):
             if st.button("Calculate Power"):
                 res = kruskal_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha, are=are)
                 st.success(
-                    f"Achieved Power (approximate): **{res.power:.4f}** ({res.power * 100:.1f}%) "
+                    f"Power at this sample size (approximate): **{res.power:.4f}** ({res.power * 100:.1f}%) "
                     f"for {int(nobs_per_group)} per group"
                 )
                 st.caption(res.method)
@@ -2490,7 +2498,7 @@ def run_power_analysis(df, analyzer):
             nobs = st.number_input("Total Sample Size", value=int(default_n_total), step=1, key="n_total_chi2")
             if st.button("Calculate Power"):
                 res = chi2_independence_power(effect_size, nobs, int(df_chi2), alpha=alpha)
-                st.success(f"Achieved Power: **{res.power:.4f}** ({res.power * 100:.1f}%) with df = {int(df_chi2)}")
+                st.success(f"Power at this sample size: **{res.power:.4f}** ({res.power * 100:.1f}%) with df = {int(df_chi2)}")
                 st.caption(res.method)
 
     with st.expander("Methodology & References"):

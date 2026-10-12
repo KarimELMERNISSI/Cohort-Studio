@@ -210,10 +210,10 @@
           <span class="card-kicker">03 // MISSINGNESS PATTERNS</span>
           <h3 class="exploration-title">Little's MCAR Diagnostics &amp; Pairwise MAR Dependency</h3>
           <p class="exploration-desc">
-            Opaque missing data biases epidemiological inference. CMP applies a heuristic permutation test of Little's MCAR alongside pairwise dependency tests to detect whether omissions are missing completely at random or dependent on clinical covariates.
+            Opaque missing data biases epidemiological inference. CMP runs Little's MCAR test on EM estimates of the mean and covariance alongside pairwise dependency tests (whole family adjusted) to detect whether omissions are missing completely at random or dependent on clinical covariates.
           </p>
           <ul class="exploration-points">
-            <li><strong>Little's MCAR Permutation:</strong> Tests mean vector equivalence across missingness patterns (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>) to validate whether complete-case analysis is legitimate.</li>
+            <li><strong>Little's MCAR Test:</strong> Tests mean vector equivalence across missingness patterns (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>, EM estimates); rejection argues against MCAR, non-rejection does not prove it.</li>
             <li><strong>Pairwise MAR Dependency:</strong> Evaluates chi-square associations between missing indicators and observed clinical predictors.</li>
             <li><strong>Interactive Sparsity Matrix:</strong> Visual heatmap and dendrogram clustering co-missing variable blocks across longitudinal patient records.</li>
           </ul>
@@ -221,12 +221,12 @@
 
         <div class="exploration-card">
           <span class="card-kicker">04 // CLINICAL PHENOTYPING</span>
-          <h3 class="exploration-title">MICE, MissForest &amp; Multidimensional Stratification</h3>
+          <h3 class="exploration-title">Single imputation (chained equations, missForest) &amp; Multidimensional Stratification</h3>
           <p class="exploration-desc">
             Combine flexible multivariate imputation with unsupervised patient stratification. Automatically reduces high-dimensional clinical profiles using FAMD or PCA before clustering into actionable patient sub-phenotypes.
           </p>
           <ul class="exploration-points">
-            <li><strong>Non-Linear Imputation:</strong> Chained Random Forest (MissForest) and Predictive Mean Matching (MICE) preserving complex clinical covariance structures.</li>
+            <li><strong>Imputation:</strong> Iterative tree imputation (missForest algorithm, LightGBM learners) and single imputation by chained equations; the pages state that single imputation does not propagate imputation uncertainty.</li>
             <li><strong>Mixed-Data Phenotyping:</strong> Factor Analysis of Mixed Data (FAMD) handles continuous lab panels alongside categorical diagnosis flags.</li>
             <li><strong>Standard Semantic Ontologies:</strong> AI-driven variable renaming mapped directly to UMLS, SNOMED CT, and LOINC clinical terminology.</li>
           </ul>
@@ -317,30 +317,28 @@ metrics = auditor.run_audit(validity_method=<span class="token-str">"iqr"</span>
       <!-- Tab 3: Missingness & MCAR -->
       <div id="tab-mcar" class="showcase-panel">
         <div class="panel-content">
-          <h3 class="panel-title">Missingness Topology &amp; Little's MCAR Permutation</h3>
+          <h3 class="panel-title">Missingness Topology &amp; Little's MCAR Test</h3>
           <p class="panel-desc">
-            Determine whether missing lab results or survey fields introduce systematic bias. CMP executes a heuristic permutation test of Little's MCAR and runs pairwise dependency checks across all observed clinical variables.
+            Determine whether missing lab results or survey fields introduce systematic bias. CMP runs Little's MCAR test (EM estimates) and a family-adjusted scan of pairwise dependencies across all observed clinical variables.
           </p>
           <ul class="panel-features">
             <li>
-              <span><strong>Little's MCAR Test:</strong> Permutation test of normalized mean differences across missingness patterns (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>).</span>
+              <span><strong>Little's MCAR Test:</strong> Chi-square test of pattern-wise mean differences against EM estimates (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>).</span>
             </li>
             <li>
               <span><strong>Pairwise MAR Scans:</strong> Isolates specific baseline covariates that predict missingness in downstream endpoints.</span>
             </li>
             <li>
-              <span><strong>Guidance on Imputation:</strong> Informs the researcher whether Complete-Case Analysis, MICE, or MissForest is methodologically indicated.</span>
+              <span><strong>Guidance on Imputation:</strong> Informs the researcher whether complete-case analysis or an imputation strategy is methodologically indicated.</span>
             </li>
           </ul>
         </div>
         <div class="panel-code">
-          <pre><code><span class="token-cm"># Little's MCAR Permutation & Missingness Diagnostics</span>
-<span class="token-kw">from</span> explore.epidemiology_stats <span class="token-kw">import</span> run_littles_mcar_test
+          <pre><code><span class="token-cm"># Little's MCAR test (EM estimates) & missingness diagnostics</span>
+<span class="token-kw">from</span> biostats.mcar <span class="token-kw">import</span> littles_mcar_test
 
-mcar_res = run_littles_mcar_test(
-    df=longitudinal_cohort, 
-    numeric_cols=[<span class="token-str">"cholesterol"</span>, <span class="token-str">"ldl"</span>, <span class="token-str">"creatinine"</span>, <span class="token-str">"egfr"</span>],
-    n_permutations=<span class="token-num">1000</span>
+mcar_res = littles_mcar_test(
+    longitudinal_cohort[[<span class="token-str">"cholesterol"</span>, <span class="token-str">"ldl"</span>, <span class="token-str">"creatinine"</span>, <span class="token-str">"egfr"</span>]]
 )
 
 <span class="token-cm"># Check if data satisfies Missing Completely at Random</span>
@@ -351,9 +349,9 @@ mcar_res = run_littles_mcar_test(
       <!-- Tab 4: Imputation & Phenotyping -->
       <div id="tab-enrich" class="showcase-panel">
         <div class="panel-content">
-          <h3 class="panel-title">MICE &amp; MissForest Imputation Chained with Patient Phenotyping</h3>
+          <h3 class="panel-title">Single Imputation Chained with Patient Phenotyping</h3>
           <p class="panel-desc">
-            Resolve missing data using advanced predictive mean matching or chained random forests without distorting underlying clinical variance. Feed imputed features directly into dimensionality reduction and unsupervised clustering.
+            Resolve missing data with iterative tree imputation or chained equations (single imputation, uncertainty not propagated). Feed imputed features directly into dimensionality reduction and unsupervised clustering.
           </p>
           <ul class="panel-features">
             <li>
@@ -466,8 +464,8 @@ famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</spa
             </div>
             <div class="tree-branch non-parametric">
               <span class="branch-condition">IF Normality Rejected or Ordinal Severity Scale</span>
-              <span class="branch-action">Kruskal-Wallis + Dunn's FDR Post-Hoc</span>
-              <span class="branch-details">Calculates H-statistic based on average rank sums across cohorts. Pairwise post-hoc comparisons apply Benjamini-Hochberg False Discovery Rate.</span>
+              <span class="branch-action">Kruskal-Wallis + Dunn (Holm) post-hoc</span>
+              <span class="branch-details">Calculates H-statistic based on average rank sums across cohorts. Pairwise post-hoc comparisons report every pair with Holm-adjusted p-values.</span>
               <span class="formula-tag">&epsilon;&sup2; = (H - k + 1) / (N - k)</span>
             </div>
           </div>
@@ -583,7 +581,7 @@ famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</spa
               <td><strong>&ge; 3 Stratified Trial Arms</strong></td>
               <td>Omnibus normality and equal variance across all strata</td>
               <td><span class="test-pill">One-Way ANOVA</span> + Tukey HSD</td>
-              <td><span class="test-pill robust">Welch's ANOVA</span> + Games-Howell<br><span class="test-pill robust">Kruskal-Wallis</span> + Dunn's FDR</td>
+              <td><span class="test-pill robust">Welch's ANOVA</span> + Games-Howell<br><span class="test-pill robust">Kruskal-Wallis</span> + Dunn (Holm)</td>
               <td>Eta-squared: <code>&eta;&sup2; = SS_between / SS_total</code><br>Omega-squared: <code>&omega;&sup2; = (SS_b - df_b&times;MS_w) / (SS_t + MS_w)</code></td>
             </tr>
             <tr>
@@ -609,10 +607,10 @@ famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</spa
             </tr>
             <tr>
               <td><strong>Missing Data Pattern Diagnosis</strong></td>
-              <td>Permutation test comparing observed mean vectors across missing patterns</td>
-              <td>Complete Case Analysis (valid only if MCAR confirmed)</td>
-              <td><span class="test-pill robust">Heuristic Little's MCAR</span> + Pairwise MAR Tests</td>
-              <td>Permutation Mahalanobis distance:<br><code>d&sup2; = (x̄_obs - x̄_all)' &Sigma;⁻¹ (x̄_obs - x̄_all) ~ &chi;&sup2;</code></td>
+              <td>Chi-square test comparing pattern-wise observed means with EM estimates</td>
+              <td>Complete-case analysis (defensible only without evidence against MCAR)</td>
+              <td><span class="test-pill robust">Little's MCAR (EM)</span> + family-adjusted MAR scan</td>
+              <td>Mahalanobis distance of pattern means:<br><code>d&sup2; = (x̄_obs - x̄_all)' &Sigma;⁻¹ (x̄_obs - x̄_all) ~ &chi;&sup2;</code></td>
             </tr>
             <tr>
               <td><strong>Diagnostic Biomarker Cutoffs</strong></td>
