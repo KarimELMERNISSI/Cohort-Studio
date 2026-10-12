@@ -365,22 +365,19 @@ def app():
                 
                 if not nodes:
                     st.warning("No nodes found for the selected documents.")
-                
-                w = StreamlitGraphWidget(nodes=nodes, edges=edges)
+                else:
+                    w = StreamlitGraphWidget(nodes=nodes, edges=edges)
 
-                # Apply Mappings (Properties, not Init Args)
-                w.node_label_mapping = lambda n: n['properties']['label']
-                w.node_styles_mapping = get_node_style
-                w.node_label_style_mapping = get_node_label_style
-                w.node_tooltip_mapping = lambda n: n['properties']['description']
-                
-                w.edge_label_mapping = lambda e: e['properties']['label']
-                w.edge_styles_mapping = get_edge_style
-                w.edge_label_styles_mapping = get_edge_label_style
+                    # Apply Mappings (yfiles-graphs-for-streamlit 2.x API)
+                    w.node_label_mapping = lambda n: n['properties']['label']
+                    w.node_styles_mapping = get_node_style
+                    w.edge_label_mapping = lambda e: e['properties']['label']
+                    w.edge_styles_mapping = get_edge_style
 
-                w.height = 800
-                
-                w.show(key="doc_graph_widget", graph_layout=Layout.HIERARCHIC)
+                    try:
+                        w.show(key="doc_graph_widget", graph_layout=Layout.HIERARCHICAL, height=800)
+                    except Exception as graph_err:
+                        st.error(f"The document graph could not be rendered: {graph_err}")
                 
             with col_details:
                 st.subheader("Node Details")

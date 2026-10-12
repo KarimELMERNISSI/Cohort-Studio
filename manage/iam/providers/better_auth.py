@@ -9,7 +9,6 @@ resilient error handling.
 
 import logging
 import time
-from typing import Any
 
 import requests
 
@@ -182,7 +181,7 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 "email": username if "@" in username else f"{username}@local.cohort",
                 "password": password,
                 "role": role.value,
-                "isActive": auto_activate or (username == "admin"),
+                "isActive": bool(auto_activate),
             }
             resp = self._session.post(
                 f"{self.base_url}/sign-up/email",
@@ -190,7 +189,7 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 timeout=self.request_timeout,
             )
             if resp.status_code in (200, 201):
-                if auto_activate or username == "admin":
+                if auto_activate:
                     return True, "User created and activated successfully via Better Auth"
                 return True, "Account created! Awaiting administrator approval."
             elif resp.status_code == 409 or "exists" in resp.text.lower():

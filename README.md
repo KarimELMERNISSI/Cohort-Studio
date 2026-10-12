@@ -1,7 +1,7 @@
 # Cohort Monitoring Package
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![Test Suite](https://img.shields.io/badge/tests-165%2F165%20passed-success.svg?logo=pytest&logoColor=white)](tests/)
+[![CI](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
@@ -203,20 +203,30 @@ docker compose up -d
 
 ## Environment Configuration
 
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env` and fill in what you use (the example documents every variable the application reads). Key settings:
 
 ```env
-# Application Storage Root (default: ./data)
+# Application storage root (default: ./data)
 DATA_ROOT=./data
 
-# RAG & LLM Provider API Keys (configure those you use)
-GOOGLE_API_KEY=your_gemini_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
-MISTRAL_API_KEY=your_mistral_api_key_here
+# First administrator: created on first start when no active administrator exists
+# (alternatively: python manage_users.py create-admin <username>)
+CMP_ADMIN_USERNAME=admin
+CMP_ADMIN_PASSWORD=choose-a-long-passphrase
 
-# Local Ollama Host (for on-premise air-gapped LLM inference)
+# AI providers: Ollama is the default and keeps data on the server. Cloud providers are opt-in
+# and require an explicit confirmation in the app before any data is sent.
 OLLAMA_BASE_URL=http://localhost:11434
+GOOGLE_API_KEY=
+OPENAI_API_KEY=
+MISTRAL_API_KEY=
 ```
+
+### Administrator accounts and user management
+
+- Accounts created from the sign-in page are **pending** until an administrator activates them. The username `admin` receives no special treatment.
+- Bootstrap the first administrator with `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD` (or `CMP_ADMIN_PASSWORD_FILE`), or run `python manage_users.py create-admin <username>` (the password is prompted, never passed as an argument).
+- `python manage_users.py list | activate | deactivate | reset-password <username>` covers day-to-day administration.
 
 ---
 

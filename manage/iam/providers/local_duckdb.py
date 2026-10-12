@@ -8,7 +8,6 @@ clinical environments, and full backward compatibility.
 
 import logging
 import os
-from typing import Any
 
 import bcrypt
 import duckdb
@@ -88,8 +87,6 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             except Exception:
                 pass
 
-            # Administrator account is perpetually active
-            con.execute("UPDATE users SET is_active = TRUE, role = 'admin' WHERE username = 'admin'")
         except Exception as e:
             logger.error(f"Error initializing local user database: {e}")
         finally:
@@ -170,8 +167,9 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 return False, "Username already exists"
 
             hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            is_active = True if username == "admin" or auto_activate else False
-            role_val = "admin" if username == "admin" else role.value
+            # Accounts are never activated or promoted because of their name (audit E5).
+            is_active = bool(auto_activate)
+            role_val = role.value if isinstance(role, UserRole) else str(role)
 
             con.execute(
                 "INSERT INTO users (username, password_hash, is_active, role) VALUES (?, ?, ?, ?)",
@@ -271,9 +269,14 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
         finally:
             con.close()
 
+    def _is_admin_account(self, username: str) -> bool:
+        """True when the account exists and holds the administrator role."""
+        user = self.get_user(username)
+        return user is not None and str(user.role) == UserRole.ADMIN.value
+
     def deactivate_user(self, username: str) -> tuple[bool, str]:
-        """Deactivate a user account (admin protected)."""
-        if username == "admin":
+        """Deactivate a user account (administrator accounts are protected)."""
+        if self._is_admin_account(username):
             return False, "Cannot deactivate admin account"
         con = self._get_connection()
         if not con:
@@ -290,8 +293,8 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             con.close()
 
     def delete_user(self, username: str) -> tuple[bool, str]:
-        """Delete a user account (admin protected)."""
-        if username == "admin":
+        """Delete a user account (administrator accounts are protected)."""
+        if self._is_admin_account(username):
             return False, "Cannot delete admin account"
         con = self._get_connection()
         if not con:

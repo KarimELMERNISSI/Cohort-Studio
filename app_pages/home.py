@@ -10,7 +10,6 @@ import streamlit as st
 from yfiles_graphs_for_streamlit import (
     DashStyle,
     EdgeStyle,
-    LabelStyle,
     Layout,
     StreamlitGraphWidget,
 )
@@ -1369,9 +1368,7 @@ def app():
                             
                             if nodes:
                                 widget = StreamlitGraphWidget(nodes=nodes, edges=edges, heat_mapping="heat")
-                                widget.directed = False
                                 widget.node_label_mapping = lambda n: n['properties']['label']
-                                widget.node_label_style_mapping = lambda n: LabelStyle(color="#000000", text_position="center")
                                 widget.node_color_mapping = lambda n: n['properties']['color']
                                 
                                 def get_edge_style(edge):
@@ -1394,8 +1391,13 @@ def app():
                                 widget.edge_styles_mapping = get_edge_style
                                 widget.edge_label_mapping = lambda e: e['properties']['label']
                                 
-                                widget.height = 500
-                                widget.show(key="corr_network_graph", graph_layout=Layout.ORGANIC)
+                                # yfiles-graphs-for-streamlit 2.x: height/directed are show() arguments
+                                widget.show(
+                                    key="corr_network_graph",
+                                    graph_layout=Layout.ORGANIC,
+                                    directed=False,
+                                    height=500,
+                                )
                             else:
                                 st.info("No correlations found meeting the criteria.")
                     except Exception as e:

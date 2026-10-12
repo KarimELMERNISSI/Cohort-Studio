@@ -4,14 +4,13 @@ import os
 import re
 from typing import Any
 
-import bcrypt
 import duckdb
 import pandas as pd
 
 from utils.data_paths import get_datasets_dir, get_stats_dir
 
 from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
-from manage.iam.schemas import UserCredentials
+from manage.iam.schemas import UserCredentials, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +35,15 @@ class DBManager:
         """Initialize the users table with activation support."""
         self.iam_provider._init_database()
 
-    def create_user(self, username: str, password: str, auto_activate: bool = False) -> tuple[bool, str]:
-        """Create a new user. Admin is auto-activated, others need approval."""
-        return self.iam_provider.create_user(username, password, auto_activate=auto_activate)
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        auto_activate: bool = False,
+        role: UserRole = UserRole.RESEARCHER,
+    ) -> tuple[bool, str]:
+        """Create a new user (pending approval unless auto_activate is set)."""
+        return self.iam_provider.create_user(username, password, role=role, auto_activate=auto_activate)
 
     def verify_user(self, username: str, password: str) -> tuple[bool, str]:
         """Verify user credentials and check if account is active."""
@@ -58,6 +63,7 @@ class DBManager:
                 "is_active": u.is_active,
                 "created_at": u.created_at,
                 "status": "Active" if u.is_active else "Pending Approval",
+                "role": str(u.role),
             }
             for u in users
         ]

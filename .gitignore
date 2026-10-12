@@ -154,3 +154,7 @@ main.build/
 correlation_matrix.xlsx
 execution_log.txt
 
+# Secrets and local-only material (audit E12)
+.streamlit/secrets.toml
+DOCUMENTS/
+config/*.json

@@ -5,7 +5,6 @@ Tests LocalDuckDB, Better Auth (remote with in-memory TTL caching),
 Disabled provider, and the IAMManager facade.
 """
 
-from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,8 +12,6 @@ import pytest
 import requests
 
 from manage.iam import (
-    AuthResult,
-    BaseIAMProvider,
     BetterAuthIAMProvider,
     DisabledIAMProvider,
     IAMConfig,
@@ -22,9 +19,7 @@ from manage.iam import (
     IAMProviderType,
     LocalDuckDBIAMProvider,
     UserCredentials,
-    UserProfile,
     UserRole,
-    get_iam_manager,
 )
 
 
@@ -43,12 +38,24 @@ def local_provider(temp_db_path: str) -> LocalDuckDBIAMProvider:
 class TestLocalDuckDBIAMProvider:
     """Test suite for LocalDuckDBIAMProvider."""
 
-    def test_admin_auto_activation(self, local_provider: LocalDuckDBIAMProvider) -> None:
-        """Admin user is created and automatically activated."""
-        ok, msg = local_provider.create_user("admin", "AdminPassword123!")
+    def test_admin_username_is_not_auto_activated(self, local_provider: LocalDuckDBIAMProvider) -> None:
+        """Self-signup with the username 'admin' must not yield an active administrator (audit E5)."""
+        ok, _ = local_provider.create_user("admin", "AdminPassword123!")
         assert ok is True
 
         res = local_provider.authenticate(UserCredentials(username="admin", password="AdminPassword123!"))
+        assert res.success is False
+        profile = local_provider.get_user("admin")
+        assert profile is not None
+        assert profile.role == UserRole.RESEARCHER
+        assert profile.is_active is False
+
+    def test_bootstrap_admin_creation(self, local_provider: LocalDuckDBIAMProvider) -> None:
+        """An explicit administrator bootstrap creates an active admin account."""
+        ok, _ = local_provider.create_user("ops_admin", "AdminPassword123!", role=UserRole.ADMIN, auto_activate=True)
+        assert ok is True
+
+        res = local_provider.authenticate(UserCredentials(username="ops_admin", password="AdminPassword123!"))
         assert res.success is True
         assert res.user is not None
         assert res.user.role == UserRole.ADMIN
@@ -87,7 +94,7 @@ class TestLocalDuckDBIAMProvider:
 
     def test_admin_lockout_protection(self, local_provider: LocalDuckDBIAMProvider) -> None:
         """Admins cannot be deactivated or deleted."""
-        local_provider.create_user("admin", "secret")
+        local_provider.create_user("admin", "secret", role=UserRole.ADMIN, auto_activate=True)
         deact_ok, deact_msg = local_provider.deactivate_user("admin")
         assert deact_ok is False
         assert "cannot deactivate admin" in deact_msg.lower()

@@ -9,6 +9,7 @@ import pytest
 
 import utils.data_paths as dp
 from manage.db_manager import DBManager
+from manage.iam.schemas import UserRole
 
 
 @pytest.fixture
@@ -23,8 +24,8 @@ class TestDBManagerUserAuth:
     """Test suite for user credential management and activation workflow."""
 
     def test_create_and_verify_admin_user(self, isolated_db_manager: DBManager) -> None:
-        """Admin user is automatically activated upon creation."""
-        ok, msg = isolated_db_manager.create_user("admin", "admin_secret123")
+        """An explicitly bootstrapped administrator is active immediately."""
+        ok, msg = isolated_db_manager.create_user("admin", "admin_secret123", auto_activate=True, role=UserRole.ADMIN)
         assert ok is True
         assert "activated" in msg.lower()
 
@@ -87,7 +88,7 @@ class TestDBManagerUserAuth:
 
     def test_admin_cannot_be_deactivated_or_deleted(self, isolated_db_manager: DBManager) -> None:
         """Safety checks preventing accidental admin lockout."""
-        isolated_db_manager.create_user("admin", "pass")
+        isolated_db_manager.create_user("admin", "pass", auto_activate=True, role=UserRole.ADMIN)
         
         deact_ok, deact_msg = isolated_db_manager.deactivate_user("admin")
         assert deact_ok is False
@@ -114,7 +115,7 @@ class TestDBManagerUserAuth:
 
     def test_get_all_users_and_status(self, isolated_db_manager: DBManager) -> None:
         """Status overview lists users with their activation state."""
-        isolated_db_manager.create_user("admin", "p1")
+        isolated_db_manager.create_user("admin", "p1", auto_activate=True, role=UserRole.ADMIN)
         isolated_db_manager.create_user("user_a", "p2", auto_activate=False)
         isolated_db_manager.create_user("user_b", "p3", auto_activate=True)
 

@@ -28,14 +28,12 @@ def render_dashboard(df, config):
     validity_method = st.session_state['validity_outlier_method']
     validity_params = st.session_state['validity_outlier_params']
     
-    print(f"[DEBUG render_dashboard] validity_method={validity_method}, validity_params={validity_params}")
 
     # Initialize Auditor
     auditor = DataQualityAuditor(df, config=config)
     metrics = auditor.run_audit(validity_method=validity_method, validity_params=validity_params)
     advice_list = auditor.generate_advice()
     
-    print(f"[DEBUG render_dashboard] metrics={metrics}")
 
     # --- Global Score Calculation ---
     with st.expander("Score Weights Configuration", expanded=False):

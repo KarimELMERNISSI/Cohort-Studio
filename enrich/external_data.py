@@ -5,6 +5,8 @@ import pandas as pd  # for Dataframes manipulation
 
 import manage.file_handling as mf
 
+logger = logging.getLogger(__name__)
+
 # def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
 #     """
 #     Enrich the dataset based on a common row identifier or multiple identifiers.
@@ -134,7 +136,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
             )
 
             # Print matching identifiers for debugging
-            print("Matching identifiers for conflict resolution:\n", merged_identifiers_df)
+            logger.debug("Matching identifiers for conflict resolution: %d rows", len(merged_identifiers_df))
 
             
 
@@ -181,10 +183,9 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
                 unmatched_identifiers_mask = additional_df[right_id_names].apply(tuple, axis=1).isin(unmatched_identifiers)
 
                 # Display unmatched identifiers for debugging
-                print("Unmatched identifiers:", unmatched_identifiers)
-                print("Mask for unmatched identifiers:\n", unmatched_identifiers_mask, unmatched_identifiers_mask.sum())
+                logger.debug("Unmatched identifiers: %d", len(unmatched_identifiers))
                 additional_df_excluding_conflicts = additional_df[unmatched_identifiers_mask]
-                print("Rows in additional DataFrame after excluding conflicts:\n", additional_df_excluding_conflicts)
+                logger.debug("Rows kept from additional data after excluding conflicts: %d", len(additional_df_excluding_conflicts))
                 combined_df = pd.concat([df, additional_df_excluding_conflicts], ignore_index=True)
                 
             else:  # Default or 'keep'

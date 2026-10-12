@@ -120,7 +120,6 @@ def run_tsne(
         "perplexity_used": effective_perplexity,
         "n_samples": len(numeric_data),
         "sampled": sampled,
-        "sampled": sampled,
         "kl_divergence": tsne.kl_divergence_ if hasattr(tsne, 'kl_divergence_') else None,
         "feature_names": numeric_data.columns.tolist()
     }
@@ -165,7 +164,6 @@ def run_umap(
     info = {
         "n_neighbors_used": min(n_neighbors, len(numeric_data) - 1),
         "min_dist": min_dist,
-        "n_samples": len(numeric_data),
         "n_samples": len(numeric_data),
         "sampled": sampled,
         "feature_names": numeric_data.columns.tolist()

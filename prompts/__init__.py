@@ -9,7 +9,7 @@ Usage:
     prompt = context_analysis(sample_text="...", columns_context="...")
 """
 
-from .anomaly_criteria import anomaly_criteria_prompt
+from .anomaly_criteria import anomaly_criteria_prompt as anomaly_criteria_prompt
 from .column_renaming import column_renaming
 from .context_analysis import context_analysis
 from .contextualize_variables import contextualize_variables

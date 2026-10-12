@@ -1249,22 +1249,20 @@ def app():
         else:
             # 3. Initialize Widget
             widget = StreamlitGraphWidget(nodes=nodes, edges=edges)
-            
-            # 4. Apply Mappings
+
+            # 4. Apply Mappings (yfiles-graphs-for-streamlit 2.x API)
             widget.node_label_mapping = lambda n: n['properties']['label']
             widget.node_styles_mapping = get_node_style
-            widget.node_label_style_mapping = get_node_label_style
-            widget.node_tooltip_mapping = lambda n: n['properties']['tooltip']
-            
             widget.edge_label_mapping = lambda e: e['properties']['label']
             widget.edge_styles_mapping = get_edge_style
-            widget.edge_label_styles_mapping = get_edge_label_style
 
-            # 5. Render
-            widget.height = 750 
-            
-            # Rendering and getting selection
-            selection_data = widget.show(key="main_kg_view", graph_layout=Layout.HIERARCHIC)
+            # 5. Render. Height/layout are show() arguments in 2.x; failures are isolated so the
+            #    remaining tabs of this page still render.
+            try:
+                selection_data = widget.show(key="main_kg_view", graph_layout=Layout.HIERARCHICAL, height=750)
+            except Exception as graph_err:
+                st.error(f"The knowledge graph could not be rendered: {graph_err}")
+                selection_data = None
             
             # 6. Interaction Panel
             if selection_data:
@@ -2065,7 +2063,6 @@ def app():
 
                                         # Clear suggestions to reset state?
                                         del st.session_state['refine_suggestions_text']
-                                        import time
                                         time.sleep(1)
                                         st.rerun()
 

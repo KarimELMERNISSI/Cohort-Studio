@@ -7,7 +7,6 @@ or disabled authentication.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from .schemas import AuthResult, UserCredentials, UserProfile, UserRole
 

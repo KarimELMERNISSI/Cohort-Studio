@@ -181,6 +181,48 @@ class IAMManager:
         """Update user credentials."""
         return self._provider.update_password(username, new_password)
 
+    def ensure_bootstrap_admin(self) -> tuple[bool, str]:
+        """
+        Create the initial administrator when no active administrator exists.
+
+        Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
+        CMP_ADMIN_PASSWORD_FILE. Nothing is created when the IAM provider is disabled, when an
+        active administrator already exists, or when no bootstrap password is configured.
+        """
+        if not self._provider.is_enabled:
+            return False, "IAM disabled; no bootstrap needed"
+        try:
+            users = self._provider.list_users()
+        except Exception as exc:  # provider unreachable: never block application start-up
+            logger.warning("Admin bootstrap skipped, could not list users: %s", exc)
+            return False, f"Could not list users: {exc}"
+        if any(str(u.role) == UserRole.ADMIN.value and u.is_active for u in users):
+            return False, "An active administrator already exists"
+
+        username = os.getenv("CMP_ADMIN_USERNAME", "admin").strip()
+        password = os.getenv("CMP_ADMIN_PASSWORD")
+        password_file = os.getenv("CMP_ADMIN_PASSWORD_FILE")
+        if not password and password_file and os.path.isfile(password_file):
+            with open(password_file, encoding="utf-8") as handle:
+                password = handle.read().strip()
+        if not password:
+            logger.warning(
+                "No active administrator exists. Set CMP_ADMIN_PASSWORD (or CMP_ADMIN_PASSWORD_FILE) "
+                "or run `python manage_users.py create-admin <username>`."
+            )
+            return False, "No bootstrap credentials configured"
+        if self._provider.get_user(username) is not None:
+            logger.warning(
+                "Bootstrap account '%s' exists but is not an active administrator; "
+                "use `python manage_users.py` to activate it or create another administrator.",
+                username,
+            )
+            return False, f"User '{username}' exists but is not an active administrator"
+        ok, msg = self._provider.create_user(username, password, role=UserRole.ADMIN, auto_activate=True)
+        if ok:
+            logger.info("Bootstrap administrator '%s' created from environment configuration.", username)
+        return ok, msg
+
 
 # Global singleton instance and accessor
 _GLOBAL_IAM_MANAGER: IAMManager | None = None

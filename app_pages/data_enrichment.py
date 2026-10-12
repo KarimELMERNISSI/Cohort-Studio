@@ -23,6 +23,8 @@ from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 
+logger = logging.getLogger(__name__)
+
 # Note: DataTransformationEngine class was removed (dead code)
 # See git history if needed
 
@@ -760,14 +762,13 @@ def tokenize_formula(formula: str) -> list[str]:
               .split(sep=" ; ")
               )
     tokens = [token.strip() for token in tokens]
-    print(f"tokens:{tokens}")
+    logger.debug("formula tokens: %s", tokens)
     
     # Replace placeholders with the original quoted tokens
     for idx, token in enumerate(quoted_tokens):
         placeholder = f"__quoted_{idx}__"
         stripped_token = token[2:-2].strip()
         tokens = [stripped_token if t.strip() == placeholder else t.strip() for t in tokens]
-    print(tokens)
     return tokens
 
 
@@ -1101,7 +1102,7 @@ def normalize_formula(formula: str, column_mapping: dict) -> str:
     str
         The formula with normalized column names.
     """
-    print("original formula:", formula)
+    logger.debug("original formula: %s", formula)
     
     # Sort mapping by length of column name descending to prevent substring replacement issues
     # column_mapping values are Series, so we access .name
@@ -1109,12 +1110,12 @@ def normalize_formula(formula: str, column_mapping: dict) -> str:
     
     for normalized, original in sorted_mapping:
         col_name = str(original.name)
-        print(f"normalized {normalized}, original {col_name}")
+        logger.debug("normalized column name %s -> %s", col_name, normalized)
         # Replace each column name with its corresponding normalized variable name
         formula = formula.replace(f'""{col_name}""', f'{normalized}')
         formula = formula.replace(col_name, normalized)  # in case the column name is without quotes
         
-    print("norm formula:", formula)
+    logger.debug("normalized formula: %s", formula)
     return formula
 
 
@@ -1202,7 +1203,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
                 parsed_series, _ = smart_parse_dates(dataset[col])
                 dataset[col] = parsed_series
     except Exception as e:
-        print(f"Error during date conversion: {e}")
+        logger.debug("Date conversion failed: %s", e)
 
     # Helper for robust subtraction (handles Date-Date -> Days automatically)
     def safe_sub(a, b):
@@ -1232,7 +1233,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
 
     local_vars = create_variables_dict(dataset, identified_columns, constants)
     
-    print(f"local_vars dict: {local_vars} \nInitial formula: {formula}")
+    logger.debug("evaluate_formula: %d variables available; formula=%s", len(local_vars), formula)
     normalized_formula = normalize_formula(formula, local_vars)
     
     local_vars['__safe_sub__'] = safe_sub # Inject helper AFTER normalization to avoid attribute error
@@ -1246,9 +1247,8 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         
         # Compile and Evaluate
         code = compile(tree, filename="<string>", mode="eval")
-        print(f"Normalized & Rewritten formula: {normalized_formula}")
+        logger.debug("Normalized formula: %s", normalized_formula)
         result = eval(code, {"np":np, "pd":pd}, local_vars)
-        print(result)
         
         # Convert numpy array to Series if needed
         if isinstance(result, np.ndarray):
@@ -1870,6 +1870,18 @@ def merge_transformed_columns(main_data, transformed_data, handle_duplicates="re
 
 
 def compute_transformations(dataframe):
+    # Local imports: heavy ML libraries are only needed in this section (these names were undefined before).
+    import prince
+    import umap
+    from sklearn.manifold import TSNE
+    from sklearn.preprocessing import (
+        LabelEncoder,
+        MinMaxScaler,
+        OneHotEncoder,
+        OrdinalEncoder,
+        StandardScaler,
+    )
+
     st.subheader("Transformation and Aggregation")
 
     # Define available transformations
@@ -2281,7 +2293,6 @@ def compute_transformations(dataframe):
                                 initial_variable=col,
                                 category=category
                             )
-                            print(f"{new_col_name}:{encoded_data[:, i]}")
                             new_columns[new_col_name]  = encoded_data[:, i]
                 
                 elif transformation == "Label Encoding":
@@ -2786,7 +2797,13 @@ def app():
     # 2. Handle Missing Values
     # 2. Handle Missing Values
     with impute_tab:
-        
+        if st.session_state.get('enriched_df') is None:
+            _NO_DATA = "No dataset loaded. Upload a dataset from the sidebar or load a saved version first."
+            st.info(_NO_DATA)
+            with define_var_tab:
+                st.info(_NO_DATA)
+            return
+
         tab_targeted, tab_global = st.tabs([
             "Targeted Imputation (Custom Formula)", 
             "Global Imputation (Auto-MICE/KNN/Mean)"

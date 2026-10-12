@@ -80,4 +80,5 @@ python_functions = ["test_*"]
 markers = [
     "integration: integration tests requiring external services or API keys",
 ]
+addopts = "-m 'not integration' -ra"
 

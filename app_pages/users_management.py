@@ -11,6 +11,7 @@ This page allows administrators to:
 import streamlit as st
 
 from manage.db_manager import DBManager
+from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role
 
 
 def app():
@@ -18,7 +19,7 @@ def app():
     
     # Double-check admin access (should already be filtered in main.py)
     username = st.session_state.get('username')
-    if username != 'admin':
+    if not is_admin_role(st.session_state.get('user_role')):
         st.error("Access Denied. Admin privileges required.")
         st.stop()
     
@@ -76,7 +77,7 @@ def app():
         cols = st.columns([2, 2, 2, 2])
         
         with cols[0]:
-            if uname == 'admin':
+            if is_admin_role(user.get('role')):
                 st.markdown(f"**{uname}** `(Admin)`")
             else:
                 st.markdown(f"**{uname}**")
@@ -88,8 +89,8 @@ def app():
                 st.markdown(":orange[**Pending**]")
         
         with cols[2]:
-            if uname == 'admin':
-                st.markdown("—")  # Admin is always active
+            if is_admin_role(user.get('role')):
+                st.markdown("—")  # administrator accounts cannot be deactivated
             elif is_active:
                 if st.button("Deactivate", key=f"deact_{uname}", help=f"Deactivate {uname}"):
                     success, msg = db.deactivate_user(uname)
@@ -108,8 +109,8 @@ def app():
                         st.error(msg)
         
         with cols[3]:
-            if uname != 'admin':
-                if st.button("", key=f"delete_{uname}", help=f"Delete user {uname}"):
+            if not is_admin_role(user.get('role')):
+                if st.button("Delete", key=f"delete_{uname}", help=f"Delete user {uname}"):
                     st.session_state[f"confirm_delete_{uname}"] = True
     
     # --- Delete Confirmation Dialogs ---
@@ -138,7 +139,7 @@ def app():
     st.subheader("Reset User Password")
     
     # Filter out admin from password reset
-    non_admin_users = [u['username'] for u in users if u['username'] != 'admin']
+    non_admin_users = [u['username'] for u in users if not is_admin_role(u.get('role'))]
     
     if not non_admin_users:
         st.info("No non-admin users to manage.")
@@ -153,7 +154,7 @@ def app():
             new_password = st.text_input(
                 "New Password",
                 type="password",
-                help="Enter the new password (minimum 4 characters)"
+                help=f"Enter the new password (minimum {MIN_PASSWORD_LENGTH} characters)"
             )
             
             confirm_password = st.text_input(
@@ -167,8 +168,8 @@ def app():
             if submit:
                 if not new_password:
                     st.error("Password cannot be empty.")
-                elif len(new_password) < 4:
-                    st.error("Password must be at least 4 characters.")
+                elif len(new_password) < MIN_PASSWORD_LENGTH:
+                    st.error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
                 elif new_password != confirm_password:
                     st.error("Passwords do not match.")
                 else:
@@ -185,10 +186,10 @@ def app():
         **User Activation:**
         - New users start with **Pending Approval** status
         - Users cannot log in until admin activates their account
-        - Admin account is always active
+        - Administrator accounts are created with `python manage_users.py create-admin <name>` or CMP_ADMIN_* settings
         
         **Security Notes:**
         - Passwords are stored using **bcrypt** hashing (one-way encryption)
         - Original passwords **cannot be retrieved** - only reset
-        - The **admin** account cannot be deleted or deactivated
+        - Administrator accounts cannot be deleted or deactivated
         """)

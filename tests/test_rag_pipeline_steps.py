@@ -13,16 +13,12 @@ Covers:
 import json
 from unittest.mock import MagicMock
 
-import pytest
 
 from manage.rag.schemas import ProviderConfig, ProviderType, RAGConfig
 from manage.rag_computed_vars import parse_formula_vars
 from manage.rag_documents import DocumentsMixin
 from manage.rag_schemas import (
-    AlternativeFormula,
     ComputedVariableSuggestion,
-    FormulaCorrection,
-    ProxyVariable,
     SuggestionResponse,
     TheoreticalConcept,
     TheoreticalConceptList,
@@ -86,7 +82,7 @@ class TestFormulaParsingAndValidation:
         assert valid is False or len(vars_found) == 0
 
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 class TestDocumentKnowledgeGraphFormatting:
     """Test graph structure compatibility with yFiles visual specifications."""

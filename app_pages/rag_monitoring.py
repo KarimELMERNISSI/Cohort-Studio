@@ -20,7 +20,6 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    import plotly.express as px
     import plotly.graph_objects as go
     PLOTLY_AVAILABLE = True
 except ImportError:

@@ -1,5 +1,3 @@
-import logging
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -13,9 +11,7 @@ import utils.export_utils as eu
 import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from manage.db_manager import DBManager
-from utils.visualization_utils import DataAnalyzer
-
-logging.basicConfig(level=logging.DEBUG)
+from utils.data_analyzer import DataAnalyzer
 
 def app():
     # Initialize DB Manager
@@ -287,7 +283,6 @@ def app():
             "Clustermap": {
                 "title": "Clustermap (Hierarchical Clustering)",
                 "desc": "A matrix-based visualization that applies hierarchical clustering to reorganize rows and columns based on similarity.",
-                "usage": "Uncover hidden structures, patterns, and relationships in complex, high-dimensional datasets.",
                 "usage": "Uncover hidden structures, patterns, and relationships in complex, high-dimensional datasets.",
                 "insight": "Identify clusters of similar samples or features, indicated by dendrogram structures and color intensity.",
                 "inputs": "2 or more Numeric variables."

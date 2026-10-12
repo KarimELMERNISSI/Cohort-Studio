@@ -6,7 +6,6 @@ and publication modebar configuration.
 """
 
 from io import BytesIO
-from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go

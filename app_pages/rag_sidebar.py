@@ -17,6 +17,42 @@ from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 
 load_dotenv()
 
+CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
+
+
+def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | None:
+    """Session-scoped API key entry.
+
+    The server-side key is never shown or pre-filled and nothing is written to ``os.environ``
+    (audit E6). Leaving the field empty falls back to the server-configured key, if any.
+    """
+    typed = st.text_input(label, value="", type="password", help=help_text, key=key)
+    if os.getenv(env_var):
+        st.caption("A server-side key is configured; leave this empty to use it.")
+    st.session_state.rag_manager.api_key = typed or None
+    return typed or None
+
+
+def _render_cloud_consent(selected_provider: str, display_names: dict) -> bool:
+    """Explicit, session-scoped confirmation before any data can be sent to a cloud provider (audit E6)."""
+    if selected_provider not in CLOUD_PROVIDERS:
+        st.session_state.rag_manager.cloud_consent = False
+        return True
+    st.warning(
+        f"Cloud provider selected ({display_names.get(selected_provider, selected_provider)}). "
+        "When the AI engine is used, the following leaves this server: column names and types, "
+        "up to 3 sample rows, the most frequent values of each column, your anomaly criteria, "
+        "the text of indexed PDFs and your chat messages. Do not enable this for identifiable "
+        "patient data unless your data-protection approval covers it."
+    )
+    consent = st.checkbox(
+        "I confirm this data may be sent to the selected cloud provider",
+        key="rag_cloud_consent",
+        help="Required before any data is sent to a cloud AI provider. Applies to this session only.",
+    )
+    st.session_state.rag_manager.cloud_consent = bool(consent)
+    return bool(consent)
+
 
 def render_rag_sidebar():
     """Renders the professional RAG & AI Configuration sidebar."""
@@ -43,7 +79,8 @@ def render_rag_sidebar():
         }
         
         provider_options = list(provider_display_names.keys())
-        default_provider_idx = 0
+        # Local-first default: no data leaves the server unless a cloud provider is chosen explicitly.
+        default_provider_idx = provider_options.index("ollama")
         
         selected_provider = st.selectbox(
             "AI Provider",
@@ -61,7 +98,7 @@ def render_rag_sidebar():
 
         # --- 1. OLLAMA (LOCAL OPEN SOURCE) ---
         if selected_provider == "ollama":
-            st.caption("100% Offline, HIPAA/GDPR private inference. Zero telemetry.")
+            st.caption("Runs on this server or your network. No data leaves it.")
             base_url = st.text_input(
                 "Ollama Host Endpoint",
                 value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
@@ -106,17 +143,7 @@ def render_rag_sidebar():
 
         # --- 2. GOOGLE GEMINI ---
         elif selected_provider == "gemini":
-            env_api_key = os.getenv("GOOGLE_API_KEY", "")
-            api_key = st.text_input(
-                "Google GenAI API Key",
-                value=env_api_key,
-                type="password",
-                help="Required for Gemini inference.",
-                key="rag_gemini_api_key"
-            )
-            if api_key:
-                st.session_state.rag_manager.api_key = api_key
-                os.environ["GOOGLE_API_KEY"] = api_key
+            api_key = _api_key_input("GOOGLE_API_KEY", "Google GenAI API Key", "rag_gemini_api_key", "Required for Gemini inference.")
 
             base_gemini_models = [
                 "gemini-2.5-flash",
@@ -163,17 +190,7 @@ def render_rag_sidebar():
 
         # --- 3. OPENAI ---
         elif selected_provider == "openai":
-            env_api_key = os.getenv("OPENAI_API_KEY", "")
-            api_key = st.text_input(
-                "OpenAI API Key",
-                value=env_api_key,
-                type="password",
-                help="Required for OpenAI inference.",
-                key="rag_openai_api_key"
-            )
-            if api_key:
-                st.session_state.rag_manager.api_key = api_key
-                os.environ["OPENAI_API_KEY"] = api_key
+            api_key = _api_key_input("OPENAI_API_KEY", "OpenAI API Key", "rag_openai_api_key", "Required for OpenAI inference.")
 
             openai_model_options = [
                 "gpt-4o-mini",
@@ -200,17 +217,7 @@ def render_rag_sidebar():
 
         # --- 4. MISTRAL AI ---
         elif selected_provider == "mistral":
-            env_api_key = os.getenv("MISTRAL_API_KEY", "")
-            api_key = st.text_input(
-                "Mistral API Key",
-                value=env_api_key,
-                type="password",
-                help="Required for Mistral AI inference.",
-                key="rag_mistral_api_key"
-            )
-            if api_key:
-                st.session_state.rag_manager.api_key = api_key
-                os.environ["MISTRAL_API_KEY"] = api_key
+            api_key = _api_key_input("MISTRAL_API_KEY", "Mistral API Key", "rag_mistral_api_key", "Required for Mistral AI inference.")
 
             mistral_model_options = [
                 "mistral-small-latest",
@@ -231,6 +238,8 @@ def render_rag_sidebar():
                 index=0,
                 key="rag_mistral_embed_select"
             )
+
+        cloud_consent = _render_cloud_consent(selected_provider, provider_display_names)
 
         st.markdown("---")
         st.markdown("##### Document Library")
@@ -319,7 +328,9 @@ def render_rag_sidebar():
             help="Reuse already computed vector embeddings to skip re-indexing."
         )
 
-        if st.button("Initialize / Reindex RAG System", key="rag_init_button"):
+        if not cloud_consent:
+            st.caption("Confirm the data-sharing notice above to enable initialization.")
+        if st.button("Initialize / Reindex RAG System", key="rag_init_button", disabled=not cloud_consent):
             with st.spinner("Initializing AI Engine..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()

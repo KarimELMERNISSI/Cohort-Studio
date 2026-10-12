@@ -7,7 +7,6 @@ sheet name sanitization, openpyxl chart export, and yFiles network graph generat
 
 from io import BytesIO
 
-import numpy as np
 import pandas as pd
 import pytest
 

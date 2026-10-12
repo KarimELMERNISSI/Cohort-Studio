@@ -1,9 +1,13 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import statsmodels.stats.multitest as smt
 import streamlit as st
 from scipy import stats
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+logger = logging.getLogger(__name__)
 
 
 def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_cols, group_col_options=None, default_group_col="None", target_col_options=None, key_prefix=""):

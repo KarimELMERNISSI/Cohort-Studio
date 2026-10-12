@@ -7,13 +7,12 @@ and error handling.
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import pytest
 
-import app_pages.data_enrichment
 from manage.reproduction_manager import execute_trace_pipeline
 
 

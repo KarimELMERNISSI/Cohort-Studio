@@ -1419,9 +1419,9 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
 def outlier_values_dialog(outlier_summary):
     """Display outlier values in a dialog"""
     st.write("Outlier Values:")
-    for col, stats in outlier_summary.items():
+    for col, col_stats in outlier_summary.items():
         st.subheader(col)
-        st.write(stats['outlier_values'])
+        st.write(col_stats['outlier_values'])
 
 
 def display_results_with_outliers(filtered_df: pd.DataFrame, st):
@@ -2267,6 +2267,7 @@ def app():
     
     # Load or select dataset (assuming df is already loaded into session state) 
     df = st.session_state.get('data', None)
+    analyzer = None
     if df is not None:
         analyzer = DataAnalyzer(st.session_state.get('data', None))
         
@@ -2321,7 +2322,7 @@ def app():
         if df is not None:
             render_dashboard(df, st.session_state.config)
         else:
-            st.warning("Please upload a dataset in the 'Main View' first.")
+            st.info("No dataset loaded. Upload a dataset from the sidebar first.")
 
     with tab1:
         anomaly_family = "clinical_anomalies"
@@ -2392,18 +2393,21 @@ def app():
 
 
     with tab3:
-        # Outliers Handler
-        with st.expander("Outliers Handler"):
-            df = add_outlier_handling_ui(df, analyzer.numeric_cols)
-        
-        with st.expander("Results", expanded=False):
-            display_results_with_outliers(filtered_df=df, st=st)
+        if df is None or analyzer is None:
+            st.info("No dataset loaded. Upload a dataset from the sidebar first.")
+        else:
+            # Outliers Handler
+            with st.expander("Outliers Handler"):
+                df = add_outlier_handling_ui(df, analyzer.numeric_cols)
+
+            with st.expander("Results", expanded=False):
+                display_results_with_outliers(filtered_df=df, st=st)
     #    st.json(st.session_state.config["mask_families"])
     #    add_mask_family(st.session_state.config, st)
 
     with tab4:
         # 1. Add External Data
-        with st.expander("Upload de Data Files To Compare", expanded=True):
+        with st.expander("Upload the data files to compare", expanded=True):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -2425,7 +2429,6 @@ def app():
 
         with st.expander("Process Comparison", expanded=False):
             if data_c1 is not None and data_c2 is not None:
-                st.write("---------------\n PROCESS COMPARISON \n --------------")
                 
                 common_columns = list(set(data_c1.columns) & set(data_c2.columns)) 
 
@@ -2497,9 +2500,6 @@ def app():
                         width='stretch'
                     ):
                         st.success("Comparison results exported successfully!")
-                            
-                    else:
-                        st.error("Failed to process the comparison.")
                 else:
                     st.warning("Please upload both datasets first.")
 

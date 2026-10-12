@@ -44,6 +44,17 @@ from .rag_taxonomy import TaxonomyMixin
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["CHROMA_TELEMETRY_IMPL"] = "false"
 
+CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
+_ENV_KEY_NAMES = {"gemini": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}
+
+
+def _env_api_key(provider: str | None) -> str | None:
+    """Server-configured API key for a cloud provider; used only when the user typed none."""
+    env_name = _ENV_KEY_NAMES.get((provider or "").lower())
+    if not env_name:
+        return None
+    return os.getenv(env_name) or None
+
 # Suppress specific ChromaDB telemetry errors
 logging.getLogger('chromadb.telemetry.product.posthog').setLevel(logging.CRITICAL)
 
@@ -52,7 +63,6 @@ try:
     from langchain_chroma import Chroma
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
-    from langchain_core.runnables import RunnablePassthrough
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     from manage.rag import (
@@ -124,8 +134,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # Formulas Registry
         self.formulas_registry = {}
         
-        if api_key and provider == "gemini":
-            os.environ["GOOGLE_API_KEY"] = api_key
+        # Explicit per-session confirmation is required before data may be sent to a cloud provider.
+        self.cloud_consent = False
 
     def is_available(self):
         """Check if RAG dependencies are available."""
@@ -136,7 +146,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         try:
             cfg = ProviderConfig(
                 provider=ProviderType(provider.lower()),
-                api_key=self.api_key,
+                api_key=self.api_key or _env_api_key(provider),
                 base_url=base_url or self.base_url,
             )
             connector = ConnectorFactory.get_llm_connector(cfg)
@@ -238,7 +248,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.provider = provider_clean
         self.base_url = base_url
 
-        if provider_clean in ["gemini", "openai", "mistral"] and not self.api_key:
+        effective_key = self.api_key or _env_api_key(provider_clean)
+        if provider_clean in CLOUD_PROVIDERS and not getattr(self, "cloud_consent", False):
+            return False, (
+                "Cloud providers require explicit confirmation that data may leave this server. "
+                "Tick the confirmation in the RAG & AI Configuration panel first."
+            )
+        if provider_clean in CLOUD_PROVIDERS and not effective_key:
             return False, f"{provider_clean.capitalize()} API Key is required."
 
         try:
@@ -276,7 +292,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 provider=provider_clean,
                 model_name=model_name,
                 embedding_model=embedding_model,
-                api_key=self.api_key,
+                api_key=effective_key,
                 base_url=base_url,
                 temperature=temperature,
             )

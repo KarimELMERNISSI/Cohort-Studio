@@ -1,0 +1,12 @@
+# Streamlit runtime configuration (committed). Secrets belong in secrets.toml, which is git-ignored.
+
+[browser]
+# No usage statistics leave the server (privacy requirement for clinical deployments).
+gatherUsageStats = false
+
+[server]
+maxUploadSize = 500
+enableXsrfProtection = true
+
+[theme]
+base = "light"

@@ -6,6 +6,8 @@ import pandas as pd  # for Dataframes manipulation
 
 import manage.file_handling as mf
 
+logger = logging.getLogger(__name__)
+
 ######################################## FUNCTIONS FOR EXCEL SPECIFIC FUNCTIONALITIES ########################################
 
 def highlight_modifications(row, dataset,common_id_only_in_df1, common_id_only_in_df2, common_id_modified, common_id=['visit_id']):
@@ -122,7 +124,7 @@ def compare_dataframes(df1, df2, id_column, exception_list):
     try:
         # Merge df1 and df2 based on 'visit_id' using left join
         merged_df = pd.merge(df2, df1, on=id_column, suffixes=('_df2', '_df1'), how='outer', indicator=True)
-        print("\n MERGED DF : \n",merged_df.head())
+        logger.debug("Merged frame shape: %s", merged_df.shape)
         # Initialize modification column with False
         merged_df['modification'] = False
         # Initialize column to store the names of differing columns
@@ -132,15 +134,14 @@ def compare_dataframes(df1, df2, id_column, exception_list):
             id_column = [id_column]
         # Exclude id_column(s) from the column list
         cols_merge = [col for col in merged_df.columns if col not in id_column]
-        print("\n cols_merge : \n",cols_merge) 
+        logger.debug("Merged columns: %s", cols_merge)
         #exception_list = []
         cols_to_compare = [col for col in df2.columns if col not in id_column and col in df1.columns and col not in exception_list]
         df1_not_matched_cols = [col for col in df1.columns if col not in id_column and col not in cols_to_compare and col not in exception_list]
         df2_not_matched_cols = [col for col in df2.columns if col not in id_column and col not in cols_to_compare and col not in exception_list]
         if df1_not_matched_cols or df2_not_matched_cols:
             logging.warning(f"Some unmatched columns won't be considered: IN FILE 1 ({df1_not_matched_cols}), IN FILE 2 ({df2_not_matched_cols})")
-        print("\n-------------- cols_to_compare : \n",cols_to_compare)   
-        print("____ DATAFRAME MERGED ____\n",merged_df.head(),"\n")
+        logger.debug("Columns to compare: %s", cols_to_compare)
         # Iterate over rows and compare values
         for index, row in merged_df.iterrows():
             if row['_merge'] != 'both':
@@ -151,11 +152,6 @@ def compare_dataframes(df1, df2, id_column, exception_list):
                 if (pd.isna(row[f'{col}_df1']) != pd.isna(row[f'{col}_df2'])) or 
                    (pd.notna(row[f'{col}_df1']) and pd.notna(row[f'{col}_df2']) and row[f'{col}_df1'] != row[f'{col}_df2'])
             ]
-            if differing_columns:
-                print("\n ____ differing_columns : \n", differing_columns)
-            differing_values = [(row[f'{col}_df1'],row[f'{col}_df2']) for col in differing_columns]
-            if differing_values:
-                print("\n ____ differing_values : \n", differing_values)
             if differing_columns:
                 merged_df.at[index, 'modification'] = True
                 merged_df.at[index, 'differing_columns'] = ','.join(differing_columns)
@@ -285,10 +281,10 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         common_id_df1 = set(df1[common_id].dropna().apply(tuple, axis=1).unique())
         common_id_df2 = set(df2[common_id].dropna().apply(tuple, axis=1).unique())
 
-        print(f"\n ------> common_id_df1 {common_id_df1}\n ------> common_id_df2 {common_id_df2}")
+        logger.debug("Common identifiers: %d in file 1, %d in file 2", len(common_id_df1), len(common_id_df2))
 
         exclude_cols = [col for col in df1.columns.union(df2.columns) if col not in common_cols + common_id]
-        print(f"\n ------> exclude_cols {exclude_cols}")
+        logger.debug("Excluded columns: %s", exclude_cols)
         # Exclude specified columns (if provided)
         if exclude_cols:
             logging.info(f"Excluding columns: {exclude_cols}")
