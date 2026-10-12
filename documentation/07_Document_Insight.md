@@ -44,8 +44,8 @@ Build an interactive knowledge graph from concepts extracted across all uploaded
 ### Features
 
 - **Filter by Document** — Show/hide concepts from specific papers.
-- **Node Details** — Click any node to view its definition, citations, and connected concepts.
-- **Interactive Layout** — Powered by yFiles with multiple layout options.
+- **Node Details** — Select a node in the graph (or in the entity list) to view its definition, citations, and connected concepts; toggle *Focus* to show only its neighbourhood.
+- **Interactive Layout** — Hierarchical layout rendered by the configured graph engine (offline Plotly by default; yFiles optional). Entities mentioned only inside a relation appear as flagged *Inferred* nodes.
 
 ---
 

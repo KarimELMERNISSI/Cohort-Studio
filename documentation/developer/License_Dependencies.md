@@ -6,16 +6,33 @@ This document analyzes the open-source licenses of the libraries used in the Coh
 
 ## License Summary
 
-All production dependencies use **Permissive** or **Weak Copyleft** licenses (MIT, BSD, Apache 2.0, MPL 2.0). There are **no GPL-licensed dependencies** in the project.
+All *required* production dependencies use **Permissive** or **Weak Copyleft** licenses (MIT, BSD, Apache 2.0, MPL 2.0). There are **no GPL-licensed dependencies** in the project. One *optional* component, the yFiles graph engine, is proprietary and network-dependent; see the dedicated section below.
 
 ### License Types Found
 
 - **Permissive**: MIT, BSD-3-Clause, Apache 2.0 (e.g., `streamlit`, `pandas`, `scikit-learn`, `numpy`, `RapidFuzz`)
 - **Weak Copyleft**: MPL 2.0 (e.g., `certifi`, `tqdm`)
-- **Proprietary (Free)**: `yfiles-graphs-for-streamlit` (free, non-transferable yWorks license)
+- **Proprietary (Free), optional**: `yfiles-graphs-for-streamlit` (yWorks free license; opt-in extra `graph-yfiles`)
 
 > [!NOTE]
 > Previous versions of this document flagged `Unidecode` (GPL) and `python-Levenshtein` (GPL-2.0) as risks. Both have been removed — `Unidecode` was dropped, and `python-Levenshtein` was replaced by `RapidFuzz` (MIT).
+
+## Proprietary / network-dependent components
+
+### yfiles-graphs-for-streamlit (optional extra `graph-yfiles`)
+
+License: *yWorks yFiles Streamlit Component Free License v1.0* (October 2025), shipped in the package as `LICENSE.md`.
+Obligations and constraints that matter for this project:
+
+| Clause | Consequence for the Cohort Monitoring Package |
+|---|---|
+| 1.2 Internet requirement | The component loads its "Cloud Runtime" from `https://www.yworks.com/streamlit-yfiles-core/` at render time. It cannot work on an air-gapped network. |
+| 1.4 No redistribution | Only designated redistributables may be shipped; the package is therefore **not** part of the default install or Docker image (`requirements.txt`), only of `requirements-yfiles.txt` / the `graph-yfiles` extra. |
+| 1.7 End-user notice | Users must be informed of the yWorks terms and the internet requirement: done on the About page and in a caption under every yFiles-rendered graph. |
+| 2 Discontinuation | yWorks may modify, suspend or discontinue the component at any time; the application keeps working through the offline Plotly engine. |
+| 3 Analytics | yWorks collects anonymised structural/geometric information about user-created graphs (no text), settings and interactions. The "zero telemetry" statement only holds with the default engine (`CMP_GRAPH_RENDERER=auto|plotly`, or `CMP_OFFLINE=1`). |
+
+The graph connector (`graph/`) keeps the engine swappable; see `documentation/developer/Graph_Rendering.md`.
 
 ## Recommended Application License
 
@@ -407,7 +424,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **xyzservices** | BSD-3-Clause |
 | **yapf** | Apache-2.0 |
 | **yarl** | Apache-2.0 |
-| **yfiles-graphs-for-streamlit** | Proprietary (free, non-transferable) |
+| **yfiles-graphs-for-streamlit** (optional) | Proprietary (free, non-transferable; internet + analytics, see above) |
 | **zict** | BSD-3-Clause |
 | **zipp** | MIT |
 | **zope.interface** | ZPL-2.1 |

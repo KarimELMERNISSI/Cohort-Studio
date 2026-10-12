@@ -25,7 +25,7 @@ Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from
 
 1. **Load or Create** — Start a new taxonomy from the current dataset, or load a previously saved version.
 2. **AI Generation** — The RAG system analyses column names, data types, value distributions, and uploaded documentation to infer categories, relationships, and computed formulas.
-3. **Review** — Inspect the generated graph in the interactive yFiles visualisation.
+3. **Review** — Inspect the generated graph in the interactive visualisation (offline Plotly engine by default; yFiles optional).
 4. **Iterate** — Refine, enrich, or repair the taxonomy as needed.
 
 ### Generation Options
@@ -70,13 +70,16 @@ Versions are stored per-user and per-dataset for isolation.
 
 ## Visualisation
 
-The taxonomy is rendered as an interactive graph using **yFiles**:
+The taxonomy is rendered as an interactive graph through a library-agnostic connector (see
+`documentation/developer/Graph_Rendering.md`). The default engine is Plotly + NetworkX, which works
+offline; the proprietary yFiles engine can be enabled as an optional extra.
 
-- **Node Styles** — Different colours and shapes per node type (category, variable, concept, formula).
-- **Edge Labels** — Relationship type displayed on each connection.
-- **Layout Options** — Hierarchical, organic, circular, and other layout algorithms.
-- **Search & Filter** — Locate specific nodes or filter by type.
-- **Click Details** — Click any node to view its metadata, description, and connected nodes.
+- **Node Styles** — Colours and shapes per node type (category, input, derived, outcome, external, formula), with a generated legend.
+- **Edge Labels** — Relationship type displayed on each connection (input, yields, category membership, related).
+- **Layout** — Hierarchical layout (formulas between their inputs and outputs); organic/circular/radial layouts are available with the yFiles engine.
+- **Filter** — Show or hide node and edge types; the formula search restricts the graph to matching formulas and their variables.
+- **Selection Details** — Select nodes in the graph to open their metadata, description and formula definitions below the graph.
+- **Graph engine** — Switch between the offline engine and yFiles (needs internet access) in the graph toolbar.
 
 ---
 
@@ -86,7 +89,7 @@ The taxonomy is rendered as an interactive graph using **yFiles**:
 | --- | --- |
 | **JSON** | Full taxonomy structure for programmatic use. |
 | **CSV** | Flat table of nodes and their attributes. |
-| **Interactive Graph** | yFiles HTML export for sharing. |
+| **Interactive Graph** | JSON of the rendered graph (nodes, edges, legend); standalone HTML export with the Plotly engine. |
 
 ---
 

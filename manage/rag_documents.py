@@ -134,92 +134,26 @@ class DocumentsMixin:
     def extract_merged_graph_from_docs(self, doc_list, progress_callback=None):
         """
         Extracts and merges graphs from multiple documents.
-        Returns (merged_json, error).
+        Entities are unified across documents and relation endpoints are remapped to the merged
+        entities (graph.builders.document.merge_document_graphs). Returns (merged_json, error).
         """
-        import difflib
-        
+        from graph.builders.document import merge_document_graphs
+
         if not doc_list:
             return None, "No documents specified."
-            
-        merged_nodes = {}
-        merged_edges = []
-        merged_formulas = []
-        merged_summaries = []
-        
-        seen_edges = set()
-        
+
+        per_document = []
         total = len(doc_list)
-        
         for idx, doc in enumerate(doc_list):
-            if progress_callback: progress_callback(int((idx/total)*100), f"Processing {doc}...")
-            
+            if progress_callback:
+                progress_callback(int((idx / total) * 100), f"Processing {doc}...")
             g_json, err = self.extract_custom_graph_from_doc(doc)
-            if err:
+            if err or not isinstance(g_json, dict):
                 continue
-            
-            if "summary" in g_json:
-                s = g_json["summary"]
-                s["doc"] = doc
-                merged_summaries.append(s)
+            per_document.append((doc, g_json))
 
-            for n in g_json.get("nodes", []):
-                nid = n.get("id", "").strip()
-                if not nid: continue
-                nid_lower = nid.lower()
-                
-                page_ref = n.get("page_reference", "Unknown")
-                if isinstance(page_ref, list):
-                    page_str = ", ".join(str(p) for p in page_ref)
-                else:
-                    page_str = str(page_ref) if page_ref is not None else "Unknown"
-
-                citation = {
-                    "doc": doc,
-                    "page": page_str,
-                    "text": n.get("source_text", "")
-                }
-                
-                match_id = None
-                
-                if nid_lower in merged_nodes:
-                    match_id = nid_lower
-                else:
-                    existing_keys = list(merged_nodes.keys())
-                    matches = difflib.get_close_matches(nid_lower, existing_keys, n=1, cutoff=0.85)
-                    if matches:
-                        match_id = matches[0]
-                
-                if not match_id:
-                    n["citations"] = [citation]
-                    n.pop("source_text", None)
-                    n.pop("page_reference", None)
-                    merged_nodes[nid_lower] = n
-                else:
-                    existing = merged_nodes[match_id]
-                    existing["citations"].append(citation)
-                    if len(n.get("description", "")) > len(existing.get("description", "")):
-                        existing["description"] = n.get("description", "")
-            
-            for e in g_json.get("edges", []):
-                s = str(e.get("source"))
-                t = str(e.get("target"))
-                r = e.get("relation", "relates to")
-                key = (s.lower(), t.lower(), r.lower())
-                
-                if key not in seen_edges:
-                    merged_edges.append(e)
-                    seen_edges.add(key)
-            
-            for f in g_json.get("formulas", []):
-                f["doc"] = doc
-                merged_formulas.append(f)
-
-        return {
-            "nodes": list(merged_nodes.values()),
-            "edges": merged_edges,
-            "formulas": merged_formulas,
-            "summaries": merged_summaries
-        }, None
+        merged = merge_document_graphs(per_document)
+        return merged.to_json_dict(), None
 
     def match_columns_to_graph(self, columns, graph_json):
         """

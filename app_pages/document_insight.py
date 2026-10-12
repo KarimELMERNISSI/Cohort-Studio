@@ -2,185 +2,15 @@ import json
 import os
 
 import streamlit as st
-from yfiles_graphs_for_streamlit import (
-    DashStyle,
-    Edge,
-    EdgeStyle,
-    LabelStyle,
-    Layout,
-    Node,
-    NodeShape,
-    NodeStyle,
-    StreamlitGraphWidget,
-)
+from graph.builders.document import build_document_graph, filter_by_documents
+from graph.model import LayoutHint, RenderOptions
+from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 
 # ==========================================
 # 1. GRAPH HELPER FUNCTIONS (Adapted for Docs)
 # ==========================================
 
-def filter_graph_by_docs(graph_json, visible_docs):
-    """
-    Returns a subset of the graph JSON containing only nodes/edges/formulas linked to visible_docs.
-    """
-    if not graph_json or not visible_docs:
-        return {"nodes": [], "edges": [], "formulas": []}
-        
-    visible_set = set(visible_docs)
-    
-    # 1. Filter Nodes
-    kept_nodes = []
-    valid_node_ids = set()
-    
-    for n in graph_json.get("nodes", []):
-        # Check citations
-        citations = n.get("citations", [])
-        
-        # Fallback for legacy/single-doc nodes without citations list
-        # (Though extraction now ensures citations, existing session state might be old)
-        if not citations and n.get("source_text"):
-             # Assume it belongs if we can't track it? Or strict?
-             # If strictly generated from merge, it has citations.
-             pass
-             
-        relevant_cits = [c for c in citations if c.get("doc") in visible_set]
-        
-        if relevant_cits:
-            # Create a shallow copy to avoid mutating session state
-            n_copy = n.copy()
-            n_copy["citations"] = relevant_cits
-            kept_nodes.append(n_copy)
-            valid_node_ids.add(n.get("id"))
-            
-    # 2. Filter Edges
-    kept_edges = []
-    for e in graph_json.get("edges", []):
-        if e.get("source") in valid_node_ids and e.get("target") in valid_node_ids:
-            kept_edges.append(e)
-            
-    # 3. Filter Formulas
-    kept_formulas = [f for f in graph_json.get("formulas", []) if f.get("doc") in visible_set]
-    
-    # 4. Filter Summaries
-    kept_summaries = [s for s in graph_json.get("summaries", []) if s.get("doc") in visible_set]
-    
-    return {
-        "nodes": kept_nodes,
-        "edges": kept_edges,
-        "formulas": kept_formulas,
-        "summaries": kept_summaries
-    }
-
-def get_document_graph_data(graph_json, focus_node_id=None):
-    nodes = []
-    edges = []
-    existing_node_ids = set()
-
-    # Pre-filter check
-    valid_neighbors = set()
-    if focus_node_id:
-        valid_neighbors.add(focus_node_id)
-        for e in graph_json.get("edges", []):
-            s = str(e.get("source"))
-            t = str(e.get("target"))
-            if s == focus_node_id: valid_neighbors.add(t)
-            if t == focus_node_id: valid_neighbors.add(s)
-
-    # Dynamic Type Coloring
-    TYPE_COLORS = {
-        "Concept": "#4285F4",    # Blue
-        "Metric": "#34A853",     # Green
-        "Finding": "#EA4335",    # Red
-        "Disease": "#FBBC05",    # Yellow
-        "Treatment": "#AA46BB",  # Purple
-        "Method": "#00ACC1",     # Cyan
-        "Other": "#9E9E9E"       # Grey
-    }
-
-    def add_node_safe(n_id, n_type, desc, source_text, page_ref):
-        safe_id = str(n_id)
-        if safe_id not in existing_node_ids:
-            # Determine color based on type (fuzzy match)
-            color = TYPE_COLORS["Other"]
-            for key, c in TYPE_COLORS.items():
-                if key.lower() in n_type.lower():
-                    color = c
-                    break
-            
-            nodes.append(Node(
-                id=safe_id,
-                properties={
-                    "label": safe_id,
-                    "type": n_type,
-                    "color": color,
-                    "description": desc,
-                    "source_text": source_text,
-                    "page_reference": page_ref
-                }
-            ))
-            existing_node_ids.add(safe_id)
-
-    # 1. Parse Nodes
-    for n in graph_json.get("nodes", []):
-        nid = n.get("id")
-        
-        # Filter: Skip if focusing and not in neighbors
-        if focus_node_id and nid not in valid_neighbors:
-             continue
-             
-        add_node_safe(
-            nid, 
-            n.get("type", "Concept"), 
-            n.get("description", ""), 
-            n.get("source_text", ""),
-            n.get("page_reference", "")
-        )
-
-    # 2. Parse Edges
-    for e in graph_json.get("edges", []):
-        src = str(e.get("source"))
-        tgt = str(e.get("target"))
-        
-        # Filter edge if focusing
-        if focus_node_id:
-            if src not in valid_neighbors or tgt not in valid_neighbors:
-                continue
-        
-        # Ensure endpoints exist
-        # Pass empty strings for inferred nodes
-        if src not in existing_node_ids:
-            add_node_safe(src, "Inferred", "Inferred from relationship", "", "")
-        if tgt not in existing_node_ids:
-            add_node_safe(tgt, "Inferred", "Inferred from relationship", "", "")
-
-        edges.append(Edge(
-            start=src,
-            end=tgt,
-            properties={
-                "label": e.get("relation", "relates to"),
-                "description": e.get("description", ""),
-                "color": "#BDBDBD"
-            }
-        ))
-
-    return nodes, edges
-
-def get_node_style(node):
-    color = node['properties'].get('color', '#9E9E9E')
-    return NodeStyle(color=color, shape=NodeShape.ELLIPSE)
-
-def get_edge_style(edge):
-    return EdgeStyle(
-        color=edge['properties'].get('color', '#BDBDBD'),
-        dash_style=DashStyle.SOLID,
-        directed=True,
-        thickness=2.0
-    )
-
-def get_node_label_style(node):
-    return LabelStyle(color="#000000", text_position="center")
-
-def get_edge_label_style(edge):
-    return LabelStyle(background_color="#FFFFFFCC", color="#333333", text_position="center", wrapping="word")
+# Filtering, merging and graph construction live in graph.builders.document.
 
 
 # ==========================================
@@ -345,7 +175,7 @@ def app():
         visible_docs = st.sidebar.multiselect("Filter Visible Documents", all_graph_docs, default=all_graph_docs)
         
         # Apply Filtering
-        filtered_graph = filter_graph_by_docs(st.session_state.doc_graph_json, visible_docs)
+        filtered_graph = filter_by_documents(st.session_state.doc_graph_json, visible_docs).to_json_dict()
         
         # Create Tabs
         tab_graph, tab_formulas, tab_coverage, tab_summary, tab_chat = st.tabs(["Knowledge Graph", "Explicit Formulas", "Dataset Coverage", "Document Summary", "Chat with Document"])
@@ -354,30 +184,26 @@ def app():
             col_graph, col_details = st.columns([2, 1])
             
             with col_graph:
-                # Get Selection for filtering
                 selected_entity = st.session_state.get("doc_graph_selected_node", None)
-                focus_mode = st.toggle("Focus on Selected Entity", value=False)
-                
+                c_focus, c_engine = st.columns(2)
+                focus_mode = c_focus.toggle("Focus on Selected Entity", value=False, key="doc_graph_focus_mode")
+                renderer_selector(container=c_engine)
                 target_node = selected_entity if (focus_mode and selected_entity) else None
-                
-                # USE FILTERED GRAPH
-                nodes, edges = get_document_graph_data(filtered_graph, focus_node_id=target_node)
-                
-                if not nodes:
+
+                spec = build_document_graph(filtered_graph, focus=target_node, theme=current_theme())
+                if not spec.nodes:
                     st.warning("No nodes found for the selected documents.")
                 else:
-                    w = StreamlitGraphWidget(nodes=nodes, edges=edges)
-
-                    # Apply Mappings (yfiles-graphs-for-streamlit 2.x API)
-                    w.node_label_mapping = lambda n: n['properties']['label']
-                    w.node_styles_mapping = get_node_style
-                    w.edge_label_mapping = lambda e: e['properties']['label']
-                    w.edge_styles_mapping = get_edge_style
-
-                    try:
-                        w.show(key="doc_graph_widget", graph_layout=Layout.HIERARCHICAL, height=800)
-                    except Exception as graph_err:
-                        st.error(f"The document graph could not be rendered: {graph_err}")
+                    selection = render_graph(
+                        spec,
+                        RenderOptions(key="doc_graph_widget", height=800, selectable=True, layout=LayoutHint.HIERARCHICAL),
+                    )
+                    # A node selected in the graph becomes the entity shown in the details panel
+                    if selection.node_ids:
+                        clicked = selection.node_ids[0]
+                        if clicked in {n.get("id") for n in filtered_graph.get("nodes", [])}:
+                            st.session_state["doc_graph_selected_node"] = clicked
+                    render_graph_exports(spec, RenderOptions(key="doc_graph_widget"), file_stem="document_graph")
                 
             with col_details:
                 st.subheader("Node Details")

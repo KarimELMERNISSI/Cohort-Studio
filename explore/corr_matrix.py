@@ -2,7 +2,6 @@ import re
 import warnings
 
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -11,12 +10,13 @@ import plotly.graph_objects as go
 import seaborn as sns
 from matplotlib.colors import to_hex
 from openpyxl.styles import Font, PatternFill
-from yfiles_graphs_for_streamlit import Edge, Node
 
-# Filter statistical edge-case warnings
-warnings.filterwarnings("ignore", message=".*sample arguments is too small.*")
-warnings.filterwarnings("ignore", message=".*SmallSampleWarning.*")
-warnings.filterwarnings("ignore", message=".*An input array is constant.*")
+from explore.correlation_strength import (
+    STRENGTH_ORDER,
+    STRENGTH_THRESHOLDS,
+    CorrelationMethod,
+    categorize_strength,
+)
 
 ####################################### CORRELATION MATRIX ###########################################
 
@@ -272,376 +272,31 @@ def plotly_corr_mat(
     return fig
 
 
-def plotly_corr_network(
-    data,
-    targets,
-    predictors,
-    method="pearson",
-    threshold_category="Weak", # Minimum strength to display
-    corr_method_name=None,
-    node_color="skyblue",
-):
-    """
-    Generate an interactive correlation network graph using Plotly and NetworkX.
-    Nodes represent variables, and edges represent correlations.
-    Edge styles/attributes depend on correlation strength.
-
-    Parameters:
-    - data (pd.DataFrame): Input data.
-    - targets (list): Target variables.
-    - predictors (list): Predictor variables.
-    - method (str): Correlation method.
-    - threshold_category (str): Minimum strength category to display edge ('Negligible', 'Weak', 'Moderate', 'Strong', 'Very Strong').
-    - corr_method_name (str): Display name for method.
-    - node_color (str): Color of nodes.
-
-    Returns:
-    - plotly.graph_objects.Figure: The network graph.
-    """
-    # 1. Calculate Correlation Matrix
-    unique_cols = list(set(targets + predictors))
-    # Filter numeric columns only to avoid errors
-    data_filtered = data[unique_cols].select_dtypes(include=[np.number])
-    
-    if data_filtered.empty:
-        return go.Figure()
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=Warning)
-        corr_matrix = data_filtered.corr(method=method)
-
-    # 2. Define Thresholds (Same as Excel export)
-    strength_data = {
-        'pearson': [0.00, 0.10, 0.40, 0.70, 0.90],
-        'spearman': [0.00, 0.10, 0.38, 0.68, 0.89],
-        'kendall': [0.00, 0.06, 0.26, 0.49, 0.71]
-    }
-    thresholds = strength_data.get(method, strength_data['pearson'])
-    strength_labels = ['Negligible', 'Weak', 'Moderate', 'Strong', 'Very Strong']
-    strength_map = dict(zip(strength_labels, thresholds)) # e.g., 'Weak': 0.10
-
-    min_strength_val = strength_map.get(threshold_category, 0.10)
-
-    # 3. Create NetworkX Graph
-    G = nx.Graph()
-    
-    # Add nodes
-    for col in corr_matrix.columns:
-        G.add_node(col)
-
-    # Add edges
-    # Iterate over the upper triangle to avoid duplicates and self-loops
-    cols = corr_matrix.columns
-    for i in range(len(cols)):
-        for j in range(i + 1, len(cols)):
-            col1 = cols[i]
-            col2 = cols[j]
-            corr_val = corr_matrix.loc[col1, col2]
-            abs_corr = abs(corr_val)
-
-            if abs_corr >= min_strength_val:
-                # Determine category
-                cat = 'Negligible'
-                for idx, val in enumerate(thresholds):
-                    if abs_corr >= val:
-                        cat = strength_labels[idx]
-                
-                # Add edge with attributes
-                G.add_edge(col1, col2, weight=abs_corr, correlation=corr_val, category=cat)
-
-    # 4. Generate Layout
-    # pos = nx.spring_layout(G, seed=42) # Seed for reproducible layout
-    # Use circular layout if small number of nodes, else spring
-    if len(G.nodes) < 10:
-         pos = nx.circular_layout(G)
-    else:
-        pos = nx.spring_layout(G, k=0.5, iterations=50, seed=42)
-
-    # 5. Create Plotly Traces
-    
-    # Edge Traces
-    # We create separate traces for different categories to style them differently (legend support)
-    edge_traces = []
-    
-    # Define styles for categories
-    # Width and Color
-    style_map = {
-        'Negligible': {'width': 1, 'color': '#d3d3d3', 'dash': 'dot'}, # Light Gray
-        'Weak': {'width': 2, 'color': '#a9a9a9', 'dash': 'dash'},     # Dark Gray
-        'Moderate': {'width': 3, 'color': '#add8e6', 'dash': 'solid'}, # Light Blue
-        'Strong': {'width': 4, 'color': '#0000ff', 'dash': 'solid'},  # Blue
-        'Very Strong': {'width': 5, 'color': '#00008b', 'dash': 'solid'} # Dark Blue
-    }
-
-    # Group edges by category
-    edges_by_cat = {cat: [] for cat in strength_labels}
-    for u, v, d in G.edges(data=True):
-        edges_by_cat[d['category']].append((u, v, d))
-
-    for cat in strength_labels:
-        edges = edges_by_cat[cat]
-        if not edges:
-            continue
-        
-        style = style_map[cat]
-        edge_x = []
-        edge_y = []
-        hover_texts = []
-        
-        for u, v, d in edges:
-            x0, y0 = pos[u]
-            x1, y1 = pos[v]
-            edge_x.append(x0)
-            edge_x.append(x1)
-            edge_x.append(None)
-            edge_y.append(y0)
-            edge_y.append(y1)
-            edge_y.append(None)
-            # Hover text needs to be per point, but scatter lines share hover. 
-            # Often simpler to put hover on a middle node or just disable edge hover and rely on visual.
-            # But we can try to add a middle point for hover if needed. For now, simple lines.
-        
-        edge_trace = go.Scatter(
-            x=edge_x, y=edge_y,
-            line=dict(width=style['width'], color=style['color'], dash=style['dash']),
-            hoverinfo='none',
-            mode='lines',
-            name=cat # Add to legend
-        )
-        edge_traces.append(edge_trace)
-
-    # Node Trace
-    node_x = []
-    node_y = []
-    node_text = []
-    node_adjacencies = []
-    
-    for node in G.nodes():
-        x, y = pos[node]
-        node_x.append(x)
-        node_y.append(y)
-        node_text.append(node)
-        node_adjacencies.append(len(G.adj[node])) # Degree
-
-    node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        hoverinfo='text',
-        text=node_text,
-        textposition="top center",
-        marker=dict(
-            showscale=True,
-            colorscale='YlGnBu',
-            reversescale=True,
-            color=node_adjacencies,
-            size=20,
-            colorbar=dict(
-                thickness=15,
-                title=dict(
-                    text='Node Connections',
-                    side='right'
-                ),
-                xanchor='left',
-            ),
-            line_width=2
-        )
-    )
-
-    # 6. Create Figure
-    fig = go.Figure(data=edge_traces + [node_trace])
-    
-    if corr_method_name is None:
-        corr_method_name = method.capitalize()
-
-    fig.update_layout(
-        title=f"Correlation Network ({corr_method_name}) - Threshold: {threshold_category}",
-        title_font_size=16,
-        showlegend=True,
-        hovermode='closest',
-        margin=dict(b=20,l=5,r=5,t=40),
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        legend=dict(title="Correlation Strength")
-    )
-
-    return fig
-
 
 def get_yfiles_network_data(data, targets, predictors, method="pearson", threshold_category="Weak", correlation_matrix=None, focus_node=None):
-    """
-    Generate nodes and edges for yFiles correlation network.
+    """Deprecated: use :func:`graph.builders.correlation.build_correlation_graph`.
 
-    Parameters:
-    - data (pd.DataFrame): Input data.
-    - targets (list): Target variables.
-    - predictors (list): Predictor variables.
-    - method (str): Correlation method.
-    - threshold_category (str): Minimum strength category.
-    - correlation_matrix (pd.DataFrame): Pre-calculated correlation matrix (optional).
-    - focus_node (str): Variable to focus on (optional). Filters graph to connected component.
-
-    Returns:
-    - nodes (list): List of yFiles Node objects.
-    - edges (list): List of yFiles Edge objects.
+    Kept for backward compatibility; returns plain-dict nodes/edges in the historical shape
+    (``{"id", "properties"}`` / ``{"start", "end", "id", "properties"}``).
     """
-    if correlation_matrix is not None:
-        corr_matrix = correlation_matrix
-    else:
-        unique_cols = list(set(targets + predictors))
-        data_filtered = data[unique_cols].select_dtypes(include=[np.number])
-        
+    warnings.warn(
+        "get_yfiles_network_data is deprecated; use graph.builders.correlation.build_correlation_graph",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from graph.builders.correlation import build_correlation_graph, to_legacy_dicts
+
+    if correlation_matrix is None:
+        unique_cols = list(dict.fromkeys(list(targets) + list(predictors)))
+        data_filtered = data[unique_cols].select_dtypes(include=[np.number]) if unique_cols else pd.DataFrame()
         if data_filtered.empty:
             return [], []
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=Warning)
-            corr_matrix = data_filtered.corr(method=method)
+            correlation_matrix = data_filtered.corr(method=method)
 
-    if corr_matrix is None or corr_matrix.empty:
-        return [], []
-
-    # Thresholds
-    strength_data = {
-        'pearson': [0.00, 0.10, 0.40, 0.70, 0.90],
-        'spearman': [0.00, 0.10, 0.38, 0.68, 0.89],
-        'kendall': [0.00, 0.06, 0.26, 0.49, 0.71]
-    }
-    thresholds = strength_data.get(method, strength_data['pearson'])
-    strength_labels = ['Negligible', 'Weak', 'Moderate', 'Strong', 'Very Strong']
-    strength_map = dict(zip(strength_labels, thresholds))
-    min_strength_val = strength_map.get(threshold_category, 0.10)
-
-    nodes = []
-    edges = []
-    node_heat = {col: 0.0 for col in corr_matrix.columns}
-
-    # Create Edges first to calculate heat based on visible connections
-    # Store adjacency for BFS if needed
-    adj = {col: [] for col in corr_matrix.columns}
-    
-    cols = corr_matrix.columns
-    for i in range(len(cols)):
-        for j in range(i + 1, len(cols)):
-            col1 = cols[i]
-            col2 = cols[j]
-            corr_val = corr_matrix.loc[col1, col2]
-            abs_corr = abs(corr_val)
-
-            if abs_corr >= min_strength_val:
-                # Accumulate heat (weighted degree)
-                node_heat[col1] += abs_corr
-                node_heat[col2] += abs_corr
-                
-                # Build Adjacency
-                adj[col1].append(col2)
-                adj[col2].append(col1)
-
-                # Determine category
-                cat = 'Negligible'
-                for idx, val in enumerate(thresholds):
-                    if abs_corr >= val:
-                        cat = strength_labels[idx]
-                
-                # Assign properties based on category
-                # Base styles (dash/thickness)
-                base_styles = {
-                    'Negligible': {'dash': 'dotted', 'thickness': 1.0},
-                    'Weak': {'dash': 'dashed', 'thickness': 1.5},
-                    'Moderate': {'dash': 'solid', 'thickness': 2.5},
-                    'Strong': {'dash': 'solid', 'thickness': 3.5},
-                    'Very Strong': {'dash': 'solid', 'thickness': 5.0}
-                }
-                
-                # Color palettes
-                if corr_val >= 0:
-                    # Positive: Blue variations
-                    colors = {
-                        'Negligible': '#d3d3d3',
-                        'Weak': '#add8e6', # LightBlue
-                        'Moderate': '#4169e1', # RoyalBlue
-                        'Strong': '#0000ff', # Blue
-                        'Very Strong': '#00008b' # DarkBlue
-                    }
-                else:
-                    # Negative: Red variations
-                    colors = {
-                        'Negligible': '#d3d3d3',
-                        'Weak': '#f08080', # LightCoral
-                        'Moderate': '#cd5c5c', # IndianRed
-                        'Strong': '#ff0000', # Red
-                        'Very Strong': '#8b0000' # DarkRed
-                    }
-                
-                style = base_styles.get(cat, base_styles['Weak'])
-                color = colors.get(cat, '#a9a9a9')
-                
-                props = {**style, 'color': color}
-                
-                edges.append(Edge(
-                    start=col1,
-                    end=col2,
-                    properties={
-                        "label": f"{corr_val:.2f}",
-                        "color": props['color'],
-                        "dash": props['dash'],
-                        "thickness": props['thickness'],
-                        "directed": False
-                    }
-                ))
-
-    # Determine visible nodes based on focus_node
-    if focus_node and focus_node in corr_matrix.columns:
-        # Perform BFS to find connected component
-        visited = set()
-        queue = [focus_node]
-        visited.add(focus_node)
-        
-        while queue:
-            curr = queue.pop(0)
-            for neighbor in adj.get(curr, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(neighbor)
-        
-        visible_nodes = visited
-    else:
-        visible_nodes = set(corr_matrix.columns)
-
-    # Filter Edges
-    final_edges = [e for e in edges if e.start in visible_nodes and e.end in visible_nodes]
-    
-    # Recalculate heat based on visible edges? 
-    # Decision: Keep heat based on visible edges in the *filtered* view to be consistent?
-    # Actually, let's recalculate heat for accurate "local" visualization
-    node_heat_filtered = {col: 0.0 for col in visible_nodes}
-    for e in final_edges:
-        # Extract weight from label (a bit hacky but we have it) to avoid re-lookup
-        # Or re-lookup
-        val = float(e.properties['label'])
-        val = abs(val)
-        node_heat_filtered[e.start] += val
-        node_heat_filtered[e.end] += val
-        
-    # Normalize heat
-    max_heat = max(node_heat_filtered.values()) if node_heat_filtered and max(node_heat_filtered.values()) > 0 else 1.0
-
-    # Create Nodes with heat property
-    for col in visible_nodes:
-        heat_val = node_heat_filtered.get(col, 0.0) / max_heat
-        # Highlight focus node?
-        color = "orange" if col == focus_node else "skyblue"
-        
-        nodes.append(Node(
-            id=col,
-            properties={
-                "label": col,
-                "color": color,
-                "shape": "ellipse",
-                "heat": heat_val
-            }
-        ))
-    
-    return nodes, final_edges
+    spec = build_correlation_graph(correlation_matrix, method=method, min_strength=threshold_category, focus=focus_node)
+    return to_legacy_dicts(spec)
 
 
 def add_correlation_strength_table(writer, method, sheet_name='Correlation Strength Info'):
@@ -657,20 +312,12 @@ def add_correlation_strength_table(writer, method, sheet_name='Correlation Stren
     Returns:
     None
     """
-    # Define the correlation strength thresholds for each method
-    strength_data = {
-        'Strength (absolute value)': ['Negligible', 'Weak', 'Moderate', 'Strong', 'Very Strong'],
-        'pearson': [0.00, 0.10, 0.40, 0.70, 0.90],
-        'spearman': [0.00, 0.10, 0.38, 0.68, 0.89],
-        'kendall': [0.00, 0.06, 0.26, 0.49, 0.71]
-    }
-
-    # Create a DataFrame to represent the full table for all methods
+    # Thresholds come from the shared table (explore.correlation_strength)
     strength_df = pd.DataFrame({
-        'Strength (absolute value)': strength_data['Strength (absolute value)'],
-        'Pearson': strength_data['pearson'],
-        'Spearman': strength_data['spearman'],
-        'Kendall': strength_data['kendall']
+        'Strength (absolute value)': [c.value for c in STRENGTH_ORDER],
+        'Pearson': list(STRENGTH_THRESHOLDS[CorrelationMethod.PEARSON]),
+        'Spearman': list(STRENGTH_THRESHOLDS[CorrelationMethod.SPEARMAN]),
+        'Kendall': list(STRENGTH_THRESHOLDS[CorrelationMethod.KENDALL]),
     })
 
     # Write the strength table to a new sheet
@@ -759,31 +406,9 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     corr_flat['AbsCorrelation'] = corr_flat['Correlation'].abs()
     corr_flat_sorted = corr_flat.sort_values(by='AbsCorrelation', ascending=False)
 
-    # Define strength categories based on the selected method
-    strength_data = {
-        'pearson': [0.00, 0.10, 0.40, 0.70, 0.90],
-        'spearman': [0.00, 0.10, 0.38, 0.68, 0.89],
-        'kendall': [0.00, 0.06, 0.26, 0.49, 0.71]
-    }
-
-    # Map the selected method to the appropriate thresholds
-    method_key = str(method).lower()
-    selected_thresholds = strength_data.get(method_key, strength_data['pearson'])
-
-    # Categorize correlation strengths based on absolute values
-    def categorize_strength(value):
-        if value >= selected_thresholds[4]:
-            return 'Very Strong'
-        elif value >= selected_thresholds[3]:
-            return 'Strong'
-        elif value >= selected_thresholds[2]:
-            return 'Moderate'
-        elif value >= selected_thresholds[1]:
-            return 'Weak'
-        else:
-            return 'Negligible'
-
-    corr_flat_sorted['Strength'] = corr_flat_sorted['AbsCorrelation'].apply(categorize_strength)
+    corr_flat_sorted['Strength'] = corr_flat_sorted['AbsCorrelation'].apply(
+        lambda value: categorize_strength(float(value), method).value
+    )
 
     # Define the order of strength categories for filtering
     strength_order = ['negligible', 'weak', 'moderate', 'strong', 'very strong']

@@ -1,0 +1,73 @@
+"""Offline verification of the yFiles adapter: translation is replayed through the library's own
+mapping engine without a browser, and the installed library is checked for the API this adapter needs."""
+
+import copy
+
+import pytest
+
+from graph.model import GraphSpec, LayoutHint, RenderOptions
+
+yfiles = pytest.importorskip("yfiles_graphs_for_streamlit")
+
+from graph.renderers.yfiles import YFilesGraphRenderer  # noqa: E402
+
+
+def _apply(payload):
+    from yfiles_graphs_for_streamlit.apply_mappings import MappingClass
+
+    widget = yfiles.StreamlitGraphWidget(nodes=payload.nodes, edges=payload.edges, **payload.mappings)
+    mapper = MappingClass(widget, widget._data_importer, payload.show_kwargs["directed"])
+    nodes, edges = mapper.apply_mappings(
+        copy.deepcopy(widget._user_nodes), copy.deepcopy(widget._user_edges), widget._user_nodes, widget._user_edges
+    )
+    to_dict = lambda item: item.to_dict() if hasattr(item, "to_dict") else dict(item)  # noqa: E731
+    return [to_dict(n) for n in nodes], [to_dict(e) for e in edges], widget
+
+
+def test_installed_library_matches_adapter_expectations() -> None:
+    ok, reason = YFilesGraphRenderer.availability()
+    assert ok, reason
+    assert "hierarchical" in {m.value for m in yfiles.Layout}
+
+
+def test_capabilities_declare_internet_and_telemetry() -> None:
+    caps = YFilesGraphRenderer().capabilities
+    assert caps.requires_internet and caps.telemetry and caps.supports_drag
+
+
+def test_translate_taxonomy_graph(taxonomy_spec: GraphSpec) -> None:
+    renderer = YFilesGraphRenderer()
+    payload = renderer.translate(taxonomy_spec, RenderOptions(key="kg", height=750, selectable=True, theme="light"))
+
+    assert payload.show_kwargs["graph_layout"] == yfiles.Layout.HIERARCHICAL
+    assert payload.show_kwargs["directed"] is False  # mixed graph: arrows come from the per-edge mapping
+    assert payload.show_kwargs["sync_selection"] is True
+    assert payload.show_kwargs["height"] == 750 and payload.show_kwargs["key"] == "kg__yfiles"
+    assert [n["id"] for n in payload.nodes] == list(taxonomy_spec.node_ids())
+    assert [e["id"] for e in payload.edges] == [e.id for e in taxonomy_spec.edges]
+
+    nodes, edges, widget = _apply(payload)
+    assert getattr(widget, "_error", None) is None
+
+    formula = next(n for n in nodes if n["id"] == "FORM_bmi")
+    assert formula["label"] == "BMI formula"
+    assert formula["styles"]["shape"] == yfiles.NodeShape.HEXAGON.value
+    assert formula["styles"]["label_styles"]["position"] == "center"
+    assert formula["styles"]["color"].lower() == taxonomy_spec.node("FORM_bmi").style.color.lower()
+
+    member = next(e for e in edges if e["id"].startswith("category_member"))
+    yields = next(e for e in edges if e["id"].startswith("yields"))
+    assert member["directed"] is False and yields["directed"] is True
+    assert member["styles"]["dashStyle"] == yfiles.DashStyle.DASH.value
+    assert "directed" not in member["styles"] and yields["styles"]["directed"] is True
+    assert yields["label"] == "yields"
+
+
+def test_translate_heat_and_layout_override(taxonomy_spec: GraphSpec) -> None:
+    spec = taxonomy_spec.model_copy(update={"nodes": tuple(n.model_copy(update={"weight": 0.5}) for n in taxonomy_spec.nodes)})
+    payload = YFilesGraphRenderer().translate(spec, RenderOptions(key="k", heat=True, layout=LayoutHint.CIRCULAR, show_edge_labels=False))
+    assert payload.show_kwargs["graph_layout"] == yfiles.Layout.CIRCULAR
+    nodes, edges, widget = _apply(payload)
+    assert getattr(widget, "_error", None) is None
+    assert all(n["heat"] == 0.5 for n in nodes)
+    assert all(e["label"] == "" for e in edges)

@@ -43,17 +43,15 @@ def get_taxonomy_versions(username=None):
             
     return sorted(versions, key=lambda x: x[0], reverse=True)
 # Ensure clean imports consistent with your environment
-from yfiles_graphs_for_streamlit import (
-    DashStyle,
-    Edge,
-    EdgeStyle,
-    LabelStyle,
-    Layout,
-    Node,
-    NodeShape,
-    NodeStyle,
-    StreamlitGraphWidget,
+from graph.builders.taxonomy import (
+    CATEGORY_LABELS,
+    RELATION_LABELS,
+    build_taxonomy_graph,
+    make_formula_id,
+    parse_formula_id,
 )
+from graph.model import LayoutHint, RenderOptions
+from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 
 # Lazy-compatible imports for clustering (module itself is light)
 from utils.clustering_utils import (
@@ -108,442 +106,7 @@ def repair_taxonomy_links(taxonomy, formulas_registry):
                 
     return taxonomy
 
-def get_graph_data(taxonomy_data, formulas_registry=None, full_taxonomy_ref=None, formula_search_query=None):
-    """
-    Constructs node and edge lists for the graph visualization.
-
-    Parameters:
-    -----------
-    taxonomy_data : dict
-        The filtered taxonomy data to visualize.
-    formulas_registry : dict, optional
-        Registry of formulas to include in the graph.
-    full_taxonomy_ref : dict, optional
-        Reference to the full taxonomy for resolving hidden nodes.
-    formula_search_query : str, optional
-        Query string to filter formulas.
-
-    Returns:
-    --------
-    tuple
-        (nodes, edges) lists for the graph widget.
-    """
-    nodes = []
-    edges = []
-    existing_node_ids = set()
-    
-    TYPE_CONFIG = {
-        "Input":    {"role": "input"},
-        "Derived":  {"role": "derived"},
-        "Outcome":  {"role": "outcome"},
-        "Formula":  {"role": "formula"},
-        "Category": {"role": "category"},
-        "Input-External":   {"role": "input-external"},
-        "Derived-External": {"role": "derived-external"},
-        # Explicit Internal Types
-        "Input-Internal":   {"role": "input"},
-        "Derived-Internal": {"role": "derived"}
-    }
-
-    def add_node_safe(n_id, label, n_type, description=""):
-        # Ensure IDs are robust strings
-        safe_id = str(n_id)
-        if safe_id not in existing_node_ids:
-            role = TYPE_CONFIG.get(n_type, {}).get("role", "input")
-            
-            nodes.append(Node(
-                id=safe_id,
-                properties={
-                    "label": str(label),
-                    "type": n_type,
-                    "role": role,
-                    "tooltip": description
-                }
-            ))
-            existing_node_ids.add(safe_id)
-
-    # --- Pre-compute Lookups for Robust Matching ---
-    std_to_orig = {}
-    
-    for k, v in taxonomy_data.items():
-        # Standard Name Lookup
-        s_name = str(v.get('standard_name', '')).lower()
-        if s_name: std_to_orig[s_name] = k
-
-    # Helper to resolve ID (Shared Logic)
-    def resolve_id(raw_name):
-        r = str(raw_name).strip()
-        r_lower = r.lower()
-        
-        # 1. Check if ID exists directly (in existing nodes or taxonomy)
-        if r in existing_node_ids: return r
-        if r in taxonomy_data: return r
-        if full_taxonomy_ref and r in full_taxonomy_ref: return r
-        
-        # 2. Check Standard Name (Exact & Case-insensitive)
-        if r_lower in std_to_orig: return std_to_orig[r_lower]
-        
-        # Check Standard Name in FULL taxonomy if available
-        if full_taxonomy_ref:
-                for k, v in full_taxonomy_ref.items():
-                    if str(v.get('standard_name', '')).lower() == r_lower:
-                        return k
-
-        # 3. Check if 'r' is a substring of any Standard Name (Fuzzy)
-        # (Only if r is long enough to be significant)
-        if len(r) > 4:
-            for s_name, t_id in std_to_orig.items():
-                if r_lower in s_name or s_name in r_lower:
-                    return t_id
-                    
-        return r # Fallback to raw (External)
-
-
-    # --- FILTER PRE-PASS: Identify allowed Variables if Formula Search is active ---
-    allowed_var_ids = None    
-    if formula_search_query and formulas_registry:
-        allowed_var_ids = set()
-        
-        for f_id, f_data in formulas_registry.items():
-            f_name = f_data.get('name', f_id)
-            f_desc = f_data.get('description', '')
-            
-            # Check match
-            search_text = f"{f_name} {f_desc} {f_data.get('input_variables', [])!s} {f_data.get('output_variable', '')!s}".lower()
-            if formula_search_query in search_text:
-                # Add inputs
-                for inp in f_data.get('input_variables', []):
-                    allowed_var_ids.add(resolve_id(inp))
-                # Add output
-                out = f_data.get('output_variable')
-                if out:
-                    allowed_var_ids.add(resolve_id(out))
-
-    # --- Main Parsing Loop ---
-    # 1. Variables & Categories
-    for var_id, attributes in taxonomy_data.items():
-        var_id_str = str(var_id)
-        
-        # STRICT FILTER CHECK
-        if allowed_var_ids is not None:
-            if var_id_str not in allowed_var_ids:
-                continue
-
-        # Variable Node
-        node_type = attributes.get("node_type", "Input")
-        # Remap Input -> Input-Internal
-        if node_type == "Input":
-             node_type = "Input-Internal"
-             
-        label = attributes.get("standard_name", var_id_str)
-        desc = attributes.get("description", "")
-        
-        add_node_safe(var_id_str, label, node_type, desc)
-
-        # Category Node & Edge
-        category = attributes.get("category", "Uncategorized")
-        cat_id = f"CAT_{category}"
-        add_node_safe(cat_id, category, "Category", "Data Category")
-        
-        # Edge: Category -> Variable (Parent -> Child for layout)
-        edges.append(Edge(
-            start=cat_id, 
-            end=var_id_str, 
-            properties={
-                "label": "", 
-                "style": "dashed", 
-                "color": "#BDBDBD", 
-                "directed": False 
-            }
-        ))
-
-    # 2. Formula Logic (Structured vs Legacy)
-    if formulas_registry:
-        # --- NEW STRUCTURED PATH ---
-        for f_id, f_data in formulas_registry.items():
-            f_name = f_data.get('name', f_id)
-            f_desc = f_data.get('description', '')
-            
-            # --- FORMULA QUERY FILTER ---
-            if formula_search_query:
-                # Check name, description, and inputs/outputs
-                search_text = f"{f_name} {f_desc} {f_data.get('input_variables', [])!s} {f_data.get('output_variable', '')!s}".lower()
-                if formula_search_query not in search_text:
-                    continue
-
-            formula_node_id = f"FORM_{f_id}" # Namespace it
-
-            # --- FILTER CHECK: Is this formula relevant? ---
-            # It is relevant if:
-            # A) Its Output Variable is in the CURRENT FILTERED SET (taxonomy_data)
-            # B) Any of its Input Variables is in the CURRENT FILTERED SET
-            
-            is_relevant = False
-            resolved_inputs = [resolve_id(i) for i in f_data.get('input_variables', [])]
-            resolved_output = resolve_id(f_data.get('output_variable')) if f_data.get('output_variable') else None
-            
-            # Check Output
-            if resolved_output and resolved_output in taxonomy_data:
-                is_relevant = True
-            
-            # Check Inputs
-            if not is_relevant:
-                for inp_id in resolved_inputs:
-                    if inp_id in taxonomy_data:
-                        is_relevant = True
-                        break
-            
-            if not is_relevant:
-                continue
-
-            add_node_safe(formula_node_id, f_name, "Formula", f_desc)
-
-            # Inputs -> Formula
-            for inp_var in f_data.get('input_variables', []):
-                inp_id = resolve_id(inp_var)
-                
-                # If resolved to existing, it uses that node's type/role. 
-                # If new, we treat as External.
-                if inp_id not in existing_node_ids:
-                    # Check if it is a HIDDEN internal node (in full taxonomy but not current view)
-                    is_hidden_internal = full_taxonomy_ref and inp_id in full_taxonomy_ref
-                    
-                    if is_hidden_internal:
-                        # Add it as a proper Input Node (Internal)
-                        # Fetch details from full taxonomy
-                        hidden_data = full_taxonomy_ref[inp_id]
-                        
-                        # Use Internal Type explicitly if it was 'Input'
-                        n_type = hidden_data.get('node_type', 'Input')
-                        if n_type == "Input":
-                            n_type = "Input-Internal"
-                            
-                        add_node_safe(inp_id, hidden_data.get('standard_name', inp_id), n_type, hidden_data.get('description', ''))
-                        
-                        # --- FIX: Also restore Category Link for this hidden node ---
-                        category = hidden_data.get("category", "Uncategorized")
-                        cat_id = f"CAT_{category}"
-                        add_node_safe(cat_id, category, "Category", "Data Category")
-                        
-                        edges.append(Edge(
-                            start=cat_id, 
-                            end=inp_id, 
-                            properties={
-                                "label": "", 
-                                "style": "dashed", 
-                                "color": "#BDBDBD", 
-                                "directed": False 
-                            }
-                        ))
-                    else:
-                        add_node_safe(inp_id, inp_id, "Input-External")
-                
-                edges.append(Edge(
-                    start=inp_id, 
-                    end=formula_node_id, 
-                    properties={
-                        "label": "input", 
-                        "style": "solid", 
-                        "color": "#4285F4", 
-                        "directed": True
-                    }
-                ))
-            
-                # Formula -> Output
-            out_var = f_data.get('output_variable')
-            if out_var:
-                out_id = resolve_id(out_var)
-                
-                if out_id not in existing_node_ids:
-                    # Check if it is a HIDDEN internal node
-                    is_hidden_internal = full_taxonomy_ref and out_id in full_taxonomy_ref
-                    
-                    if is_hidden_internal:
-                        # Restore Hidden Node
-                        hidden_data = full_taxonomy_ref[out_id]
-                        # Note: We enforce 'Derived-Internal' type/role because it is an output here, 
-                        # even if taxonomy says 'Input' (though ideally taxonomy matches)
-                        add_node_safe(out_id, hidden_data.get('standard_name', out_id), "Derived-Internal", hidden_data.get('description', ''))
-                        
-                        # Restore Category
-                        category = hidden_data.get("category", "Uncategorized")
-                        cat_id = f"CAT_{category}"
-                        add_node_safe(cat_id, category, "Category", "Data Category")
-                        
-                        edges.append(Edge(
-                            start=cat_id, 
-                            end=out_id, 
-                            properties={
-                                "label": "", 
-                                "style": "dashed", 
-                                "color": "#BDBDBD", 
-                                "directed": False 
-                            }
-                        ))
-                    else:
-                        add_node_safe(out_id, out_id, "Derived-External") 
-                
-                # Update role/type if it was existing (or just added) to reflect it's being calculated here
-                for n in nodes:
-                    if n.id == out_id:
-                        current_type = n.properties.get('type', '')
-                        if "External" in current_type:
-                             n.properties['type'] = 'Derived-External'
-                             n.properties['role'] = 'derived-external'
-                        else:
-                             n.properties['type'] = 'Derived-Internal'
-                             n.properties['role'] = 'derived'
-
-                edges.append(Edge(
-                    start=formula_node_id, 
-                    end=out_id, 
-                    properties={
-                        "label": "yields", 
-                        "style": "solid", 
-                        "color": "#EA4335", 
-                        "directed": True
-                    }
-                ))
-                
-    else:
-        # --- LEGACY REGEX PATH ---
-        for var_id, attributes in taxonomy_data.items():
-            var_id_str = str(var_id)
-            raw_formulas = attributes.get("related_formulas", [])
-            if isinstance(raw_formulas, str): raw_formulas = [raw_formulas]
-            
-            for text in raw_formulas:
-                match_input = re.search(r"Parameter in:?\s*(.*?)(?:\.|:|\(|$)", text, re.IGNORECASE)
-                match_output = re.search(r"Result of:?\s*(.*?)(?:\.|:|\(|$)", text, re.IGNORECASE)
-    
-                if match_input:
-                    form_name = match_input.group(1).strip()
-                    form_id = f"FORM_{hash(form_name)}"
-                    add_node_safe(form_id, form_name, "Formula", text)
-                    
-                    edges.append(Edge(
-                        start=var_id_str, 
-                        end=form_id, 
-                        properties={
-                            "label": "input", 
-                            "style": "solid", 
-                            "color": "#4285F4", 
-                            "directed": True
-                        }
-                    ))
-                
-                elif match_output:
-                    form_name = match_output.group(1).strip()
-                    form_id = f"FORM_{hash(form_name)}"
-                    add_node_safe(form_id, form_name, "Formula", text)
-                    
-                    if var_id_str in existing_node_ids:
-                         for node in nodes:
-                             if node.id == var_id_str:
-                                 node.properties['role'] = 'derived'
-                                 node.properties['type'] = 'Derived'
-                                 break
-    
-                    edges.append(Edge(
-                        start=form_id, 
-                        end=var_id_str, 
-                        properties={
-                            "label": "yields", 
-                            "style": "solid", 
-                            "color": "#EA4335", 
-                            "directed": True
-                        }
-                    ))
-    
-    # 4. Relationships (Common)
-    for var_id, attributes in taxonomy_data.items():
-        var_id_str = str(var_id)
-        for target in attributes.get("relationships", []):
-            if target in taxonomy_data:
-                edges.append(Edge(
-                    start=var_id_str, 
-                    end=str(target), 
-                    properties={
-                        "label": "relates to", 
-                        "style": "dotted", 
-                        "color": "#9E9E9E", 
-                        "directed": False
-                    }
-                ))
-
-    return nodes, edges
-
-# --- Visual Mappers ---
-
-def get_node_style(node):
-    """
-    Determine the visual style of a node based on its role.
-
-    Parameters:
-    -----------
-    node : Node
-        The node object containing properties.
-
-    Returns:
-    --------
-    NodeStyle
-        The style configuration for the node.
-    """
-    role = node['properties'].get('role', 'input')
-    styles = {
-        "category": {"color": "#E0E0E0", "shape": NodeShape.ROUND_RECTANGLE},
-        "input":    {"color": "#4285F4", "shape": NodeShape.ELLIPSE},
-        "derived":  {"color": "#FBBC05", "shape": NodeShape.ELLIPSE},
-        "formula":  {"color": "#EA4335", "shape": NodeShape.HEXAGON},
-        "input-external":   {"color": "#AECBFA", "shape": NodeShape.ELLIPSE}, # Lighter Blue
-        "derived-external": {"color": "#FEEFC3", "shape": NodeShape.ELLIPSE}  # Lighter Yellow
-    }
-    config = styles.get(role, styles["input"])
-    # Reverting scale change to fix crash
-    return NodeStyle(color=config["color"], shape=config["shape"])
-
-def get_edge_style(edge):
-    """
-    Determine the visual style of an edge based on its properties.
-
-    Parameters:
-    -----------
-    edge : Edge
-        The edge object containing properties.
-
-    Returns:
-    --------
-    EdgeStyle
-        The style configuration for the edge.
-    """
-    props = edge['properties']
-    style_str = props.get('style', 'solid')
-    
-    if style_str == 'dashed': d_style = DashStyle.DASH
-    elif style_str == 'dotted': d_style = DashStyle.DOT
-    else: d_style = DashStyle.SOLID
-    
-    return EdgeStyle(
-        color=props.get('color', '#000000'),
-        dash_style=d_style,
-        directed=props.get('directed', True),
-        thickness=2.0
-    )
-
-def get_node_label_style(node):
-    return LabelStyle(
-        color="#000000", 
-        text_position="center", 
-        # Removing wrapping and background to ensure text is always rendered
-    )
-
-def get_edge_label_style(edge):
-    return LabelStyle(
-        background_color="#FFFFFFCC", 
-        color="#333333", 
-        text_position="center",
-        wrapping="word"
-    )
+# Graph construction and styling live in graph.builders.taxonomy and graph.palette.
 
 # ==========================================
 # 2. MAIN APP LOGIC
@@ -1145,214 +708,133 @@ def app():
     # --- TAB 3: KNOWLEDGE GRAPH ---
     with tab_graph:
         st.subheader("Interactive Clinical Knowledge Graph")
-        
-        col_legend = st.columns([1])[0]
-        
-        with col_legend:
-            with st.expander("Legend", expanded=False):
-                st.markdown("""
-                **Nodes:**  
-                **Input Var** · **Derived Var** · **Formula** · **Category**  
-                <span style='color:#AECBFA'><b>●</b></span> **Ext. Input** <span style='color:#FEEFC3'><b>●</b></span> **Ext. Derived**
 
-                **Edges:**  
-                <span style='color:#4285F4'><b>──▶</b></span> **Input to Formula** (Blue)  
-                <span style='color:#EA4335'><b>──▶</b></span> **Yields Variable** (Red)  
-                <span style='color:#BDBDBD'><b>- - -</b></span> **Category Member** (Dashed)  
-                <span style='color:#9E9E9E'><b>• • •</b></span> **Related To** (Dotted)
-                """, unsafe_allow_html=True)
-                
-
-
-        # 2. Build Graph Elements (Using filtered data)
-        # Use filtered_vars directly, consistent with sidebar
         graph_source = filtered_vars
-
         if len(graph_source) > 150:
             st.warning(f"Rendering {len(graph_source)} variables. The graph might be slow.")
 
-        # Pass FULL taxonomy as reference to allow finding hidden nodes
-        nodes, edges = get_graph_data(graph_source, formulas_registry, full_taxonomy_ref=taxonomy, formula_search_query=f_query)
-        
-        # --- FILTERS ---
-        if nodes:
-            c_f1, c_f2 = st.columns(2)
-            
-            # Helper for robust access
-            def get_props(item):
-                return getattr(item, 'properties', item.get('properties', {}) if isinstance(item, dict) else {})
+        # Renderer-agnostic graph; the full taxonomy restores variables hidden by the filters
+        spec = build_taxonomy_graph(
+            graph_source,
+            formulas_registry,
+            full_taxonomy=taxonomy,
+            formula_query=f_query,
+            theme=current_theme(),
+        )
+        view = spec
+        if spec.nodes:
+            stats = spec.stats()
+            c_f1, c_f2, c_f3 = st.columns(3)
+            node_options = sorted(stats.nodes_by_category)
+            sel_node_cats = c_f1.multiselect(
+                "Node types", node_options, default=node_options,
+                format_func=lambda c: CATEGORY_LABELS.get(c, c), key="kg_node_types",
+            )
+            edge_options = sorted(stats.edges_by_category)
+            sel_edge_cats = c_f2.multiselect(
+                "Edge types", edge_options, default=edge_options,
+                format_func=lambda c: RELATION_LABELS.get(c, c), key="kg_edge_types",
+            )
+            renderer_selector(container=c_f3)
+            view = spec.filter(node_categories=sel_node_cats, edge_categories=sel_edge_cats)
 
-            # 1. Node Types
-            all_node_types = sorted(list(set(get_props(n).get('type', 'Unknown') for n in nodes)))
-            sel_node_types = c_f1.multiselect("Node Types", all_node_types, default=all_node_types)
-            
-            # 2. Edge Types
-            # Map edge labels to readable types
-            def get_edge_type(e):
-                p = get_props(e)
-                l = p.get('label', '')
-                if not l and p.get('style') == 'dashed': return 'Category Link'
-                if not l and p.get('style') == 'dotted': return 'Related'
-                return l if l else 'Unknown'
-
-            all_edge_types = sorted(list(set(get_edge_type(e) for e in edges)))
-            # Default: specific common types
-            sel_edge_types = c_f2.multiselect("Edge Types", all_edge_types, default=all_edge_types)
-            
-            # Apply Filters
-            filtered_nodes = [n for n in nodes if get_props(n).get('type') in sel_node_types]
-            filtered_node_ids = set(n.id for n in filtered_nodes)
-            
-            # DEBUG
-            # num_formulas_raw = len([n for n in nodes if get_props(n).get('type') == 'Formula'])
-            # if num_formulas_raw > 0: st.sidebar.info(f"Raw Formulas found: {num_formulas_raw}")
-            
-            # Filter Edges: Both source and target must exist, AND edge type must be selected
-            filtered_edges = [
-                e for e in edges 
-                if e.start in filtered_node_ids 
-                and e.end in filtered_node_ids
-                and get_edge_type(e) in sel_edge_types
-            ]
-            
-            # Override for display
-            nodes = filtered_nodes
-            edges = filtered_edges
-
-        # --- Metrics Display ---
-        if nodes:
-            # Count Nodes by Type
-            node_counts = {}
-            for n in nodes:
-                ntype = get_props(n).get('type', 'Unknown')
-                node_counts[ntype] = node_counts.get(ntype, 0) + 1
-            
-            edge_count = len(edges)
-            
+        if not view.nodes:
+            st.info("No nodes to display based on current filters.")
+        else:
+            view_stats = view.stats()
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Total Nodes", len(nodes))
-            m2.metric("Total Edges", edge_count)
-            m3.metric("Formulas", node_counts.get('Formula', 0))
-            m4.metric("Categories", node_counts.get('Category', 0))
-            
+            m1.metric("Total Nodes", view_stats.node_count)
+            m2.metric("Total Edges", view_stats.edge_count)
+            m3.metric("Formulas", view_stats.nodes_by_category.get("formula", 0))
+            m4.metric("Categories", view_stats.nodes_by_category.get("category", 0))
+
             with st.expander("Detailed Metrics", expanded=False):
                 d1, d2 = st.columns(2)
                 with d1:
                     st.write("**Nodes by Type**")
-                    st.dataframe(pd.DataFrame(list(node_counts.items()), columns=["Type", "Count"]), width="stretch", hide_index=True)
+                    st.dataframe(
+                        pd.DataFrame([{"Type": CATEGORY_LABELS.get(k, k), "Count": v}
+                                      for k, v in view_stats.nodes_by_category.items()]),
+                        width="stretch", hide_index=True,
+                    )
                 with d2:
-                    st.write("**Edge Summary**")
-                    st.info(f"Visualizing interactions between {len(nodes)} entities.")
-        
-        if not nodes:
-            st.info("No nodes to display based on current filters.")
-        else:
-            # 3. Initialize Widget
-            widget = StreamlitGraphWidget(nodes=nodes, edges=edges)
+                    st.write("**Edges by Type**")
+                    st.dataframe(
+                        pd.DataFrame([{"Type": RELATION_LABELS.get(k, k), "Count": v}
+                                      for k, v in view_stats.edges_by_category.items()]),
+                        width="stretch", hide_index=True,
+                    )
 
-            # 4. Apply Mappings (yfiles-graphs-for-streamlit 2.x API)
-            widget.node_label_mapping = lambda n: n['properties']['label']
-            widget.node_styles_mapping = get_node_style
-            widget.edge_label_mapping = lambda e: e['properties']['label']
-            widget.edge_styles_mapping = get_edge_style
+            selection = render_graph(
+                view,
+                RenderOptions(key="main_kg_view", height=750, selectable=True, layout=LayoutHint.HIERARCHICAL),
+            )
+            render_graph_exports(view, RenderOptions(key="main_kg_view"), file_stem="knowledge_graph")
 
-            # 5. Render. Height/layout are show() arguments in 2.x; failures are isolated so the
-            #    remaining tabs of this page still render.
-            try:
-                selection_data = widget.show(key="main_kg_view", graph_layout=Layout.HIERARCHICAL, height=750)
-            except Exception as graph_err:
-                st.error(f"The knowledge graph could not be rendered: {graph_err}")
-                selection_data = None
-            
-            # 6. Interaction Panel
-            if selection_data:
-                selected_ids = []
-                
-                # Recursive flatten function to handle lists, tuples, nested structures
-                def flatten_and_collect(data):
-                    if isinstance(data, (list, tuple)):
-                        for item in data:
-                            flatten_and_collect(item)
-                    elif data is not None:
-                        # Append as string, trim whitespace
-                        s = str(data).strip()
-                        if s: selected_ids.append(s)
+            # 6. Interaction panel, driven by the renderer's selection
+            if selection.node_ids:
+                st.divider()
+                st.markdown(f"### Selection Details ({len(selection.node_ids)} items)")
 
-                flatten_and_collect(selection_data)
-                
-                # Deduplicate
-                selected_ids = list(set(selected_ids))
-
-                if selected_ids:
-                    st.divider()
-                    st.markdown(f"### Selection Details ({len(selected_ids)} items)")
-                    
-                    for sel_id in selected_ids:
-                        with st.expander(f"Item: {sel_id}", expanded=True):
-                            # Case A: It's a Variable in our Taxonomy
-                            if sel_id in taxonomy:
-                                data = taxonomy[sel_id]
-                                c1, c2 = st.columns(2)
-                                with c1:
-                                    st.write(f"**Standard Name:** {data.get('standard_name')}")
-                                    st.write(f"**Category:** {data.get('category')}")
-                                    st.info(data.get('description'))
-                                with c2:
-                                    st.write("**Clinical Usage:**")
-                                    st.caption(data.get('clinical_usage', 'N/A'))
-                                    if data.get('related_formulas'):
-                                        st.write("**Formulas:**")
-                                        for f in data['related_formulas']:
-                                            st.code(f, language="text")
-                            
-                            # Case B: It's a Generated Node (Category or Formula)
-                            else:
-                                # Search in graph nodes
-                                node_obj = next((n for n in nodes if n.id == sel_id), None)
-                                if node_obj:
-                                    role = node_obj.properties.get('role', '').title()
-                                    label = node_obj.properties.get('label', '')
-                                    st.write(f"**Type:** {role} Node")
-                                    st.write(f"**Name:** {label}")
-                                    
-                                    if role == "Category":
-                                        st.info(f"Groups all variables belonging to '{label}' category.")
-                                    elif role == "Formula":
-                                        st.markdown("#### Formula Details")
-                                        
-                                        # Try to resolve valid Formula ID
-                                        f_id = sel_id.replace("FORM_", "")
-                                        f_data = formulas_registry.get(f_id)
-                                        
-                                        if f_data:
-                                            # Rich Display from Registry
-                                            c_fd1, c_fd2 = st.columns(2)
-                                            # Math Display
-                                            st.markdown("#### Formula Content")
-                                            if f_data.get('markdown_formula'):
-                                                st.latex(f_data['markdown_formula'])
-                                            elif f_data.get('expression'):
-                                                st.code(f_data['expression'], language="text")
-                                            elif f_data.get('formula'):
-                                                st.code(f_data['formula'], language="python")
-                                            else:
-                                                st.caption("No mathematical expression available.")
-                                            
-                                            st.success(f"**Description:** {f_data.get('description', 'No description.')}")
-                                            
-                                            c_in, c_out = st.columns(2)
-                                            with c_in:
-                                                st.markdown("**Inputs**")
-                                                for inv in f_data.get('input_variables', []):
-                                                    st.markdown(f"- `{inv}`")
-                                            with c_out:
-                                                st.markdown("**Derived Variable**")
-                                                st.markdown(f"`{f_data.get('output_variable', 'Unknown')}`")
-                                        else:
-                                            # Fallback to Node Props
-                                            st.info(f"Logic: {node_obj.properties.get('tooltip', 'No details')}")
+                for sel_id in selection.node_ids:
+                    node = view.node(sel_id)
+                    if node is None:
+                        continue
+                    with st.expander(f"Item: {node.label}", expanded=True):
+                        if sel_id in taxonomy:
+                            data = taxonomy[sel_id]
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.write(f"**Standard Name:** {data.get('standard_name')}")
+                                st.write(f"**Category:** {data.get('category')}")
+                                st.info(data.get('description') or "No description.")
+                            with c2:
+                                st.write("**Clinical Usage:**")
+                                st.caption(data.get('clinical_usage', 'N/A'))
+                                if data.get('related_formulas'):
+                                    st.write("**Formulas:**")
+                                    for f in data['related_formulas']:
+                                        st.code(f, language="text")
+                        elif node.category == "category":
+                            st.write("**Type:** Category node")
+                            st.info(f"Groups all variables belonging to '{node.label}' category.")
+                        elif node.category == "formula":
+                            st.markdown("#### Formula Details")
+                            registry = formulas_registry or {}
+                            f_key = node.data.get("formula_key") or parse_formula_id(sel_id) or sel_id
+                            f_data = (
+                                registry.get(f_key)
+                                or registry.get(make_formula_id(f_key))
+                                or registry.get(parse_formula_id(f_key) or "")
+                            )
+                            if f_data:
+                                st.markdown("#### Formula Content")
+                                if f_data.get('markdown_formula'):
+                                    st.latex(f_data['markdown_formula'])
+                                elif f_data.get('expression'):
+                                    st.code(f_data['expression'], language="text")
+                                elif f_data.get('formula'):
+                                    st.code(f_data['formula'], language="python")
                                 else:
-                                    st.caption(f"ID not found in graph registry: {sel_id}")
+                                    st.caption("No mathematical expression available.")
+
+                                st.success(f"**Description:** {f_data.get('description', 'No description.')}")
+
+                                c_in, c_out = st.columns(2)
+                                with c_in:
+                                    st.markdown("**Inputs**")
+                                    for inv in f_data.get('input_variables', []):
+                                        st.markdown(f"- `{inv}`")
+                                with c_out:
+                                    st.markdown("**Derived Variable**")
+                                    st.markdown(f"`{f_data.get('output_variable', 'Unknown')}`")
+                            else:
+                                st.info(f"Logic: {node.tooltip or 'No details'}")
+                        else:
+                            st.write(f"**Type:** {CATEGORY_LABELS.get(node.category, node.category)}")
+                            st.write(f"**Name:** {node.label}")
+                            if node.tooltip:
+                                st.info(node.tooltip)
 
     # --- TAB 3: FORMULA DETAILS (NEW) ---
     with tab_formulas:
@@ -1995,7 +1477,7 @@ def app():
                                         new_var_id = item.get('name')
                                         # Create a simpler ID for formula to avoid collisions? 
                                         # Use hash or timestamp, or just FORM_VARNAME
-                                        new_form_id = f"FORM_{new_var_id}"
+                                        new_form_id = make_formula_id(new_var_id)
                                         
                                         # MERGE CLUES AS INPUTS
                                         final_inputs = list(set(item.get('input_variables', []) + st.session_state.get('refine_active_clues', [])))

@@ -62,7 +62,7 @@ def app():
         st.markdown("""
         *   **Hypothesis Testing**: Automated selection of appropriate parametric/non-parametric tests (T-test, ANOVA, Chi-Square, etc.).
         *   **Multivariate Analysis**: Perform ANCOVA and regression models to adjust for confounding variables.
-        *   **Epidemiological Metrics**: Calculation of Odds Ratios (OR), Relative Risks (RR), and survival analysis metrics.
+        *   **Epidemiological Metrics**: Calculation of Odds Ratios (OR), Relative Risks (RR), risk differences and numbers needed to treat with confidence intervals.
         *   **Power Analysis**: Sample size calculation and statistical power estimation.
         """)
         
@@ -70,11 +70,29 @@ def app():
         st.markdown("""
         *   **Version Control**: Built-in dataset versioning (DuckDB) and trace management.
         *   **Analysis Replay**: Reproduce exact analysis states and settings.
-        *   **Publication-Ready Exports**: Generate high-resolution figures and formated Excel tables.
+        *   **Publication-Ready Exports**: Generate high-resolution figures and formatted Excel tables.
         """)
 
     st.divider()
-    
+
+    # --- Third-party components (license notices) ---
+    st.markdown("### Third-party components and notices")
+    st.markdown("""
+    *   **Graph rendering** uses a library-agnostic connector. The default engine is **Plotly + NetworkX**
+        (MIT / BSD-3), rendered locally with no network access and no telemetry.
+    *   The optional **yFiles Graphs for Streamlit** engine is a proprietary component of **yWorks GmbH**,
+        used under the *yFiles Streamlit Component Free License*. When it is selected, the graph runtime is
+        loaded from `yworks.com` at render time (an internet connection is required) and anonymised,
+        non-textual information about the structure of the graphs you create is reported to yWorks.
+        yWorks may change or discontinue the component. Choose the offline engine in the graph settings
+        (or set `CMP_GRAPH_RENDERER=plotly` / `CMP_OFFLINE=1`) to avoid any outbound connection.
+    *   **AI providers**: Ollama runs on your server; Google Gemini, OpenAI and Mistral are cloud services
+        that only receive data after an explicit confirmation in the RAG & AI Configuration panel.
+    *   Full dependency licences: `documentation/developer/License_Dependencies.md`.
+    """)
+
+    st.divider()
+
     # --- Footer ---
     st.markdown("### Contact Information")
     

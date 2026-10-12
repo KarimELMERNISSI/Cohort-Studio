@@ -40,9 +40,9 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 | **Outlier Detection** | Hardcoded IQR / standard dev | Manual range validation | **Univariate + ML (Isolation Forest, LOF, DBSCAN)** |
 | **Clinical Anomaly Rules** | Custom if-else blocks | Form validation rules | **Declarative Expression Masks & Highlight Tables** |
 | **Document Intelligence** | Disconnected LLM chats | None | **Model-Agnostic RAG (Local Ollama, Gemini, OpenAI)** |
-| **Knowledge Graph Taxonomy**| Manual drawing | Controlled terminologies | **Interactive yFiles Graph Induction & Refinement** |
+| **Knowledge Graph Taxonomy**| Manual drawing | Controlled terminologies | **Interactive knowledge graphs (offline Plotly engine by default, yFiles optional)** |
 | **Audit Trail & Pipeline Replay** | Fragile notebook state | Fixed PDF audit trail | **Full Pipeline Re-Execution (Headless & UI) + Word Dossiers** |
-| **Deployment Model** | Local interpreter | Cloud SaaS subscription | **Self-Hosted, Air-Gapped / Docker / Cloud** |
+| **Deployment Model** | Local interpreter | Cloud SaaS subscription | **Self-Hosted / Docker / Cloud; air-gapped with the default graph engine and a local LLM** |
 | **License** | N/A | Proprietary / Commercial fees | **Open-Source (Apache 2.0)** |
 
 ---
@@ -118,7 +118,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Provider-Agnostic Interface**: Direct connectors for Google Gemini 2.5, local Ollama (air-gapped clinical deployments), OpenAI (GPT-4o), and Mistral.
 - **Medical Semantic Renaming**: Harmonizes raw electronic health record columns with standard terminologies (UMLS, LOINC, SNOMED CT).
 - **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation via ChromaDB.
-- **Knowledge Graphs**: Automated variable relationship induction into interactive yFiles knowledge graphs.
+- **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
 
 ### 6. Pipeline Reproducibility & Audit Trail
 - **Deterministic Trace Engine**: Logs timestamped operational trees with function signatures, serialized parameters, and output snapshot paths.
