@@ -12,48 +12,17 @@ import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from manage.db_manager import DBManager
 from utils.data_analyzer import DataAnalyzer
+from ui.components import no_dataset
 
 def app():
     # Initialize DB Manager
     if 'db_manager' not in st.session_state:
         st.session_state.db_manager = DBManager()
 
-    # Dataset Management Sidebar (Automatic Versioning)
-    with st.sidebar.expander("Dataset History", expanded=False):
-        st.caption("Manage dataset versions")
-        
-        datasets = st.session_state.db_manager.get_available_datasets()
-        if datasets:
-            selected_dataset = st.selectbox("Select Dataset Version", datasets, index=0)
-            if st.button("Load Selected Version"):
-                df_loaded, msg = st.session_state.db_manager.load_dataset(selected_dataset)
-                if df_loaded is not None:
-                    st.session_state['data'] = df_loaded
-                    st.session_state['working_df'] = df_loaded.copy()
-                    st.session_state['current_dataset_name'] = selected_dataset
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
-        else:
-            st.info("No saved datasets found.")
-
-    # Implicitly load latest dataset if none is loaded
+    # Dataset versions are managed from the shell sidebar (ui/shell.py); nothing is auto-loaded.
     if st.session_state.get("data") is None:
-        datasets = st.session_state.db_manager.get_available_datasets()
-        if datasets:
-            latest_dataset = datasets[0]
-            df_loaded, msg = st.session_state.db_manager.load_dataset(latest_dataset)
-            if df_loaded is not None:
-                st.session_state['data'] = df_loaded
-                st.session_state['working_df'] = df_loaded.copy()
-                st.session_state['current_dataset_name'] = latest_dataset
-                st.toast(f"Auto-loaded latest dataset: {latest_dataset}")
-            else:
-                st.warning("Failed to auto-load latest dataset.")
-        else:
-            st.warning("Please upload data first!")
-            return
+        no_dataset()
+        return
     
     df_full = st.session_state["data"]
     analyzer = DataAnalyzer(df_full)

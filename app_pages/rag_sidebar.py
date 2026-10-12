@@ -28,6 +28,25 @@ def _documents_dir() -> str:
     return str(scope.documents_dir()) if scope else "DOCUMENTS"
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _discover_ollama_models(base_url: str) -> list[str]:
+    """Ollama model list, probed at most once a minute per endpoint (audit E11)."""
+    try:
+        cfg = ProviderConfig(provider=ProviderType.OLLAMA, base_url=base_url)
+        return list(ConnectorFactory.get_llm_connector(cfg).get_available_models() or [])
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _discover_cloud_models(_manager, provider: str, api_key: str) -> list[str]:
+    """Cloud model list, fetched at most once an hour per key (audit E11)."""
+    try:
+        return list(_manager.get_available_models(provider) or [])
+    except Exception:
+        return []
+
+
 def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | None:
     """Session-scoped API key entry.
 
@@ -62,8 +81,8 @@ def _render_cloud_consent(selected_provider: str, display_names: dict) -> bool:
     return bool(consent)
 
 
-def render_rag_sidebar():
-    """Renders the professional RAG & AI Configuration sidebar."""
+def render_ai_settings():
+    """AI provider, keys, consent, document library and retrieval parameters (Settings page)."""
     from manage.rag_manager import RAGManager
 
     # Initialize RAG Manager in session state if not already present
@@ -75,319 +94,318 @@ def render_rag_sidebar():
             old_key = getattr(st.session_state.rag_manager, "api_key", None)
             st.session_state.rag_manager = RAGManager(api_key=old_key)
 
-    with st.sidebar.expander("RAG & AI Configuration", expanded=False):
-        st.caption("Model Providers, Embeddings & Literature Retrieval")
+    # --- Provider ---
+    st.caption("Model Providers, Embeddings & Literature Retrieval")
 
-        # Provider Selector
-        provider_display_names = {
-            "gemini": "Google Gemini (Cloud)",
-            "ollama": "Ollama (Local / Open-Source)",
-            "openai": "OpenAI (Cloud)",
-            "mistral": "Mistral AI (European Sovereign)",
-        }
-        
-        provider_options = list(provider_display_names.keys())
-        # Local-first default: no data leaves the server unless a cloud provider is chosen explicitly.
-        default_provider_idx = provider_options.index("ollama")
-        
-        selected_provider = st.selectbox(
-            "AI Provider",
-            options=provider_options,
-            format_func=lambda x: provider_display_names.get(x, x),
-            index=default_provider_idx,
-            key="rag_provider_select",
-            help="Choose between sovereign local open-source models (Ollama) or managed cloud models."
+    # Provider Selector
+    provider_display_names = {
+        "gemini": "Google Gemini (Cloud)",
+        "ollama": "Ollama (Local / Open-Source)",
+        "openai": "OpenAI (Cloud)",
+        "mistral": "Mistral AI (European Sovereign)",
+    }
+    
+    provider_options = list(provider_display_names.keys())
+    # Local-first default: no data leaves the server unless a cloud provider is chosen explicitly.
+    default_provider_idx = provider_options.index("ollama")
+    
+    selected_provider = st.selectbox(
+        "AI Provider",
+        options=provider_options,
+        format_func=lambda x: provider_display_names.get(x, x),
+        index=default_provider_idx,
+        key="rag_provider_select",
+        help="Choose between sovereign local open-source models (Ollama) or managed cloud models."
+    )
+
+    api_key = None
+    base_url = None
+    selected_model = ""
+    selected_embedding_model = ""
+
+    # --- 1. OLLAMA (LOCAL OPEN SOURCE) ---
+    if selected_provider == "ollama":
+        st.caption("Runs on this server or your network. No data leaves it.")
+        base_url = st.text_input(
+            "Ollama Host Endpoint",
+            value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            key="rag_ollama_base_url",
+            help="URL of the local or network Ollama service."
         )
 
-        api_key = None
-        base_url = None
-        selected_model = ""
-        selected_embedding_model = ""
+        # Discover local Ollama models dynamically
+        discovered_models = _discover_ollama_models(base_url)
 
-        # --- 1. OLLAMA (LOCAL OPEN SOURCE) ---
-        if selected_provider == "ollama":
-            st.caption("Runs on this server or your network. No data leaves it.")
-            base_url = st.text_input(
-                "Ollama Host Endpoint",
-                value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-                key="rag_ollama_base_url",
-                help="URL of the local or network Ollama service."
-            )
+        ollama_model_options = discovered_models if discovered_models else [
+            "llama3.2:latest",
+            "llama3.1:8b",
+            "mistral:latest",
+            "deepseek-r1:8b",
+            "qwen2.5:7b"
+        ]
 
-            # Discover local Ollama models dynamically
-            ollama_cfg = ProviderConfig(provider=ProviderType.OLLAMA, base_url=base_url)
-            ollama_llm = ConnectorFactory.get_llm_connector(ollama_cfg)
-            discovered_models = ollama_llm.get_available_models()
-
-            ollama_model_options = discovered_models if discovered_models else [
-                "llama3.2:latest",
-                "llama3.1:8b",
-                "mistral:latest",
-                "deepseek-r1:8b",
-                "qwen2.5:7b"
-            ]
-
-            selected_model = st.selectbox(
-                "Chat Model",
-                options=ollama_model_options,
-                index=0,
-                key="rag_ollama_model_select",
-                help="Local model for question answering and taxonomy generation."
-            )
-
-            ollama_embed_options = [
-                "nomic-embed-text:latest",
-                "bge-m3:latest",
-                "all-minilm:latest",
-                "mxbai-embed-large:latest",
-            ]
-            selected_embedding_model = st.selectbox(
-                "Local Embedding Model",
-                options=ollama_embed_options,
-                index=0,
-                key="rag_ollama_embed_select",
-                help="Local vector embedding model (must be pulled in Ollama: 'ollama pull <model>')."
-            )
-
-        # --- 2. GOOGLE GEMINI ---
-        elif selected_provider == "gemini":
-            api_key = _api_key_input("GOOGLE_API_KEY", "Google GenAI API Key", "rag_gemini_api_key", "Required for Gemini inference.")
-
-            base_gemini_models = [
-                "gemini-2.5-flash",
-                "gemini-2.5-pro",
-                "gemini-3.8-flash",
-                "gemini-3.5-flash",
-                "gemini-flash-latest",
-                "gemini-pro-latest",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash",
-                "gemini-1.5-pro",
-            ]
-            
-            # Dynamically fetch available models from Google API if initialized
-            if api_key and hasattr(st.session_state.rag_manager, "get_available_models"):
-                try:
-                    live_models = st.session_state.rag_manager.get_available_models("gemini")
-                    if live_models:
-                        for lm in live_models:
-                            if lm not in base_gemini_models:
-                                base_gemini_models.append(lm)
-                except Exception:
-                    pass
-
-            selected_model = st.selectbox(
-                "Gemini Model",
-                options=base_gemini_models,
-                index=0,
-                key="rag_gemini_model_select"
-            )
-
-            gemini_embed_options = [
-                "models/gemini-embedding-2",
-                "models/text-embedding-005",
-                "models/text-embedding-004",
-                "models/gemini-embedding-001",
-            ]
-            selected_embedding_model = st.selectbox(
-                "Embedding Model",
-                options=gemini_embed_options,
-                index=0,
-                key="rag_gemini_embed_select"
-            )
-
-        # --- 3. OPENAI ---
-        elif selected_provider == "openai":
-            api_key = _api_key_input("OPENAI_API_KEY", "OpenAI API Key", "rag_openai_api_key", "Required for OpenAI inference.")
-
-            openai_model_options = [
-                "gpt-4o-mini",
-                "gpt-4o",
-                "o3-mini",
-            ]
-            selected_model = st.selectbox(
-                "OpenAI Model",
-                options=openai_model_options,
-                index=0,
-                key="rag_openai_model_select"
-            )
-
-            openai_embed_options = [
-                "text-embedding-3-small",
-                "text-embedding-3-large",
-            ]
-            selected_embedding_model = st.selectbox(
-                "Embedding Model",
-                options=openai_embed_options,
-                index=0,
-                key="rag_openai_embed_select"
-            )
-
-        # --- 4. MISTRAL AI ---
-        elif selected_provider == "mistral":
-            api_key = _api_key_input("MISTRAL_API_KEY", "Mistral API Key", "rag_mistral_api_key", "Required for Mistral AI inference.")
-
-            mistral_model_options = [
-                "mistral-small-latest",
-                "mistral-large-latest",
-                "codestral-latest",
-            ]
-            selected_model = st.selectbox(
-                "Mistral Model",
-                options=mistral_model_options,
-                index=0,
-                key="rag_mistral_model_select"
-            )
-
-            mistral_embed_options = ["mistral-embed"]
-            selected_embedding_model = st.selectbox(
-                "Embedding Model",
-                options=mistral_embed_options,
-                index=0,
-                key="rag_mistral_embed_select"
-            )
-
-        cloud_consent = _render_cloud_consent(selected_provider, provider_display_names)
-
-        st.markdown("---")
-        st.markdown("##### Document Library")
-
-        # Document Upload
-        uploaded_files = st.file_uploader(
-            "Upload Literature (PDF)",
-            type=["pdf"],
-            accept_multiple_files=True,
-            key="rag_file_uploader",
-            help="PDF files are stored in your workspace and ingested into your knowledge base."
+        selected_model = st.selectbox(
+            "Chat Model",
+            options=ollama_model_options,
+            index=0,
+            key="rag_ollama_model_select",
+            help="Local model for question answering and taxonomy generation."
         )
-        if uploaded_files:
-            docs_dir = _documents_dir()
-            os.makedirs(docs_dir, exist_ok=True)
-            new_files_count = 0
-            for uploaded_file in uploaded_files:
-                file_path = os.path.join(docs_dir, safe_filename(uploaded_file.name))
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                new_files_count += 1
-            if new_files_count > 0:
-                st.success(f"Stored {new_files_count} document(s). Click Initialize below to index.")
 
-        # Document Selection
-        selected_files = None
+        ollama_embed_options = [
+            "nomic-embed-text:latest",
+            "bge-m3:latest",
+            "all-minilm:latest",
+            "mxbai-embed-large:latest",
+        ]
+        selected_embedding_model = st.selectbox(
+            "Local Embedding Model",
+            options=ollama_embed_options,
+            index=0,
+            key="rag_ollama_embed_select",
+            help="Local vector embedding model (must be pulled in Ollama: 'ollama pull <model>')."
+        )
+
+    # --- 2. GOOGLE GEMINI ---
+    elif selected_provider == "gemini":
+        api_key = _api_key_input("GOOGLE_API_KEY", "Google GenAI API Key", "rag_gemini_api_key", "Required for Gemini inference.")
+
+        base_gemini_models = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ]
+        
+        # Dynamically fetch available models from Google API if initialized
+        if api_key and hasattr(st.session_state.rag_manager, "get_available_models"):
+            for lm in _discover_cloud_models(st.session_state.rag_manager, "gemini", api_key):
+                if lm not in base_gemini_models:
+                    base_gemini_models.append(lm)
+
+        selected_model = st.selectbox(
+            "Gemini Model",
+            options=base_gemini_models,
+            index=0,
+            key="rag_gemini_model_select"
+        )
+
+        gemini_embed_options = [
+            "models/gemini-embedding-2",
+            "models/text-embedding-005",
+            "models/text-embedding-004",
+            "models/gemini-embedding-001",
+        ]
+        selected_embedding_model = st.selectbox(
+            "Embedding Model",
+            options=gemini_embed_options,
+            index=0,
+            key="rag_gemini_embed_select"
+        )
+
+    # --- 3. OPENAI ---
+    elif selected_provider == "openai":
+        api_key = _api_key_input("OPENAI_API_KEY", "OpenAI API Key", "rag_openai_api_key", "Required for OpenAI inference.")
+
+        openai_model_options = [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "o3-mini",
+        ]
+        selected_model = st.selectbox(
+            "OpenAI Model",
+            options=openai_model_options,
+            index=0,
+            key="rag_openai_model_select"
+        )
+
+        openai_embed_options = [
+            "text-embedding-3-small",
+            "text-embedding-3-large",
+        ]
+        selected_embedding_model = st.selectbox(
+            "Embedding Model",
+            options=openai_embed_options,
+            index=0,
+            key="rag_openai_embed_select"
+        )
+
+    # --- 4. MISTRAL AI ---
+    elif selected_provider == "mistral":
+        api_key = _api_key_input("MISTRAL_API_KEY", "Mistral API Key", "rag_mistral_api_key", "Required for Mistral AI inference.")
+
+        mistral_model_options = [
+            "mistral-small-latest",
+            "mistral-large-latest",
+            "codestral-latest",
+        ]
+        selected_model = st.selectbox(
+            "Mistral Model",
+            options=mistral_model_options,
+            index=0,
+            key="rag_mistral_model_select"
+        )
+
+        mistral_embed_options = ["mistral-embed"]
+        selected_embedding_model = st.selectbox(
+            "Embedding Model",
+            options=mistral_embed_options,
+            index=0,
+            key="rag_mistral_embed_select"
+        )
+
+    cloud_consent = _render_cloud_consent(selected_provider, provider_display_names)
+
+    st.markdown("---")
+    st.markdown("##### Document Library")
+
+    # Document Upload
+    uploaded_files = st.file_uploader(
+        "Upload Literature (PDF)",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="rag_file_uploader",
+        help="PDF files are stored in your workspace and ingested into your knowledge base."
+    )
+    if uploaded_files:
         docs_dir = _documents_dir()
-        if os.path.exists(docs_dir):
-            all_files = [f for f in os.listdir(docs_dir) if f.lower().endswith(".pdf")]
-            if all_files:
-                with st.expander(f"Select Documents ({len(all_files)} available)", expanded=False):
-                    selected_files = st.multiselect(
-                        "Active Documents for Ingestion",
-                        options=all_files,
-                        default=all_files,
-                        label_visibility="collapsed",
-                        key="rag_selected_files_multiselect"
-                    )
-            else:
-                st.info("No PDF files in your document library yet.")
+        os.makedirs(docs_dir, exist_ok=True)
+        new_files_count = 0
+        for uploaded_file in uploaded_files:
+            file_path = os.path.join(docs_dir, safe_filename(uploaded_file.name))
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            new_files_count += 1
+        if new_files_count > 0:
+            st.success(f"Stored {new_files_count} document(s). Click Initialize below to index.")
 
-        st.markdown("---")
-        st.markdown("##### Retrieval Parameters")
-
-        # Adherence Slider
-        if "rag_adherence_score" not in st.session_state:
-            st.session_state.rag_adherence_score = 0.5
-
-        adherence_score = st.slider(
-            "Adherence: Medical Knowledge vs Documents",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.rag_adherence_score,
-            step=0.1,
-            help="0.0 = General Medical Knowledge. 1.0 = Strict Document Factuality.",
-            key="rag_adherence_slider"
-        )
-        if adherence_score != st.session_state.rag_adherence_score:
-            st.session_state.rag_adherence_score = adherence_score
-            if st.session_state.rag_manager.initialized:
-                success, msg = st.session_state.rag_manager.update_adherence_score(adherence_score)
-                if success:
-                    st.toast(msg)
-                else:
-                    st.error(msg)
-
-        # Temperature Slider
-        if "rag_temperature" not in st.session_state:
-            st.session_state.rag_temperature = 0.3
-
-        temperature = st.slider(
-            "Creativity (Temperature)",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.rag_temperature,
-            step=0.1,
-            help="0.0 = Deterministic. 1.0 = Highly Creative.",
-            key="rag_temp_slider"
-        )
-        if temperature != st.session_state.rag_temperature:
-            st.session_state.rag_temperature = temperature
-
-        use_existing_db = st.checkbox(
-            "Use Existing Database (Fast Load)",
-            value=True,
-            help="Reuse already computed vector embeddings to skip re-indexing."
-        )
-
-        if not cloud_consent:
-            st.caption("Confirm the data-sharing notice above to enable initialization.")
-        if st.button("Initialize / Reindex RAG System", key="rag_init_button", disabled=not cloud_consent):
-            with st.spinner("Initializing AI Engine..."):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                def update_progress(percent: int, message: str):
-                    progress_bar.progress(percent)
-                    status_text.text(message)
-
-                dataset_columns = None
-                if "data" in st.session_state and st.session_state.data is not None:
-                    dataset_columns = st.session_state.data.columns.tolist()
-                elif "working_df" in st.session_state and st.session_state.working_df is not None:
-                    dataset_columns = st.session_state.working_df.columns.tolist()
-
-                # Set API key on manager if provided
-                if api_key:
-                    st.session_state.rag_manager.api_key = api_key
-
-                success, msg = st.session_state.rag_manager.initialize_system(
-                    provider=selected_provider,
-                    model_name=selected_model,
-                    embedding_model=selected_embedding_model,
-                    base_url=base_url,
-                    adherence_score=adherence_score,
-                    temperature=temperature,
-                    dataset_columns=dataset_columns,
-                    use_existing_db=use_existing_db,
-                    progress_callback=update_progress,
-                    selected_files=selected_files,
+    # Document Selection
+    selected_files = None
+    docs_dir = _documents_dir()
+    if os.path.exists(docs_dir):
+        all_files = [f for f in os.listdir(docs_dir) if f.lower().endswith(".pdf")]
+        if all_files:
+            with st.expander(f"Select Documents ({len(all_files)} available)", expanded=False):
+                selected_files = st.multiselect(
+                    "Active Documents for Ingestion",
+                    options=all_files,
+                    default=all_files,
+                    label_visibility="collapsed",
+                    key="rag_selected_files_multiselect"
                 )
-
-                progress_bar.empty()
-                status_text.empty()
-
-                if success:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-
-        # Status and Context Summary
-        if st.session_state.rag_manager.initialized:
-            st.success("RAG System Active")
-            if hasattr(st.session_state.rag_manager, "global_context"):
-                gc = st.session_state.rag_manager.global_context
-                if isinstance(gc, dict):
-                    st.markdown("---")
-                    st.markdown("##### Inferred Clinical Context")
-                    st.write(f"**Domain:** {gc.get('domain', 'General Medical')}")
-                    if gc.get("context_description"):
-                        st.caption(gc.get("context_description"))
         else:
-            st.info("RAG System Inactive (Initialize above)")
+            st.info("No PDF files in your document library yet.")
+
+    st.markdown("---")
+    st.markdown("##### Retrieval Parameters")
+
+    # Adherence Slider
+    if "rag_adherence_score" not in st.session_state:
+        st.session_state.rag_adherence_score = 0.5
+
+    adherence_score = st.slider(
+        "Adherence: Medical Knowledge vs Documents",
+        min_value=0.0,
+        max_value=1.0,
+        value=st.session_state.rag_adherence_score,
+        step=0.1,
+        help="0.0 = General Medical Knowledge. 1.0 = Strict Document Factuality.",
+        key="rag_adherence_slider"
+    )
+    if adherence_score != st.session_state.rag_adherence_score:
+        st.session_state.rag_adherence_score = adherence_score
+        if st.session_state.rag_manager.initialized:
+            success, msg = st.session_state.rag_manager.update_adherence_score(adherence_score)
+            if success:
+                st.toast(msg)
+            else:
+                st.error(msg)
+
+    # Temperature Slider
+    if "rag_temperature" not in st.session_state:
+        st.session_state.rag_temperature = 0.3
+
+    temperature = st.slider(
+        "Creativity (Temperature)",
+        min_value=0.0,
+        max_value=1.0,
+        value=st.session_state.rag_temperature,
+        step=0.1,
+        help="0.0 = Deterministic. 1.0 = Highly Creative.",
+        key="rag_temp_slider"
+    )
+    if temperature != st.session_state.rag_temperature:
+        st.session_state.rag_temperature = temperature
+
+    use_existing_db = st.checkbox(
+        "Use Existing Database (Fast Load)",
+        value=True,
+        help="Reuse already computed vector embeddings to skip re-indexing."
+    )
+
+    if not cloud_consent:
+        st.caption("Confirm the data-sharing notice above to enable initialization.")
+    if st.button("Initialize / Reindex RAG System", key="rag_init_button", disabled=not cloud_consent):
+        with st.spinner("Initializing AI Engine..."):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            def update_progress(percent: int, message: str):
+                progress_bar.progress(percent)
+                status_text.text(message)
+
+            dataset_columns = None
+            if "data" in st.session_state and st.session_state.data is not None:
+                dataset_columns = st.session_state.data.columns.tolist()
+            elif "working_df" in st.session_state and st.session_state.working_df is not None:
+                dataset_columns = st.session_state.working_df.columns.tolist()
+
+            # Set API key on manager if provided
+            if api_key:
+                st.session_state.rag_manager.api_key = api_key
+
+            success, msg = st.session_state.rag_manager.initialize_system(
+                provider=selected_provider,
+                model_name=selected_model,
+                embedding_model=selected_embedding_model,
+                base_url=base_url,
+                adherence_score=adherence_score,
+                temperature=temperature,
+                dataset_columns=dataset_columns,
+                use_existing_db=use_existing_db,
+                progress_callback=update_progress,
+                selected_files=selected_files,
+            )
+
+            progress_bar.empty()
+            status_text.empty()
+
+            if success:
+                st.success(msg)
+            else:
+                st.error(msg)
+
+    # Status and Context Summary
+    if st.session_state.rag_manager.initialized:
+        st.success("RAG System Active")
+        if hasattr(st.session_state.rag_manager, "global_context"):
+            gc = st.session_state.rag_manager.global_context
+            if isinstance(gc, dict):
+                st.markdown("---")
+                st.markdown("##### Inferred Clinical Context")
+                st.write(f"**Domain:** {gc.get('domain', 'General Medical')}")
+                if gc.get("context_description"):
+                    st.caption(gc.get("context_description"))
+    else:
+        st.info("RAG System Inactive (Initialize above)")
+
+
+def render_rag_sidebar():
+    """Legacy wrapper: the same controls inside a sidebar expander (the Settings page is the primary home)."""
+    with st.sidebar.expander("RAG & AI Configuration", expanded=False):
+        render_ai_settings()

@@ -52,8 +52,8 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 ```text
 +---------------------------------------------------------------------------------------+
 |                                  PRESENTATION LAYER                                   |
-|       Streamlit 1.65+ Multi-Page Architecture (Home, Monitoring, Enrichment,          |
-|                 Epidemiology, Visualization, Document Insights, Admin)                |
+| Streamlit 1.65 st.navigation shell: Start / Data (Import, Validate, Enrich) / Explore |
+|           Analyze / Knowledge / Reproduce / Help (Handbook, Settings) / Admin         |
 +-------------------------------------------+-------------------------------------------+
                                             |
                                             v

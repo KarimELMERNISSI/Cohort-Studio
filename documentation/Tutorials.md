@@ -9,14 +9,14 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 **Goal**: Load your dataset, standardise column names, and save an initial version.
 
 1. **Log in** to your account (or sign up and wait for admin activation).
-2. Go to the **Main View** page.
+2. Go to **Data > Import** (or load the sample cohort from the Start page).
 3. Click **Upload Dataset** and select your file (CSV, Excel, or Parquet).
 4. Review the **Dataset Statistics** panel to check shape, types, and missing values.
 5. Open the **Column Renaming** section:
 - For AI-assisted renaming, click **Generate AI Suggestions** and review the proposed names.
 - For manual renaming, edit names directly in the mapping table.
 6. Click **Apply Renaming** to update the column names.
-7. In the sidebar, click **Save Dataset** to create your first version.
+7. In the sidebar dataset card, click **Save version** to create your first version.
 
 ---
 
@@ -24,7 +24,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Identify and handle anomalies, outliers, and incomplete records.
 
-1. Go to **Data Validation & Monitoring**.
+1. Go to **Data > Validate**.
 2. Review the **Data Quality Score** at the top of the page.
 3. In the **Clinical Anomalies** tab:
 - Review flagged values.
@@ -46,7 +46,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Fill missing values using targeted formulas and global strategies.
 
-1. Go to **Data Enrichment** → **Handle Missing Data** tab.
+1. Go to **Data > Enrich** → **Handle Missing Data** tab.
 2. **Targeted Imputation**:
 - Select a column with missing values.
 - Click **Generate Formula Suggestions** to get AI-powered formulas.
@@ -65,7 +65,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Create new variables and identify population subgroups.
 
-1. Go to **Data Enrichment** → **Create New Variables** tab.
+1. Go to **Data > Enrich** → **Create New Variables** tab.
 2. **Encoding**:
 - Select "Encoding" as transformation type.
 - Choose "One-Hot Encoding" and select categorical columns.
@@ -87,7 +87,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Build a structured taxonomy from your dataset variables.
 
-1. Go to **Data Insight**.
+1. Go to **Knowledge > Variable map**.
 2. Click **Generate New Taxonomy** (or load an existing version).
 3. Optionally upload research PDFs for richer context.
 4. Wait for the AI to analyse your variables and generate the graph.
@@ -106,7 +106,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Extract insights from uploaded PDFs and check dataset coverage.
 
-1. Go to **Documents Insight**.
+1. Go to **Knowledge > Documents**.
 2. **Upload PDFs** of relevant research papers.
 3. In the **Summariser** tab:
 - View structured summaries (objective, methods, findings, variables) for each paper.
@@ -126,7 +126,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Perform hypothesis testing and power analysis.
 
-1. Go to **Epidemiology & Hypothesis**.
+1. Go to **Analyze > Hypothesis tests & epidemiology**.
 2. **Hypothesis Testing**:
 - Select an outcome variable and a comparison variable.
 - The system auto-recommends an appropriate test.
@@ -148,7 +148,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Generate polished visualisations with statistical annotations.
 
-1. Go to **Visualisation**.
+1. Go to **Explore > Visualize**.
 2. Select a chart type (e.g. Box Plot).
 3. Choose the outcome variable and a grouping variable.
 4. The system automatically applies the appropriate statistical test and overlays significance.
@@ -165,7 +165,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Replay a past analysis session and generate a report.
 
-1. Go to **Reproduce Analysis**.
+1. Go to **Reproduce > Versions & traces**.
 2. Browse available traces in the history panel.
 3. Select a trace to inspect its steps.
 4. Choose a replay mode:
@@ -181,7 +181,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 **Goal**: Activate new accounts and manage user access.
 
 1. Log in with an **Administrator** account.
-2. Go to **Users Management** (sidebar).
+2. Go to **Admin > Users**.
 3. **Activate a New User**:
 - Find the user with "Pending" status in the list.
 - Click the **Activate** button.
@@ -199,7 +199,7 @@ Step-by-step guides for common workflows in the Cohort Monitoring Package.
 
 **Goal**: Check the health and performance of the AI documentation assistant.
 
-1. Go to **RAG Quality Monitor**.
+1. Go to **Admin > AI quality**.
 2. **Overview**:
 - Check the "Knowledge Base Health" for total documents and chunks.
 - Ensure "Embedding Dimension" matches your model (e.g. 1536 for OpenAI).

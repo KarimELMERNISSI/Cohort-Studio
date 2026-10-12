@@ -16,16 +16,16 @@ This application is built around three principles:
 
 ## Workflow Phases
 
-The application is organised into seven phases, mirroring the natural flow of cohort research. You can navigate freely between phases using the sidebar.
+The application is organised into seven phases, mirroring the natural flow of cohort research. Pages are grouped in the navigation bar at the top (Data, Explore, Analyze, Knowledge, Reproduce, Help, Admin); the sidebar always shows the current dataset (name, version, size) with **Change** and **Save version**, the AI engine status and a link to this handbook. The **Start** page lists the three steps, your saved versions and a bundled **sample cohort** (500 synthetic patients) to try everything before loading your own data.
 
 ### Phase 1 — Ingestion & Setup
 
-**Page**: Main View 
+**Pages**: Data > Import (load a file), then Explore > Statistics & correlations (overview, renaming)
 
 | Step | Action |
 | --- | --- |
 | 1.1 | **Sign up / Log in** to your account. |
-| 1.2 | **Load your dataset** (CSV, Excel, or Parquet). |
+| 1.2 | **Import your dataset** (CSV/TSV, Excel, or Parquet): the import flow proposes the encoding, delimiter and decimal separator, shows a preview and a parse report, and lets you override every option. |
 | 1.3 | **Rename columns** manually or with AI assistance for standardisation. |
 | 1.4 | **Save an initial version** to create a baseline snapshot. |
 
@@ -33,7 +33,7 @@ See: [01_Home.md](01_Home.md)
 
 ### Phase 2 — Quality Control
 
-**Page**: Data Validation & Monitoring 
+**Page**: Data > Validate
 
 | Step | Action |
 | --- | --- |
@@ -49,7 +49,7 @@ See: [02_Data_Validation.md](02_Data_Validation.md)
 
 ### Phase 3 — Enrichment & Preparation
 
-**Page**: Data Enrichment 
+**Page**: Data > Enrich
 
 | Step | Action |
 | --- | --- |
@@ -64,7 +64,7 @@ See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clust
 
 ### Phase 4 — Exploration & Visualisation
 
-**Page**: Visualisation 
+**Page**: Explore > Visualize
 
 | Step | Action |
 | --- | --- |
@@ -78,7 +78,7 @@ See: [04_Visualization.md](04_Visualization.md)
 
 ### Phase 5 — Statistical Analysis
 
-**Page**: Epidemiology & Hypothesis 
+**Page**: Analyze > Hypothesis tests & epidemiology
 
 | Step | Action |
 | --- | --- |
@@ -92,7 +92,7 @@ See: [05_Epidemiology.md](05_Epidemiology.md)
 
 ### Phase 6 — Knowledge & Literature
 
-**Pages**: Data Insight , Documents Insight 
+**Pages**: Knowledge > Variable map, Knowledge > Documents
 
 | Step | Action |
 | --- | --- |
@@ -106,7 +106,7 @@ See: [06_Data_Insight.md](06_Data_Insight.md), [07_Document_Insight.md](07_Docum
 
 ### Phase 7 — Reproducibility & Reporting
 
-**Page**: Reproduce Analysis 
+**Page**: Reproduce > Versions & traces
 
 | Step | Action |
 | --- | --- |
@@ -125,7 +125,7 @@ Administrative features for managing users and monitoring system health.
 
 ### User Management
 
-**Page**: Users Management  — *Visible only to Admins*
+**Page**: Admin > Users — *visible only to administrators*
 
 | Step | Action |
 | --- | --- |
@@ -138,7 +138,7 @@ See: [10_Developer_Guide.md](10_Developer_Guide.md)
 
 ### RAG Quality Monitoring
 
-**Page**: RAG Quality Monitor — *Optional*
+**Page**: Admin > AI quality — *optional*
 
 | Step | Action |
 | --- | --- |

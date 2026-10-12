@@ -8,5 +8,14 @@ gatherUsageStats = false
 maxUploadSize = 500
 enableXsrfProtection = true
 
+# Design tokens are mirrored in ui/theme.py (a unit test keeps them in sync).
 [theme]
 base = "light"
+primaryColor = "#1F5F8B"
+font = "sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#F4F6F8"
+
+[theme.dark]
+primaryColor = "#2F81F7"

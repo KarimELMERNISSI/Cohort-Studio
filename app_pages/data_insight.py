@@ -59,6 +59,7 @@ from utils.clustering_utils import (
     run_tsne,
     run_umap,
 )
+from ui.components import no_dataset
 
 # ==========================================
 # ==========================================
@@ -422,7 +423,7 @@ def app():
                 st.markdown("You need to initialize the AI system to generate a new taxonomy from your data.")
             else:
                 if "working_df" not in st.session_state:
-                    st.error("No dataset loaded. Please go to Home page.")
+                    no_dataset()
                 else:
                     st.markdown("Analyze your dataset to generate a medical knowledge graph.")
                     if st.button("Generate Taxonomy", type="primary", width='stretch'):

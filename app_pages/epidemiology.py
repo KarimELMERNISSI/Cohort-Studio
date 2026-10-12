@@ -29,6 +29,7 @@ from biostats.zscores import reference_zscores
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from utils.data_analyzer import DataAnalyzer
+from ui.components import no_dataset
 
 
 def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
@@ -154,7 +155,7 @@ def app():
     5. Educational Content display.
     """
     if 'data' not in st.session_state or st.session_state['data'] is None:
-        st.warning("Please upload a dataset in the Main View first.")
+        no_dataset()
         return
 
     df = st.session_state['data']

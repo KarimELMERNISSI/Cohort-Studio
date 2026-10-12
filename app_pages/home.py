@@ -17,6 +17,7 @@ from manage.rag_manager import RAGManager
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
+from ui.components import confirm, no_dataset
 
 
 def _top_correlations(corr_matrix: pd.DataFrame, node_ids, limit: int = 10) -> pd.DataFrame:
@@ -761,37 +762,7 @@ def app():
     # with st.sidebar.expander("RAG & AI Settings", expanded=False):
     #     ... (Code moved)
 
-    # Dataset Management Sidebar (Automatic Versioning)
-    with st.sidebar.expander("Dataset History", expanded=False):
-        st.caption("Manage dataset versions")
-        
-        # Save current state option
-        if st.session_state.get('data') is not None:
-            if st.button("Save Current State as New Version"):
-                base_name = "cohort_data"
-                success, msg, saved_name = st.session_state.db_manager.save_dataset(st.session_state['data'], base_name=base_name, username=st.session_state.get('username'))
-                if success:
-                    st.session_state['current_dataset_name'] = saved_name
-                    st.success(f"Saved as {saved_name}")
-                    st.rerun()
-                else:
-                    st.error(msg)
-
-        datasets = st.session_state.db_manager.get_available_datasets(username=st.session_state.get('username'))
-        if datasets:
-            selected_dataset = st.selectbox("Select Dataset Version", datasets, index=0)
-            if st.button("Load Selected Version"):
-                df_loaded, msg = st.session_state.db_manager.load_dataset(selected_dataset)
-                if df_loaded is not None:
-                    st.session_state['data'] = df_loaded
-                    st.session_state['working_df'] = df_loaded.copy()
-                    st.session_state['current_dataset_name'] = selected_dataset
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
-        else:
-            st.info("No saved datasets found.")
+    # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
     # Implicitly load latest dataset if none is loaded
     # if st.session_state.get("data") is None:
@@ -826,7 +797,7 @@ def app():
         if df is not None:
             run_benchmark(df, analyzer)
         else:
-            st.warning("Please upload data to run benchmark.")
+            no_dataset()
 
     with tabs[1]:
         if 'working_df' in st.session_state:
@@ -846,7 +817,7 @@ def app():
             #st.dataframe(st.session_state["data"])
             
         else:
-            st.warning("Please upload data to view statistics.")
+            no_dataset()
 
     with tabs[0]:
         if 'working_df' in st.session_state:
@@ -855,15 +826,16 @@ def app():
         with col_title:
             st.title("Dataset Statistics")
         with col_reset:
-             if st.button("Reset Cache", help="Force full recomputation of statistics"):
-                # 1. Clear Disk Cache
+             def _reset_statistics_cache() -> None:
                 if 'db_manager' in st.session_state:
-                    st.session_state.db_manager.clear_all_stats()
-                # 2. Clear Memory Cache
+                    st.session_state.db_manager.clear_all_stats()  # this user's workspace only
                 st.cache_data.clear()
-                st.toast("Cache cleared! Reloading...")
-                time.sleep(1)
-                st.rerun()
+                st.toast("Cache cleared.")
+
+             if st.button("Reset Cache", help="Force full recomputation of statistics"):
+                confirm("Reset the statistics cache?",
+                        "Cached statistics in your workspace and the in-memory cache will be recomputed on the next visit. "
+                        "Datasets and traces are not affected.", _reset_statistics_cache, confirm_label="Reset")
         #df = st.session_state.get('data', None)
         if "max_top_modalities" not in locals():
             max_top_modalities = 3
@@ -1358,4 +1330,4 @@ def app():
                         st.error(f"An error occurred: {e}")
 
         else:
-            st.warning("Please upload data to view statistics.")
+            no_dataset()

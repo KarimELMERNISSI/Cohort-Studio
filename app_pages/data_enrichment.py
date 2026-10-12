@@ -25,6 +25,7 @@ from core.expressions import evaluate_tree, safe_format
 from utils.data_paths import get_traces_dir
 from utils.session_scope import get_current_scope
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
+from ui.components import no_dataset
 
 
 def _workspace_path(path_text: str) -> str:
@@ -2633,63 +2634,7 @@ def app():
         from manage.rag_manager import RAGManager
         st.session_state.rag_manager = RAGManager()
 
-    # Dataset Management Sidebar (Automatic Versioning)
-    with st.sidebar.expander("Dataset History", expanded=False):
-        st.caption("Manage dataset versions")
-        
-        datasets = st.session_state.db_manager.get_available_datasets()
-        if datasets:
-            selected_dataset = st.selectbox("Select Dataset Version", datasets, index=0)
-            col_load, col_report = st.columns(2)
-            with col_load:
-                if st.button("Load Selected Version"):
-                    df_loaded, msg = st.session_state.db_manager.load_dataset(selected_dataset)
-                    if df_loaded is not None:
-                        st.session_state['data'] = df_loaded
-                        st.session_state['working_df'] = df_loaded.copy()
-                        st.session_state['enriched_df'] = df_loaded.copy()
-                        st.session_state['current_dataset_name'] = selected_dataset
-                        
-                        # Initialize new session trace
-                        st.session_state.transformation_manager.initialize_session(selected_dataset, username=st.session_state.get('username'))
-                        # Log initial load
-                        st.session_state.transformation_manager.add_step(
-                            "initial_load", 
-                            {"dataset_name": selected_dataset}, 
-                            f"Loaded dataset: {selected_dataset}"
-                        )
-                        
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-            
-            with col_report:
-                # Attempt to find the trace for this dataset
-                tm = st.session_state.transformation_manager
-                traces = tm.get_available_datasets_from_traces()
-                # Find trace where file_path contains selected_dataset
-                # selected_dataset usually is a filename like "calculated_data_v5.parquet"
-                matching_trace = next((t for t in traces if selected_dataset in t.get('file_path', '')), None)
-                
-                if matching_trace:
-                     trace_path = os.path.join("data", "traces", f"{matching_trace['session_id']}.json")
-                     if os.path.exists(trace_path):
-                        try:
-                            doc = TraceDocumenter(trace_path)
-                            buf = doc.generate_report()
-                            st.download_button(
-                                label="Download Report",
-                                data=buf,
-                                file_name=f"report_{selected_dataset}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
-                        except Exception as e:
-                            st.warning(f"Error generating report: {e}")
-                else:
-                    st.caption("No trace found")
-        else:
-            st.info("No saved datasets found.")
+    # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
     # Reproduction Sidebar
     with st.sidebar.expander("Reproduce Analysis", expanded=False):
@@ -2820,9 +2765,9 @@ def app():
     with impute_tab:
         if st.session_state.get('enriched_df') is None:
             _NO_DATA = "No dataset loaded. Upload a dataset from the sidebar or load a saved version first."
-            st.info(_NO_DATA)
+            no_dataset()
             with define_var_tab:
-                st.info(_NO_DATA)
+                no_dataset()
             return
 
         tab_targeted, tab_global = st.tabs([
@@ -3165,4 +3110,4 @@ def app():
                 #         st.session_state.working_df = st.session_state['enriched_df']
                 #         st.success("Dataset saved and ready for further analysis!")
             else:
-                st.warning("No dataset available. Please upload data first.")
+                no_dataset()

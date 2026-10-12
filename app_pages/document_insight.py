@@ -18,6 +18,7 @@ from graph.ui import current_theme, render_graph, render_graph_exports, renderer
 import datetime
 
 from core.workspace import UserScope, resolve_within, safe_filename
+from ui.components import no_dataset
 
 
 def _graph_dir(username):
@@ -290,7 +291,7 @@ def app():
             st.info("Check if variables in your loaded dataset are defined or discussed in these documents.")
             
             if "working_df" not in st.session_state:
-                st.warning("No dataset loaded. Please go to 'Data Preparation' to load a CSV first.")
+                no_dataset()
             else:
                 df_cols = list(st.session_state["working_df"].columns)
                 

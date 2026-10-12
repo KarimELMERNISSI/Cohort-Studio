@@ -1,6 +1,6 @@
 # Home — Dashboard & Data Loading
 
-The **Main View (Home)** page is the entry point for working with your dataset. It handles data loading, provides an overview of your data, and includes tools for column renaming, performance benchmarking, and dataset management.
+Data enters the application through **Data > Import** (a three-step flow: choose a file, check how it is read, name and load it) or through the sidebar dataset card (saved versions, sample cohort). **Explore > Statistics & correlations** then provides the overview of your data, column renaming, the correlation network and the performance benchmark.
 
 ---
 
@@ -60,7 +60,7 @@ Compare query performance between **Pandas** and **DuckDB** on your dataset.
 
 ## Authentication
 
-Authentication is handled in the sidebar:
+Authentication is a centred sign-in screen (the application opens only after sign-in):
 
 | Feature | Description |
 | --- | --- |
@@ -80,7 +80,7 @@ Each account works in its own workspace folder (`<DATA_ROOT>/users/<username>/`)
 ### Versioning
 - Datasets are versioned using **DuckDB** and **Parquet snapshots**.
 - Each save creates a new version; previous versions remain accessible.
-- Load any saved version from the sidebar.
+- Load any saved version from the sidebar dataset card (**Change**) or from the Start page.
 
 ### Operations
 

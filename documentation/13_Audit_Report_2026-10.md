@@ -91,7 +91,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P1 | Library-agnostic graph connector (model, builders, yFiles + Plotly adapters, license compliance) | done (commit `3c9b55e`) |
 | P2 | Science Tier A: the five wrong-number bugs | done (S4 stage 1: honest labelling, seeds, observed-rows fit; multiple imputation with pooling is P5) |
 | P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | done (`core/expressions`, `core/workspace`, lockout; migration script `dev_scripts/migrate_user_layout.py`) |
-| P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | planned |
+| P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | done (`ui/`, `ingest/`, `core/state.py`, `app_pages/views/`) |
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | planned |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | planned |
 | P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | planned |
@@ -121,11 +121,14 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy); P3 (login lockout) |
 | E6 cloud LLM by default / key exposure | closed for consent and keys | P0; Settings-page UX in P4 |
 | E7 PHI on stdout | closed | P0 |
-| E8 stale state / cache | open | P4 |
+| E8 stale state / cache | closed for session state (`AppState.set_dataset` single invalidation point); the on-disk statistics cache key still ignores filters | P4; cache key in P6 |
 | E9 undefined names / empty-state crashes | closed | P0 |
 | E10 reproducibility claims | open | P6 |
-| E11 per-rerun expensive work | open | P4 |
+| E11 per-rerun expensive work | partially closed (upload hash once per file, AI probes cached and moved to Settings) | P4; remaining DataAnalyzer/audit recomputation in P6 |
 | E12 tracked secrets/config | closed | P0 |
 | E13 layering / dead code / duplication | open | P6 |
 | E14 quality gates | lite CI closed | P0; full gates in P7 |
-| U1–U8 UX | open | P4, P5 |
+| U1–U3 login, navigation, onboarding, import | closed | P4 (`st.navigation`, Start page, sample cohort, import flow) |
+| U5 destructive actions | partially closed (cache reset, cached statistics) | P4; reindex/filter confirmations with the page refactors in P5/P6 |
+| U6 design | partially closed (theme tokens, components) | P4; `unsafe_allow_html` removal in P6 |
+| U4, U7, U8 feedback, guidance, copy | open | P5 (result cards, wizard, glossary), P6 |

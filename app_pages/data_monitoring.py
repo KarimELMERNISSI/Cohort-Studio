@@ -22,6 +22,7 @@ from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.multipage import load_dataframe
 from utils.session_scope import get_current_scope
+from ui.components import no_dataset
 
 #############################################################################################
 
@@ -2329,7 +2330,7 @@ def app():
         if df is not None:
             render_dashboard(df, st.session_state.config)
         else:
-            st.info("No dataset loaded. Upload a dataset from the sidebar first.")
+            no_dataset()
 
     with tab1:
         anomaly_family = "clinical_anomalies"
@@ -2401,7 +2402,7 @@ def app():
 
     with tab3:
         if df is None or analyzer is None:
-            st.info("No dataset loaded. Upload a dataset from the sidebar first.")
+            no_dataset()
         else:
             # Outliers Handler
             with st.expander("Outliers Handler"):
