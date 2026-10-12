@@ -21,6 +21,7 @@ from utils.config_loader import create_empty_config, transform_expression
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.multipage import load_dataframe
+from utils.session_scope import get_current_scope
 
 #############################################################################################
 
@@ -882,16 +883,22 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         file_path_input = st.text_input(f"Enter file path for {label}:", value=file_path, key=f"{tmp}_data_path")
         
         if file_path_input:
-            if os.path.exists(file_path_input):
+            scope = get_current_scope()
+            try:  # manual paths must stay inside the user's workspace (audit E4)
+                resolved_path = str(scope.resolve_within(file_path_input)) if scope else file_path_input
+            except ValueError as exc:
+                st.error(str(exc))
+                return None, None
+            if os.path.exists(resolved_path):
                 try:
-                    df = load_dataframe(file_path_input)
+                    df = load_dataframe(resolved_path)
                     st.success("Dataset successfully loaded.")
-                    return df, file_path_input
+                    return df, resolved_path
                 except Exception as e:
                     st.error(f"Error loading file: {e!s}")
                     return None, None
             else:
-                st.error("File not found.")
+                st.error("File not found in your workspace.")
                 return None, None
                 
     return None, None

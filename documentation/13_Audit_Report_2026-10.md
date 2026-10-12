@@ -90,7 +90,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P0 | Stop the bleeding: key rotation, crashes, admin takeover, secrets, cloud-LLM consent, PHI on stdout, lite CI | done (commit `ea6bd09`); key rotation remains an owner action |
 | P1 | Library-agnostic graph connector (model, builders, yFiles + Plotly adapters, license compliance) | done (commit `3c9b55e`) |
 | P2 | Science Tier A: the five wrong-number bugs | done (S4 stage 1: honest labelling, seeds, observed-rows fit; multiple imputation with pooling is P5) |
-| P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | planned |
+| P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | done (`core/expressions`, `core/workspace`, lockout; migration script `dev_scripts/migrate_user_layout.py`) |
 | P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | planned |
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | planned |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | planned |
@@ -116,9 +116,9 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | S6–S16 soundness, missing methods | open | P5, P8 |
 | E1 leaked key | open | owner action |
 | E2 Visualization import | closed | P0 |
-| E3 eval code execution | open | P3 |
-| E4 per-user isolation | open | P3 |
-| E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy) |
+| E3 eval code execution | closed | P3 (`core/expressions` AST whitelist evaluator, `safe_format`) |
+| E4 per-user isolation | closed | P3 (`UserScope` workspaces, contained path inputs, parameterised DuckDB paths; column-name quoting in Main View filters remains with the P4 state refactor) |
+| E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy); P3 (login lockout) |
 | E6 cloud LLM by default / key exposure | closed for consent and keys | P0; Settings-page UX in P4 |
 | E7 PHI on stdout | closed | P0 |
 | E8 stale state / cache | open | P4 |

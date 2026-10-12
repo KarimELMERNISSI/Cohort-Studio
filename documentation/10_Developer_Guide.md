@@ -65,15 +65,16 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 - Passwords are hashed with **bcrypt** before storage.
 - User records are stored in the DuckDB database (`db_manager.py`).
 - The `is_active` field controls login eligibility.
-- The `admin` user is automatically activated and has access to the **Users Management** page.
+- Administrators are created from `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD(_FILE)` on first start or with `python manage_users.py create-admin <name>`; the role (not the username) grants access to the **Users Management** page.
 
 ### Data Isolation
 
-Per-user isolation is enforced via:
+Per-user isolation is enforced by `core/workspace.py`:
 
-- **Filename prefixes** — Saved datasets, traces, and configs are prefixed with the username.
-- **Directory scoping** — ChromaDB collections and snapshot directories are user-specific.
-- **Session state** — `st.session_state.username` gates all read/write operations.
+- **Workspace directories** — `UserScope.for_user(username)` maps every storage kind (`datasets`, `stats`, `traces` with `artifacts/` and `snapshots/`, `uploads`, `taxonomy`, `knowledge_graphs`, `documents`, `chroma_db`, `rag_eval_logs`) to `<DATA_ROOT>/users/<username>/<kind>/`. `DBManager`, `TransformationManager` and `RAGManager` resolve the signed-in user's scope from the session (`utils/session_scope.get_current_scope()`); outside a Streamlit session (CLI, tests) they fall back to the legacy shared directories and the username-prefix convention.
+- **Path containment** — `UserScope.resolve_within()` rejects any manually entered or trace-recorded path that resolves outside the workspace; uploaded file names go through `safe_filename()`.
+- **Migration** — `python dev_scripts/migrate_user_layout.py --dry-run` previews, and without the flag moves, the legacy flat layout (`data/datasets/<user>_*.parquet`, `data/traces/<user>_session_*.json`, `data/taxonomy/<user>/`, `data/knowledge_graphs/<user>_*.json`, `DOCUMENTS/`, `data/chroma_db/`) into the per-user workspaces. Files without a username prefix are assigned to the administrator.
+- **Login lockout** — `CMP_MAX_FAILED_LOGINS` consecutive failures lock an account for `CMP_LOCKOUT_MINUTES` (defaults 5 and 15).
 
 ---
 

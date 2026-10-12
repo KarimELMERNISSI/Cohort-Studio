@@ -6,12 +6,14 @@ from typing import Any
 
 import pandas as pd
 
+from core.workspace import UserScope
 from utils.data_paths import get_traces_dir
+from utils.session_scope import get_current_scope
 
 logger = logging.getLogger(__name__)
 
 class TransformationManager:
-    def __init__(self, trace_dir: str | None = None) -> None:
+    def __init__(self, trace_dir: str | None = None, scope: UserScope | None = None) -> None:
         """
         Initialize the TransformationManager.
         
@@ -21,7 +23,13 @@ class TransformationManager:
              Directory where transformation traces will be stored.
              Defaults to DATA_ROOT/traces via data_paths utility.
         """
-        self.trace_dir: str = trace_dir if trace_dir else get_traces_dir()
+        self.scope: UserScope | None = scope if scope is not None else (None if trace_dir else get_current_scope())
+        if trace_dir:
+            self.trace_dir: str = trace_dir
+        elif self.scope is not None:
+            self.trace_dir = str(self.scope.traces_dir())  # per-user workspace (audit E4)
+        else:
+            self.trace_dir = get_traces_dir()
         self.history: list[dict[str, Any]] = []
         self.source_dataset: str | None = None
         self.session_id: str | None = None
@@ -33,8 +41,8 @@ class TransformationManager:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = "".join([c for c in dataset_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
         
-        # User Isolation: Prefix session ID
-        if username and username != 'admin':
+        # Legacy name-prefix isolation only when no workspace scope is active
+        if self.scope is None and username and username != 'admin':
             self.session_id = f"{username}_session_{timestamp}_{safe_name}"
         else:
             self.session_id = f"session_{timestamp}_{safe_name}"
@@ -153,8 +161,8 @@ class TransformationManager:
 
         trace_files = [f for f in os.listdir(self.trace_dir) if f.endswith('.json')]
         
-        # User Isolation Filtering
-        if username and username != 'admin':
+        # Legacy name-prefix filtering only when no workspace scope is active
+        if self.scope is None and username and username != 'admin':
             trace_files = [f for f in trace_files if f.startswith(f"{username}_")]
         
         for trace_file in trace_files:

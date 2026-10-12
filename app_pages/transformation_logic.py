@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+
+from core.expressions import safe_format
 from sklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -75,7 +77,7 @@ def apply_variable_transformation(dataframe, params):
             transformed_data = model.fit_transform(dataframe[columns])
 
         # Create column names and DataFrame
-        component_names = [naming_pattern.format(method_applied=transformation.replace(" ", "_")) + f"_{i + 1}" for i in range(n_components)]
+        component_names = [safe_format(naming_pattern, method_applied=transformation.replace(" ", "_")) + f"_{i + 1}" for i in range(n_components)]
 
         if transformation in ["t-SNE", "UMAP"]:
             result_df = pd.DataFrame(transformed_data, columns=component_names, index=dataframe.index)
@@ -118,7 +120,7 @@ def apply_variable_transformation(dataframe, params):
                 full_labels = pd.Series(index=dataframe.index, data=np.nan)
                 full_labels.loc[valid_idx] = labels
                 
-                col_name = naming_pattern.format(method_applied=transformation.replace(" ", "_"))
+                col_name = safe_format(naming_pattern, method_applied=transformation.replace(" ", "_"))
                 new_columns[col_name] = full_labels.values
 
     elif transformation_type == "Encoding":
@@ -128,7 +130,7 @@ def apply_variable_transformation(dataframe, params):
                 encoded_data = encoder.fit_transform(dataframe[[col]])
                 categories = encoder.categories_[0]
                 for i, category in enumerate(categories):
-                    new_col_name = naming_pattern.format(
+                    new_col_name = safe_format(naming_pattern, 
                         initial_variable=col,
                         category=category
                     )
@@ -137,7 +139,7 @@ def apply_variable_transformation(dataframe, params):
         elif transformation == "Label Encoding":
             encoder = LabelEncoder()
             for col in columns:
-                new_col_name = naming_pattern.format(
+                new_col_name = safe_format(naming_pattern, 
                     initial_variable=col,
                     category="label_encoded"
                 )
@@ -146,7 +148,7 @@ def apply_variable_transformation(dataframe, params):
         elif transformation == "Ordinal Encoding":
             for col in columns:
                 encoder = OrdinalEncoder(categories=[category_orders[col]])
-                new_col_name = naming_pattern.format(
+                new_col_name = safe_format(naming_pattern, 
                     initial_variable=col,
                     category="ordinal"
                 )
@@ -157,7 +159,7 @@ def apply_variable_transformation(dataframe, params):
         method_function = TRANSFORMATIONS.get(transformation, None)
         if method_function:
             for col in columns:
-                new_col_name = naming_pattern.format(
+                new_col_name = safe_format(naming_pattern, 
                     initial_variable=col,
                     method_applied=transformation.replace(" ", "_")
                 )

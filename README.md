@@ -89,7 +89,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - Automatic encoding detection (UTF-8, Latin-1, CP1252) and dynamic delimiter parsing (comma, semicolon, tab, pipe).
 - Columnar Parquet persistence with atomic version incrementation (`dataset_v1`, `dataset_v2`).
 - Query acceleration: instantaneous analytical aggregations powered by embedded DuckDB.
-- Multi-user isolation: usernames partition datasets, traces, and ChromaDB namespaces, managed by an administrative security module with bcrypt hashing.
+- Multi-user isolation: every account has its own workspace under `<DATA_ROOT>/users/<username>/` (datasets, traces, uploads, taxonomies, knowledge graphs, document library, vector store); path inputs are confined to that workspace. Accounts are managed by a role-based IAM module with bcrypt hashing and login lockout.
 
 ### 2. Clinical Biostatistics & Epidemiological Testing
 - **Normality & Distribution Profiling**: Shapiro-Wilk, D'Agostino-Pearson omnibus tests with automated test recommendation logic.

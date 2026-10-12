@@ -71,7 +71,7 @@ Authentication is handled in the sidebar:
 
 ### Data Isolation
 
-Each user's data is isolated through filename prefixes and user-specific directories. Datasets, traces, and analysis results are not shared across accounts.
+Each account works in its own workspace folder (`<DATA_ROOT>/users/<username>/`). Datasets, traces, uploads, taxonomies, knowledge graphs, the document library and the vector store are not shared across accounts, and file paths typed into the app must point inside your workspace.
 
 ---
 

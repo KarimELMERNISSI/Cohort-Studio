@@ -29,15 +29,26 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     if not original_path:
         return None
 
-    # 1. Check if the path works as-is (absolute or valid relative)
-    if os.path.exists(original_path):
+    from utils.session_scope import get_current_scope
+
+    scope = get_current_scope()
+    # 1. The recorded path itself, but only inside the user's workspace when a user is signed in
+    #    (trace files are user-supplied JSON and must not point anywhere on the server; audit E4).
+    if scope is not None:
+        try:
+            candidate = scope.resolve_within(original_path)
+            if candidate.exists():
+                return str(candidate)
+        except ValueError:
+            pass
+    elif os.path.exists(original_path):
         return original_path
 
     # 2. Extract filename and search in common directories
     filename = os.path.basename(original_path)
     
     if search_dirs is None:
-        search_dirs = ["data", "data/uploads", "data/traces", "."]
+        search_dirs = [str(p) for p in scope.search_dirs()] if scope else ["data", "data/uploads", "data/traces"]
 
     for directory in search_dirs:
         candidate_path = os.path.join(directory, filename)

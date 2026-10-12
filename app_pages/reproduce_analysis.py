@@ -13,6 +13,50 @@ from manage.db_manager import DBManager
 from manage.trace_documenter import TraceDocumenter
 from utils.multipage import load_dataframe
 from utils.path_utils import normalize_path, resolve_path
+from core.workspace import safe_filename
+from utils.data_paths import get_traces_dir, get_uploads_dir
+from utils.session_scope import get_current_scope
+
+
+def _uploads_dir() -> str:
+    scope = get_current_scope()
+    return str(scope.uploads_dir()) if scope else get_uploads_dir()
+
+
+def _traces_dir() -> str:
+    scope = get_current_scope()
+    return str(scope.traces_dir()) if scope else get_traces_dir()
+
+
+def _artifacts_dir() -> str:
+    scope = get_current_scope()
+    path = str(scope.artifacts_dir()) if scope else os.path.join(get_traces_dir(), "artifacts")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _resolve_user_path(text: str | None) -> str | None:
+    """A manually entered path must exist inside the user's workspace (audit E4)."""
+    if not text:
+        return None
+    fixed = text.replace("\\", "/")
+    scope = get_current_scope()
+    if scope is None:
+        for candidate in (fixed, os.path.join("data", fixed)):
+            if os.path.exists(candidate):
+                return candidate
+        return None
+    bases = [scope.root, *scope.search_dirs()]
+    for base in bases:
+        try:
+            candidate = scope.resolve_within(fixed if os.path.isabs(fixed) else os.path.join(str(base), fixed))
+        except ValueError:
+            continue
+        if candidate.exists():
+            return str(candidate)
+    st.error("Only files inside your workspace can be referenced. Upload the file instead.")
+    return None
+
 
 
 def app():
@@ -29,12 +73,12 @@ def app():
             trace_data = json.load(uploaded_trace)
             st.success(f"Result loaded from **{uploaded_trace.name}**")
             # If uploaded, use the uploaded file's directory as a pseudo trace path if needed, or None
-            trace_path = os.path.join("data", "uploads", uploaded_trace.name) 
+            trace_path = os.path.join(_uploads_dir(), safe_filename(uploaded_trace.name))
         except Exception as e:
             st.error(f"Error parsing JSON: {e}")
             trace_path = None
     else:
-        trace_dir = "data/traces"
+        trace_dir = _traces_dir()
         if not os.path.exists(trace_dir):
             st.info("No analysis traces found (and no file uploaded).")
             return
@@ -42,13 +86,13 @@ def app():
         # List available traces
         traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]
         
-        # User Isolation: Filter traces
+        # Traces live in the user's workspace; the legacy name-prefix filter only applies without a scope
         username = st.session_state.get('username')
-        if username and username != 'admin':
+        if get_current_scope() is None and username and username != 'admin':
             traces = [f for f in traces if f.startswith(f"{username}_")]
         
         if not traces:
-            st.info("No analysis traces found in data/traces/")
+            st.info("No analysis traces found in your workspace.")
             return
 
         # Sort traces by modification time (newest first)
@@ -149,10 +193,7 @@ def app():
                          possible_matches.append(os.path.join(os.path.dirname(trace_path), trace_basename))
                     
                     # Always check standard data locations
-                    possible_matches.extend([
-                        os.path.join("data", "traces", "artifacts", trace_basename),
-                        os.path.join("data", trace_basename)
-                    ])
+                    possible_matches.append(os.path.join(_artifacts_dir(), trace_basename))
                     for pm in possible_matches:
                          if os.path.exists(pm) and os.path.isdir(pm):
                              potential_paths.append(pm)
@@ -160,7 +201,7 @@ def app():
                 # 2. Add generic 'artifacts' folders
                 if trace_path: 
                     potential_paths.append(os.path.join(os.path.dirname(trace_path), "artifacts")) # data/traces/artifacts
-                potential_paths.append(os.path.join("data", "artifacts"))
+                potential_paths.append(_artifacts_dir())
 
                 for p in potential_paths:
                     if os.path.exists(p) and os.path.isdir(p):
@@ -171,10 +212,11 @@ def app():
                 if suggested_folder:
                      help_text += f" Found likely candidate: `{suggested_folder}`"
 
-                artifact_folder_input = st.text_input("Select Artifact Root Folder (Optional batch resolution)", 
+                artifact_folder_input = st.text_input("Select Artifact Root Folder (Optional batch resolution)",
                                               value=suggested_folder if suggested_folder else "",
                                               help=help_text)
-                
+                artifact_folder_input = _resolve_user_path(artifact_folder_input) or ""
+
                 # Auto-fix Windows paths (replace \ with /)
                 if artifact_folder_input:
                      artifact_folder = artifact_folder_input.replace("\\", "/")
@@ -271,8 +313,6 @@ def app():
                     st.markdown("---")
                     st.caption("Please upload missing files, select from artifacts, or provide their location manually:")
                     
-                    os.makedirs("data/uploads", exist_ok=True)
-                    
                     for item in missing_files:
                         cols = st.columns([2, 2, 2, 2]) # Added column for Dropdown
                         with cols[0]:
@@ -283,7 +323,7 @@ def app():
                             # File Uploader
                             uploaded_missing = st.file_uploader("Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
                             if uploaded_missing:
-                                save_path = os.path.join("data/uploads", uploaded_missing.name)
+                                save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_missing.name))
                                 with open(save_path, "wb") as f:
                                     f.write(uploaded_missing.getbuffer())
                                 
@@ -343,12 +383,8 @@ def app():
                                 # Auto-fix Windows paths
                                 manual_path_fixed = manual_path.replace("\\", "/")
                                 
-                                # Verify existence
-                                valid_path = None
-                                if os.path.exists(manual_path_fixed):
-                                    valid_path = manual_path_fixed
-                                elif os.path.exists(os.path.join("data", manual_path_fixed)):
-                                    valid_path = os.path.join("data", manual_path_fixed)
+                                # Verify existence inside the workspace
+                                valid_path = _resolve_user_path(manual_path_fixed)
                                 
                                 if valid_path:
                                      # Persist resolution
@@ -356,7 +392,7 @@ def app():
                                      st.toast(f"Path Verified: {os.path.basename(valid_path)}", icon="")
                                      st.rerun() 
 
-                    st.info("Uploaded files are automatically saved to `data/uploads/`, which is checked during reproduction.")
+                    st.info("Uploaded files are saved to your workspace uploads folder, which is checked during reproduction.")
                     st.divider()
 
         # --- END PRE-FLIGHT CHECK ---
@@ -499,17 +535,14 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     uploaded_source = st.file_uploader("Or upload source file:", type=['csv', 'xlsx', 'parquet'], key=f"upload_source_{session_id}")
                 
                 if uploaded_source:
-                    # Save uploaded file
-                    os.makedirs("data/uploads", exist_ok=True)
-                    save_path = os.path.join("data/uploads", uploaded_source.name)
+                    # Save uploaded file into the workspace
+                    save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_source.name))
                     with open(save_path, "wb") as f:
                         f.write(uploaded_source.getbuffer())
                     resolved_source = save_path
                     st.success(f"Using uploaded file: {save_path}")
-                elif manual_source and os.path.exists(manual_source):
-                     resolved_source = manual_source
-                elif manual_source and os.path.exists(os.path.join("data", manual_source)):
-                     resolved_source = os.path.join("data", manual_source)
+                elif manual_source:
+                     resolved_source = _resolve_user_path(manual_source)
             
             if resolved_source and os.path.exists(resolved_source):
                 source_dataset = resolved_source # Update to valid path
@@ -579,16 +612,13 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                                  uploaded_enrich = st.file_uploader(f"Or upload enrichment file (Step {i+1}):", type=['csv', 'xlsx'], key=f"upload_enrich_{i}_{session_id}")
                              
                              if uploaded_enrich:
-                                 os.makedirs("data/uploads", exist_ok=True)
-                                 save_path_enrich = os.path.join("data/uploads", uploaded_enrich.name)
+                                 save_path_enrich = os.path.join(_uploads_dir(), safe_filename(uploaded_enrich.name))
                                  with open(save_path_enrich, "wb") as f:
                                      f.write(uploaded_enrich.getbuffer())
                                  resolved_enrich_path = save_path_enrich
                                  st.success(f"Using uploaded enrichment file: {save_path_enrich}")
-                             elif manual_enrich and os.path.exists(manual_enrich):
-                                 resolved_enrich_path = manual_enrich
-                             elif manual_enrich and os.path.exists(os.path.join("data", manual_enrich)):
-                                 resolved_enrich_path = os.path.join("data", manual_enrich)
+                             elif manual_enrich:
+                                 resolved_enrich_path = _resolve_user_path(manual_enrich)
 
                         if resolved_enrich_path and os.path.exists(resolved_enrich_path):
                             enrichment_df = load_dataframe(resolved_enrich_path)

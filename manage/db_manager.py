@@ -7,20 +7,37 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from core.workspace import UserScope
 from utils.data_paths import get_datasets_dir, get_stats_dir
+from utils.session_scope import get_current_scope
 
 from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
 from manage.iam.schemas import UserCredentials, UserRole
+
+
+def _sql_literal(value: str) -> str:
+    """Escape a string for use inside a single-quoted DuckDB literal (COPY ... TO does not bind parameters)."""
+    return value.replace("'", "''")
+
 
 logger = logging.getLogger(__name__)
 
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
-    def __init__(self, db_path: str = ":memory:") -> None:
-        self.dataset_dir: str = get_datasets_dir()
-        self.stats_dir: str = get_stats_dir()
-        self.db_path: str = os.path.join(self.dataset_dir, "cohort_data.duckdb")
-        self.user_db_path: str = os.path.join(self.dataset_dir, "users.duckdb")
+    def __init__(self, db_path: str = ":memory:", scope: UserScope | None = None) -> None:
+        # Per-user workspace (audit E4): datasets and statistics live under <DATA_ROOT>/users/<username>/.
+        # Without a signed-in user (tests, CLI) the legacy shared directories are used.
+        self.scope: UserScope | None = scope if scope is not None else get_current_scope()
+        shared_dir = get_datasets_dir()
+        if self.scope is not None:
+            self.dataset_dir: str = str(self.scope.datasets_dir())
+            self.stats_dir: str = str(self.scope.stats_dir())
+        else:
+            self.dataset_dir = shared_dir
+            self.stats_dir = get_stats_dir()
+        # The user directory and the DuckDB catalog are shared by design.
+        self.db_path: str = os.path.join(shared_dir, "cohort_data.duckdb")
+        self.user_db_path: str = os.path.join(shared_dir, "users.duckdb")
         
         # Modular IAM Provider (Local DuckDB default)
         self.iam_provider: LocalDuckDBIAMProvider = LocalDuckDBIAMProvider(db_path=self.user_db_path)
@@ -116,7 +133,7 @@ class DBManager:
         try:
             target_folder = folder if folder else self.dataset_dir
             file_path = os.path.join(target_folder, f"{name}.parquet")
-            con.execute(f"COPY (SELECT * FROM df) TO '{file_path}' (FORMAT PARQUET)")
+            con.execute(f"COPY (SELECT * FROM df) TO '{_sql_literal(file_path)}' (FORMAT PARQUET)")
             return True, f"Data saved to '{file_path}'"
         except Exception as e:
             return False, str(e)
@@ -129,9 +146,8 @@ class DBManager:
         if con is None:
             return False, "Database connection not available", None
         try:
-            # Prefix functionality for user isolation
-            if username and username != 'admin':
-                display_name = base_name
+            # Legacy name-prefix isolation only when no workspace scope is active
+            if self.scope is None and username and username != 'admin':
                 base_name = f"{username}_{base_name}"
             
             version = self._get_next_version(base_name)
@@ -139,7 +155,7 @@ class DBManager:
             file_path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
             
             # Use DuckDB to write parquet efficiently
-            con.execute(f"COPY (SELECT * FROM df) TO '{file_path}' (FORMAT PARQUET)")
+            con.execute(f"COPY (SELECT * FROM df) TO '{_sql_literal(file_path)}' (FORMAT PARQUET)")
             return True, f"Data saved as '{file_name}'", file_name
         except Exception as e:
             return False, str(e), None
@@ -154,7 +170,7 @@ class DBManager:
         try:
             target_folder = folder if folder else self.dataset_dir
             file_path = os.path.join(target_folder, f"{name}.parquet")
-            df = con.execute(f"SELECT * FROM read_parquet('{file_path}')").df()
+            df = con.execute("SELECT * FROM read_parquet(?)", [file_path]).df()
             return df, f"Data loaded from '{file_path}'"
         except Exception as e:
             return None, f"Failed to load '{name}': {e!s}"
@@ -196,7 +212,7 @@ class DBManager:
         
         all_files = [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
         
-        if username and username != 'admin':
+        if self.scope is None and username and username != 'admin':
             return [f for f in all_files if f.startswith(f"{username}_")]
         
         return all_files

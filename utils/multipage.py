@@ -17,6 +17,8 @@ from PIL import Image
 import manage.file_handling as mf
 from app_pages.rag_sidebar import render_rag_sidebar
 from manage.transformation_manager import TransformationManager
+from utils.data_paths import get_traces_dir
+from utils.session_scope import get_current_scope
 
 # @dataclass
 # class Page:
@@ -310,10 +312,7 @@ def create_empty_config() -> dict[str, Any]:
 
 def get_file_hash(uploaded_file) -> str:
     """Generate a hash of the file content using hashlib."""
-    hash_md5 = hashlib.md5()
-    for chunk in uploaded_file.getvalue():
-        hash_md5.update(bytes([chunk]))
-    return hash_md5.hexdigest()
+    return hashlib.md5(uploaded_file.getvalue()).hexdigest()
 
 
 def _finalize_upload(df, uploaded_file, is_new_file=True):
@@ -332,7 +331,8 @@ def _finalize_upload(df, uploaded_file, is_new_file=True):
 
     # Save source file to artifacts for reproducibility
     session_id = st.session_state.transformation_manager.session_id
-    artifact_dir = os.path.join("data", "traces", "artifacts", session_id)
+    scope = get_current_scope()
+    artifact_dir = str(scope.artifacts_dir(session_id)) if scope else os.path.join(get_traces_dir(), "artifacts", session_id)
     os.makedirs(artifact_dir, exist_ok=True)
 
     file_ext = os.path.splitext(uploaded_file.name)[1]

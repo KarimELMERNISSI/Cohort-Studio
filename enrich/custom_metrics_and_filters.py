@@ -1,8 +1,11 @@
 ######################################## PACKAGES ########################################
-import ast  # dynamic python script interpretation
-import logging  # Added for logging
+import logging
 
 import pandas as pd  # for Dataframes manipulation
+
+from core.expressions import UnsafeExpressionError, evaluate
+
+logger = logging.getLogger(__name__)
 
 ######################################## CUSTOM CONDITIONAL MASKS FUNCTIONS DEFINITION ######################################## 
 
@@ -19,12 +22,10 @@ def create_mask(df, condition, mask_name):
         pd.Series or None: The mask as a boolean Series or None if an error occurs.
     """
     try:
-        print("In create_mask:---",mask_name,":",condition)
+        logger.debug("create_mask %s: %s", mask_name, condition)
         if "expression" in condition:
-            print("create_mask:expression:",condition)
             return create_expression_mask(df, condition["expression"])
         elif condition.get("numeric"):
-            print("numeric create_mask:numeric:",condition)
             lower_bound = condition.get("lower_bound")
             upper_bound = condition.get("upper_bound")
             strategy= condition.get("strategy")
@@ -52,16 +53,11 @@ def create_expression_mask(df, expression):
         ValueError: If an error occurs during expression evaluation.
     """
     try:
-        # Parse the expression and convert it into a valid Python expression
-        parsed_expr = ast.parse(expression, mode='eval')
-        transformed_expr = ast.Expression(body=ast.fix_missing_locations(parsed_expr.body))
-        compiled_expr = compile(transformed_expr, filename="<string>", mode='eval')
-
-        # Evaluate the expression using the DataFrame
-        result = eval(compiled_expr, globals(), {'df': df})
-
-        # Return the result as a boolean Series
+        # Whitelisted evaluation (no builtins, restricted np/pd facades): see core.expressions
+        result = evaluate(expression, df)
         return pd.Series(result, index=df.index, dtype=bool)
+    except UnsafeExpressionError as e:
+        raise ValueError(f"Expression rejected: {e}")
     except Exception as e:
         raise ValueError(f"Error in evaluating expression: {e!s}")
 
@@ -83,7 +79,6 @@ def create_numeric_mask(series, lower_bound=None, upper_bound=None, strategy=Non
     Raises:
         ValueError: If an invalid strategy is provided.
     """
-    print("create_numeric_mask:in numeric function!!")
     try:
         if strategy not in ['include', 'exclude', None]:
             raise ValueError("Invalid strategy. Use 'include', 'exclude', or None.")
@@ -95,16 +90,12 @@ def create_numeric_mask(series, lower_bound=None, upper_bound=None, strategy=Non
         if exclude_na and series.isna().any():
             mask[series.isna()] = False
         if lower_bound is not None and upper_bound is None:
-            print("create_numeric_mask: lower_bound is not None")
             mask &= series >= lower_bound
         if upper_bound is not None and lower_bound is None:
-            print("create_numeric_mask: upper_bound is not None")
             mask &= series <= upper_bound
         if strategy == 'include':
-            print(f"create_numeric_mask: including values between {lower_bound} and {upper_bound}")
             mask &= (series >= lower_bound) & (series <= upper_bound)
         elif strategy == 'exclude':
-            print(f"create_numeric_mask: excluding values between {lower_bound} and {upper_bound}")
             mask &= ~((series >= lower_bound) & (series <= upper_bound))
 
         return mask
@@ -139,11 +130,7 @@ def zip_masks(df, config, mask_type=None):
     for mask_name, mask_config in config.items():
         if mask_name!= "operator":
             mask_names.append(mask_name)
-            print("apply_masks:",mask_name)
-            print("apply_masks:",mask_config)
             masks.append(create_mask(df=df, mask_name=mask_name, condition=mask_config))
-            print("append:",mask_name,mask_config)
-    print("m: ",mask_names)
     return zip(mask_names, masks)
 
 ######################################## CUSTOM CONDITIONAL MASK TAGGING FUNCTION DEFINITION ######################################## 
@@ -182,7 +169,7 @@ def generate_computed_column(df, config):
         column_expr = computation_config.get("expression")
         if column_expr is not None:
             if computation_name not in df.columns:
-                print("created column:", computation_name,":", column_expr)
+                logger.debug("creating computed column %s: %s", computation_name, column_expr)
                 apply_computation(df=df, column_name=computation_name, computation_expr=column_expr)
         else:
             logging.warning(f"No expression found for computed column {computation_name}. Skipping...")
@@ -202,10 +189,7 @@ def apply_computation(df, column_name, computation_expr):
         None
     """
     try:
-        print("\n----------------------------------------------------------------------------")
-        print("column_name:", column_name)
-        print("computation_expr:", computation_expr)
-        print("\n----------------------------------------------------------------------------\n")
+        logger.debug("apply_computation %s: %s", column_name, computation_expr)
         computed_col = create_computation(df=df, expression=computation_expr)
         if computed_col is not None:
             df[column_name] = computed_col
@@ -226,14 +210,8 @@ def create_computation(df, expression):
         Any: The result of the evaluated expression.
     """
     try:
-        print("\nin computation --------------", expression)
-        parsed_expr = ast.parse(expression, mode='eval')
-        print("\nparse",parsed_expr)
-        computed_expr = ast.Expression(
-            body=ast.fix_missing_locations(parsed_expr.body)
-        )
-        compiled_expr = compile(computed_expr, filename="<string>", mode='eval')
-        result = eval(compiled_expr, globals(), {'df': df})
-        return result
+        return evaluate(expression, df)
+    except UnsafeExpressionError as e:
+        raise ValueError(f"Expression rejected: {e}")
     except Exception as e:
         raise ValueError(f"Error in evaluating expression: {e!s}")

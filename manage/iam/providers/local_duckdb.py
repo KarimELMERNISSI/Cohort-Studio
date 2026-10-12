@@ -8,6 +8,7 @@ clinical environments, and full backward compatibility.
 
 import logging
 import os
+from datetime import datetime, timedelta
 
 import bcrypt
 import duckdb
@@ -15,6 +16,9 @@ import duckdb
 import utils.data_paths as dp
 from ..base import BaseIAMProvider
 from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
+
+MAX_FAILED_LOGINS = int(os.getenv("CMP_MAX_FAILED_LOGINS", "5"))
+LOCKOUT_MINUTES = int(os.getenv("CMP_LOCKOUT_MINUTES", "15"))
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +91,15 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             except Exception:
                 pass
 
+            for migration in (
+                "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP",
+            ):
+                try:
+                    con.execute(migration)
+                except Exception:
+                    pass
+
         except Exception as e:
             logger.error(f"Error initializing local user database: {e}")
         finally:
@@ -102,7 +115,8 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
 
         try:
             res = con.execute(
-                "SELECT password_hash, is_active, role, created_at FROM users WHERE username = ?",
+                "SELECT password_hash, is_active, role, created_at, failed_attempts, locked_until "
+                "FROM users WHERE username = ?",
                 [credentials.username],
             ).fetchone()
 
@@ -113,9 +127,24 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             is_active = bool(res[1]) if len(res) > 1 and res[1] is not None else True
             raw_role = str(res[2]) if len(res) > 2 and res[2] is not None else "researcher"
             created_at = str(res[3]) if len(res) > 3 and res[3] is not None else None
+            failed_attempts = int(res[4] or 0) if len(res) > 4 else 0
+            locked_until = res[5] if len(res) > 5 else None
+            now = datetime.now()
+
+            # Temporary lockout after repeated failures (brute-force protection)
+            if locked_until is not None and locked_until > now:
+                remaining = int((locked_until - now).total_seconds() // 60) + 1
+                return AuthResult(
+                    success=False,
+                    message=f"Account temporarily locked after repeated failed attempts. Try again in {remaining} min.",
+                )
 
             # Verify bcrypt hash
             if bcrypt.checkpw(credentials.password.encode("utf-8"), stored_hash.encode("utf-8")):
+                con.execute(
+                    "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE username = ?",
+                    [credentials.username],
+                )
                 if not is_active:
                     return AuthResult(
                         success=False,
@@ -136,6 +165,18 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                     message="Login successful",
                 )
 
+            failed_attempts += 1
+            if failed_attempts >= MAX_FAILED_LOGINS:
+                con.execute(
+                    "UPDATE users SET failed_attempts = 0, locked_until = ? WHERE username = ?",
+                    [now + timedelta(minutes=LOCKOUT_MINUTES), credentials.username],
+                )
+                logger.warning("Account %s locked for %d minutes after repeated failed logins", credentials.username, LOCKOUT_MINUTES)
+                return AuthResult(
+                    success=False,
+                    message=f"Too many failed attempts; the account is locked for {LOCKOUT_MINUTES} minutes.",
+                )
+            con.execute("UPDATE users SET failed_attempts = ? WHERE username = ?", [failed_attempts, credentials.username])
             return AuthResult(success=False, message="Invalid username or password")
         except Exception as e:
             logger.error(f"Exception during user verification: {e}")

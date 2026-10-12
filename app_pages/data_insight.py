@@ -6,25 +6,19 @@ import time
 import pandas as pd
 import streamlit as st
 
-TAXONOMY_DIR = os.path.join("data", "taxonomy")
+from core.workspace import UserScope
+
 
 def get_user_taxonomy_dir(username):
-    """Returns the taxonomy directory for a specific user."""
+    """Taxonomy directory of the user's workspace (no shared fallback; audit E4)."""
     if not username:
-        # Security: Do not fallback to global dir if username is missing.
-        # Return a non-existent path to ensure empty result.
-        return os.path.join(TAXONOMY_DIR, "_no_user_")
-    return os.path.join(TAXONOMY_DIR, username)
+        return None
+    return str(UserScope.for_user(username).taxonomy_dir())
 
 def get_taxonomy_versions(username=None):
     """Returns list of (version_int, filepath) sorted descending."""
-    
-    # User Isolation
-    target_dir = TAXONOMY_DIR
-    if username:
-        target_dir = get_user_taxonomy_dir(username)
-
-    if not os.path.exists(target_dir):
+    target_dir = get_user_taxonomy_dir(username)
+    if not target_dir or not os.path.exists(target_dir):
         return []
     
     # Scan for directories starting with 'v'
@@ -251,6 +245,8 @@ def app():
             try:
                 # User Isolation: Save to user folder
                 user_dir = get_user_taxonomy_dir(username)
+                if not user_dir:
+                    raise ValueError("Sign in to save a taxonomy version.")
                 new_dir = os.path.join(user_dir, f"v{next_v}")
                 os.makedirs(new_dir, exist_ok=True)
                 

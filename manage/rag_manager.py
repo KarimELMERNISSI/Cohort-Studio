@@ -112,7 +112,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         - suggest_alternative_formula
     """
     
-    def __init__(self, documents_dir="DOCUMENTS", api_key=None, provider="gemini", base_url=None):
+    def __init__(self, documents_dir=None, api_key=None, provider="gemini", base_url=None):
+        if documents_dir is None:
+            # Per-user document library (audit E4); the legacy shared folder is used outside a session.
+            from utils.session_scope import get_current_scope
+
+            scope = get_current_scope()
+            documents_dir = str(scope.documents_dir()) if scope else "DOCUMENTS"
         self.documents_dir = documents_dir
         self.api_key = api_key
         self.provider = provider
@@ -298,7 +304,10 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             )
             
             from utils.data_paths import get_chroma_dir
-            persist_directory = get_chroma_dir()
+            from utils.session_scope import get_current_scope
+
+            _scope = get_current_scope()
+            persist_directory = str(_scope.chroma_dir()) if _scope else get_chroma_dir()  # per-user vector store
             
             if use_existing_db and os.path.exists(persist_directory):
                 if progress_callback: progress_callback(60, "Loading existing database...")

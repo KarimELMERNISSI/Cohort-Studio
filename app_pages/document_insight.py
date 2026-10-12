@@ -1,5 +1,4 @@
 import json
-import os
 
 import streamlit as st
 from graph.builders.document import build_document_graph, filter_by_documents
@@ -18,38 +17,34 @@ from graph.ui import current_theme, render_graph, render_graph_exports, renderer
 # ==========================================
 import datetime
 
-GRAPH_STORAGE_DIR = os.path.join("data", "knowledge_graphs")
+from core.workspace import UserScope, resolve_within, safe_filename
+
+
+def _graph_dir(username):
+    """Knowledge-graph directory of the user's workspace (audit E4)."""
+    if not username:
+        return None
+    return UserScope.for_user(username).knowledge_graphs_dir()
+
 
 def get_saved_graphs(username=None):
-    """Returns list of saved graph filenames (without extension). Filters by username."""
-    if not os.path.exists(GRAPH_STORAGE_DIR):
+    """Returns the saved graph names of the user's workspace."""
+    directory = _graph_dir(username)
+    if directory is None or not directory.exists():
         return []
-    
-    files = [f.replace(".json", "") for f in os.listdir(GRAPH_STORAGE_DIR) if f.endswith(".json")]
-    
-    # User Isolation
-    if not username:
-        return []
-        
-    if username != 'admin':
-        files = [f for f in files if f.startswith(f"{username}_")]
-        
-    return sorted(files)
+    return sorted(p.stem for p in directory.glob("*.json"))
+
 
 def save_graph(name, graph_json, source_docs, username=None):
-    """Saves graph + metadata to disk."""
-    if not os.path.exists(GRAPH_STORAGE_DIR):
-        os.makedirs(GRAPH_STORAGE_DIR)
-        
-    safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '_', '-')]).strip()
-    if not safe_name: return False, "Invalid name"
-    
-    # User Isolation: Prefix
-    if username and username != 'admin' and not safe_name.startswith(f"{username}_"):
-        safe_name = f"{username}_{safe_name}"
+    """Saves graph + metadata into the user's workspace."""
+    directory = _graph_dir(username)
+    if directory is None:
+        return False, "Sign in to save graphs"
+    safe_name = safe_filename(name, default="")
+    if not safe_name:
+        return False, "Invalid name"
+    filepath = directory / f"{safe_name}.json"
 
-    filepath = os.path.join(GRAPH_STORAGE_DIR, f"{safe_name}.json")
-    
     payload = {
         "meta": {
             "name": safe_name,
@@ -58,22 +53,29 @@ def save_graph(name, graph_json, source_docs, username=None):
         },
         "graph": graph_json
     }
-    
+
     try:
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
         return True, None
     except Exception as e:
         return False, str(e)
 
-def load_graph(name):
-    """Loads graph payload."""
-    filepath = os.path.join(GRAPH_STORAGE_DIR, f"{name}.json")
-    if not os.path.exists(filepath):
-        return None, "File not found"
-        
+
+def load_graph(name, username=None):
+    """Loads a graph payload from the user's workspace."""
+    directory = _graph_dir(username)
+    if directory is None:
+        return None, "Sign in to load graphs"
     try:
-        with open(filepath, "r") as f:
+        filepath = resolve_within(directory, f"{safe_filename(name)}.json")
+    except ValueError as e:
+        return None, str(e)
+    if not filepath.exists():
+        return None, "File not found"
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
             payload = json.load(f)
         return payload, None
     except Exception as e:
@@ -100,7 +102,7 @@ def app():
         with st.sidebar.expander("Load Saved Analysis", expanded=False):
             selected_load = st.selectbox("Select Analysis", [""] + saved_graphs, index=0)
             if selected_load and st.button("Load Graph"):
-                payload, err = load_graph(selected_load)
+                payload, err = load_graph(selected_load, username=username)
                 if err:
                     st.sidebar.error(f"Load failed: {err}")
                 else:

@@ -13,11 +13,19 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
+from core.workspace import safe_filename
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
+from utils.session_scope import get_current_scope
 
 load_dotenv()
 
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
+
+
+def _documents_dir() -> str:
+    """The signed-in user's document library (audit E4); the legacy shared folder outside a session."""
+    scope = get_current_scope()
+    return str(scope.documents_dir()) if scope else "DOCUMENTS"
 
 
 def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | None:
@@ -250,14 +258,14 @@ def render_rag_sidebar():
             type=["pdf"],
             accept_multiple_files=True,
             key="rag_file_uploader",
-            help="PDF files will be stored in DOCUMENTS and ingested into the knowledge base."
+            help="PDF files are stored in your workspace and ingested into your knowledge base."
         )
         if uploaded_files:
-            docs_dir = "DOCUMENTS"
+            docs_dir = _documents_dir()
             os.makedirs(docs_dir, exist_ok=True)
             new_files_count = 0
             for uploaded_file in uploaded_files:
-                file_path = os.path.join(docs_dir, uploaded_file.name)
+                file_path = os.path.join(docs_dir, safe_filename(uploaded_file.name))
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 new_files_count += 1
@@ -266,7 +274,7 @@ def render_rag_sidebar():
 
         # Document Selection
         selected_files = None
-        docs_dir = "DOCUMENTS"
+        docs_dir = _documents_dir()
         if os.path.exists(docs_dir):
             all_files = [f for f in os.listdir(docs_dir) if f.lower().endswith(".pdf")]
             if all_files:
@@ -279,7 +287,7 @@ def render_rag_sidebar():
                         key="rag_selected_files_multiselect"
                     )
             else:
-                st.info("No PDF files currently stored in DOCUMENTS folder.")
+                st.info("No PDF files in your document library yet.")
 
         st.markdown("---")
         st.markdown("##### Retrieval Parameters")

@@ -57,9 +57,9 @@ def check_auth():
             st.divider()
             st.write(f"User: **{st.session_state.username}**")
             if st.button("Logout", width="stretch"):
-                st.session_state.user_authenticated = False
-                st.session_state.username = None
-                st.session_state.user_role = None
+                # Drop everything tied to the user: managers bound to their workspace, datasets, caches.
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
         return True
 

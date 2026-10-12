@@ -21,7 +21,26 @@ from manage.trace_documenter import TraceDocumenter
 from manage.transformation_manager import TransformationManager
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
+from core.expressions import evaluate_tree, safe_format
+from utils.data_paths import get_traces_dir
+from utils.session_scope import get_current_scope
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
+
+
+def _workspace_path(path_text: str) -> str:
+    """Only files inside the signed-in user's workspace may be referenced by path (audit E4)."""
+    scope = get_current_scope()
+    if scope is None:
+        return path_text
+    return str(scope.resolve_within(path_text))
+
+
+def _artifact_dir(session_id: str) -> str:
+    scope = get_current_scope()
+    path = str(scope.artifacts_dir(session_id)) if scope else os.path.join(get_traces_dir(), "artifacts", session_id)
+    os.makedirs(path, exist_ok=True)
+    return path
+
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +177,7 @@ def handle_main_data_upload() -> pd.DataFrame | None:
         
         if file_path:
             try:
-                df = load_dataframe(file_path)
+                df = load_dataframe(_workspace_path(file_path))
                 st.success("Main dataset successfully loaded from provided path.")
                 st.session_state['data'] = df
                 if 'enriched_df' not in st.session_state:
@@ -187,8 +206,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
                 # Save to artifacts if session is active
                 if 'transformation_manager' in st.session_state and st.session_state.transformation_manager.session_id:
                     session_id = st.session_state.transformation_manager.session_id
-                    artifact_dir = os.path.join("data", "traces", "artifacts", session_id)
-                    os.makedirs(artifact_dir, exist_ok=True)
+                    artifact_dir = _artifact_dir(session_id)
                     
                     # Create a safe filename
                     safe_name = "".join([c for c in uploaded_file.name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
@@ -238,7 +256,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
         file_path_input = st.text_input("Enter file path for the enrichment dataset:", value=file_path, key='enrichment_data_path')
         if file_path_input:
             try:
-                df = load_dataframe(file_path_input)
+                df = load_dataframe(_workspace_path(file_path_input))
                 st.success("Enrichment dataset successfully loaded from provided path.")
                 return df, file_name
             except Exception as e:
@@ -1245,10 +1263,9 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         tree = DateSubRewriter().visit(tree)
         ast.fix_missing_locations(tree)
         
-        # Compile and Evaluate
-        code = compile(tree, filename="<string>", mode="eval")
+        # Whitelisted evaluation (no builtins, restricted np/pd facades): see core.expressions
         logger.debug("Normalized formula: %s", normalized_formula)
-        result = eval(code, {"np":np, "pd":pd}, local_vars)
+        result = evaluate_tree(tree, dataset, extra_locals=local_vars)
         
         # Convert numpy array to Series if needed
         if isinstance(result, np.ndarray):
@@ -2236,7 +2253,7 @@ def compute_transformations(dataframe):
                     transformed_data = model.fit_transform(dataframe[columns])
 
                 # Create column names and DataFrame
-                component_names = [naming_pattern.format(method_applied=transformation.replace(" ", "_")) + f"_{i + 1}" for i in range(n_components)]
+                component_names = [safe_format(naming_pattern, method_applied=transformation.replace(" ", "_")) + f"_{i + 1}" for i in range(n_components)]
 
                 if transformation in ["t-SNE", "UMAP"]:
                     result_df = pd.DataFrame(transformed_data, columns=component_names, index=dataframe.index)
@@ -2277,7 +2294,7 @@ def compute_transformations(dataframe):
                 full_labels = pd.Series(index=dataframe.index, data=np.nan)
                 full_labels.loc[valid_idx] = labels
                 
-                col_name = naming_pattern.format(method_applied=transformation.replace(" ", "_"))
+                col_name = safe_format(naming_pattern, method_applied=transformation.replace(" ", "_"))
                 new_columns[col_name] = full_labels.values
 
 
@@ -2289,7 +2306,7 @@ def compute_transformations(dataframe):
                         categories = encoder.categories_[0]
                         for i, category in enumerate(categories):
                             
-                            new_col_name = naming_pattern.format(
+                            new_col_name = safe_format(naming_pattern, 
                                 initial_variable=col,
                                 category=category
                             )
@@ -2298,7 +2315,7 @@ def compute_transformations(dataframe):
                 elif transformation == "Label Encoding":
                     encoder = LabelEncoder()
                     for col in columns:
-                        new_col_name = naming_pattern.format(
+                        new_col_name = safe_format(naming_pattern, 
                             initial_variable=col,
                             category="label_encoded"
                         )
@@ -2309,7 +2326,7 @@ def compute_transformations(dataframe):
                     for col in columns:
                         # Initialize the encoder with the specified category order for the current column
                         encoder = OrdinalEncoder(categories=[category_orders[col]])
-                        new_col_name = naming_pattern.format(
+                        new_col_name = safe_format(naming_pattern, 
                             initial_variable=col,
                             category="ordinal"
                         )
@@ -2320,7 +2337,7 @@ def compute_transformations(dataframe):
                 method_function = TRANSFORMATIONS.get(transformation, None)
                 if method_function:
                     for col in columns:
-                        new_col_name = naming_pattern.format(
+                        new_col_name = safe_format(naming_pattern, 
                             initial_variable=col,
                             method_applied=transformation.replace(" ", "_")
                         )
@@ -2531,14 +2548,18 @@ def apply_imputer(data, numerical_imputation_method='mean', categorical_imputati
         return data, initial_null_mask
 
 
-def save_snapshot(df, step_name, base_dir="data/traces/snapshots"):
-    """Saves a snapshot of the dataframe and returns the path."""
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
+def save_snapshot(df, step_name, base_dir=None):
+    """Saves a snapshot of the dataframe in the user's workspace and returns the path."""
+    import uuid
+
+    if base_dir is None:
+        scope = get_current_scope()
+        base_dir = str(scope.snapshots_dir()) if scope else os.path.join(get_traces_dir(), "snapshots")
+    os.makedirs(base_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_step = "".join([c for c in step_name if c.isalnum() or c=='_'])
-    base_filename = f"{timestamp}_{safe_step}"
+    base_filename = f"{timestamp}_{safe_step}_{uuid.uuid4().hex[:8]}"
     
     df_path = os.path.join(base_dir, f"{base_filename}.parquet")
     try:

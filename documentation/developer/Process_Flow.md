@@ -36,7 +36,7 @@ The data loading process is critical as it sets up the `TransformationManager` a
 4. **Session Setup**:
     * `st.session_state['data']` is populated.
     * `TransformationManager` is initialized.
-    * Source artifact is saved to `data/traces/artifacts/`.
+    * Source artifact is saved to the user's workspace (`<DATA_ROOT>/users/<username>/traces/artifacts/<session>/`).
 5. **Trace Initialization**: A new trace session is started to record future operations.
 
 ```mermaid
@@ -123,7 +123,7 @@ Implements Retrieval-Augmented Generation to query scientific documents.
 Ensures all user actions are recorded and reproducible.
 
 1. **Recording**: Every action (enrichment, outlier removal) calls `add_step()` on `TransformationManager`.
-2. **Persistence**: Steps are saved to a JSON trace file in `data/traces/`.
+2. **Persistence**: Steps are saved to a JSON trace file in the user's workspace (`<DATA_ROOT>/users/<username>/traces/`).
 3. **Documentation**: `TraceDocumenter` converts the JSON trace into a readable Word report (`.docx`).
 4. **Reproduction**:
     * User uploads a Trace JSON in "Reproduce Analysis" page.
