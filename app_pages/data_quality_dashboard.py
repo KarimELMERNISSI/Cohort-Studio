@@ -617,7 +617,7 @@ def render_dashboard(df, config):
                             progress_bar.empty()
                             
                             if scan_results.empty:
-                                st.info("No significant dependencies found (p < 0.05).")
+                                st.info("No testable target/predictor pairs (groups too small or too few observed values).")
                             else:
                                 # Apply Correction
                                 if scan_correction != "None":
@@ -639,6 +639,7 @@ def render_dashboard(df, config):
                                     scan_results = scan_results.sort_values("P-Value")
 
                                 st.success(f"Found {len(scan_results[scan_results['Significant'] == 'Yes'])} significant dependencies (Adjusted p < 0.05) out of {len(scan_results)} tests.")
+                                st.caption("Every performed test is listed; the adjustment controls the whole family shown here. Associations are not causal claims.")
                                 
                                 # Display Table
                                 st.dataframe(

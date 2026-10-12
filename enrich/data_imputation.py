@@ -20,6 +20,8 @@ from utils.data_analyzer import DataAnalyzer
 #from missforest import MissForest # our MissForest adaptation is based on this package
 from utils.miss_forest.missforest import MissForest
 
+from biostats._types import RANDOM_STATE
+
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 class MissForestTransformer(TransformerMixin):
@@ -40,8 +42,8 @@ class MissForestTransformer(TransformerMixin):
         self.current_progress = 0  # To track progress updates
         self.total_steps = 10
         self.imputer = MissForest(
-            clf=LGBMClassifier(verbosity=-1, n_jobs=-1),
-            rgr=LGBMRegressor(verbosity=-1, n_jobs=-1),
+            clf=LGBMClassifier(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),
+            rgr=LGBMRegressor(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),
             initial_guess='median',
             max_iter=self.total_steps,
             early_stopping=True,
@@ -430,7 +432,8 @@ def get_imputer(numerical_imputation_method='mean',
     elif numerical_imputation_method == 'knn':
         num_imputer = KNNImputer()
     elif numerical_imputation_method == 'mice':
-        num_imputer = IterativeImputer(random_state=0)
+        # Single imputation by chained equations (one deterministic pass); not multiple imputation.
+        num_imputer = IterativeImputer(random_state=RANDOM_STATE)
     elif numerical_imputation_method == 'missforest':
         num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
     else:
@@ -608,7 +611,8 @@ def get_imputer_in_progress(numerical_imputation_method='mean',
     elif numerical_imputation_method == 'knn':
         num_imputer = KNNImputer()
     elif numerical_imputation_method == 'mice':
-        num_imputer = IterativeImputer(random_state=0)
+        # Single imputation by chained equations (one deterministic pass); not multiple imputation.
+        num_imputer = IterativeImputer(random_state=RANDOM_STATE)
     elif numerical_imputation_method == 'missforest':
         num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
     else:

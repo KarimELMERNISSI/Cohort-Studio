@@ -85,9 +85,13 @@ Estimate the sample size needed to detect a meaningful effect, or the power of y
 
 ### Outputs
 
-- **Required sample size** per group for the specified power.
-- **Achieved power** given current sample size.
-- **Power curve** — plot of power vs sample size.
+- **Required sample size** — reported **per group and in total** (the one-way ANOVA and Kruskal-Wallis
+  calculators follow statsmodels' convention where the sample size is the total over all groups; the
+  Kruskal-Wallis figure divides the ANOVA requirement by the asymptotic relative efficiency, 0.955 for
+  normal data or the 0.864 worst case).
+- **Achieved power** given the current per-group sample size.
+- **Chi-square** — the calculator takes the degrees of freedom, (rows − 1) × (columns − 1), of the
+  contingency table (df = 1 for a 2×2 table).
 
 ---
 
@@ -99,8 +103,9 @@ Convert raw variable values into Z-scores relative to a reference population or 
 
 | Mode | Description |
 | --- | --- |
-| **Sample-based** | Z-scores computed from the dataset's own mean and standard deviation. |
-| **Reference-based** | User provides external reference mean and standard deviation (e.g. population norms). |
+| **Whole cohort** | Z-scores computed from the dataset's own mean and standard deviation. |
+| **Internal control group** | Mean and SD of a reference group of the cohort (for example controls or the placebo arm); groups coded 0/False are supported. |
+| **Manual reference values** | Mean and SD entered per variable (published population norms). |
 
 ### Output
 - New column(s) appended with the Z-score transformation.

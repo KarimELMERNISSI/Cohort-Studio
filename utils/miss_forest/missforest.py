@@ -487,9 +487,11 @@ class MissForest:
                 else:
                     estimator = deepcopy(self.regressor)
 
-                # Fit estimator with imputed x.
-                x_obs = x_imp.drop(c, axis=1)
-                y_obs = x_imp[c]
+                # Fit the estimator on the rows where `c` was originally observed (Stekhoven & Buhlmann 2012);
+                # training on previously imputed targets would let the model fit its own guesses.
+                observed_index = x_imp.index.difference(missing_rows[c])
+                x_obs = x_imp.loc[observed_index].drop(c, axis=1)
+                y_obs = x_imp.loc[observed_index, c]
                 estimator.fit(x_obs, y_obs)
 
                 # Predict the missing column with the trained estimator.

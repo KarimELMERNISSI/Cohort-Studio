@@ -109,7 +109,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Clinical Rule Enforcement**: Declarative execution of clinical exclusion and anomaly boundaries (`mask_families` in `config/config.json`).
 
 ### 4. Advanced Data Enrichment
-- **Imputation Suites**: Targeted formula-driven imputation and global multivariable imputation (MICE, MissForest, KNN, Median).
+- **Imputation Suites**: Targeted formula-driven imputation and global single imputation (mean/median, KNN, chained equations via IterativeImputer, tree-based missForest with LightGBM). Imputation uncertainty is not propagated; multiple imputation with pooling is planned.
 - **Dimensionality Reduction**: Principal Component Analysis (PCA), Factor Analysis of Mixed Data (FAMD), t-SNE, and UMAP.
 - **Feature Engineering**: One-Hot, Ordinal, Label encoding, mathematical transformations (log, square root, Box-Cox), and robust/standard scaling.
 - **Population Clustering**: K-Means, DBSCAN, and Gaussian Mixture Models (GMM) with automated hyperparameter sweeps.

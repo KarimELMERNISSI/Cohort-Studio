@@ -64,7 +64,7 @@ class TestContingency2x2Epidemiology:
     def test_rare_disease_guidance(self):
         # Rare disease: a=2, b=998, c=1, d=999 (prevalence ~ 0.15% < 10%)
         res = calculate_2x2_epidemiology_metrics((2, 998, 1, 999))
-        assert any("Rare disease assumption holds" in g for g in res.guidance)
+        assert any("uncommon" in g for g in res.guidance)
 
 
 class TestEffectSizeCalculations:

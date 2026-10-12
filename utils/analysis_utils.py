@@ -93,9 +93,14 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
         "correction_method": correction_method
     }
 
-def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test="Auto-Detect"):
+def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test="Auto-Detect",
+                     *, exposure_ref=None, event_level=None, design="unknown"):
     """
     Analyzes a single variable against the group column, selecting the appropriate test.
+
+    For binary outcomes the 2x2 measures use an explicit orientation (audit S1): ``exposure_ref`` is the
+    reference level of ``group_col`` and ``event_level`` the outcome level counted as the event; both are
+    auto-detected (0/No/control vs 1/Yes/case) when omitted.
     """
     # Prepare data
     clean_df = df[[group_col, target]].dropna()
@@ -198,10 +203,12 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
 
         epi_2x2_data = None
         if contingency_table.shape == (2, 2):
-            from utils.epidemiology_utils import calculate_2x2_epidemiology_metrics
+            from biostats.contingency import TwoByTwo, analyze_twobytwo
             try:
-                epi_res = calculate_2x2_epidemiology_metrics(contingency_table)
-                epi_2x2_data = epi_res.model_dump()
+                table_2x2 = TwoByTwo.from_crosstab(
+                    clean_df, group_col, target, exposure_ref=exposure_ref, event_level=event_level
+                )
+                epi_2x2_data = analyze_twobytwo(table_2x2, design=design).legacy_dict()
             except Exception as e_epi:
                 logger.debug(f"2x2 epidemiology calculation notice: {e_epi}")
 
@@ -474,210 +481,20 @@ def littles_mcar_test(df):
 
 
 
-def scan_missingness_dependencies(df, target_cols=None, predictor_cols=None, test_preference="Auto-Detect", progress_callback=None):
-    """
-    Systematically tests for dependencies between missingness of targets and values/missingness of predictors.
-    
-    Args:
-        test_preference: "Auto-Detect", "Force Parametric", "Force Non-Parametric"
-    
-    Returns:
-    - pd.DataFrame with significant results.
-    """
-    results = []
-    
-    # Defaults
-    if target_cols is None:
-        # Targets must have missing values
-        target_cols = [c for c in df.columns if df[c].isnull().any()]
-    
-    if predictor_cols is None:
-        predictor_cols = df.columns.tolist()
-        
-    # Pre-calculate missingness masks to speed up
-    missing_masks = {col: df[col].isnull() for col in df.columns}
-    
-    total_tests = len(target_cols) * len(predictor_cols)
-    processed = 0
-    
-    # Identify column types
-    numeric_cols = set(df.select_dtypes(include=[np.number]).columns)
-    categorical_cols = set(df.select_dtypes(include=['object', 'category']).columns)
-    binary_cols = set([c for c in df.columns if df[c].nunique() == 2])
-    
-    for target in target_cols:
-        target_missing = missing_masks[target]
-        
-        # If no missing or all missing, skip
-        if target_missing.sum() == 0 or target_missing.sum() == len(df):
-            processed += len(predictor_cols)
-            if progress_callback: progress_callback(processed / total_tests)
-            continue
-            
-        # Create binary target for analysis
-        # We want to see if Predictor differs between Target=Missing vs Target=Observed
-        
-        for pred in predictor_cols:
-            if pred == target:
-                processed += 1
-                continue
-                
-            # --- Test 1: Value Impact (Predictor Value -> Target Missingness) ---
-            # Does the value of 'pred' differ when 'target' is missing?
-            # Only consider rows where 'pred' is observed
-            
-            valid_rows = ~missing_masks[pred]
-            
-            if valid_rows.sum() < 10: # Skip if too few observed values
-                processed += 1
-                continue
-                
-            y_vals = df.loc[valid_rows, pred]
-            groups = target_missing.loc[valid_rows] # True=Missing, False=Observed
-            
-            # Check group sizes
-            n_missing = groups.sum()
-            n_observed = (~groups).sum()
-            
-            if n_missing < 5 or n_observed < 5:
-                # Too few samples in one group to test
-                pass
-            else:
-                try:
-                    p_val = np.nan
-                    test_name = "Unknown"
-                    
-                    if pred in numeric_cols:
-                        g1 = y_vals[groups] # Target Missing
-                        g2 = y_vals[~groups] # Target Observed
-                        
-                        use_parametric = False
-                        
-                        if test_preference == "Force Parametric":
-                            use_parametric = True
-                        elif test_preference == "Force Non-Parametric":
-                            use_parametric = False
-                        else: # Auto-Detect
-                            # Check Normality (Shapiro/Normaltest)
-                            # Only check if N is reasonable, otherwise assume non-normal for small N, normal for huge N?
-                            # Actually, for "Auto", we should be robust.
-                            is_normal = True
-                            for g in [g1, g2]:
-                                if len(g) < 3: is_normal = False; break
-                                try:
-                                    if len(g) > 5000:
-                                        _, p = stats.normaltest(g)
-                                    else:
-                                        _, p = stats.shapiro(g)
-                                    if p < 0.05:
-                                        is_normal = False
-                                        break
-                                except:
-                                    is_normal = False
-                                    break
-                            
-                            # Check Homogeneity of Variance (Levene)
-                            equal_var = True
-                            try:
-                                _, p = stats.levene(g1, g2)
-                                if p < 0.05: equal_var = False
-                            except:
-                                pass
-                                
-                            if is_normal:
-                                use_parametric = True
-                                # We will handle Welch vs Student below
-                            else:
-                                use_parametric = False
-                        
-                        if use_parametric:
-                            # Check variance for Welch vs Student if not already checked
-                            if test_preference == "Force Parametric":
-                                try:
-                                    _, p = stats.levene(g1, g2)
-                                    equal_var = p > 0.05
-                                except:
-                                    equal_var = False
-                            
-                            if equal_var:
-                                stat, p_val = stats.ttest_ind(g1, g2, nan_policy='omit')
-                                test_name = "Student's t-test"
-                            else:
-                                stat, p_val = stats.ttest_ind(g1, g2, equal_var=False, nan_policy='omit')
-                                test_name = "Welch's t-test"
-                        else:
-                            stat, p_val = stats.mannwhitneyu(g1, g2)
-                            test_name = "Mann-Whitney U"
-                            
-                    elif pred in categorical_cols or pred in binary_cols:
-                        # Chi-Square
-                        contingency = pd.crosstab(y_vals, groups)
-                        if contingency.size > 0:
-                            # Check expected freqs for Fisher?
-                            chi2, p, dof, expected = stats.chi2_contingency(contingency)
-                            
-                            if (expected < 5).any() and contingency.shape == (2,2):
-                                # Fisher's Exact
-                                _, p_val = stats.fisher_exact(contingency)
-                                test_name = "Fisher's Exact"
-                            else:
-                                p_val = p
-                                test_name = "Chi-Square"
-                            
-                    if not np.isnan(p_val) and p_val < 0.05:
-                        results.append({
-                            "Target Variable": target,
-                            "Predictor Variable": pred,
-                            "Dependency Type": "Value Impact",
-                            "Test Used": test_name,
-                            "P-Value": p_val,
-                            "Conclusion": f"{pred} value affects missingness of {target}"
-                        })
-                except Exception:
-                    pass
+def scan_missingness_dependencies(df, target_cols=None, predictor_cols=None, test_preference="Auto-Detect",
+                                  progress_callback=None, correction="none", alpha=0.05):
+    """Deprecated shim over :func:`biostats.missing.scan_missingness_dependencies`.
 
-            # --- Test 2: Pattern Impact (Predictor Missingness -> Target Missingness) ---
-            # Is missingness of 'pred' associated with missingness of 'target'?
-            # Chi-Square on two boolean vectors
-            
-            pred_missing = missing_masks[pred]
-            
-            # If pred has no missing values, skip
-            if pred_missing.sum() == 0 or pred_missing.sum() == len(df):
-                pass
-            else:
-                try:
-                    contingency = pd.crosstab(target_missing, pred_missing)
-                    if contingency.shape == (2, 2):
-                        # Always Chi-Square or Fisher for 2x2 boolean
-                        chi2, p, dof, expected = stats.chi2_contingency(contingency)
-                        
-                        if (expected < 5).any():
-                             _, p_val = stats.fisher_exact(contingency)
-                             test_name = "Fisher's Exact"
-                        else:
-                             p_val = p
-                             test_name = "Chi-Square"
-                        
-                        if p_val < 0.05:
-                             results.append({
-                                "Target Variable": target,
-                                "Predictor Variable": pred,
-                                "Dependency Type": "Missingness Correlation",
-                                "Test Used": test_name,
-                                "P-Value": p_val,
-                                "Conclusion": f"Missingness of {pred} is linked to missingness of {target}"
-                            })
-                except Exception:
-                    pass
-            
-            processed += 1
-            if progress_callback and processed % 10 == 0:
-                progress_callback(processed / total_tests)
-                
-    if progress_callback: progress_callback(1.0)
-    
-    if not results:
-        return pd.DataFrame(columns=["Target Variable", "Predictor Variable", "Dependency Type", "Test Used", "P-Value", "Conclusion"])
-        
-    return pd.DataFrame(results).sort_values("P-Value")
+    Returns EVERY performed test (not only p < 0.05, audit S3) so that a multiplicity correction applied by
+    the caller controls the real family. With ``correction`` set, adjusted p-values are included.
+    """
+    from biostats.missing import scan_missingness_dependencies as _scan
+
+    result = _scan(df, target_cols, predictor_cols, test_preference=test_preference, correction=correction,
+                   alpha=alpha, progress_callback=progress_callback)
+    table = result.table.copy()
+    table.attrs["n_tests"] = result.n_tests
+    table.attrs["n_skipped"] = result.n_skipped
+    if str(correction).lower() in ("none", ""):
+        table = table.drop(columns=["P-Value (Adj)", "Significant"])
+    return table

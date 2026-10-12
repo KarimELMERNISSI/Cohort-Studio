@@ -87,9 +87,9 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 
 | Phase | Goal | Status |
 |---|---|---|
-| P0 | Stop the bleeding: key rotation, crashes, admin takeover, secrets, cloud-LLM consent, PHI on stdout, lite CI | in progress |
-| P1 | Library-agnostic graph connector (model, builders, yFiles + Plotly adapters, license compliance) | planned |
-| P2 | Science Tier A: the five wrong-number bugs | planned |
+| P0 | Stop the bleeding: key rotation, crashes, admin takeover, secrets, cloud-LLM consent, PHI on stdout, lite CI | done (commit `ea6bd09`); key rotation remains an owner action |
+| P1 | Library-agnostic graph connector (model, builders, yFiles + Plotly adapters, license compliance) | done (commit `3c9b55e`) |
+| P2 | Science Tier A: the five wrong-number bugs | done (S4 stage 1: honest labelling, seeds, observed-rows fit; multiple imputation with pooling is P5) |
 | P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | planned |
 | P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | planned |
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | planned |
@@ -107,25 +107,25 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 
 | Item | Status | Closed by |
 |---|---|---|
-| G1 yFiles 2.0 crash (`Layout.HIERARCHIC`) | open | P0 hotfix, P1 connector |
-| G2 ignored widget settings / directed edges | open | P0 hotfix, P1 |
-| G3 selection never returned | open | P1 |
-| G4 license vs air-gapped claims | open | P1 (opt-in extra, notices) |
-| G5–G8 coupling, duplication, data defects | open | P1 |
-| S1–S5 wrong numbers | open | P2 |
+| G1 yFiles 2.0 crash (`Layout.HIERARCHIC`) | closed | P0 hotfix, P1 connector |
+| G2 ignored widget settings / directed edges | closed | P0 hotfix, P1 |
+| G3 selection never returned | closed | P1 (`sync_selection` in the adapter; selection drives the panels) |
+| G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
+| G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
+| S1–S5 wrong numbers | closed (S4 stage 1) | P2 (`biostats/`); multiple imputation in P5 |
 | S6–S16 soundness, missing methods | open | P5, P8 |
 | E1 leaked key | open | owner action |
-| E2 Visualization import | open | P0 |
+| E2 Visualization import | closed | P0 |
 | E3 eval code execution | open | P3 |
 | E4 per-user isolation | open | P3 |
-| E5 admin takeover | open | P0 |
-| E6 cloud LLM by default / key exposure | open | P0 (consent, keys), P4 (Settings UX) |
-| E7 PHI on stdout | open | P0 |
+| E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy) |
+| E6 cloud LLM by default / key exposure | closed for consent and keys | P0; Settings-page UX in P4 |
+| E7 PHI on stdout | closed | P0 |
 | E8 stale state / cache | open | P4 |
-| E9 undefined names / empty-state crashes | open | P0 |
+| E9 undefined names / empty-state crashes | closed | P0 |
 | E10 reproducibility claims | open | P6 |
 | E11 per-rerun expensive work | open | P4 |
-| E12 tracked secrets/config | open | P0 |
+| E12 tracked secrets/config | closed | P0 |
 | E13 layering / dead code / duplication | open | P6 |
-| E14 quality gates | open | P0 (lite CI), P7 |
+| E14 quality gates | lite CI closed | P0; full gates in P7 |
 | U1–U8 UX | open | P4, P5 |

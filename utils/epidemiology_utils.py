@@ -1,11 +1,15 @@
 """
-Epidemiology and Biostatistics Utility Module.
+Epidemiology and Biostatistics Utility Module (legacy entry points).
 
-Provides mathematically rigorous, STROBE/CONSORT compliant statistical engines:
-- 2x2 Contingency Table Analysis (OR, RR, RD, NNT, Attributable Fraction, with 95% CIs)
-- Effect Size Estimations with Confidence Intervals (Cohen's d, Hedges' g, η², ω², Cramér's V)
-- ANCOVA Diagnostic Engine (Homogeneity of slopes, residual normality, homoscedasticity)
-- Diagnostic Test Accuracy (Sensitivity, Specificity, PPV, NPV, Likelihood Ratios with Wilson CIs)
+What is implemented here:
+- 2x2 contingency measures (OR with Woolf CI, RR with Katz CI, RD with Newcombe CI, NNT, attributable
+  fraction) - delegated to :mod:`biostats.contingency`, which also carries the explicit table orientation
+- Cohen's d (pooled SD) with a normal-approximation CI and the Hedges' g small-sample factor (approximate J)
+- Eta-squared / omega-squared point estimates for one-way designs
+- ANCOVA diagnostics (homogeneity of slopes, residual normality, Breusch-Pagan homoscedasticity)
+- Diagnostic test accuracy (sensitivity, specificity, PPV, NPV with Wilson score CIs; LR+/LR-, Youden J)
+
+No compliance with reporting guidelines is implied by this module; see documentation/05_Epidemiology.md.
 """
 
 import logging
@@ -149,126 +153,45 @@ def calculate_2x2_epidemiology_metrics(
     Returns:
         Contingency2x2Result with OR, RR, RD, NNT, Attributable Fraction, tests, and guidance.
     """
-    if isinstance(table_or_counts, pd.DataFrame):
-        arr = table_or_counts.to_numpy()
-        a, b = int(arr[0, 0]), int(arr[0, 1])
-        c, d = int(arr[1, 0]), int(arr[1, 1])
-    elif isinstance(table_or_counts, np.ndarray):
-        a, b = int(table_or_counts[0, 0]), int(table_or_counts[0, 1])
-        c, d = int(table_or_counts[1, 0]), int(table_or_counts[1, 1])
+    import warnings as _warnings
+
+    if isinstance(table_or_counts, (pd.DataFrame, np.ndarray)):
+        _warnings.warn(
+            "Passing a table positionally is ambiguous (which row is the exposed group, which column the event?). "
+            "Use biostats.contingency.TwoByTwo.from_crosstab(...) with explicit levels.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        arr = table_or_counts.to_numpy() if isinstance(table_or_counts, pd.DataFrame) else np.asarray(table_or_counts)
+        a, b, c, d = int(arr[0, 0]), int(arr[0, 1]), int(arr[1, 0]), int(arr[1, 1])
     else:
-        a, b, c, d = [int(v) for v in table_or_counts]
+        a, b, c, d = (int(v) for v in table_or_counts)
 
-    n_total = a + b + c + d
-    z_crit = norm.ppf(1.0 - alpha / 2.0)
-    guidance: list[str] = []
+    from biostats.contingency import TwoByTwo, analyze_twobytwo
 
-    # Haldane-Anscombe 0.5 correction check for zero cells
-    haldane_applied = False
-    a_calc, b_calc, c_calc, d_calc = float(a), float(b), float(c), float(d)
-    if any(cell == 0 for cell in (a, b, c, d)):
-        haldane_applied = True
-        a_calc += 0.5
-        b_calc += 0.5
-        c_calc += 0.5
-        d_calc += 0.5
-        guidance.append(
-            "Haldane-Anscombe correction (+0.5 to each cell) was applied because one or more cells had zero counts."
-        )
+    table = TwoByTwo(
+        a=a, b=b, c=c, d=d,
+        exposure_level=exposure_label, reference_level=f"Not {exposure_label}",
+        event_level=outcome_label, nonevent_level=f"No {outcome_label}",
+    )
+    res = analyze_twobytwo(table, alpha=alpha)
+    level = 1.0 - alpha
 
-    # 1. Odds Ratio (OR) & Woolf's 95% CI
-    odds_ratio = (a_calc * d_calc) / (b_calc * c_calc) if (b_calc * c_calc) > 0 else 1.0
-    se_log_or = math.sqrt((1.0 / a_calc) + (1.0 / b_calc) + (1.0 / c_calc) + (1.0 / d_calc))
-    log_or = math.log(odds_ratio)
-    or_lower = math.exp(log_or - z_crit * se_log_or)
-    or_upper = math.exp(log_or + z_crit * se_log_or)
-
-    # 2. Relative Risk (RR) & Katz's 95% CI
-    n_exp = a_calc + b_calc
-    n_unexp = c_calc + d_calc
-    p_exp = a_calc / n_exp if n_exp > 0 else 0.0
-    p_unexp = c_calc / n_unexp if n_unexp > 0 else 0.0
-
-    relative_risk = p_exp / p_unexp if p_unexp > 0 else 1.0
-    se_log_rr = math.sqrt((b_calc / (a_calc * n_exp)) + (d_calc / (c_calc * n_unexp)))
-    log_rr = math.log(relative_risk) if relative_risk > 0 else 0.0
-    rr_lower = math.exp(log_rr - z_crit * se_log_rr)
-    rr_upper = math.exp(log_rr + z_crit * se_log_rr)
-
-    # 3. Risk Difference (RD) / Absolute Risk Reduction & Wald CI
-    p_exp_raw = a / (a + b) if (a + b) > 0 else 0.0
-    p_unexp_raw = c / (c + d) if (c + d) > 0 else 0.0
-    risk_diff = p_exp_raw - p_unexp_raw
-    se_rd = math.sqrt(
-        (p_exp_raw * (1.0 - p_exp_raw) / (a + b)) + (p_unexp_raw * (1.0 - p_unexp_raw) / (c + d))
-    ) if (a + b) > 0 and (c + d) > 0 else 0.0
-    rd_lower = max(-1.0, risk_diff - z_crit * se_rd)
-    rd_upper = min(1.0, risk_diff + z_crit * se_rd)
-
-    # 4. Number Needed to Treat / Harm
-    nnt = None
-    if abs(risk_diff) > 1e-6:
-        nnt = round(1.0 / abs(risk_diff), 2)
-
-    # 5. Attributable Fraction in Exposed (AF_e)
-    afe = None
-    if relative_risk > 1.0:
-        afe = round((relative_risk - 1.0) / relative_risk, 4)
-
-    # 6. Statistical Hypothesis Tests (Chi2, Yates, Fisher Exact)
-    obs = np.array([[a, b], [c, d]])
-    chi2_res = stats.chi2_contingency(obs, correction=False)
-    chi2_stat = float(chi2_res[0])
-    chi2_pval = float(chi2_res[1])
-    expected = chi2_res[3]
-
-    chi2_yates = stats.chi2_contingency(obs, correction=True)
-    chi2_yates_pval = float(chi2_yates[1])
-
-    fisher_stat, fisher_pval = stats.fisher_exact(obs)
-
-    # Methodological Guidance synthesis
-    if (expected < 5.0).any():
-        guidance.append(
-            "Expected frequencies < 5 found in contingency cells. Prefer Fisher's Exact test p-value over Pearson Chi-Square."
-        )
-
-    prevalence = (a + c) / n_total if n_total > 0 else 0.0
-    if prevalence < 0.10:
-        guidance.append(
-            f"Rare disease assumption holds (overall prevalence = {prevalence*100:.1f}% < 10%). The Odds Ratio (OR={odds_ratio:.2f}) provides an accurate estimate of the Relative Risk."
-        )
-    else:
-        guidance.append(
-            f"Common outcome detected (prevalence = {prevalence*100:.1f}% >= 10%). The Odds Ratio (OR={odds_ratio:.2f}) overstates the effect relative to the Relative Risk (RR={relative_risk:.2f}). Prefer RR for cohort designs."
-        )
-
-    if nnt is not None:
-        direction = "Harm (NNH)" if risk_diff > 0 else "Benefit (NNT)"
-        guidance.append(
-            f"Number Needed to {direction}: {nnt:.1f} individuals must be exposed/treated for one additional event to occur."
-        )
+    def _ci(ci) -> ConfidenceInterval:
+        return ConfidenceInterval(lower=round(ci.lower, 4), upper=round(ci.upper, 4), level=level)
 
     return Contingency2x2Result(
-        a=a,
-        b=b,
-        c=c,
-        d=d,
-        n_total=n_total,
-        haldane_applied=haldane_applied,
-        odds_ratio=round(odds_ratio, 4),
-        odds_ratio_ci=ConfidenceInterval(lower=round(or_lower, 4), upper=round(or_upper, 4), level=1.0 - alpha),
-        relative_risk=round(relative_risk, 4),
-        relative_risk_ci=ConfidenceInterval(lower=round(rr_lower, 4), upper=round(rr_upper, 4), level=1.0 - alpha),
-        risk_difference=round(risk_diff, 4),
-        risk_difference_ci=ConfidenceInterval(lower=round(rd_lower, 4), upper=round(rd_upper, 4), level=1.0 - alpha),
-        nnt=nnt,
-        attributable_fraction_exposed=afe,
-        chi2_statistic=round(chi2_stat, 4),
-        chi2_pvalue=float(chi2_pval),
-        chi2_yates_pvalue=float(chi2_yates_pval),
-        fisher_exact_pvalue=float(fisher_pval),
-        guidance=guidance,
+        a=a, b=b, c=c, d=d, n_total=res.n_total, haldane_applied=res.haldane_applied,
+        odds_ratio=round(res.odds_ratio, 4), odds_ratio_ci=_ci(res.odds_ratio_ci),
+        relative_risk=round(res.relative_risk, 4), relative_risk_ci=_ci(res.relative_risk_ci),
+        risk_difference=round(res.risk_difference, 4), risk_difference_ci=_ci(res.risk_difference_ci),
+        nnt=round(res.nnt, 2) if res.nnt is not None else None,
+        attributable_fraction_exposed=(
+            round(res.attributable_fraction_exposed, 4) if res.attributable_fraction_exposed is not None else None
+        ),
+        chi2_statistic=round(res.chi2_statistic, 4), chi2_pvalue=res.chi2_pvalue,
+        chi2_yates_pvalue=res.chi2_yates_pvalue, fisher_exact_pvalue=res.fisher_exact_pvalue,
+        guidance=res.guidance,
     )
 
 

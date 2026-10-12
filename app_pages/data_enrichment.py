@@ -2806,7 +2806,7 @@ def app():
 
         tab_targeted, tab_global = st.tabs([
             "Targeted Imputation (Custom Formula)", 
-            "Global Imputation (Auto-MICE/KNN/Mean)"
+            "Global Imputation (single imputation)"
         ])
         
         # --- TAB 1: Targeted Imputation ---
@@ -2940,7 +2940,13 @@ def app():
         # --- TAB 2: Global Imputation ---
         with tab_global:
             st.markdown("### Global & Automated Imputation")
-            st.info("Use this mode to apply statistical strategies (Mean, Median, MICE, KNN) to all missing values at once.")
+            st.info("Use this mode to fill all missing values at once with a single imputation (mean, median, KNN, chained equations or tree-based).")
+            st.warning(
+                "Single imputation fills each missing cell once. P-values and confidence intervals computed on the "
+                "imputed dataset will be too narrow because the uncertainty of the imputation is ignored. Use it for "
+                "exploration and visualisation; for inference prefer complete-case analysis with a sensitivity check "
+                "or multiple imputation (planned)."
+            )
 
             main_data = st.session_state['enriched_df']
             
@@ -2955,7 +2961,7 @@ def app():
                 st.metric("Total Missing Values", f"{total_missing}", delta=f"{missing_percent:.2f}%")
             with col_metrics2:
                 if missing_percent > 0:
-                    st.info("**Tip:** For complex datasets with correlated variables, **MICE** or **MissForest** often yield better results than simple Mean/Median imputation.")
+                    st.info("**Tip:** With correlated variables, chained-equation or tree-based imputation usually reproduces the data structure better than mean/median imputation.")
             
             if missing_percent > 0:
                 with st.expander("View Missing Values Details"):
@@ -2971,12 +2977,23 @@ def app():
                 numerical_imputation_method = st.selectbox(
                     "Numerical Imputation Method",
                     ["Mean", "Median", "KNN", "MICE", "MissForest"],
-                    help="MICE (Multivariate Imputation by Chained Equations) models each feature with missing values as a function of other features."
+                    format_func=lambda m: {
+                        "KNN": "K-nearest neighbours",
+                        "MICE": "Chained equations (IterativeImputer, single imputation)",
+                        "MissForest": "Tree-based iterative (missForest algorithm with LightGBM)",
+                    }.get(m, m),
+                    help="Chained equations: each variable with missing values is predicted from the others "
+                         "(scikit-learn IterativeImputer, one deterministic pass). This is single imputation, "
+                         "not multiple imputation: no pooled uncertainty.",
                 )
             with col2:
                 categorical_imputation_method = st.selectbox(
                     "Categorical Imputation Method",
-                    ["Most_Frequent", "MissForest"]
+                    ["Most_Frequent", "MissForest"],
+                    format_func=lambda m: {
+                        "Most_Frequent": "Most frequent value",
+                        "MissForest": "Tree-based iterative (missForest algorithm with LightGBM)",
+                    }.get(m, m),
                 )
             
             if categorical_imputation_method == numerical_imputation_method:

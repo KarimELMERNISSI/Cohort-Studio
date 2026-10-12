@@ -12,11 +12,115 @@ import statsmodels.stats.multitest as smt
 import streamlit as st
 from scipy import stats
 from scipy.stats import t as t_dist
-from statsmodels.stats.power import FTestAnovaPower, GofChisquarePower, TTestIndPower
+from statsmodels.stats.power import TTestIndPower
+
+from biostats.power import (
+    ARE_NORMAL,
+    ARE_WORST_CASE,
+    anova_power,
+    anova_sample_size,
+    chi2_independence_power,
+    chi2_independence_sample_size,
+    kruskal_power,
+    kruskal_sample_size,
+)
+from biostats.zscores import reference_zscores
 
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from utils.data_analyzer import DataAnalyzer
+
+
+def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
+    """Reference-group / event-level / design selectors; recomputes the 2x2 analysis with explicit orientation."""
+    from biostats.contingency import TwoByTwo, analyze_twobytwo
+
+    levels_group = sorted(df[group_col].dropna().unique().tolist(), key=str)
+    levels_out = sorted(df[outcome_col].dropna().unique().tolist(), key=str)
+    if len(levels_group) != 2 or len(levels_out) != 2:
+        return default_epi
+    c1, c2, c3 = st.columns(3)
+    default_ref = default_epi.get("reference_level")
+    ref_index = next((i for i, lvl in enumerate(levels_group) if str(lvl) == str(default_ref)), 0)
+    reference = c1.selectbox(
+        "Reference group", levels_group, index=ref_index, key=f"ref_{outcome_col}", format_func=str,
+        help="Risks are compared against this group: RR, RD and NNT describe the other group relative to it.",
+    )
+    default_event = default_epi.get("event_level")
+    event_index = next((i for i, lvl in enumerate(levels_out) if str(lvl) == str(default_event)), len(levels_out) - 1)
+    event = c2.selectbox(
+        "Event level", levels_out, index=event_index, key=f"event_{outcome_col}", format_func=str,
+        help="Which value of the outcome counts as the event (for example Yes, 1 or Dead).",
+    )
+    design = c3.selectbox(
+        "Study design", ["unknown", "cohort", "rct", "cross-sectional", "case-control"], key=f"design_{outcome_col}",
+        help="Determines which measures are interpretable: only the odds ratio in case-control designs.",
+    )
+    try:
+        table = TwoByTwo.from_crosstab(df, group_col, outcome_col, exposure_ref=reference, event_level=event)
+        return analyze_twobytwo(table, design=design).legacy_dict()
+    except Exception as exc:
+        st.error(f"2x2 analysis failed: {exc}")
+        return None
+
+
+def _render_twobytwo_panel(epi):
+    """Labelled 2x2 table, measures of association (comparison vs reference) and guidance."""
+    col_tbl, col_metrics = st.columns([1, 1])
+    with col_tbl:
+        st.markdown("##### 2x2 Contingency Table")
+        tbl_df = pd.DataFrame(
+            [
+                [epi["a"], epi["b"], epi["a"] + epi["b"]],
+                [epi["c"], epi["d"], epi["c"] + epi["d"]],
+                [epi["a"] + epi["c"], epi["b"] + epi["d"], epi["n_total"]],
+            ],
+            index=[f"{epi['exposure_level']} (comparison)", f"{epi['reference_level']} (reference)", "Total"],
+            columns=[f"{epi['event_level']} (event)", f"{epi['nonevent_level']}", "Total"],
+        )
+        st.table(tbl_df)
+        st.caption(
+            f"Risk of '{epi['event_level']}': {epi['risk_exposed'] * 100:.1f}% in {epi['exposure_level']} vs "
+            f"{epi['risk_reference'] * 100:.1f}% in {epi['reference_level']}."
+        )
+        if epi.get("haldane_applied"):
+            st.caption("Haldane-Anscombe continuity correction (+0.5) applied to OR and RR because of a zero cell.")
+
+    with col_metrics:
+        st.markdown("##### Risk & Association Estimates (comparison vs reference)")
+        c_or, c_rr = st.columns(2)
+        with c_or:
+            ci = epi["odds_ratio_ci"]
+            st.metric("Odds Ratio (OR)", f"{epi['odds_ratio']:.2f}")
+            st.caption(f"95% CI {ci['lower']:.2f} to {ci['upper']:.2f} ({ci.get('method', '')})")
+        with c_rr:
+            ci = epi["relative_risk_ci"]
+            st.metric("Risk Ratio (RR)", f"{epi['relative_risk']:.2f}")
+            st.caption(f"95% CI {ci['lower']:.2f} to {ci['upper']:.2f} ({ci.get('method', '')})")
+
+        c_rd, c_nnt = st.columns(2)
+        with c_rd:
+            ci = epi["risk_difference_ci"]
+            st.metric("Risk Difference (RD)", f"{epi['risk_difference'] * 100:.1f}%")
+            st.caption(f"95% CI {ci['lower'] * 100:.1f}% to {ci['upper'] * 100:.1f}% ({ci.get('method', '')})")
+        with c_nnt:
+            nnt_val = epi.get("nnt")
+            nnt_ci = epi.get("nnt_ci")
+            st.metric(epi.get("nnt_label") or "NNT / NNH", f"{nnt_val:.1f}" if nnt_val is not None else "N/A")
+            if nnt_ci:
+                st.caption(f"95% CI {nnt_ci['lower']:.1f} to {nnt_ci['upper']:.1f}")
+            elif nnt_val is not None:
+                st.caption("95% CI not bounded (the risk-difference interval includes 0)")
+        st.caption(
+            f"Primary test: {epi['primary_test']}, p = {epi['primary_pvalue']:.4g} "
+            f"(Pearson chi-square p = {epi['chi2_pvalue']:.4g}; Fisher exact p = {epi['fisher_exact_pvalue']:.4g})."
+        )
+
+    if epi.get("guidance"):
+        st.markdown("##### Clinical Epidemiological Guidance")
+        for note in epi["guidance"]:
+            st.info(note)
+
 
 
 def to_excel(df):
@@ -447,54 +551,12 @@ def run_univariate_analysis(df, analyzer):
             else:
                 st.write("No significant pairwise differences found after correction.")
 
-        # Epidemiological 2x2 Risk & Association Panel
+        # Epidemiological 2x2 Risk & Association Panel (explicit orientation, audit S1)
         if is_categorical and "epi_2x2" in detail_res:
-            epi = detail_res["epi_2x2"]
             st.subheader("Epidemiological Risk & Association Analysis (2x2)")
-            
-            col_tbl, col_metrics = st.columns([1, 1])
-            with col_tbl:
-                st.markdown("##### 2x2 Contingency Table")
-                tbl_df = pd.DataFrame(
-                    [
-                        [epi["a"], epi["b"], epi["a"] + epi["b"]],
-                        [epi["c"], epi["d"], epi["c"] + epi["d"]],
-                        [epi["a"] + epi["c"], epi["b"] + epi["d"], epi["n_total"]],
-                    ],
-                    index=["Exposed / Group 1", "Unexposed / Group 2", "Total"],
-                    columns=["Event +", "Event -", "Total"],
-                )
-                st.table(tbl_df)
-                if epi.get("haldane_applied"):
-                    st.caption("Note: Haldane-Anscombe continuity correction (+0.5) applied due to zero cell count.")
-
-            with col_metrics:
-                st.markdown("##### Risk & Association Estimates")
-                c_or, c_rr = st.columns(2)
-                with c_or:
-                    or_ci = epi["odds_ratio_ci"]
-                    st.metric("Odds Ratio (OR)", f"{epi['odds_ratio']:.2f}")
-                    st.caption(f"95% CI: **[{or_ci['lower']:.2f}, {or_ci['upper']:.2f}]**")
-                with c_rr:
-                    rr_ci = epi["relative_risk_ci"]
-                    st.metric("Risk Ratio (RR)", f"{epi['relative_risk']:.2f}")
-                    st.caption(f"95% CI: **[{rr_ci['lower']:.2f}, {rr_ci['upper']:.2f}]**")
-
-                c_rd, c_nnt = st.columns(2)
-                with c_rd:
-                    rd_ci = epi["risk_difference_ci"]
-                    st.metric("Risk Difference (RD)", f"{epi['risk_difference']*100:.1f}%")
-                    st.caption(f"95% CI: **[{rd_ci['lower']*100:.1f}%, {rd_ci['upper']*100:.1f}%]**")
-                with c_nnt:
-                    nnt_val = epi.get("nnt")
-                    st.metric("NNT / NNH", f"{nnt_val:.1f}" if nnt_val is not None else "N/A")
-                    st.caption("Number Needed to Treat / Harm")
-
-            # Methodological & Clinical Guidance
-            if epi.get("guidance"):
-                st.markdown("##### Clinical Epidemiological Guidance")
-                for note in epi["guidance"]:
-                    st.info(note)
+            epi = _render_twobytwo_controls(df_analysis_filtered, group_col, selected_detail, detail_res["epi_2x2"])
+            if epi is not None:
+                _render_twobytwo_panel(epi)
 
         # Visualizations
         visualize_result(df_analysis_filtered, group_col, selected_detail, analyzer)
@@ -1076,23 +1138,31 @@ def run_zscore_analysis(df, analyzer):
                     help="The group to use as reference (mean=0, SD=1 for this group)"
                 )
                 
-        if ref_group_col and ref_group_val:
-            ref_n = len(df[df[ref_group_col] == ref_group_val])
+        if ref_group_col is not None and ref_group_val is not None:
+            ref_n = int((df[ref_group_col] == ref_group_val).sum())
             st.caption(f"Reference group: **{ref_group_val}** (n = {ref_n})")
             
     elif ref_method == "Whole Cohort (Standardization)":
         st.info("Using the entire cohort mean and SD as reference. All Z-scores will have mean ≈ 0 and SD ≈ 1.")
         
     elif ref_method == "Manual Reference Values":
-
-        st.info("Enter published or population-based reference values below.")
+        st.info("Enter published or population-based reference values (mean and SD) for each selected variable.")
+        for var in target_vars:
+            c_mu, c_sd = st.columns(2)
+            series = pd.to_numeric(df[var], errors="coerce")
+            default_mu = float(series.mean()) if pd.notna(series.mean()) else 0.0
+            default_sd = float(series.std()) if pd.notna(series.std()) and series.std() > 0 else 1.0
+            manual_refs[var] = (
+                c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", key=f"mu_{var}"),
+                c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", key=f"sigma_{var}"),
+            )
 
     if not target_vars:
         st.warning("Please select at least one variable to standardize.")
         return
     
     # Create a configuration key to detect changes
-    config_key = f"{','.join(sorted(target_vars))}_{ref_method}_{ref_group_col}_{ref_group_val}"
+    config_key = f"{','.join(sorted(target_vars))}_{ref_method}_{ref_group_col}_{ref_group_val}_{sorted(manual_refs.items())}"
     
     # Check if we need to recalculate (config changed or button pressed)
     need_recalc = False
@@ -1119,30 +1189,24 @@ def run_zscore_analysis(df, analyzer):
     
     # Calculate Z-Scores (only if needed)
     if need_recalc or not has_cached_results:
-        z_df = df.copy()
-        z_cols = []
-        ref_stats = {}
-
-        for var in target_vars:
-            col_name = f"{var}_Z"
-            z_cols.append(col_name)
-            
-            if ref_method == "Whole Cohort (Standardization)":
-                mu = df[var].mean()
-                sigma = df[var].std()
-            elif ref_method == "Internal Control Group":
-                if ref_group_col and ref_group_val:
-                    control_data = df[df[ref_group_col] == ref_group_val][var]
-                    mu = control_data.mean()
-                    sigma = control_data.std()
-                else:
-                    mu, sigma = 0, 1
-            else:  # Manual - use session state values
-                mu = st.session_state.get(f"mu_{var}", 0.0)
-                sigma = st.session_state.get(f"sigma_{var}", 1.0)
-            
-            ref_stats[var] = {"mean": round(mu, 3), "std": round(sigma, 3)}
-            z_df[col_name] = (df[var] - mu) / sigma if sigma > 0 else 0
+        method_key = {
+            "Whole Cohort (Standardization)": "cohort",
+            "Internal Control Group": "control",
+            "Manual Reference Values": "manual",
+        }[ref_method]
+        try:
+            z_df, ref_objects = reference_zscores(
+                df, list(target_vars), method_key,
+                ref_col=ref_group_col, ref_value=ref_group_val, manual=manual_refs,
+            )
+        except ValueError as exc:
+            st.error(f"Z-scores could not be computed: {exc}")
+            return
+        z_cols = [f"{var}_Z" for var in target_vars]
+        ref_stats = {
+            var: {"mean": round(r.mean, 3), "std": round(r.std, 3), "n": r.n, "source": r.source}
+            for var, r in ref_objects.items()
+        }
         
         # Cache results in session state
         st.session_state['zscore_results'] = {
@@ -2331,20 +2395,26 @@ def run_power_analysis(df, analyzer):
                 effect_size = effect_size_input
         
         k_groups = st.number_input("Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_anova")
-        analysis = FTestAnovaPower()
-        
+
         if calc_mode == "Calculate Required Sample Size":
             power = st.slider("Desired Power", 0.5, 0.99, 0.80)
             if st.button("Calculate Sample Size"):
-                nobs = analysis.solve_power(effect_size=effect_size, alpha=alpha, power=power, k_groups=k_groups)
-                st.success(f"Required Sample Size (per group): **{np.ceil(nobs):.0f}**")
-                st.info(f"Total Sample Size: **{np.ceil(nobs) * k_groups:.0f}**")
+                res = anova_sample_size(effect_size, int(k_groups), alpha=alpha, power=power)
+                st.success(
+                    f"Required sample size: **{res.n_per_group} per group** "
+                    f"({res.n_per_group * int(k_groups)} in total; exact total {res.n_total:.1f})"
+                )
+                st.caption(res.method)
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
             nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_anova")
             if st.button("Calculate Power"):
-                power_val = analysis.solve_power(effect_size=effect_size, nobs=nobs_per_group, alpha=alpha, k_groups=k_groups)
-                st.success(f"Achieved Power: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                res = anova_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha)
+                st.success(
+                    f"Achieved Power: **{res.power:.4f}** ({res.power * 100:.1f}%) for {int(nobs_per_group)} per group "
+                    f"({int(res.n_total)} in total)"
+                )
+                st.caption(res.method)
 
     elif test_type == "Kruskal-Wallis (Non-parametric)":
         st.subheader("Kruskal-Wallis Parameters")
@@ -2357,24 +2427,33 @@ def run_power_analysis(df, analyzer):
                 effect_size = effect_size_input
         
         k_groups = st.number_input("Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_kw")
-        dist_assumption = st.radio("Underlying Distribution Assumption", ["Normal Distribution (Optimistic)", "Unknown / Heavy-Tailed (Conservative)"])
-        adjustment_factor = 1.0 / 0.955 if dist_assumption == "Normal Distribution (Optimistic)" else 1.0 / 0.864
-        analysis = FTestAnovaPower()
-        
+        dist_assumption = st.radio(
+            "Underlying Distribution Assumption",
+            ["Normal Distribution (ARE 0.955)", "Unknown / Heavy-Tailed (worst case, ARE 0.864)"],
+            help="The Kruskal-Wallis requirement is the ANOVA requirement divided by the asymptotic relative "
+                 "efficiency; 0.864 is the lower bound over all continuous distributions.",
+        )
+        are = ARE_NORMAL if dist_assumption.startswith("Normal") else ARE_WORST_CASE
+
         if calc_mode == "Calculate Required Sample Size":
             power = st.slider("Desired Power", 0.5, 0.99, 0.80)
             if st.button("Calculate Sample Size"):
-                nobs_parametric = analysis.solve_power(effect_size=effect_size, alpha=alpha, power=power, k_groups=k_groups)
-                nobs = nobs_parametric * adjustment_factor
-                st.success(f"Required Sample Size (per group): **{np.ceil(nobs):.0f}** (Adjusted)")
-                st.info(f"Total Sample Size: **{np.ceil(nobs) * k_groups:.0f}**")
+                res = kruskal_sample_size(effect_size, int(k_groups), alpha=alpha, power=power, are=are)
+                st.success(
+                    f"Required sample size: **{res.n_per_group} per group** "
+                    f"({res.n_per_group * int(k_groups)} in total; exact total {res.n_total:.1f})"
+                )
+                st.caption(f"{res.method}. {res.note}")
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
             nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_kw")
             if st.button("Calculate Power"):
-                effective_nobs = nobs_per_group / adjustment_factor
-                power_val = analysis.solve_power(effect_size=effect_size, nobs=effective_nobs, alpha=alpha, k_groups=k_groups)
-                st.success(f"Achieved Power (Estimated): **{power_val:.4f}** ({power_val*100:.1f}%)")
+                res = kruskal_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha, are=are)
+                st.success(
+                    f"Achieved Power (approximate): **{res.power:.4f}** ({res.power * 100:.1f}%) "
+                    f"for {int(nobs_per_group)} per group"
+                )
+                st.caption(res.method)
 
     elif test_type == "Chi-Square":
         st.subheader("Chi-Square Parameters")
@@ -2394,19 +2473,24 @@ def run_power_analysis(df, analyzer):
             else: st.session_state['chi2_w'] = effect_size_input
             effect_size = st.session_state['chi2_w']
             
-        n_cat = st.number_input("Number of Categories (or Cells - 1)", value=int(default_n_cat), step=1, min_value=2, key="n_cat_chi2")
-        analysis = GofChisquarePower()
-        
+        df_chi2 = st.number_input(
+            "Degrees of freedom = (rows - 1) x (columns - 1)",
+            value=max(1, int(default_n_cat) - 1), step=1, min_value=1, key="df_chi2",
+            help="For a 2x2 table df = 1; for k groups and a binary outcome df = k - 1.",
+        )
+
         if calc_mode == "Calculate Required Sample Size":
             power = st.slider("Desired Power", 0.5, 0.99, 0.80)
             if st.button("Calculate Sample Size"):
-                nobs = analysis.solve_power(effect_size=effect_size, alpha=alpha, power=power, n_bins=n_cat)
-                st.success(f"Required Total Sample Size: **{np.ceil(nobs):.0f}**")
+                res = chi2_independence_sample_size(effect_size, int(df_chi2), alpha=alpha, power=power)
+                st.success(f"Required Total Sample Size: **{np.ceil(res.n_total):.0f}** (df = {int(df_chi2)})")
+                st.caption(res.method)
         else:
             nobs = st.number_input("Total Sample Size", value=int(default_n_total), step=1, key="n_total_chi2")
             if st.button("Calculate Power"):
-                power_val = analysis.solve_power(effect_size=effect_size, nobs=nobs, alpha=alpha, n_bins=n_cat)
-                st.success(f"Achieved Power: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                res = chi2_independence_power(effect_size, nobs, int(df_chi2), alpha=alpha)
+                st.success(f"Achieved Power: **{res.power:.4f}** ({res.power * 100:.1f}%) with df = {int(df_chi2)}")
+                st.caption(res.method)
 
     with st.expander("Methodology & References"):
         st.markdown("""

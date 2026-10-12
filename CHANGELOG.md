@@ -6,6 +6,14 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Statistics: wrong-number fixes (audit phase P2; findings S1-S5)
+
+- **S1 2x2 orientation** — Binary outcomes coded No/Yes, 0/1 or False/True had their risk measures inverted (the sorted crosstab put the non-event in the "event" column). New `biostats.contingency` engine with an explicit table orientation (`TwoByTwo.from_crosstab` with reference group and event level, auto-detected or chosen in the UI), labelled tables, risk per group, Newcombe risk-difference interval, NNT interval (Altman 1998), primary test by expected counts, design-aware guidance. Example: Placebo 40/100 vs Treatment 15/100 events now reports RR 2.67 (95% CI 1.58 to 4.51) instead of RR 0.71.
+- **S2 ANOVA / Kruskal-Wallis power** — statsmodels' `nobs` is the total sample size; the page treated it as per group (required sizes overstated by k, achieved power understated). `biostats.power` states total and per-group sizes explicitly; the chi-square calculator takes degrees of freedom instead of "number of categories".
+- **S3 Missingness scan** — The global dependency scan now returns every performed test with family-adjusted p-values (`biostats.missing`); previously only p < 0.05 results were kept and then "corrected", so the correction controlled nothing. Wording is associational.
+- **S4 Imputation** — "MICE" relabelled as single imputation by chained equations (IterativeImputer) and "MissForest" as tree-based iterative imputation with LightGBM; a warning explains that imputation uncertainty is not propagated; estimators are seeded; missForest models are fitted on originally observed rows only.
+- **S5 Z-scores** — A control group coded 0/False no longer silently falls back to mean 0 / SD 1; the manual-reference mode has mean/SD inputs; computation moved to `biostats.zscores`.
+
 ### Graph rendering connector (audit phase P1; findings G1-G8)
 
 - **New `graph/` package** — Renderer-agnostic model (`GraphSpec`), a palette/legend single source of truth, pure builders for the correlation network, the clinical knowledge graph and the document graph, and a renderer contract (`translate()` / `render()`) with three backends: Plotly + NetworkX (offline default), yFiles (opt-in extra `graph-yfiles`) and Graphviz (static). See `documentation/developer/Graph_Rendering.md`.

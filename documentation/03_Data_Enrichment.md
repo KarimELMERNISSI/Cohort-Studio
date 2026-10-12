@@ -47,8 +47,8 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 | **Mean / Median** | Statistical | Replace missing values with the column mean or median. |
 | **Most Frequent** | Statistical | Replace with the mode (categorical columns). |
 | **KNN** | ML | Impute using K-nearest neighbours. |
-| **MICE** | ML | Multiple Imputation by Chained Equations — iterative, multivariate. |
-| **MissForest** | ML | Random forest-based imputation for mixed data types. |
+| **Chained equations** (shown as "MICE") | ML | Single imputation by chained equations (scikit-learn IterativeImputer, one deterministic pass). It is **not** multiple imputation: the uncertainty of the imputation is not propagated to later tests. |
+| **MissForest** | ML | Iterative tree-based imputation (missForest algorithm with LightGBM learners) for mixed data types; models are fitted on originally observed rows only. |
 
 #### Global Imputation Options
 
