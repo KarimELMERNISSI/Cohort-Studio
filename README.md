@@ -31,19 +31,19 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ## Capability Comparison Matrix
 
-| Capability | Ad-Hoc Scripts / Notebooks | Commercial EDC (REDCap/Medidata) | Cohort Monitoring Package |
-| :--- | :--- | :--- | :--- |
-| **Storage Architecture** | Flat CSVs / Memory Pandas | Row-based SQL / Cloud RDBMS | **Columnar DuckDB + Parquet Snapshots** |
-| **Data Versioning** | Manual copies or Git LFS | Audit log only (no snapshotting) | **Automated Zero-Copy Versioning (`_v1`, `_v2`)** |
-| **Biostatistical Validation** | Manual script assembly | Limited / Third-party add-ons | **Integrated Test Guidance & Effect Sizes** |
-| **Missingness Testing** | Custom R / Python code | None | **Automated Little's MCAR & Pairwise MAR** |
-| **Outlier Detection** | Hardcoded IQR / standard dev | Manual range validation | **Univariate + ML (Isolation Forest, LOF, DBSCAN)** |
-| **Clinical Anomaly Rules** | Custom if-else blocks | Form validation rules | **Declarative Expression Masks & Highlight Tables** |
-| **Document Intelligence** | Disconnected LLM chats | None | **Model-Agnostic RAG (Local Ollama, Gemini, OpenAI)** |
-| **Knowledge Graph Taxonomy**| Manual drawing | Controlled terminologies | **Interactive knowledge graphs (offline Plotly engine by default, yFiles optional)** |
-| **Audit Trail & Pipeline Replay** | Fragile notebook state | Fixed PDF audit trail | **Full Pipeline Re-Execution (Headless & UI) + Word Dossiers** |
-| **Deployment Model** | Local interpreter | Cloud SaaS subscription | **Self-Hosted / Docker / Cloud; air-gapped with the default graph engine and a local LLM** |
-| **License** | N/A | Proprietary / Commercial fees | **Open-Source (Apache 2.0)** |
+| Capability                        | Ad-Hoc Scripts / Notebooks   | Commercial EDC (REDCap/Medidata) | Cohort Monitoring Package                                                                  |
+| :-------------------------------- | :--------------------------- | :------------------------------- | :----------------------------------------------------------------------------------------- |
+| **Storage Architecture**          | Flat CSVs / Memory Pandas    | Row-based SQL / Cloud RDBMS      | **Columnar DuckDB + Parquet Snapshots**                                                    |
+| **Data Versioning**               | Manual copies or Git LFS     | Audit log only (no snapshotting) | **Automated Zero-Copy Versioning (`_v1`, `_v2`)**                                          |
+| **Biostatistical Validation**     | Manual script assembly       | Limited / Third-party add-ons    | **Integrated Test Guidance & Effect Sizes**                                                |
+| **Missingness Testing**           | Custom R / Python code       | None                             | **Automated Little's MCAR & Pairwise MAR**                                                 |
+| **Outlier Detection**             | Hardcoded IQR / standard dev | Manual range validation          | **Univariate + ML (Isolation Forest, LOF, DBSCAN)**                                        |
+| **Clinical Anomaly Rules**        | Custom if-else blocks        | Form validation rules            | **Declarative Expression Masks & Highlight Tables**                                        |
+| **Document Intelligence**         | Disconnected LLM chats       | None                             | **Model-Agnostic RAG (Local Ollama, Gemini, OpenAI)**                                      |
+| **Knowledge Graph Taxonomy**      | Manual drawing               | Controlled terminologies         | **Interactive knowledge graphs (offline Plotly engine by default, yFiles optional)**       |
+| **Audit Trail & Pipeline Replay** | Fragile notebook state       | Fixed PDF audit trail            | **Full Pipeline Re-Execution (Headless & UI) + Word Dossiers**                             |
+| **Deployment Model**              | Local interpreter            | Cloud SaaS subscription          | **Self-Hosted / Docker / Cloud; air-gapped with the default graph engine and a local LLM** |
+| **License**                       | N/A                          | Proprietary / Commercial fees    | **Open-Source (Apache 2.0)**                                                               |
 
 ---
 
@@ -86,12 +86,14 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 ## Module Breakdown
 
 ### 1. Data Ingestion & DuckDB Persistence
+
 - Automatic encoding detection (UTF-8, Latin-1, CP1252) and dynamic delimiter parsing (comma, semicolon, tab, pipe).
 - Columnar Parquet persistence with atomic version incrementation (`dataset_v1`, `dataset_v2`).
 - Query acceleration: instantaneous analytical aggregations powered by embedded DuckDB.
 - Multi-user isolation: every account has its own workspace under `<DATA_ROOT>/users/<username>/` (datasets, traces, uploads, taxonomies, knowledge graphs, document library, vector store); path inputs are confined to that workspace. Accounts are managed by a role-based IAM module with bcrypt hashing and login lockout.
 
 ### 2. Clinical Biostatistics & Epidemiological Testing
+
 - **Normality & Distribution Profiling**: Shapiro-Wilk, D'Agostino-Pearson omnibus tests with automated test recommendation logic.
 - **Two-Group & Multi-Group Inference**: Welch's t-test by default (Student's t optional), Mann-Whitney U with the Hodges-Lehmann shift, Welch ANOVA (default) and one-way ANOVA, Kruskal-Wallis; pairwise comparisons report every pair with raw and adjusted p-values (Games-Howell, Tukey HSD, Dunn with Holm). Effect sizes with confidence intervals: Hedges' g (noncentral t), rank-biserial r, eta and omega squared, bias-corrected Cramer's V. Assumption checks are diagnostics, never gates.
 - **2x2 Contingency & Cohort Epidemiology**: Relative Risk (RR), Odds Ratio (OR), Risk Difference (RD) with Haldane-Anscombe small-sample / zero-cell corrections, Wald & logit confidence intervals, and rare disease guidance ($OR \approx RR$).
@@ -105,6 +107,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Multiple Testing Corrections**: False Discovery Rate (Benjamini-Hochberg) and Family-Wise Error Rate (Bonferroni).
 
 ### 3. Data Quality & Anomaly Profiling
+
 - **Completeness Index**: Total non-missing data ratio with variable-level missingness ranking.
 - **Uniqueness Index**: Detection of redundant cohort entries and duplicate patient records.
 - **Statistical Validity**: Univariate (IQR, Z-Score, Quantiles) and multivariate (Isolation Forest, Local Outlier Factor, DBSCAN) outlier scoring.
@@ -112,30 +115,35 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Clinical Rule Enforcement**: Declarative execution of clinical exclusion and anomaly boundaries (`mask_families` in `config/config.json`).
 
 ### 4. Advanced Data Enrichment
+
 - **Imputation Suites**: Targeted formula-driven imputation and global single imputation (mean/median, KNN, chained equations via IterativeImputer, tree-based missForest with LightGBM). Imputation uncertainty is not propagated; multiple imputation with pooling is planned.
 - **Dimensionality Reduction**: Principal Component Analysis (PCA), Factor Analysis of Mixed Data (FAMD), t-SNE, and UMAP.
 - **Feature Engineering**: One-Hot, Ordinal, Label encoding, mathematical transformations (log, square root, Box-Cox), and robust/standard scaling.
 - **Population Clustering**: K-Means, DBSCAN, and Gaussian Mixture Models (GMM) with automated hyperparameter sweeps.
 
 ### 5. Model-Agnostic Medical RAG
+
 - **Provider-Agnostic Interface**: Direct connectors for Google Gemini 2.5, local Ollama (air-gapped clinical deployments), OpenAI (GPT-4o), and Mistral.
 - **Medical Semantic Renaming**: Harmonizes raw electronic health record columns with standard terminologies (UMLS, LOINC, SNOMED CT).
 - **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation via ChromaDB.
 - **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
 
 ### 6. Pipeline Reproducibility & Audit Trail
+
 - **Deterministic Trace Engine**: Logs timestamped operational trees with function signatures, serialized parameters, and output snapshot paths.
 - **Complete Pipeline Reproduction**: Re-executes entire multi-step transformation pipelines (enrichment joins, MICE/MissForest imputations, feature scaling, mathematical transforms) headless (`execute_trace_pipeline`) or via UI (`reproduce_trace`) to guarantee exact reproducible results across environments.
 - **Replay Verification**: Full (data re-execution) and Fast (parameter audit) replay capabilities with cross-platform path resolution.
 - **Word Dossier Generation**: Export publication-ready Microsoft Word (`.docx`) audit dossiers summarizing cohort transformations.
 
 ### 7. Interactive Clinical Visualisation & 1-Click Fast Figure Export
+
 - **Multi-Modal Clinical Plots**: Distributions (KDE, box, violin, eCDF), cohort stratification, correlation heatmaps, Bland-Altman agreement plots, and ROC curves with optimal Youden's $J$ cutoffs.
 - **Integrated Hypothesis Test Overlays**: Automated routing to parametric (Student's t / ANOVA) or non-parametric (Mann-Whitney U / Kruskal-Wallis) tests with Bonferroni / Benjamini-Hochberg FDR adjustments rendered directly on plots with publication brackets.
 - **Publication Graphics Export**: 1-click export of figures in vector SVG, 300+ DPI raster PNG, standalone interactive HTML (`.html`), and full serialized Plotly JSON (`.json`) schemas.
 - **Underlying Analytical Data Extraction**: One-click download of the exact plotted subset as raw tabular CSV (`.csv`) or Microsoft Excel (`.xlsx`) datasets.
 
 ### 8. Pluggable Modular IAM Architecture
+
 - **Protocol-First Contract**: `AuthService` protocol defining authentication, user creation, session verification, and role-based permissions (`Role.ADMIN`, `Role.RESEARCHER`, `Role.AUDITOR`).
 - **Default In-Process Adapter**: `DefaultAuthService` powered by embedded DuckDB and bcrypt hashing for zero-dependency, local-first environments.
 - **Extensible Identity Adapters**: Drop-in architectural support for external enterprise IAM (Better Auth HTTP sidecar, Keycloak OIDC, LDAP) without leaking dependencies or degrading core analytical throughput.
@@ -250,31 +258,31 @@ uv run pytest --cov=. --cov-report=term-missing
 Line coverage 55 % (CI floor 50 %); ruff and pyright (scoped) clean
 ```
 
-| Test Module | Coverage Scope | Status |
-| :--- | :--- | :--- |
-| [`tests/biostats_layer/`](tests/biostats_layer/) | 2x2 orientation and measures, power semantics, missingness scan, Z-scores, Welch-first inference, post-hoc tables, effect sizes with CIs, normality, EM-based Little's test, diagnostic accuracy, Bland-Altman, mixed-type associations | **PASSED** |
-| [`tests/core_layer/`](tests/core_layer/) | Whitelisted expression evaluator (allow/deny corpora), naming patterns, per-user workspaces, path containment, login lockout | **PASSED** |
-| [`tests/ingest_layer/`](tests/ingest_layer/) | Encoding/delimiter/decimal detection, parse reports, Excel sheet merge, sample cohort properties | **PASSED** |
-| [`tests/graph_layer/`](tests/graph_layer/) | Graph model, builders, palette, Plotly and yFiles translation, renderer policy and contract | **PASSED** |
-| [`tests/ui_layer/`](tests/ui_layer/) | Theme tokens vs config, navigation registry, `AppState.set_dataset` invalidation and trace, test chooser, glossary, help-text coverage, AppTest smoke over every page | **PASSED** |
-| [`tests/test_layering.py`](tests/test_layering.py), [`tests/test_quality_gates.py`](tests/test_quality_gates.py) | Dependency direction (no Streamlit in domain modules), no `eval`, no sleeps, no hard-coded paths, raw-HTML and `print` ratchets | **PASSED** |
-| [`tests/test_authz.py`](tests/test_authz.py) | Role checks, username and password policy | **PASSED** |
-| [`tests/test_epidemiology_stats.py`](tests/test_epidemiology_stats.py) | 2x2 Contingency, Effect Sizes, ANCOVA, Diagnostic Accuracy | **PASSED** |
-| [`tests/test_epidemiology_integration.py`](tests/test_epidemiology_integration.py) | Two-group, ANOVA, Little's MCAR, Multiple corrections | **PASSED** |
-| [`tests/test_date_parser_and_stats.py`](tests/test_date_parser_and_stats.py) | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation, Date Ingestion | **PASSED** |
-| [`tests/test_corr_matrix.py`](tests/test_corr_matrix.py) | Mixed-type Correlation Matrix (Pearson, Spearman, Cramér's V) | **PASSED** |
-| [`tests/test_export_utils.py`](tests/test_export_utils.py) | Vector SVG, 300+ DPI PNG, Standalone HTML, Plotly JSON, CSV/Excel export | **PASSED** |
-| [`tests/test_db_manager.py`](tests/test_db_manager.py) | bcrypt Auth, Activation, DuckDB Parquet persistence | **PASSED** |
-| [`tests/test_iam_framework.py`](tests/test_iam_framework.py) | Pluggable IAM contract, DefaultAuthService, BetterAuth sidecar evaluation | **PASSED** |
-| [`tests/test_transformation_manager.py`](tests/test_transformation_manager.py) | Session lineage, complex parameter serialization, traces | **PASSED** |
-| [`tests/test_reproduction_manager.py`](tests/test_reproduction_manager.py) | Headless pipeline re-execution (`execute_trace_pipeline`), snapshot replay | **PASSED** |
-| [`tests/test_data_quality_auditor.py`](tests/test_data_quality_auditor.py) | Completeness, Uniqueness, Outlier validity, MCAR heuristics | **PASSED** |
-| [`tests/test_data_analyzer.py`](tests/test_data_analyzer.py) | `DatasetProfile` immutability, type categorization, charts | **PASSED** |
-| [`tests/test_rag_connectors.py`](tests/test_rag_connectors.py) | Gemini, Ollama, OpenAI, Mistral factory & failover | **PASSED** |
-| [`tests/test_rag_evaluator.py`](tests/test_rag_evaluator.py) | RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision | **PASSED** |
-| [`tests/test_rag_pipeline_steps.py`](tests/test_rag_pipeline_steps.py) | RAG retrieval, prompt augmentation, grounding validation | **PASSED** |
-| [`tests/test_clustering_utils.py`](tests/test_clustering_utils.py) | K-Means, DBSCAN, GMM, Silhouette score, cluster stratification | **PASSED** |
-| [`tests/test_trace_documenter.py`](tests/test_trace_documenter.py) | Microsoft Word `.docx` transformation report generation | **PASSED** |
+| Test Module                                                                                                      | Coverage Scope                                                                                                                                                                                                                          | Status     |
+| :--------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------- |
+| [`tests/biostats_layer/`](tests/biostats_layer/)                                                                 | 2x2 orientation and measures, power semantics, missingness scan, Z-scores, Welch-first inference, post-hoc tables, effect sizes with CIs, normality, EM-based Little's test, diagnostic accuracy, Bland-Altman, mixed-type associations | **PASSED** |
+| [`tests/core_layer/`](tests/core_layer/)                                                                         | Whitelisted expression evaluator (allow/deny corpora), naming patterns, per-user workspaces, path containment, login lockout                                                                                                            | **PASSED** |
+| [`tests/ingest_layer/`](tests/ingest_layer/)                                                                     | Encoding/delimiter/decimal detection, parse reports, Excel sheet merge, sample cohort properties                                                                                                                                        | **PASSED** |
+| [`tests/graph_layer/`](tests/graph_layer/)                                                                       | Graph model, builders, palette, Plotly and yFiles translation, renderer policy and contract                                                                                                                                             | **PASSED** |
+| [`tests/ui_layer/`](tests/ui_layer/)                                                                             | Theme tokens vs config, navigation registry, `AppState.set_dataset` invalidation and trace, test chooser, glossary, help-text coverage, AppTest smoke over every page                                                                   | **PASSED** |
+| [`tests/test_layering.py`](tests/test_layering.py), [`tests/test_quality_gates.py`](tests/test_quality_gates.py) | Dependency direction (no Streamlit in domain modules), no `eval`, no sleeps, no hard-coded paths, raw-HTML and `print` ratchets                                                                                                         | **PASSED** |
+| [`tests/test_authz.py`](tests/test_authz.py)                                                                     | Role checks, username and password policy                                                                                                                                                                                               | **PASSED** |
+| [`tests/test_epidemiology_stats.py`](tests/test_epidemiology_stats.py)                                           | 2x2 Contingency, Effect Sizes, ANCOVA, Diagnostic Accuracy                                                                                                                                                                              | **PASSED** |
+| [`tests/test_epidemiology_integration.py`](tests/test_epidemiology_integration.py)                               | Two-group, ANOVA, Little's MCAR, Multiple corrections                                                                                                                                                                                   | **PASSED** |
+| [`tests/test_date_parser_and_stats.py`](tests/test_date_parser_and_stats.py)                                     | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation, Date Ingestion                                                                                                                                                  | **PASSED** |
+| [`tests/test_corr_matrix.py`](tests/test_corr_matrix.py)                                                         | Mixed-type Correlation Matrix (Pearson, Spearman, Cramér's V)                                                                                                                                                                           | **PASSED** |
+| [`tests/test_export_utils.py`](tests/test_export_utils.py)                                                       | Vector SVG, 300+ DPI PNG, Standalone HTML, Plotly JSON, CSV/Excel export                                                                                                                                                                | **PASSED** |
+| [`tests/test_db_manager.py`](tests/test_db_manager.py)                                                           | bcrypt Auth, Activation, DuckDB Parquet persistence                                                                                                                                                                                     | **PASSED** |
+| [`tests/test_iam_framework.py`](tests/test_iam_framework.py)                                                     | Pluggable IAM contract, DefaultAuthService, BetterAuth sidecar evaluation                                                                                                                                                               | **PASSED** |
+| [`tests/test_transformation_manager.py`](tests/test_transformation_manager.py)                                   | Session lineage, complex parameter serialization, traces                                                                                                                                                                                | **PASSED** |
+| [`tests/test_reproduction_manager.py`](tests/test_reproduction_manager.py)                                       | Headless pipeline re-execution (`execute_trace_pipeline`), snapshot replay                                                                                                                                                              | **PASSED** |
+| [`tests/test_data_quality_auditor.py`](tests/test_data_quality_auditor.py)                                       | Completeness, Uniqueness, Outlier validity, MCAR heuristics                                                                                                                                                                             | **PASSED** |
+| [`tests/test_data_analyzer.py`](tests/test_data_analyzer.py)                                                     | `DatasetProfile` immutability, type categorization, charts                                                                                                                                                                              | **PASSED** |
+| [`tests/test_rag_connectors.py`](tests/test_rag_connectors.py)                                                   | Gemini, Ollama, OpenAI, Mistral factory & failover                                                                                                                                                                                      | **PASSED** |
+| [`tests/test_rag_evaluator.py`](tests/test_rag_evaluator.py)                                                     | RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision                                                                                                                                                              | **PASSED** |
+| [`tests/test_rag_pipeline_steps.py`](tests/test_rag_pipeline_steps.py)                                           | RAG retrieval, prompt augmentation, grounding validation                                                                                                                                                                                | **PASSED** |
+| [`tests/test_clustering_utils.py`](tests/test_clustering_utils.py)                                               | K-Means, DBSCAN, GMM, Silhouette score, cluster stratification                                                                                                                                                                          | **PASSED** |
+| [`tests/test_trace_documenter.py`](tests/test_trace_documenter.py)                                               | Microsoft Word `.docx` transformation report generation                                                                                                                                                                                 | **PASSED** |
 
 ---
 
@@ -308,7 +316,7 @@ If you use the Cohort Monitoring Package in academic or clinical research, pleas
 ```bibtex
 @software{cohort_monitoring_package_2026,
   author = {Karim El Mernissi},
-  title = {Cohort Monitoring Package: High-Performance Clinical Cohort Intelligence and Epidemiological Analytics},
+  title = {Cohort Monitoring Package: Intuitive Clinical Epidemiology & Cohort Data Exploration},
   year = {2026},
   publisher = {GitHub},
   journal = {GitHub repository},
