@@ -816,7 +816,7 @@ def app():
     tabs = st.tabs(["Dataset Statistics", "Columns Renaming", "Performance Benchmark"])
 
     with tabs[2]:
-        st.title("Performance Benchmark")
+        st.subheader("Performance benchmark", icon=":material/speed:", anchor=False)
         if df is not None:
             run_benchmark(df, analyzer)
         else:
@@ -847,7 +847,7 @@ def app():
             analyzer.refresh(st.session_state["working_df"])
         col_title, col_reset = st.columns([4, 1])
         with col_title:
-            st.title("Dataset Statistics")
+            st.subheader("Dataset statistics", icon=":material/table_chart:", anchor=False)
         with col_reset:
              def _reset_statistics_cache() -> None:
                 if 'db_manager' in st.session_state:

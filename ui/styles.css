@@ -1,0 +1,75 @@
+/*
+ * Cohort Monitoring Platform - scoped styles.
+ *
+ * Colours, fonts, radii and borders come from .streamlit/config.toml (light and dark themes).
+ * This sheet only adds what the theme cannot express: the page hero banner, the login card and
+ * tighter top spacing. Selectors target keyed containers (.st-key-*) and data-testid attributes,
+ * never generated class names, so a Streamlit upgrade degrades to the plain theme at worst.
+ */
+
+/* Tighter top spacing: just enough to clear the fixed top navigation bar (3.75rem) plus a small gap. */
+[data-testid="stMainBlockContainer"] {
+    padding-top: 5rem;
+    padding-bottom: 3rem;
+}
+
+/* ---------------------------------------------------------------- page hero banner */
+.st-key-cmp-hero {
+    padding: 1.35rem 1.75rem 1.25rem;
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 94% 12%, rgba(36, 228, 228, 0.32) 0, rgba(36, 228, 228, 0) 38%),
+        radial-gradient(circle at 72% 135%, rgba(84, 204, 156, 0.30) 0, rgba(84, 204, 156, 0) 46%),
+        linear-gradient(118deg, #0B2B36 0%, #0D4A57 52%, #0E7C86 100%);
+    box-shadow: 0 12px 32px rgba(11, 43, 54, 0.16);
+    margin-bottom: 0.75rem;
+}
+
+.st-key-cmp-hero h1,
+.st-key-cmp-hero p,
+.st-key-cmp-hero span,
+.st-key-cmp-hero label {
+    color: #FFFFFF !important;
+}
+
+.st-key-cmp-hero h1 {
+    padding: 0.1rem 0 0.2rem;
+    letter-spacing: -0.01em;
+}
+
+.st-key-cmp-hero [data-testid="stCaptionContainer"] p {
+    color: rgba(255, 255, 255, 0.84) !important;
+    font-size: 1rem;
+}
+
+.st-key-cmp-hero-eyebrow p {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.74) !important;
+}
+
+/* Hero actions (handbook link) as translucent pills */
+.st-key-cmp-hero [data-testid="stPageLink"] a {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    border-radius: 999px;
+    padding: 0.3rem 0.95rem;
+}
+
+.st-key-cmp-hero [data-testid="stPageLink"] a:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+/* ---------------------------------------------------------------- login card */
+.st-key-cmp-login {
+    box-shadow: 0 20px 48px rgba(11, 43, 54, 0.14);
+    border-radius: 18px;
+}
+
+.st-key-cmp-login .st-key-cmp-hero {
+    box-shadow: none;
+    text-align: center;
+}

@@ -1,43 +1,45 @@
-"""The application shell: sidebar with the dataset card, AI status, handbook link and user menu."""
+"""The application shell: brand logo, and a sidebar with the dataset card, AI status and user menu."""
 
 from __future__ import annotations
 
-import contextlib
-
 import streamlit as st
 
-from ui.auth import LOGO, logout
+from manage.iam.authz import is_admin_role
+from ui.auth import logout
 from ui.components import confirm, page_link
 from ui.state import AppState
 
 ORIGIN_LABELS = {
-    "upload": "imported file",
-    "saved": "saved version",
-    "sample": "sample cohort",
-    "path": "server file",
+    "upload": ("imported file", ":material/upload_file:"),
+    "saved": ("saved version", ":material/inventory_2:"),
+    "sample": ("sample cohort", ":material/science:"),
+    "path": ("server file", ":material/folder_open:"),
 }
 
 
-@st.dialog("Change dataset")
+@st.dialog("Change dataset", icon=":material/swap_horiz:")
 def _change_dialog(state: AppState) -> None:
     versions = state.saved_versions()
     if versions:
         chosen = st.selectbox("Saved versions in your workspace", versions, help="Newest first.")
-        if st.button("Load this version", type="primary", width="stretch"):
+        if st.button(
+            "Load this version", type="primary", width="stretch", icon=":material/download:"
+        ):
             ok, msg = state.load_saved_version(chosen)
             if ok:
                 st.rerun()
             st.error(msg)
     else:
         st.caption("No saved versions yet.")
-    st.divider()
-    page_link("import", "Import a new file", icon=":material/upload_file:")
-    if st.button("Load the sample cohort", width="stretch"):
-        state.load_sample_cohort()
-        st.rerun()
+    st.space("small")
+    with st.container(horizontal=True):
+        page_link("import", "Import a new file", icon=":material/upload_file:")
+        if st.button("Load the sample cohort", icon=":material/science:"):
+            state.load_sample_cohort()
+            st.rerun()
 
 
-@st.dialog("Save a version")
+@st.dialog("Save a version", icon=":material/save:")
 def _save_dialog(state: AppState) -> None:
     ref = state.dataset
     name = st.text_input(
@@ -48,7 +50,7 @@ def _save_dialog(state: AppState) -> None:
     st.caption(
         "The current working dataset (with renames, enrichments and filters applied) is saved as Parquet in your workspace."
     )
-    if st.button("Save", type="primary", width="stretch"):
+    if st.button("Save", type="primary", width="stretch", icon=":material/save:"):
         ok, msg, saved = state.save_version(name)
         if ok:
             st.success(f"Saved as {saved}")
@@ -57,29 +59,38 @@ def _save_dialog(state: AppState) -> None:
 
 
 def _dataset_card(state: AppState) -> None:
-    with st.container(border=True):
+    with st.container(border=True, key="cmp-dataset-card"):
+        st.caption("Current dataset")
         ref = state.dataset
         df = state.df
         if ref is None or df is None:
-            st.markdown("**No dataset loaded**")
-            st.caption("Import a file or reopen a saved version.")
-            page_link("import", "Import", icon=":material/upload_file:", width="stretch")
-            if st.button("Load the sample cohort", key="shell_load_sample", width="stretch"):
+            st.markdown("**:material/dataset: No dataset loaded**")
+            page_link("import", "Import a file", icon=":material/upload_file:", width="stretch")
+            if st.button(
+                "Load the sample cohort",
+                key="shell_load_sample",
+                width="stretch",
+                icon=":material/science:",
+            ):
                 state.load_sample_cohort()
                 st.rerun()
             return
-        title_col, badge_col = st.columns([3, 1], vertical_alignment="center")
-        title_col.markdown(f"**{ref.name}**")
-        if ref.version:
-            badge_col.badge(f"v{ref.version}", color="blue")
-        st.caption(
-            f"{len(df):,} rows x {df.shape[1]} columns - {ORIGIN_LABELS.get(ref.origin, ref.origin)}"
+        st.markdown(f"**:material/dataset: {ref.name}**")
+        origin_label, origin_icon = ORIGIN_LABELS.get(
+            ref.origin, (ref.origin, ":material/description:")
         )
-        col_change, col_save = st.columns(2)
-        if col_change.button("Change", key="shell_change_dataset", width="stretch"):
-            _change_dialog(state)
-        if col_save.button("Save version", key="shell_save_version", width="stretch"):
-            _save_dialog(state)
+        with st.container(horizontal=True, gap="small"):
+            if ref.version:
+                st.badge(f"v{ref.version}", color="primary")
+            st.badge(origin_label, icon=origin_icon, color="gray")
+        st.caption(f"{len(df):,} rows · {df.shape[1]} columns")
+        with st.container(horizontal=True, gap="small"):
+            if st.button(
+                "Change", key="shell_change_dataset", width="stretch", icon=":material/swap_horiz:"
+            ):
+                _change_dialog(state)
+            if st.button("Save", key="shell_save_version", width="stretch", icon=":material/save:"):
+                _save_dialog(state)
 
 
 def _ai_status(state: AppState) -> None:
@@ -88,29 +99,32 @@ def _ai_status(state: AppState) -> None:
     if status["initialized"]:
         local = provider == "ollama"
         st.badge(
-            f"AI: {provider} ({'local' if local else 'cloud'})",
+            f"AI engine: {provider} ({'local' if local else 'cloud'})",
             icon=":material/smart_toy:",
             color="green" if local else "orange",
         )
     else:
-        st.badge("AI engine: off", icon=":material/smart_toy:", color="grey")
-    page_link("settings", "Settings", icon=":material/settings:")
+        st.badge("AI engine off", icon=":material/smart_toy:", color="gray")
 
 
 def _user_menu(state: AppState) -> None:
-    st.caption(f"Signed in as **{state.username}** ({state.role or 'researcher'})")
-    if st.button("Log out", key="shell_logout", width="stretch"):
+    with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+        st.markdown(f":material/account_circle: **{state.username}**")
+        admin = is_admin_role(state.role)
+        st.badge(
+            "admin" if admin else (state.role or "researcher"), color="violet" if admin else "gray"
+        )
+    if st.button("Log out", key="shell_logout", type="tertiary", icon=":material/logout:"):
         logout()
 
 
 def render_sidebar(state: AppState) -> None:
     with st.sidebar:
-        with contextlib.suppress(Exception):
-            st.image(LOGO, width=150)
         _dataset_card(state)
         _ai_status(state)
+        page_link("settings", "Settings", icon=":material/settings:")
         page_link("handbook", "Handbook", icon=":material/menu_book:")
-        st.divider()
+        st.space("medium")
         _user_menu(state)
 
 

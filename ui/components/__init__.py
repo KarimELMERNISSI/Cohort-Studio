@@ -44,17 +44,38 @@ def switch_to(key: str) -> None:
 # ----------------------------------------------------------------------------- page structure
 
 
-def page_header(title: str, subtitle: str | None = None, *, chapter: str | None = None) -> None:
-    """The page's single H1, an optional one-line purpose, and the handbook link for this page."""
-    left, right = st.columns([5, 1], vertical_alignment="center")
-    with left:
-        st.title(title)
-        if subtitle:
-            st.caption(subtitle)
+def _page_meta(title: str) -> nav.PageDef | None:
+    return next((p for p in nav.PAGES if p.title == title), None)
+
+
+def page_header(
+    title: str,
+    subtitle: str | None = None,
+    *,
+    chapter: str | None = None,
+    eyebrow: str | None = None,
+    icon: str | None = None,
+) -> None:
+    """
+    The page hero banner: section name, the page's single H1, a one-line purpose and the handbook
+    link. Section and icon come from the navigation registry unless given explicitly.
+    """
+    meta = _page_meta(title)
+    section_name = eyebrow or (meta.section if meta and meta.section else "Cohort Monitoring")
+    icon = icon or (meta.icon if meta else None)
     if chapter:
         st.session_state["handbook_chapter"] = chapter
-        with right:
-            page_link("handbook", "Handbook", icon=":material/menu_book:")
+    with st.container(key="cmp-hero"):
+        left, right = st.columns([5, 1.2], vertical_alignment="bottom")
+        with left:
+            with st.container(key="cmp-hero-eyebrow"):
+                st.markdown(f"{icon} {section_name}" if icon else section_name)
+            st.title(title, anchor=False)
+            if subtitle:
+                st.caption(subtitle)
+        if chapter:
+            with right, st.container(horizontal=True, horizontal_alignment="right"):
+                page_link("handbook", "Handbook", icon=":material/menu_book:")
 
 
 def section(title: str, help_text: str | None = None) -> None:

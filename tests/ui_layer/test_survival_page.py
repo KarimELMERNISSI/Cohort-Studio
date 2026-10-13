@@ -41,14 +41,19 @@ def test_survival_page_runs_kaplan_meier_and_cox(app: AppTest) -> None:
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
     res = app.session_state["surv_result"]["res"]
     assert {c.label for c in res.curves} == {"Placebo", "Treatment"}
-    assert res.logrank_p is not None and res.logrank_p < 0.05  # placebo arm has shorter survival by construction
+    assert (
+        res.logrank_p is not None and res.logrank_p < 0.05
+    )  # placebo arm has shorter survival by construction
     app.selectbox(key="cox_time").select("fu_days").run()
     app.selectbox(key="cox_event").select("died").run()
     app.multiselect(key="cox_covs").select("arm").select("age").run()
     app.button(key="cox_run").click().run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
     table = app.session_state["cox_result"]["res"].table
-    assert "arm_Treatment" in set(table["term"]) and float(table.loc[table["term"] == "arm_Treatment", "hr"].iloc[0]) < 1
+    assert (
+        "arm_Treatment" in set(table["term"])
+        and float(table.loc[table["term"] == "arm_Treatment", "hr"].iloc[0]) < 1
+    )
 
 
 def test_paired_rates_tab_and_multiple_imputation_render(app: AppTest) -> None:
@@ -58,4 +63,6 @@ def test_paired_rates_tab_and_multiple_imputation_render(app: AppTest) -> None:
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
     app.switch_page(nav.page_path("enrich")).run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
-    assert any(b.key == "mi_run" for b in app.button), "multiple imputation control missing on the Enrich page"
+    assert any(b.key == "mi_run" for b in app.button), (
+        "multiple imputation control missing on the Enrich page"
+    )

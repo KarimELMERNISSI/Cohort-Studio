@@ -1,38 +1,39 @@
-"""Settings page: AI provider and consent, graph engine, import defaults, workspace maintenance."""
+"""Settings page: AI engine and consent, graph engine, import defaults, workspace maintenance."""
 
 import streamlit as st
 
 from app_pages.rag_sidebar import render_ai_settings
-from ui.components import confirm, page_header, section
+from ui.components import confirm, page_header
 from ui.shell import clear_workspace_statistics
 from ui.state import get_state
 
 state = get_state()
-page_header("Settings", "AI provider and data-sharing consent, graph engine, import defaults and workspace maintenance.")
+page_header("Settings", "AI engine and data-sharing consent, graph engine, import defaults and your workspace.")
 
-tab_ai, tab_graph, tab_import, tab_workspace = st.tabs(["AI provider", "Graph engine", "Import defaults", "Workspace"])
+tab_ai, tab_graph, tab_import, tab_workspace = st.tabs(
+    [":material/smart_toy: AI engine", ":material/hub: Graph engine", ":material/upload_file: Import defaults",
+     ":material/folder_shared: Workspace"]
+)
 
 with tab_ai:
-    st.caption("The AI engine is optional. Local Ollama is the default: nothing leaves the server. "
-               "Cloud providers require an explicit confirmation of what would be sent.")
     render_ai_settings()
 
-with tab_graph:
+with tab_graph, st.container(border=True, width=760):
     from graph.ui import renderer_selector
 
-    section("Graph rendering engine")
+    st.subheader("Graph rendering engine", icon=":material/hub:", anchor=False)
     renderer_selector()
     st.caption("Plotly + NetworkX renders offline. The optional yFiles engine loads its runtime from yworks.com and reports "
                "anonymised graph-structure analytics; see the About page.")
 
-with tab_import:
-    section("Defaults applied when a file is imported")
-    st.checkbox("Treat dates as day-first (31/12/2024) by default", key="import_default_dayfirst",
-                help="European date order. You can still change it per file in the import flow.")
+with tab_import, st.container(border=True, width=760):
+    st.subheader("Defaults applied when a file is imported", icon=":material/upload_file:", anchor=False)
+    st.toggle("Treat dates as day-first (31/12/2024) by default", key="import_default_dayfirst",
+              help="European date order. You can still change it per file in the import flow.")
     st.caption("Encoding, delimiter and decimal separator are always detected per file and shown for review.")
 
-with tab_workspace:
-    section("Your workspace")
+with tab_workspace, st.container(border=True, width=760):
+    st.subheader("Your workspace", icon=":material/folder_shared:", anchor=False)
     try:
         st.code(str(state.db_manager.dataset_dir), language=None)
     except Exception:
@@ -44,8 +45,9 @@ with tab_workspace:
         n = clear_workspace_statistics(state)
         st.session_state["_settings_notice"] = f"Removed {n} cached statistics file(s)."
 
-    if st.button("Clear my cached statistics", help="Forces a full recomputation of descriptive statistics for saved versions."):
+    if st.button("Clear my cached statistics", icon=":material/delete_sweep:",
+                 help="Forces a full recomputation of descriptive statistics for saved versions."):
         confirm("Clear cached statistics?", "Cached descriptive statistics of your saved versions will be recomputed on the next visit. "
                 "Datasets and traces are not affected.", _clear, confirm_label="Clear")
     if notice := st.session_state.pop("_settings_notice", None):
-        st.success(notice)
+        st.success(notice, icon=":material/check:")

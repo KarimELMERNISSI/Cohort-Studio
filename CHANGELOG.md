@@ -4,6 +4,20 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ---
 
+## [Unreleased]
+
+### Visual redesign
+
+- **Brand** — Theme built from the new logo (navy, teal, cyan, mint) with full light and dark variants, a tighter type scale, softer radii, widget borders and branded chart palettes; the top bar shows a "Cohort Monitoring" wordmark that switches with the theme (`assets/brand/`, `dev_scripts/make_brand_assets.py`); the Deploy button is hidden.
+- **Hero banner** — Every page opens with a gradient banner: section name, title, one-line purpose and a Handbook pill (`ui.components.page_header`, scoped stylesheet `ui/styles.css`). The large empty band above page titles is gone.
+- **Sign-in** — A centred branded card with icons in the fields and a one-line trust statement.
+- **Sidebar** — Compact dataset card (name, version and origin badges, size, Change / Save with icons), AI engine badge, quick links and a user block with role badge; the oversized logo moved to the top bar.
+- **Start page** — Personal welcome banner, a row of bordered figures (dataset, rows, columns, missing cells, saved versions), three workflow step cards with status badges, and cards for saved versions, the sample cohort and the AI engine.
+- **Settings** — The AI configuration is grouped into cards (provider and models, data sharing, document library, retrieval, engine) in two columns; tabs carry icons; the other tabs use fixed-width cards.
+- **About** — Six feature cards instead of coloured alert boxes; the LinkedIn badge no longer loads an external image.
+- **Analysis page** — Analysis type and transformation controls moved from the sidebar onto the page; legacy duplicate page titles demoted to section headings.
+- **Tests** — Theme tokens, WCAG AA contrast of the theme colours, brand assets and an offline-only stylesheet are checked.
+
 ## [2.3.0] - 2026-10-13
 
 The October 2026 audit and professionalisation programme (phases P0-P8; see `documentation/13_Audit_Report_2026-10.md`).

@@ -34,8 +34,6 @@ except ImportError:
 
 def render_rag_monitoring():
     """Main entry point for the RAG Monitoring page."""
-    st.title("RAG Quality Monitor")
-    st.markdown("Monitor and assess the quality of RAG outputs over time.")
     
     # Check if evaluator exists
     try:

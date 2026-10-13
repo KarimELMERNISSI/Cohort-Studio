@@ -144,21 +144,22 @@ def app():
     df = st.session_state['data']
     analyzer = DataAnalyzer(df)
 
-    # Sidebar for Analysis Mode
-    with st.sidebar:
-        st.header("Analysis Configuration")
-        analysis_mode = st.radio(
-            "Select Analysis Type",
+    # Page options next to the content (the sidebar belongs to the application shell)
+    with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
+        analysis_mode = st.segmented_control(
+            "Analysis type",
             ["Univariate (Group Comparison)", "Multivariate (ANCOVA/Regression)"],
-            help="Choose 'Univariate' to compare groups one variable at a time. Choose 'Multivariate' to adjust for confounding variables (ANCOVA)."
+            default="Univariate (Group Comparison)",
+            required=True,
+            key="epi_analysis_mode",
+            help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
         )
-        
-        st.divider()
-        st.subheader("Data Preprocessing")
         transformation = st.selectbox(
-            "Apply Transformation",
+            "Transform numeric variables",
             ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
-            help="Transform numeric variables before analysis. \n- Log: Reduces skewness (good for normality).\n- Z-Score: Centers data (Mean=0, SD=1).\n- Min-Max: Scales to [0, 1]."
+            key="epi_transformation",
+            width=300,
+            help="Applied before the analysis tab only. \n- Log: reduces skewness.\n- Z-score: centres (mean 0, SD 1).\n- Min-max: scales to [0, 1].",
         )
 
     # Apply Transformation

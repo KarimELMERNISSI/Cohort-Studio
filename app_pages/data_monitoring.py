@@ -1677,7 +1677,7 @@ def display_mask_family_alt(config):
     """
     Display mask families configuration in a single top-level expander without nesting.
     """
-    st.title("Data Masking Configuration")
+    st.subheader("Data masking configuration", icon=":material/rule:", anchor=False)
 
     # Ensure config is a dictionary
     if isinstance(config, str):
