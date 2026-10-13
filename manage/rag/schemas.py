@@ -16,6 +16,7 @@ class ProviderType(str, Enum):
     OLLAMA = "ollama"
     OPENAI = "openai"
     MISTRAL = "mistral"
+    ANTHROPIC = "anthropic"  # Claude: chat only, embeddings from another provider
     CUSTOM = "custom"
 
 
@@ -24,7 +25,7 @@ class ProviderConfig(BaseModel):
     Configuration specification for a specific LLM and Embedding provider.
     
     Attributes:
-        provider: Provider identifier (gemini, ollama, openai, mistral, custom).
+        provider: Provider identifier (gemini, ollama, openai, mistral, anthropic, custom).
         model_name: Name of the chat/completion model (e.g., 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.8-flash', 'llama3.2', 'gpt-4o-mini').
         embedding_model: Name of the embedding model (e.g., 'models/gemini-embedding-2', 'models/text-embedding-005', 'nomic-embed-text').
         api_key: Optional API key for commercial cloud endpoints.

@@ -24,7 +24,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 1. **Zero-Lock-In High-Performance Storage**: Native Parquet dataset versioning and caching executed via DuckDB columnar queries. Complete user data isolation with transactional stability on Windows and Linux.
 2. **Statistically Rigorous Epidemiology Engine**: Automated normality profiling, parametric and non-parametric comparative hypothesis testing, multivariate ANCOVA with parallel slope diagnostics, effect size quantification ($\text{Cohen's } d$, $\text{Hedges' } g$, $\eta^2$, $\omega^2$), Little's MCAR missingness testing, Haldane-Anscombe zero-cell continuity corrections for odds ratios, and diagnostic test accuracy analytics (ROC, PPV, NPV, Likelihood Ratios).
 3. **Multi-Dimensional Data Quality Auditing**: Real-time scoring across Completeness, Uniqueness, Consistency, Uniformity, Statistical Outlier Validity (IQR, Z-Score, Quantiles, Isolation Forest, Local Outlier Factor), and declared Clinical Anomaly Rules.
-4. **Model-Agnostic Medical RAG**: Pluggable connector architecture supporting Google Gemini 2.5, local Ollama (air-gapped/on-premise privacy), OpenAI, and Mistral for medical document synthesis, semantic column standardization (UMLS/LOINC/SNOMED), and automated variable engineering.
+4. **Model-Agnostic Medical RAG**: Pluggable connector architecture supporting Google Gemini 2.5, local Ollama (air-gapped/on-premise privacy), OpenAI, Mistral and Anthropic Claude for medical document synthesis, semantic column standardization (UMLS/LOINC/SNOMED), and automated variable engineering.
 5. **Deterministic Lineage, Complete Pipeline Reproduction & Audit Dossiers**: Every transformation step, imputation, and enrichment join is logged into an executable JSON session trace. The headless reproduction engine can re-execute the complete multi-step pipeline (`execute_trace_pipeline`) to recreate identical analytical datasets deterministically, while generating signed Microsoft Word (`.docx`) transformation certificates.
 
 ---
@@ -123,9 +123,9 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ### 5. Model-Agnostic Medical RAG
 
-- **Provider-Agnostic Interface**: Direct connectors for Google Gemini 2.5, local Ollama (air-gapped clinical deployments), OpenAI (GPT-4o), and Mistral.
+- **Provider-Agnostic Interface**: Direct connectors for Google Gemini 2.5, local Ollama (air-gapped clinical deployments), OpenAI (GPT-4o), Mistral and Anthropic Claude (Claude answers; local Ollama or another provider embeds the documents).
 - **Medical Semantic Renaming**: Harmonizes raw electronic health record columns with standard terminologies (UMLS, LOINC, SNOMED CT).
-- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation via ChromaDB.
+- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant (selectable for your machine).
 - **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
 
 ### 6. Pipeline Reproducibility & Audit Trail
@@ -231,6 +231,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 GOOGLE_API_KEY=
 OPENAI_API_KEY=
 MISTRAL_API_KEY=
+ANTHROPIC_API_KEY=
 ```
 
 ### Administrator accounts and user management

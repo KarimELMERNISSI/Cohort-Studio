@@ -45,7 +45,13 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
   (`similarity_search`, `max_marginal_relevance_search`, `as_retriever`, `build`), so it is identical whatever the
   engine; filtering by document is a list of sources that each engine translates (SQL `IN` for LanceDB, a `MatchAny`
   payload filter for Qdrant). See "Vector databases" below.
-- **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI and Mistral as cloud providers that require an explicit data-sharing consent).
+- **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI, Mistral and Anthropic Claude as cloud providers that require an explicit data-sharing consent).
+- **Anthropic Claude** (`manage/rag/providers/claude.py`, official `anthropic` SDK) answers but has no embedding
+  API. `ConnectorFactory.create_connectors(provider="anthropic", embedding_provider=...)` pairs it with another
+  provider's embeddings (local Ollama by default, so the library is indexed on the server and only the retrieved
+  passages reach Claude); the index manifest records that embedding provider. Claude models choose their own
+  sampling, so the app's temperature is not sent. Model IDs: `claude-fable-5-1` (default, most capable),
+  `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`.
 - Each mixin accesses shared resources (`self.vectorstore`, `self.llm`) from the base `RAGManager`.
 
 ---

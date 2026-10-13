@@ -59,6 +59,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **altair** | BSD-3-Clause |
 | **annotated-doc** | MIT |
 | **annotated-types** | MIT |
+| **anthropic** | MIT |
 | **anyio** | MIT |
 | **appdirs** | MIT |
 | **archspec** | Apache-2.0 OR MIT |
@@ -119,6 +120,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **dill** | BSD-3-Clause |
 | **distributed** | BSD-3-Clause |
 | **distro** | Apache-2.0 |
+| **docstring-parser** | MIT |
 | **docstring-to-markdown** | LGPL-2.1-or-later |
 | **docutils** | BSD-2-Clause / PSF / Public Domain |
 | **duckdb** | MIT |
@@ -187,6 +189,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **jedi** | MIT |
 | **jellyfish** | MIT |
 | **Jinja2** | BSD-3-Clause |
+| **jiter** | MIT |
 | **jmespath** | MIT |
 | **joblib** | BSD-3-Clause |
 | **json5** | Apache-2.0 |

@@ -1,8 +1,9 @@
 """
 AI engine configuration (Settings page).
 
-Provider-agnostic controls for the AI providers (local Ollama by default; Google Gemini, OpenAI and
-Mistral as cloud providers that require an explicit data-sharing consent), model and embedding
+Provider-agnostic controls for the AI providers (local Ollama by default; Google Gemini, OpenAI, Mistral
+and Anthropic Claude as cloud providers that require an explicit data-sharing consent; Claude has no
+embedding model, so another provider embeds the documents), model and embedding
 selection, the document library, retrieval parameters and engine initialisation. Laid out as cards:
 provider and models, data sharing and document library on the left; retrieval, the vector database
 (LanceDB or Qdrant, see ``manage.vectorstores``) and the engine on the right. Widget keys are stable
@@ -38,13 +39,16 @@ from utils.session_scope import get_current_scope
 
 load_dotenv()
 
-CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
+CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 PROVIDER_NAMES = {
     "ollama": "Ollama (local, open-source)",
     "gemini": "Google Gemini (cloud)",
     "openai": "OpenAI (cloud)",
     "mistral": "Mistral AI (cloud, EU)",
+    "anthropic": "Anthropic Claude (cloud)",
 }
+# Claude answers but has no embedding model: these providers can embed the documents for it.
+EMBEDDING_PROVIDERS = ("ollama", "gemini", "openai", "mistral")
 OLLAMA_CHAT_FALLBACK = ["llama3.2:latest", "llama3.1:8b", "mistral:latest", "deepseek-r1:8b", "qwen2.5:7b"]
 OLLAMA_EMBEDDINGS = ["nomic-embed-text:latest", "bge-m3:latest", "all-minilm:latest", "mxbai-embed-large:latest"]
 CLOUD_CATALOG = {
@@ -66,6 +70,12 @@ CLOUD_CATALOG = {
         "label": "Mistral API key",
         "chat": ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
         "embed": ["mistral-embed"],
+    },
+    "anthropic": {
+        "env": "ANTHROPIC_API_KEY",
+        "label": "Anthropic API key",
+        "chat": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+        "embed": [],  # no embedding API: see EMBEDDING_PROVIDERS
     },
 }
 
@@ -155,18 +165,64 @@ def _provider_card() -> dict:
                 catalog["env"], catalog["label"], f"rag_{provider}_api_key", f"Required for {PROVIDER_NAMES[provider]} inference."
             )
             chat_options = list(catalog["chat"])
-            if provider == "gemini" and cfg["api_key"] and hasattr(st.session_state.rag_manager, "get_available_models"):
-                for model in _discover_cloud_models(st.session_state.rag_manager, "gemini", cfg["api_key"]):
+            if provider in ("gemini", "anthropic") and cfg["api_key"] and hasattr(
+                st.session_state.rag_manager, "get_available_models"
+            ):
+                for model in _discover_cloud_models(st.session_state.rag_manager, provider, cfg["api_key"]):
                     if model not in chat_options:
                         chat_options.append(model)
             embed_options = catalog["embed"]
             chat_key, embed_key = f"rag_{provider}_model_select", f"rag_{provider}_embed_select"
             chat_help = "Model used for question answering and taxonomy generation."
             embed_help = "Embedding model used to index your documents."
+            if provider == "anthropic":
+                chat_help += " The most capable model is listed first; the app's temperature setting does not apply to Claude."
+                embed_options, embed_help = _claude_embedding_block(cfg)
+                embed_key = f"rag_anthropic_{cfg['embedding_provider']}_embed_select"
         col_chat, col_embed = st.columns(2)
         cfg["model"] = col_chat.selectbox("Chat model", chat_options, index=0, key=chat_key, help=chat_help)
         cfg["embedding"] = col_embed.selectbox("Embedding model", embed_options, index=0, key=embed_key, help=embed_help)
     return cfg
+
+
+def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
+    """Claude has no embedding model: choose the provider that embeds the documents (local Ollama by default)."""
+    st.caption(
+        "Claude answers; another provider embeds your documents for search. With local Ollama the whole library "
+        "is indexed on this server, and only the passages retrieved for a question are sent to Claude."
+    )
+    embed_provider = st.selectbox(
+        "Embedding provider",
+        EMBEDDING_PROVIDERS,
+        format_func=lambda p: PROVIDER_NAMES.get(p, p),
+        index=0,
+        key="rag_claude_embed_provider",
+        help="Who turns your documents into vectors for search. Ollama keeps the documents on this server; a cloud "
+        "provider needs its own API key and receives the text of the indexed PDFs.",
+    )
+    cfg["embedding_provider"] = embed_provider
+    if embed_provider == "ollama":
+        cfg["embedding_base_url"] = st.text_input(
+            "Ollama endpoint (embeddings)",
+            value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            key="rag_claude_ollama_base_url",
+            help="URL of the local or network Ollama service that embeds the documents.",
+            icon=":material/dns:",
+        )
+        return OLLAMA_EMBEDDINGS, "Local embedding model (pull it first: 'ollama pull <model>')."
+    catalog = CLOUD_CATALOG[embed_provider]
+    typed = st.text_input(
+        f"{catalog['label']} (embeddings)",
+        value="",
+        type="password",
+        key=f"rag_claude_{embed_provider}_embed_key",
+        icon=":material/key:",
+        help=f"Key for {PROVIDER_NAMES[embed_provider]} embeddings. Never stored; empty uses the server key if configured.",
+    )
+    if os.getenv(catalog["env"]):
+        st.caption("A server-side key is configured for the embeddings; leave this empty to use it.")
+    cfg["embedding_api_key"] = typed or None
+    return list(catalog["embed"]), f"{PROVIDER_NAMES[embed_provider]} embedding model used to index your documents."
 
 
 def _consent_card(provider: str) -> bool:
@@ -423,6 +479,9 @@ def _engine_card(
                     use_existing_db=use_existing_db,
                     progress_callback=update_progress,
                     selected_files=selected_files,
+                    embedding_provider=cfg.get("embedding_provider"),
+                    embedding_api_key=cfg.get("embedding_api_key"),
+                    embedding_base_url=cfg.get("embedding_base_url"),
                     vector_engine=vector.get("vector_engine"),
                     qdrant_url=vector.get("qdrant_url"),
                     qdrant_api_key=vector.get("qdrant_api_key"),

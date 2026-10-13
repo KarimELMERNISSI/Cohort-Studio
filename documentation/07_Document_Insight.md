@@ -11,6 +11,15 @@ Upload one or more PDF files. Documents are split into chunks, embedded and inde
 - Documents are stored per-user for data isolation.
 - Previously uploaded documents can be reused across sessions.
 
+### Choosing the AI provider
+
+Settings > AI engine > **Provider and models** offers local **Ollama** (the default; nothing leaves the server)
+and four cloud providers, which need an API key and your explicit data-sharing consent: Google Gemini, OpenAI,
+Mistral AI and **Anthropic Claude**. Claude answers questions but has no embedding model, so a second choice
+appears: the **embedding provider** that indexes your documents. Keep **Ollama** there to index the whole
+library on this server; only the passages retrieved for each question are then sent to Claude. The temperature
+slider does not apply to Claude.
+
 ### Choosing the vector database
 
 Settings > AI engine > **Vector database** offers two engines; the app recommends one for your machine and says why

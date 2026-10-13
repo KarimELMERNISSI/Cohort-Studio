@@ -39,8 +39,15 @@ from .rag_documents import DocumentsMixin
 # Import mixins
 from .rag_taxonomy import TaxonomyMixin
 
-CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
-_ENV_KEY_NAMES = {"gemini": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}
+CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
+_ENV_KEY_NAMES = {
+    "gemini": "GOOGLE_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+# Providers that answer but have no embedding API: documents are embedded by another provider.
+CHAT_ONLY_PROVIDERS = {"anthropic"}
 
 
 def _env_api_key(provider: str | None) -> str | None:
@@ -250,8 +257,14 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         vector_engine=None,
         qdrant_url=None,
         qdrant_api_key=None,
+        embedding_provider=None,
+        embedding_api_key=None,
+        embedding_base_url=None,
     ):
         """Initialize the RAG system with documents, embeddings, the vector database and the LLM.
+
+        ``embedding_provider`` embeds the documents when it differs from the answering ``provider``; Claude
+        (``anthropic``) has no embedding API and uses local Ollama unless another provider is given.
 
         ``vector_engine`` is "lancedb" or "qdrant" (None: the server default ``CMP_VECTOR_STORE``, else
         the engine recommended for this machine); ``qdrant_url`` selects a Qdrant server instead of
@@ -265,13 +278,25 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.base_url = base_url
 
         effective_key = self.api_key or _env_api_key(provider_clean)
-        if provider_clean in CLOUD_PROVIDERS and not getattr(self, "cloud_consent", False):
+        embed_provider = (
+            embedding_provider or ("ollama" if provider_clean in CHAT_ONLY_PROVIDERS else provider_clean)
+        ).lower()
+        if embed_provider in CHAT_ONLY_PROVIDERS:
+            return False, f"{embed_provider.capitalize()} has no embedding API: choose another embedding provider."
+        separate_embeddings = embed_provider != provider_clean
+        embed_key = embedding_api_key or (_env_api_key(embed_provider) if separate_embeddings else effective_key)
+        self.embedding_provider = embed_provider
+        if (provider_clean in CLOUD_PROVIDERS or embed_provider in CLOUD_PROVIDERS) and not getattr(
+            self, "cloud_consent", False
+        ):
             return False, (
                 "Cloud providers require explicit confirmation that data may leave this server. "
                 "Tick the confirmation in the RAG & AI Configuration panel first."
             )
         if provider_clean in CLOUD_PROVIDERS and not effective_key:
             return False, f"{provider_clean.capitalize()} API Key is required."
+        if separate_embeddings and embed_provider in CLOUD_PROVIDERS and not embed_key:
+            return False, f"{embed_provider.capitalize()} API Key is required for the embeddings."
 
         try:
             # 1. Load Documents using native PDFDocumentLoader
@@ -311,6 +336,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 api_key=effective_key,
                 base_url=base_url,
                 temperature=temperature,
+                embedding_provider=embed_provider if separate_embeddings else None,
+                embedding_api_key=embed_key if separate_embeddings else None,
+                embedding_base_url=embedding_base_url if separate_embeddings else None,
             )
             
             # 4. Vector database (engine-agnostic: manage.vectorstores)
@@ -324,7 +352,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             api_key = qdrant_api_key or settings.qdrant_api_key
             advice = recommend(probe_machine(base_dir), chunks=len(texts), qdrant_server=bool(url))
             engine = resolve_engine(vector_engine, settings, advice)
-            embedding_label = f"{provider_clean}:{embedding_model}"
+            embedding_label = f"{embed_provider}:{embedding_model}"
             try:
                 backend = open_index(
                     engine,
@@ -339,7 +367,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     index.check_compatible(embedding_label)
                 else:
                     if progress_callback: progress_callback(60, f"Building the {engine.value} index...")
-                    cloud = provider_clean in CLOUD_PROVIDERS
+                    cloud = embed_provider in CLOUD_PROVIDERS  # cloud embedding APIs rate-limit bursts
 
                     def _embedding_progress(done, total):
                         if progress_callback:
