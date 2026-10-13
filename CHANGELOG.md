@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Guidance in Analyze > Hypothesis tests & epidemiology
+
+- **Guidance switch and orientation** — A *Guidance* switch (on by default) and a "Which tab do I need?" panel mapping questions to the six tabs, with a link to the *Which test?* chooser.
+- **Every parameter explained** — The 38 inputs that had no help now have one (power calculator, detailed view, z-scores, plot references); the configuration panel uses the same texts. `tests/ui_layer/test_guidance.py` now checks the page, its configuration panel and the paired/rates module, so no input can lose its help again.
+- **Before you run: the plan** — Live, before anything is computed: the group sizes, for each variable the test that will run and why (the engine's own rules, so the prediction matches what runs), missing data, and warnings (groups under 2 or 5, unbalanced groups, more than 6 groups, 20% or more missing, several tests without correction, transformed scale). A suggested multiple-testing correction applied in one click.
+- **Detailed view and ANCOVA** — Notes on the assumptions of a hand-picked test; an ANCOVA model check (observations per parameter, rows excluded, covariates largely explained by the group).
+- **Guided power calculator** — Four-step plan; effect sizes from expected means and SD (t-test, Mann-Whitney), group means and SD (ANOVA, Kruskal-Wallis) or event proportions per group (chi-square, degrees of freedom derived); results as sentences with a dropout reminder and power put in context; an effect size of 0 is refused with an explanation.
+- **Code** — `ui/guidance/analysis.py` (rules and texts, pure), `app_pages/analysis_guidance_ui.py` (rendering). Tests: `tests/test_analysis_guidance.py`, `tests/ui_layer/test_analyze_guidance.py` (plan, one-click correction, switch, power from means and proportions, ANCOVA check on the sample cohort).
+
 ### Renamed: Cohort Monitoring Package becomes CohortStudio
 
 - **Why** — "Monitoring" suggested clinical-trial monitoring or safety surveillance, and "Package" a library; the application is a workbench that takes a cohort from raw file to reproducible evidence (quality, enrichment, biostatistics, literature knowledge, traced reports). Tagline: *Clinical cohort data, from raw file to reproducible evidence.*

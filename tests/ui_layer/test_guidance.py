@@ -31,6 +31,11 @@ INPUT_WIDGETS = {
 CHECKED_FILES = [
     *(ROOT / "app_pages" / "views").glob("*.py"),
     ROOT / "app_pages" / "analysis_diagnostic.py",
+    # Analyze > Hypothesis tests & epidemiology: every parameter explained
+    ROOT / "app_pages" / "epidemiology.py",
+    ROOT / "app_pages" / "analysis_config.py",
+    ROOT / "app_pages" / "analysis_extras.py",
+    ROOT / "app_pages" / "analysis_guidance_ui.py",
     ROOT / "ui" / "import_flow.py",
     ROOT / "ui" / "shell.py",
     ROOT / "ui" / "components" / "__init__.py",

@@ -16,6 +16,14 @@ import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
 from app_pages.analysis_extras import run_paired_and_rates, run_reliability
+from app_pages.analysis_guidance_ui import (
+    guidance_on,
+    guidance_toggle,
+    render_ancova_check,
+    render_orientation,
+    render_plan,
+    render_test_note,
+)
 from biostats.multiplicity import adjust as adjust_pvalues
 from biostats.power import (
     ARE_NORMAL,
@@ -29,9 +37,38 @@ from biostats.power import (
 )
 from biostats.zscores import reference_zscores
 from ui.components import no_dataset, result_card
+from ui.guidance.analysis import (
+    HELP,
+    ancova_check,
+    cohens_d_from_means,
+    cohens_f_from_means,
+    cohens_w_from_proportions,
+    p_superiority_from_d,
+    parse_numbers,
+    plan_group_comparison,
+    power_sentence,
+    sample_size_sentence,
+)
 from ui.progress import mark_step
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
+
+
+def _effect_ok(effect_size) -> bool:
+    """A planning effect must be positive: with no difference to detect, no sample is large enough."""
+    if effect_size is None or not np.isfinite(effect_size) or effect_size <= 0:
+        st.error("The effect size must be above 0: with no difference to detect, no sample size is large enough.")
+        return False
+    return True
+
+
+def _expected_means_inputs(prefix: str):
+    """Expected means of two groups and the common SD; returns (mean1, mean2, sd)."""
+    c_m1, c_m2, c_sd = st.columns(3)
+    mean1 = c_m1.number_input("Mean, group 1", value=120.0, key=f"{prefix}_m1", help=HELP["mean1"])
+    mean2 = c_m2.number_input("Mean, group 2", value=125.0, key=f"{prefix}_m2", help=HELP["mean2"])
+    sd = c_sd.number_input("SD", value=10.0, min_value=1e-9, key=f"{prefix}_sd", help=HELP["sd"])
+    return mean1, mean2, sd
 
 
 def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
@@ -160,8 +197,11 @@ def app():
             ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
             key="epi_transformation",
             width=300,
-            help="Applied before the analysis tab only. \n- Log: reduces skewness.\n- Z-score: centres (mean 0, SD 1).\n- Min-max: scales to [0, 1].",
+            help=HELP["transform"],
         )
+        guidance_toggle()
+    if guidance_on():
+        render_orientation()
 
     # Apply Transformation
     df_analysis = df.copy()
@@ -203,7 +243,7 @@ def app():
 
     with tabs[0]:
         if analysis_mode == "Univariate (Group Comparison)":
-            run_univariate_analysis(df_analysis, analyzer)
+            run_univariate_analysis(df_analysis, analyzer, transformed=transformation != "None (Raw Data)")
         else:
             run_multivariate_analysis(df_analysis, analyzer)
 
@@ -224,7 +264,7 @@ def app():
     with tabs[5]:
         show_educational_content()
 
-def run_univariate_analysis(df, analyzer):
+def run_univariate_analysis(df, analyzer, transformed=False):
     st.header("Univariate Group Comparison")
     st.markdown("Compare variables between groups using statistical tests (T-test, ANOVA, Chi-Square, etc.).")
     
@@ -259,6 +299,22 @@ def run_univariate_analysis(df, analyzer):
         return
 
     st.write(f"### Comparing groups defined by **{group_col}**: {', '.join(map(str, groups))}")
+    if guidance_on():
+        render_plan(
+            plan_group_comparison(
+                df,
+                group_col,
+                selected_groups,
+                target_cols,
+                numeric_cols=analyzer.numeric_cols,
+                categorical_cols=analyzer.categorical_cols + analyzer.binary_cols,
+                strategy=test_preference,
+                correction=correction_method,
+                transformed=transformed,
+            ),
+            correction=correction_method,
+            correction_key="correction",
+        )
 
     # Explicit run (audit U4): results are computed on demand and kept until the configuration changes
     signature = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method,
@@ -490,7 +546,7 @@ def run_univariate_analysis(df, analyzer):
 
     # Detailed View
     st.subheader("Detailed Analysis & Visualization")
-    selected_detail = st.selectbox("Select variable for detailed view", target_cols)
+    selected_detail = st.selectbox("Select variable for detailed view", target_cols, help=HELP["detail_variable"])
     
     if selected_detail:
         # Allow specific manual test selection for this variable
@@ -508,7 +564,11 @@ def run_univariate_analysis(df, analyzer):
             
         col_det1, col_det2 = st.columns([1, 3])
         with col_det1:
-            selected_test_method = st.selectbox("Test Method (Detail)", available_tests, index=0)
+            selected_test_method = st.selectbox(
+                "Test Method (Detail)", available_tests, index=0, help=HELP["detail_test"]
+            )
+            if guidance_on():
+                render_test_note(selected_test_method)
         
         # Re-run analysis for this specific variable with the selected method
         detail_res = au.analyze_variable(
@@ -638,7 +698,7 @@ def run_multivariate_analysis(df, analyzer):
         covariates = st.multiselect(
             "Covariates (Confounders)",
             options=[c for c in analyzer.numeric_cols if c != target_col],
-            help="Continuous variables to adjust for (e.g., Age, Baseline score). These are potential confounders."
+            help=HELP["ancova_covariates"]
         )
     
     # Show preview of group structure
@@ -657,6 +717,9 @@ def run_multivariate_analysis(df, analyzer):
         st.info("Please select a Target and a Grouping variable to proceed.")
         return
     
+    if guidance_on():
+        render_ancova_check(ancova_check(df, target_col, group_col, covariates))
+
     # Run Button
     col_btn1, col_btn2 = st.columns([1, 3])
     with col_btn1:
@@ -920,11 +983,11 @@ def visualize_result(df, group_col, target, analyzer):
             st.caption("Add horizontal reference lines (e.g., clinical thresholds, normal range limits).")
             col_ref1, col_ref2, col_ref3 = st.columns([2, 2, 1])
             with col_ref1:
-                ref_val = st.number_input("Value", value=0.0, key=f"ref_val_{target}")
+                ref_val = st.number_input("Value", value=0.0, key=f"ref_val_{target}", help=HELP["ref_value"])
             with col_ref2:
-                ref_label = st.text_input("Label", value="Threshold", key=f"ref_lbl_{target}")
+                ref_label = st.text_input("Label", value="Threshold", key=f"ref_lbl_{target}", help=HELP["ref_label"])
             with col_ref3:
-                add_ref = st.checkbox("Show Line", key=f"add_ref_{target}")
+                add_ref = st.checkbox("Show Line", key=f"add_ref_{target}", help=HELP["ref_show"])
         
         # 1. Boxplot with Significance
         st.subheader("Distribution & Significance")
@@ -1153,8 +1216,8 @@ def run_zscore_analysis(df, analyzer):
             default_mu = float(series.mean()) if pd.notna(series.mean()) else 0.0
             default_sd = float(series.std()) if pd.notna(series.std()) and series.std() > 0 else 1.0
             manual_refs[var] = (
-                c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", key=f"mu_{var}"),
-                c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", key=f"sigma_{var}"),
+                c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", key=f"mu_{var}", help=HELP["z_mean"]),
+                c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", key=f"sigma_{var}", help=HELP["z_sd"]),
             )
 
     if not target_vars:
@@ -1292,7 +1355,8 @@ def run_zscore_analysis(df, analyzer):
             group_col = st.selectbox(
                 "Group by", 
                 options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20],
-                key="zscore_group_col"
+                key="zscore_group_col",
+                help=HELP["z_group_by"],
             )
         with col_grp2:
             error_type = st.radio(
@@ -1416,7 +1480,7 @@ def run_zscore_analysis(df, analyzer):
         else:
             heatmap_df = z_df
             
-        sort_col = st.selectbox("Sort samples by", ["None"] + z_cols, key="heatmap_sort")
+        sort_col = st.selectbox("Sort samples by", ["None"] + z_cols, key="heatmap_sort", help=HELP["z_sort"])
         if sort_col != "None":
             heatmap_df = heatmap_df.sort_values(sort_col)
             
@@ -1460,14 +1524,14 @@ def run_zscore_analysis(df, analyzer):
     with viz_tabs[2]:
         st.markdown("#### Individual Z-Score Profile")
         
-        sample_id_col = st.selectbox("Select Sample ID Column", ["Row Index"] + analyzer.categorical_cols, key="profile_id_col")
+        sample_id_col = st.selectbox("Select Sample ID Column", ["Row Index"] + analyzer.categorical_cols, key="profile_id_col", help=HELP["z_id_col"])
         
         if sample_id_col == "Row Index":
-            sample_idx = st.number_input("Row Index", min_value=0, max_value=len(z_df)-1, value=0, step=1)
+            sample_idx = st.number_input("Row Index", min_value=0, max_value=len(z_df)-1, value=0, step=1, help=HELP["z_row"])
             selected_row = z_df.iloc[sample_idx]
             label = f"Sample #{sample_idx}"
         else:
-            sample_val = st.selectbox("Select Sample", z_df[sample_id_col].unique())
+            sample_val = st.selectbox("Select Sample", z_df[sample_id_col].unique(), help=HELP["z_sample"])
             selected_row = z_df[z_df[sample_id_col] == sample_val].iloc[0]
             label = str(sample_val)
             
@@ -2019,7 +2083,7 @@ def run_power_analysis(df, analyzer):
             results_list = st.session_state['epidemiology_results']
             # Create options
             options = {f"{r['Variable']} ({r['Test Used']})": r for r in results_list}
-            selected_import = st.selectbox("Select Result to Import", ["None"] + list(options.keys()))
+            selected_import = st.selectbox("Select Result to Import", ["None"] + list(options.keys()), help=HELP["power_import"])
             
             if selected_import != "None":
                 res = options[selected_import]
@@ -2147,7 +2211,8 @@ def run_power_analysis(df, analyzer):
             "Select Grouping Variable", 
             options=["None"] + potential_groupers,
             index=default_idx + 1 if potential_groupers else 0,
-            key="power_group_col"
+            key="power_group_col",
+            help=HELP["power_autofill_group"],
         )
         
         # Group Filtering (New)
@@ -2275,36 +2340,58 @@ def run_power_analysis(df, analyzer):
             "Statistical Test", 
             ["T-Test (Independent)", "Mann-Whitney U (Non-parametric)", "ANOVA (One-way)", "Kruskal-Wallis (Non-parametric)", "Chi-Square"], 
             index=test_type_idx,
-            key='power_test_type_selector' # Use different key to avoid conflict or handle sync manually
+            key='power_test_type_selector',  # separate from the imported value, synced manually
+            help=HELP["power_test"],
         )
         # Sync selector with session state if needed, but simpler to just let user select
     with col2:
-        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Power at this sample size"])
+        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Power at this sample size"], help=HELP["power_goal"])
         
     st.divider()
     
+    if guidance_on():
+        st.info(
+            "**How to plan:** 1. pick the test you will use in the final analysis; 2. state the smallest effect worth "
+            "detecting (a minimal clinically important difference or pilot data, not the effect you hope for), directly "
+            "or from expected means or proportions; 3. keep alpha at 0.05 and aim for 80 to 90% power; "
+            "4. add a margin for dropouts and missing data.",
+            icon=":material/route:",
+        )
+
     # Common Inputs
     c1, c2 = st.columns(2)
     with c1:
-        alpha = st.number_input("Significance Level (Alpha)", value=0.05, step=0.01, format="%.2f", help="Probability of Type I error (False Positive). Usually 0.05.")
+        alpha = st.number_input("Significance Level (Alpha)", value=0.05, step=0.01, format="%.2f", help=HELP["alpha"])
     
     if test_type == "T-Test (Independent)":
         st.subheader("T-Test Parameters")
         st.caption("Effect Size: Cohen's d (Small=0.2, Medium=0.5, Large=0.8)")
         
         with c2:
-            effect_size = st.number_input("Effect Size (Cohen's d)", value=float(default_effect_size), step=0.001, format="%.3f", key="es_ttest")
+            es_mode = st.selectbox(
+                "Effect size input", ["Cohen's d", "Expected means and SD"], key="es_mode_ttest", help=HELP["es_mode"]
+            )
+            if es_mode == "Cohen's d":
+                effect_size = st.number_input(
+                    "Effect Size (Cohen's d)", value=float(default_effect_size), step=0.001, format="%.3f",
+                    key="es_ttest", help=HELP["es_d"],
+                )
+                effect_label = f"a difference of d = {effect_size:.2f}"
+            else:
+                mean1, mean2, sd_expected = _expected_means_inputs("es_t")
+                effect_size = cohens_d_from_means(mean1, mean2, sd_expected)
+                st.caption(f"Cohen's d = |{mean1:g} - {mean2:g}| / {sd_expected:g} = **{effect_size:.3f}**")
+                effect_label = f"a difference of {abs(mean1 - mean2):g} units (d = {effect_size:.2f})"
         
-        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, help="1.0 for equal group sizes.", key="ratio_ttest")
+        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, help=HELP["ratio"], key="ratio_ttest")
         
         analysis = TTestIndPower()
         
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80)
-            if st.button("Calculate Sample Size"):
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 nobs = analysis.solve_power(effect_size=effect_size, alpha=alpha, power=power, ratio=ratio)
-                st.success(f"Required Sample Size (Group 1): **{np.ceil(nobs):.0f}**")
-                st.info(f"Total Sample Size: **{np.ceil(nobs) + np.ceil(nobs*ratio):.0f}**")
+                st.success(sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[nobs, nobs * ratio]))
                 st.caption("Calculation based on Cohen's d and non-central t-distribution (Cohen, 1988).")
                 
                 # Plot Power Curve
@@ -2325,43 +2412,57 @@ def run_power_analysis(df, analyzer):
                 st.pyplot(fig)
                 
         else: # Calculate Power
-            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_ttest", help="Number of observations in the first group.")
-            if st.button("Calculate Power"):
+            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_ttest", help=HELP["n1"])
+            if st.button("Calculate Power") and _effect_ok(effect_size):
                 power_val = analysis.solve_power(effect_size=effect_size, nobs1=nobs1, alpha=alpha, ratio=ratio)
-                st.success(f"Power at this sample size: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                st.success(power_sentence(effect_label, power_val, sample=f"{int(nobs1)} in group 1 and {int(round(nobs1 * ratio))} in group 2"))
 
     elif test_type == "Mann-Whitney U (Non-parametric)":
         st.subheader("Mann-Whitney U Parameters")
         st.info("Uses Noether's formula (1987) based on the probability P(X < Y).")
         
         with c2:
-            if 'mwu_p_xy' not in st.session_state: st.session_state['mwu_p_xy'] = 0.64
-            es_type = st.selectbox("Effect Size Input", ["P(X < Y)", "Rank-Biserial r", "Cohen's d (approx)"], key="es_type_mwu")
-            
-            if es_type == "P(X < Y)":
-                display_val = st.session_state['mwu_p_xy']
-                min_v, max_v = 0.0, 1.0
-            elif es_type == "Rank-Biserial r":
-                display_val = 2 * st.session_state['mwu_p_xy'] - 1
-                min_v, max_v = -1.0, 1.0
+            if 'mwu_p_xy' not in st.session_state:
+                st.session_state['mwu_p_xy'] = 0.64
+            es_type = st.selectbox(
+                "Effect Size Input", ["P(X < Y)", "Rank-Biserial r", "Cohen's d (approx)", "Expected means and SD"],
+                key="es_type_mwu", help=HELP["es_mwu_scale"],
+            )
+            if es_type == "Expected means and SD":
+                mean1, mean2, sd_expected = _expected_means_inputs("es_mwu")
+                d_planned = cohens_d_from_means(mean1, mean2, sd_expected)
+                st.session_state['mwu_p_xy'] = p_superiority_from_d(d_planned)
+                st.caption(f"d = {d_planned:.3f}, so P(X < Y) = **{st.session_state['mwu_p_xy']:.3f}** (normal data assumed)")
             else:
-                p_safe = np.clip(st.session_state['mwu_p_xy'], 0.001, 0.999)
-                display_val = np.sqrt(2) * stats.norm.ppf(p_safe)
-                min_v, max_v = -10.0, 10.0
-
-            val_input = st.number_input(f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", min_value=min_v, max_value=max_v, key=f"es_input_{es_type}")
-            
-            if es_type == "P(X < Y)": st.session_state['mwu_p_xy'] = val_input
-            elif es_type == "Rank-Biserial r": st.session_state['mwu_p_xy'] = (val_input + 1) / 2
-            else: st.session_state['mwu_p_xy'] = stats.norm.cdf(val_input / np.sqrt(2))
-            
+                if es_type == "P(X < Y)":
+                    display_val = st.session_state['mwu_p_xy']
+                    min_v, max_v = 0.0, 1.0
+                elif es_type == "Rank-Biserial r":
+                    display_val = 2 * st.session_state['mwu_p_xy'] - 1
+                    min_v, max_v = -1.0, 1.0
+                else:
+                    p_safe = np.clip(st.session_state['mwu_p_xy'], 0.001, 0.999)
+                    display_val = np.sqrt(2) * stats.norm.ppf(p_safe)
+                    min_v, max_v = -10.0, 10.0
+                val_input = st.number_input(
+                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f",
+                    min_value=min_v, max_value=max_v, key=f"es_input_{es_type}", help=HELP["es_mwu"],
+                )
+                if es_type == "P(X < Y)":
+                    st.session_state['mwu_p_xy'] = val_input
+                elif es_type == "Rank-Biserial r":
+                    st.session_state['mwu_p_xy'] = (val_input + 1) / 2
+                else:
+                    st.session_state['mwu_p_xy'] = stats.norm.cdf(val_input / np.sqrt(2))
             p_xy = st.session_state['mwu_p_xy']
-        
-        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, key="ratio_mwu")
+            effect_size = abs(p_xy - 0.5)  # distance from "no effect", for the input check
+            effect_label = f"P(X < Y) = {p_xy:.2f}"
+
+        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, key="ratio_mwu", help=HELP["ratio"])
         
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80)
-            if st.button("Calculate Sample Size"):
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 if abs(p_xy - 0.5) < 0.001:
                     st.error("Effect size is too close to 0.5 (No Effect).")
                 else:
@@ -2372,62 +2473,113 @@ def run_power_analysis(df, analyzer):
                     denominator = 12 * c * (1-c) * (p_xy - 0.5)**2
                     N_total = numerator / denominator
                     n1 = N_total * c
-                    st.success(f"Required Sample Size (Group 1): **{np.ceil(n1):.0f}**")
-                    st.info(f"Total Sample Size: **{np.ceil(N_total):.0f}**")
+                    st.success(sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[n1, N_total - n1]))
         else:
-            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_mwu")
-            if st.button("Calculate Power"):
+            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_mwu", help=HELP["n1"])
+            if st.button("Calculate Power") and _effect_ok(effect_size):
                 c = 1 / (1 + ratio)
                 N_total = nobs1 * (1 + ratio)
                 z_alpha = stats.norm.ppf(1 - alpha/2)
                 z_beta = np.sqrt(N_total * 12 * c * (1-c) * (p_xy - 0.5)**2) - z_alpha
                 power_val = stats.norm.cdf(z_beta)
-                st.success(f"Power at this sample size: **{power_val:.4f}** ({power_val*100:.1f}%)")
+                st.success(power_sentence(effect_label, power_val, sample=f"{int(nobs1)} in group 1 and {int(round(nobs1 * ratio))} in group 2"))
 
     elif test_type == "ANOVA (One-way)":
         st.subheader("ANOVA Parameters")
         st.caption("Effect Size: Cohen's f (Small=0.1, Medium=0.25, Large=0.4)")
+        planned_means = None
         with c2:
-            es_type = st.selectbox("Effect Size Input", ["Cohen's f", "Eta Squared"], key="es_type_anova")
-            effect_size_input = st.number_input(f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f", key="es_anova")
-            if es_type == "Eta Squared":
-                effect_size = np.sqrt(effect_size_input / (1 - effect_size_input)) if effect_size_input < 1 else 0.1
+            es_type = st.selectbox(
+                "Effect Size Input", ["Cohen's f", 'Eta Squared', 'Expected group means and SD'], key="es_type_anova", help=HELP["es_anova_scale"]
+            )
+            if es_type == "Expected group means and SD":
+                means_text = st.text_input(
+                    "Expected group means", value="120, 125, 132", key="es_type_anova_means", help=HELP["group_means"]
+                )
+                sd_expected = st.number_input(
+                    "SD within groups", value=10.0, min_value=1e-9, key="es_type_anova_sd", help=HELP["sd"]
+                )
+                try:
+                    planned_means = parse_numbers(means_text)
+                    effect_size = cohens_f_from_means(planned_means, sd_expected)
+                    st.caption(f"Cohen's f = **{effect_size:.3f}** for {len(planned_means)} groups")
+                except ValueError as exc:
+                    st.error(str(exc))
+                    planned_means, effect_size = None, 0.0
             else:
-                effect_size = effect_size_input
-        
-        k_groups = st.number_input("Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_anova")
+                effect_size_input = st.number_input(
+                    f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f",
+                    key="es_anova", help=HELP["es_anova"],
+                )
+                if es_type == "Eta Squared":
+                    effect_size = np.sqrt(effect_size_input / (1 - effect_size_input)) if effect_size_input < 1 else 0.1
+                else:
+                    effect_size = effect_size_input
+        if planned_means:
+            k_groups = len(planned_means)
+            st.caption(f"Number of groups: {k_groups} (from the expected means)")
+        else:
+            k_groups = st.number_input(
+                "Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_anova", help=HELP["k_groups"]
+            )
+        effect_label = f"an effect of f = {effect_size:.2f}"
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80)
-            if st.button("Calculate Sample Size"):
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = anova_sample_size(effect_size, int(k_groups), alpha=alpha, power=power)
                 st.success(
-                    f"Required sample size: **{res.n_per_group} per group** "
-                    f"({res.n_per_group * int(k_groups)} in total; exact total {res.n_total:.1f})"
+                    sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[res.n_per_group] * int(k_groups))
                 )
                 st.caption(res.method)
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
-            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_anova")
-            if st.button("Calculate Power"):
+            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_anova", help=HELP["n_per_group"])
+            if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = anova_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha)
                 st.success(
-                    f"Power at this sample size: **{res.power:.4f}** ({res.power * 100:.1f}%) for {int(nobs_per_group)} per group "
-                    f"({int(res.n_total)} in total)"
+                    power_sentence(effect_label, res.power, sample=f"{int(nobs_per_group)} per group ({int(res.n_total)} in total)")
                 )
                 st.caption(res.method)
 
     elif test_type == "Kruskal-Wallis (Non-parametric)":
         st.subheader("Kruskal-Wallis Parameters")
+        planned_means = None
         with c2:
-            es_type = st.selectbox("Effect Size Input", ["Cohen's f equivalent", "Epsilon Squared"], key="es_type_kw")
-            effect_size_input = st.number_input(f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f", key="es_kw")
-            if es_type == "Epsilon Squared":
-                effect_size = np.sqrt(effect_size_input / (1 - effect_size_input)) if effect_size_input < 1 else 0.1
+            es_type = st.selectbox(
+                "Effect Size Input", ["Cohen's f equivalent", 'Epsilon Squared', 'Expected group means and SD'], key="es_type_kw", help=HELP["es_kw_scale"]
+            )
+            if es_type == "Expected group means and SD":
+                means_text = st.text_input(
+                    "Expected group means", value="120, 125, 132", key="es_type_kw_means", help=HELP["group_means"]
+                )
+                sd_expected = st.number_input(
+                    "SD within groups", value=10.0, min_value=1e-9, key="es_type_kw_sd", help=HELP["sd"]
+                )
+                try:
+                    planned_means = parse_numbers(means_text)
+                    effect_size = cohens_f_from_means(planned_means, sd_expected)
+                    st.caption(f"Cohen's f = **{effect_size:.3f}** for {len(planned_means)} groups")
+                except ValueError as exc:
+                    st.error(str(exc))
+                    planned_means, effect_size = None, 0.0
             else:
-                effect_size = effect_size_input
-        
-        k_groups = st.number_input("Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_kw")
+                effect_size_input = st.number_input(
+                    f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f",
+                    key="es_kw", help=HELP["es_anova"],
+                )
+                if es_type == "Epsilon Squared":
+                    effect_size = np.sqrt(effect_size_input / (1 - effect_size_input)) if effect_size_input < 1 else 0.1
+                else:
+                    effect_size = effect_size_input
+        if planned_means:
+            k_groups = len(planned_means)
+            st.caption(f"Number of groups: {k_groups} (from the expected means)")
+        else:
+            k_groups = st.number_input(
+                "Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_kw", help=HELP["k_groups"]
+            )
+        effect_label = f"an effect of f = {effect_size:.2f}"
         dist_assumption = st.radio(
             "Underlying Distribution Assumption",
             ["Normal Distribution (ARE 0.955)", "Unknown / Heavy-Tailed (worst case, ARE 0.864)"],
@@ -2437,60 +2589,87 @@ def run_power_analysis(df, analyzer):
         are = ARE_NORMAL if dist_assumption.startswith("Normal") else ARE_WORST_CASE
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80)
-            if st.button("Calculate Sample Size"):
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = kruskal_sample_size(effect_size, int(k_groups), alpha=alpha, power=power, are=are)
                 st.success(
-                    f"Required sample size: **{res.n_per_group} per group** "
-                    f"({res.n_per_group * int(k_groups)} in total; exact total {res.n_total:.1f})"
+                    sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[res.n_per_group] * int(k_groups))
                 )
                 st.caption(f"{res.method}. {res.note}")
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
-            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_kw")
-            if st.button("Calculate Power"):
+            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_kw", help=HELP["n_per_group"])
+            if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = kruskal_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha, are=are)
                 st.success(
-                    f"Power at this sample size (approximate): **{res.power:.4f}** ({res.power * 100:.1f}%) "
-                    f"for {int(nobs_per_group)} per group"
+                    power_sentence(effect_label, res.power, sample=f"{int(nobs_per_group)} per group") + " (approximation)"
                 )
                 st.caption(res.method)
 
     elif test_type == "Chi-Square":
         st.subheader("Chi-Square Parameters")
         st.caption("Effect Size: Cohen's w (Small=0.1, Medium=0.3, Large=0.5)")
+        planned_props = None
         with c2:
-            if 'chi2_w' not in st.session_state: st.session_state['chi2_w'] = 0.3
-            es_type = st.selectbox("Effect Size Input", ["Cohen's w", "Cramer's V"], key="es_type_chi2")
-            if 'min_dim_chi2' not in st.session_state: st.session_state['min_dim_chi2'] = 1
-            min_dim_input = st.number_input("Min Dimension (min(r-1, c-1))", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1)
-            
-            if es_type == "Cramer's V": display_val = st.session_state['chi2_w'] / np.sqrt(min_dim_input)
-            else: display_val = st.session_state['chi2_w']
-            
-            effect_size_input = st.number_input(f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", key="es_chi2_input")
-            
-            if es_type == "Cramer's V": st.session_state['chi2_w'] = effect_size_input * np.sqrt(min_dim_input)
-            else: st.session_state['chi2_w'] = effect_size_input
+            if 'chi2_w' not in st.session_state:
+                st.session_state['chi2_w'] = 0.3
+            es_type = st.selectbox(
+                "Effect Size Input", ["Cohen's w", "Cramer's V", "Expected event proportions"], key="es_type_chi2",
+                help=HELP["es_chi2_scale"],
+            )
+            if es_type == "Expected event proportions":
+                props_text = st.text_input(
+                    "Expected event proportion per group", value="0.20, 0.35", key="es_chi2_props", help=HELP["proportions"]
+                )
+                try:
+                    planned_props = parse_numbers(props_text)
+                    st.session_state['chi2_w'] = cohens_w_from_proportions(planned_props)
+                    st.caption(f"Cohen's w = **{st.session_state['chi2_w']:.3f}** for {len(planned_props)} groups")
+                except ValueError as exc:
+                    st.error(str(exc))
+                    planned_props = None
+            else:
+                if 'min_dim_chi2' not in st.session_state:
+                    st.session_state['min_dim_chi2'] = 1
+                min_dim_input = st.number_input(
+                    "Min Dimension (min(r-1, c-1))", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1,
+                    help=HELP["min_dim"],
+                )
+                display_val = st.session_state['chi2_w'] / np.sqrt(min_dim_input) if es_type == "Cramer's V" else st.session_state['chi2_w']
+                effect_size_input = st.number_input(
+                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", key="es_chi2_input",
+                    help=HELP["es_chi2"],
+                )
+                st.session_state['chi2_w'] = effect_size_input * np.sqrt(min_dim_input) if es_type == "Cramer's V" else effect_size_input
             effect_size = st.session_state['chi2_w']
-            
-        df_chi2 = st.number_input(
-            "Degrees of freedom = (rows - 1) x (columns - 1)",
-            value=max(1, int(default_n_cat) - 1), step=1, min_value=1, key="df_chi2",
-            help="For a 2x2 table df = 1; for k groups and a binary outcome df = k - 1.",
-        )
+
+        if planned_props:
+            df_chi2 = len(planned_props) - 1
+            st.caption(f"Degrees of freedom = {df_chi2} ({len(planned_props)} groups x a yes/no outcome)")
+        else:
+            df_chi2 = st.number_input(
+                "Degrees of freedom = (rows - 1) x (columns - 1)",
+                value=max(1, int(default_n_cat) - 1), step=1, min_value=1, key="df_chi2",
+                help="For a 2x2 table df = 1; for k groups and a binary outcome df = k - 1.",
+            )
+        effect_label = f"an association of w = {effect_size:.2f}"
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80)
-            if st.button("Calculate Sample Size"):
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = chi2_independence_sample_size(effect_size, int(df_chi2), alpha=alpha, power=power)
-                st.success(f"Required Total Sample Size: **{np.ceil(res.n_total):.0f}** (df = {int(df_chi2)})")
+                per_group = [res.n_total / len(planned_props)] * len(planned_props) if planned_props else None
+                st.success(
+                    sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=per_group, n_total=res.n_total)
+                )
+                st.caption(f"Degrees of freedom: {int(df_chi2)}")
                 st.caption(res.method)
         else:
-            nobs = st.number_input("Total Sample Size", value=int(default_n_total), step=1, key="n_total_chi2")
-            if st.button("Calculate Power"):
+            nobs = st.number_input("Total Sample Size", value=int(default_n_total), step=1, key="n_total_chi2", help=HELP["n_total"])
+            if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = chi2_independence_power(effect_size, nobs, int(df_chi2), alpha=alpha)
-                st.success(f"Power at this sample size: **{res.power:.4f}** ({res.power * 100:.1f}%) with df = {int(df_chi2)}")
+                st.success(power_sentence(effect_label, res.power, sample=f"{int(nobs)} participants in total"))
+                st.caption(f"Degrees of freedom: {int(df_chi2)}")
                 st.caption(res.method)
 
     with st.expander("Methodology & References"):

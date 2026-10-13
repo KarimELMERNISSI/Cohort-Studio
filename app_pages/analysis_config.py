@@ -3,6 +3,7 @@
 import streamlit as st
 
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
+from ui.guidance.analysis import HELP
 
 
 def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_cols, group_col_options=None, default_group_col="None", target_col_options=None, key_prefix=""):
@@ -24,7 +25,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 "Select Grouping Variable (Factor)", 
                 options=group_col_options,
                 index=group_col_options.index(default_group_col) if default_group_col in group_col_options else 0,
-                help="Select a categorical variable to define groups (e.g., Treatment vs Control).",
+                help=HELP["group_col"],
                 key=f"{key_prefix}group_col"
             )
             
@@ -36,7 +37,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                     "Groups to Include",
                     options=unique_groups,
                     default=unique_groups,
-                    help="Deselect groups with small sample sizes (e.g., < 5) to exclude them from analysis.",
+                    help=HELP["groups"],
                     key=f"{key_prefix}selected_groups"
                 )
             elif group_col != "None":
@@ -59,7 +60,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 "Select Variables to Test",
                 options=target_col_options,
                 default=default_targets,
-                help="Select variables to compare across groups.",
+                help=HELP["targets"],
                 key=f"{key_prefix}target_cols"
             )
             
@@ -69,15 +70,14 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
             test_preference = st.selectbox(
                 "Test Selection Strategy",
                 ["Auto-Detect (Recommended)", "Force Parametric (T-test/ANOVA)", "Force Non-Parametric (Mann-Whitney/Kruskal)"],
-                help="Auto-Detect checks normality and variance assumptions. You can force specific test families if needed.",
+                help=HELP["strategy"],
                 key=f"{key_prefix}test_pref"
             )
         with col4:
             correction_method = st.selectbox(
                 "Multiple Testing Correction",
                 list(CORRECTION_OPTIONS),
-                help="The family is the set of variables tested in this run. Holm controls the family-wise error rate and is "
-                     "more powerful than Bonferroni; Benjamini-Hochberg controls the false discovery rate (exploratory screens).",
+                help=HELP["correction"],
                 key=f"{key_prefix}correction"
             )
             

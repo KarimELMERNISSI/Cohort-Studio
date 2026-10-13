@@ -2,6 +2,31 @@
 
 The **Epidemiology & Hypothesis** page provides a complete statistical analysis toolkit — from univariate tests to multivariate modelling, power calculations, and Z-score standardisation. The system auto-recommends appropriate tests based on your data characteristics.
 
+## Guidance on this page
+
+The **Guidance** switch at the top of the page (on by default) adds help where decisions are made; turn it off once
+you know the page.
+
+- **Which tab do I need?** — maps your question to the right tab (compare groups, diagnostic accuracy and
+  agreement, paired data, rates and stratified analyses, power and sample size, reference z-scores) and links to
+  the *Which test?* chooser.
+- **Every parameter is explained** — hover the help icon of any input: what it means, typical values and what
+  changes when you change it.
+- **Before you run: the plan** — once the groups and variables are chosen, the page shows, for each variable,
+  the test that will run and why (the same rules as the engine: Welch's test by default, a rank test for small
+  and strongly skewed groups, Fisher's exact test for sparse 2x2 tables), the group sizes, missing data, and
+  warnings: very small or unbalanced groups, many groups, variables with 20% or more missing values, and tests
+  run without a multiple-testing correction. It suggests a correction (none for one test, Holm up to 9 tests,
+  Benjamini-Hochberg for screens of 10 or more) and applies it in one click.
+- **Detailed view** — choosing a test by hand shows what that test assumes.
+- **ANCOVA model check** — complete observations per model parameter (at least 10, better 20), rows excluded
+  for missing values, covariates largely explained by the group (possible mediators or collinearity), and a
+  reminder of how to choose covariates.
+- **Power & sample size** — a four-step plan; the effect can be given directly or from what you expect in the
+  outcome's own terms (two means and an SD, several group means and an SD, or event proportions per group);
+  results are written as a sentence ("To detect ... with 80% power ... you need ... participants") with a
+  reminder to add a dropout margin, and achieved power is put in context (below 50%, below the 80% target).
+
 ---
 
 ## Hypothesis Testing
@@ -78,7 +103,7 @@ Estimate the sample size needed to detect a meaningful effect, or the power of y
 
 | Parameter | Description |
 | --- | --- |
-| **Effect Size** | Expected magnitude (Cohen's d or custom). |
+| **Effect Size** | The smallest effect worth detecting: Cohen's d, f or w directly, or computed from expected means and SD, group means, or event proportions per group. |
 | **Alpha (α)** | Significance level (default 0.05). |
 | **Power (1 − β)** | Desired statistical power (default 0.80). |
 | **Number of Groups** | For multi-group comparisons. |
