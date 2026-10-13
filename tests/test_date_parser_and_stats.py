@@ -11,7 +11,6 @@ import pyarrow as pa
 import pytest
 
 from app_pages.home import get_statistics_dataframe as home_get_stats
-from explore.statistics import get_statistics_dataframe as explore_get_stats
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
@@ -163,13 +162,3 @@ class TestPyArrowStatisticsCompatibility:
         assert "admission_date" in date_stats.index
         assert "discharge_date" in date_stats.index
 
-    def test_explore_get_statistics_dataframe_arrow_compatibility(self) -> None:
-        """Descriptive statistics in explore/statistics.py serializes cleanly with mixed column types."""
-        df_mixed = pd.DataFrame({
-            "score": [1.0, 2.5, 3.8, 4.2],
-            "event_time": pd.to_datetime(["2017-01-01", "2017-02-01", "2017-03-01", "2017-04-01"]),
-            "status": ["Active", "Paused", "Active", "Completed"],
-        })
-        stats_df = explore_get_stats(df_mixed)
-        table = pa.Table.from_pandas(stats_df)
-        assert table.num_rows == 3

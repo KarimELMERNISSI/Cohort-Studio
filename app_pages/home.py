@@ -18,6 +18,21 @@ from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 from ui.components import confirm, no_dataset
+import hashlib
+
+
+def _q(identifier) -> str:
+    """Quote a DuckDB identifier (column names come from uploaded files; audit E4)."""
+    return '"' + str(identifier).replace('"', '""') + '"'
+
+
+def _frame_fingerprint(df) -> str:
+    """Short content hash so cached statistics follow the frame (filters, renames), not only its name (audit E8)."""
+    head = f"{df.shape}|{list(map(str, df.columns))}".encode()
+    try:
+        return hashlib.md5(head + pd.util.hash_pandas_object(df, index=False).values.tobytes()).hexdigest()[:12]
+    except Exception:
+        return hashlib.md5(head).hexdigest()[:12]
 
 
 def _top_correlations(corr_matrix: pd.DataFrame, node_ids, limit: int = 10) -> pd.DataFrame:
@@ -238,12 +253,12 @@ class RenameColumnsComponent:
                             )
                             st.markdown(stats_str, unsafe_allow_html=True)
                         else:
-                            st.markdown("<div style='padding:5px; color: #A9A9A9;'>N/A</div>", unsafe_allow_html=True)
+                            st.caption("N/A")
                     else:
                         st.warning(f"Column '{col}' is missing in the DataFrame.")
 
                 # Styling for separation
-                st.markdown("<hr style='margin: 5px 0; border: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+                st.divider()
 
         # Apply renaming and refresh analyzer
         if st.button("Apply Renaming"):
@@ -251,6 +266,11 @@ class RenameColumnsComponent:
             if rename_dict != {col: col for col in self.original_df.columns}:
                 # Apply renaming to working_df
                 st.session_state["working_df"] = st.session_state["working_df"].rename(columns=rename_dict)
+                changed = {old: new for old, new in rename_dict.items() if old != new}
+                if "transformation_manager" in st.session_state and changed:  # every mutating step is traced (audit E10)
+                    st.session_state.transformation_manager.add_step(
+                        "rename_columns", {"mapping": changed}, f"Renamed {len(changed)} column(s)"
+                    )
                 st.success("Columns renamed successfully!")
                 self.analyzer.refresh(st.session_state["working_df"])
             else:
@@ -302,6 +322,8 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
     
     Note: Parameters starting with _ are excluded from hashing by Streamlit.
     """
+    if dataset_name:
+        dataset_name = f"{dataset_name}__{_frame_fingerprint(df)}"
     # Try to load cached stats if dataset name is available
     if dataset_name and _db_manager:
         cached_num, _ = _db_manager.load_stats(dataset_name, "numerical")
@@ -563,15 +585,15 @@ def run_benchmark(df, analyzer):
         selects = []
         for col in analyzer.numeric_cols:
             # Basic stats equivalent to describe()
-            selects.append(f"COUNT(\"{col}\")")
-            selects.append(f"AVG(\"{col}\")")
-            selects.append(f"STDDEV(\"{col}\")")
-            selects.append(f"MIN(\"{col}\")")
-            selects.append(f"MAX(\"{col}\")")
+            selects.append(f"COUNT({_q(col)})")
+            selects.append(f"AVG({_q(col)})")
+            selects.append(f"STDDEV({_q(col)})")
+            selects.append(f"MIN({_q(col)})")
+            selects.append(f"MAX({_q(col)})")
             # Quantiles (approximate is faster, exact is slower)
-            selects.append(f"QUANTILE_CONT(\"{col}\", 0.25)")
-            selects.append(f"QUANTILE_CONT(\"{col}\", 0.50)")
-            selects.append(f"QUANTILE_CONT(\"{col}\", 0.75)")
+            selects.append(f"QUANTILE_CONT({_q(col)}, 0.25)")
+            selects.append(f"QUANTILE_CONT({_q(col)}, 0.50)")
+            selects.append(f"QUANTILE_CONT({_q(col)}, 0.75)")
 
         if selects:
             query = f"SELECT {', '.join(selects)} FROM df_bench"
@@ -609,7 +631,7 @@ def run_benchmark(df, analyzer):
         start = time.time()
         dd_cats = {}
         for col in analyzer.categorical_cols:
-            query = f"SELECT \"{col}\", COUNT(*) as count FROM df_bench GROUP BY \"{col}\" ORDER BY count DESC LIMIT 5"
+            query = f"SELECT {_q(col)}, COUNT(*) as count FROM df_bench GROUP BY {_q(col)} ORDER BY count DESC LIMIT 5"
             dd_cats[col] = con.execute(query).fetchall()
         end = time.time()
         time_dd_cat = end - start
@@ -646,11 +668,11 @@ def run_benchmark(df, analyzer):
             start = time.time()
             # DuckDB doesn't have a direct 'describe' for groups, so we do basic stats
             query = f"""
-            SELECT \"{group_col}\", 
-                   COUNT(\"{target_col}\"), AVG(\"{target_col}\"), STDDEV(\"{target_col}\"), MIN(\"{target_col}\"), MAX(\"{target_col}\")
+            SELECT {_q(group_col)}, 
+                   COUNT({_q(target_col)}), AVG({_q(target_col)}), STDDEV({_q(target_col)}), MIN({_q(target_col)}), MAX({_q(target_col)})
             FROM df_bench 
-            GROUP BY \"{group_col}\"
-            ORDER BY \"{group_col}\"
+            GROUP BY {_q(group_col)}
+            ORDER BY {_q(group_col)}
             """
             dd_group = con.execute(query).fetchall()
             end = time.time()
@@ -689,7 +711,7 @@ def run_benchmark(df, analyzer):
         
         for i, c1 in enumerate(bench_cols):
             for c2 in bench_cols[i:]:
-                 selects.append(f"CORR(\"{c1}\", \"{c2}\")")
+                 selects.append(f"CORR({_q(c1)}, {_q(c2)})")
         
         if selects:
             query = f"SELECT {', '.join(selects)} FROM df_bench"

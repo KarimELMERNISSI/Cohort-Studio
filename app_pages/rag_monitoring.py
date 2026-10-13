@@ -561,11 +561,8 @@ def run_demo_evaluation(evaluator):
     }
     
     progress_bar.progress(30, text="Simulating retrieval...")
-    import time
-    time.sleep(0.5)
     
     progress_bar.progress(60, text="Simulating generation...")
-    time.sleep(0.5)
     
     progress_bar.progress(90, text="Computing demo scores...")
     

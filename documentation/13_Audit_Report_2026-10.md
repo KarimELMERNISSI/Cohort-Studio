@@ -93,7 +93,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | done (`core/expressions`, `core/workspace`, lockout; migration script `dev_scripts/migrate_user_layout.py`) |
 | P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | done (`ui/`, `ingest/`, `core/state.py`, `app_pages/views/`) |
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | done (multiple imputation with Rubin pooling deferred to P8) |
-| P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | planned |
+| P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | done (function splitting and the remaining `unsafe_allow_html` blocks deferred to P7/P8 clean-up) |
 | P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | planned |
 | P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement | planned |
 
@@ -118,19 +118,19 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | E1 leaked key | open | owner action |
 | E2 Visualization import | closed | P0 |
 | E3 eval code execution | closed | P3 (`core/expressions` AST whitelist evaluator, `safe_format`) |
-| E4 per-user isolation | closed | P3 (`UserScope` workspaces, contained path inputs, parameterised DuckDB paths; column-name quoting in Main View filters remains with the P4 state refactor) |
+| E4 per-user isolation | closed | P3 (`UserScope` workspaces, contained path inputs, parameterised DuckDB paths); P6 (quoted identifiers in the DuckDB benchmark) |
 | E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy); P3 (login lockout) |
 | E6 cloud LLM by default / key exposure | closed for consent and keys | P0; Settings-page UX in P4 |
 | E7 PHI on stdout | closed | P0 |
-| E8 stale state / cache | closed for session state (`AppState.set_dataset` single invalidation point); the on-disk statistics cache key still ignores filters | P4; cache key in P6 |
+| E8 stale state / cache | closed | P4 (`AppState.set_dataset` single invalidation point); P6 (disk statistics cache keyed by a frame fingerprint) |
 | E9 undefined names / empty-state crashes | closed | P0 |
-| E10 reproducibility claims | open | P6 |
+| E10 reproducibility claims | closed for the recorded steps (single engine `run_trace`; rename and filters traced and replayed); outlier *tagging* and date re-parsing are still not recorded | P6 |
 | E11 per-rerun expensive work | partially closed (upload hash once per file, AI probes cached and moved to Settings) | P4; remaining DataAnalyzer/audit recomputation in P6 |
 | E12 tracked secrets/config | closed | P0 |
-| E13 layering / dead code / duplication | open | P6 |
+| E13 layering / dead code / duplication | closed for layering (test-enforced), dead code and duplicates; giant functions (59 > 100 lines) remain | P6; splitting with P7/P8 |
 | E14 quality gates | lite CI closed | P0; full gates in P7 |
 | U1–U3 login, navigation, onboarding, import | closed | P4 (`st.navigation`, Start page, sample cohort, import flow) |
-| U5 destructive actions | partially closed (cache reset, cached statistics) | P4; reindex/filter confirmations with the page refactors in P5/P6 |
-| U6 design | partially closed (theme tokens, components) | P4; `unsafe_allow_html` removal in P6 |
-| U4, U7 feedback and guidance | closed for result cards, test chooser, glossary, handbook; Run buttons and long-operation status on the legacy pages in P6 | P5 |
+| U5 destructive actions | closed (cache reset, cached statistics, apply filter); reindex confirmation pending | P4, P6 |
+| U6 design | partially closed (theme tokens, components, interpretation quadrants); 30 `unsafe_allow_html` blocks remain, mostly the educational HTML tables | P4, P6; P7/P8 clean-up |
+| U4, U7 feedback and guidance | closed (result cards, test chooser, glossary, handbook, Run button on the Analyze page, no artificial sleeps); `long_op` adoption on the legacy pages pending | P5, P6 |
 | U8 copy | open | P6 |

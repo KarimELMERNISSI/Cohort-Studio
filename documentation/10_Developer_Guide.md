@@ -41,7 +41,7 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
 ### Key Design Decisions
 
 - **ChromaDB** is used as the vector store for document embeddings.
-- **Google Gemini** is the LLM backend (via a custom LangChain adapter in `utils/custom_gemini.py`).
+- **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI and Mistral as cloud providers that require an explicit data-sharing consent).
 - Each mixin accesses shared resources (`self.vectorstore`, `self.llm`) from the base `RAGManager`.
 
 ---

@@ -1,7 +1,6 @@
 # pages/data_monitoring.py
 import json
 import os
-import time
 from io import BytesIO
 from typing import Any
 
@@ -22,7 +21,8 @@ from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.multipage import load_dataframe
 from utils.session_scope import get_current_scope
-from ui.components import no_dataset
+from ui.components import confirm, no_dataset
+from utils.export_utils import to_excel
 
 #############################################################################################
 
@@ -1817,24 +1817,6 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
 
 
 # Convert DataFrame to Excel for download using openpyxl
-def to_excel(df):
-    """
-    Convert a DataFrame to an Excel file in binary format.
-
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        The DataFrame to convert.
-
-    Returns:
-    --------
-    bytes
-        The Excel file content as bytes.
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=True, sheet_name='Sheet1')
-    return output.getvalue()
 
 
 def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: str, st):
@@ -1882,16 +1864,26 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
             st.session_state[f"{key_base}_applied"] = False
 
         if st.button("Apply Filtering Criteria for Further Analysis", width='stretch', key=f"{key_base}_apply_criteria"):
-            # Ensure df_masked exists and is valid
-            #st.write("Masked DataFrame Preview:")
-            #st.dataframe(df_masked)
-                
-            # Update session state
-            st.session_state.data = df_masked
-            st.session_state.working_df = df_masked
-                
-            st.success("Dataset saved and ready for further analysis!")
-            # Debug outputs to confirm updates
+            n_before, n_after = len(df), len(df_masked)
+
+            def _apply_filter(df_masked=df_masked, key_base=key_base, n_before=n_before, n_after=n_after):
+                st.session_state.data = df_masked
+                st.session_state.working_df = df_masked
+                st.session_state[f"{key_base}_applied"] = True
+                if "transformation_manager" in st.session_state:  # every mutating step is traced (audit E10)
+                    st.session_state.transformation_manager.add_step(
+                        "apply_filter",
+                        {"criterion": key_base, "rows_before": n_before, "rows_after": n_after,
+                         "kept_index": [int(i) if isinstance(i, (int, np.integer)) else str(i) for i in df_masked.index]},
+                        f"Applied {key_base.replace('_data', '')} criteria: kept {n_after} of {n_before} rows",
+                    )
+
+            confirm("Apply this filter to the working dataset?",
+                    f"{n_before - n_after} of {n_before} rows will be excluded from further analyses in this session. "
+                    "Saved versions are not changed.", _apply_filter, confirm_label="Apply")
+        if st.session_state.get(f"{key_base}_applied"):
+            st.success("Filter applied: the working dataset is ready for further analysis.")
+# Debug outputs to confirm updates
             #st.write("Updated working DataFrame:")
             #st.dataframe(st.session_state.working_df)
 
@@ -2032,7 +2024,6 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                                     "expression": expression
                                 }
                                 st.success("Added!")
-                                time.sleep(0.5)
                                 st.rerun()
                         st.divider()
 

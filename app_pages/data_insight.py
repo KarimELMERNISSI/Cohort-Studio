@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import time
 
 import pandas as pd
 import streamlit as st
@@ -650,7 +649,6 @@ def app():
                     st.session_state["enrichment_formulas"] = {}
                     
                     st.toast(f"Merged {count} vars & {len(new_formulas)} formulas!", icon="")
-                    time.sleep(1)
                     st.rerun()
             
             if c_discard.button("Discard All"):
@@ -1542,7 +1540,6 @@ def app():
 
                                         # Clear suggestions to reset state?
                                         del st.session_state['refine_suggestions_text']
-                                        time.sleep(1)
                                         st.rerun()
 
 

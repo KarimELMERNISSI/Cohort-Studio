@@ -1,200 +1,11 @@
 # Enrichment Modules Documentation
 
-## conditional_transformations.py
-
-_No module description._
-
-**Imports**:
-`logging`, `ast`, `pandas`, `numpy`
-
-### def `global_column_mapping` (conditional_transformations.py)
-
-- **Arguments**: `unit_columns, gl_columns, mmoll_columns, unit_column_suffix, gl_column_suffix, mmoll_column_suffix`
-
-- **Returns**: `None`
-
-Creates a global column mapping for different units based on the provided column lists and suffixes.
-This function is a part of a process for handling multiple columns with same names but different content.
-The aim of this process is to remap column names based on column contents before using them for filling columns empty values with the transformation function (units or g/L or mmol/L).
-
-Parameters:
-- unit_columns (list): List of column names for units.
-
-- gl_columns (list): List of column names for g/L units.
-
-- mmoll_columns (list): List of column names for mmol/L units.
-
-- unit_column_suffix (str): Suffix for columns related to units.
-
-- gl_column_suffix (str): Suffix for columns related to g/L units.
-
-- mmoll_column_suffix (str): Suffix for columns related to mmol/L units.
-
-Returns:
-- dict: A dictionary mapping original column names to their corresponding global column names.
-
-### def `create_column_mapping` (conditional_transformations.py)
-
-- **Arguments**: `column_tuples`
-
-- **Returns**: `None`
-
-Creates a mapping between original column names and their corresponding global column names.
-This function is a part of a process for handling multiple columns with same names but different content.
-The aim of this process is to remap column names based on column contents before using them for filling columns empty values with the transformation function (units or g/L or mmol/L).
-
-Parameters:
-    column_tuples (List[Tuple[List[str], str]]): A list of tuples, where each tuple contains a list of
-        column names and a column suffix.
-
-Returns:
-    dict: A dictionary mapping original column names to their corresponding global column names.
-
-### def `count_non_null_values` (conditional_transformations.py)
-
-- **Arguments**: `df, unit_column, unit_value`
-
-- **Returns**: `None`
-
-Counts non-null values in specific columns of a DataFrame that match a given unit value in a specified unit column.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to search for non-null values.
-    unit_column (str): The name of the unit column.
-    unit_value (str, optional): The unit value to filter rows (default: 'mmol/L').
-
-Returns:
-    Union[pd.Series, None]: A Series containing counts of non-null values for each base column in the filtered rows,
-        or None if no base columns are found.
-
-### def `find_measures_with_unit_column` (conditional_transformations.py)
-
-- **Arguments**: `columns, unit_column`
-
-- **Returns**: `None`
-
-Finds base columns associated with a given unit column in a list of column names.
-
-Parameters:
-    columns (List[str]): The list of column names to search.
-    unit_column (str): The name of the unit column.
-
-Returns:
-    List[str]: A list of base column names associated with the unit column.
-
-### def `find_unit_columns` (conditional_transformations.py)
-
-- **Arguments**: `df, units, columns`
-
-- **Returns**: `None`
-
-Finds columns containing unit information in a DataFrame.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to search.
-    units (List[str]): A list of unit strings to search for.
-    columns (List[str]): A list of column names to search.
-
-Returns:
-    List[str]: A list of column names that contain unit information.
-
-### def `retrieve_transform_column_names` (conditional_transformations.py)
-
-- **Arguments**: `config`
-
-- **Returns**: `None`
-
-Retrieves column names involved in transformations from the configuration json data.
-
-Parameters:
-    config : The configuration json data containing transformation information.
-
-Returns:
-    List[str]: The list of column names involved in transformations.
-
-### def `transform_column` (conditional_transformations.py)
-
-- **Arguments**: `df, config`
-
-- **Returns**: `None`
-
-Apply column transformations to a DataFrame based on the provided configuration.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to be transformed.
-    config (Dict[str, Any]): The configuration json data containing transformation information.
-
-Returns:
-    None
-
-### def `create_condition_mask` (conditional_transformations.py)
-
-- **Arguments**: `df, expression`
-
-- **Returns**: `None`
-
-Parse and evaluate a given expression within the context of a DataFrame,
-generating a boolean mask based on the evaluation result.
-This is a part of the process of applying transformation, it'll drive where the transformation is applied.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame used as the context for the condition mask.
-    expression (str): The expression to be parsed and evaluated.
-
-Returns:
-    pd.Series: A boolean mask indicating the evaluation result for each row in the DataFrame.
-
-### def `create_transformation` (conditional_transformations.py)
-
-- **Arguments**: `df, expression, condition_column, parameter_column, condition, conversion_rate`
-
-- **Returns**: `None`
-
-Create a transformation to apply to a DataFrame based on an expression, with optional conditional application and conversion rates.
-This is a part of the process of applying transformation.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to be transformed.
-    expression (str): The expression defining the transformation.
-    condition_column (str): The name of the column used for conditional application of the transformation.
-    parameter_column (str): The name of the column containing parameters for the transformation.
-    condition (pd.Series): A boolean Series representing the condition for applying the transformation.
-    conversion_rate (float): The conversion rate used in the transformation.
-
-Returns:
-    pd.Series: The transformed column as a Series.
-
-### def `apply_transformation` (conditional_transformations.py)
-
-- **Arguments**: `df, condition, parameter_column, transformed_column, conversion_rate, transformation_expr`
-
-- **Returns**: `None`
-
-Apply the created transformation to a DataFrame based on specified conditions and expressions.
-This is a part of the process of applying transformation.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to be transformed.
-    condition (pd.Series): A boolean Series representing the condition for applying the transformation.
-    parameter_column (str): The name of the column containing parameters for the transformation.
-    transformed_column (str): The name of the column to be transformed.
-    conversion_rate (float): The conversion rate used in the transformation.
-    transformation_expr (str): The expression defining the transformation.
-
-Raises:
-    ValueError: If an error occurs during the transformation.
-
-Returns:
-    None
-
----
-
 ## custom_metrics_and_filters.py
 
 _No module description._
 
 **Imports**:
-`pandas`, `ast`, `logging`
+`logging`, `pandas`, `core.expressions.UnsafeExpressionError`, `core.expressions.evaluate`
 
 ### def `create_mask` (custom_metrics_and_filters.py)
 
@@ -339,7 +150,7 @@ Returns:
 _No module description._
 
 **Imports**:
-`pandas`, `sklearn.base.TransformerMixin`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `utils.miss_forest.missforest.MissForest`, `sklearn.impute.SimpleImputer`, `sklearn.impute.KNNImputer`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `sklearn.compose.ColumnTransformer`, `sklearn.pipeline.Pipeline`, `streamlit`, `utils.data_analyzer.DataAnalyzer`
+`pandas`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `utils.data_analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`, `biostats._types.RANDOM_STATE`
 
 ### class `MissForestTransformer` (data_imputation.py)
 
@@ -586,7 +397,7 @@ Returns:
 _No module description._
 
 **Imports**:
-`os`, `manage.file_handling`, `pandas`, `logging`
+`logging`, `os`, `pandas`, `manage.file_handling`
 
 ### def `add_data` (external_data.py)
 
@@ -639,5 +450,22 @@ Parameters:
 
 Returns:
 - DataFrame: The dataset df enriched with data from all the additional data files. Returns the original df if an error occurs.
+
+---
+
+## transformation_logic.py
+
+_No module description._
+
+**Imports**:
+`numpy`, `pandas`, `core.expressions.safe_format`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`
+
+### def `apply_variable_transformation` (transformation_logic.py)
+
+- **Arguments**: `dataframe, params`
+
+- **Returns**: `None`
+
+No description available.
 
 ---

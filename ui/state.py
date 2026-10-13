@@ -32,7 +32,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "imputation_suggestions", "ai_variable_suggestions", "ai_renaming_suggestions", "ai_domain_analysis",
     "enrichment_formulas", "loaded_path", "last_main_file_hash", "last_enrichment_file_hash", "mwu_p_xy",
     "last_power_selected_groups", "last_power_group_col", "epidemiology_group_col", "validity_outlier_params",
-    "validity_outlier_method",
+    "validity_outlier_method", "univariate_cache", "diag_result", "ba_result",
 )
 
 

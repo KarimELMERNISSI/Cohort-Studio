@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`os`, `pandas`, `logging`, `manage.file_handling`
+`logging`, `os`, `pandas`, `manage.file_handling`
 
 ### def `highlight_modifications` (changes.py)
 
@@ -113,176 +113,12 @@ Notes:
 
 ---
 
-## outliers bckp.py
-
-_No module description._
-
-**Imports**:
-`sys`, `os`, `pandas`, `numpy`, `sklearn.neighbors.LocalOutlierFactor`, `sklearn.ensemble.IsolationForest`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`
-
-### def `find_outliers_zscore` (outliers bckp.py)
-
-- **Arguments**: `series, threshold`
-
-- **Returns**: `None`
-
-Finds outliers in a numerical Series using Z-score.
-
-Parameters:
-- series (pandas.Series): The Series to find outliers in.
-
-- threshold (float, optional): The Z-score threshold for identifying outliers.
-  Values with absolute Z-score greater than this threshold are considered outliers.
-  Default is 3.
-
-Returns:
-- pandas.Series: A boolean Series indicating outliers, with True for outliers and False otherwise.
-
-This function computes the Z-score for each value in the input Series. For numerical columns
-(int64 or float64 data types), it calculates the Z-score as (value - mean) / standard deviation.
-Outliers are identified as values with absolute Z-score greater than the specified threshold.
-For non-numeric columns, it returns an empty Series with dtype=bool.
-
-### def `find_outliers_boxplot` (outliers bckp.py)
-
-- **Arguments**: `series, tolerance`
-
-- **Returns**: `None`
-
-Finds potential outliers in a numerical Series using boxplot statistics.
-
-Parameters:
-- series (pandas.Series): The Series to find potential outliers in.
-
-- tolerance (float, optional): The IQR tolerance for identifying outliers.
-  Higher IQR tolerance leads to less sensitivity in detecting outliers. Increase this value if too much outliers are found with this method.
-  Default is 1.5.
-
-Returns:
-- pandas.Series: A boolean Series indicating potential outliers, with True for outliers and False otherwise.
-
-This function calculates the lower and upper bounds for potential outliers using the
-interquartile range (IQR) method based on boxplot statistics. For numerical columns
-(int64 or float64 data types), it calculates the lower bound as the first quartile (Q1)
-minus tolerance times the IQR, and the upper bound as the third quartile (Q3) plus tolerance times the IQR.
-Values outside this range are considered potential outliers. For non-numeric columns,
-it returns an empty Series with dtype=bool.
-
-### def `find_categorical_outliers` (outliers bckp.py)
-
-- **Arguments**: `series, threshold`
-
-- **Returns**: `None`
-
-Finds potential outliers in a categorical Series based on the frequency of categories.
-
-Parameters:
-- series (pandas.Series): The categorical Series to find potential outliers in.
-
-- threshold (int, optional): The threshold for identifying potential outliers based on z-scores.
-  Categories with z-scores below the negative threshold are considered potential outliers.
-  Default is 1.
-
-Returns:
-- pandas.Series: A Series with potential outlier categories marked as None, and non-outlier categories unchanged.
-
-This function identifies potential outliers in a categorical Series based on the frequency
-of categories. It calculates the z-scores for each category count and identifies categories
-with z-scores below the negative threshold as potential outliers. The original Series is
-mapped, marking potential outlier categories as None and leaving non-outlier categories unchanged.
-
-### def `find_lof_outliers` (outliers bckp.py)
-
-- **Arguments**: `data`
-
-- **Returns**: `None`
-
-Detects outliers in the given dataset using Local Outlier Factor (LOF).
-
-Parameters:
-- data (pandas.DataFrame): The input DataFrame containing numerical data.
-
-Returns:
-- numpy.ndarray: An array of boolean values indicating whether each data point is an outlier.
-
-### def `compute_lof_scores` (outliers bckp.py)
-
-- **Arguments**: `data`
-
-- **Returns**: `None`
-
-Computes the Local Outlier Factor (LOF) scores for the given dataset.
-
-Parameters:
-- data (pandas.DataFrame): The input DataFrame containing numerical data.
-
-Returns:
-- numpy.ndarray: An array of LOF scores for each data point in the DataFrame.
-
-### def `find_isolation_forest_outliers` (outliers bckp.py)
-
-- **Arguments**: `data, n_estimators, max_samples, contamination`
-
-- **Returns**: `None`
-
-Detects outliers in the given dataset using Isolation Forest algorithm.
-
-Parameters:
-- data (pandas.DataFrame): The input DataFrame containing numerical data.
-
-Returns:
-- numpy.ndarray: An array of boolean values indicating whether each data point is an outlier.
-
-### def `compute_isolation_forest_scores` (outliers bckp.py)
-
-- **Arguments**: `data, n_estimators, max_samples, contamination`
-
-- **Returns**: `None`
-
-Computes the Isolation Forest scores for the given dataset.
-
-Parameters:
-- data (pandas.DataFrame): The input DataFrame containing numerical data.
-
-Returns:
-- numpy.ndarray: An array of LOF scores for each data point in the DataFrame.
-
-### def `tag_cat_columns` (outliers bckp.py)
-
-- **Arguments**: `row`
-
-- **Returns**: `None`
-
-Create a comma-separated list of categorical columns with outliers in a row.
-
-Parameters:
-- row (pd.Series): A row in the DataFrame.
-
-Returns:
-- str: Comma-separated list of columns with outliers.
-
-### def `tag_num_columns` (outliers bckp.py)
-
-- **Arguments**: `row`
-
-- **Returns**: `None`
-
-Create a comma-separated list of numerical columns with outliers in a row.
-
-Parameters:
-- row (pd.Series): A row in the DataFrame.
-
-Returns:
-- str: Comma-separated list of columns with outliers.
-
----
-
 ## outliers.py
 
 _No module description._
 
 **Imports**:
-`sys`, `os`, `pandas`, `numpy`, `sklearn.neighbors.LocalOutlierFactor`, `sklearn.cluster.DBSCAN`, `sklearn.ensemble.IsolationForest`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `enrich.data_imputation`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `sklearn.compose.ColumnTransformer`
+`pandas`, `sklearn.cluster.DBSCAN`, `sklearn.compose.ColumnTransformer`, `sklearn.ensemble.IsolationForest`, `sklearn.neighbors.LocalOutlierFactor`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `enrich.data_imputation`, `biostats._types.RANDOM_STATE`
 
 ### def `debug_print` (outliers.py)
 
@@ -314,6 +150,23 @@ This function computes the Z-score for each value in the input Series. For numer
 (int64 or float64 data types), it calculates the Z-score as (value - mean) / standard deviation.
 Outliers are identified as values with absolute Z-score greater than the specified threshold.
 For non-numeric columns, it returns an empty Series with dtype=bool.
+
+### def `_is_continuous` (outliers.py)
+
+- **Arguments**: `series`
+
+- **Returns**: `bool`
+
+Numeric (any width, nullable included), not boolean, and more than two distinct values.
+
+### def `find_outliers_mad` (outliers.py)
+
+- **Arguments**: `series, threshold`
+
+- **Returns**: `None`
+
+Robust outliers with the modified Z-score 0.6745 (x - median) / MAD (Iglewicz & Hoaglin 1993).
+Unlike the mean/SD Z-score, the median and MAD are not inflated by the outliers themselves.
 
 ### def `find_outliers_boxplot` (outliers.py)
 

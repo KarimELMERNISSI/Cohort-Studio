@@ -284,13 +284,38 @@ Returns:
 
 ---
 
+## imputation_formulas.py
+
+_Prompt for suggesting physiological/clinical imputation formulas._
+
+### def `imputation_formulas` (imputation_formulas.py)
+
+- **Arguments**: `scope_desc: str, columns_str: str, target_variable: str, stats_context: str, hint_instruction: str, num_suggestions: int`
+
+- **Returns**: `str`
+
+Suggests physiological formulas or regression-like heuristics to estimate missing values.
+
+Args:
+    scope_desc: Description of column scope (e.g., 'Available Columns')
+    columns_str: Comma-separated list of column names
+    target_variable: Name of the variable to impute
+    stats_context: Optional statistics context string for unit/range matching
+    hint_instruction: Optional user hint instruction string
+    num_suggestions: Number of distinct formula options to request
+
+Returns:
+    Formatted prompt string
+
+---
+
 ## map_formulas.py
 
 _Prompt for mapping theoretical formulas to dataset columns._
 
 ### def `map_formulas` (map_formulas.py)
 
-- **Arguments**: `columns_str: str, concepts_str: str, missing_instr: str, limit: int, taxonomy_context: str`
+- **Arguments**: `columns_str: str, concepts_str: str, missing_instr: str, limit: int, taxonomy_context: str, category_instruction: str`
 
 - **Returns**: `str`
 
@@ -302,6 +327,7 @@ Args:
     missing_instr: Instruction for handling missing variables
     limit: Number of top suggestions to return
     taxonomy_context: Optional taxonomy context for variable understanding
+    category_instruction: Optional instruction for classifying into existing categories
 
 Returns:
     Formatted prompt string

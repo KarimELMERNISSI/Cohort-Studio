@@ -1,17 +1,147 @@
 # App Pages Documentation
 
+## about.py
+
+_No module description._
+
+**Imports**:
+`streamlit`
+
+### def `app` (about.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## about.py
+
+_About page._
+
+**Imports**:
+`app_pages.about.app`
+
+---
+
+## ai_quality.py
+
+_AI quality page (administrators): RAG evaluation and embedding health._
+
+**Imports**:
+`app_pages.rag_monitoring.render_rag_monitoring`
+
+---
+
+## analysis_config.py
+
+_Analysis configuration widgets of the Analyze page (moved out of utils so the engine side stays UI-free)._
+
+**Imports**:
+`streamlit`, `biostats.multiplicity.UI_OPTIONS`
+
+### def `render_analysis_configuration` (analysis_config.py)
+
+- **Arguments**: `df, numeric_cols, categorical_cols, binary_cols, group_col_options, default_group_col, target_col_options, key_prefix`
+
+- **Returns**: `None`
+
+Renders the Analysis Configuration expander.
+Returns a dictionary with the selected configuration.
+
+---
+
+## analysis_diagnostic.py
+
+_Diagnostic accuracy and method agreement tab of the Analyze page (audit S10)._
+
+**Imports**:
+`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.agreement.bland_altman`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.section`, `ui.components.status_chip`
+
+### def `_ci_text` (analysis_diagnostic.py)
+
+- **Arguments**: `ci`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_roc_figure` (analysis_diagnostic.py)
+
+- **Arguments**: `y_true: pd.Series, y_score: pd.Series, pos_label, auc: dict, cutoff: ComplexType`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_bland_altman_figure` (analysis_diagnostic.py)
+
+- **Arguments**: `ba, label_a: str, label_b: str`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `run_diagnostic_accuracy` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## analyze.py
+
+_Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scores._
+
+**Imports**:
+`app_pages.epidemiology.app`, `ui.components.page_header`
+
+---
+
 ## data_enrichment.py
 
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `numpy`, `json`, `matplotlib.pyplot`, `typing.Dict`, `typing.Any`, `typing.Optional`, `typing.Union`, `typing.List`, `typing.Tuple`, `typing.Callable`, `io.BytesIO`, `utils.multipage.load_dataframe`, `utils.multipage.get_file_hash`, `enrich.external_data`, `utils.data_analyzer.DataAnalyzer`, `rapidfuzz.fuzz`, `os`, `re`, `pandas.api.types.is_numeric_dtype`, `sklearn.decomposition.PCA`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.manifold.TSNE`, `umap`, `enrich.data_imputation`, `prince`, `logging`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `manage.trace_documenter.TraceDocumenter`, `datetime.datetime`, `ast`, `ast`, `utils.date_parser.smart_parse_dates`
+`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.data_imputation`, `enrich.external_data`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `core.expressions.evaluate_tree`, `core.expressions.safe_format`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `ui.components.no_dataset`, `utils.export_utils.to_excel`
+
+### def `_workspace_path` (data_enrichment.py)
+
+- **Arguments**: `path_text: str`
+
+- **Returns**: `str`
+
+Only files inside the signed-in user's workspace may be referenced by path (audit E4).
+
+### def `_artifact_dir` (data_enrichment.py)
+
+- **Arguments**: `session_id: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_handle_multisheet_inline` (data_enrichment.py)
+
+- **Arguments**: `uploaded_file, key_prefix: str`
+
+- **Returns**: `ComplexType`
+
+Handle multi-sheet Excel files inline with a selection UI.
+
+Persists the loaded DataFrame in session state so it survives Streamlit re-runs.
+Returns the loaded DataFrame, or None if the user hasn't made a selection yet.
 
 ### def `handle_main_data_upload` (data_enrichment.py)
 
 - **Arguments**: ``
 
-- **Returns**: `Optional[pd.DataFrame]`
+- **Returns**: `ComplexType`
 
 Handle the upload or path input for the main dataset.
 
@@ -19,7 +149,7 @@ Handle the upload or path input for the main dataset.
 
 - **Arguments**: ``
 
-- **Returns**: `Optional[Union[ComplexType]]`
+- **Returns**: `ComplexType`
 
 Handle the upload or path input for the enrichment dataset.
 
@@ -27,7 +157,7 @@ Handle the upload or path input for the enrichment dataset.
 
 - **Arguments**: `main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str`
 
-- **Returns**: `Optional[pd.DataFrame]`
+- **Returns**: `ComplexType`
 
 Configure and perform the data enrichment.
 
@@ -86,24 +216,6 @@ Display the results of the enrichment process.
 
 Save the enrichment configuration to session state.
 
-### def `to_excel` (data_enrichment.py)
-
-- **Arguments**: `df`
-
-- **Returns**: `None`
-
-Convert a DataFrame to an Excel file in binary format.
-
-**Parameters**:
-
-df : pd.DataFrame
-    The DataFrame to convert.
-
-**Returns**:
-
-bytes
-    The Excel file content as bytes.
-
 ### def `calculate_prefix_score` (data_enrichment.py)
 
 - **Arguments**: `input_token: str, column_name: str`
@@ -149,7 +261,7 @@ int
 
 - **Arguments**: `formula: str`
 
-- **Returns**: `List[str]`
+- **Returns**: `list[str]`
 
 Tokenizes the formula, treating quoted variables as single tokens and splitting others by operators.
 
@@ -165,9 +277,9 @@ List[str]
 
 ### def `suggest_columns` (data_enrichment.py)
 
-- **Arguments**: `computation_formula: str, column_names: List[str], threshold: int, max_suggestions: int`
+- **Arguments**: `computation_formula: str, column_names: list[str], threshold: int, max_suggestions: int`
 
-- **Returns**: `List[Tuple[ComplexType]]`
+- **Returns**: `list[tuple[ComplexType]]`
 
 Suggest column names based on similarity to the input formula with enhanced
 prefix matching, including handling quoted variable names as unique tokens.
@@ -188,18 +300,22 @@ max_suggestions : int, optional
 List[Tuple[str, int]]
     List of tuples containing (column_name, similarity_score).
 
-### def `display_column_suggestions` (data_enrichment.py)
+### def `update_formula_callback` (data_enrichment.py)
 
-- **Arguments**: `suggestions`
+- **Arguments**: `col, formula_key`
 
 - **Returns**: `None`
 
-Displays column suggestions as buttons and enables users to copy column names to the clipboard by clicking.
+Callback to update formula when a suggestion is clicked.
 
-**Parameters**:
+### def `display_column_suggestions` (data_enrichment.py)
 
-suggestions : list of tuples
-    List of (column name, score) tuples to display.
+- **Arguments**: `suggestions, formula_key`
+
+- **Returns**: `None`
+
+Displays column suggestions as buttons. Clicking a button replaces the last token
+in the formula input with the selected column name.
 
 ### def `validate_variable_name` (data_enrichment.py)
 
@@ -231,7 +347,7 @@ bool
 
 - **Arguments**: `formula: str, dataset_columns: list`
 
-- **Returns**: `Tuple[ComplexType]`
+- **Returns**: `tuple[ComplexType]`
 
 Parses formula using Python AST to safely extract variables and constants
 regardless of spacing.
@@ -266,9 +382,9 @@ Extract the value from a constant token like constant(val1) -> val1
 
 ### def `create_variables_dict` (data_enrichment.py)
 
-- **Arguments**: `dataset: pd.DataFrame, identified_columns: List[str], constant_tokens: List[str]`
+- **Arguments**: `dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]`
 
-- **Returns**: `Dict[ComplexType]`
+- **Returns**: `dict[ComplexType]`
 
 Create a dictionary mapping variable names to their corresponding Series
 for both regular columns and constants.
@@ -341,7 +457,6 @@ Enhanced version of define_new_variables with improved preview and validation.
 Merge transformed_data into main_data securely.
 
 Parameters:
-
 - main_data (pd.DataFrame): The original DataFrame.
 
 - transformed_data (pd.DataFrame): The DataFrame with new columns.
@@ -350,7 +465,6 @@ Parameters:
                            Options: "replace" or "ignore".
 
 Returns:
-
 - pd.DataFrame: The merged DataFrame.
 
 ### def `compute_transformations` (data_enrichment.py)
@@ -417,7 +531,7 @@ Returns:
 
 - **Returns**: `None`
 
-Saves a snapshot of the dataframe and returns the path.
+Saves a snapshot of the dataframe in the user's workspace and returns the path.
 
 ### def `extract_column_stats` (data_enrichment.py)
 
@@ -437,7 +551,6 @@ Used to give context to the RAG model for unit conversion logic.
 Main application function for the Data Enrichment page.
 
 Handles:
-
 1. External Data Upload and Enrichment
 2. Targeted Imputation (Manual/AI-assisted)
 3. Global Imputation (MICE, KNN, etc.)
@@ -450,11 +563,19 @@ Handles:
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `json`, `os`, `re`, `networkx`, `glob`, `time`, `yfiles_graphs_for_streamlit.StreamlitGraphWidget`, `yfiles_graphs_for_streamlit.Node`, `yfiles_graphs_for_streamlit.Edge`, `yfiles_graphs_for_streamlit.EdgeStyle`, `yfiles_graphs_for_streamlit.DashStyle`, `yfiles_graphs_for_streamlit.Layout`, `yfiles_graphs_for_streamlit.LabelStyle`, `yfiles_graphs_for_streamlit.NodeStyle`, `yfiles_graphs_for_streamlit.NodeShape`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.optimal_k_analysis`, `utils.clustering_utils.compute_cluster_profiles`
+`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `ui.components.no_dataset`
+
+### def `get_user_taxonomy_dir` (data_insight.py)
+
+- **Arguments**: `username`
+
+- **Returns**: `None`
+
+Taxonomy directory of the user's workspace (no shared fallback; audit E4).
 
 ### def `get_taxonomy_versions` (data_insight.py)
 
-- **Arguments**: ``
+- **Arguments**: `username`
 
 - **Returns**: `None`
 
@@ -469,82 +590,6 @@ Returns list of (version_int, filepath) sorted descending.
 Ensures taxonomy variables have correct related_formula_ids based on registry.
 Run this on load to fix desynchronized files.
 
-### def `get_graph_data` (data_insight.py)
-
-- **Arguments**: `taxonomy_data, formulas_registry, full_taxonomy_ref, formula_search_query`
-
-- **Returns**: `None`
-
-Constructs node and edge lists for the graph visualization.
-
-**Parameters**:
-
-taxonomy_data : dict
-    The filtered taxonomy data to visualize.
-formulas_registry : dict, optional
-    Registry of formulas to include in the graph.
-full_taxonomy_ref : dict, optional
-    Reference to the full taxonomy for resolving hidden nodes.
-formula_search_query : str, optional
-    Query string to filter formulas.
-
-**Returns**:
-
-tuple
-    (nodes, edges) lists for the graph widget.
-
-### def `get_node_style` (data_insight.py)
-
-- **Arguments**: `node`
-
-- **Returns**: `None`
-
-Determine the visual style of a node based on its role.
-
-**Parameters**:
-
-node : Node
-    The node object containing properties.
-
-**Returns**:
-
-NodeStyle
-    The style configuration for the node.
-
-### def `get_edge_style` (data_insight.py)
-
-- **Arguments**: `edge`
-
-- **Returns**: `None`
-
-Determine the visual style of an edge based on its properties.
-
-**Parameters**:
-
-edge : Edge
-    The edge object containing properties.
-
-**Returns**:
-
-EdgeStyle
-    The style configuration for the edge.
-
-### def `get_node_label_style` (data_insight.py)
-
-- **Arguments**: `node`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `get_edge_label_style` (data_insight.py)
-
-- **Arguments**: `edge`
-
-- **Returns**: `None`
-
-No description available.
-
 ### def `load_and_repair_taxonomy` (data_insight.py)
 
 - **Arguments**: `target_path, rag_manager`
@@ -552,7 +597,6 @@ No description available.
 - **Returns**: `None`
 
 Robust loading function:
-
 1. Loads Taxonomy & Formulas
 2. Repairs Links immediately
 3. Updates Session State
@@ -567,7 +611,6 @@ Robust loading function:
 Main application function for the Data Insight (Knowledge Graph) page.
 
 Handles:
-
 1. Loading and saving taxonomy versions.
 2. Visualizing variables and formulas as a graph.
 3. Generating new taxonomies using RAG.
@@ -580,7 +623,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `io.BytesIO`, `numpy`, `time`, `scipy.stats`, `utils.data_analyzer.DataAnalyzer`, `utils.config_loader.transform_expression`, `utils.config_loader.create_empty_config`, `app_pages.data_quality_dashboard.render_dashboard`, `enrich.custom_metrics_and_filters`, `monitor.outliers`, `monitor.changes`, `utils.clustering_utils`, `typing.Dict`, `typing.Any`, `typing.Optional`, `typing.Union`, `typing.List`, `typing.Tuple`, `typing.Callable`, `os`, `re`, `json`, `utils.multipage.load_dataframe`, `utils.multipage.get_file_hash`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `utils.date_parser.smart_parse_dates`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `enrich.custom_metrics_and_filters`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.multipage.load_dataframe`, `utils.session_scope.get_current_scope`, `ui.components.confirm`, `ui.components.no_dataset`, `utils.export_utils.to_excel`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -588,7 +631,7 @@ Helper class to detect and handle outliers using various methods
 
 **Methods:**
 
-- ****init****(`self, df, config`) -> `None`
+- **__init__**(`self, df, config`) -> `None`
   > No description available.
 
 - **detect_outliers_zscore**(`self, column, threshold`) -> `None`
@@ -607,27 +650,27 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > columns : list
-  > List of column names to use for outlier detection
+  >     List of column names to use for outlier detection
   > n_neighbors : int, optional (default=20)
-  > Number of neighbors to use for LOF
+  >     Number of neighbors to use for LOF
   > contamination : str or float, optional (default='auto')
-  > Expected proportion of outliers in the dataset
+  >     Expected proportion of outliers in the dataset
   > numerical_imputation_method : str, optional (default='missforest')
-  > Method for imputing numerical missing values
+  >     Method for imputing numerical missing values
   > categorical_imputation_method : str, optional (default='missforest')
-  > Method for imputing categorical missing values
+  >     Method for imputing categorical missing values
   > remainder_columns : str or list, optional (default='auto')
-  > Columns to keep if not in the selected columns
+  >     Columns to keep if not in the selected columns
   > remainder_threshold : float, optional (default=0.4)
-  > Threshold for keeping columns with missing values
+  >     Threshold for keeping columns with missing values
   > debug : bool, optional (default=True)
-  > Enable debug mode
+  >     Enable debug mode
   >
   >
   > **Returns**:
   >
   > tuple
-  > Outlier tags, outlier scores, and additional information
+  >     Outlier tags, outlier scores, and additional information
 
 - **detect_isolation_forest_outliers**(`self, data, n_estimators, max_samples, contamination, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
   > Detect outliers using Isolation Forest method
@@ -636,29 +679,29 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > columns : list
-  > List of column names to use for outlier detection
+  >     List of column names to use for outlier detection
   > n_estimators : int, optional (default=100)
-  > Number of trees in the forest
+  >     Number of trees in the forest
   > max_samples : str or int, optional (default='auto')
-  > Number of samples to draw for each base estimator
+  >     Number of samples to draw for each base estimator
   > contamination : str or float, optional (default='auto')
-  > Expected proportion of outliers in the dataset
+  >     Expected proportion of outliers in the dataset
   > numerical_imputation_method : str, optional (default='missforest')
-  > Method for imputing numerical missing values
+  >     Method for imputing numerical missing values
   > categorical_imputation_method : str, optional (default='missforest')
-  > Method for imputing categorical missing values
+  >     Method for imputing categorical missing values
   > remainder_columns : str or list, optional (default='auto')
-  > Columns to keep if not in the selected columns
+  >     Columns to keep if not in the selected columns
   > remainder_threshold : float, optional (default=0.4)
-  > Threshold for keeping columns with missing values
+  >     Threshold for keeping columns with missing values
   > debug : bool, optional (default=True)
-  > Enable debug mode
+  >     Enable debug mode
   >
   >
   > **Returns**:
   >
   > tuple
-  > Outlier tags, outlier scores, and additional information
+  >     Outlier tags, outlier scores, and additional information
 
 - **detect_dbscan_outliers**(`self, data, eps, min_samples, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
   > Detect outliers using DBSCAN method
@@ -667,67 +710,67 @@ Helper class to detect and handle outliers using various methods
   > **Parameters**:
   >
   > data : pd.DataFrame
-  > Input data
+  >     Input data
   > eps : float
-  > The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+  >     The maximum distance between two samples for one to be considered as in the neighborhood of the other.
   > min_samples : int
-  > The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
+  >     The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
   > numerical_imputation_method : str
-  > Imputation method for numerical columns
+  >     Imputation method for numerical columns
   > categorical_imputation_method : str
-  > Imputation method for categorical columns
+  >     Imputation method for categorical columns
   > remainder_columns : str
-  > How to handle remainder columns
+  >     How to handle remainder columns
   > remainder_threshold : float
-  > Threshold for remainder columns
+  >     Threshold for remainder columns
   > debug : bool
-  > Enable debug printing
+  >     Enable debug printing
   >
   >
   > **Returns**:
   >
   > tuple
-  > (outliers_tag, outliers_scores, additional_info)
+  >     (outliers_tag, outliers_scores, additional_info)
 
 - **handle_outliers**(`self, columns, method, handling_strategy`) -> `None`
   > Handle outliers in the DataFrame and generate an outlier matrix.
   >
   > Parameters:
-  > columns (list): List of columns to analyze for outliers.
-  > method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  > handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
-  > **kwargs: Additional parameters for specific outlier detection methods.
+  >     columns (list): List of columns to analyze for outliers.
+  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
+  >     handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
+  >     **kwargs: Additional parameters for specific outlier detection methods.
   >
   > Returns:
-  > DataFrame: Processed DataFrame with outliers handled.
-  > DataFrame: Outlier matrix with boolean values indicating outliers.
+  >     DataFrame: Processed DataFrame with outliers handled.
+  >     DataFrame: Outlier matrix with boolean values indicating outliers.
 
 - **_apply_handling_strategy**(`self, columns, outlier_matrix, strategy, method, is_outlier, outlier_score`) -> `None`
   > Apply a handling strategy to the outliers.
   >
   > Parameters:
-  > columns (list): Columns analyzed for outliers.
-  > outlier_matrix (DataFrame): Boolean matrix indicating outliers.
-  > strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
-  > method (str): Outlier detection method.
-  > is_outlier (ndarray): Boolean array for dataset-wide methods.
-  > outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
-  > **kwargs: Additional parameters for handling strategies.
+  >     columns (list): Columns analyzed for outliers.
+  >     outlier_matrix (DataFrame): Boolean matrix indicating outliers.
+  >     strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
+  >     method (str): Outlier detection method.
+  >     is_outlier (ndarray): Boolean array for dataset-wide methods.
+  >     outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
+  >     **kwargs: Additional parameters for handling strategies.
   >
   > Returns:
-  > DataFrame: Processed DataFrame with outliers handled.
+  >     DataFrame: Processed DataFrame with outliers handled.
 
 - **clip_outliers**(`self, column, is_outlier, method`) -> `None`
   > Helper function to clip outliers based on the specified method.
   >
   > Parameters:
-  > column (str): Column name to process.
-  > is_outlier (pd.Series): Boolean mask indicating outliers.
-  > method (str): Method for clipping ('zscore', 'iqr', 'quantile').
-  > kwargs: Additional parameters for each method.
+  >     column (str): Column name to process.
+  >     is_outlier (pd.Series): Boolean mask indicating outliers.
+  >     method (str): Method for clipping ('zscore', 'iqr', 'quantile').
+  >     kwargs: Additional parameters for each method.
   >
   > Returns:
-  > pd.Series: Updated column with outliers clipped.
+  >     pd.Series: Updated column with outliers clipped.
 
 - **get_outliers_masks**(`self`) -> `None`
   > Get the masks of outliers detected so far.
@@ -736,18 +779,18 @@ Helper class to detect and handle outliers using various methods
   > **Returns**:
   >
   > dict or None
-  > Dictionary of outlier masks if available, else None.
+  >     Dictionary of outlier masks if available, else None.
 
 - **get_outlier_summary**(`self, columns, method`) -> `None`
   > Get a summary of outliers for each column or the dataset as a whole.
   >
   > Parameters:
-  > columns (list): List of columns to analyze for outliers.
-  > method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  > **kwargs: Additional parameters for specific outlier detection methods.
+  >     columns (list): List of columns to analyze for outliers.
+  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
+  >     **kwargs: Additional parameters for specific outlier detection methods.
   >
   > Returns:
-  > dict: Summary of outliers for each column or the dataset.
+  >     dict: Summary of outliers for each column or the dataset.
 
 ### def `export_comparison_results` (data_monitoring.py)
 
@@ -761,7 +804,7 @@ Efficiently export comparison results to an Excel file
 
 - **Arguments**: `tmp: str, label: str`
 
-- **Returns**: `Tuple[ComplexType]`
+- **Returns**: `tuple[ComplexType]`
 
 Handle data selection from various sources.
 
@@ -877,7 +920,7 @@ Display the results of the enrichment process.
 
 ### def `ensure_family_exists` (data_monitoring.py)
 
-- **Arguments**: `config: Dict[ComplexType], family_name: str`
+- **Arguments**: `config: dict[ComplexType], family_name: str`
 
 - **Returns**: `None`
 
@@ -885,7 +928,7 @@ Ensure the specified family exists in the configuration.
 
 ### def `validate_mask_name` (data_monitoring.py)
 
-- **Arguments**: `config: Dict[ComplexType], family_name: str, mask_name: str, st_container`
+- **Arguments**: `config: dict[ComplexType], family_name: str, mask_name: str, st_container`
 
 - **Returns**: `None`
 
@@ -917,7 +960,7 @@ Handle family operator selection and its parameters.
 
 ### def `add_mask_family` (data_monitoring.py)
 
-- **Arguments**: `config: Dict[ComplexType], st_container`
+- **Arguments**: `config: dict[ComplexType], st_container`
 
 - **Returns**: `None`
 
@@ -948,7 +991,6 @@ Display mask families configuration in a single top-level expander without nesti
 Apply a single mask family from JSON configuration to the dataset.
 
 Parameters:
-
 - df: DataFrame to which the mask family is applied.
 
 - family_name: Name of the mask family to apply.
@@ -958,28 +1000,9 @@ Parameters:
 - st_container: Streamlit container for displaying results.
 
 Returns:
-
 - Updated DataFrame with mask family tags and lists.
 
 - The names of the columns related to the masks family
-
-### def `to_excel` (data_monitoring.py)
-
-- **Arguments**: `df`
-
-- **Returns**: `None`
-
-Convert a DataFrame to an Excel file in binary format.
-
-**Parameters**:
-
-df : pd.DataFrame
-    The DataFrame to convert.
-
-**Returns**:
-
-bytes
-    The Excel file content as bytes.
 
 ### def `display_results` (data_monitoring.py)
 
@@ -1016,7 +1039,7 @@ Renders the AI assistant for generating criteria.
 
 ### def `add_domain_expert_based_anomaly_mask` (data_monitoring.py)
 
-- **Arguments**: `config: Dict[ComplexType], st_container`
+- **Arguments**: `config: dict[ComplexType], st_container`
 
 - **Returns**: `None`
 
@@ -1032,7 +1055,7 @@ Display the results of the enrichment process.
 
 ### def `add_study_inclusion_mask` (data_monitoring.py)
 
-- **Arguments**: `config: Dict[ComplexType], st_container`
+- **Arguments**: `config: dict[ComplexType], st_container`
 
 - **Returns**: `None`
 
@@ -1063,7 +1086,6 @@ Process dataset using DataAnalyzer to fix types.
 Main application function for the Data Monitoring page.
 
 Handles:
-
 1. Data Quality Dashboard (Data Validity, Completeness, etc.).
 2. Clinical Anomalies Management (Add/Apply Masks).
 3. Study Inclusion Criteria Management (Add/Apply Masks).
@@ -1072,37 +1094,12 @@ Handles:
 
 ---
 
-## data_preparation.py
-
-_No module description._
-
-**Imports**:
-`streamlit`, `pandas`, `explore.data_quality_auditor.DataQualityAuditor`, `manage.transformation_manager.TransformationManager`, `app_pages.data_enrichment.save_snapshot`
-
-### def `app` (data_preparation.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-No description available.
-
-### def `handle_missing_values` (data_preparation.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-No description available.
-
----
-
 ## data_quality_dashboard.py
 
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `numpy`, `plotly.express`, `plotly.graph_objects`, `plotly.figure_factory`, `scipy.cluster.hierarchy`, `explore.data_quality_auditor.DataQualityAuditor`, `utils.analysis_utils`, `statsmodels.stats.multitest`, `utils.visualization_utils`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `explore.data_quality_auditor.DataQualityAuditor`
 
 ### def `render_dashboard` (data_quality_dashboard.py)
 
@@ -1119,79 +1116,39 @@ Renders the Data Quality Dashboard.
 _No module description._
 
 **Imports**:
-`streamlit`, `json`, `os`, `yfiles_graphs_for_streamlit.StreamlitGraphWidget`, `yfiles_graphs_for_streamlit.Node`, `yfiles_graphs_for_streamlit.Edge`, `yfiles_graphs_for_streamlit.EdgeStyle`, `yfiles_graphs_for_streamlit.DashStyle`, `yfiles_graphs_for_streamlit.Layout`, `yfiles_graphs_for_streamlit.LabelStyle`, `yfiles_graphs_for_streamlit.NodeStyle`, `yfiles_graphs_for_streamlit.NodeShape`, `os`, `json`, `datetime`
+`json`, `streamlit`, `graph.builders.document.build_document_graph`, `graph.builders.document.filter_by_documents`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `datetime`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `core.workspace.safe_filename`, `ui.components.no_dataset`
 
-### def `filter_graph_by_docs` (document_insight.py)
+### def `_graph_dir` (document_insight.py)
 
-- **Arguments**: `graph_json, visible_docs`
-
-- **Returns**: `None`
-
-Returns a subset of the graph JSON containing only nodes/edges/formulas linked to visible_docs.
-
-### def `get_document_graph_data` (document_insight.py)
-
-- **Arguments**: `graph_json, focus_node_id`
+- **Arguments**: `username`
 
 - **Returns**: `None`
 
-No description available.
-
-### def `get_node_style` (document_insight.py)
-
-- **Arguments**: `node`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `get_edge_style` (document_insight.py)
-
-- **Arguments**: `edge`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `get_node_label_style` (document_insight.py)
-
-- **Arguments**: `node`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `get_edge_label_style` (document_insight.py)
-
-- **Arguments**: `edge`
-
-- **Returns**: `None`
-
-No description available.
+Knowledge-graph directory of the user's workspace (audit E4).
 
 ### def `get_saved_graphs` (document_insight.py)
 
-- **Arguments**: ``
+- **Arguments**: `username`
 
 - **Returns**: `None`
 
-Returns list of saved graph filenames (without extension).
+Returns the saved graph names of the user's workspace.
 
 ### def `save_graph` (document_insight.py)
 
-- **Arguments**: `name, graph_json, source_docs`
+- **Arguments**: `name, graph_json, source_docs, username`
 
 - **Returns**: `None`
 
-Saves graph + metadata to disk.
+Saves graph + metadata into the user's workspace.
 
 ### def `load_graph` (document_insight.py)
 
-- **Arguments**: `name`
+- **Arguments**: `name, username`
 
 - **Returns**: `None`
 
-Loads graph payload.
+Loads a graph payload from the user's workspace.
 
 ### def `app` (document_insight.py)
 
@@ -1203,30 +1160,46 @@ No description available.
 
 ---
 
+## documents.py
+
+_Documents page: literature knowledge graph and document chat._
+
+**Imports**:
+`app_pages.document_insight.app`, `ui.components.page_header`
+
+---
+
+## enrich.py
+
+_Enrich page: external data merge, computed variables, imputation, transformations._
+
+**Imports**:
+`app_pages.data_enrichment.app`, `ui.components.page_header`
+
+---
+
 ## epidemiology.py
 
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `numpy`, `scipy.stats`, `scipy.stats.t`, `plotly.express`, `plotly.graph_objects`, `utils.data_analyzer.DataAnalyzer`, `utils.visualization_utils`, `utils.analysis_utils`, `io.BytesIO`, `statsmodels.stats.multitest`, `statsmodels.stats.power.TTestIndPower`, `statsmodels.stats.power.FTestAnovaPower`, `statsmodels.stats.power.GofChisquarePower`, `matplotlib.pyplot`, `statsmodels.formula.api`, `statsmodels.stats.multicomp.pairwise_tukeyhsd`, `re`, `statsmodels.api`, `itertools`
+`re`, `matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `statsmodels.api`, `statsmodels.formula.api`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `utils.analysis_utils`, `utils.visualization_utils`, `utils.data_analyzer.DataAnalyzer`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `biostats.multiplicity.adjust`, `ui.components.no_dataset`, `ui.components.result_card`, `utils.export_utils.to_excel`
 
-### def `to_excel` (epidemiology.py)
+### def `_render_twobytwo_controls` (epidemiology.py)
 
-- **Arguments**: `df`
+- **Arguments**: `df, group_col, outcome_col, default_epi`
 
 - **Returns**: `None`
 
-Convert a DataFrame to an Excel file in binary format.
+Reference-group / event-level / design selectors; recomputes the 2x2 analysis with explicit orientation.
 
-**Parameters**:
+### def `_render_twobytwo_panel` (epidemiology.py)
 
-df : pd.DataFrame
-    The DataFrame to convert.
+- **Arguments**: `epi`
 
-**Returns**:
+- **Returns**: `None`
 
-bytes
-    The Excel file content as bytes.
+Labelled 2x2 table, measures of association (comparison vs reference) and guidance.
 
 ### def `app` (epidemiology.py)
 
@@ -1237,7 +1210,6 @@ bytes
 Main application function for the Epidemiology Analysis page.
 
 Handles:
-
 1. Univariate Group Comparisons (T-tests, ANOVA, Chi-Square, etc.).
 2. Multivariate Analysis (ANCOVA) to control for confounders.
 3. Power Analysis & Sample Size Calculation.
@@ -1302,12 +1274,46 @@ No description available.
 
 ---
 
+## explore.py
+
+_Explore page: descriptive statistics, column renaming, correlations, performance benchmark._
+
+**Imports**:
+`app_pages.home.app`, `ui.components.page_header`
+
+---
+
+## handbook.py
+
+_Handbook page: the researcher documentation rendered in the app (works offline)._
+
+**Imports**:
+`re`, `pathlib.Path`, `streamlit`, `ui.components.page_header`
+
+### def `_chapters` (handbook.py)
+
+- **Arguments**: ``
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+(stem, title) for every top-level chapter, in file order.
+
+### def `_anchor` (handbook.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `str`
+
+No description available.
+
+---
+
 ## home.py
 
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `io.BytesIO`, `numpy`, `yfiles_graphs_for_streamlit.StreamlitGraphWidget`, `yfiles_graphs_for_streamlit.Node`, `yfiles_graphs_for_streamlit.Edge`, `yfiles_graphs_for_streamlit.EdgeStyle`, `yfiles_graphs_for_streamlit.DashStyle`, `yfiles_graphs_for_streamlit.Layout`, `yfiles_graphs_for_streamlit.LabelStyle`, `explore.corr_matrix`, `utils.visualization_utils`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.show_test_guidelines`, `utils.data_analyzer.DataAnalyzer`, `os`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `json`, `duckdb`, `time`
+`io.BytesIO`, `json`, `time`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`, `ui.components.confirm`, `ui.components.no_dataset`, `hashlib`
 
 ### class `RenameColumnsComponent` (home.py)
 
@@ -1315,7 +1321,7 @@ A Streamlit component for renaming DataFrame columns with sorting, searching, ty
 
 **Methods:**
 
-- ****init****(`self, df, analyzer`) -> `None`
+- **__init__**(`self, df, analyzer`) -> `None`
   > No description available.
 
 - **_get_columns_info**(`self, columns_to_process`) -> `None`
@@ -1323,6 +1329,30 @@ A Streamlit component for renaming DataFrame columns with sorting, searching, ty
 
 - **display**(`self`) -> `None`
   > Displays the column renaming UI with sorting, searching, type filtering, and a compact layout.
+
+### def `_q` (home.py)
+
+- **Arguments**: `identifier`
+
+- **Returns**: `str`
+
+Quote a DuckDB identifier (column names come from uploaded files; audit E4).
+
+### def `_frame_fingerprint` (home.py)
+
+- **Arguments**: `df`
+
+- **Returns**: `str`
+
+Short content hash so cached statistics follow the frame (filters, renames), not only its name (audit E8).
+
+### def `_top_correlations` (home.py)
+
+- **Arguments**: `corr_matrix: pd.DataFrame, node_ids, limit: int`
+
+- **Returns**: `pd.DataFrame`
+
+Strongest correlations of the selected variables (for the graph selection panel).
 
 ### def `display_category_box` (home.py)
 
@@ -1358,6 +1388,14 @@ Tries to load from DuckDB/Parquet cache if dataset_name is provided.
 
 Note: Parameters starting with _ are excluded from hashing by Streamlit.
 
+### def `_cached_corr_excel_bytes` (home.py)
+
+- **Arguments**: `data, targets, predictors, group_column, method`
+
+- **Returns**: `None`
+
+No description available.
+
 ### def `run_benchmark` (home.py)
 
 - **Arguments**: `df, analyzer`
@@ -1376,13 +1414,21 @@ No description available.
 
 ---
 
+## import_data.py
+
+_Import page: the three-step import flow._
+
+**Imports**:
+`ui.components.page_header`, `ui.import_flow.render_import_flow`, `ui.state.get_state`
+
+---
+
 ## rag_monitoring.py
 
 _RAG Monitoring Dashboard
 
 Streamlit page for monitoring and visualizing RAG system quality metrics.
 Provides dashboards for:
-
 - Quality overview with trends
 
 - Evaluation details and drill-down
@@ -1392,7 +1438,7 @@ Provides dashboards for:
 - Manual evaluation triggers_
 
 **Imports**:
-`streamlit`, `json`, `datetime.datetime`, `datetime.timedelta`, `pathlib.Path`, `sys`
+`json`, `sys`, `datetime.datetime`, `pathlib.Path`, `streamlit`
 
 ### def `render_rag_monitoring` (rag_monitoring.py)
 
@@ -1470,10 +1516,70 @@ Render export buttons.
 
 ## rag_sidebar.py
 
-_No module description._
+_RAG and AI Configuration Sidebar Component.
+
+Provides a unified, provider-agnostic interface for configuring:
+- AI Providers: Google Gemini, Ollama (Local Open Source), OpenAI, Mistral AI
+
+- Model selection and dynamic model discovery
+
+- Local and cloud embedding models
+
+- Document retrieval parameters and clinical adherence calibration_
 
 **Imports**:
-`streamlit`, `os`, `manage.rag_manager.RAGManager`
+`os`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `utils.session_scope.get_current_scope`
+
+### def `_documents_dir` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+The signed-in user's document library (audit E4); the legacy shared folder outside a session.
+
+### def `_discover_ollama_models` (rag_sidebar.py)
+
+- **Arguments**: `base_url: str`
+
+- **Returns**: `list[str]`
+
+Ollama model list, probed at most once a minute per endpoint (audit E11).
+
+### def `_discover_cloud_models` (rag_sidebar.py)
+
+- **Arguments**: `_manager, provider: str, api_key: str`
+
+- **Returns**: `list[str]`
+
+Cloud model list, fetched at most once an hour per key (audit E11).
+
+### def `_api_key_input` (rag_sidebar.py)
+
+- **Arguments**: `env_var: str, label: str, key: str, help_text: str`
+
+- **Returns**: `ComplexType`
+
+Session-scoped API key entry.
+
+The server-side key is never shown or pre-filled and nothing is written to ``os.environ``
+(audit E6). Leaving the field empty falls back to the server-configured key, if any.
+
+### def `_render_cloud_consent` (rag_sidebar.py)
+
+- **Arguments**: `selected_provider: str, display_names: dict`
+
+- **Returns**: `bool`
+
+Explicit, session-scoped confirmation before any data can be sent to a cloud provider (audit E6).
+
+### def `render_ai_settings` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+AI provider, keys, consent, document library and retrieval parameters (Settings page).
 
 ### def `render_rag_sidebar` (rag_sidebar.py)
 
@@ -1481,7 +1587,16 @@ _No module description._
 
 - **Returns**: `None`
 
-Renders the RAG & AI Settings sidebar component.
+Legacy wrapper: the same controls inside a sidebar expander (the Settings page is the primary home).
+
+---
+
+## reproduce.py
+
+_Reproduce page: traces, artifacts, replay and reports._
+
+**Imports**:
+`app_pages.reproduce_analysis.app`, `ui.components.page_header`
 
 ---
 
@@ -1490,7 +1605,39 @@ Renders the RAG & AI Settings sidebar component.
 _No module description._
 
 **Imports**:
-`streamlit`, `pandas`, `os`, `json`, `manage.db_manager.DBManager`, `manage.trace_documenter.TraceDocumenter`, `enrich.external_data`, `app_pages.transformation_logic.apply_variable_transformation`, `app_pages.data_enrichment.apply_imputer`, `app_pages.data_enrichment.evaluate_formula_safely`, `utils.multipage.load_dataframe`, `utils.multipage.load_dataframe`, `utils.path_utils.resolve_path`, `utils.path_utils.normalize_path`, `difflib`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `manage.trace_documenter.TraceDocumenter`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `core.workspace.safe_filename`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.session_scope.get_current_scope`, `manage.reproduction_manager.run_trace`
+
+### def `_uploads_dir` (reproduce_analysis.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_traces_dir` (reproduce_analysis.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_artifacts_dir` (reproduce_analysis.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_resolve_user_path` (reproduce_analysis.py)
+
+- **Arguments**: `text: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A manually entered path must exist inside the user's workspace (audit E4).
 
 ### def `app` (reproduce_analysis.py)
 
@@ -1510,49 +1657,117 @@ Reproduces the analysis up to the target step index.
 
 ---
 
-## statistical_tests.py
+## settings.py
 
-_No module description._
+_Settings page: AI provider and consent, graph engine, import defaults, workspace maintenance._
 
 **Imports**:
-`streamlit`, `streamlit`, `json`, `re`, `typing.Dict`, `typing.Any`, `typing.Optional`
+`streamlit`, `app_pages.rag_sidebar.render_ai_settings`, `ui.components.confirm`, `ui.components.page_header`, `ui.components.section`, `ui.shell.clear_workspace_statistics`, `ui.state.get_state`
 
-### def `add_statistical_test` (statistical_tests.py)
+---
 
-- **Arguments**: `config: Dict[ComplexType], st_container`
+## start.py
 
-- **Returns**: `None`
+_Start page: the three-step workflow, saved versions, the sample cohort and the AI status._
 
-Add a new statistical test with flexible group/target configuration.
+**Imports**:
+`streamlit`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.section`, `ui.components.status_chip`, `ui.state.SAMPLE_DICTIONARY_PATH`, `ui.state.get_state`
 
-Args:
-    config: Dictionary containing the configuration
-    st_container: Streamlit container for rendering UI elements
+---
 
-### def `app` (statistical_tests.py)
+## statistics_guides.py
+
+_Normality-test guidance widgets (moved out of utils so the statistics helpers stay UI-free)._
+
+**Imports**:
+`streamlit`
+
+### def `show_test_guidelines` (statistics_guides.py)
 
 - **Arguments**: ``
 
 - **Returns**: `None`
 
-No description available.
+Displays a detailed explanation of the normality tests,
+including algorithms, formulas, and recommendations.
+
+### def `_show_overview_guide` (statistics_guides.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Display normality test overview and selection guide.
+
+### def `_show_algorithm_details` (statistics_guides.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Display detailed algorithm explanations.
 
 ---
 
 ## transformation_logic.py
 
-_No module description._
+_Compatibility shim: the transformation logic lives in :mod:`enrich.transformation_logic` (no UI code)._
 
 **Imports**:
-`pandas`, `numpy`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.StandardScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.manifold.TSNE`, `umap`, `prince`
+`enrich.transformation_logic.*`, `enrich.transformation_logic.apply_variable_transformation`
 
-### def `apply_variable_transformation` (transformation_logic.py)
+---
 
-- **Arguments**: `dataframe, params`
+## users.py
+
+_Users page (administrators)._
+
+**Imports**:
+`app_pages.users_management.app`, `ui.components.page_header`
+
+---
+
+## users_management.py
+
+_Users Management Page - Admin Only
+
+This page allows administrators to:
+- View all registered users with their status
+
+- Activate/Deactivate user accounts
+
+- Reset user passwords
+
+- Delete user accounts_
+
+**Imports**:
+`streamlit`, `manage.db_manager.DBManager`, `manage.iam.authz.MIN_PASSWORD_LENGTH`, `manage.iam.authz.is_admin_role`
+
+### def `app` (users_management.py)
+
+- **Arguments**: ``
 
 - **Returns**: `None`
 
-No description available.
+Render the Users Management page.
+
+---
+
+## validate.py
+
+_Validate page: data quality dashboard, anomalies, inclusion criteria, outliers, version comparison._
+
+**Imports**:
+`app_pages.data_monitoring.app`, `ui.components.page_header`
+
+---
+
+## variable_map.py
+
+_Variable map page: taxonomy of variables, formulas, clustering and the knowledge graph._
+
+**Imports**:
+`app_pages.data_insight.app`, `ui.components.page_header`
 
 ---
 
@@ -1561,7 +1776,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`streamlit`, `plotly.express`, `plotly.graph_objects`, `pandas`, `numpy`, `scipy.stats`, `plotly.subplots.make_subplots`, `app_pages.data_monitoring`, `logging`, `manage.db_manager.DBManager`, `utils.visualization_utils`, `utils.visualization_utils.DataAnalyzer`, `plotly.figure_factory`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `manage.db_manager.DBManager`, `utils.data_analyzer.DataAnalyzer`, `ui.components.no_dataset`
 
 ### def `app` (visualization.py)
 
@@ -1573,19 +1788,20 @@ No description available.
 
 ---
 
-## yfiles_test.py
+## visualize.py
 
-_No module description._
+_Visualize page: distributions, group comparisons, time series, ROC, Bland-Altman._
 
 **Imports**:
-`streamlit`, `yfiles_graphs_for_streamlit.StreamlitGraphWidget`, `yfiles_graphs_for_streamlit.Node`, `yfiles_graphs_for_streamlit.Edge`, `yfiles_graphs_for_streamlit.EdgeStyle`, `yfiles_graphs_for_streamlit.DashStyle`, `yfiles_graphs_for_streamlit.Layout`, `yfiles_graphs_for_streamlit.LabelStyle`
+`app_pages.visualization.app`, `ui.components.page_header`
 
-### def `app` (yfiles_test.py)
+---
 
-- **Arguments**: ``
+## which_test.py
 
-- **Returns**: `None`
+_Which test? Four questions -> the recommended analysis, why, and where to run it._
 
-No description available.
+**Imports**:
+`streamlit`, `ui.components.glossary_popover`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.section`, `ui.components.status_chip`, `ui.guidance.DESIGNS`, `ui.guidance.DISTRIBUTIONS`, `ui.guidance.GROUPS`, `ui.guidance.OUTCOMES`, `ui.guidance.recommend`
 
 ---

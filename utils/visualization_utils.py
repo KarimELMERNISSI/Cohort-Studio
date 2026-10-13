@@ -5,10 +5,12 @@ import pandas as pd
 import plotly.colors as pc
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
-import streamlit as st
 from matplotlib.colors import to_rgba
 from scipy import stats
 from scipy.stats import zscore
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", correction_method="None", alpha=0.05):
@@ -259,7 +261,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
                         max_d = max(max_d, max(trace['x']))
                 row_dendro_range = [0, max_d]
         except Exception as e:
-            st.warning(f"Row clustering failed: {e}")
+            logger.warning(f"Row clustering failed: {e}")
 
     # 2. Column Clustering (Samples)
     if cluster_cols and df_to_plot.shape[1] > 1:
@@ -281,7 +283,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
                         max_d = max(max_d, max(trace['y']))
                 col_dendro_range = [0, max_d]
         except Exception as e:
-            st.warning(f"Column clustering failed: {e}")
+            logger.warning(f"Column clustering failed: {e}")
 
     # Grouping (if not clustered, sort by group)
     groups = None
@@ -769,14 +771,12 @@ def get_figure_column_names(fig, df):
 
     return columns
 
-def add_custom_hovertemplate(fig, df):
+def add_custom_hovertemplate(fig, df, selected_cols=None):
     """
-    Adds a custom hovertemplate to an existing Plotly figure, showing only selected columns on hover.
+    Adds a custom hovertemplate to an existing Plotly figure, showing ``selected_cols`` on hover
+    (the page renders the column picker; this helper stays UI-free).
     """
-    selected_cols = st.multiselect(
-        "Select columns to display on hover",
-        options=sorted(df.columns)
-    )
+    selected_cols = [c for c in (selected_cols or []) if c in df.columns]
 
     if len(selected_cols) >= 1:
         for trace in fig.data:
@@ -1176,7 +1176,7 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
             if show_dendrograms:
                 col_dendro_traces = dendro_top['data']
         except Exception as e:
-            st.warning(f"Column clustering failed: {e}")
+            logger.warning(f"Column clustering failed: {e}")
 
     # 2. Row Clustering (Samples)
     if cluster_rows and len(row_order) > 1:
@@ -1188,7 +1188,7 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
             if show_dendrograms:
                 row_dendro_traces = dendro_side['data']
         except Exception as e:
-            st.warning(f"Row clustering failed: {e}")
+            logger.warning(f"Row clustering failed: {e}")
 
     # Reorder DataFrame
     nullity_df = nullity_df.iloc[row_order]

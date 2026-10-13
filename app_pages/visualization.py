@@ -1309,7 +1309,9 @@ def app():
                     fig.update_layout(paper_bgcolor="#ebebeb", plot_bgcolor="#ebebeb", font=dict(color="black", size=14))
 
                 if plot_type not in ["Clustermap", "Correlation Matrix"]:
-                    fig = vu.add_custom_hovertemplate(fig, df=df)
+                    hover_cols = st.multiselect("Select columns to display on hover", options=sorted(df.columns),
+                                                key="viz_hover_cols", help="Extra columns shown in the tooltip of each point.")
+                    fig = vu.add_custom_hovertemplate(fig, df=df, selected_cols=hover_cols)
                 
                 plot_filename = f"{plot_type.lower().replace(' ', '_')}_export"
                 plot_config = eu.get_publication_plot_config(filename=plot_filename, format_type="svg", scale=3)

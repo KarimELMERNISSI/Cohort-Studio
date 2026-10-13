@@ -6,16 +6,12 @@ import pandas as pd
 import streamlit as st
 
 # Import necessary modules for reproduction logic
-import enrich.external_data as eed
-from app_pages.data_enrichment import apply_imputer, evaluate_formula_safely
-from app_pages.transformation_logic import apply_variable_transformation
-from manage.db_manager import DBManager
 from manage.trace_documenter import TraceDocumenter
-from utils.multipage import load_dataframe
 from utils.path_utils import normalize_path, resolve_path
 from core.workspace import safe_filename
 from utils.data_paths import get_traces_dir, get_uploads_dir
 from utils.session_scope import get_current_scope
+from manage.reproduction_manager import run_trace
 
 
 def _uploads_dir() -> str:
@@ -505,231 +501,74 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             st.warning(f"Failed to load snapshot: {e}. Falling back to replay.")
             # Fallback to replay
     
-    # 2. Full Replay (or Fallback)
-    with st.spinner(f"Replaying analysis up to Step {target_step_index+1}..."):
-        source_dataset = trace_data.get('source_dataset')
-        
-        # Fallback: Check first step for source_path (for newer traces)
-        if (not source_dataset or not os.path.exists(source_dataset)) and len(steps) > 0:
-            first_step = steps[0]
-            if first_step['function'] == 'initial_load' and 'source_path' in first_step['params']:
-                candidate_path = first_step['params']['source_path']
-                if os.path.exists(candidate_path):
-                    source_dataset = candidate_path
-
-        # Handle initial load
-        if source_dataset:
-            resolved_source = resolve_path(source_dataset)
-            if not resolved_source:
-                st.warning(f"Could not find source dataset at: `{source_dataset}`")
-                st.info("It seems the file path is different (possibly due to Docker/OS differences). Please locate the file manually.")
-                
-                # Check if we have a manual override in session state from a previous run or input
-                manual_path_key = f"manual_source_path_{session_id}"
-                
-                col_manual, col_upload = st.columns(2)
-                with col_manual:
-                    manual_source = st.text_input("Enter path to source dataset:", value=os.path.basename(source_dataset), key=manual_path_key)
-                
-                with col_upload:
-                    uploaded_source = st.file_uploader("Or upload source file:", type=['csv', 'xlsx', 'parquet'], key=f"upload_source_{session_id}")
-                
-                if uploaded_source:
-                    # Save uploaded file into the workspace
-                    save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_source.name))
-                    with open(save_path, "wb") as f:
-                        f.write(uploaded_source.getbuffer())
-                    resolved_source = save_path
-                    st.success(f"Using uploaded file: {save_path}")
-                elif manual_source:
-                     resolved_source = _resolve_user_path(manual_source)
-            
-            if resolved_source and os.path.exists(resolved_source):
-                source_dataset = resolved_source # Update to valid path
-                # Determine file type
-                if source_dataset.endswith('.csv'):
-                    df = pd.read_csv(source_dataset)
-                elif source_dataset.endswith('.xlsx'):
-                    df = pd.read_excel(source_dataset)
-                elif source_dataset.endswith('.parquet'):
-                    df = pd.read_parquet(source_dataset)
-                else:
-                    st.error(f"Unknown file type for source dataset: {source_dataset}")
-                    return
-            else:
-                 if resolved_source:
-                     st.error(f"Still cannot find file at: {resolved_source}")
-                 return
-
-        else:
-            # Try DB Manager
-            db_manager = DBManager()
-            df, msg = db_manager.load_dataset(source_dataset)
-        
-        if df is None:
-            st.error(f"Could not load source dataset '{source_dataset}'")
+    # 2. Full replay through the single engine (manage.reproduction_manager, audit E10)
+    overrides = dict(st.session_state.get('resolved_paths', {}))
+    source_dataset = trace_data.get('source_dataset')
+    if (not source_dataset or not os.path.exists(str(source_dataset))) and steps:
+        first_step = steps[0]
+        candidate_path = (first_step.get('params') or {}).get('source_path') if first_step.get('function') == 'initial_load' else None
+        if candidate_path and os.path.exists(candidate_path):
+            source_dataset = candidate_path
+    resolved_source = resolve_path(source_dataset) if source_dataset else None
+    if source_dataset and not resolved_source:
+        st.warning(f"Could not find source dataset at: `{source_dataset}`")
+        st.info("The file path differs on this machine. Locate the file inside your workspace or upload it.")
+        col_manual, col_upload = st.columns(2)
+        with col_manual:
+            manual_source = st.text_input("Enter path to source dataset:", value=os.path.basename(str(source_dataset)),
+                                          key=f"manual_source_path_{session_id}", help="A path inside your workspace.")
+        with col_upload:
+            uploaded_source = st.file_uploader("Or upload source file:", type=['csv', 'xlsx', 'parquet'],
+                                               key=f"upload_source_{session_id}", help="Stored in your workspace uploads folder.")
+        if uploaded_source:
+            save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_source.name))
+            with open(save_path, "wb") as f:
+                f.write(uploaded_source.getbuffer())
+            resolved_source = save_path
+        elif manual_source:
+            resolved_source = _resolve_user_path(manual_source)
+        if not resolved_source:
             return
-            
-        current_df = df.copy()
-        
-        # Initialize Progress Bar
-        progress_bar = st.progress(0, text="Starting reproduction...")
-        
-        # Replay loop
-        for i in range(target_step_index + 1):
-            step = steps[i]
-            func_name = step['function']
-            description = step.get('description', func_name)
-            
-            # Update Progress
-            progress_bar.progress((i + 1) / (target_step_index + 1), text=f"Step {i+1}: {description}")
-            
-            params = step['params']
-            
-            if func_name == "initial_load":
-                continue # Already loaded
+        st.session_state['resolved_paths'][str(source_dataset)] = resolved_source
+        overrides[str(source_dataset)] = resolved_source
 
-            try:
-                if func_name == "enrichment":
-                    # Logic to replay enrichment
-                    enrichment_file_path = params.get("enrichment_file_path")
-                    identifier = params.get("identifier")
-                    strategy = params.get("strategy", "left")
-                    conflict_resolution = params.get("conflict_resolution", "add")
-                    
-                    if enrichment_file_path:
-                        resolved_enrich_path = resolve_path(enrichment_file_path)
-                        
-                        if not resolved_enrich_path:
-                             st.warning(f"Enrichment file not found: `{enrichment_file_path}`")
-                             manual_enrich_key = f"manual_enrich_path_{i}_{session_id}"
-                             
-                             col_enrich_manual, col_enrich_upload = st.columns(2)
-                             with col_enrich_manual:
-                                 manual_enrich = st.text_input(f"Enter path for enrichment file (Step {i+1}):", value=os.path.basename(enrichment_file_path), key=manual_enrich_key)
-                             
-                             with col_enrich_upload:
-                                 uploaded_enrich = st.file_uploader(f"Or upload enrichment file (Step {i+1}):", type=['csv', 'xlsx'], key=f"upload_enrich_{i}_{session_id}")
-                             
-                             if uploaded_enrich:
-                                 save_path_enrich = os.path.join(_uploads_dir(), safe_filename(uploaded_enrich.name))
-                                 with open(save_path_enrich, "wb") as f:
-                                     f.write(uploaded_enrich.getbuffer())
-                                 resolved_enrich_path = save_path_enrich
-                                 st.success(f"Using uploaded enrichment file: {save_path_enrich}")
-                             elif manual_enrich:
-                                 resolved_enrich_path = _resolve_user_path(manual_enrich)
+    progress_bar = st.progress(0, text="Starting reproduction...")
 
-                        if resolved_enrich_path and os.path.exists(resolved_enrich_path):
-                            enrichment_df = load_dataframe(resolved_enrich_path)
-                        if enrichment_df is not None:
-                            # Ensure identifier is a list/set as expected by add_data
-                            # In data_enrichment.py it handles str vs list, but let's be safe
-                            # eed.add_data expects left_id_names and right_id_names
-                            
-                            # Calculate additional columns (all columns in enrichment_df except identifier)
-                            # Note: In data_enrichment.py, it calculates this. We should do the same.
-                            identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
-                            additional_columns = list(set(enrichment_df.columns) - identifier_set)
+    def _on_progress(pct, msg):
+        progress_bar.progress(min(max(int(pct), 0), 100) / 100, text=msg)
 
-                            current_df = eed.add_data(
-                                df=current_df, 
-                                additional_df=enrichment_df, 
-                                left_id_names=identifier, 
-                                right_id_names=identifier, 
-                                additional_cols=additional_columns,
-                                strategy=strategy, 
-                                conflict_resolution=conflict_resolution
-                            )
-                        else:
-                            st.error(f"Failed to load enrichment file: {enrichment_file_path}")
-                            return
-                    else:
-                        st.warning(f"Enrichment file not found: {enrichment_file_path}")
+    with st.spinner(f"Replaying analysis up to Step {target_step_index + 1}..."):
+        result = run_trace(trace_data, upto=target_step_index, path_overrides=overrides, progress_callback=_on_progress)
+    progress_bar.empty()
 
-                elif func_name == "variable_computation":
-                     # Replay variable computation
-                     formula = params.get("formula")
-                     variable_name = params.get("variable_name")
-                     
-                     success, msg, current_df = evaluate_formula_safely(formula, variable_name, current_df)
-                     if not success:
-                         st.error(f"Failed to replay variable computation: {msg}")
-                         return
-
-                elif func_name == "imputation":
-                    # Replay imputation
-                    numerical_imputation_method = params.get("numerical_imputation_method", "Mean")
-                    categorical_imputation_method = params.get("categorical_imputation_method", "Most_Frequent")
-                    cat_encoder = params.get("cat_encoder", False)
-                    num_scaler = params.get("num_scaler", False)
-                    remainder_columns = params.get("remainder_columns", "auto")
-                    remainder_strategy = params.get("remainder_strategy", "passthrough")
-                    remainder_threshold = params.get("remainder_threshold", 0.3)
-                    
-                    current_df, _ = apply_imputer(
-                        data=current_df,
-                        numerical_imputation_method=numerical_imputation_method,
-                        categorical_imputation_method=categorical_imputation_method,
-                        cat_encoder=cat_encoder,
-                        num_scaler=num_scaler,
-                        remainder_columns=remainder_columns,
-                        remainder_strategy=remainder_strategy,
-                        remainder_threshold=remainder_threshold,
-                        debug=False
-                    )
-
-                elif func_name == "variable_transformation":
-                    # Replay variable transformation
-                    result_df = apply_variable_transformation(current_df, params)
-                    if result_df is not None:
-                        current_df = pd.concat([current_df, result_df], axis=1)
-                    else:
-                        st.warning(f"Variable transformation returned no data at step {i+1}")
-
-                elif func_name == "data_type_conversion":
-                    # Replay data type conversion
-                    columns = params.get("columns", [])
-                    new_type = params.get("new_type")
-                    
-                    for col in columns:
-                        if new_type == "datetime":
-                            current_df[col] = pd.to_datetime(current_df[col])
-                        else:
-                            current_df[col] = current_df[col].astype(new_type)
-
-                elif func_name == "missing_value_handling":
-                    # Replay missing value handling
-                    strategy = params.get("strategy")
-                    columns = params.get("columns", [])
-                    fill_value = params.get("fill_value")
-
-                    if strategy == "Drop rows":
-                        current_df = current_df.dropna(subset=columns)
-                    elif strategy == "Fill with mean":
-                        for col in columns:
-                            current_df[col] = current_df[col].fillna(current_df[col].mean())
-                    elif strategy == "Fill with median":
-                        for col in columns:
-                            current_df[col] = current_df[col].fillna(current_df[col].median())
-                    elif strategy == "Fill with mode":
-                        for col in columns:
-                            # Safely handle mode if empty
-                            mode_val = current_df[col].mode()
-                            if not mode_val.empty:
-                                current_df[col] = current_df[col].fillna(mode_val[0])
-                    elif strategy == "Fill with value":
-                        for col in columns:
-                            current_df[col] = current_df[col].fillna(fill_value)
-
-                # ... Add other replay handlers as needed ...
-                    
-            except Exception as e:
-                st.error(f"Error replaying step {i+1} ({func_name}): {e}")
-                return
-
-        st.session_state['working_df'] = current_df
-        st.session_state['data'] = current_df
-        st.session_state['enriched_df'] = current_df
-        progress_bar.empty() # clear progress bar
-        st.success(f"Successfully reproduced state at Step {target_step_index+1} (Full Replay)")
+    if result.missing_file is not None:
+        step_index, missing_path = result.missing_file
+        st.warning(f"Step {step_index + 1} needs a file that was not found: `{missing_path}`")
+        key_suffix = f"{step_index}_{session_id}"
+        col_m, col_u = st.columns(2)
+        with col_m:
+            manual = st.text_input(f"Enter path for the file of step {step_index + 1}:", value=os.path.basename(missing_path),
+                                   key=f"manual_enrich_path_{key_suffix}", help="A path inside your workspace.")
+        with col_u:
+            uploaded = st.file_uploader(f"Or upload it (step {step_index + 1}):", type=['csv', 'xlsx', 'parquet'],
+                                        key=f"upload_enrich_{key_suffix}", help="Stored in your workspace uploads folder.")
+        resolved = None
+        if uploaded:
+            resolved = os.path.join(_uploads_dir(), safe_filename(uploaded.name))
+            with open(resolved, "wb") as f:
+                f.write(uploaded.getbuffer())
+        elif manual:
+            resolved = _resolve_user_path(manual)
+        if resolved:
+            st.session_state['resolved_paths'][missing_path] = resolved
+            st.toast("File located; click the step again to replay.")
+        return
+    if result.error:
+        st.error(result.error)
+        return
+    for note in result.warnings:
+        st.warning(note)
+    st.session_state['working_df'] = result.df
+    st.session_state['data'] = result.df
+    st.session_state['enriched_df'] = result.df
+    st.success(f"Successfully reproduced state at Step {target_step_index + 1} (full replay, {result.steps_applied} step(s))")

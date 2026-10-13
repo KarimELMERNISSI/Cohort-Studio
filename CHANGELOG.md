@@ -6,6 +6,15 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Structure: layering, dead code, single replay engine, traced mutations (audit phase P6; findings E4, E8, E10, E13, U4, U5, U6)
+
+- **One replay engine** — `manage.reproduction_manager.run_trace()` replays a trace headlessly (optionally up to a step, from a pre-loaded frame, with path overrides chosen in the UI) and reports a missing file as structured data instead of rendering widgets; the Reproduce page's own replay loop and the Enrich page's duplicate "Reproduce Analysis" sidebar were removed. Supported steps: enrichment, imputation, variable transformation and computation, type conversion, missing-value handling, column renaming and row filters. The source file is read through the import engine with the parsing options recorded at import.
+- **Traced mutations** — Column renaming (Explore) and "Apply filtering criteria" (Validate: anomalies, inclusion criteria, outliers) are now logged in the trace with the kept rows, so they replay; applying a filter asks for confirmation.
+- **Layering** — No Streamlit in `utils/analysis_utils.py`, `utils/statistics_utils.py`, `utils/path_utils.py`, `utils/visualization_utils.py`, `utils/multipage.py`, `manage/reproduction_manager.py` (widgets moved to `app_pages/analysis_config.py`, `app_pages/statistics_guides.py` and the Visualize page); `enrich/transformation_logic.py` holds the transformation logic (the `app_pages` module is a shim); `tests/test_layering.py` enforces the dependency direction and bounds the remaining lazy page imports.
+- **Dead code removed** — `app_pages/data_preparation.py`, `app_pages/statistical_tests.py`, `explore/statistics.py`, `explore/stats_examples.py`, `manage/anonymize.py` (commented-out), `utils/custom_gemini.py` and its test; the Excel export (`to_excel`) and the empty-config factory now exist once; the legacy loader delegates to `ingest.loaders`.
+- **Correctness** — Statistics caches on disk are keyed by a content fingerprint of the frame (filters and renames no longer serve stale statistics); DuckDB benchmark queries quote column identifiers; the Analyze page runs its battery of tests on an explicit "Run analysis" button and keeps results until the configuration changes; artificial `time.sleep` pauses were removed; two raw-HTML snippets became native elements.
+- **Logo** — New application logo (transparent background).
+
 ### Statistics Tier B, result cards and guidance (audit phase P5; findings S6-S10, S12-S16, U4, U7)
 
 - **Welch-first inference** (`biostats.inference`) — Two groups: Welch's t-test by default with the mean difference and its CI; Mann-Whitney with the Hodges-Lehmann shift (bootstrap CI). Three or more: Welch ANOVA by default, one-way ANOVA, Kruskal-Wallis. Normality (Shapiro/D'Agostino) and Levene are reported as diagnostics with sample-size caveats; they never select the test.

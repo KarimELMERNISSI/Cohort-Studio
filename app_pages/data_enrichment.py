@@ -5,7 +5,6 @@ import logging
 import os
 import re
 from datetime import datetime
-from io import BytesIO
 from typing import Any
 
 import numpy as np
@@ -17,7 +16,6 @@ from rapidfuzz import fuzz
 import enrich.data_imputation as edi
 import enrich.external_data as eed
 from manage.db_manager import DBManager
-from manage.trace_documenter import TraceDocumenter
 from manage.transformation_manager import TransformationManager
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
@@ -26,6 +24,7 @@ from utils.data_paths import get_traces_dir
 from utils.session_scope import get_current_scope
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 from ui.components import no_dataset
+from utils.export_utils import to_excel
 
 
 def _workspace_path(path_text: str) -> str:
@@ -621,24 +620,6 @@ def save_enrichment_config(enrichment_name: str, strategy: str,
 
 
 # Convert DataFrame to Excel for download using openpyxl
-def to_excel(df):
-    """
-    Convert a DataFrame to an Excel file in binary format.
-
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        The DataFrame to convert.
-
-    Returns:
-    --------
-    bytes
-        The Excel file content as bytes.
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=True, sheet_name='Sheet1')
-    return output.getvalue()
 
 
 def calculate_prefix_score(input_token: str, column_name: str) -> float:
@@ -2636,66 +2617,7 @@ def app():
 
     # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
-    # Reproduction Sidebar
-    with st.sidebar.expander("Reproduce Analysis", expanded=False):
-        st.caption("Reproduce analysis or generate report")
-        
-        tab_upload, tab_history = st.tabs(["Upload", "History"])
-        
-        with tab_upload:
-            uploaded_trace = st.file_uploader("Upload Trace JSON", type=["json"])
-            if uploaded_trace:
-                # Report Generation for Uploaded Trace
-                try:
-                    # Save temporary file to read it with TraceDocumenter if needed, 
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
-                        tmp.write(uploaded_trace.getvalue())
-                        tmp_path = tmp.name
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        from manage.reproduction_manager import reproduce_trace
-                        if st.button("Reproduce Analysis"):
-                            reproduce_trace(uploaded_trace)
-                    
-                    with col2:
-                        documenter = TraceDocumenter(tmp_path)
-                        report_buffer = documenter.generate_report()
-                        st.download_button(
-                            label="Download Report",
-                            data=report_buffer,
-                            file_name="uploaded_trace_report.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                    os.unlink(tmp_path) # Clean up
-                except Exception as e:
-                    st.error(f"Could not generate report from upload: {e}")
-
-        with tab_history:
-            if 'transformation_manager' in st.session_state:
-                datasets = st.session_state.transformation_manager.get_available_datasets_from_traces()
-                if datasets:
-                    options = {f"{d['timestamp']} | {d['session_id']}": d for d in datasets}
-                    selected_label = st.selectbox("Select Trace", list(options.keys()))
-                    if selected_label:
-                        selected_data = options[selected_label]
-                        trace_path = os.path.join("data", "traces", f"{selected_data['session_id']}.json")
-                        
-                        if os.path.exists(trace_path):
-                            try:
-                                documenter = TraceDocumenter(trace_path)
-                                report_buffer = documenter.generate_report()
-                                st.download_button(
-                                    label="Download Transformation Report (.docx)",
-                                    data=report_buffer,
-                                    file_name=f"trace_report_{selected_data['session_id']}.docx",
-                                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                                )
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                else:
-                    st.info("No traces found.")
+    # Trace replay and reports live on the Reproduce page (single replay engine, audit E10).
 
     # Main navigation tabs
     main_tab, impute_tab, define_var_tab = st.tabs([

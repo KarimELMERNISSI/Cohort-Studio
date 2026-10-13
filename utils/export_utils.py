@@ -10,22 +10,14 @@ from typing import Any
 import pandas as pd
 
 
-def to_excel(df):
-    """
-    Convert a DataFrame to Excel bytes for download.
-    
-    Args:
-        df: pandas DataFrame to export
-        
-    Returns:
-        bytes: Excel file as bytes
-    """
+def to_excel(df, index: bool = True, sheet_name: str = "Sheet1") -> bytes:
+    """Excel bytes for a download button (the one implementation used by every page)."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         if df is None or getattr(df, "empty", False):
-            pd.DataFrame({"Status": ["No data available"]}).to_excel(writer, index=False, sheet_name='Sheet1')
+            pd.DataFrame({"Status": ["No data available"]}).to_excel(writer, index=False, sheet_name=sheet_name)
         else:
-            df.to_excel(writer, index=True, sheet_name='Sheet1')
+            df.to_excel(writer, index=index, sheet_name=sheet_name)
     return output.getvalue()
 
 

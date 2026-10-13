@@ -1,6 +1,8 @@
 import os
+import logging
 
-import streamlit as st
+logger = logging.getLogger(__name__)
+
 
 
 def normalize_path(path_str: str) -> str:
@@ -53,7 +55,7 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     for directory in search_dirs:
         candidate_path = os.path.join(directory, filename)
         if os.path.exists(candidate_path):
-            st.toast(f"Build-in path resolution found file: {candidate_path} (original: {original_path})", icon=None)
+            logger.info("Path resolution found %s for %s", candidate_path, original_path)
             return candidate_path
             
     return None

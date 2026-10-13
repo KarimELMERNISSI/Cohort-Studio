@@ -1,5 +1,4 @@
 import re
-from io import BytesIO
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +30,7 @@ from utils.data_analyzer import DataAnalyzer
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
 from biostats.multiplicity import adjust as adjust_pvalues
 from ui.components import no_dataset, result_card
+from utils.export_utils import to_excel
 
 
 def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
@@ -125,24 +125,6 @@ def _render_twobytwo_panel(epi):
 
 
 
-def to_excel(df):
-    """
-    Convert a DataFrame to an Excel file in binary format.
-
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        The DataFrame to convert.
-
-    Returns:
-    --------
-    bytes
-        The Excel file content as bytes.
-    """
-    output = BytesIO()
-    with pd.ExcelWriter(output) as writer:
-        df.to_excel(writer, index=False, sheet_name='Results')
-    return output.getvalue()
 
 def app():
     """
@@ -263,43 +245,43 @@ def run_univariate_analysis(df, analyzer):
     # Filter Dataframe based on selected groups
     df_analysis_filtered = df[df[group_col].isin(selected_groups)].copy()
 
-    # Prepare results container
-    results = []
-    
-    # Get groups
     groups = df_analysis_filtered[group_col].dropna().unique()
     n_groups = len(groups)
-    
     if n_groups < 2:
         st.error("Grouping variable must have at least 2 levels in the filtered data.")
         return
 
     st.write(f"### Comparing groups defined by **{group_col}**: {', '.join(map(str, groups))}")
 
-    # Progress bar for many variables
-    progress_bar = st.progress(0)
-    
-    for i, target in enumerate(target_cols):
-        # Determine manual test override based on preference
-        manual_override = "Auto-Detect"
-        if test_preference == "Force Parametric (T-test/ANOVA)":
-            manual_override = "Student's t-test" if n_groups == 2 else "ANOVA"
-        elif test_preference == "Force Non-Parametric (Mann-Whitney/Kruskal)":
-            manual_override = "Mann-Whitney U" if n_groups == 2 else "Kruskal-Wallis"
-            
-        res = au.analyze_variable(
-            df_analysis_filtered, 
-            group_col, 
-            target, 
-            analyzer.numeric_cols,
-            analyzer.categorical_cols,
-            analyzer.binary_cols,
-            manual_test=manual_override
-        )
-        results.append(res)
-        progress_bar.progress((i + 1) / len(target_cols))
-    
-    progress_bar.empty()
+    # Explicit run (audit U4): results are computed on demand and kept until the configuration changes
+    signature = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method,
+                 len(df_analysis_filtered))
+    cached = st.session_state.get("univariate_cache")
+    run_now = st.button("Run analysis", type="primary", key="univariate_run",
+                        help="Runs every test for the selected variables. Results stay until the configuration changes.")
+    if not run_now and not (cached and cached.get("signature") == signature):
+        st.info("Choose the grouping variable and the variables to test, then click Run analysis.")
+        return
+    if run_now or cached is None or cached.get("signature") != signature:
+        results = []
+        progress_bar = st.progress(0)
+        for i, target in enumerate(target_cols):
+            manual_override = "Auto-Detect"
+            if test_preference == "Force Parametric (T-test/ANOVA)":
+                manual_override = "Welch's t-test" if n_groups == 2 else "Welch ANOVA"
+            elif test_preference == "Force Non-Parametric (Mann-Whitney/Kruskal)":
+                manual_override = "Mann-Whitney U" if n_groups == 2 else "Kruskal-Wallis"
+            res = au.analyze_variable(
+                df_analysis_filtered, group_col, target,
+                analyzer.numeric_cols, analyzer.categorical_cols, analyzer.binary_cols,
+                manual_test=manual_override,
+            )
+            results.append(res)
+            progress_bar.progress((i + 1) / len(target_cols))
+        progress_bar.empty()
+        st.session_state["univariate_cache"] = {"signature": signature, "results": results}
+    else:
+        results = cached["results"]
 
     # Display Results Table
     results_df = pd.DataFrame(results)
@@ -357,7 +339,7 @@ def run_univariate_analysis(df, analyzer):
     # Download Button
     st.download_button(
         label="Download Summary Table (Excel)",
-        data=to_excel(results_df),
+        data=to_excel(results_df, index=False, sheet_name="Results"),
         file_name=f"epidemiology_results_{group_col}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

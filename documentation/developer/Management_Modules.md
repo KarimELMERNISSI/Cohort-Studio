@@ -1,8 +1,288 @@
 # Backend Management Logic
 
-## anonymize.py
+## authz.py
 
-_No module description._
+_Authorization and credential-policy helpers shared by the UI and the CLI.
+
+Privileges are derived from the role stored by the IAM provider (``UserProfile.role``), never from
+the username string (audit finding E5)._
+
+**Imports**:
+`__future__.annotations`, `os`, `re`, `schemas.UserRole`
+
+### def `is_admin_role` (authz.py)
+
+- **Arguments**: `role: ComplexType`
+
+- **Returns**: `bool`
+
+True when the role value denotes an administrator.
+
+### def `validate_username` (authz.py)
+
+- **Arguments**: `username: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Return an error message when the username is unacceptable, else None.
+
+### def `validate_password` (authz.py)
+
+- **Arguments**: `password: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Return an error message when the password is unacceptable, else None.
+
+### def `validate_new_credentials` (authz.py)
+
+- **Arguments**: `username: ComplexType, password: ComplexType, confirm: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Validate a sign-up form; returns the first problem found or None.
+
+---
+
+## base.py
+
+_Base Abstract Interface for Identity and Access Management (IAM) Providers.
+
+Defines the contract that all authentication and user management backends
+must implement, enabling framework-agnostic switching between local, remote,
+or disabled authentication._
+
+**Imports**:
+`abc.ABC`, `abc.abstractmethod`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+
+### class `BaseIAMProvider` (base.py)
+
+Abstract Base Class for IAM Providers.
+
+Subclasses implement credential verification, user provisioning, role
+management, and session token resolution against specific backends.
+
+**Methods:**
+
+- **provider_name**(`self`) -> `str`
+  > Return the unique name identifier of the IAM provider.
+
+- **is_enabled**(`self`) -> `bool`
+  > Indicates whether authentication is actively enforced.
+  > Default is True; disabled/bypass providers override to False.
+
+- **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
+  > Authenticate user credentials and evaluate account activation status.
+  >
+  > Args:
+  >     credentials: UserCredentials containing username and password.
+  >
+  > Returns:
+  >     AuthResult with success status, user profile, and informative message.
+
+- **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
+  > Provision a new user account.
+  >
+  > Args:
+  >     username: Unique alphanumeric username.
+  >     password: Raw password string to be securely hashed.
+  >     role: Assigned clinical user role.
+  >     auto_activate: Whether account is active immediately without admin review.
+  >
+  > Returns:
+  >     Tuple of (success_flag, status_message).
+
+- **verify_session**(`self, token: str`) -> `AuthResult`
+  > Validate an active bearer token or session identifier.
+  >
+  > Args:
+  >     token: Session token or bearer string.
+  >
+  > Returns:
+  >     AuthResult with user details if token is valid.
+
+- **get_user**(`self, username: str`) -> `ComplexType`
+  > Retrieve structured user profile by username.
+  >
+  > Args:
+  >     username: Target user account name.
+  >
+  > Returns:
+  >     UserProfile if found, else None.
+
+- **list_users**(`self`) -> `list[UserProfile]`
+  > List all registered platform users with activation and role status.
+  >
+  > Returns:
+  >     List of UserProfile instances.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Activate a pending user account (administrator authorization).
+  >
+  > Args:
+  >     username: Target user account name.
+  >
+  > Returns:
+  >     Tuple of (success_flag, status_message).
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Suspend an active user account.
+  >
+  > Args:
+  >     username: Target user account name.
+  >
+  > Returns:
+  >     Tuple of (success_flag, status_message).
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Permanently remove a user account from the directory.
+  >
+  > Args:
+  >     username: Target user account name.
+  >
+  > Returns:
+  >     Tuple of (success_flag, status_message).
+
+- **update_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > Update credentials for an existing account.
+  >
+  > Args:
+  >     username: Target user account name.
+  >     new_password: New raw password string.
+  >
+  > Returns:
+  >     Tuple of (success_flag, status_message).
+
+---
+
+## base.py
+
+_Base Connector Interfaces for LLM and Embedding Providers.
+
+Provides abstract and extensible base classes conforming to LangChain Core contracts
+(BaseChatModel, Embeddings) for seamless interoperability with LCEL chains, Vector Stores,
+and evaluation components._
+
+**Imports**:
+`abc.abstractmethod`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.embeddings.Embeddings`, `langchain_core.language_models.chat_models.BaseChatModel`, `langchain_core.messages.BaseMessage`, `langchain_core.outputs.ChatResult`, `pydantic.Field`, `schemas.ProviderConfig`
+
+### class `BaseLLMConnector` (base.py)
+
+Abstract base class for all LLM connectors.
+
+Subclasses must implement:
+- _generate: LangChain core generation interface.
+
+- _llm_type: String identifier of the LLM provider.
+
+- get_available_models: Query available models for the provider.
+
+**Methods:**
+
+- **_llm_type**(`self`) -> `str`
+  > Provider identifier string for LangChain introspection.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > Core execution method converting messages to model completion.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > Retrieve available text generation models for this provider.
+  > Default fallback returns the configured model.
+
+### class `BaseEmbeddingConnector` (base.py)
+
+Abstract base class for embedding connectors.
+
+Subclasses must implement:
+- embed_documents: Batch embedding generation.
+
+- embed_query: Single query string embedding.
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > Initialize with provider configuration.
+
+- **embed_documents**(`self, texts: list[str]`) -> `list[list[float]]`
+  > Compute embeddings for a batch of text strings.
+
+- **embed_query**(`self, text: str`) -> `list[float]`
+  > Compute an embedding for a single search query.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > Retrieve available embedding models for this provider.
+  > Default fallback returns the configured model.
+
+---
+
+## better_auth.py
+
+_Better Auth Remote IAM Provider.
+
+Enables seamless integration with modern authentication frameworks such as
+Better Auth (and compatible RESTful identity microservices). Features connection
+pooling, short-lived in-memory TTL session caching to eliminate UI latency, and
+resilient error handling._
+
+**Imports**:
+`logging`, `time`, `requests`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+
+### class `BetterAuthIAMProvider` (better_auth.py)
+
+Remote IAM Provider integrating with Better Auth or compatible REST IAM services.
+
+Includes an in-memory TTL cache to ensure that Streamlit rerun cycles do not
+degrade performance with repeated synchronous network requests.
+
+**Methods:**
+
+- **__init__**(`self, base_url: ComplexType, api_key: ComplexType, cache_ttl_seconds: int, request_timeout: float`) -> `None`
+  > Initialize the Better Auth provider.
+  >
+  > Args:
+  >     base_url: Base endpoint URL of the Better Auth service (e.g., "http://localhost:3000/api/auth").
+  >     api_key: Optional Bearer or service API key for administrative queries.
+  >     cache_ttl_seconds: Duration to cache verified sessions in memory (default 300s).
+  >     request_timeout: HTTP request timeout in seconds (default 3.0s).
+
+- **provider_name**(`self`) -> `str`
+  > Return provider identifier.
+
+- **_get_cached_auth**(`self, cache_key: str`) -> `ComplexType`
+  > Check in-memory TTL cache to avoid redundant network round-trips.
+
+- **_set_cached_auth**(`self, cache_key: str, result: AuthResult`) -> `None`
+  > Store verified authentication result in TTL cache.
+
+- **health_check**(`self`) -> `tuple[ComplexType]`
+  > Verify connectivity to the Better Auth service.
+
+- **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
+  > Authenticate credentials via Better Auth sign-in endpoint.
+
+- **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
+  > Provision a new user account through Better Auth sign-up endpoint.
+
+- **verify_session**(`self, token: str`) -> `AuthResult`
+  > Verify existing session token using Better Auth get-session endpoint.
+
+- **get_user**(`self, username: str`) -> `ComplexType`
+  > Fetch user profile from Better Auth admin endpoint.
+
+- **list_users**(`self`) -> `list[UserProfile]`
+  > Fetch user list from Better Auth admin endpoint.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Activate user via Better Auth admin API.
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Deactivate user via Better Auth admin API.
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Delete user account in Better Auth directory.
+
+- **update_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > Reset user password via Better Auth admin API.
 
 ---
 
@@ -11,7 +291,7 @@ _No module description._
 _No module description._
 
 **Imports**:
-`duckdb`, `glob`, `re`, `os`, `logging`, `pandas`
+`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`, `utils.session_scope.get_current_scope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`
 
 ### class `DBManager` (db_manager.py)
 
@@ -19,46 +299,77 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 
 **Methods:**
 
-- ****init****(`self, db_path`) -> `None`
+- **__init__**(`self, db_path: str, scope: ComplexType`) -> `None`
   > No description available.
+
+- **_get_user_connection**(`self`) -> `None`
+  > Get a new DuckDB connection for users DB.
+
+- **init_user_db**(`self`) -> `None`
+  > Initialize the users table with activation support.
+
+- **create_user**(`self, username: str, password: str, auto_activate: bool, role: UserRole`) -> `tuple[ComplexType]`
+  > Create a new user (pending approval unless auto_activate is set).
+
+- **verify_user**(`self, username: str, password: str`) -> `tuple[ComplexType]`
+  > Verify user credentials and check if account is active.
+
+- **get_all_users**(`self`) -> `list[str]`
+  > Get list of all registered usernames.
+
+- **get_all_users_with_status**(`self`) -> `list[dict[ComplexType]]`
+  > Get list of all users with their activation status.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Activate a user account (admin only).
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Deactivate a user account (admin only). Cannot deactivate admin.
+
+- **update_user_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > Update a user's password.
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Delete a user account. Protects admin from deletion.
 
 - **_get_connection**(`self`) -> `None`
   > Get a new DuckDB connection.
 
-- **_get_next_version**(`self, base_name`) -> `None`
+- **_get_next_version**(`self, base_name: str`) -> `int`
   > Determines the next version number for a given base name.
 
-- **save_dataframe**(`self, df, name, folder`) -> `None`
+- **save_dataframe**(`self, df: pd.DataFrame, name: str, folder: ComplexType`) -> `tuple[ComplexType]`
   > Persists a pandas DataFrame to a Parquet file via DuckDB (Low level).
 
-- **save_dataset**(`self, df, base_name`) -> `None`
+- **save_dataset**(`self, df: pd.DataFrame, base_name: str, username: ComplexType`) -> `tuple[ComplexType]`
   > Persists a pandas DataFrame to a Parquet file with automatic versioning.
 
-- **load_dataframe**(`self, name, folder`) -> `None`
+- **load_dataframe**(`self, name: str, folder: ComplexType`) -> `tuple[ComplexType]`
   > Loads a Parquet file into a pandas DataFrame via DuckDB (Low level).
 
-- **load_dataset**(`self, file_name`) -> `None`
+- **load_dataset**(`self, file_name: str`) -> `tuple[ComplexType]`
   > Loads a Parquet file into a pandas DataFrame via DuckDB.
   >
   >
   > **Parameters**:
   >
   > file_name : str
-  > The name of the file to load (without extension)
+  >     The name of the file to load (without extension)
   >
   >
   > **Returns**:
   >
   > tuple
-  > (DataFrame, message) - The loaded DataFrame and a success/error message
+  >     (DataFrame, message) - The loaded DataFrame and a success/error message
 
-- **get_available_tables**(`self`) -> `None`
+- **get_available_tables**(`self`) -> `list[str]`
   > List available parquet files in the current directory.
 
-- **get_available_datasets**(`self`) -> `None`
+- **get_available_datasets**(`self, username: ComplexType`) -> `list[str]`
   > List available parquet files in the current directory, sorted by modification time.
+  > Filters by username if provided (unless admin).
 
-- **save_stats**(`self, df, dataset_name, stats_type`) -> `None`
+- **save_stats**(`self, df: pd.DataFrame, dataset_name: str, stats_type: str`) -> `tuple[ComplexType]`
   > Save statistical results to parquet cache.
 
 - **load_stats**(`self, dataset_name, stats_type`) -> `None`
@@ -70,6 +381,153 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 - **clear_all_stats**(`self`) -> `None`
   > Delete ALL cached statistics files.
 
+### def `_sql_literal` (db_manager.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+Escape a string for use inside a single-quoted DuckDB literal (COPY ... TO does not bind parameters).
+
+---
+
+## disabled.py
+
+_Disabled IAM Provider (Bypass / No-Auth Mode).
+
+Allows seamless operation in single-researcher offline workstations or automated
+pipelines where user authentication is explicitly disabled. Automatically provides
+a pre-authorized administrator session without gating the application._
+
+**Imports**:
+`base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+
+### class `DisabledIAMProvider` (disabled.py)
+
+Bypass provider that allows unrestricted access as a local researcher.
+
+**Methods:**
+
+- **__init__**(`self, default_username: str`) -> `None`
+  > No description available.
+
+- **provider_name**(`self`) -> `str`
+  > Return provider identifier.
+
+- **is_enabled**(`self`) -> `bool`
+  > Authentication is disabled.
+
+- **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
+  > Always return active authorized session.
+
+- **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
+  > No-op user provisioning.
+
+- **verify_session**(`self, token: str`) -> `AuthResult`
+  > Always validate token.
+
+- **get_user**(`self, username: str`) -> `ComplexType`
+  > Return default user profile.
+
+- **list_users**(`self`) -> `list[UserProfile]`
+  > Return default user.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > No description available.
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > No description available.
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > No description available.
+
+- **update_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > No description available.
+
+---
+
+## document_loader.py
+
+_High-Performance PDF Document Loader.
+
+Replaces deprecated `langchain_community.document_loaders` with native `pypdf` extraction,
+improving performance, eliminating deprecation warnings, and resiliently handling errors._
+
+**Imports**:
+`logging`, `pathlib.Path`, `langchain_core.documents.Document`, `pypdf.PdfReader`
+
+### class `PDFDocumentLoader` (document_loader.py)
+
+Lightweight, native PDF document loader using pypdf.
+
+Converts PDF pages into standardized `langchain_core.documents.Document`
+objects with complete metadata (source, filename, page, total_pages).
+
+**Methods:**
+
+- **__init__**(`self, file_or_dir_path: ComplexType`) -> `None`
+  > Initialize the loader with a file or directory path.
+  >
+  > Args:
+  >     file_or_dir_path: Path to a single PDF or a directory containing PDFs.
+
+- **load_single_pdf**(`self, file_path: ComplexType`) -> `list[Document]`
+  > Extract text from an individual PDF file page by page.
+  >
+  > Args:
+  >     file_path: Absolute or relative path to the PDF file.
+  >
+  > Returns:
+  >     List of Document objects representing non-empty pages.
+
+- **load**(`self, recursive: bool`) -> `list[Document]`
+  > Load all PDF documents from the initialized path.
+  >
+  > Args:
+  >     recursive: If True and path is a directory, searches subdirectories.
+  >
+  > Returns:
+  >     Aggregated list of Document objects from all discovered PDFs.
+
+---
+
+## factory.py
+
+_Connector Factory for RAG LLMs and Embeddings.
+
+Instantiates provider-specific connectors based on ProviderConfig or UI parameters,
+providing a single entry point for model-agnostic execution._
+
+**Imports**:
+`logging`, `typing.Any`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `providers.gemini.GeminiChatConnector`, `providers.gemini.GeminiEmbeddingConnector`, `providers.mistral.MistralChatConnector`, `providers.mistral.MistralEmbeddingConnector`, `providers.ollama.OllamaChatConnector`, `providers.ollama.OllamaEmbeddingConnector`, `providers.openai.OpenAIChatConnector`, `providers.openai.OpenAIEmbeddingConnector`, `schemas.ProviderConfig`, `schemas.ProviderType`
+
+### class `ConnectorFactory` (factory.py)
+
+Factory for creating LLM and Embedding connectors.
+
+**Methods:**
+
+- **get_llm_connector**(`cls, config: ProviderConfig`) -> `BaseLLMConnector`
+  > Instantiate the appropriate LLM chat connector.
+  >
+  > Args:
+  >     config: Provider configuration specification.
+  >
+  > Returns:
+  >     Instance of BaseLLMConnector.
+
+- **get_embedding_connector**(`cls, config: ProviderConfig`) -> `BaseEmbeddingConnector`
+  > Instantiate the appropriate Embedding connector.
+  >
+  > Args:
+  >     config: Provider configuration specification.
+  >
+  > Returns:
+  >     Instance of BaseEmbeddingConnector.
+
+- **create_connectors**(`cls, provider: str, model_name: ComplexType, embedding_model: ComplexType, api_key: ComplexType, base_url: ComplexType, temperature: float`) -> `tuple[ComplexType]`
+  > Convenience factory method constructing both connectors from keyword arguments.
+
 ---
 
 ## file_handling.py
@@ -77,7 +535,7 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 _No module description._
 
 **Imports**:
-`os`, `pandas`, `detect_delimiter.detect`, `logging`
+`logging`, `os`, `pandas`, `detect_delimiter.detect`
 
 ### def `create_folders` (file_handling.py)
 
@@ -102,13 +560,11 @@ Returns:
 Lists files with specified extensions in a directory.
 
 Parameters:
-
 - directory (str): The path to the directory.
 
 - file_extensions (list of str, optional): List of file extensions to filter. Default is None.
 
 Returns:
-
 - list of str: List of file paths that match the specified extensions.
 
 If no file_extensions are provided, all files in the directory are listed.
@@ -122,13 +578,11 @@ If no file_extensions are provided, all files in the directory are listed.
 Detects the encoding of a file using charset-normalizer.
 
 Parameters:
-
 - file_path (str): The path to the file.
 
 - num_lines (int): The number of lines to read from the file for encoding detection. Default is 100.
 
 Returns:
-
 - str: The detected encoding of the file.
 
 Note:
@@ -150,7 +604,6 @@ Load a CSV file with automatic delimiter detection.
 - num_lines (int): The number of lines to read for delimiter detection. Default is 10.
 
 Returns:
-
 - pd.DataFrame: The loaded DataFrame.
 
 ### def `load_dataframe` (file_handling.py)
@@ -162,13 +615,11 @@ Returns:
 Loads a DataFrame from a file.
 
 Parameters:
-
 - file_path (str): The path to the file to load.
 
 - encoding (str, optional): The encoding of the file. Default is 'utf-8'.
 
 Returns:
-
 - DataFrame or None: The loaded DataFrame if successful, otherwise None.
 
 This function attempts to load a DataFrame from the specified file. It first detects the file extension
@@ -197,6 +648,373 @@ Raises:
 
 ---
 
+## gemini.py
+
+_Google Gemini Provider Connectors.
+
+Utilizes the modern `google-genai` SDK (v2.x) with retry logic,
+temperature controls, and embedding integration._
+
+**Imports**:
+`logging`, `random`, `time`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+
+### class `GeminiChatConnector` (gemini.py)
+
+Chat connector for Google Gemini models via google-genai SDK.
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **_llm_type**(`self`) -> `str`
+  > No description available.
+
+- **model_name**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > Query Gemini API for available text models.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > No description available.
+
+### class `GeminiEmbeddingConnector` (gemini.py)
+
+Embedding connector for Google Gemini models.
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **_embed_single**(`self, text: str`) -> `list[float]`
+  > Embeds single text with automatic fallback across supported Gemini models.
+
+- **embed_documents**(`self, texts: list[str]`) -> `list[list[float]]`
+  > No description available.
+
+- **embed_query**(`self, text: str`) -> `list[float]`
+  > No description available.
+
+---
+
+## local_duckdb.py
+
+_Local DuckDB IAM Provider.
+
+Default, zero-dependency embedded authentication backend utilizing DuckDB
+and bcrypt password hashing. Designed for single-node deployments, air-gapped
+clinical environments, and full backward compatibility._
+
+**Imports**:
+`logging`, `os`, `datetime.datetime`, `datetime.timedelta`, `bcrypt`, `duckdb`, `utils.data_paths`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+
+### class `LocalDuckDBIAMProvider` (local_duckdb.py)
+
+Local embedded IAM backend using DuckDB and bcrypt.
+
+**Methods:**
+
+- **__init__**(`self, db_path: ComplexType`) -> `None`
+  > Initialize the local DuckDB IAM provider.
+  >
+  > Args:
+  >     db_path: Optional custom path to users.duckdb file. If None,
+  >              resolves via standard data paths.
+
+- **provider_name**(`self`) -> `str`
+  > Return provider identifier.
+
+- **_get_connection**(`self`) -> `ComplexType`
+  > Acquire an on-demand DuckDB connection.
+  > Closes explicitly per operation to prevent Windows file lock conflicts.
+
+- **_init_database**(`self`) -> `None`
+  > Initialize user directory table and apply schema migrations.
+
+- **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
+  > Authenticate local credentials against bcrypt password hashes.
+
+- **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
+  > Provision a new local user with bcrypt password hashing.
+
+- **verify_session**(`self, token: str`) -> `AuthResult`
+  > Validate local session token.
+
+- **get_user**(`self, username: str`) -> `ComplexType`
+  > Retrieve user profile from local database.
+
+- **list_users**(`self`) -> `list[UserProfile]`
+  > List all users in local database.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Activate a user account.
+
+- **_is_admin_account**(`self, username: str`) -> `bool`
+  > True when the account exists and holds the administrator role.
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Deactivate a user account (administrator accounts are protected).
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Delete a user account (administrator accounts are protected).
+
+- **update_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > Update password for an existing user.
+
+---
+
+## manager.py
+
+_IAM Manager and Factory.
+
+Provides a unified, framework-agnostic facade for identity and access management.
+Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
+Better Auth, or Disabled) based on environment configuration or runtime parameters._
+
+**Imports**:
+`logging`, `os`, `typing.Any`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+
+### class `IAMManager` (manager.py)
+
+Central facade managing IAM operations and provider lifecycle.
+
+**Methods:**
+
+- **__init__**(`self, config: ComplexType`) -> `None`
+  > Initialize IAM Manager with configuration or environment variables.
+
+- **_resolve_config_from_env**(`cls`) -> `IAMConfig`
+  > Read IAM configuration from process environment variables.
+
+- **_build_provider**(`cls, config: IAMConfig`) -> `BaseIAMProvider`
+  > Construct the designated provider instance.
+
+- **provider**(`self`) -> `BaseIAMProvider`
+  > Get the active IAM provider instance.
+
+- **is_enabled**(`self`) -> `bool`
+  > Whether authentication gating is active.
+
+- **provider_name**(`self`) -> `str`
+  > Name of the active provider.
+
+- **set_provider**(`self, provider: BaseIAMProvider`) -> `None`
+  > Manually inject a custom or mock IAM provider.
+
+- **reset_provider**(`self`) -> `None`
+  > Reset provider to default environment configuration.
+
+- **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
+  > Authenticate user credentials.
+
+- **verify_user**(`self, username: str, password: str`) -> `tuple[ComplexType]`
+  > Convenience verification method returning (success, message).
+  > Maintains complete drop-in compatibility with legacy DBManager calls.
+
+- **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
+  > Provision a new user account.
+
+- **verify_session**(`self, token: str`) -> `AuthResult`
+  > Verify an existing session token.
+
+- **get_user**(`self, username: str`) -> `ComplexType`
+  > Fetch user profile.
+
+- **list_users**(`self`) -> `list[UserProfile]`
+  > List registered user profiles.
+
+- **get_all_users**(`self`) -> `list[str]`
+  > Return list of all registered usernames.
+
+- **get_all_users_with_status**(`self`) -> `list[dict[ComplexType]]`
+  > Return structured dictionary list of all users with status.
+  > Maintains complete drop-in compatibility with legacy DBManager calls.
+
+- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Activate user account.
+
+- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Deactivate user account.
+
+- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
+  > Delete user account.
+
+- **update_user_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
+  > Update user credentials.
+
+- **ensure_bootstrap_admin**(`self`) -> `tuple[ComplexType]`
+  > Create the initial administrator when no active administrator exists.
+  >
+  > Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
+  > CMP_ADMIN_PASSWORD_FILE. Nothing is created when the IAM provider is disabled, when an
+  > active administrator already exists, or when no bootstrap password is configured.
+
+### def `get_iam_manager` (manager.py)
+
+- **Arguments**: `config: ComplexType`
+
+- **Returns**: `IAMManager`
+
+Retrieve or initialize the global IAMManager instance.
+
+---
+
+## mistral.py
+
+_Mistral AI Provider Connectors.
+
+Integrates European sovereign models (Mistral Small, Mistral Large, Codestral)
+and Mistral Embeddings via Mistral OpenAI-compatible API._
+
+**Imports**:
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+
+### class `MistralChatConnector` (mistral.py)
+
+Chat connector for Mistral AI sovereign models.
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **_llm_type**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > No description available.
+
+### class `MistralEmbeddingConnector` (mistral.py)
+
+Embedding connector for Mistral AI embeddings (mistral-embed).
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **embed_documents**(`self, texts: list[str]`) -> `list[list[float]]`
+  > No description available.
+
+- **embed_query**(`self, text: str`) -> `list[float]`
+  > No description available.
+
+---
+
+## ollama.py
+
+_Ollama Local & Open-Source Provider Connectors.
+
+Enables 100% offline, privacy-preserving, sovereign execution using locally hosted
+open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
+(Nomic Embed Text, BGE-M3, etc.) via Ollama REST API._
+
+**Imports**:
+`logging`, `typing.Any`, `httpx`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`
+
+### class `OllamaChatConnector` (ollama.py)
+
+Chat connector for local Ollama instances via native REST API.
+Zero cloud dependencies, completely offline and private.
+
+**Methods:**
+
+- **_llm_type**(`self`) -> `str`
+  > No description available.
+
+- **base_url**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > Query the local Ollama server for currently downloaded models.
+  > Falls back to recommended open-source models if Ollama is unreachable.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > No description available.
+
+### class `OllamaEmbeddingConnector` (ollama.py)
+
+Embedding connector for local Ollama embedding models.
+Supports high-performance embeddings like nomic-embed-text, bge-m3, all-minilm.
+
+**Methods:**
+
+- **base_url**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **_call_embed**(`self, input_data: Any`) -> `Any`
+  > Call either /api/embed or fallback to /api/embeddings.
+
+- **embed_documents**(`self, texts: list[str]`) -> `list[list[float]]`
+  > No description available.
+
+- **embed_query**(`self, text: str`) -> `list[float]`
+  > No description available.
+
+---
+
+## openai.py
+
+_OpenAI Provider Connectors.
+
+Integrates OpenAI chat completion models (GPT-4o, GPT-4o-mini) and embeddings
+(text-embedding-3-small, text-embedding-3-large) using official OpenAI client._
+
+**Imports**:
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+
+### class `OpenAIChatConnector` (openai.py)
+
+Chat connector for OpenAI API models (GPT-4o, GPT-4o-mini, o3-mini).
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **_llm_type**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > No description available.
+
+### class `OpenAIEmbeddingConnector` (openai.py)
+
+Embedding connector for OpenAI embeddings (text-embedding-3-small, text-embedding-3-large).
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **embed_documents**(`self, texts: list[str]`) -> `list[list[float]]`
+  > No description available.
+
+- **embed_query**(`self, text: str`) -> `list[float]`
+  > No description available.
+
+---
+
 ## rag_computed_vars.py
 
 _Computed Variables Mixin for RAGManager.
@@ -205,7 +1023,7 @@ Contains all computed variable suggestion and validation methods.
 This is part of the RAGManager class composition pattern._
 
 **Imports**:
-`json`, `re`, `ast`, `hashlib`, `logging`, `rag_schemas.TheoreticalConcept`, `rag_schemas.TheoreticalConceptList`, `rag_schemas.ComputedVariableSuggestion`, `rag_schemas.SuggestionResponse`, `rag_schemas.ProxyVariable`, `rag_schemas.AlternativeFormula`, `rag_schemas.FormulaCorrection`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`
+`ast`, `hashlib`, `json`, `logging`, `re`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`, `rag_schemas.AlternativeFormula`, `rag_schemas.ProxyVariable`
 
 ### class `ComputedVarsMixin` (rag_computed_vars.py)
 
@@ -261,6 +1079,29 @@ Methods:
   > - context_stats (dict): Optional dictionary of statistics for the context columns.
   > - num_suggestions (int): Number of suggestions to generate.
 
+### def `parse_formula_vars` (rag_computed_vars.py)
+
+- **Arguments**: `formula_str: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+Parses variable identifiers from a formula expression using Python AST.
+
+Handles:
+- Standard variable identifiers (e.g., `weight`, `height`)
+
+- Power operator normalization (`^` to `**`)
+
+- Escaped column names enclosed in double quotes (e.g., `""Systolic BP""`)
+
+- Column names enclosed in backticks (e.g., `` `Diastolic BP` ``)
+
+Args:
+    formula_str: Mathematical expression string to parse.
+
+Returns:
+    tuple[set[str], bool]: Set of extracted variable names and syntax validity flag.
+
 ---
 
 ## rag_documents.py
@@ -271,7 +1112,7 @@ Contains all document processing, knowledge graph extraction and chat methods.
 This is part of the RAGManager class composition pattern._
 
 **Imports**:
-`os`, `json`, `time`
+`os`, `time`
 
 ### class `DocumentsMixin` (rag_documents.py)
 
@@ -294,11 +1135,13 @@ Methods:
   > Returns a list of PDF files in the documents directory.
 
 - **extract_custom_graph_from_doc**(`self, file_name, progress_callback`) -> `None`
-  > Uses Gemini Native File API to extract a knowledge graph from a specific document.
+  > Extract a Knowledge Graph of key entities and relationships from a specific document.
+  > Supports both Gemini File API and universal text-based LLM extraction (Ollama, OpenAI, Mistral).
 
 - **extract_merged_graph_from_docs**(`self, doc_list, progress_callback`) -> `None`
   > Extracts and merges graphs from multiple documents.
-  > Returns (merged_json, error).
+  > Entities are unified across documents and relation endpoints are remapped to the merged
+  > entities (graph.builders.document.merge_document_graphs). Returns (merged_json, error).
 
 - **match_columns_to_graph**(`self, columns, graph_json`) -> `None`
   > Matches dataset columns to Knowledge Graph nodes using fuzzy string matching.
@@ -315,7 +1158,6 @@ Methods:
 _RAG Evaluator Module
 
 Provides comprehensive evaluation metrics for the RAG system including:
-
 - Retrieval quality (context relevance, semantic similarity)
 
 - Generation quality (faithfulness, answer relevance, hallucination detection)
@@ -325,7 +1167,7 @@ Provides comprehensive evaluation metrics for the RAG system including:
 - Logging and tracking of evaluation results_
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `pathlib.Path`, `typing.Dict`, `typing.List`, `typing.Optional`, `typing.Any`, `typing.Tuple`, `hashlib`, `prompts.evaluation.evaluate_context_relevance`, `prompts.evaluation.evaluate_faithfulness`, `prompts.evaluation.evaluate_answer_relevance`, `prompts.evaluation.detect_hallucination`
+`hashlib`, `json`, `datetime.datetime`, `pathlib.Path`, `typing.Any`, `prompts.evaluation.detect_hallucination`, `prompts.evaluation.evaluate_answer_relevance`, `prompts.evaluation.evaluate_context_relevance`, `prompts.evaluation.evaluate_faithfulness`, `utils.data_paths.get_rag_eval_logs_dir`
 
 ### class `RAGEvaluator` (rag_evaluator.py)
 
@@ -336,12 +1178,12 @@ and direct validation for structural metrics.
 
 **Methods:**
 
-- ****init****(`self, llm, log_dir: str`) -> `None`
+- **__init__**(`self, llm, log_dir: str`) -> `None`
   > Initialize the RAG Evaluator.
   >
   > Args:
-  > llm: The LLM instance to use for evaluation (same as RAG system)
-  > log_dir: Directory to store evaluation logs
+  >     llm: The LLM instance to use for evaluation (same as RAG system)
+  >     log_dir: Directory to store evaluation logs (defaults to DATA_ROOT/rag_eval_logs)
 
 - **_init_summary**(`self`) -> `None`
   > Initialize the metrics summary file.
@@ -355,95 +1197,95 @@ and direct validation for structural metrics.
 - **_generate_eval_id**(`self, query: str, timestamp: str`) -> `str`
   > Generate a unique evaluation ID.
 
-- **evaluate_retrieval_quality**(`self, query: str, retrieved_chunks: List[str], k: int`) -> `Dict[ComplexType]`
+- **evaluate_retrieval_quality**(`self, query: str, retrieved_chunks: list[str], k: int`) -> `dict[ComplexType]`
   > Evaluate the quality of retrieved context.
   >
   > Args:
-  > query: The original query
-  > retrieved_chunks: List of retrieved text chunks
-  > k: Number of top chunks to consider
+  >     query: The original query
+  >     retrieved_chunks: List of retrieved text chunks
+  >     k: Number of top chunks to consider
   >
   > Returns:
-  > Dictionary with relevance scores and analysis
+  >     Dictionary with relevance scores and analysis
 
-- **calculate_semantic_similarity**(`self, query_embedding: List[float], chunk_embeddings: List[List[float]]`) -> `Dict[ComplexType]`
+- **calculate_semantic_similarity**(`self, query_embedding: list[float], chunk_embeddings: list[list[float]]`) -> `dict[ComplexType]`
   > Calculate semantic similarity between query and chunks.
   >
   > Args:
-  > query_embedding: The query's embedding vector
-  > chunk_embeddings: List of chunk embedding vectors
+  >     query_embedding: The query's embedding vector
+  >     chunk_embeddings: List of chunk embedding vectors
   >
   > Returns:
-  > Dictionary with similarity metrics
+  >     Dictionary with similarity metrics
 
-- **evaluate_generation_quality**(`self, query: str, context: str, response: str, function_name: str`) -> `Dict[ComplexType]`
+- **evaluate_generation_quality**(`self, query: str, context: str, response: str, function_name: str`) -> `dict[ComplexType]`
   > Evaluate the quality of generated response.
   >
   > Args:
-  > query: The original query
-  > context: The retrieved context used
-  > response: The generated response
-  > function_name: Name of the RAG function being evaluated
+  >     query: The original query
+  >     context: The retrieved context used
+  >     response: The generated response
+  >     function_name: Name of the RAG function being evaluated
   >
   > Returns:
-  > Dictionary with quality scores
+  >     Dictionary with quality scores
 
-- **validate_json_output**(`self, response: str`) -> `Dict[ComplexType]`
+- **validate_json_output**(`self, response: str`) -> `dict[ComplexType]`
   > Validate if the response contains valid JSON.
   >
   > Args:
-  > response: The generated response
+  >     response: The generated response
   >
   > Returns:
-  > Dictionary with validation results
+  >     Dictionary with validation results
 
-- **evaluate**(`self, query: str, context: str, response: str, function_name: str, retrieved_chunks: Optional[List[str]]`) -> `Dict[ComplexType]`
+- **evaluate**(`self, query: str, context: str, response: str, function_name: str, retrieved_chunks: ComplexType`) -> `dict[ComplexType]`
   > Run full evaluation on a RAG query-response pair.
   >
   > Args:
-  > query: The original query
-  > context: The retrieved context
-  > response: The generated response
-  > function_name: Name of the RAG function
-  > retrieved_chunks: Optional list of individual chunks
+  >     query: The original query
+  >     context: The retrieved context
+  >     response: The generated response
+  >     function_name: Name of the RAG function
+  >     retrieved_chunks: Optional list of individual chunks
   >
   > Returns:
-  > Complete evaluation results
+  >     Complete evaluation results
 
-- **log_result**(`self, result: Dict[ComplexType]`) -> `None`
+- **log_result**(`self, result: dict[ComplexType]`) -> `None`
   > Log evaluation result to file and update summary.
   >
   > Args:
-  > result: Evaluation result dictionary
+  >     result: Evaluation result dictionary
 
-- **_parse_evaluation_response**(`self, response: str, metric_type: str`) -> `Dict[ComplexType]`
+- **_parse_evaluation_response**(`self, response: str, metric_type: str`) -> `dict[ComplexType]`
   > Parse LLM evaluation response into structured format.
 
-- **load_test_suite**(`self`) -> `List[Dict[ComplexType]]`
+- **load_test_suite**(`self`) -> `list[dict[ComplexType]]`
   > Load the test suite from file.
 
-- **save_test_suite**(`self, test_cases: List[Dict[ComplexType]]`) -> `None`
+- **save_test_suite**(`self, test_cases: list[dict[ComplexType]]`) -> `None`
   > Save test cases to file.
 
-- **add_test_case**(`self, query: str, expected_concepts: List[str], ground_truth: Optional[str], expected_sources: Optional[List[str]]`) -> `None`
+- **add_test_case**(`self, query: str, expected_concepts: list[str], ground_truth: ComplexType, expected_sources: ComplexType`) -> `None`
   > Add a new test case to the suite.
 
-- **run_test_suite**(`self, rag_manager`) -> `Dict[ComplexType]`
+- **run_test_suite**(`self, rag_manager`) -> `dict[ComplexType]`
   > Run all test cases against the RAG system.
   >
   > Args:
-  > rag_manager: The RAGManager instance to test
+  >     rag_manager: The RAGManager instance to test
   >
   > Returns:
-  > Test suite results with pass/fail for each case
+  >     Test suite results with pass/fail for each case
 
-- **get_summary**(`self`) -> `Dict[ComplexType]`
+- **get_summary**(`self`) -> `dict[ComplexType]`
   > Get the current metrics summary.
 
-- **get_recent_evaluations**(`self, limit: int`) -> `List[Dict[ComplexType]]`
+- **get_recent_evaluations**(`self, limit: int`) -> `list[dict[ComplexType]]`
   > Get recent evaluation results.
 
-- **get_metrics_by_date**(`self, days: int`) -> `Dict[ComplexType]`
+- **get_metrics_by_date**(`self, days: int`) -> `dict[ComplexType]`
   > Get metrics aggregated by date for the last N days.
 
 ---
@@ -453,7 +1295,6 @@ and direct validation for structural metrics.
 _RAG Manager - Core Module.
 
 This is the main RAGManager class that composes functionality from mixin classes:
-
 - TaxonomyMixin: Variable taxonomy generation and enrichment
 
 - DocumentsMixin: Document processing and knowledge graph extraction
@@ -464,14 +1305,14 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`os`, `shutil`, `streamlit`, `pathlib.Path`, `ast`, `json`, `hashlib`, `time`, `logging`, `re`, `rapidfuzz.process`, `prompts.context_analysis`, `prompts.column_renaming`, `prompts.taxonomy_simple`, `prompts.formula_enrichment`, `prompts.anomaly_criteria_prompt`, `rag_taxonomy.TaxonomyMixin`, `rag_documents.DocumentsMixin`, `rag_computed_vars.ComputedVarsMixin`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`
+`ast`, `json`, `logging`, `os`, `re`, `shutil`, `time`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
 Main RAG Manager class that composes functionality from mixins.
 
 Core Methods (defined here):
-    - **init**
+    - __init__
 
     - is_available
 
@@ -518,14 +1359,14 @@ Computed Variable Methods (from ComputedVarsMixin):
 
 **Methods:**
 
-- ****init****(`self, documents_dir, api_key`) -> `None`
+- **__init__**(`self, documents_dir, api_key, provider, base_url`) -> `None`
   > No description available.
 
 - **is_available**(`self`) -> `None`
   > Check if RAG dependencies are available.
 
-- **get_available_models**(`self`) -> `None`
-  > Get list of available Gemini models.
+- **get_available_models**(`self, provider: str, base_url: str`) -> `None`
+  > Get list of available models for the specified provider.
 
 - **_clean_json_response**(`self, text`) -> `None`
   > Clean JSON output from LLM using robust parsing utilities.
@@ -548,8 +1389,8 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **_analyze_global_context**(`self, texts, dataset_columns`) -> `None`
   > Analyzes a sample of the documents and dataset columns to determine the global context.
 
-- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files`) -> `None`
-  > Initialize the RAG system with documents and LLM.
+- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url`) -> `None`
+  > Initialize the RAG system with documents, embeddings and LLM.
 
 - **update_adherence_score**(`self, adherence_score`) -> `None`
   > Updates the adherence score and rebuilds the chain without full re-initialization.
@@ -569,6 +1410,14 @@ Computed Variable Methods (from ComputedVarsMixin):
   > Suggests anomaly or inclusion criteria based on natural language description.
   > Returns a list of criteria dictionaries.
 
+### def `_env_api_key` (rag_manager.py)
+
+- **Arguments**: `provider: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Server-configured API key for a cloud provider; used only when the user typed none.
+
 ---
 
 ## rag_schemas.py
@@ -579,7 +1428,7 @@ Pydantic models for structured LLM outputs, enabling type-safe parsing
 and Gemini's native response_schema enforcement._
 
 **Imports**:
-`typing.List`, `typing.Optional`, `pydantic.BaseModel`, `pydantic.Field`
+`pydantic.BaseModel`, `pydantic.Field`
 
 ### class `TheoreticalConcept` (rag_schemas.py)
 
@@ -704,18 +1553,153 @@ Methods:
 
 ## reproduction_manager.py
 
-_No module description._
+_Reproduction engine: replays a transformation trace headlessly (no Streamlit).
+
+One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
+source dataset (or a pre-loaded frame) up to an optional step index, resolving file paths through
+the user's workspace and the ``path_overrides`` chosen in the UI. :func:`execute_trace_pipeline`
+keeps the historical ``(df, error)`` signature._
 
 **Imports**:
-`streamlit`, `pandas`, `json`, `enrich.external_data`, `app_pages.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.path_utils.resolve_path`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.state.ParseOptions`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.path_utils.resolve_path`
 
-### def `reproduce_trace` (reproduction_manager.py)
-
-- **Arguments**: `trace_file`
-
-- **Returns**: `None`
+### class `ReplayResult` (reproduction_manager.py)
 
 No description available.
+
+### def `_resolve` (reproduction_manager.py)
+
+- **Arguments**: `path: ComplexType, overrides: ComplexType`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_read_any` (reproduction_manager.py)
+
+- **Arguments**: `path: str, parse_options: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are DuckDB dataset names.
+
+### def `load_source` (reproduction_manager.py)
+
+- **Arguments**: `trace_data: dict[ComplexType], path_overrides: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The source dataset of a trace: the recorded artifact (newer traces) or the original path/name.
+
+### def `_apply_step` (reproduction_manager.py)
+
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, overrides: ComplexType, warnings: list[str]`
+
+- **Returns**: `tuple[ComplexType]`
+
+Apply one recorded step; returns (df, missing_path).
+
+### def `run_trace` (reproduction_manager.py)
+
+- **Arguments**: `trace_data: dict[ComplexType]`
+
+- **Returns**: `ReplayResult`
+
+Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame.
+
+### def `execute_trace_pipeline` (reproduction_manager.py)
+
+- **Arguments**: `trace_data: dict[ComplexType], progress_callback: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+Historical signature: ``(result_dataframe, error_message)``.
+
+---
+
+## schemas.py
+
+_Identity and Access Management (IAM) Schemas and Data Models.
+
+Defines strict Pydantic models for user profiles, credentials, authentication
+results, and IAM provider configurations._
+
+**Imports**:
+`enum.Enum`, `typing.Any`, `pydantic.BaseModel`, `pydantic.Field`
+
+### class `IAMProviderType` (schemas.py)
+
+Supported IAM provider backends.
+
+### class `UserRole` (schemas.py)
+
+Clinical user authorization roles.
+
+### class `UserProfile` (schemas.py)
+
+Structured representation of a registered platform user.
+
+### class `UserCredentials` (schemas.py)
+
+User authentication credentials for sign-in.
+
+### class `AuthResult` (schemas.py)
+
+Result of an authentication or verification attempt.
+
+### class `IAMConfig` (schemas.py)
+
+Configuration specification for the IAM subsystem.
+
+---
+
+## schemas.py
+
+_RAG Provider and Model Configuration Schemas.
+
+Defines strongly-typed Pydantic schemas for LLM and Embedding provider settings,
+ensuring validation, serialization, and support for multi-provider configurations._
+
+**Imports**:
+`enum.Enum`, `pydantic.BaseModel`, `pydantic.Field`, `pydantic.field_validator`
+
+### class `ProviderType` (schemas.py)
+
+Supported LLM and Embedding providers.
+
+### class `ProviderConfig` (schemas.py)
+
+Configuration specification for a specific LLM and Embedding provider.
+
+Attributes:
+    provider: Provider identifier (gemini, ollama, openai, mistral, custom).
+    model_name: Name of the chat/completion model (e.g., 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.8-flash', 'llama3.2', 'gpt-4o-mini').
+    embedding_model: Name of the embedding model (e.g., 'models/gemini-embedding-2', 'models/text-embedding-005', 'nomic-embed-text').
+    api_key: Optional API key for commercial cloud endpoints.
+    base_url: Optional custom endpoint URL (crucial for Ollama or local inference servers).
+    temperature: Sampling temperature for generation (0.0 to 1.0).
+    timeout_seconds: Request timeout in seconds.
+    max_retries: Maximum number of retry attempts upon transient network failures.
+    extra_headers: Optional HTTP headers for custom gateways.
+
+**Methods:**
+
+- **sanitize_base_url**(`cls, v: ComplexType`) -> `ComplexType`
+  > Strip trailing slashes for consistent endpoint path appending.
+
+### class `RAGConfig` (schemas.py)
+
+Global configuration for the RAG engine and retrieval pipelines.
+
+Attributes:
+    provider_config: Underlying provider configuration.
+    documents_dir: Directory path storing source PDF documents.
+    chunk_size: Number of characters per text chunk during ingestion.
+    chunk_overlap: Character overlap between consecutive chunks.
+    top_k: Number of most relevant documents to retrieve per query.
+    fetch_k: Candidate pool size for Maximum Marginal Relevance (MMR) retrieval.
+    search_type: Retrieval strategy ('mmr' or 'similarity').
+    adherence_score: Degree of adherence to document context (0.0=creative, 1.0=strict).
 
 ---
 
@@ -724,7 +1708,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`os`, `json`, `datetime.datetime`, `docx.Document`, `docx.shared.Pt`, `docx.shared.Inches`, `docx.shared.RGBColor`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.oxml.ns.qn`, `docx.oxml.OxmlElement`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 
@@ -732,7 +1716,7 @@ No description available.
 
 **Methods:**
 
-- ****init****(`self, trace_source`) -> `None`
+- **__init__**(`self, trace_source`) -> `None`
   > Initialize with either a dictionary trace or a path to a json trace file.
 
 - **generate_report**(`self`) -> `None`
@@ -767,7 +1751,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`json`, `logging`, `datetime.datetime`, `pandas`, `streamlit`, `os`
+`json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`
 
 ### class `TransformationManager` (transformation_manager.py)
 
@@ -775,19 +1759,20 @@ No description available.
 
 **Methods:**
 
-- ****init****(`self, trace_dir`) -> `None`
+- **__init__**(`self, trace_dir: ComplexType, scope: ComplexType`) -> `None`
   > Initialize the TransformationManager.
   >
   >
   > **Parameters**:
   >
-  > trace_dir : str
-  > Directory where transformation traces will be stored.
+  > trace_dir : str, optional
+  >      Directory where transformation traces will be stored.
+  >      Defaults to DATA_ROOT/traces via data_paths utility.
 
-- **initialize_session**(`self, dataset_name`) -> `None`
+- **initialize_session**(`self, dataset_name: str, username: ComplexType`) -> `None`
   > Initializes a new session trace.
 
-- **get_trace_path**(`self`) -> `None`
+- **get_trace_path**(`self`) -> `ComplexType`
   > Generates the trace file path based on the session ID.
 
 - **add_step**(`self, function_name, params, description, output_dataset_path, stats_cat_path, stats_num_path, corr_matrix_path`) -> `None`
@@ -797,19 +1782,19 @@ No description available.
   > **Parameters**:
   >
   > function_name : str
-  > Name of the function/transformation applied.
+  >     Name of the function/transformation applied.
   > params : dict
-  > Dictionary of parameters used in the transformation.
+  >      Dictionary of parameters used in the transformation.
   > description : str
-  > Human-readable description of the step.
+  >      Human-readable description of the step.
   > output_dataset_path : str, optional
-  > Path to the output dataset (snapshot).
+  >      Path to the output dataset (snapshot).
   > stats_cat_path : str, optional
-  > Path to categorical statistics file.
+  >      Path to categorical statistics file.
   > stats_num_path : str, optional
-  > Path to numerical statistics file.
+  >      Path to numerical statistics file.
   > corr_matrix_path : str, optional
-  > Path to correlation matrix file.
+  >      Path to correlation matrix file.
 
 - **_make_serializable**(`self, obj`) -> `None`
   > Recursively converts objects to JSON-serializable formats.
@@ -823,8 +1808,9 @@ No description available.
 - **load_trace**(`self, filepath`) -> `None`
   > Loads a trace from a JSON file.
 
-- **get_available_datasets_from_traces**(`self`) -> `None`
+- **get_available_datasets_from_traces**(`self, username`) -> `None`
   > Scans all trace files in the trace directory and returns a list of available datasets.
   > Each entry contains: session_id, timestamp, step_description, file_path.
+  > Filters by username if provided (unless admin).
 
 ---
