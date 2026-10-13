@@ -3,7 +3,15 @@
 import numpy as np
 import pytest
 
-from biostats.effect_sizes import cohens_d, cramers_v, eta_squared, eta_squared_h, hedges_j, rank_biserial, vargha_delaney_a
+from biostats.effect_sizes import (
+    cohens_d,
+    cramers_v,
+    eta_squared,
+    eta_squared_h,
+    hedges_j,
+    rank_biserial,
+    vargha_delaney_a,
+)
 
 REFERENCE = [1, 2, 3, 4, 5]
 COMPARISON = [3, 4, 5, 6, 7]

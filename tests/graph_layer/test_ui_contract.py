@@ -13,7 +13,9 @@ from graph.renderers.graphviz import GraphvizGraphRenderer, to_dot
 
 def _corr_spec() -> GraphSpec:
     labels = ["a", "b", "c"]
-    matrix = pd.DataFrame([[1, 0.8, -0.5], [0.8, 1, 0.1], [-0.5, 0.1, 1]], index=labels, columns=labels)
+    matrix = pd.DataFrame(
+        [[1, 0.8, -0.5], [0.8, 1, 0.1], [-0.5, 0.1, 1]], index=labels, columns=labels
+    )
     return build_correlation_graph(matrix, min_strength="Weak")
 
 
@@ -26,7 +28,9 @@ def _render_with(spec_json: str, rtype: str) -> None:
 
     spec = GraphSpec.from_json(spec_json)
     renderer = GraphRendererManager().get(rtype)
-    result = renderer.render(spec, RenderOptions(key="t", selectable=True, heat=True, theme="light"))
+    result = renderer.render(
+        spec, RenderOptions(key="t", selectable=True, heat=True, theme="light")
+    )
     st.write(f"rendered-by:{result.renderer}")
 
 
@@ -45,10 +49,18 @@ def _render_with_fallback(spec_json: str) -> None:
         @property
         def capabilities(self) -> RendererCapabilities:
             return RendererCapabilities(
-                supports_selection=False, supports_edge_selection=False, supports_heat=False,
-                supports_node_shapes=False, supports_edge_labels=False, supports_mixed_direction=False,
-                supports_hierarchical=False, supports_drag=False, supports_html_export=False,
-                requires_internet=False, telemetry=False, license_note="test",
+                supports_selection=False,
+                supports_edge_selection=False,
+                supports_heat=False,
+                supports_node_shapes=False,
+                supports_edge_labels=False,
+                supports_mixed_direction=False,
+                supports_hierarchical=False,
+                supports_drag=False,
+                supports_html_export=False,
+                requires_internet=False,
+                telemetry=False,
+                license_note="test",
             )
 
         def translate(self, spec, options):
@@ -80,8 +92,11 @@ def test_each_available_renderer_renders_headlessly(rtype: GraphRendererType) ->
     cls = GraphRendererManager(GraphConfig()).registry().get(rtype)
     if cls is None or not cls.availability()[0]:
         pytest.skip(f"{rtype.value} not available")
-    at = AppTest.from_function(_render_with, kwargs={"spec_json": _corr_spec().to_json(), "rtype": rtype.value},
-                               default_timeout=60).run()
+    at = AppTest.from_function(
+        _render_with,
+        kwargs={"spec_json": _corr_spec().to_json(), "rtype": rtype.value},
+        default_timeout=60,
+    ).run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert any(f"rendered-by:{rtype.value}" in m.value for m in at.markdown)
 
@@ -95,8 +110,9 @@ def test_graphviz_translation_is_deterministic_dot() -> None:
 
 
 def test_render_graph_isolates_failures_and_falls_back() -> None:
-    at = AppTest.from_function(_render_with_fallback, kwargs={"spec_json": _corr_spec().to_json()},
-                               default_timeout=60).run()
+    at = AppTest.from_function(
+        _render_with_fallback, kwargs={"spec_json": _corr_spec().to_json()}, default_timeout=60
+    ).run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert any("could not render" in e.value for e in at.error)
     assert any("Falling back" in i.value for i in at.info)

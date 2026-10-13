@@ -232,7 +232,7 @@ MISTRAL_API_KEY=
 
 ## Verification & Test Suite
 
-The platform includes a comprehensive automated test suite covering biostatistics, DuckDB persistence, transformation lineage, and RAG connectors:
+The automated suite covers the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, DuckDB persistence, transformation lineage and replay, the graph connector, the RAG connectors, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite with a coverage floor on every push:
 
 ```bash
 # Run the complete test suite
@@ -243,12 +243,19 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-====================== 165 passed, 8 warnings in 74.20s ======================
-Pass rate: 100% (165 passed out of 165 tests)
+444 passed, 1 deselected (live-provider integration test) in about 3 minutes
+Line coverage 55 % (CI floor 50 %); ruff and pyright (scoped) clean
 ```
 
 | Test Module | Coverage Scope | Status |
 | :--- | :--- | :--- |
+| [`tests/biostats_layer/`](tests/biostats_layer/) | 2x2 orientation and measures, power semantics, missingness scan, Z-scores, Welch-first inference, post-hoc tables, effect sizes with CIs, normality, EM-based Little's test, diagnostic accuracy, Bland-Altman, mixed-type associations | **PASSED** |
+| [`tests/core_layer/`](tests/core_layer/) | Whitelisted expression evaluator (allow/deny corpora), naming patterns, per-user workspaces, path containment, login lockout | **PASSED** |
+| [`tests/ingest_layer/`](tests/ingest_layer/) | Encoding/delimiter/decimal detection, parse reports, Excel sheet merge, sample cohort properties | **PASSED** |
+| [`tests/graph_layer/`](tests/graph_layer/) | Graph model, builders, palette, Plotly and yFiles translation, renderer policy and contract | **PASSED** |
+| [`tests/ui_layer/`](tests/ui_layer/) | Theme tokens vs config, navigation registry, `AppState.set_dataset` invalidation and trace, test chooser, glossary, help-text coverage, AppTest smoke over every page | **PASSED** |
+| [`tests/test_layering.py`](tests/test_layering.py), [`tests/test_quality_gates.py`](tests/test_quality_gates.py) | Dependency direction (no Streamlit in domain modules), no `eval`, no sleeps, no hard-coded paths, raw-HTML and `print` ratchets | **PASSED** |
+| [`tests/test_authz.py`](tests/test_authz.py) | Role checks, username and password policy | **PASSED** |
 | [`tests/test_epidemiology_stats.py`](tests/test_epidemiology_stats.py) | 2x2 Contingency, Effect Sizes, ANCOVA, Diagnostic Accuracy | **PASSED** |
 | [`tests/test_epidemiology_integration.py`](tests/test_epidemiology_integration.py) | Two-group, ANOVA, Little's MCAR, Multiple corrections | **PASSED** |
 | [`tests/test_date_parser_and_stats.py`](tests/test_date_parser_and_stats.py) | Kolmogorov-Smirnov, Shapiro-Wilk, Levene, Spearman/Pearson correlation, Date Ingestion | **PASSED** |

@@ -15,16 +15,16 @@ from rapidfuzz import fuzz
 
 import enrich.data_imputation as edi
 import enrich.external_data as eed
+from core.expressions import evaluate_tree, safe_format
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
-from utils.data_analyzer import DataAnalyzer
-from utils.date_parser import smart_parse_dates
-from core.expressions import evaluate_tree, safe_format
-from utils.data_paths import get_traces_dir
-from utils.session_scope import get_current_scope
-from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 from ui.components import no_dataset
+from utils.data_analyzer import DataAnalyzer
+from utils.data_paths import get_traces_dir
+from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
+from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
+from utils.session_scope import get_current_scope
 
 
 def _workspace_path(path_text: str) -> str:

@@ -1,0 +1,33 @@
+name: Integration tests (manual)
+
+# Tests marked `integration` call live services (LLM providers, Ollama). They never run on push;
+# trigger them by hand with the provider keys stored as repository secrets.
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMP_IAM_PROVIDER: local
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python and dependencies (locked)
+        run: uv sync --frozen --extra dev
+
+      - name: Integration tests
+        run: uv run pytest -m integration -q

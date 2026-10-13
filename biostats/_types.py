@@ -46,12 +46,12 @@ class EffectSize(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    name: str               # "Hedges' g", "rank-biserial r", "eta squared", ...
-    kind: str               # key of _MAGNITUDE_THRESHOLDS ("d", "g", "r", "eta2", "omega2", "eta2_h", "v") or "other"
+    name: str  # "Hedges' g", "rank-biserial r", "eta squared", ...
+    kind: str  # key of _MAGNITUDE_THRESHOLDS ("d", "g", "r", "eta2", "omega2", "eta2_h", "v") or "other"
     estimate: float
     ci: CI | None = None
     n: int | None = None
-    reference: str = ""     # method citation
+    reference: str = ""  # method citation
     note: str = ""
 
     def magnitude(self) -> str:

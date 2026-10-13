@@ -7,10 +7,10 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test:
-    name: Lint and offline tests
+  quality:
+    name: Lint, types and offline tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       CMP_IAM_PROVIDER: local
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
@@ -28,8 +28,22 @@ jobs:
       - name: Install Python and dependencies (locked; dev tools and the optional yFiles extra for its offline tests)
         run: uv sync --frozen --extra dev --extra graph-yfiles
 
-      - name: Lint (syntax errors, undefined names, unused imports, duplicate keys)
-        run: uv run ruff check --select E9,F --ignore F841 --output-format github .
+      - name: Lint (ruff, project configuration)
+        run: uv run ruff check --output-format github .
 
-      - name: Tests (offline, integration tests excluded)
-        run: uv run pytest -m "not integration" -q
+      - name: Format check (packages written under the 2026 audit)
+        run: uv run ruff format --check core biostats ingest ui graph tests/core_layer tests/biostats_layer tests/ingest_layer tests/ui_layer tests/graph_layer
+
+      - name: Type check (pyright, errors only, scoped by pyrightconfig.json)
+        run: uv run pyright --level error
+
+      - name: Tests (offline; integration tests run from the manual workflow)
+        run: uv run pytest -m "not integration" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=50
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: ignore

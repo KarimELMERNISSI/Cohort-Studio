@@ -13,7 +13,6 @@ Covers:
 import json
 from unittest.mock import MagicMock
 
-
 from manage.rag.schemas import ProviderConfig, ProviderType, RAGConfig
 from manage.rag_computed_vars import parse_formula_vars
 from manage.rag_documents import DocumentsMixin
@@ -83,6 +82,7 @@ class TestFormulaParsingAndValidation:
 
 
 from unittest.mock import patch
+
 
 class TestDocumentKnowledgeGraphFormatting:
     """Test graph structure compatibility with yFiles visual specifications."""

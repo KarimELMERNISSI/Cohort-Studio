@@ -23,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from core.workspace import UserScope  # noqa: E402
-from utils.data_paths import get_data_root  # noqa: E402
+from core.workspace import UserScope
+from utils.data_paths import get_data_root
 
 
 def known_users() -> tuple[list[str], str | None]:

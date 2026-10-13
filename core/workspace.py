@@ -19,7 +19,15 @@ from pathlib import Path
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$")
 _UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
 KINDS: tuple[str, ...] = (
-    "datasets", "stats", "traces", "uploads", "taxonomy", "knowledge_graphs", "documents", "chroma_db", "rag_eval_logs",
+    "datasets",
+    "stats",
+    "traces",
+    "uploads",
+    "taxonomy",
+    "knowledge_graphs",
+    "documents",
+    "chroma_db",
+    "rag_eval_logs",
 )
 
 
@@ -34,7 +42,9 @@ def validate_username(username: str | None) -> str:
     """Strict validation for new accounts; raises ``ValueError`` otherwise."""
     value = (username or "").strip()
     if not USERNAME_PATTERN.match(value):
-        raise ValueError("Username must be 3-32 characters: letters, digits, '.', '_' or '-' (no spaces).")
+        raise ValueError(
+            "Username must be 3-32 characters: letters, digits, '.', '_' or '-' (no spaces)."
+        )
     return value
 
 
@@ -141,7 +151,13 @@ class UserScope:
 
     def search_dirs(self) -> list[Path]:
         """Directories searched when a trace references a file by name."""
-        return [self.uploads_dir(), self.artifacts_dir(), self.snapshots_dir(), self.datasets_dir(), self.root]
+        return [
+            self.uploads_dir(),
+            self.artifacts_dir(),
+            self.snapshots_dir(),
+            self.datasets_dir(),
+            self.root,
+        ]
 
 
 def all_user_scopes() -> list[UserScope]:

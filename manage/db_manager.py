@@ -8,11 +8,10 @@ import duckdb
 import pandas as pd
 
 from core.workspace import UserScope
-from utils.data_paths import get_datasets_dir, get_stats_dir
-from utils.session_scope import get_current_scope
-
 from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
 from manage.iam.schemas import UserCredentials, UserRole
+from utils.data_paths import get_datasets_dir, get_stats_dir
+from utils.session_scope import get_current_scope
 
 
 def _sql_literal(value: str) -> str:

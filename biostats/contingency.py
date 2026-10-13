@@ -29,10 +29,45 @@ from biostats._types import CI
 
 Design = Literal["unknown", "cohort", "rct", "case-control", "cross-sectional"]
 
-EVENT_TOKENS = {"1", "1.0", "true", "yes", "y", "positive", "pos", "present", "case", "cases", "event",
-                "dead", "died", "death", "deceased", "abnormal", "disease"}
-REFERENCE_TOKENS = {"0", "0.0", "false", "no", "n", "control", "controls", "placebo", "unexposed", "absent",
-                    "reference", "ref", "none", "negative", "neg", "healthy", "normal", "standard"}
+EVENT_TOKENS = {
+    "1",
+    "1.0",
+    "true",
+    "yes",
+    "y",
+    "positive",
+    "pos",
+    "present",
+    "case",
+    "cases",
+    "event",
+    "dead",
+    "died",
+    "death",
+    "deceased",
+    "abnormal",
+    "disease",
+}
+REFERENCE_TOKENS = {
+    "0",
+    "0.0",
+    "false",
+    "no",
+    "n",
+    "control",
+    "controls",
+    "placebo",
+    "unexposed",
+    "absent",
+    "reference",
+    "ref",
+    "none",
+    "negative",
+    "neg",
+    "healthy",
+    "normal",
+    "standard",
+}
 
 
 def _token(value: Any) -> str:
@@ -117,7 +152,9 @@ class TwoByTwo:
             exposed = pick(exp_levels, exposure_level, None)
             reference = next(lvl for lvl in exp_levels if lvl != exposed)
         else:
-            reference = pick(exp_levels, exposure_ref, detect_reference_level(exp_levels) or exp_levels[0])
+            reference = pick(
+                exp_levels, exposure_ref, detect_reference_level(exp_levels) or exp_levels[0]
+            )
             exposed = next(lvl for lvl in exp_levels if lvl != reference)
             if exposure_level is not None and str(exposure_level) != str(exposed):
                 raise ValueError("exposure_level and exposure_ref must be the two different levels")
@@ -144,9 +181,16 @@ class TwoByTwo:
     def as_frame(self) -> pd.DataFrame:
         """Labelled table with margins."""
         return pd.DataFrame(
-            [[self.a, self.b, self.a + self.b], [self.c, self.d, self.c + self.d],
-             [self.a + self.c, self.b + self.d, self.n_total]],
-            index=[f"{self.exposure_level} (comparison)", f"{self.reference_level} (reference)", "Total"],
+            [
+                [self.a, self.b, self.a + self.b],
+                [self.c, self.d, self.c + self.d],
+                [self.a + self.c, self.b + self.d, self.n_total],
+            ],
+            index=[
+                f"{self.exposure_level} (comparison)",
+                f"{self.reference_level} (reference)",
+                "Total",
+            ],
             columns=[f"{self.event_level} (event)", f"{self.nonevent_level}", "Total"],
         )
 
@@ -199,10 +243,20 @@ class TwoByTwoResult(BaseModel):
     def legacy_dict(self) -> dict[str, Any]:
         """Dictionary in the shape the pages consumed before the audit (plus the new keys)."""
         payload = self.model_dump()
-        for key in ("odds_ratio_ci", "relative_risk_ci", "risk_difference_ci", "nnt_ci", "attributable_fraction_ci"):
+        for key in (
+            "odds_ratio_ci",
+            "relative_risk_ci",
+            "risk_difference_ci",
+            "nnt_ci",
+            "attributable_fraction_ci",
+        ):
             if payload.get(key) is not None:
-                payload[key] = {"lower": payload[key]["lower"], "upper": payload[key]["upper"],
-                                "level": payload[key]["level"], "method": payload[key]["method"]}
+                payload[key] = {
+                    "lower": payload[key]["lower"],
+                    "upper": payload[key]["upper"],
+                    "level": payload[key]["level"],
+                    "method": payload[key]["method"],
+                }
         return payload
 
 
@@ -211,7 +265,9 @@ def _newcombe_rd_ci(a: int, n1: int, c: int, n0: int, alpha: float) -> tuple[flo
     try:
         from statsmodels.stats.proportion import confint_proportions_2indep
 
-        low, upp = confint_proportions_2indep(a, n1, c, n0, method="newcomb", compare="diff", alpha=alpha)
+        low, upp = confint_proportions_2indep(
+            a, n1, c, n0, method="newcomb", compare="diff", alpha=alpha
+        )
         return float(low), float(upp), "Newcombe hybrid score (1998)"
     except Exception:
         return _wald_rd_ci(a, n1, c, n0, alpha)
@@ -263,11 +319,17 @@ def analyze_twobytwo(
     # Odds ratio (Woolf) and risk ratio (Katz)
     odds_ratio = (a_ * d_) / (b_ * c_)
     se_log_or = math.sqrt(1 / a_ + 1 / b_ + 1 / c_ + 1 / d_)
-    or_low, or_upp = math.exp(math.log(odds_ratio) - z * se_log_or), math.exp(math.log(odds_ratio) + z * se_log_or)
+    or_low, or_upp = (
+        math.exp(math.log(odds_ratio) - z * se_log_or),
+        math.exp(math.log(odds_ratio) + z * se_log_or),
+    )
     p1_, p0_ = a_ / (a_ + b_), c_ / (c_ + d_)
     relative_risk = p1_ / p0_
     se_log_rr = math.sqrt(b_ / (a_ * (a_ + b_)) + d_ / (c_ * (c_ + d_)))
-    rr_low, rr_upp = math.exp(math.log(relative_risk) - z * se_log_rr), math.exp(math.log(relative_risk) + z * se_log_rr)
+    rr_low, rr_upp = (
+        math.exp(math.log(relative_risk) - z * se_log_rr),
+        math.exp(math.log(relative_risk) + z * se_log_rr),
+    )
 
     # NNT / NNH from the RD interval (Altman 1998)
     nnt: float | None = None
@@ -275,16 +337,26 @@ def analyze_twobytwo(
     nnt_label = ""
     if abs(rd) > 1e-12:
         nnt = 1.0 / abs(rd)
-        nnt_label = "NNH (more events in the comparison group)" if rd > 0 else "NNT (fewer events in the comparison group)"
+        nnt_label = (
+            "NNH (more events in the comparison group)"
+            if rd > 0
+            else "NNT (fewer events in the comparison group)"
+        )
         if rd_low > 0 or rd_upp < 0:
             bounds = sorted((1.0 / abs(rd_low), 1.0 / abs(rd_upp)))
-            nnt_ci = CI(lower=bounds[0], upper=bounds[1], level=level, method=f"from the {rd_method} RD interval")
+            nnt_ci = CI(
+                lower=bounds[0],
+                upper=bounds[1],
+                level=level,
+                method=f"from the {rd_method} RD interval",
+            )
         else:
             guidance.append(
                 f"The risk-difference interval includes 0, so the number needed to treat is not bounded: it ranges "
                 f"from NNTB {1.0 / abs(rd_low):.1f} through infinity to NNTH {1.0 / abs(rd_upp):.1f} "
-                f"(Altman 1998)." if rd_low != 0 and rd_upp != 0 else
-                "The risk-difference interval includes 0, so the number needed to treat is not bounded (Altman 1998)."
+                f"(Altman 1998)."
+                if rd_low != 0 and rd_upp != 0
+                else "The risk-difference interval includes 0, so the number needed to treat is not bounded (Altman 1998)."
             )
 
     # Attributable fraction in the exposed (and its interval from the RR interval)
@@ -293,7 +365,12 @@ def analyze_twobytwo(
     if relative_risk > 1.0:
         afe = (relative_risk - 1.0) / relative_risk
         if rr_low > 1.0:
-            afe_ci = CI(lower=(rr_low - 1.0) / rr_low, upper=(rr_upp - 1.0) / rr_upp, level=level, method="from the Katz RR interval")
+            afe_ci = CI(
+                lower=(rr_low - 1.0) / rr_low,
+                upper=(rr_upp - 1.0) / rr_upp,
+                level=level,
+                method="from the Katz RR interval",
+            )
 
     # Tests
     obs = np.array([[a, b], [c, d]])
@@ -329,28 +406,50 @@ def analyze_twobytwo(
                 "and cross-sectional designs."
             )
     if nnt is not None:
-        ci_text = f" (95% CI {nnt_ci.lower:.1f} to {nnt_ci.upper:.1f})" if nnt_ci is not None else ""
+        ci_text = (
+            f" (95% CI {nnt_ci.lower:.1f} to {nnt_ci.upper:.1f})" if nnt_ci is not None else ""
+        )
         guidance.append(
             f"{nnt_label.split(' (')[0]} = {nnt:.1f}{ci_text}: about {nnt:.0f} people in the "
             f"'{table.exposure_level}' group per one additional event compared with '{table.reference_level}'."
         )
 
     return TwoByTwoResult(
-        a=a, b=b, c=c, d=d, n_total=n,
-        exposure_name=table.exposure_name, outcome_name=table.outcome_name,
-        exposure_level=table.exposure_level, reference_level=table.reference_level,
-        event_level=table.event_level, nonevent_level=table.nonevent_level,
-        design=design, haldane_applied=haldane,
-        risk_exposed=p1, risk_reference=p0, prevalence_event=prevalence,
-        odds_ratio=odds_ratio, odds_ratio_ci=CI(lower=or_low, upper=or_upp, level=level, method="Woolf (log) interval"),
-        relative_risk=relative_risk, relative_risk_ci=CI(lower=rr_low, upper=rr_upp, level=level, method="Katz (log) interval"),
-        risk_difference=rd, risk_difference_ci=CI(lower=rd_low, upper=rd_upp, level=level, method=rd_method),
-        nnt=nnt, nnt_ci=nnt_ci, nnt_label=nnt_label,
-        attributable_fraction_exposed=afe, attributable_fraction_ci=afe_ci,
-        chi2_statistic=float(chi2_stat), chi2_pvalue=float(chi2_p),
-        chi2_yates_statistic=float(yates_stat), chi2_yates_pvalue=float(yates_p),
-        fisher_exact_pvalue=float(fisher_p), expected_min=expected_min,
-        primary_test=primary_test, primary_pvalue=primary_p,
+        a=a,
+        b=b,
+        c=c,
+        d=d,
+        n_total=n,
+        exposure_name=table.exposure_name,
+        outcome_name=table.outcome_name,
+        exposure_level=table.exposure_level,
+        reference_level=table.reference_level,
+        event_level=table.event_level,
+        nonevent_level=table.nonevent_level,
+        design=design,
+        haldane_applied=haldane,
+        risk_exposed=p1,
+        risk_reference=p0,
+        prevalence_event=prevalence,
+        odds_ratio=odds_ratio,
+        odds_ratio_ci=CI(lower=or_low, upper=or_upp, level=level, method="Woolf (log) interval"),
+        relative_risk=relative_risk,
+        relative_risk_ci=CI(lower=rr_low, upper=rr_upp, level=level, method="Katz (log) interval"),
+        risk_difference=rd,
+        risk_difference_ci=CI(lower=rd_low, upper=rd_upp, level=level, method=rd_method),
+        nnt=nnt,
+        nnt_ci=nnt_ci,
+        nnt_label=nnt_label,
+        attributable_fraction_exposed=afe,
+        attributable_fraction_ci=afe_ci,
+        chi2_statistic=float(chi2_stat),
+        chi2_pvalue=float(chi2_p),
+        chi2_yates_statistic=float(yates_stat),
+        chi2_yates_pvalue=float(yates_p),
+        fisher_exact_pvalue=float(fisher_p),
+        expected_min=expected_min,
+        primary_test=primary_test,
+        primary_pvalue=primary_p,
         guidance=guidance,
         references=[
             "Katz D et al. (1978) Biometrics 34:469-474 (risk ratio interval)",

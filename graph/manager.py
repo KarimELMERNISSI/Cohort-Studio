@@ -34,9 +34,15 @@ class GraphRendererType(StrEnum):
 
 class GraphConfig(BaseModel):
     renderer: GraphRendererType = GraphRendererType.AUTO
-    offline: bool = Field(default=False, description="Never choose a renderer that needs internet access.")
-    fallback_on_error: bool = Field(default=True, description="Fall back to the offline renderer when rendering fails.")
-    show_license_notice: bool = Field(default=True, description="Show the third-party notice for proprietary renderers.")
+    offline: bool = Field(
+        default=False, description="Never choose a renderer that needs internet access."
+    )
+    fallback_on_error: bool = Field(
+        default=True, description="Fall back to the offline renderer when rendering fails."
+    )
+    show_license_notice: bool = Field(
+        default=True, description="Show the third-party notice for proprietary renderers."
+    )
 
 
 _REGISTRY_SPEC: dict[GraphRendererType, tuple[str, str]] = {
@@ -121,7 +127,9 @@ class GraphRendererManager:
             return None
         instance = cls()
         if self._config.offline and instance.capabilities.requires_internet:
-            logger.warning("Graph renderer %s needs internet access; refused in offline mode", rtype.value)
+            logger.warning(
+                "Graph renderer %s needs internet access; refused in offline mode", rtype.value
+            )
             return None
         return instance
 
@@ -136,7 +144,9 @@ class GraphRendererManager:
                 if candidate != rtype and rtype != GraphRendererType.AUTO:
                     logger.warning("Falling back to graph renderer %s", candidate.value)
                 return instance
-        raise RuntimeError("No graph renderer is available (plotly and networkx are required for the default renderer).")
+        raise RuntimeError(
+            "No graph renderer is available (plotly and networkx are required for the default renderer)."
+        )
 
     # ----------------------------------------------------------------- access
     @property

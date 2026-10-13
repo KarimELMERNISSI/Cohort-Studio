@@ -9,6 +9,7 @@ workspace and logs the parsing options. Pages keep reading the legacy keys (``da
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 from dataclasses import replace
@@ -27,12 +28,33 @@ SAMPLE_DICTIONARY_PATH = SAMPLE_COHORT_PATH.with_name("sample_cohort_dictionary.
 
 # Results derived from the current dataset: cleared whenever the dataset changes.
 DERIVED_KEYS: tuple[str, ...] = (
-    "rename_dict", "enriched_df", "working_df", "epidemiology_results", "zscore_results", "zscore_config_key",
-    "fig_clustermap", "fig_clustermap_error", "preview_new_variable", "enrichment_candidates",
-    "imputation_suggestions", "ai_variable_suggestions", "ai_renaming_suggestions", "ai_domain_analysis",
-    "enrichment_formulas", "loaded_path", "last_main_file_hash", "last_enrichment_file_hash", "mwu_p_xy",
-    "last_power_selected_groups", "last_power_group_col", "epidemiology_group_col", "validity_outlier_params",
-    "validity_outlier_method", "univariate_cache", "diag_result", "ba_result",
+    "rename_dict",
+    "enriched_df",
+    "working_df",
+    "epidemiology_results",
+    "zscore_results",
+    "zscore_config_key",
+    "fig_clustermap",
+    "fig_clustermap_error",
+    "preview_new_variable",
+    "enrichment_candidates",
+    "imputation_suggestions",
+    "ai_variable_suggestions",
+    "ai_renaming_suggestions",
+    "ai_domain_analysis",
+    "enrichment_formulas",
+    "loaded_path",
+    "last_main_file_hash",
+    "last_enrichment_file_hash",
+    "mwu_p_xy",
+    "last_power_selected_groups",
+    "last_power_group_col",
+    "epidemiology_group_col",
+    "validity_outlier_params",
+    "validity_outlier_method",
+    "univariate_cache",
+    "diag_result",
+    "ba_result",
 )
 
 
@@ -96,7 +118,9 @@ class AppState:
         if ref is None and self.df is not None:
             # Dataset installed by legacy code (direct session writes): synthesise a reference.
             name = st.session_state.get("current_dataset_name") or "dataset"
-            ref = DatasetRef.from_saved_name(str(name), n_rows=len(self.df), n_cols=self.df.shape[1])
+            ref = DatasetRef.from_saved_name(
+                str(name), n_rows=len(self.df), n_cols=self.df.shape[1]
+            )
             st.session_state["dataset_ref"] = ref
         return ref
 
@@ -121,7 +145,11 @@ class AppState:
         source_path = ref.source_path
         if source_bytes is not None and source_name:
             scope = get_current_scope()
-            artifact_dir = scope.artifacts_dir(session_id) if scope else Path(get_traces_dir()) / "artifacts" / session_id
+            artifact_dir = (
+                scope.artifacts_dir(session_id)
+                if scope
+                else Path(get_traces_dir()) / "artifacts" / session_id
+            )
             artifact_dir.mkdir(parents=True, exist_ok=True)
             ext = os.path.splitext(source_name)[1] or ".csv"
             artifact = artifact_dir / f"source{ext}"
@@ -130,8 +158,13 @@ class AppState:
             tm.source_dataset = source_path
             tm.save_trace()
 
-        ref = replace(ref, source_path=source_path, n_rows=int(len(df)), n_cols=int(df.shape[1]),
-                      source_name=source_name or ref.source_name)
+        ref = replace(
+            ref,
+            source_path=source_path,
+            n_rows=int(len(df)),
+            n_cols=int(df.shape[1]),
+            source_name=source_name or ref.source_name,
+        )
         tm.add_step(
             "initial_load",
             {
@@ -168,8 +201,16 @@ class AppState:
 
     # ------------------------------------------------------------------ sources
 
-    def load_parsed(self, df: pd.DataFrame, *, filename: str, data: bytes, options: ParseOptions | None,
-                    name: str | None = None, origin: str = "upload") -> DatasetRef:
+    def load_parsed(
+        self,
+        df: pd.DataFrame,
+        *,
+        filename: str,
+        data: bytes,
+        options: ParseOptions | None,
+        name: str | None = None,
+        origin: str = "upload",
+    ) -> DatasetRef:
         ref = DatasetRef(
             name=name or dataset_base_name(filename),
             origin=origin,
@@ -184,8 +225,14 @@ class AppState:
 
         data = SAMPLE_COHORT_PATH.read_bytes()
         result = read_table(data, SAMPLE_COHORT_PATH.name, ParseOptions(dayfirst=True))
-        return self.load_parsed(result.df, filename=SAMPLE_COHORT_PATH.name, data=data, options=result.options,
-                                name="sample_cohort", origin="sample")
+        return self.load_parsed(
+            result.df,
+            filename=SAMPLE_COHORT_PATH.name,
+            data=data,
+            options=result.options,
+            name="sample_cohort",
+            origin="sample",
+        )
 
     def saved_versions(self) -> list[str]:
         try:
@@ -198,7 +245,9 @@ class AppState:
         if df is None:
             return False, msg
         path = os.path.join(self.db_manager.dataset_dir, f"{saved_name}.parquet")
-        ref = DatasetRef.from_saved_name(saved_name, source_path=path, source_name=f"{saved_name}.parquet")
+        ref = DatasetRef.from_saved_name(
+            saved_name, source_path=path, source_name=f"{saved_name}.parquet"
+        )
         self.set_dataset(df, ref, description=f"Loaded saved version: {saved_name}")
         return True, msg
 
@@ -207,7 +256,9 @@ class AppState:
             return False, "No dataset loaded.", None
         ref = self.dataset
         base = dataset_base_name(base_name or (ref.name if ref else "cohort"))
-        ok, msg, saved = self.db_manager.save_dataset(self.df, base_name=base, username=self.username)
+        ok, msg, saved = self.db_manager.save_dataset(
+            self.df, base_name=base, username=self.username
+        )
         if ok and saved:
             new_ref = DatasetRef.from_saved_name(
                 saved,
@@ -220,10 +271,10 @@ class AppState:
             )
             st.session_state["dataset_ref"] = new_ref
             st.session_state["current_dataset_name"] = saved
-            try:
-                self.transformation_manager.add_step("save_version", {"dataset_name": saved}, f"Saved version: {saved}")
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                self.transformation_manager.add_step(
+                    "save_version", {"dataset_name": saved}, f"Saved version: {saved}"
+                )
         return ok, msg, saved
 
     # ------------------------------------------------------------------ misc
@@ -232,7 +283,11 @@ class AppState:
         rm = st.session_state.get("rag_manager")
         initialized = bool(getattr(rm, "initialized", False))
         provider = getattr(rm, "provider", None) if rm is not None else None
-        return {"initialized": initialized, "provider": provider, "consent": bool(getattr(rm, "cloud_consent", False))}
+        return {
+            "initialized": initialized,
+            "provider": provider,
+            "consent": bool(getattr(rm, "cloud_consent", False)),
+        }
 
 
 def get_state() -> AppState:

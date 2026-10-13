@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import streamlit as st
 
 from ui.auth import LOGO, logout
 from ui.components import confirm, page_link
 from ui.state import AppState
 
-ORIGIN_LABELS = {"upload": "imported file", "saved": "saved version", "sample": "sample cohort", "path": "server file"}
+ORIGIN_LABELS = {
+    "upload": "imported file",
+    "saved": "saved version",
+    "sample": "sample cohort",
+    "path": "server file",
+}
 
 
 @st.dialog("Change dataset")
@@ -33,9 +40,14 @@ def _change_dialog(state: AppState) -> None:
 @st.dialog("Save a version")
 def _save_dialog(state: AppState) -> None:
     ref = state.dataset
-    name = st.text_input("Dataset name", value=ref.name if ref else "cohort",
-                         help="Versions are numbered automatically (name_v1, name_v2, ...).")
-    st.caption("The current working dataset (with renames, enrichments and filters applied) is saved as Parquet in your workspace.")
+    name = st.text_input(
+        "Dataset name",
+        value=ref.name if ref else "cohort",
+        help="Versions are numbered automatically (name_v1, name_v2, ...).",
+    )
+    st.caption(
+        "The current working dataset (with renames, enrichments and filters applied) is saved as Parquet in your workspace."
+    )
     if st.button("Save", type="primary", width="stretch"):
         ok, msg, saved = state.save_version(name)
         if ok:
@@ -60,7 +72,9 @@ def _dataset_card(state: AppState) -> None:
         title_col.markdown(f"**{ref.name}**")
         if ref.version:
             badge_col.badge(f"v{ref.version}", color="blue")
-        st.caption(f"{len(df):,} rows x {df.shape[1]} columns - {ORIGIN_LABELS.get(ref.origin, ref.origin)}")
+        st.caption(
+            f"{len(df):,} rows x {df.shape[1]} columns - {ORIGIN_LABELS.get(ref.origin, ref.origin)}"
+        )
         col_change, col_save = st.columns(2)
         if col_change.button("Change", key="shell_change_dataset", width="stretch"):
             _change_dialog(state)
@@ -73,7 +87,11 @@ def _ai_status(state: AppState) -> None:
     provider = status["provider"] or "ollama"
     if status["initialized"]:
         local = provider == "ollama"
-        st.badge(f"AI: {provider} ({'local' if local else 'cloud'})", icon=":material/smart_toy:", color="green" if local else "orange")
+        st.badge(
+            f"AI: {provider} ({'local' if local else 'cloud'})",
+            icon=":material/smart_toy:",
+            color="green" if local else "orange",
+        )
     else:
         st.badge("AI engine: off", icon=":material/smart_toy:", color="grey")
     page_link("settings", "Settings", icon=":material/settings:")
@@ -87,10 +105,8 @@ def _user_menu(state: AppState) -> None:
 
 def render_sidebar(state: AppState) -> None:
     with st.sidebar:
-        try:
+        with contextlib.suppress(Exception):
             st.image(LOGO, width=150)
-        except Exception:
-            pass
         _dataset_card(state)
         _ai_status(state)
         page_link("handbook", "Handbook", icon=":material/menu_book:")

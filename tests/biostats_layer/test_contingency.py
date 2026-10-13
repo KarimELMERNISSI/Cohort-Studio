@@ -5,12 +5,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from biostats.contingency import TwoByTwo, analyze_twobytwo, detect_event_level, detect_reference_level
+from biostats.contingency import (
+    TwoByTwo,
+    analyze_twobytwo,
+    detect_event_level,
+    detect_reference_level,
+)
 
 
 @pytest.fixture
 def trial_df() -> pd.DataFrame:
-    rows = [("Placebo", "Yes")] * 40 + [("Placebo", "No")] * 60 + [("Treatment", "Yes")] * 15 + [("Treatment", "No")] * 85
+    rows = (
+        [("Placebo", "Yes")] * 40
+        + [("Placebo", "No")] * 60
+        + [("Treatment", "Yes")] * 15
+        + [("Treatment", "No")] * 85
+    )
     return pd.DataFrame(rows, columns=["arm", "event"])
 
 
@@ -41,7 +51,9 @@ class TestOrientation:
         assert res.relative_risk == pytest.approx(0.375, rel=1e-6)
 
     def test_sorted_01_outcome_is_not_inverted(self) -> None:
-        df = pd.DataFrame({"g": ["A"] * 100 + ["B"] * 100, "y": [1] * 40 + [0] * 60 + [1] * 15 + [0] * 85})
+        df = pd.DataFrame(
+            {"g": ["A"] * 100 + ["B"] * 100, "y": [1] * 40 + [0] * 60 + [1] * 15 + [0] * 85}
+        )
         t = TwoByTwo.from_crosstab(df, "g", "y")
         assert t.event_level == "1" and t.reference_level == "A" and t.exposure_level == "B"
         assert (t.a, t.b, t.c, t.d) == (15, 85, 40, 60)
@@ -62,14 +74,22 @@ class TestOrientation:
 
 class TestMeasures:
     def test_reference_values(self, trial_df: pd.DataFrame) -> None:
-        res = analyze_twobytwo(TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo"))
+        res = analyze_twobytwo(
+            TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo")
+        )
         assert res.relative_risk == pytest.approx(2.6667, abs=1e-4)
-        assert (res.relative_risk_ci.lower, res.relative_risk_ci.upper) == pytest.approx((1.5780, 4.5065), abs=1e-3)
+        assert (res.relative_risk_ci.lower, res.relative_risk_ci.upper) == pytest.approx(
+            (1.5780, 4.5065), abs=1e-3
+        )
         assert res.odds_ratio == pytest.approx(3.7778, abs=1e-4)
-        assert (res.odds_ratio_ci.lower, res.odds_ratio_ci.upper) == pytest.approx((1.9154, 7.4511), abs=1e-3)
+        assert (res.odds_ratio_ci.lower, res.odds_ratio_ci.upper) == pytest.approx(
+            (1.9154, 7.4511), abs=1e-3
+        )
         assert res.risk_difference == pytest.approx(0.25)
         assert res.risk_difference_ci.method.startswith("Newcombe")
-        assert (res.risk_difference_ci.lower, res.risk_difference_ci.upper) == pytest.approx((0.1272, 0.3633), abs=1e-3)
+        assert (res.risk_difference_ci.lower, res.risk_difference_ci.upper) == pytest.approx(
+            (0.1272, 0.3633), abs=1e-3
+        )
         assert res.nnt == pytest.approx(4.0)
         assert res.nnt_ci is not None
         assert (res.nnt_ci.lower, res.nnt_ci.upper) == pytest.approx((2.75, 7.86), abs=0.01)
@@ -83,11 +103,27 @@ class TestMeasures:
         assert not res.haldane_applied
 
     def test_wald_option_and_legacy_dict(self, trial_df: pd.DataFrame) -> None:
-        res = analyze_twobytwo(TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo"), rd_ci="wald")
+        res = analyze_twobytwo(
+            TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo"), rd_ci="wald"
+        )
         assert res.risk_difference_ci.method == "Wald"
-        assert (res.risk_difference_ci.lower, res.risk_difference_ci.upper) == pytest.approx((0.1312, 0.3688), abs=1e-3)
+        assert (res.risk_difference_ci.lower, res.risk_difference_ci.upper) == pytest.approx(
+            (0.1312, 0.3688), abs=1e-3
+        )
         payload = res.legacy_dict()
-        for key in ("a", "b", "c", "d", "n_total", "odds_ratio", "odds_ratio_ci", "relative_risk", "risk_difference", "nnt", "guidance"):
+        for key in (
+            "a",
+            "b",
+            "c",
+            "d",
+            "n_total",
+            "odds_ratio",
+            "odds_ratio_ci",
+            "relative_risk",
+            "risk_difference",
+            "nnt",
+            "guidance",
+        ):
             assert key in payload
         assert set(payload["odds_ratio_ci"]) == {"lower", "upper", "level", "method"}
 
@@ -101,7 +137,9 @@ class TestMeasures:
     def test_small_expected_counts_make_fisher_primary(self) -> None:
         res = analyze_twobytwo(TwoByTwo(a=3, b=1, c=0, d=4))
         assert res.expected_min < 5
-        assert res.primary_test.startswith("Fisher") and res.primary_pvalue == res.fisher_exact_pvalue
+        assert (
+            res.primary_test.startswith("Fisher") and res.primary_pvalue == res.fisher_exact_pvalue
+        )
         assert any("expected count" in g for g in res.guidance)
 
     def test_unbounded_nnt_when_rd_interval_includes_zero(self) -> None:

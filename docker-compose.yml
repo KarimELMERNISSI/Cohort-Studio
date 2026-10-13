@@ -1,21 +1,27 @@
-version: '3.8'
-
 services:
   cohort-app:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_YFILES: "0"   # "1" adds the optional proprietary graph engine (online runtime, usage analytics)
     image: cohort-monitoring-app:latest
     container_name: cohort_monitoring_app
     ports:
       - "8501:8501"
     volumes:
-      # Persist data (users, datasets, chroma_db, traces, etc.)
+      # Per-user workspaces, the user directory and traces. The container runs as uid 1000:
+      # on Linux hosts run `chown -R 1000:1000 data` once.
       - ./data:/app/data
-      # Allow configuration updates without rebuild
+      # Optional study configuration files
       - ./config:/app/config
-      # Mount documents for RAG
-      - ./DOCUMENTS:/app/DOCUMENTS
+    env_file:
+      # Bootstrap administrator (CMP_ADMIN_USERNAME / CMP_ADMIN_PASSWORD or CMP_ADMIN_PASSWORD_FILE),
+      # AI provider keys and other settings: see .env.example
+      - path: .env
+        required: false
     environment:
-      - PYTHONUNBUFFERED=1
-      # DATA_ROOT tells the app where to find/store data
       - DATA_ROOT=/app/data
+      - CMP_GRAPH_RENDERER=plotly
+      - CMP_IAM_PROVIDER=local
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
     restart: unless-stopped

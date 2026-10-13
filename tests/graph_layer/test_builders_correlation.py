@@ -4,7 +4,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from explore.correlation_strength import StrengthCategory, categorize_strength, min_abs_for, strength_table
+from explore.correlation_strength import (
+    StrengthCategory,
+    categorize_strength,
+    min_abs_for,
+    strength_table,
+)
 from graph.builders.correlation import build_correlation_graph, to_legacy_dicts
 from graph.model import GraphKind, LineStyle
 
@@ -36,10 +41,18 @@ class TestBuilder:
         assert spec.kind == GraphKind.CORRELATION and not spec.directed
         assert spec.node_ids() == ("a", "b", "c", "d")
         assert [e.id for e in spec.edges] == ["corr:a|b", "corr:a|c", "corr:b|d"]
-        assert [e.category for e in spec.edges] == ["corr.pos.very_strong", "corr.neg.moderate", "corr.pos.weak"]
+        assert [e.category for e in spec.edges] == [
+            "corr.pos.very_strong",
+            "corr.neg.moderate",
+            "corr.pos.weak",
+        ]
         assert [e.label for e in spec.edges] == ["0.95", "-0.50", "0.20"]
         assert [e.style.width for e in spec.edges] == [5.0, 2.5, 1.5]
-        assert [e.style.line for e in spec.edges] == [LineStyle.SOLID, LineStyle.SOLID, LineStyle.DASHED]
+        assert [e.style.line for e in spec.edges] == [
+            LineStyle.SOLID,
+            LineStyle.SOLID,
+            LineStyle.DASHED,
+        ]
         assert all(not e.directed for e in spec.edges)
         assert spec.meta["n_pairs_total"] == 6 and spec.meta["n_pairs_kept"] == 3
         assert spec.legend  # legend travels with the spec
@@ -59,7 +72,9 @@ class TestBuilder:
         weights = {n.id: n.weight for n in spec.nodes}
         assert weights["c"] == 0.0 and weights["d"] == 0.0
 
-    def test_focus_keeps_connected_component_and_highlights(self, corr_matrix: pd.DataFrame) -> None:
+    def test_focus_keeps_connected_component_and_highlights(
+        self, corr_matrix: pd.DataFrame
+    ) -> None:
         spec = build_correlation_graph(corr_matrix, min_strength="Weak", focus="d")
         assert spec.node_ids() == ("a", "b", "c", "d")
         assert spec.node("d").category == "focus" and spec.node("a").category == "variable"
@@ -91,11 +106,21 @@ class TestBuilder:
         assert build_correlation_graph(None).nodes == ()
 
     def test_spec_is_deterministic(self, corr_matrix: pd.DataFrame) -> None:
-        assert build_correlation_graph(corr_matrix).fingerprint() == build_correlation_graph(corr_matrix).fingerprint()
+        assert (
+            build_correlation_graph(corr_matrix).fingerprint()
+            == build_correlation_graph(corr_matrix).fingerprint()
+        )
 
     def test_legacy_dict_shape(self, corr_matrix: pd.DataFrame) -> None:
         nodes, edges = to_legacy_dicts(build_correlation_graph(corr_matrix, min_strength="Weak"))
-        assert nodes[0]["id"] == "a" and set(nodes[0]["properties"]) == {"label", "color", "shape", "heat"}
+        assert nodes[0]["id"] == "a" and set(nodes[0]["properties"]) == {
+            "label",
+            "color",
+            "shape",
+            "heat",
+        }
         assert edges[0]["start"] == "a" and edges[0]["end"] == "b"
-        assert edges[0]["properties"]["dash"] == "solid" and edges[2]["properties"]["dash"] == "dashed"
+        assert (
+            edges[0]["properties"]["dash"] == "solid" and edges[2]["properties"]["dash"] == "dashed"
+        )
         assert edges[0]["properties"]["directed"] is False

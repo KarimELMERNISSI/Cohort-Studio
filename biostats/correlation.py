@@ -19,7 +19,19 @@ from biostats.effect_sizes import cramers_v
 from biostats.multiplicity import adjust
 from biostats.references import cite
 
-PAIR_COLUMNS = ["var_1", "var_2", "type_1", "type_2", "measure", "estimate", "ci_low", "ci_high", "p_raw", "p_adj", "n"]
+PAIR_COLUMNS = [
+    "var_1",
+    "var_2",
+    "type_1",
+    "type_2",
+    "measure",
+    "estimate",
+    "ci_low",
+    "ci_high",
+    "p_raw",
+    "p_adj",
+    "n",
+]
 
 
 def pearson_ci(r: float, n: int, alpha: float = 0.05) -> CI:
@@ -29,7 +41,12 @@ def pearson_ci(r: float, n: int, alpha: float = 0.05) -> CI:
     z = np.arctanh(r)
     se = 1 / math.sqrt(n - 3)
     q = stats.norm.ppf(1 - alpha / 2)
-    return CI(lower=float(np.tanh(z - q * se)), upper=float(np.tanh(z + q * se)), level=1 - alpha, method="Fisher z")
+    return CI(
+        lower=float(np.tanh(z - q * se)),
+        upper=float(np.tanh(z + q * se)),
+        level=1 - alpha,
+        method="Fisher z",
+    )
 
 
 def spearman_ci(r: float, n: int, alpha: float = 0.05) -> CI:
@@ -39,7 +56,12 @@ def spearman_ci(r: float, n: int, alpha: float = 0.05) -> CI:
     z = np.arctanh(r)
     se = math.sqrt((1 + r * r / 2) / (n - 3))
     q = stats.norm.ppf(1 - alpha / 2)
-    return CI(lower=float(np.tanh(z - q * se)), upper=float(np.tanh(z + q * se)), level=1 - alpha, method="Bonett-Wright")
+    return CI(
+        lower=float(np.tanh(z - q * se)),
+        upper=float(np.tanh(z + q * se)),
+        level=1 - alpha,
+        method="Bonett-Wright",
+    )
 
 
 def correlation_ratio(categories: pd.Series, values: pd.Series) -> tuple[float, float, int]:
@@ -76,8 +98,8 @@ def variable_types(df: pd.DataFrame, columns: list[str] | None = None) -> dict[s
 
 @dataclass
 class AssociationResult:
-    matrix: pd.DataFrame          # square, estimates (NaN when not computable)
-    pairs: pd.DataFrame           # long table with CIs and p-values
+    matrix: pd.DataFrame  # square, estimates (NaN when not computable)
+    pairs: pd.DataFrame  # long table with CIs and p-values
     types: dict[str, str]
     method: str
     min_periods: int
@@ -89,8 +111,15 @@ def _binary_codes(s: pd.Series) -> pd.Series:
     return s.map({levels[0]: 0.0, levels[1]: 1.0})
 
 
-def association_matrix(df: pd.DataFrame, columns: list[str] | None = None, *, method: str = "pearson", min_periods: int = 10,
-                       alpha: float = 0.05, adjust_method: str = "fdr_bh") -> AssociationResult:
+def association_matrix(
+    df: pd.DataFrame,
+    columns: list[str] | None = None,
+    *,
+    method: str = "pearson",
+    min_periods: int = 10,
+    alpha: float = 0.05,
+    adjust_method: str = "fdr_bh",
+) -> AssociationResult:
     """Pairwise associations with a measure chosen by the variable types; pairs with n < min_periods are left empty."""
     if method not in ("pearson", "spearman"):
         raise ValueError("method must be 'pearson' or 'spearman'")
@@ -101,13 +130,31 @@ def association_matrix(df: pd.DataFrame, columns: list[str] | None = None, *, me
         ta, tb = types[a], types[b]
         pair = df[[a, b]].dropna()
         n = len(pair)
-        row = {"var_1": a, "var_2": b, "type_1": ta, "type_2": tb, "n": n, "estimate": np.nan, "ci_low": np.nan, "ci_high": np.nan,
-               "p_raw": np.nan, "measure": ""}
+        row = {
+            "var_1": a,
+            "var_2": b,
+            "type_1": ta,
+            "type_2": tb,
+            "n": n,
+            "estimate": np.nan,
+            "ci_low": np.nan,
+            "ci_high": np.nan,
+            "p_raw": np.nan,
+            "measure": "",
+        }
         if n >= min_periods:
             kinds = {ta, tb}
             if kinds <= {"numeric", "binary"} and "numeric" in kinds or kinds == {"numeric"}:
-                x = _binary_codes(pair[a]) if ta == "binary" else pd.to_numeric(pair[a], errors="coerce")
-                y = _binary_codes(pair[b]) if tb == "binary" else pd.to_numeric(pair[b], errors="coerce")
+                x = (
+                    _binary_codes(pair[a])
+                    if ta == "binary"
+                    else pd.to_numeric(pair[a], errors="coerce")
+                )
+                y = (
+                    _binary_codes(pair[b])
+                    if tb == "binary"
+                    else pd.to_numeric(pair[b], errors="coerce")
+                )
                 ok = ~(x.isna() | y.isna())
                 x, y = x[ok], y[ok]
                 if len(x) >= min_periods and x.std() > 0 and y.std() > 0:
@@ -136,15 +183,31 @@ def association_matrix(df: pd.DataFrame, columns: list[str] | None = None, *, me
                     row.update(measure="Cramer's V (bias-corrected)", estimate=v.estimate, p_raw=p)
         rows.append(row)
     pairs = pd.DataFrame(rows, columns=PAIR_COLUMNS)
-    pairs["p_adj"] = adjust(pairs["p_raw"].tolist(), adjust_method, alpha=alpha) if len(pairs) else []
+    pairs["p_adj"] = (
+        adjust(pairs["p_raw"].tolist(), adjust_method, alpha=alpha) if len(pairs) else []
+    )
     matrix = pd.DataFrame(np.nan, index=names, columns=names, dtype=float)
     for name in names:
         matrix.loc[name, name] = 1.0
     for _, r in pairs.iterrows():
         matrix.loc[r["var_1"], r["var_2"]] = r["estimate"]
         matrix.loc[r["var_2"], r["var_1"]] = r["estimate"]
-    return AssociationResult(matrix=matrix, pairs=pairs, types=types, method=method, min_periods=min_periods,
-                             references=cite("fisher1915", "bonett2000", "bergsma2013", "benjamini1995", "schober2018"))
+    return AssociationResult(
+        matrix=matrix,
+        pairs=pairs,
+        types=types,
+        method=method,
+        min_periods=min_periods,
+        references=cite("fisher1915", "bonett2000", "bergsma2013", "benjamini1995", "schober2018"),
+    )
 
 
-__all__ = ["PAIR_COLUMNS", "AssociationResult", "association_matrix", "correlation_ratio", "pearson_ci", "spearman_ci", "variable_types"]
+__all__ = [
+    "PAIR_COLUMNS",
+    "AssociationResult",
+    "association_matrix",
+    "correlation_ratio",
+    "pearson_ci",
+    "spearman_ci",
+    "variable_types",
+]

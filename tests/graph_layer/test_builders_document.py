@@ -11,8 +11,19 @@ from graph.model import GraphKind
 
 DOC_A = {
     "nodes": [
-        {"id": "Heart failure", "type": "Disease", "description": "Reduced ejection fraction", "source_text": "...", "page_reference": 3},
-        {"id": "LVEF", "type": "Metric (echo)", "description": "Left ventricular ejection fraction", "page_reference": [3, 4]},
+        {
+            "id": "Heart failure",
+            "type": "Disease",
+            "description": "Reduced ejection fraction",
+            "source_text": "...",
+            "page_reference": 3,
+        },
+        {
+            "id": "LVEF",
+            "type": "Metric (echo)",
+            "description": "Left ventricular ejection fraction",
+            "page_reference": [3, 4],
+        },
         {"id": "", "type": "Concept"},
     ],
     "edges": [
@@ -25,7 +36,11 @@ DOC_A = {
 }
 DOC_B = {
     "nodes": [
-        {"id": "heart Failure", "type": "disease", "description": "Reduced ejection fraction with symptoms and signs"},
+        {
+            "id": "heart Failure",
+            "type": "disease",
+            "description": "Reduced ejection fraction with symptoms and signs",
+        },
         {"id": "Beta blockers", "type": "Treatment", "description": "Standard therapy"},
     ],
     "edges": [
@@ -40,7 +55,9 @@ def test_parse_is_tolerant() -> None:
     assert [n.id for n in graph.nodes] == ["Heart failure", "LVEF"]  # empty id skipped
     assert graph.nodes[0].page_reference == "3" and graph.nodes[1].page_reference == "3, 4"
     assert len(graph.edges) == 3 and graph.formulas
-    assert DocumentGraph.parse(None).nodes == [] and DocumentGraph.parse({"nodes": "junk"}).nodes == []
+    assert (
+        DocumentGraph.parse(None).nodes == [] and DocumentGraph.parse({"nodes": "junk"}).nodes == []
+    )
 
 
 def test_entity_type_normalisation() -> None:
@@ -74,15 +91,21 @@ def test_build_from_merged_graph_has_no_spurious_inferred_nodes() -> None:
     assert spec.kind == GraphKind.DOCUMENT and spec.directed
     assert spec.meta["n_inferred"] == 0
     assert spec.node_ids() == ("Heart failure", "LVEF", "Beta blockers")
-    assert spec.node("Heart failure").category == "Disease" and spec.node("LVEF").category == "Metric"
+    assert (
+        spec.node("Heart failure").category == "Disease" and spec.node("LVEF").category == "Metric"
+    )
     assert spec.node("Heart failure").data["citations"][1]["doc"] == "b.pdf"
     assert sorted(e.category for e in spec.edges) == ["diagnoses", "improved by", "treats"]
     assert all(e.directed for e in spec.edges)
 
 
 def test_dangling_endpoints_become_flagged_inferred_nodes() -> None:
-    spec = build_document_graph({"nodes": [{"id": "A", "type": "Concept"}],
-                                 "edges": [{"source": "a", "target": "Zeta", "relation": "relates to"}]})
+    spec = build_document_graph(
+        {
+            "nodes": [{"id": "A", "type": "Concept"}],
+            "edges": [{"source": "a", "target": "Zeta", "relation": "relates to"}],
+        }
+    )
     assert spec.node_ids() == ("A", "Zeta")
     zeta = spec.node("Zeta")
     assert zeta.category == "Inferred" and zeta.data["inferred"] is True
@@ -100,9 +123,16 @@ def test_filter_by_documents_and_focus() -> None:
     assert set(focused.node_ids()) == {"LVEF", "Heart failure", "Beta blockers"}
     focused_hf = build_document_graph(merged, focus="Heart failure", hops=1)
     assert set(focused_hf.node_ids()) == {"Heart failure", "LVEF", "Beta blockers"}
-    assert build_document_graph(merged, focus="unknown").node_ids() == ("Heart failure", "LVEF", "Beta blockers")
+    assert build_document_graph(merged, focus="unknown").node_ids() == (
+        "Heart failure",
+        "LVEF",
+        "Beta blockers",
+    )
 
 
 def test_builder_is_deterministic() -> None:
     merged = merge_document_graphs([("a.pdf", DOC_A), ("b.pdf", DOC_B)])
-    assert build_document_graph(merged).fingerprint() == build_document_graph(merged.to_json_dict()).fingerprint()
+    assert (
+        build_document_graph(merged).fingerprint()
+        == build_document_graph(merged.to_json_dict()).fingerprint()
+    )

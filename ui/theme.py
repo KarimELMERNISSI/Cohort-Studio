@@ -11,11 +11,20 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-OKABE_ITO: tuple[str, ...] = ("#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#F0E442", "#000000")
+OKABE_ITO: tuple[str, ...] = (
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#D55E00",
+    "#CC79A7",
+    "#56B4E9",
+    "#F0E442",
+    "#000000",
+)
 
 TOKENS: dict[str, str] = {
-    "primary": "#1F5F8B",        # clinical blue, WCAG AA on white
-    "primary_dark": "#2F81F7",   # primary on dark backgrounds
+    "primary": "#1F5F8B",  # clinical blue, WCAG AA on white
+    "primary_dark": "#2F81F7",  # primary on dark backgrounds
     "success": "#1B7F3B",
     "warning": "#B7791F",
     "danger": "#B42318",
@@ -23,7 +32,13 @@ TOKENS: dict[str, str] = {
     "surface": "#F4F6F8",
 }
 
-STATUS_COLORS = {"ok": "green", "caution": "orange", "violated": "red", "info": "blue", "neutral": "grey"}
+STATUS_COLORS = {
+    "ok": "green",
+    "caution": "orange",
+    "violated": "red",
+    "info": "blue",
+    "neutral": "grey",
+}
 
 PLOTLY_TEMPLATE_NAME = "cmp"
 _registered = False
@@ -63,4 +78,12 @@ def apply_theme() -> None:
     plotly_template()
 
 
-__all__ = ["OKABE_ITO", "PLOTLY_TEMPLATE_NAME", "STATUS_COLORS", "TOKENS", "apply_theme", "config_theme", "plotly_template"]
+__all__ = [
+    "OKABE_ITO",
+    "PLOTLY_TEMPLATE_NAME",
+    "STATUS_COLORS",
+    "TOKENS",
+    "apply_theme",
+    "config_theme",
+    "plotly_template",
+]

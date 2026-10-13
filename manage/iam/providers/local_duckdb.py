@@ -9,11 +9,13 @@ clinical environments, and full backward compatibility.
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 import bcrypt
 import duckdb
 
 import utils.data_paths as dp
+
 from ..base import BaseIAMProvider
 from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
 
@@ -239,6 +241,12 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             return AuthResult(success=True, user=user, token=token, message="Session valid")
         return AuthResult(success=False, message="Session expired or account inactive")
 
+    @staticmethod
+    def _row_padded(raw: Any) -> tuple[Any, Any, Any, Any]:
+        """username, is_active, role, created_at (missing trailing columns become None)."""
+        values = list(cast("tuple[Any, ...]", raw)) + [None] * 4
+        return values[0], values[1], values[2], values[3]
+
     def get_user(self, username: str) -> UserProfile | None:
         """Retrieve user profile from local database."""
         con = self._get_connection()
@@ -252,13 +260,14 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             if not res:
                 return None
 
-            raw_role = str(res[2]) if len(res) > 2 and res[2] is not None else "researcher"
+            row = self._row_padded(res)
+            raw_role = str(row[2]) if row[2] is not None else "researcher"
             role_enum = UserRole.ADMIN if raw_role == "admin" else UserRole.RESEARCHER
             return UserProfile(
-                username=res[0],
-                is_active=bool(res[1]),
+                username=row[0],
+                is_active=bool(row[1]),
                 role=role_enum,
-                created_at=str(res[3]) if len(res) > 3 and res[3] is not None else None,
+                created_at=str(row[3]) if row[3] is not None else None,
             )
         except Exception as e:
             logger.error(f"Error fetching user {username}: {e}")
@@ -276,15 +285,16 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 "SELECT username, is_active, role, created_at FROM users ORDER BY is_active ASC, username ASC"
             ).fetchall()
             users: list[UserProfile] = []
-            for row in res:
-                raw_role = str(row[2]) if len(row) > 2 and row[2] is not None else "researcher"
+            for raw in res:
+                row = self._row_padded(raw)
+                raw_role = str(row[2]) if row[2] is not None else "researcher"
                 role_enum = UserRole.ADMIN if raw_role == "admin" else UserRole.RESEARCHER
                 users.append(
                     UserProfile(
                         username=row[0],
                         is_active=bool(row[1]) if row[1] is not None else True,
                         role=role_enum,
-                        created_at=str(row[3]) if len(row) > 3 and row[3] is not None else None,
+                        created_at=str(row[3]) if row[3] is not None else None,
                     )
                 )
             return users

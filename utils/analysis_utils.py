@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 from scipy import stats
+
 from biostats.inference import LEGACY_NAMES, compare_groups, groups_from_frame
 from biostats.inference import recommend as _recommend_kind
 from biostats.posthoc import default_method, pairwise_comparisons

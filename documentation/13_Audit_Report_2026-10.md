@@ -94,7 +94,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P4 | State + UX foundation: typed AppState, st.navigation shell, components, sample cohort, import flow, Settings/consent | done (`ui/`, `ingest/`, `core/state.py`, `app_pages/views/`) |
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | done (multiple imputation with Rubin pooling deferred to P8) |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | done (function splitting and the remaining `unsafe_allow_html` blocks deferred to P7/P8 clean-up) |
-| P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | planned |
+| P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | done (Docker image not built in the audit environment: Docker unavailable) |
 | P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement | planned |
 
 ## Owner actions required (cannot be done from the repository)
@@ -128,7 +128,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | E11 per-rerun expensive work | partially closed (upload hash once per file, AI probes cached and moved to Settings) | P4; remaining DataAnalyzer/audit recomputation in P6 |
 | E12 tracked secrets/config | closed | P0 |
 | E13 layering / dead code / duplication | closed for layering (test-enforced), dead code and duplicates; giant functions (59 > 100 lines) remain | P6; splitting with P7/P8 |
-| E14 quality gates | lite CI closed | P0; full gates in P7 |
+| E14 quality gates | closed | P0 (lite CI); P7 (ruff configuration, pyright, coverage floor, pre-commit, source gates, hardened Docker) |
 | U1–U3 login, navigation, onboarding, import | closed | P4 (`st.navigation`, Start page, sample cohort, import flow) |
 | U5 destructive actions | closed (cache reset, cached statistics, apply filter); reindex confirmation pending | P4, P6 |
 | U6 design | partially closed (theme tokens, components, interpretation quadrants); 30 `unsafe_allow_html` blocks remain, mostly the educational HTML tables | P4, P6; P7/P8 clean-up |

@@ -27,7 +27,9 @@ def how_to_read(result: TestResult) -> str:
             "effect by Cohen's conventions; the interval shows which other magnitudes remain compatible."
         )
     elif effect is not None:
-        parts.append(f"{effect.name} = {_fmt(effect.estimate)} ({effect.magnitude() or 'standardised'} by Cohen's conventions).")
+        parts.append(
+            f"{effect.name} = {_fmt(effect.estimate)} ({effect.magnitude() or 'standardised'} by Cohen's conventions)."
+        )
     p = result.p_adjusted if result.p_adjusted is not None else result.p_value
     if p is not None:
         label = "adjusted p" if result.p_adjusted is not None else "p"
@@ -37,10 +39,18 @@ def how_to_read(result: TestResult) -> str:
         )
     worries = [a for a in result.assumptions if a.status in ("caution", "violated")]
     if worries:
-        parts.append("Diagnostics to keep in mind: " + "; ".join(f"{a.name} ({a.detail})" for a in worries) + ".")
+        parts.append(
+            "Diagnostics to keep in mind: "
+            + "; ".join(f"{a.name} ({a.detail})" for a in worries)
+            + "."
+        )
     if result.family == "nonparametric":
-        parts.append("Rank-based test: the conclusion is about which group tends to have larger values, not about means.")
-    parts.append("Report the estimate with its interval, the test, the sample sizes and the reference group.")
+        parts.append(
+            "Rank-based test: the conclusion is about which group tends to have larger values, not about means."
+        )
+    parts.append(
+        "Report the estimate with its interval, the test, the sample sizes and the reference group."
+    )
     return " ".join(parts)
 
 

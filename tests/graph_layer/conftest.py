@@ -26,9 +26,16 @@ def taxonomy_spec() -> GraphSpec:
     kind = GraphKind.TAXONOMY
 
     def node(node_id: str, category: str, label: str | None = None) -> NodeSpec:
-        return NodeSpec(id=node_id, label=label or node_id, category=category, style=node_style_for(kind, category))
+        return NodeSpec(
+            id=node_id,
+            label=label or node_id,
+            category=category,
+            style=node_style_for(kind, category),
+        )
 
-    def edge(category: str, source: str, target: str, directed: bool = True, label: str = "") -> EdgeSpec:
+    def edge(
+        category: str, source: str, target: str, directed: bool = True, label: str = ""
+    ) -> EdgeSpec:
         return EdgeSpec(
             id=edge_id(category, source, target, undirected=not directed),
             source=source,
@@ -53,5 +60,12 @@ def taxonomy_spec() -> GraphSpec:
         edge("input", "weight", "FORM_bmi", label="input"),
         edge("yields", "FORM_bmi", "bmi", label="yields"),
     )
-    return GraphSpec(kind=kind, title="Taxonomy", nodes=nodes, edges=edges, directed=True,
-                     layout=LayoutHint.HIERARCHICAL, legend=legend_entries(kind))
+    return GraphSpec(
+        kind=kind,
+        title="Taxonomy",
+        nodes=nodes,
+        edges=edges,
+        directed=True,
+        layout=LayoutHint.HIERARCHICAL,
+        legend=legend_entries(kind),
+    )

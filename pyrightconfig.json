@@ -1,0 +1,32 @@
+{
+  "include": [
+    "core",
+    "biostats",
+    "ingest",
+    "ui",
+    "graph",
+    "manage/iam",
+    "manage/db_manager.py",
+    "manage/transformation_manager.py",
+    "manage/reproduction_manager.py",
+    "main.py"
+  ],
+  "exclude": ["**/__pycache__", ".venv"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "error",
+  "reportMissingModuleSource": "none",
+  "reportAttributeAccessIssue": "warning",
+  "reportArgumentType": "warning",
+  "reportCallIssue": "warning",
+  "reportOptionalMemberAccess": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportPossiblyUnbound": "warning",
+  "reportIndexIssue": "warning",
+  "reportOperatorIssue": "warning",
+  "reportReturnType": "warning",
+  "reportAssignmentType": "warning",
+  "reportRedeclaration": "warning"
+}

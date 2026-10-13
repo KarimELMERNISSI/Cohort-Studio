@@ -28,7 +28,9 @@ class TestPower:
     def test_anova_power_per_group(self) -> None:
         res = anova_power(0.25, 30, 3, alpha=0.05)
         assert res.n_total == 90
-        assert res.power == pytest.approx(0.5396, abs=2e-3)  # the page reported 0.195 before the fix
+        assert res.power == pytest.approx(
+            0.5396, abs=2e-3
+        )  # the page reported 0.195 before the fix
 
     def test_kruskal_are_scaling(self) -> None:
         res = kruskal_sample_size(0.25, 3, alpha=0.05, power=0.8, are=ARE_NORMAL)
@@ -82,9 +84,13 @@ class TestMissingnessScan:
         df["lab"] = lab
         return df
 
-    def test_every_test_is_returned_and_corrected_over_the_full_family(self, mar_df: pd.DataFrame) -> None:
+    def test_every_test_is_returned_and_corrected_over_the_full_family(
+        self, mar_df: pd.DataFrame
+    ) -> None:
         result = scan_missingness_dependencies(mar_df, targets=["lab"], correction="fdr_bh")
-        assert result.n_tests == 10 and len(result.table) == 10  # ten predictors, all complete: no co-occurrence tests
+        assert (
+            result.n_tests == 10 and len(result.table) == 10
+        )  # ten predictors, all complete: no co-occurrence tests
         assert set(result.table["Dependency Type"]) == {"Value association"}
         best = result.table.iloc[0]
         assert best["Predictor Variable"] == "x1" and best["Significant"]
@@ -98,8 +104,15 @@ class TestMissingnessScan:
     def test_legacy_shim_returns_all_tests(self, mar_df: pd.DataFrame) -> None:
         from utils.analysis_utils import scan_missingness_dependencies as legacy
 
-        table = legacy(mar_df, target_cols=["lab"], predictor_cols=[f"x{i}" for i in range(1, 11)], test_preference="Auto-Detect")
-        assert len(table) == 10 and "P-Value" in table.columns and "P-Value (Adj)" not in table.columns
+        table = legacy(
+            mar_df,
+            target_cols=["lab"],
+            predictor_cols=[f"x{i}" for i in range(1, 11)],
+            test_preference="Auto-Detect",
+        )
+        assert (
+            len(table) == 10 and "P-Value" in table.columns and "P-Value (Adj)" not in table.columns
+        )
         assert table.attrs["n_tests"] == 10
 
     def test_small_groups_are_skipped_not_reported(self) -> None:

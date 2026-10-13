@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import streamlit as st
 
 from manage.iam import UserCredentials, UserRole, get_iam_manager
@@ -41,12 +43,12 @@ def require_login() -> bool:
 
     _, centre, _ = st.columns([1, 1.2, 1])
     with centre:
-        try:
+        with contextlib.suppress(Exception):
             st.image(LOGO, width=180)
-        except Exception:
-            pass
         st.title("Cohort Monitoring Platform")
-        st.caption("Sign in to open your workspace. Your datasets, traces and documents are private to your account.")
+        st.caption(
+            "Sign in to open your workspace. Your datasets, traces and documents are private to your account."
+        )
 
         tab_login, tab_signup = st.tabs(["Sign in", "Create an account"])
 
@@ -54,20 +56,28 @@ def require_login() -> bool:
             username = st.text_input("Username", autocomplete="username")
             password = st.text_input("Password", type="password", autocomplete="current-password")
             if st.form_submit_button("Sign in", type="primary", width="stretch"):
-                result = iam.authenticate(UserCredentials(username=username.strip(), password=password))
+                result = iam.authenticate(
+                    UserCredentials(username=username.strip(), password=password)
+                )
                 if result.success:
                     st.session_state.user_authenticated = True
                     st.session_state.username = username.strip()
                     st.session_state.user_role = (
-                        str(result.user.role) if result.user is not None else UserRole.RESEARCHER.value
+                        str(result.user.role)
+                        if result.user is not None
+                        else UserRole.RESEARCHER.value
                     )
                     st.rerun()
                 else:
                     st.error(result.message)
 
         with tab_signup, st.form("signup_form"):
-            new_user = st.text_input("New username", help="3-32 characters: letters, digits, '.', '_' or '-'")
-            new_pass = st.text_input("New password", type="password", help=f"At least {MIN_PASSWORD_LENGTH} characters")
+            new_user = st.text_input(
+                "New username", help="3-32 characters: letters, digits, '.', '_' or '-'"
+            )
+            new_pass = st.text_input(
+                "New password", type="password", help=f"At least {MIN_PASSWORD_LENGTH} characters"
+            )
             confirm_pass = st.text_input("Confirm password", type="password")
             if st.form_submit_button("Create account", width="stretch"):
                 problem = validate_new_credentials(new_user, new_pass, confirm_pass)

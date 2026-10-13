@@ -26,8 +26,12 @@ def _log_ci(estimate: float, se_log: float, alpha: float, method: str) -> CI | N
     if not np.isfinite(estimate) or estimate <= 0 or not np.isfinite(se_log):
         return None
     z = stats.norm.ppf(1 - alpha / 2)
-    return CI(lower=float(math.exp(math.log(estimate) - z * se_log)), upper=float(math.exp(math.log(estimate) + z * se_log)),
-              level=1 - alpha, method=method)
+    return CI(
+        lower=float(math.exp(math.log(estimate) - z * se_log)),
+        upper=float(math.exp(math.log(estimate) + z * se_log)),
+        level=1 - alpha,
+        method=method,
+    )
 
 
 @dataclass
@@ -60,7 +64,9 @@ class DiagnosticAccuracy:
     warnings: list[str] = field(default_factory=list)
 
 
-def diagnostic_accuracy(tp: int, fp: int, fn: int, tn: int, *, alpha: float = 0.05, prevalence: float | None = None) -> DiagnosticAccuracy:
+def diagnostic_accuracy(
+    tp: int, fp: int, fn: int, tn: int, *, alpha: float = 0.05, prevalence: float | None = None
+) -> DiagnosticAccuracy:
     """Sensitivity, specificity, predictive values (Wilson CIs), likelihood ratios (Simel log CIs), DOR, Youden."""
     tp, fp, fn, tn = int(tp), int(fp), int(fn), int(tn)
     n_pos, n_neg = tp + fn, fp + tn
@@ -75,10 +81,20 @@ def diagnostic_accuracy(tp: int, fp: int, fn: int, tn: int, *, alpha: float = 0.
 
     lr_pos = sens / (1 - spec) if n_pos and n_neg and spec < 1 else None
     lr_neg = (1 - sens) / spec if n_pos and n_neg and spec > 0 else None
-    lr_pos_ci = _log_ci(lr_pos, math.sqrt((1 - sens) / tp + spec / fp), alpha, "Simel log") if lr_pos and tp and fp else None
-    lr_neg_ci = _log_ci(lr_neg, math.sqrt(sens / fn + (1 - spec) / tn), alpha, "Simel log") if lr_neg and fn and tn else None
+    lr_pos_ci = (
+        _log_ci(lr_pos, math.sqrt((1 - sens) / tp + spec / fp), alpha, "Simel log")
+        if lr_pos and tp and fp
+        else None
+    )
+    lr_neg_ci = (
+        _log_ci(lr_neg, math.sqrt(sens / fn + (1 - spec) / tn), alpha, "Simel log")
+        if lr_neg and fn and tn
+        else None
+    )
     if lr_pos is None or lr_neg is None:
-        warnings.append("a likelihood ratio is undefined (sensitivity or specificity equals 0 or 1)")
+        warnings.append(
+            "a likelihood ratio is undefined (sensitivity or specificity equals 0 or 1)"
+        )
 
     cells = [tp, fp, fn, tn]
     if all(c > 0 for c in cells):
@@ -87,8 +103,12 @@ def diagnostic_accuracy(tp: int, fp: int, fn: int, tn: int, *, alpha: float = 0.
     elif n > 0:
         adj = [c + 0.5 for c in cells]
         dor = (adj[0] * adj[3]) / (adj[1] * adj[2])
-        dor_ci = _log_ci(dor, math.sqrt(sum(1 / c for c in adj)), alpha, "Woolf log, Haldane-Anscombe 0.5 added")
-        warnings.append("a cell is zero: the diagnostic odds ratio uses the Haldane-Anscombe correction")
+        dor_ci = _log_ci(
+            dor, math.sqrt(sum(1 / c for c in adj)), alpha, "Woolf log, Haldane-Anscombe 0.5 added"
+        )
+        warnings.append(
+            "a cell is zero: the diagnostic odds ratio uses the Haldane-Anscombe correction"
+        )
     else:
         dor, dor_ci = None, None
 
@@ -98,14 +118,32 @@ def diagnostic_accuracy(tp: int, fp: int, fn: int, tn: int, *, alpha: float = 0.
         npv_prev = spec * (1 - prevalence) / (spec * (1 - prevalence) + (1 - sens) * prevalence)
 
     return DiagnosticAccuracy(
-        tp=tp, fp=fp, fn=fn, tn=tn,
-        sensitivity=sens, sensitivity_ci=_wilson(tp, n_pos, alpha), specificity=spec, specificity_ci=_wilson(tn, n_neg, alpha),
-        ppv=ppv, ppv_ci=_wilson(tp, tp + fp, alpha), npv=npv, npv_ci=_wilson(tn, tn + fn, alpha),
-        accuracy=accuracy, prevalence_observed=prev_obs,
-        lr_positive=lr_pos, lr_positive_ci=lr_pos_ci, lr_negative=lr_neg, lr_negative_ci=lr_neg_ci,
-        dor=dor, dor_ci=dor_ci, youden=(sens + spec - 1) if n_pos and n_neg else float("nan"),
-        ppv_at_prevalence=ppv_prev, npv_at_prevalence=npv_prev, prevalence_assumed=prevalence,
-        references=cite("wilson1927", "simel1991", "youden1950"), warnings=warnings,
+        tp=tp,
+        fp=fp,
+        fn=fn,
+        tn=tn,
+        sensitivity=sens,
+        sensitivity_ci=_wilson(tp, n_pos, alpha),
+        specificity=spec,
+        specificity_ci=_wilson(tn, n_neg, alpha),
+        ppv=ppv,
+        ppv_ci=_wilson(tp, tp + fp, alpha),
+        npv=npv,
+        npv_ci=_wilson(tn, tn + fn, alpha),
+        accuracy=accuracy,
+        prevalence_observed=prev_obs,
+        lr_positive=lr_pos,
+        lr_positive_ci=lr_pos_ci,
+        lr_negative=lr_neg,
+        lr_negative_ci=lr_neg_ci,
+        dor=dor,
+        dor_ci=dor_ci,
+        youden=(sens + spec - 1) if n_pos and n_neg else float("nan"),
+        ppv_at_prevalence=ppv_prev,
+        npv_at_prevalence=npv_prev,
+        prevalence_assumed=prevalence,
+        references=cite("wilson1927", "simel1991", "youden1950"),
+        warnings=warnings,
     )
 
 
@@ -137,23 +175,47 @@ def delong_auc(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha: fl
     var = (np.var(v10, ddof=1) / m if m > 1 else 0.0) + (np.var(v01, ddof=1) / n if n > 1 else 0.0)
     z = stats.norm.ppf(1 - alpha / 2)
     se = math.sqrt(var)
-    ci = CI(lower=float(max(0.0, auc - z * se)), upper=float(min(1.0, auc + z * se)), level=1 - alpha, method="DeLong")
-    return {"auc": auc, "variance": float(var), "se": se, "ci": ci, "n_positive": m, "n_negative": n, "pos_label": pos_label,
-            "references": cite("delong1988", "sun2014")}
+    ci = CI(
+        lower=float(max(0.0, auc - z * se)),
+        upper=float(min(1.0, auc + z * se)),
+        level=1 - alpha,
+        method="DeLong",
+    )
+    return {
+        "auc": auc,
+        "variance": float(var),
+        "se": se,
+        "ci": ci,
+        "n_positive": m,
+        "n_negative": n,
+        "pos_label": pos_label,
+        "references": cite("delong1988", "sun2014"),
+    }
 
 
-def confusion_at(y_true: Sequence, y_score: Sequence, cutoff: float, *, pos_label) -> tuple[int, int, int, int]:
+def confusion_at(
+    y_true: Sequence, y_score: Sequence, cutoff: float, *, pos_label
+) -> tuple[int, int, int, int]:
     """(tp, fp, fn, tn) when ``score >= cutoff`` is called positive."""
     scores = np.asarray(pd.to_numeric(pd.Series(list(y_score)), errors="coerce"), dtype=float)
     pos = _binary(list(y_true), pos_label)
     pred = scores >= cutoff
-    tp = int(np.sum(pred & pos)); fp = int(np.sum(pred & ~pos))
-    fn = int(np.sum(~pred & pos)); tn = int(np.sum(~pred & ~pos))
+    tp = int(np.sum(pred & pos))
+    fp = int(np.sum(pred & ~pos))
+    fn = int(np.sum(~pred & pos))
+    tn = int(np.sum(~pred & ~pos))
     return tp, fp, fn, tn
 
 
-def youden_cutoff(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha: float = 0.05, n_boot: int = 500,
-                  seed: int = RANDOM_STATE) -> dict:
+def youden_cutoff(
+    y_true: Sequence,
+    y_score: Sequence,
+    *,
+    pos_label=None,
+    alpha: float = 0.05,
+    n_boot: int = 500,
+    seed: int = RANDOM_STATE,
+) -> dict:
     """Cut-off maximising Youden's J on the sample (optimistic by construction), with a bootstrap CI for the cut-off."""
     from sklearn.metrics import roc_curve
 
@@ -185,10 +247,29 @@ def youden_cutoff(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha:
             boots.append(_best(y[b], scores[b])[0])
         if len(boots) > 50:
             lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
-            ci = CI(lower=float(lo), upper=float(hi), level=1 - alpha, method=f"bootstrap percentile ({len(boots)})")
-    return {"cutoff": cutoff, "sensitivity": sens, "specificity": spec, "youden": sens + spec - 1, "ci": ci, "pos_label": pos_label,
-            "note": "Chosen on the same data it is evaluated on: sensitivity and specificity at this cut-off are optimistic; "
-                    "confirm on independent data.", "references": cite("youden1950")}
+            ci = CI(
+                lower=float(lo),
+                upper=float(hi),
+                level=1 - alpha,
+                method=f"bootstrap percentile ({len(boots)})",
+            )
+    return {
+        "cutoff": cutoff,
+        "sensitivity": sens,
+        "specificity": spec,
+        "youden": sens + spec - 1,
+        "ci": ci,
+        "pos_label": pos_label,
+        "note": "Chosen on the same data it is evaluated on: sensitivity and specificity at this cut-off are optimistic; "
+        "confirm on independent data.",
+        "references": cite("youden1950"),
+    }
 
 
-__all__ = ["DiagnosticAccuracy", "confusion_at", "delong_auc", "diagnostic_accuracy", "youden_cutoff"]
+__all__ = [
+    "DiagnosticAccuracy",
+    "confusion_at",
+    "delong_auc",
+    "diagnostic_accuracy",
+    "youden_cutoff",
+]

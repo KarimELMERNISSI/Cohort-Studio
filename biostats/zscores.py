@@ -56,7 +56,9 @@ def reference_zscores(
 
     if method == "control":
         if ref_col is None or ref_value is None:
-            raise ValueError("A grouping variable and a reference level are required for the control-group method.")
+            raise ValueError(
+                "A grouping variable and a reference level are required for the control-group method."
+            )
         mask = _control_mask(df, ref_col, ref_value)
         if not mask.any():
             raise ValueError(f"No rows found where {ref_col!r} equals {ref_value!r}.")
@@ -80,7 +82,9 @@ def reference_zscores(
             mu, sigma = manual[var]  # type: ignore[index]
             if sigma is None or float(sigma) <= 0:
                 raise ValueError(f"The reference SD for {var!r} must be > 0.")
-            stats[var] = ReferenceStats(mean=float(mu), std=float(sigma), n=0, source="manual reference values")
+            stats[var] = ReferenceStats(
+                mean=float(mu), std=float(sigma), n=0, source="manual reference values"
+            )
             out[f"{var}{suffix}"] = (values - float(mu)) / float(sigma)
             continue
         ref = ref.dropna()

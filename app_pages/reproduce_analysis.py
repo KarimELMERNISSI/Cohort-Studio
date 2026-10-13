@@ -5,13 +5,14 @@ import os
 import pandas as pd
 import streamlit as st
 
+from core.workspace import safe_filename
+from manage.reproduction_manager import run_trace
+
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
+from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
 from utils.path_utils import normalize_path, resolve_path
-from core.workspace import safe_filename
-from utils.data_paths import get_traces_dir, get_uploads_dir
 from utils.session_scope import get_current_scope
-from manage.reproduction_manager import run_trace
 
 
 def _uploads_dir() -> str:
@@ -38,7 +39,7 @@ def _resolve_user_path(text: str | None) -> str | None:
     fixed = text.replace("\\", "/")
     scope = get_current_scope()
     if scope is None:
-        for candidate in (fixed, os.path.join("data", fixed)):
+        for candidate in (fixed, os.path.join(get_data_root(), fixed)):
             if os.path.exists(candidate):
                 return candidate
         return None

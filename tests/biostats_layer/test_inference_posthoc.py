@@ -28,10 +28,14 @@ def test_welch_anova_matches_r_oneway_test() -> None:
 
 def test_classic_anova_and_kruskal_reference_values() -> None:
     anova = compare_groups(PLANT, kind="anova")
-    assert anova.statistic == pytest.approx(4.846, abs=1e-3) and anova.p_value == pytest.approx(0.01591, abs=1e-5)
+    assert anova.statistic == pytest.approx(4.846, abs=1e-3) and anova.p_value == pytest.approx(
+        0.01591, abs=1e-5
+    )
     kw = compare_groups(PLANT, kind="kruskal")
     assert kw.name == "Kruskal-Wallis" and kw.family == "nonparametric"
-    assert kw.statistic == pytest.approx(7.9882, abs=1e-4) and kw.p_value == pytest.approx(0.01842, abs=1e-5)
+    assert kw.statistic == pytest.approx(7.9882, abs=1e-4) and kw.p_value == pytest.approx(
+        0.01842, abs=1e-5
+    )
     assert kw.effect_sizes[0].estimate == pytest.approx((7.9882 - 2) / 27, abs=1e-4)
 
 
@@ -49,13 +53,17 @@ def test_two_group_estimate_is_comparison_minus_reference() -> None:
     res = compare_groups({"ctrl": CTRL, "trt2": TRT2}, kind="welch", reference="ctrl")
     assert res.reference_group == "ctrl" and res.comparison_group == "trt2"
     assert res.estimate == pytest.approx(np.mean(TRT2) - np.mean(CTRL))
-    assert res.estimate_ci is not None and res.estimate_ci.lower < res.estimate < res.estimate_ci.upper
+    assert (
+        res.estimate_ci is not None and res.estimate_ci.lower < res.estimate < res.estimate_ci.upper
+    )
     scipy_p = stats.ttest_ind(TRT2, CTRL, equal_var=False).pvalue
     assert res.p_value == pytest.approx(scipy_p)
     flipped = compare_groups({"ctrl": CTRL, "trt2": TRT2}, kind="welch", reference="trt2")
     assert flipped.estimate == pytest.approx(-res.estimate)
     assert flipped.primary_effect.estimate == pytest.approx(-res.primary_effect.estimate)
-    mw = compare_groups({"ctrl": CTRL, "trt2": TRT2}, kind="mannwhitney", reference="ctrl", n_boot=200)
+    mw = compare_groups(
+        {"ctrl": CTRL, "trt2": TRT2}, kind="mannwhitney", reference="ctrl", n_boot=200
+    )
     assert mw.estimate_label.startswith("Hodges-Lehmann") and mw.estimate_ci is not None
     assert mw.effect_sizes[0].name == "rank-biserial r"
 
@@ -73,7 +81,9 @@ def test_tukey_reports_all_pairs_with_r_reference_values() -> None:
     assert len(table) == 3
     assert table["p_adj"].round(3).tolist() == pytest.approx([0.391, 0.198, 0.012], abs=1e-3)
     assert table["estimate"].tolist() == pytest.approx([-0.371, 0.494, 0.865], abs=1e-3)
-    assert (table["ci_low"] < table["estimate"]).all() and (table["estimate"] < table["ci_high"]).all()
+    assert (table["ci_low"] < table["estimate"]).all() and (
+        table["estimate"] < table["ci_high"]
+    ).all()
     assert table.attrs["references"]
 
 
@@ -90,14 +100,21 @@ def test_games_howell_reduces_to_welch_t_for_two_groups_and_orders_plantgrowth()
 
 
 def test_dunn_matches_hand_calculation_and_holm() -> None:
-    table = pairwise_comparisons({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, method="dunn", adjust_method="holm")
+    table = pairwise_comparisons(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, method="dunn", adjust_method="holm"
+    )
     z_ab = (5 - 2) / np.sqrt(7.5 * (2 / 3))
     assert table.loc[0, "statistic"] == pytest.approx(z_ab)
     p_ab = 2 * stats.norm.sf(z_ab)
     assert table.loc[0, "p_raw"] == pytest.approx(p_ab)
     p_ac = 2 * stats.norm.sf((8 - 2) / np.sqrt(7.5 * (2 / 3)))
-    assert table["p_adj"].tolist() == pytest.approx([max(p_ab * 2, p_ac * 3), p_ac * 3, max(p_ab * 2, p_ac * 3)], abs=1e-9)
-    assert default_method("Kruskal-Wallis") == "dunn" and default_method("Welch ANOVA") == "games-howell"
+    assert table["p_adj"].tolist() == pytest.approx(
+        [max(p_ab * 2, p_ac * 3), p_ac * 3, max(p_ab * 2, p_ac * 3)], abs=1e-9
+    )
+    assert (
+        default_method("Kruskal-Wallis") == "dunn"
+        and default_method("Welch ANOVA") == "games-howell"
+    )
     assert default_method("One-way ANOVA") == "tukey"
 
 

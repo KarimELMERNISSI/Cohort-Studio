@@ -58,7 +58,9 @@ def legend_html(entries: Iterable[LegendEntry], *, title: str | None = None) -> 
         parts.append(f'<div style="font-weight:600;margin-bottom:4px">{html.escape(title)}</div>')
     for group, items in groups.items():
         if group:
-            parts.append(f'<div style="font-weight:600;margin:6px 0 2px 0">{html.escape(group)}</div>')
+            parts.append(
+                f'<div style="font-weight:600;margin:6px 0 2px 0">{html.escape(group)}</div>'
+            )
         parts.append('<table style="border-collapse:collapse"><tbody>')
         for entry in items:
             swatch = _node_swatch(entry) if entry.swatch == "node" else _edge_swatch(entry)
@@ -71,9 +73,13 @@ def legend_html(entries: Iterable[LegendEntry], *, title: str | None = None) -> 
     return "".join(parts)
 
 
-def render_legend(spec_or_entries: GraphSpec | Iterable[LegendEntry], *, title: str | None = None) -> None:
+def render_legend(
+    spec_or_entries: GraphSpec | Iterable[LegendEntry], *, title: str | None = None
+) -> None:
     """Render the legend of a spec (or of explicit entries) in the current Streamlit container."""
-    entries = spec_or_entries.legend if isinstance(spec_or_entries, GraphSpec) else tuple(spec_or_entries)
+    entries = (
+        spec_or_entries.legend if isinstance(spec_or_entries, GraphSpec) else tuple(spec_or_entries)
+    )
     if not entries:
         st.caption("No legend available for this graph.")
         return

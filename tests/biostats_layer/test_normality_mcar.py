@@ -5,7 +5,13 @@ import pandas as pd
 from scipy import stats
 
 from biostats.mcar import em_mean_cov, littles_mcar_test
-from biostats.normality import anderson_p, lilliefors_p, normality_check, normality_summary, shapiro_p
+from biostats.normality import (
+    anderson_p,
+    lilliefors_p,
+    normality_check,
+    normality_summary,
+    shapiro_p,
+)
 
 
 def test_lilliefors_is_calibrated_where_self_standardised_ks_under_rejects() -> None:
@@ -77,5 +83,7 @@ def test_em_estimates_are_less_biased_than_available_case_means_under_mar() -> N
 def test_mcar_error_paths() -> None:
     assert "error" in littles_mcar_test(pd.DataFrame({"a": [1.0, 2.0, 3.0]}))
     assert "error" in littles_mcar_test(pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]}))
-    single_pattern = pd.DataFrame({"a": [1.0, 2.0, 3.0, 4.0], "b": [np.nan] * 4, "c": [2.0, 3.0, 4.0, 5.0]})
+    single_pattern = pd.DataFrame(
+        {"a": [1.0, 2.0, 3.0, 4.0], "b": [np.nan] * 4, "c": [2.0, 3.0, 4.0, 5.0]}
+    )
     assert "error" in littles_mcar_test(single_pattern)

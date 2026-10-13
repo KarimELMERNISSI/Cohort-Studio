@@ -6,6 +6,15 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Quality gates (audit phase P7; finding E14)
+
+- **CI** — `ci.yml` runs ruff with the project configuration, `ruff format --check` on the audit packages, pyright (errors only, scoped by `pyrightconfig.json`) and the offline test suite with a coverage floor; `integration.yml` runs the live-provider tests on demand only.
+- **Ruff configuration** — `[tool.ruff.lint]` is now explicit (E/F/W/I/B/UP/SIM/TID + selected RUF/PL rules); the legacy pages and helpers carry per-file ignores until they are split; imports are sorted project-wide.
+- **Pre-commit** — ruff check/format, gitleaks, large-file/TOML/YAML/JSON/private-key checks (`.pre-commit-config.yaml`).
+- **Source gates** (`tests/test_quality_gates.py`) — no `eval` outside the whitelisted evaluator, no artificial sleeps, no hard-coded `data/` paths, raw-HTML and `print()` ratchets, version recorded in the changelog, test directories never named like packages; `tests/test_layering.py` enforces the dependency direction.
+- **Docker** — uv-based image with locked dependencies, `libgomp1` instead of `build-essential`, non-root `app` user, offline graph engine and local IAM by default, `WITH_YFILES` build argument; `.dockerignore` excludes secrets, data, tests and the virtual environment; `docker-compose.yml` without the obsolete `version` key, optional `.env`, no shared `DOCUMENTS` mount (document libraries are per user).
+- **Project metadata** — version 2.3.0 (aligned with this changelog); `pyright` added to the dev extra; coverage configuration.
+
 ### Structure: layering, dead code, single replay engine, traced mutations (audit phase P6; findings E4, E8, E10, E13, U4, U5, U6)
 
 - **One replay engine** — `manage.reproduction_manager.run_trace()` replays a trace headlessly (optionally up to a step, from a pre-loaded frame, with path overrides chosen in the UI) and reports a missing file as structured data instead of rendering widgets; the Reproduce page's own replay loop and the Enrich page's duplicate "Reproduce Analysis" sidebar were removed. Supported steps: enrichment, imputation, variable transformation and computation, type conversion, missing-value handling, column renaming and row filters. The source file is read through the import engine with the parsing options recorded at import.

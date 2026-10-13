@@ -22,20 +22,39 @@ Correction = Literal["none", "bonferroni", "holm", "fdr_bh"]
 TestPreference = Literal["auto", "parametric", "nonparametric"]
 
 COLUMNS = [
-    "Target Variable", "Predictor Variable", "Dependency Type", "Test Used", "P-Value", "P-Value (Adj)",
-    "Significant", "Effect", "Direction", "n_missing", "n_observed", "Conclusion",
+    "Target Variable",
+    "Predictor Variable",
+    "Dependency Type",
+    "Test Used",
+    "P-Value",
+    "P-Value (Adj)",
+    "Significant",
+    "Effect",
+    "Direction",
+    "n_missing",
+    "n_observed",
+    "Conclusion",
 ]
 
 _PREFERENCE_ALIASES = {
-    "auto": "auto", "auto-detect": "auto",
-    "parametric": "parametric", "force parametric": "parametric",
-    "nonparametric": "nonparametric", "non-parametric": "nonparametric", "force non-parametric": "nonparametric",
+    "auto": "auto",
+    "auto-detect": "auto",
+    "parametric": "parametric",
+    "force parametric": "parametric",
+    "nonparametric": "nonparametric",
+    "non-parametric": "nonparametric",
+    "force non-parametric": "nonparametric",
 }
 _CORRECTION_ALIASES = {
-    "none": "none", "": "none",
+    "none": "none",
+    "": "none",
     "bonferroni": "bonferroni",
     "holm": "holm",
-    "fdr_bh": "fdr_bh", "benjamini-hochberg (fdr)": "fdr_bh", "benjamini-hochberg": "fdr_bh", "fdr": "fdr_bh", "bh": "fdr_bh",
+    "fdr_bh": "fdr_bh",
+    "benjamini-hochberg (fdr)": "fdr_bh",
+    "benjamini-hochberg": "fdr_bh",
+    "fdr": "fdr_bh",
+    "bh": "fdr_bh",
 }
 
 
@@ -68,7 +87,9 @@ def _cramers_v(table: pd.DataFrame) -> float:
     return float(np.sqrt(chi2 / (n * k))) if n > 0 and k > 0 else float("nan")
 
 
-def _numeric_test(g_missing: pd.Series, g_observed: pd.Series, preference: str) -> tuple[str, float]:
+def _numeric_test(
+    g_missing: pd.Series, g_observed: pd.Series, preference: str
+) -> tuple[str, float]:
     use_parametric = preference == "parametric"
     if preference == "auto":
         normal = True
@@ -110,7 +131,7 @@ def scan_missingness_dependencies(
     preference = _PREFERENCE_ALIASES.get(str(test_preference).strip().lower(), "auto")
     method = _CORRECTION_ALIASES.get(str(correction).strip().lower(), "fdr_bh")
     if targets is None:
-        targets = [c for c in df.columns if df[c].isnull().any()]
+        targets = [c for c in df.columns if bool(df[c].isnull().any())]
     if predictors is None:
         predictors = df.columns.tolist()
 
@@ -145,7 +166,9 @@ def scan_missingness_dependencies(
                             g_observed = pd.to_numeric(values[~groups], errors="coerce").dropna()
                             test_name, p = _numeric_test(g_missing, g_observed, preference)
                             effect = _cohens_d(g_missing, g_observed)
-                            direction = ("higher" if g_missing.mean() > g_observed.mean() else "lower") + f" {pred} when {target} is missing"
+                            direction = (
+                                "higher" if g_missing.mean() > g_observed.mean() else "lower"
+                            ) + f" {pred} when {target} is missing"
                             effect_text = f"d = {effect:.2f}" if np.isfinite(effect) else ""
                         else:
                             table = pd.crosstab(values.astype(str), groups)
@@ -159,13 +182,23 @@ def scan_missingness_dependencies(
                                 test_name = "Chi-square test"
                             effect = _cramers_v(table)
                             direction = f"distribution of {pred} differs when {target} is missing"
-                            effect_text = f"Cramer's V = {effect:.2f}" if np.isfinite(effect) else ""
-                        rows.append({
-                            "Target Variable": target, "Predictor Variable": pred, "Dependency Type": "Value association",
-                            "Test Used": test_name, "P-Value": float(p), "Effect": effect_text, "Direction": direction,
-                            "n_missing": n_missing, "n_observed": n_observed,
-                            "Conclusion": f"Values of {pred} differ between rows where {target} is missing and rows where it is observed (association, not causation).",
-                        })
+                            effect_text = (
+                                f"Cramer's V = {effect:.2f}" if np.isfinite(effect) else ""
+                            )
+                        rows.append(
+                            {
+                                "Target Variable": target,
+                                "Predictor Variable": pred,
+                                "Dependency Type": "Value association",
+                                "Test Used": test_name,
+                                "P-Value": float(p),
+                                "Effect": effect_text,
+                                "Direction": direction,
+                                "n_missing": n_missing,
+                                "n_observed": n_observed,
+                                "Conclusion": f"Values of {pred} differ between rows where {target} is missing and rows where it is observed (association, not causation).",
+                            }
+                        )
                     except Exception:
                         skipped += 1
                 else:
@@ -185,19 +218,28 @@ def scan_missingness_dependencies(
                         else:
                             test_name = "Chi-square test"
                         both = int((t_missing & p_missing).sum())
-                        rows.append({
-                            "Target Variable": target, "Predictor Variable": pred, "Dependency Type": "Missingness co-occurrence",
-                            "Test Used": test_name, "P-Value": float(p), "Effect": f"phi = {_cramers_v(table):.2f}",
-                            "Direction": f"{both} rows missing both", "n_missing": int(p_missing.sum()),
-                            "n_observed": int((~p_missing).sum()),
-                            "Conclusion": f"Missingness of {pred} is associated with missingness of {target}.",
-                        })
+                        rows.append(
+                            {
+                                "Target Variable": target,
+                                "Predictor Variable": pred,
+                                "Dependency Type": "Missingness co-occurrence",
+                                "Test Used": test_name,
+                                "P-Value": float(p),
+                                "Effect": f"phi = {_cramers_v(table):.2f}",
+                                "Direction": f"{both} rows missing both",
+                                "n_missing": int(p_missing.sum()),
+                                "n_observed": int((~p_missing).sum()),
+                                "Conclusion": f"Missingness of {pred} is associated with missingness of {target}.",
+                            }
+                        )
                 except Exception:
                     skipped += 1
     if progress_callback:
         progress_callback(1.0)
 
-    table_out = pd.DataFrame(rows, columns=[c for c in COLUMNS if c not in ("P-Value (Adj)", "Significant")])
+    table_out = pd.DataFrame(
+        rows, columns=[c for c in COLUMNS if c not in ("P-Value (Adj)", "Significant")]
+    )
     if table_out.empty:
         table_out["P-Value (Adj)"] = pd.Series(dtype=float)
         table_out["Significant"] = pd.Series(dtype=bool)
@@ -211,7 +253,9 @@ def scan_missingness_dependencies(
     table_out["P-Value (Adj)"] = p_adj
     table_out["Significant"] = reject.astype(bool)
     table_out = table_out[COLUMNS].sort_values(["P-Value (Adj)", "P-Value"]).reset_index(drop=True)
-    return ScanResult(table_out, int(len(table_out)), skipped, int(table_out["Significant"].sum()), method, alpha)
+    return ScanResult(
+        table_out, int(len(table_out)), skipped, int(table_out["Significant"].sum()), method, alpha
+    )
 
 
 __all__ = ["COLUMNS", "Correction", "ScanResult", "TestPreference", "scan_missingness_dependencies"]

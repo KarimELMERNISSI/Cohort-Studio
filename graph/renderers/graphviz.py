@@ -10,7 +10,15 @@ import html
 from typing import Any
 
 from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
-from graph.model import GraphKind, GraphSpec, LayoutHint, LineStyle, NodeShape, RenderOptions, SelectionResult
+from graph.model import (
+    GraphKind,
+    GraphSpec,
+    LayoutHint,
+    LineStyle,
+    NodeShape,
+    RenderOptions,
+    SelectionResult,
+)
 
 DOT_SHAPES: dict[NodeShape, str] = {
     NodeShape.ELLIPSE: "ellipse",
@@ -48,7 +56,9 @@ def to_dot(spec: GraphSpec, options: RenderOptions) -> str:
     font_color = "#E6EDF3" if dark else "#1F2328"
     lines = ["digraph G {" if spec.directed else "graph G {"]
     lines.append("  graph [bgcolor=transparent, rankdir=TB, splines=true, overlap=false, pad=0.2];")
-    lines.append(f"  node [style=filled, fontname=Helvetica, fontsize=11, fontcolor={_quote(font_color)}, color={_quote('#777777')}];")
+    lines.append(
+        f"  node [style=filled, fontname=Helvetica, fontsize=11, fontcolor={_quote(font_color)}, color={_quote('#777777')}];"
+    )
     lines.append(f"  edge [fontname=Helvetica, fontsize=9, fontcolor={_quote(font_color)}];")
     if spec.title:
         lines.append(f"  label={_quote(spec.title)}; labelloc=t; fontcolor={_quote(font_color)};")
@@ -125,7 +135,7 @@ class GraphvizGraphRenderer(BaseGraphRenderer):
 
     def export_html(self, spec: GraphSpec, options: RenderOptions) -> bytes | None:
         dot = html.escape(self.translate(spec, options))
-        return f"<pre>{dot}</pre>".encode("utf-8")
+        return f"<pre>{dot}</pre>".encode()
 
 
 __all__: list[Any] = ["GraphvizGraphRenderer", "to_dot"]

@@ -3,8 +3,8 @@ Export Utilities.
 
 Functions for exporting DataFrames to various formats (Excel, etc.)
 """
-from io import BytesIO
 import re
+from io import BytesIO
 from typing import Any
 
 import pandas as pd

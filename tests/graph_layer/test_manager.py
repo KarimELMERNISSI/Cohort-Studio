@@ -3,7 +3,12 @@
 import pytest
 
 from graph.base import BaseGraphRenderer, RendererCapabilities
-from graph.manager import GraphConfig, GraphRendererManager, GraphRendererType, get_graph_renderer_manager
+from graph.manager import (
+    GraphConfig,
+    GraphRendererManager,
+    GraphRendererType,
+    get_graph_renderer_manager,
+)
 from graph.model import GraphSpec, RenderOptions, SelectionResult
 
 
@@ -14,10 +19,18 @@ class _FakeRenderer(BaseGraphRenderer):
     @property
     def capabilities(self) -> RendererCapabilities:
         return RendererCapabilities(
-            supports_selection=False, supports_edge_selection=False, supports_heat=False,
-            supports_node_shapes=False, supports_edge_labels=False, supports_mixed_direction=False,
-            supports_hierarchical=False, supports_drag=False, supports_html_export=False,
-            requires_internet=False, telemetry=False, license_note="test",
+            supports_selection=False,
+            supports_edge_selection=False,
+            supports_heat=False,
+            supports_node_shapes=False,
+            supports_edge_labels=False,
+            supports_mixed_direction=False,
+            supports_hierarchical=False,
+            supports_drag=False,
+            supports_html_export=False,
+            requires_internet=False,
+            telemetry=False,
+            license_note="test",
         )
 
     def translate(self, spec: GraphSpec, options: RenderOptions):

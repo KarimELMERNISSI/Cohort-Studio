@@ -1,0 +1,29 @@
+# Install once with `uv run pre-commit install` (pre-commit is in the dev extra); run `pre-commit autoupdate` to bump revisions.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+        # Formatting is enforced on the packages written under the 2026 audit; legacy pages keep their layout until split.
+        files: ^(core|biostats|ingest|ui|graph|tests/(core|biostats|ingest|ui|graph)_layer)/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=2000]
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: end-of-file-fixer
+        files: ^(core|biostats|ingest|ui|graph)/
+      - id: trailing-whitespace
+        files: ^(core|biostats|ingest|ui|graph)/

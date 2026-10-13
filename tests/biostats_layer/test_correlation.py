@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from biostats.correlation import association_matrix, correlation_ratio, pearson_ci, spearman_ci, variable_types
+from biostats.correlation import (
+    association_matrix,
+    correlation_ratio,
+    pearson_ci,
+    spearman_ci,
+    variable_types,
+)
 
 
 def _frame(n: int = 120, seed: int = 3) -> pd.DataFrame:
@@ -20,13 +26,22 @@ def _frame(n: int = 120, seed: int = 3) -> pd.DataFrame:
 
 def test_variable_types() -> None:
     types = variable_types(_frame())
-    assert types == {"x": "numeric", "y": "numeric", "b": "binary", "c": "categorical", "noise": "numeric", "sparse": "numeric"}
+    assert types == {
+        "x": "numeric",
+        "y": "numeric",
+        "b": "binary",
+        "c": "categorical",
+        "noise": "numeric",
+        "sparse": "numeric",
+    }
     assert variable_types(pd.DataFrame({"flag": [0, 1, 0, 1]})) == {"flag": "binary"}
 
 
 def test_fisher_and_bonett_intervals() -> None:
     ci = pearson_ci(0.5, 30)
-    assert ci.lower == pytest.approx(0.1706, abs=1e-3) and ci.upper == pytest.approx(0.7288, abs=1e-3)
+    assert ci.lower == pytest.approx(0.1706, abs=1e-3) and ci.upper == pytest.approx(
+        0.7288, abs=1e-3
+    )
     wide = spearman_ci(0.5, 30)
     assert wide.lower < ci.lower and wide.upper > ci.upper  # Bonett-Wright is wider for rho
     assert np.isnan(pearson_ci(1.0, 30).lower)
@@ -42,11 +57,26 @@ def test_correlation_ratio() -> None:
 def test_association_matrix_measures_by_type() -> None:
     res = association_matrix(_frame(), method="pearson", min_periods=10)
     pairs = res.pairs.set_index(["var_1", "var_2"])
-    assert pairs.loc[("x", "y"), "measure"] == "Pearson r" and pairs.loc[("x", "y"), "estimate"] > 0.9
-    assert pairs.loc[("x", "y"), "ci_low"] < pairs.loc[("x", "y"), "estimate"] < pairs.loc[("x", "y"), "ci_high"]
-    assert pairs.loc[("x", "b"), "measure"] == "point-biserial r" and pairs.loc[("x", "b"), "estimate"] > 0.6
-    assert pairs.loc[("x", "c"), "measure"] == "correlation ratio eta" and pairs.loc[("x", "c"), "estimate"] > 0.8
-    assert pairs.loc[("b", "c"), "measure"].startswith("Cramer") and pairs.loc[("b", "c"), "estimate"] > 0.5
+    assert (
+        pairs.loc[("x", "y"), "measure"] == "Pearson r" and pairs.loc[("x", "y"), "estimate"] > 0.9
+    )
+    assert (
+        pairs.loc[("x", "y"), "ci_low"]
+        < pairs.loc[("x", "y"), "estimate"]
+        < pairs.loc[("x", "y"), "ci_high"]
+    )
+    assert (
+        pairs.loc[("x", "b"), "measure"] == "point-biserial r"
+        and pairs.loc[("x", "b"), "estimate"] > 0.6
+    )
+    assert (
+        pairs.loc[("x", "c"), "measure"] == "correlation ratio eta"
+        and pairs.loc[("x", "c"), "estimate"] > 0.8
+    )
+    assert (
+        pairs.loc[("b", "c"), "measure"].startswith("Cramer")
+        and pairs.loc[("b", "c"), "estimate"] > 0.5
+    )
     assert np.isnan(pairs.loc[("x", "sparse"), "estimate"]) and pairs.loc[("x", "sparse"), "n"] < 10
     assert (res.pairs["p_adj"].dropna() >= res.pairs["p_raw"].dropna()).all()
     assert res.matrix.shape == (6, 6) and np.allclose(np.diag(res.matrix), 1.0)

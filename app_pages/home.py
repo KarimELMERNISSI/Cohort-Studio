@@ -1,12 +1,14 @@
 # pages/home.py
-from io import BytesIO
+import hashlib
 import json
 import time
+from io import BytesIO
 
 import duckdb
 import numpy as np
 import pandas as pd
 import streamlit as st
+
 import explore.corr_matrix as ecm
 from graph.builders.correlation import build_correlation_graph
 from graph.legend import render_legend
@@ -14,11 +16,10 @@ from graph.model import LayoutHint, RenderOptions
 from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
+from ui.components import confirm, no_dataset
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
-from ui.components import confirm, no_dataset
-import hashlib
 
 
 def _q(identifier) -> str:

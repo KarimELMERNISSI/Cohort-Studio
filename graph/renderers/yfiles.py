@@ -28,7 +28,15 @@ from collections.abc import Callable
 from typing import Any, NamedTuple
 
 from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
-from graph.model import GraphKind, GraphSpec, LayoutHint, LineStyle, NodeShape, RenderOptions, SelectionResult
+from graph.model import (
+    GraphKind,
+    GraphSpec,
+    LayoutHint,
+    LineStyle,
+    NodeShape,
+    RenderOptions,
+    SelectionResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +74,14 @@ DEFAULT_LAYOUT: dict[GraphKind, LayoutHint] = {
     GraphKind.DOCUMENT: LayoutHint.HIERARCHICAL,
     GraphKind.FORMULA: LayoutHint.HIERARCHICAL,
 }
-REQUIRED_SHOW_PARAMS = ("directed", "graph_layout", "sync_selection", "height", "key", "neighborhood")
+REQUIRED_SHOW_PARAMS = (
+    "directed",
+    "graph_layout",
+    "sync_selection",
+    "height",
+    "key",
+    "neighborhood",
+)
 REQUIRED_LABEL_FIELDS = ("text", "position", "wrapping", "color")
 
 
@@ -107,7 +122,10 @@ class YFilesGraphRenderer(BaseGraphRenderer):
         try:
             y = importlib.import_module("yfiles_graphs_for_streamlit")
         except ImportError:
-            return False, "yfiles-graphs-for-streamlit is not installed (uv sync --extra graph-yfiles)"
+            return (
+                False,
+                "yfiles-graphs-for-streamlit is not installed (uv sync --extra graph-yfiles)",
+            )
         problems: list[str] = []
         try:
             major = int(importlib.metadata.version("yfiles-graphs-for-streamlit").split(".")[0])
@@ -134,11 +152,24 @@ class YFilesGraphRenderer(BaseGraphRenderer):
         edges_by_id = {e.id: e for e in spec.edges}
 
         nodes = [
-            y.Node(id=n.id, properties={**n.data, "label": n.label or n.id, "category": n.category, "tooltip": n.tooltip})
+            y.Node(
+                id=n.id,
+                properties={
+                    **n.data,
+                    "label": n.label or n.id,
+                    "category": n.category,
+                    "tooltip": n.tooltip,
+                },
+            )
             for n in spec.nodes
         ]
         edges = [
-            y.Edge(start=e.source, end=e.target, id=e.id, properties={**e.data, "label": e.label, "category": e.category})
+            y.Edge(
+                start=e.source,
+                end=e.target,
+                id=e.id,
+                properties={**e.data, "label": e.label, "category": e.category},
+            )
             for e in spec.edges
         ]
 
@@ -155,7 +186,10 @@ class YFilesGraphRenderer(BaseGraphRenderer):
 
         def node_style(element):
             n = by_id[str(element["id"])]
-            return y.NodeStyle(color=n.style.color, shape=_member(y.NodeShape, SHAPE_MEMBERS[n.style.shape], "ELLIPSE"))
+            return y.NodeStyle(
+                color=n.style.color,
+                shape=_member(y.NodeShape, SHAPE_MEMBERS[n.style.shape], "ELLIPSE"),
+            )
 
         def node_type(element):
             return by_id[str(element["id"])].category or None
@@ -181,7 +215,9 @@ class YFilesGraphRenderer(BaseGraphRenderer):
             e = edges_by_id[str(element["id"])]
             if not options.show_edge_labels or not e.label:
                 return ""
-            return y.LabelStyle(text=e.label, font_size=10, color="#333333", background_color="#FFFFFFCC")
+            return y.LabelStyle(
+                text=e.label, font_size=10, color="#333333", background_color="#FFFFFFCC"
+            )
 
         def directed(element):
             return bool(edges_by_id[str(element["id"])].directed)
@@ -201,7 +237,9 @@ class YFilesGraphRenderer(BaseGraphRenderer):
         layout = options.layout or spec.layout
         if layout == LayoutHint.AUTO:
             layout = DEFAULT_LAYOUT.get(spec.kind, LayoutHint.ORGANIC)
-        global_directed = spec.directed and (all(e.directed for e in spec.edges) if spec.edges else True)
+        global_directed = spec.directed and (
+            all(e.directed for e in spec.edges) if spec.edges else True
+        )
         overrides = options.renderer_overrides.get(self.name, {})
         show_kwargs: dict[str, Any] = {
             "directed": global_directed,
@@ -223,7 +261,9 @@ class YFilesGraphRenderer(BaseGraphRenderer):
         try:
             y = importlib.import_module("yfiles_graphs_for_streamlit")
             payload = self.translate(spec, options)
-            widget = y.StreamlitGraphWidget(nodes=payload.nodes, edges=payload.edges, **payload.mappings)
+            widget = y.StreamlitGraphWidget(
+                nodes=payload.nodes, edges=payload.edges, **payload.mappings
+            )
             selected_nodes, selected_edges = widget.show(**payload.show_kwargs)
         except RenderError:
             raise

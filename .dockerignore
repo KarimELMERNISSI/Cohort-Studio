@@ -1,31 +1,39 @@
-# Version control
+# Version control and CI
 .git
 .gitignore
+.github
+.pre-commit-config.yaml
 
-# Python cache
-__pycache__
+# Python caches and environments
+__pycache__/
 *.py[cod]
-*$py.class
-*.pyc
-
-# Virtual environments
+.venv/
 venv/
 env/
-.env
+.coverage
+coverage.xml
+.pytest_cache/
+.ruff_cache/
 
-# Data and Configuration (Mount these as volumes!)
+# Secrets and local-only material (never baked into an image)
+.env
+.streamlit/secrets.toml
+
+# Data, configuration and documents are mounted as volumes
 data/
 config/
+DOCUMENTS/
+*.duckdb
 
-# Local Dev Scripts
+# Development-only material
 dev_scripts/
 environments/
-
-# Temp files
+tests/
+docs/
+documentation/legacy/
+scratch*/
 *.log
 *.tmp
 .DS_Store
-
-# IDE settings
 .vscode/
 .idea/

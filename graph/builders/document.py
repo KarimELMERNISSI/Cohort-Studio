@@ -21,7 +21,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from graph.model import EdgeSpec, GraphKind, GraphSpec, LayoutHint, NodeSpec, edge_id
 from graph.palette import edge_style_for, legend_entries, node_style_for
 
-ENTITY_TYPES: tuple[str, ...] = ("Concept", "Metric", "Finding", "Disease", "Treatment", "Method", "Other")
+ENTITY_TYPES: tuple[str, ...] = (
+    "Concept",
+    "Metric",
+    "Finding",
+    "Disease",
+    "Treatment",
+    "Method",
+    "Other",
+)
 INFERRED = "Inferred"
 DEFAULT_RELATION = "relates to"
 
@@ -105,8 +113,12 @@ class DocumentGraph(BaseModel):
             if not _as_text(raw.get("source")).strip() or not _as_text(raw.get("target")).strip():
                 continue
             edges.append(DocEdge.model_validate(dict(raw)))
-        formulas = [dict(f) for f in (graph_json.get("formulas", []) or []) if isinstance(f, Mapping)]
-        summaries = [dict(s) for s in (graph_json.get("summaries", []) or []) if isinstance(s, Mapping)]
+        formulas = [
+            dict(f) for f in (graph_json.get("formulas", []) or []) if isinstance(f, Mapping)
+        ]
+        summaries = [
+            dict(s) for s in (graph_json.get("summaries", []) or []) if isinstance(s, Mapping)
+        ]
         return cls(nodes=nodes, edges=edges, formulas=formulas, summaries=summaries)
 
     def to_json_dict(self) -> dict[str, Any]:
@@ -158,7 +170,9 @@ def resolve_endpoint(name: str, aliases: Mapping[str, str], *, cutoff: float = 0
     return aliases[match[0]] if match else _as_text(name).strip()
 
 
-def merge_document_graphs(per_document: list[tuple[str, Mapping[str, Any] | DocumentGraph]], *, cutoff: float = 0.85) -> DocumentGraph:
+def merge_document_graphs(
+    per_document: list[tuple[str, Mapping[str, Any] | DocumentGraph]], *, cutoff: float = 0.85
+) -> DocumentGraph:
     """Merge per-document graphs: unify entities, accumulate citations, remap and de-duplicate edges."""
     merged: dict[str, DocNode] = {}
     key_to_merged: dict[str, str] = {}
@@ -183,7 +197,12 @@ def merge_document_graphs(per_document: list[tuple[str, Mapping[str, Any] | Docu
                 if not citation.doc:
                     citation.doc = doc_name
             if match_key is None:
-                merged[key] = DocNode(id=node.id, type=node.type or "Concept", description=node.description, citations=citations)
+                merged[key] = DocNode(
+                    id=node.id,
+                    type=node.type or "Concept",
+                    description=node.description,
+                    citations=citations,
+                )
                 key_to_merged[key] = key
             else:
                 existing = merged[key_to_merged[match_key]]
@@ -211,11 +230,17 @@ def merge_document_graphs(per_document: list[tuple[str, Mapping[str, Any] | Docu
         if signature in seen or canonical_key(source) == canonical_key(target):
             continue
         seen.add(signature)
-        edges.append(DocEdge(source=source, target=target, relation=relation, description=edge.description))
-    return DocumentGraph(nodes=list(merged.values()), edges=edges, formulas=formulas, summaries=summaries)
+        edges.append(
+            DocEdge(source=source, target=target, relation=relation, description=edge.description)
+        )
+    return DocumentGraph(
+        nodes=list(merged.values()), edges=edges, formulas=formulas, summaries=summaries
+    )
 
 
-def filter_by_documents(graph: Mapping[str, Any] | DocumentGraph | None, visible_docs: Collection[str]) -> DocumentGraph:
+def filter_by_documents(
+    graph: Mapping[str, Any] | DocumentGraph | None, visible_docs: Collection[str]
+) -> DocumentGraph:
     """Keep the nodes cited by at least one visible document, the edges between them, and their formulas/summaries."""
     parsed = DocumentGraph.parse(graph)
     visible = set(visible_docs or [])
@@ -227,7 +252,11 @@ def filter_by_documents(graph: Mapping[str, Any] | DocumentGraph | None, visible
         if relevant:
             nodes.append(node.model_copy(update={"citations": relevant}))
     keep = {canonical_key(n.id) for n in nodes}
-    edges = [e for e in parsed.edges if canonical_key(e.source) in keep and canonical_key(e.target) in keep]
+    edges = [
+        e
+        for e in parsed.edges
+        if canonical_key(e.source) in keep and canonical_key(e.target) in keep
+    ]
     formulas = [f for f in parsed.formulas if f.get("doc") in visible]
     summaries = [s for s in parsed.summaries if s.get("doc") in visible]
     return DocumentGraph(nodes=nodes, edges=edges, formulas=formulas, summaries=summaries)
@@ -257,7 +286,10 @@ def build_document_graph(
         category = normalize_entity_type(node.type)
         nodes.append(
             NodeSpec(
-                id=node.id, label=node.id, category=category, style=node_style_for(kind, category, theme),
+                id=node.id,
+                label=node.id,
+                category=category,
+                style=node_style_for(kind, category, theme),
                 tooltip=node.description,
                 data={
                     "type": node.type or category,
@@ -278,26 +310,49 @@ def build_document_graph(
         for endpoint in (source, target):
             if endpoint not in seen_ids and endpoint not in inferred:
                 inferred[endpoint] = NodeSpec(
-                    id=endpoint, label=endpoint, category=INFERRED, style=node_style_for(kind, INFERRED, theme),
+                    id=endpoint,
+                    label=endpoint,
+                    category=INFERRED,
+                    style=node_style_for(kind, INFERRED, theme),
                     tooltip="Mentioned only in a relation; no entity description was extracted.",
                     data={"type": INFERRED, "description": "", "citations": [], "inferred": True},
                 )
         if source == target:
             continue
         relation = edge.relation or DEFAULT_RELATION
-        eid = edge_id(f"rel:{re.sub(r'[^a-z0-9]+', '_', relation.lower()).strip('_') or 'relates_to'}", source, target)
+        eid = edge_id(
+            f"rel:{re.sub(r'[^a-z0-9]+', '_', relation.lower()).strip('_') or 'relates_to'}",
+            source,
+            target,
+        )
         if eid in edges:
             continue
         edges[eid] = EdgeSpec(
-            id=eid, source=source, target=target, label=relation, category=relation, directed=True,
-            style=edge_style_for(kind, "relation", theme), tooltip=edge.description or relation,
+            id=eid,
+            source=source,
+            target=target,
+            label=relation,
+            category=relation,
+            directed=True,
+            style=edge_style_for(kind, "relation", theme),
+            tooltip=edge.description or relation,
             data={"relation": relation, "description": edge.description},
         )
     all_nodes = tuple(nodes) + tuple(inferred[k] for k in sorted(inferred))
     spec = GraphSpec(
-        kind=kind, title=title, nodes=all_nodes, edges=tuple(edges.values()), directed=True,
-        layout=LayoutHint.HIERARCHICAL, legend=legend_entries(kind, theme),
-        meta={"n_entities": len(nodes), "n_inferred": len(inferred), "n_relations": len(edges), "focus": focus},
+        kind=kind,
+        title=title,
+        nodes=all_nodes,
+        edges=tuple(edges.values()),
+        directed=True,
+        layout=LayoutHint.HIERARCHICAL,
+        legend=legend_entries(kind, theme),
+        meta={
+            "n_entities": len(nodes),
+            "n_inferred": len(inferred),
+            "n_relations": len(edges),
+            "focus": focus,
+        },
     )
     if focus:
         focus_id = resolve_endpoint(focus, aliases)

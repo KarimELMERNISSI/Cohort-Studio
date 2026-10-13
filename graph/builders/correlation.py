@@ -25,7 +25,12 @@ from explore.correlation_strength import (
 from graph.model import EdgeSpec, GraphKind, GraphSpec, LayoutHint, LineStyle, NodeSpec, edge_id
 from graph.palette import edge_style_for, legend_entries, node_style_for
 
-_LEGACY_DASH = {LineStyle.SOLID: "solid", LineStyle.DASHED: "dashed", LineStyle.DOTTED: "dotted", LineStyle.DASH_DOT: "dashed"}
+_LEGACY_DASH = {
+    LineStyle.SOLID: "solid",
+    LineStyle.DASHED: "dashed",
+    LineStyle.DOTTED: "dotted",
+    LineStyle.DASH_DOT: "dashed",
+}
 
 
 def build_correlation_graph(
@@ -61,8 +66,14 @@ def build_correlation_graph(
     }
 
     if corr_matrix is None or corr_matrix.empty:
-        return GraphSpec(kind=kind, title=title, directed=False, layout=LayoutHint.ORGANIC,
-                         legend=legend_entries(kind, theme), meta=meta)
+        return GraphSpec(
+            kind=kind,
+            title=title,
+            directed=False,
+            layout=LayoutHint.ORGANIC,
+            legend=legend_entries(kind, theme),
+            meta=meta,
+        )
 
     rows = [str(r) for r in corr_matrix.index]
     cols = [str(c) for c in corr_matrix.columns]
@@ -100,7 +111,12 @@ def build_correlation_graph(
                     style=edge_style_for(kind, category, theme),
                     weight=min(1.0, magnitude),
                     tooltip=f"{pair[0]} - {pair[1]}: r = {value:.3f} ({strength.value})",
-                    data={"r": value, "abs_r": magnitude, "strength": strength.value, "method": method_enum.value},
+                    data={
+                        "r": value,
+                        "abs_r": magnitude,
+                        "strength": strength.value,
+                        "method": method_enum.value,
+                    },
                 )
             )
 
@@ -141,7 +157,10 @@ def build_correlation_graph(
                 style=node_style_for(kind, node_category, theme),
                 weight=round(weight, 6),
                 tooltip=f"{node_id}: cumulative |r| = {heat[node_id]:.2f}",
-                data={"degree": sum(1 for e in visible_edges if node_id in (e.source, e.target)), "heat": heat[node_id]},
+                data={
+                    "degree": sum(1 for e in visible_edges if node_id in (e.source, e.target)),
+                    "heat": heat[node_id],
+                },
             )
         )
 

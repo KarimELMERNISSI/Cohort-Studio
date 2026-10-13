@@ -45,6 +45,7 @@ from graph.builders.taxonomy import (
 )
 from graph.model import LayoutHint, RenderOptions
 from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
+from ui.components import no_dataset
 
 # Lazy-compatible imports for clustering (module itself is light)
 from utils.clustering_utils import (
@@ -58,7 +59,6 @@ from utils.clustering_utils import (
     run_tsne,
     run_umap,
 )
-from ui.components import no_dataset
 
 # ==========================================
 # ==========================================

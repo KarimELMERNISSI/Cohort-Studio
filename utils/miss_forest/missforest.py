@@ -9,6 +9,7 @@ from lightgbm import LGBMClassifier, LGBMRegressor
 from sklearn.base import BaseEstimator
 from tqdm import tqdm
 
+from biostats._types import RANDOM_STATE
 from utils.miss_forest._errors import NotFittedError
 from utils.miss_forest._label_encoding import _label_encoding, _rev_label_encoding
 from utils.miss_forest._metrics import nrmse, pfc
@@ -16,8 +17,6 @@ from utils.miss_forest._validate import (
     _is_estimator,
     _validate_single_datatype_features,
 )
-
-from biostats._types import RANDOM_STATE
 
 # Deterministic learners (audit S16): seeded and single-threaded histogram construction
 lgbm_clf = LGBMClassifier(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True)

@@ -11,8 +11,9 @@ import utils.export_utils as eu
 import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from manage.db_manager import DBManager
-from utils.data_analyzer import DataAnalyzer
 from ui.components import no_dataset
+from utils.data_analyzer import DataAnalyzer
+
 
 def app():
     # Initialize DB Manager

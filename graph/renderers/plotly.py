@@ -145,7 +145,9 @@ def compute_positions(spec: GraphSpec, layout: LayoutHint, focus: str | None = N
         positions = nx.circular_layout(graph)
     elif layout == LayoutHint.RADIAL:
         centre = focus if focus in graph else max(graph.degree, key=lambda item: item[1])[0]
-        shells: list[list[str]] = [list(layer_nodes) for layer_nodes in nx.bfs_layers(graph, centre)]
+        shells: list[list[str]] = [
+            list(layer_nodes) for layer_nodes in nx.bfs_layers(graph, centre)
+        ]
         placed = {node for shell in shells for node in shell}
         remaining = [node for node in graph.nodes if node not in placed]
         if remaining:
@@ -221,8 +223,14 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 gx.extend([x0, x1, None])
                 gy.extend([y0, y1, None])
             fig.add_trace(
-                go.Scatter(x=gx, y=gy, mode="lines", line=dict(color=colour, width=width, dash=dash),
-                           hoverinfo="none", showlegend=False)
+                go.Scatter(
+                    x=gx,
+                    y=gy,
+                    mode="lines",
+                    line=dict(color=colour, width=width, dash=dash),
+                    hoverinfo="none",
+                    showlegend=False,
+                )
             )
 
         # Arrow heads for directed edges (drawn as annotations ending at the node boundary).
@@ -237,9 +245,21 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 continue
             ex, ey = x1 - dx / length * shorten, y1 - dy / length * shorten
             fig.add_annotation(
-                x=ex, y=ey, ax=x0, ay=y0, xref="x", yref="y", axref="x", ayref="y",
-                showarrow=True, arrowhead=2, arrowsize=1.2, arrowwidth=max(1.0, float(e.style.width) * 0.6),
-                arrowcolor=e.style.color or "#999999", text="", opacity=0.95,
+                x=ex,
+                y=ey,
+                ax=x0,
+                ay=y0,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1.2,
+                arrowwidth=max(1.0, float(e.style.width) * 0.6),
+                arrowcolor=e.style.color or "#999999",
+                text="",
+                opacity=0.95,
             )
 
         # Edge midpoints: hover, selection and labels.
@@ -251,20 +271,35 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 mid_x.append((x0 + x1) / 2.0)
                 mid_y.append((y0 + y1) / 2.0)
                 labels.append(e.label if options.show_edge_labels else "")
-                hovers.append(e.tooltip or f"{e.source} -> {e.target}" if e.directed else e.tooltip or f"{e.source} - {e.target}")
+                hovers.append(
+                    e.tooltip or f"{e.source} -> {e.target}"
+                    if e.directed
+                    else e.tooltip or f"{e.source} - {e.target}"
+                )
                 ids.append(e.id)
             fig.add_trace(
                 go.Scatter(
-                    x=mid_x, y=mid_y, mode="markers+text", text=labels, textposition="middle center",
-                    textfont=dict(size=10, color=text_color), marker=dict(size=9, opacity=0.0),
-                    hovertext=hovers, hoverinfo="text", customdata=ids, showlegend=False, name="edges",
+                    x=mid_x,
+                    y=mid_y,
+                    mode="markers+text",
+                    text=labels,
+                    textposition="middle center",
+                    textfont=dict(size=10, color=text_color),
+                    marker=dict(size=9, opacity=0.0),
+                    hovertext=hovers,
+                    hoverinfo="text",
+                    customdata=ids,
+                    showlegend=False,
+                    name="edges",
                 )
             )
             edge_curve = len(fig.data) - 1
 
         # Nodes.
         if spec.nodes:
-            nx_, ny_, labels, hovers, ids, colours, symbols, sizes, borders, weights = ([] for _ in range(10))
+            nx_, ny_, labels, hovers, ids, colours, symbols, sizes, borders, weights = (
+                [] for _ in range(10)
+            )
             for n in spec.nodes:
                 x, y = positions[n.id]
                 nx_.append(x)
@@ -275,19 +310,38 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 colours.append(n.style.color or "#87CEEB")
                 symbols.append(SYMBOL_MAP.get(n.style.shape, "circle"))
                 sizes.append(NODE_BASE_SIZE * float(n.size or 1.0))
-                borders.append(n.style.border_color or ("#FFFFFF" if theme == "dark" else "#333333"))
+                borders.append(
+                    n.style.border_color or ("#FFFFFF" if theme == "dark" else "#333333")
+                )
                 weights.append(float(n.weight) if n.weight is not None else 0.0)
-            marker: dict[str, Any] = dict(size=sizes, symbol=symbols, line=dict(width=1.5, color=borders))
+            marker: dict[str, Any] = dict(
+                size=sizes, symbol=symbols, line=dict(width=1.5, color=borders)
+            )
             if options.heat and any(w > 0 for w in weights):
-                marker.update(color=weights, colorscale="YlOrRd", cmin=0.0, cmax=1.0, showscale=True,
-                              colorbar=dict(title="Heat", thickness=12, len=0.5))
+                marker.update(
+                    color=weights,
+                    colorscale="YlOrRd",
+                    cmin=0.0,
+                    cmax=1.0,
+                    showscale=True,
+                    colorbar=dict(title="Heat", thickness=12, len=0.5),
+                )
             else:
                 marker.update(color=colours)
             fig.add_trace(
                 go.Scatter(
-                    x=nx_, y=ny_, mode="markers+text", text=labels, textposition="top center",
-                    textfont=dict(size=11, color=text_color), marker=marker, hovertext=hovers,
-                    hoverinfo="text", customdata=ids, showlegend=False, name="nodes",
+                    x=nx_,
+                    y=ny_,
+                    mode="markers+text",
+                    text=labels,
+                    textposition="top center",
+                    textfont=dict(size=11, color=text_color),
+                    marker=marker,
+                    hovertext=hovers,
+                    hoverinfo="text",
+                    customdata=ids,
+                    showlegend=False,
+                    name="nodes",
                 )
             )
             node_curve = len(fig.data) - 1
@@ -303,7 +357,9 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(visible=False, showgrid=False, zeroline=False),
-            yaxis=dict(visible=False, showgrid=False, zeroline=False, scaleanchor="x", scaleratio=1),
+            yaxis=dict(
+                visible=False, showgrid=False, zeroline=False, scaleanchor="x", scaleratio=1
+            ),
             uirevision=spec.fingerprint(),
         )
         return PlotlyPayload(fig, node_curve, edge_curve, positions, layout)
@@ -348,7 +404,11 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 node_ids.append(str(custom))
             elif curve == payload.edge_curve:
                 edge_ids.append(str(custom))
-        return SelectionResult(node_ids=tuple(dict.fromkeys(node_ids)), edge_ids=tuple(dict.fromkeys(edge_ids)), renderer=self.name)
+        return SelectionResult(
+            node_ids=tuple(dict.fromkeys(node_ids)),
+            edge_ids=tuple(dict.fromkeys(edge_ids)),
+            renderer=self.name,
+        )
 
     def export_html(self, spec: GraphSpec, options: RenderOptions) -> bytes | None:
         payload = self.translate(spec, options)

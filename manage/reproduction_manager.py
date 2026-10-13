@@ -116,7 +116,9 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         ), None
 
     if func_name == "imputation":
-        from app_pages.data_enrichment import apply_imputer  # noqa: PLC0415 - page module, imported lazily (layering debt)
+        from app_pages.data_enrichment import (
+            apply_imputer,
+        )
 
         new_df, _ = apply_imputer(
             data=df,
@@ -138,7 +140,9 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         return pd.concat([df, result_df], axis=1), None
 
     if func_name == "variable_computation":
-        from app_pages.data_enrichment import evaluate_formula_safely  # noqa: PLC0415 - lazily imported page helper
+        from app_pages.data_enrichment import (
+            evaluate_formula_safely,
+        )
 
         success, msg, new_df = evaluate_formula_safely(params.get("formula"), params.get("variable_name"), df)
         if not success:

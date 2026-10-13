@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,12 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     filename = os.path.basename(original_path)
     
     if search_dirs is None:
-        search_dirs = [str(p) for p in scope.search_dirs()] if scope else ["data", "data/uploads", "data/traces"]
+        if scope:
+            search_dirs = [str(p) for p in scope.search_dirs()]
+        else:
+            from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
+
+            search_dirs = [get_data_root(), get_uploads_dir(), get_traces_dir()]
 
     for directory in search_dirs:
         candidate_path = os.path.join(directory, filename)

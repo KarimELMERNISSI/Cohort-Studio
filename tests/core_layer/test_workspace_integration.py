@@ -76,19 +76,34 @@ def test_login_lockout_after_repeated_failures(root: Path, monkeypatch: pytest.M
     assert not result.success and "locked" in result.message.lower()
 
     # Even the right password is refused while the lock is active.
-    result = provider.authenticate(UserCredentials(username="carol", password="correct-horse-battery"))
+    result = provider.authenticate(
+        UserCredentials(username="carol", password="correct-horse-battery")
+    )
     assert not result.success and "locked" in result.message.lower()
 
 
-def test_successful_login_resets_the_failure_counter(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_successful_login_resets_the_failure_counter(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(local_duckdb, "MAX_FAILED_LOGINS", 3)
     provider = local_duckdb.LocalDuckDBIAMProvider()
     assert provider.create_user("dave", "correct-horse-battery", auto_activate=True)[0]
     for _ in range(2):
         provider.authenticate(UserCredentials(username="dave", password="wrong"))
-    assert provider.authenticate(UserCredentials(username="dave", password="correct-horse-battery")).success
+    assert provider.authenticate(
+        UserCredentials(username="dave", password="correct-horse-battery")
+    ).success
     for _ in range(2):
         provider.authenticate(UserCredentials(username="dave", password="wrong"))
     # Two more failures after a success do not lock: the counter restarted.
-    assert "Invalid" in provider.authenticate(UserCredentials(username="dave", password="wrong")).message or True
-    assert provider.authenticate(UserCredentials(username="dave", password="correct-horse-battery")).success is False
+    assert (
+        "Invalid"
+        in provider.authenticate(UserCredentials(username="dave", password="wrong")).message
+        or True
+    )
+    assert (
+        provider.authenticate(
+            UserCredentials(username="dave", password="correct-horse-battery")
+        ).success
+        is False
+    )

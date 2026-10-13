@@ -108,7 +108,11 @@ def normalize_node_type(raw: str | VariableNodeType | None) -> VariableNodeType:
         if key == member.value.lower():
             return member
     if "external" in key:
-        return VariableNodeType.DERIVED_EXTERNAL if "derived" in key else VariableNodeType.INPUT_EXTERNAL
+        return (
+            VariableNodeType.DERIVED_EXTERNAL
+            if "derived" in key
+            else VariableNodeType.INPUT_EXTERNAL
+        )
     if "derived" in key:
         return VariableNodeType.DERIVED_INTERNAL
     return VariableNodeType.INPUT_INTERNAL
@@ -123,7 +127,7 @@ def make_formula_id(key: str) -> str:
 def parse_formula_id(node_id: str) -> str | None:
     """Registry key for a formula node id (strips exactly one prefix), else ``None``."""
     node_id = str(node_id)
-    return node_id[len(FORMULA_PREFIX):] if node_id.startswith(FORMULA_PREFIX) else None
+    return node_id[len(FORMULA_PREFIX) :] if node_id.startswith(FORMULA_PREFIX) else None
 
 
 def make_category_id(name: str) -> str:
@@ -137,11 +141,13 @@ def _slug(text: str) -> str:
 def _json_safe(value: Any) -> Any:
     try:
         return json.loads(json.dumps(value, default=str))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return str(value)
 
 
-def _variable_payload(var_id: str, attributes: Mapping[str, Any], node_type: VariableNodeType) -> dict[str, Any]:
+def _variable_payload(
+    var_id: str, attributes: Mapping[str, Any], node_type: VariableNodeType
+) -> dict[str, Any]:
     return _json_safe(
         {
             "node_type": node_type.value,
@@ -166,8 +172,14 @@ class _Draft:
         self.edges: dict[str, EdgeSpec] = {}
         self.restored_hidden = 0
 
-    def add_node(self, node_id: str, label: str, node_type: VariableNodeType, description: str = "",
-                 data: dict[str, Any] | None = None) -> None:
+    def add_node(
+        self,
+        node_id: str,
+        label: str,
+        node_type: VariableNodeType,
+        description: str = "",
+        data: dict[str, Any] | None = None,
+    ) -> None:
         node_id = str(node_id)
         if node_id in self.nodes:
             return
@@ -183,39 +195,73 @@ class _Draft:
             self.nodes[node_id]["type"] = node_type
             self.nodes[node_id]["data"]["node_type"] = node_type.value
 
-    def add_edge(self, relation: Relation, source: str, target: str, *, directed: bool, label: str = "",
-                 data: dict[str, Any] | None = None) -> None:
+    def add_edge(
+        self,
+        relation: Relation,
+        source: str,
+        target: str,
+        *,
+        directed: bool,
+        label: str = "",
+        data: dict[str, Any] | None = None,
+    ) -> None:
         if source == target or source not in self.nodes or target not in self.nodes:
             return
         eid = edge_id(relation.value, source, target, undirected=not directed)
         if eid in self.edges:
             return
         self.edges[eid] = EdgeSpec(
-            id=eid, source=source if directed else min(source, target), target=target if directed else max(source, target),
-            label=label, category=relation.value, directed=directed,
-            style=edge_style_for(self.kind, relation.value, self.theme), data=dict(data or {}),
+            id=eid,
+            source=source if directed else min(source, target),
+            target=target if directed else max(source, target),
+            label=label,
+            category=relation.value,
+            directed=directed,
+            style=edge_style_for(self.kind, relation.value, self.theme),
+            data=dict(data or {}),
         )
 
     def finalize(self, title: str, meta: dict[str, Any]) -> GraphSpec:
-        categories = sorted((nid for nid, n in self.nodes.items() if n["type"] is VariableNodeType.CATEGORY),
-                            key=lambda nid: self.nodes[nid]["label"].lower())
-        formulas = sorted(nid for nid, n in self.nodes.items() if n["type"] is VariableNodeType.FORMULA)
-        variables = [nid for nid, n in self.nodes.items()
-                     if n["type"] not in (VariableNodeType.CATEGORY, VariableNodeType.FORMULA)]
+        categories = sorted(
+            (nid for nid, n in self.nodes.items() if n["type"] is VariableNodeType.CATEGORY),
+            key=lambda nid: self.nodes[nid]["label"].lower(),
+        )
+        formulas = sorted(
+            nid for nid, n in self.nodes.items() if n["type"] is VariableNodeType.FORMULA
+        )
+        variables = [
+            nid
+            for nid, n in self.nodes.items()
+            if n["type"] not in (VariableNodeType.CATEGORY, VariableNodeType.FORMULA)
+        ]
         ordered = categories + variables + formulas
         nodes = []
         for nid in ordered:
             n = self.nodes[nid]
             role = ROLE_FOR[n["type"]]
             nodes.append(
-                NodeSpec(id=nid, label=n["label"], category=role, style=node_style_for(self.kind, role, self.theme),
-                         tooltip=n["tooltip"], data=n["data"])
+                NodeSpec(
+                    id=nid,
+                    label=n["label"],
+                    category=role,
+                    style=node_style_for(self.kind, role, self.theme),
+                    tooltip=n["tooltip"],
+                    data=n["data"],
+                )
             )
         edges = sorted(self.edges.values(), key=lambda e: (e.category, e.source, e.target))
         meta = dict(meta)
         meta["restored_hidden_nodes"] = self.restored_hidden
-        return GraphSpec(kind=self.kind, title=title, nodes=tuple(nodes), edges=tuple(edges), directed=True,
-                         layout=LayoutHint.HIERARCHICAL, legend=legend_entries(self.kind, self.theme), meta=meta)
+        return GraphSpec(
+            kind=self.kind,
+            title=title,
+            nodes=tuple(nodes),
+            edges=tuple(edges),
+            directed=True,
+            layout=LayoutHint.HIERARCHICAL,
+            legend=legend_entries(self.kind, self.theme),
+            meta=meta,
+        )
 
 
 def build_taxonomy_graph(
@@ -271,23 +317,42 @@ def build_taxonomy_graph(
         if query is None:
             return True
         haystack = " ".join(
-            str(part) for part in (f_data.get("name", f_id), f_data.get("description", ""),
-                                   f_data.get("input_variables", []), f_data.get("output_variable", ""))
+            str(part)
+            for part in (
+                f_data.get("name", f_id),
+                f_data.get("description", ""),
+                f_data.get("input_variables", []),
+                f_data.get("output_variable", ""),
+            )
         ).lower()
         return query in haystack
 
     def add_category_link(var_id: str, attrs: Mapping[str, Any]) -> None:
         category = str((attrs or {}).get("category") or UNCATEGORIZED)
         cat_id = make_category_id(category)
-        draft.add_node(cat_id, category, VariableNodeType.CATEGORY, "Data category",
-                       {"node_type": VariableNodeType.CATEGORY.value, "name": category})
-        draft.add_edge(Relation.CATEGORY_MEMBER, cat_id, var_id, directed=False, data={"category": category})
+        draft.add_node(
+            cat_id,
+            category,
+            VariableNodeType.CATEGORY,
+            "Data category",
+            {"node_type": VariableNodeType.CATEGORY.value, "name": category},
+        )
+        draft.add_edge(
+            Relation.CATEGORY_MEMBER, cat_id, var_id, directed=False, data={"category": category}
+        )
 
-    def add_variable(var_id: str, attrs: Mapping[str, Any], forced_type: VariableNodeType | None = None) -> None:
+    def add_variable(
+        var_id: str, attrs: Mapping[str, Any], forced_type: VariableNodeType | None = None
+    ) -> None:
         attrs = attrs or {}
         node_type = forced_type or normalize_node_type(attrs.get("node_type"))
-        draft.add_node(var_id, attrs.get("standard_name", var_id), node_type, attrs.get("description", ""),
-                       _variable_payload(var_id, attrs, node_type))
+        draft.add_node(
+            var_id,
+            attrs.get("standard_name", var_id),
+            node_type,
+            attrs.get("description", ""),
+            _variable_payload(var_id, attrs, node_type),
+        )
         add_category_link(var_id, attrs)
 
     allowed: set[str] | None = None
@@ -295,7 +360,9 @@ def build_taxonomy_graph(
         allowed = set()
         for f_id, f_data in formulas.items():
             if formula_matches(str(f_id), f_data or {}):
-                allowed.update(resolve_id(i) for i in (f_data or {}).get("input_variables", []) or [])
+                allowed.update(
+                    resolve_id(i) for i in (f_data or {}).get("input_variables", []) or []
+                )
                 out = (f_data or {}).get("output_variable")
                 if out:
                     allowed.add(resolve_id(out))
@@ -313,13 +380,25 @@ def build_taxonomy_graph(
             return
         if resolved in full_taxonomy:
             attrs = full_taxonomy[resolved] or {}
-            forced = VariableNodeType.DERIVED_INTERNAL if as_output and normalize_node_type(attrs.get("node_type")) \
-                is not VariableNodeType.OUTCOME else None
+            forced = (
+                VariableNodeType.DERIVED_INTERNAL
+                if as_output
+                and normalize_node_type(attrs.get("node_type")) is not VariableNodeType.OUTCOME
+                else None
+            )
             add_variable(resolved, attrs, forced_type=forced)
             draft.restored_hidden += 1
         else:
-            node_type = VariableNodeType.DERIVED_EXTERNAL if as_output else VariableNodeType.INPUT_EXTERNAL
-            draft.add_node(resolved, resolved, node_type, "", {"node_type": node_type.value, "original_name": resolved})
+            node_type = (
+                VariableNodeType.DERIVED_EXTERNAL if as_output else VariableNodeType.INPUT_EXTERNAL
+            )
+            draft.add_node(
+                resolved,
+                resolved,
+                node_type,
+                "",
+                {"node_type": node_type.value, "original_name": resolved},
+            )
 
     # 2. formulas: structured registry
     if formulas:
@@ -329,7 +408,9 @@ def build_taxonomy_graph(
             if not formula_matches(f_key, f_data):
                 continue
             inputs = [resolve_id(i) for i in (f_data.get("input_variables") or [])]
-            output = resolve_id(f_data["output_variable"]) if f_data.get("output_variable") else None
+            output = (
+                resolve_id(f_data["output_variable"]) if f_data.get("output_variable") else None
+            )
             relevant = (output in taxonomy) if output else False
             relevant = relevant or any(i in taxonomy for i in inputs)
             if not relevant:
@@ -337,30 +418,52 @@ def build_taxonomy_graph(
             formula_id = make_formula_id(f_key)
             registry_key = parse_formula_id(formula_id) or f_key
             draft.add_node(
-                formula_id, f_data.get("name", f_key), VariableNodeType.FORMULA, f_data.get("description", ""),
-                _json_safe({
-                    "node_type": VariableNodeType.FORMULA.value,
-                    "formula_key": f_key,
-                    "registry_key": registry_key,
-                    "name": f_data.get("name", f_key),
-                    "description": f_data.get("description", ""),
-                    "expression": f_data.get("expression", f_data.get("formula", "")),
-                    "markdown_formula": f_data.get("markdown_formula", ""),
-                    "input_variables": list(f_data.get("input_variables") or []),
-                    "output_variable": f_data.get("output_variable", ""),
-                }),
+                formula_id,
+                f_data.get("name", f_key),
+                VariableNodeType.FORMULA,
+                f_data.get("description", ""),
+                _json_safe(
+                    {
+                        "node_type": VariableNodeType.FORMULA.value,
+                        "formula_key": f_key,
+                        "registry_key": registry_key,
+                        "name": f_data.get("name", f_key),
+                        "description": f_data.get("description", ""),
+                        "expression": f_data.get("expression", f_data.get("formula", "")),
+                        "markdown_formula": f_data.get("markdown_formula", ""),
+                        "input_variables": list(f_data.get("input_variables") or []),
+                        "output_variable": f_data.get("output_variable", ""),
+                    }
+                ),
             )
             for inp in inputs:
                 ensure_variable(inp, as_output=False)
-                draft.add_edge(Relation.INPUT, inp, formula_id, directed=True, label="input", data={"formula_key": f_key})
+                draft.add_edge(
+                    Relation.INPUT,
+                    inp,
+                    formula_id,
+                    directed=True,
+                    label="input",
+                    data={"formula_key": f_key},
+                )
             if output:
                 ensure_variable(output, as_output=True)
                 current = draft.nodes[output]["type"]
                 if current in (VariableNodeType.INPUT_INTERNAL, VariableNodeType.DERIVED_INTERNAL):
                     draft.set_type(output, VariableNodeType.DERIVED_INTERNAL)
-                elif current in (VariableNodeType.INPUT_EXTERNAL, VariableNodeType.DERIVED_EXTERNAL):
+                elif current in (
+                    VariableNodeType.INPUT_EXTERNAL,
+                    VariableNodeType.DERIVED_EXTERNAL,
+                ):
                     draft.set_type(output, VariableNodeType.DERIVED_EXTERNAL)
-                draft.add_edge(Relation.YIELDS, formula_id, output, directed=True, label="yields", data={"formula_key": f_key})
+                draft.add_edge(
+                    Relation.YIELDS,
+                    formula_id,
+                    output,
+                    directed=True,
+                    label="yields",
+                    data={"formula_key": f_key},
+                )
     else:
         # 2b. legacy free-text formulas ("Parameter in: X" / "Result of: Y")
         for var_id, attrs in taxonomy.items():
@@ -379,14 +482,25 @@ def build_taxonomy_graph(
                     continue
                 form_name = match.group(1).strip()
                 formula_id = make_formula_id(_slug(form_name))
-                draft.add_node(formula_id, form_name, VariableNodeType.FORMULA, text,
-                               {"node_type": VariableNodeType.FORMULA.value, "name": form_name, "legacy_text": text})
+                draft.add_node(
+                    formula_id,
+                    form_name,
+                    VariableNodeType.FORMULA,
+                    text,
+                    {
+                        "node_type": VariableNodeType.FORMULA.value,
+                        "name": form_name,
+                        "legacy_text": text,
+                    },
+                )
                 if match_input:
                     draft.add_edge(Relation.INPUT, var_id, formula_id, directed=True, label="input")
                 else:
                     if draft.nodes[var_id]["type"] is VariableNodeType.INPUT_INTERNAL:
                         draft.set_type(var_id, VariableNodeType.DERIVED_INTERNAL)
-                    draft.add_edge(Relation.YIELDS, formula_id, var_id, directed=True, label="yields")
+                    draft.add_edge(
+                        Relation.YIELDS, formula_id, var_id, directed=True, label="yields"
+                    )
 
     # 3. declared relationships between variables
     for var_id, attrs in taxonomy.items():

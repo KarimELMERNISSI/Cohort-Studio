@@ -33,45 +33,261 @@ class UnsafeExpressionError(ValueError):
     """The expression uses a construct that is not allowed."""
 
 
-_NP_FUNCTIONS = frozenset({
-    "abs", "absolute", "add", "arccos", "arcsin", "arctan", "array", "asarray", "cbrt", "ceil", "clip", "cos",
-    "cumsum", "deg2rad", "diff", "divide", "e", "exp", "exp2", "expm1", "floor", "fmod", "full", "hypot", "inf",
-    "isfinite", "isinf", "isnan", "log", "log10", "log1p", "log2", "logical_and", "logical_not", "logical_or",
-    "logical_xor", "max", "maximum", "mean", "median", "min", "minimum", "mod", "multiply", "nan", "nanmax",
-    "nanmean", "nanmedian", "nanmin", "nanpercentile", "nanstd", "nansum", "ones", "percentile", "pi", "power",
-    "rad2deg", "rint", "round", "select", "sign", "sin", "sqrt", "square", "std", "subtract", "sum", "tan",
-    "trunc", "true_divide", "where", "zeros",
-})
-_PD_FUNCTIONS = frozenset({
-    "DateOffset", "NA", "NaT", "Timedelta", "Timestamp", "cut", "isna", "isnull", "notna", "notnull", "qcut",
-    "to_datetime", "to_numeric", "to_timedelta",
-})
-_SERIES_METHODS = frozenset({
-    "abs", "add", "all", "any", "astype", "between", "clip", "count", "cummax", "cummin", "cumsum", "diff",
-    "div", "dt", "eq", "fillna", "floordiv", "ge", "gt", "isin", "isna", "isnull", "le", "lt", "mask", "max",
-    "mean", "median", "min", "mod", "mul", "ne", "notna", "notnull", "nunique", "pct_change", "pow", "quantile",
-    "rank", "replace", "round", "shift", "std", "str", "sub", "sum", "truediv", "var", "where",
-})
-_STR_METHODS = frozenset({
-    "capitalize", "contains", "endswith", "fullmatch", "get", "isalnum", "isalpha", "isdigit", "isnumeric",
-    "len", "lower", "lstrip", "match", "pad", "replace", "rstrip", "slice", "split", "startswith", "strip",
-    "title", "upper", "zfill",
-})
-_DT_ATTRIBUTES = frozenset({
-    "date", "day", "day_name", "dayofweek", "dayofyear", "days", "days_in_month", "daysinmonth", "floor",
-    "hour", "is_leap_year", "minute", "month", "month_name", "normalize", "quarter", "second", "seconds",
-    "strftime", "total_seconds", "weekday", "year",
-})
+_NP_FUNCTIONS = frozenset(
+    {
+        "abs",
+        "absolute",
+        "add",
+        "arccos",
+        "arcsin",
+        "arctan",
+        "array",
+        "asarray",
+        "cbrt",
+        "ceil",
+        "clip",
+        "cos",
+        "cumsum",
+        "deg2rad",
+        "diff",
+        "divide",
+        "e",
+        "exp",
+        "exp2",
+        "expm1",
+        "floor",
+        "fmod",
+        "full",
+        "hypot",
+        "inf",
+        "isfinite",
+        "isinf",
+        "isnan",
+        "log",
+        "log10",
+        "log1p",
+        "log2",
+        "logical_and",
+        "logical_not",
+        "logical_or",
+        "logical_xor",
+        "max",
+        "maximum",
+        "mean",
+        "median",
+        "min",
+        "minimum",
+        "mod",
+        "multiply",
+        "nan",
+        "nanmax",
+        "nanmean",
+        "nanmedian",
+        "nanmin",
+        "nanpercentile",
+        "nanstd",
+        "nansum",
+        "ones",
+        "percentile",
+        "pi",
+        "power",
+        "rad2deg",
+        "rint",
+        "round",
+        "select",
+        "sign",
+        "sin",
+        "sqrt",
+        "square",
+        "std",
+        "subtract",
+        "sum",
+        "tan",
+        "trunc",
+        "true_divide",
+        "where",
+        "zeros",
+    }
+)
+_PD_FUNCTIONS = frozenset(
+    {
+        "DateOffset",
+        "NA",
+        "NaT",
+        "Timedelta",
+        "Timestamp",
+        "cut",
+        "isna",
+        "isnull",
+        "notna",
+        "notnull",
+        "qcut",
+        "to_datetime",
+        "to_numeric",
+        "to_timedelta",
+    }
+)
+_SERIES_METHODS = frozenset(
+    {
+        "abs",
+        "add",
+        "all",
+        "any",
+        "astype",
+        "between",
+        "clip",
+        "count",
+        "cummax",
+        "cummin",
+        "cumsum",
+        "diff",
+        "div",
+        "dt",
+        "eq",
+        "fillna",
+        "floordiv",
+        "ge",
+        "gt",
+        "isin",
+        "isna",
+        "isnull",
+        "le",
+        "lt",
+        "mask",
+        "max",
+        "mean",
+        "median",
+        "min",
+        "mod",
+        "mul",
+        "ne",
+        "notna",
+        "notnull",
+        "nunique",
+        "pct_change",
+        "pow",
+        "quantile",
+        "rank",
+        "replace",
+        "round",
+        "shift",
+        "std",
+        "str",
+        "sub",
+        "sum",
+        "truediv",
+        "var",
+        "where",
+    }
+)
+_STR_METHODS = frozenset(
+    {
+        "capitalize",
+        "contains",
+        "endswith",
+        "fullmatch",
+        "get",
+        "isalnum",
+        "isalpha",
+        "isdigit",
+        "isnumeric",
+        "len",
+        "lower",
+        "lstrip",
+        "match",
+        "pad",
+        "replace",
+        "rstrip",
+        "slice",
+        "split",
+        "startswith",
+        "strip",
+        "title",
+        "upper",
+        "zfill",
+    }
+)
+_DT_ATTRIBUTES = frozenset(
+    {
+        "date",
+        "day",
+        "day_name",
+        "dayofweek",
+        "dayofyear",
+        "days",
+        "days_in_month",
+        "daysinmonth",
+        "floor",
+        "hour",
+        "is_leap_year",
+        "minute",
+        "month",
+        "month_name",
+        "normalize",
+        "quarter",
+        "second",
+        "seconds",
+        "strftime",
+        "total_seconds",
+        "weekday",
+        "year",
+    }
+)
 _BUILTINS: dict[str, Any] = {
-    "abs": abs, "bool": bool, "float": float, "int": int, "len": len, "max": max, "min": min, "round": round, "str": str,
+    "abs": abs,
+    "bool": bool,
+    "float": float,
+    "int": int,
+    "len": len,
+    "max": max,
+    "min": min,
+    "round": round,
+    "str": str,
 }
 
 _ALLOWED_NODES: tuple[type[ast.AST], ...] = (
-    ast.Expression, ast.BoolOp, ast.And, ast.Or, ast.BinOp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
-    ast.Mod, ast.Pow, ast.BitAnd, ast.BitOr, ast.BitXor, ast.UnaryOp, ast.Not, ast.USub, ast.UAdd, ast.Invert,
-    ast.Compare, ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.In, ast.NotIn, ast.Is, ast.IsNot,
-    ast.Constant, ast.Name, ast.Load, ast.Subscript, ast.Attribute, ast.Call, ast.keyword, ast.List, ast.Tuple,
-    ast.IfExp, ast.Slice,
+    ast.Expression,
+    ast.BoolOp,
+    ast.And,
+    ast.Or,
+    ast.BinOp,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.FloorDiv,
+    ast.Mod,
+    ast.Pow,
+    ast.BitAnd,
+    ast.BitOr,
+    ast.BitXor,
+    ast.UnaryOp,
+    ast.Not,
+    ast.USub,
+    ast.UAdd,
+    ast.Invert,
+    ast.Compare,
+    ast.Eq,
+    ast.NotEq,
+    ast.Lt,
+    ast.LtE,
+    ast.Gt,
+    ast.GtE,
+    ast.In,
+    ast.NotIn,
+    ast.Is,
+    ast.IsNot,
+    ast.Constant,
+    ast.Name,
+    ast.Load,
+    ast.Subscript,
+    ast.Attribute,
+    ast.Call,
+    ast.keyword,
+    ast.List,
+    ast.Tuple,
+    ast.IfExp,
+    ast.Slice,
 )
 _CONSTANT_TYPES = (str, int, float, bool, type(None))
 
@@ -95,11 +311,15 @@ DEFAULT_POLICY = ExpressionPolicy()
 
 
 def _np_facade(policy: ExpressionPolicy) -> SimpleNamespace:
-    return SimpleNamespace(**{name: getattr(np, name) for name in policy.np_functions if hasattr(np, name)})
+    return SimpleNamespace(
+        **{name: getattr(np, name) for name in policy.np_functions if hasattr(np, name)}
+    )
 
 
 def _pd_facade(policy: ExpressionPolicy) -> SimpleNamespace:
-    return SimpleNamespace(**{name: getattr(pd, name) for name in policy.pd_functions if hasattr(pd, name)})
+    return SimpleNamespace(
+        **{name: getattr(pd, name) for name in policy.pd_functions if hasattr(pd, name)}
+    )
 
 
 class _Validator(ast.NodeVisitor):
@@ -112,22 +332,32 @@ class _Validator(ast.NodeVisitor):
     def visit(self, node: ast.AST) -> Any:
         self.count += 1
         if self.count > self.policy.max_nodes:
-            raise UnsafeExpressionError(f"Expression too complex (more than {self.policy.max_nodes} nodes).")
+            raise UnsafeExpressionError(
+                f"Expression too complex (more than {self.policy.max_nodes} nodes)."
+            )
         if not isinstance(node, _ALLOWED_NODES):
             raise UnsafeExpressionError(f"'{type(node).__name__}' is not allowed in expressions.")
         return super().visit(node)
 
     def visit_Constant(self, node: ast.Constant) -> None:
         if not isinstance(node.value, _CONSTANT_TYPES):
-            raise UnsafeExpressionError(f"Literal of type {type(node.value).__name__} is not allowed.")
+            raise UnsafeExpressionError(
+                f"Literal of type {type(node.value).__name__} is not allowed."
+            )
 
     def visit_Name(self, node: ast.Name) -> None:
         if not isinstance(node.ctx, ast.Load):
             raise UnsafeExpressionError("Assignment is not allowed in expressions.")
-        allowed = node.id in self.policy.frame_names or node.id in ("np", "pd") or node.id in self.policy.builtins \
+        allowed = (
+            node.id in self.policy.frame_names
+            or node.id in ("np", "pd")
+            or node.id in self.policy.builtins
             or node.id in self.extra_names
+        )
         if not allowed:
-            raise UnsafeExpressionError(f"Unknown name '{node.id}'. Refer to columns as df['column'].")
+            raise UnsafeExpressionError(
+                f"Unknown name '{node.id}'. Refer to columns as df['column']."
+            )
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         attr = node.attr
@@ -168,7 +398,9 @@ class _Validator(ast.NodeVisitor):
             self.visit(arg)
         for kw in node.keywords:
             if kw.arg is None or kw.arg.startswith("_"):
-                raise UnsafeExpressionError("Keyword unpacking and private keywords are not allowed.")
+                raise UnsafeExpressionError(
+                    "Keyword unpacking and private keywords are not allowed."
+                )
             self.visit(kw.value)
 
     def generic_visit(self, node: ast.AST) -> None:
@@ -176,8 +408,12 @@ class _Validator(ast.NodeVisitor):
             self.visit(child)
 
 
-def validate_tree(tree: ast.Expression, *, policy: ExpressionPolicy = DEFAULT_POLICY,
-                  extra_names: frozenset[str] | set[str] | None = None) -> ast.Expression:
+def validate_tree(
+    tree: ast.Expression,
+    *,
+    policy: ExpressionPolicy = DEFAULT_POLICY,
+    extra_names: frozenset[str] | set[str] | None = None,
+) -> ast.Expression:
     """Check an already parsed expression tree; returns it unchanged or raises :class:`UnsafeExpressionError`."""
     if not isinstance(tree, ast.Expression):
         raise UnsafeExpressionError("Only single expressions are allowed.")
@@ -185,8 +421,12 @@ def validate_tree(tree: ast.Expression, *, policy: ExpressionPolicy = DEFAULT_PO
     return tree
 
 
-def validate(expression: str, *, policy: ExpressionPolicy = DEFAULT_POLICY,
-             extra_names: frozenset[str] | set[str] | None = None) -> ast.Expression:
+def validate(
+    expression: str,
+    *,
+    policy: ExpressionPolicy = DEFAULT_POLICY,
+    extra_names: frozenset[str] | set[str] | None = None,
+) -> ast.Expression:
     """Parse and check an expression string; raises :class:`UnsafeExpressionError` (or SyntaxError) if invalid."""
     if not isinstance(expression, str) or not expression.strip():
         raise UnsafeExpressionError("The expression is empty.")
@@ -199,22 +439,36 @@ def validate(expression: str, *, policy: ExpressionPolicy = DEFAULT_POLICY,
     return validate_tree(tree, policy=policy, extra_names=extra_names)
 
 
-def evaluate_tree(tree: ast.Expression, df: pd.DataFrame | None = None, *, policy: ExpressionPolicy = DEFAULT_POLICY,
-                  extra_locals: Mapping[str, Any] | None = None) -> Any:
+def evaluate_tree(
+    tree: ast.Expression,
+    df: pd.DataFrame | None = None,
+    *,
+    policy: ExpressionPolicy = DEFAULT_POLICY,
+    extra_locals: Mapping[str, Any] | None = None,
+) -> Any:
     """Validate and evaluate a tree with empty builtins and restricted ``np`` / ``pd`` facades."""
     extra_locals = dict(extra_locals or {})
     validate_tree(tree, policy=policy, extra_names=frozenset(extra_locals))
     ast.fix_missing_locations(tree)
     code = compile(tree, filename="<expression>", mode="eval")
-    namespace: dict[str, Any] = {"__builtins__": dict(policy.builtins), "np": _np_facade(policy), "pd": _pd_facade(policy)}
+    namespace: dict[str, Any] = {
+        "__builtins__": dict(policy.builtins),
+        "np": _np_facade(policy),
+        "pd": _pd_facade(policy),
+    }
     namespace.update(extra_locals)
     for name in policy.frame_names:
         namespace[name] = df
-    return eval(code, namespace, {})  # noqa: S307 - the tree was whitelisted above and builtins are restricted
+    return eval(code, namespace, {})
 
 
-def evaluate(expression: str, df: pd.DataFrame | None = None, *, policy: ExpressionPolicy = DEFAULT_POLICY,
-             extra_locals: Mapping[str, Any] | None = None) -> Any:
+def evaluate(
+    expression: str,
+    df: pd.DataFrame | None = None,
+    *,
+    policy: ExpressionPolicy = DEFAULT_POLICY,
+    extra_locals: Mapping[str, Any] | None = None,
+) -> Any:
     """Validate and evaluate an expression string against ``df``."""
     tree = validate(expression, policy=policy, extra_names=frozenset(extra_locals or {}))
     return evaluate_tree(tree, df, policy=policy, extra_locals=extra_locals)
@@ -228,12 +482,20 @@ def column_references(expression: str, *, policy: ExpressionPolicy = DEFAULT_POL
         return set()
     names: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in policy.frame_names:
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in policy.frame_names
+        ):
             target = node.slice
             if isinstance(target, ast.Constant) and isinstance(target.value, str):
                 names.add(target.value)
             elif isinstance(target, (ast.List, ast.Tuple)):
-                names.update(e.value for e in target.elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+                names.update(
+                    e.value
+                    for e in target.elts
+                    if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                )
     return names
 
 

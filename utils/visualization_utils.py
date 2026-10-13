@@ -1,3 +1,4 @@
+import logging
 import re
 
 import numpy as np
@@ -8,7 +9,6 @@ import plotly.graph_objects as go
 from matplotlib.colors import to_rgba
 from scipy import stats
 from scipy.stats import zscore
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", cor
         rows.append({
             "Group 1": r["group_1"], "Group 2": r["group_2"], "Test": r["method"], "Statistic": r["statistic"],
             "P-Value": r["p_raw"], "g1_index": index_of[r["group_1"]], "g2_index": index_of[r["group_2"]],
-            "P-Value (Adj)": p_adj, "Significant": bool(p_adj == p_adj and p_adj < alpha),
+            "P-Value (Adj)": p_adj, "Significant": bool(pd.notna(p_adj) and p_adj < alpha),
             "Significance Level": "***" if p_adj < 0.001 else "**" if p_adj < 0.01 else "*" if p_adj < 0.05 else "ns",
             "Estimate": r["estimate"], "Effect": r["effect"], "Effect Name": r["effect_name"], "Adjustment": r["adjustment"],
         })

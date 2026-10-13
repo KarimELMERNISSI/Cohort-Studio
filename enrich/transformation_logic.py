@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-
-from core.expressions import safe_format
 from sklearn.preprocessing import (
     LabelEncoder,
     MinMaxScaler,
@@ -9,6 +7,8 @@ from sklearn.preprocessing import (
     OrdinalEncoder,
     StandardScaler,
 )
+
+from core.expressions import safe_format
 
 
 def apply_variable_transformation(dataframe, params):

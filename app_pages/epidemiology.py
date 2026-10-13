@@ -12,6 +12,10 @@ from scipy import stats
 from scipy.stats import t as t_dist
 from statsmodels.stats.power import TTestIndPower
 
+import utils.analysis_utils as au
+import utils.visualization_utils as vu
+from app_pages.analysis_diagnostic import run_diagnostic_accuracy
+from biostats.multiplicity import adjust as adjust_pvalues
 from biostats.power import (
     ARE_NORMAL,
     ARE_WORST_CASE,
@@ -23,13 +27,8 @@ from biostats.power import (
     kruskal_sample_size,
 )
 from biostats.zscores import reference_zscores
-
-import utils.analysis_utils as au
-import utils.visualization_utils as vu
-from utils.data_analyzer import DataAnalyzer
-from app_pages.analysis_diagnostic import run_diagnostic_accuracy
-from biostats.multiplicity import adjust as adjust_pvalues
 from ui.components import no_dataset, result_card
+from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
 
 
@@ -295,7 +294,7 @@ def run_univariate_analysis(df, analyzer):
         # One family: the variables tested in this run (audit S9); NaN p-values stay NaN
         pvals_corrected = adjust_pvalues(results_df["P-Value"].tolist(), correction_method)
         results_df["P-Value (Adj)"] = pvals_corrected
-        results_df["Significant (Adj)"] = ["Yes" if (p == p and p < 0.05) else "No" for p in pvals_corrected]
+        results_df["Significant (Adj)"] = ["Yes" if (pd.notna(p) and p < 0.05) else "No" for p in pvals_corrected]
         
         # Reorder columns to show adjusted p-value next to original
         cols = list(results_df.columns)

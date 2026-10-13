@@ -3,14 +3,28 @@
 import pytest
 from pydantic import ValidationError
 
-from graph.model import EdgeSpec, GraphKind, GraphSpec, NodeSpec, RenderOptions, SelectionResult, edge_id
+from graph.model import (
+    EdgeSpec,
+    GraphKind,
+    GraphSpec,
+    NodeSpec,
+    RenderOptions,
+    SelectionResult,
+    edge_id,
+)
 
 
 def _spec(**overrides) -> GraphSpec:
-    nodes = (NodeSpec(id="a", label="A", category="x"), NodeSpec(id="b", label="B", category="y"),
-             NodeSpec(id="c", label="C", category="x"), NodeSpec(id="lonely", label="L", category="y"))
-    edges = (EdgeSpec(id="e:a->b", source="a", target="b", category="rel"),
-             EdgeSpec(id="e:b->c", source="b", target="c", category="other", directed=False))
+    nodes = (
+        NodeSpec(id="a", label="A", category="x"),
+        NodeSpec(id="b", label="B", category="y"),
+        NodeSpec(id="c", label="C", category="x"),
+        NodeSpec(id="lonely", label="L", category="y"),
+    )
+    edges = (
+        EdgeSpec(id="e:a->b", source="a", target="b", category="rel"),
+        EdgeSpec(id="e:b->c", source="b", target="c", category="other", directed=False),
+    )
     base = dict(kind=GraphKind.TAXONOMY, nodes=nodes, edges=edges)
     base.update(overrides)
     return GraphSpec(**base)
@@ -29,7 +43,11 @@ class TestIntegrity:
 
     def test_dangling_edge_rejected(self) -> None:
         with pytest.raises(ValidationError, match="unknown nodes"):
-            GraphSpec(kind=GraphKind.TAXONOMY, nodes=(NodeSpec(id="a"),), edges=(EdgeSpec(id="e", source="a", target="zz"),))
+            GraphSpec(
+                kind=GraphKind.TAXONOMY,
+                nodes=(NodeSpec(id="a"),),
+                edges=(EdgeSpec(id="e", source="a", target="zz"),),
+            )
 
     def test_non_json_payload_rejected(self) -> None:
         with pytest.raises(ValidationError, match="JSON-native"):
@@ -53,7 +71,11 @@ class TestSerialisation:
 
     def test_edge_id_is_deterministic(self) -> None:
         assert edge_id("rel", "a", "b") == "rel:a->b"
-        assert edge_id("rel", "b", "a", undirected=True) == edge_id("rel", "a", "b", undirected=True) == "rel:a|b"
+        assert (
+            edge_id("rel", "b", "a", undirected=True)
+            == edge_id("rel", "a", "b", undirected=True)
+            == "rel:a|b"
+        )
 
 
 class TestQueries:

@@ -66,6 +66,8 @@ def test_resolve_within_blocks_escapes(root: Path) -> None:
     with pytest.raises(ValueError):
         alice.resolve_within(str(root / "users" / "bob" / "datasets" / "secret.parquet"))
     with pytest.raises(ValueError):
-        resolve_within(alice.root, "C:/Windows/system32" if str(root).startswith("C:") else "/etc/passwd")
+        resolve_within(
+            alice.root, "C:/Windows/system32" if str(root).startswith("C:") else "/etc/passwd"
+        )
     with pytest.raises(ValueError):
         alice.dir("nope")

@@ -4,6 +4,7 @@ Statistics Utilities.
 Functions for statistical analysis including normality tests.
 """
 import datetime
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa

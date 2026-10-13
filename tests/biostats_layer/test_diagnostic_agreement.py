@@ -14,10 +14,15 @@ def test_diagnostic_accuracy_reference_values() -> None:
     assert acc.specificity == pytest.approx(80 / 90)
     assert acc.ppv == pytest.approx(0.9) and acc.npv == pytest.approx(0.8)
     lo, hi = proportion_confint(90, 110, method="wilson")
-    assert acc.sensitivity_ci.lower == pytest.approx(lo) and acc.sensitivity_ci.upper == pytest.approx(hi)
+    assert acc.sensitivity_ci.lower == pytest.approx(
+        lo
+    ) and acc.sensitivity_ci.upper == pytest.approx(hi)
     assert acc.lr_positive == pytest.approx((90 / 110) / (1 - 80 / 90))
     assert acc.lr_negative == pytest.approx((1 - 90 / 110) / (80 / 90))
-    assert acc.lr_positive_ci is not None and acc.lr_positive_ci.lower < acc.lr_positive < acc.lr_positive_ci.upper
+    assert (
+        acc.lr_positive_ci is not None
+        and acc.lr_positive_ci.lower < acc.lr_positive < acc.lr_positive_ci.upper
+    )
     assert acc.dor == pytest.approx(36.0)
     assert acc.dor_ci is not None and acc.dor_ci.lower < 36 < acc.dor_ci.upper
     assert acc.youden == pytest.approx(90 / 110 + 80 / 90 - 1)

@@ -15,14 +15,21 @@ import streamlit as st
 from ui import nav
 from ui.theme import STATUS_COLORS
 
-
 # ----------------------------------------------------------------------------- navigation helpers
 
-def page_link(key: str, label: str | None = None, *, icon: str | None = None, width: str = "content") -> None:
+
+def page_link(
+    key: str, label: str | None = None, *, icon: str | None = None, width: str = "content"
+) -> None:
     """Link to a registered page; degrades to a caption outside ``st.navigation`` (tests, bare mode)."""
     definition = nav.page(key)
     try:
-        st.page_link(nav.page_path(key), label=label or definition.title, icon=icon or definition.icon, width=width)
+        st.page_link(
+            nav.page_path(key),
+            label=label or definition.title,
+            icon=icon or definition.icon,
+            width=width,
+        )
     except Exception:
         st.caption(f"-> {label or definition.title}")
 
@@ -35,6 +42,7 @@ def switch_to(key: str) -> None:
 
 
 # ----------------------------------------------------------------------------- page structure
+
 
 def page_header(title: str, subtitle: str | None = None, *, chapter: str | None = None) -> None:
     """The page's single H1, an optional one-line purpose, and the handbook link for this page."""
@@ -56,16 +64,31 @@ def section(title: str, help_text: str | None = None) -> None:
 
 # ----------------------------------------------------------------------------- status
 
+
 def status_chip(label: str, status: str = "neutral") -> None:
     """``ok`` | ``caution`` | ``violated`` | ``info`` | ``neutral`` rendered as a coloured badge with an icon."""
-    icons = {"ok": ":material/check_circle:", "caution": ":material/warning:", "violated": ":material/error:",
-             "info": ":material/info:", "neutral": ":material/radio_button_unchecked:"}
-    st.badge(label, icon=icons.get(status, icons["neutral"]), color=STATUS_COLORS.get(status, "grey"))
+    icons = {
+        "ok": ":material/check_circle:",
+        "caution": ":material/warning:",
+        "violated": ":material/error:",
+        "info": ":material/info:",
+        "neutral": ":material/radio_button_unchecked:",
+    }
+    st.badge(
+        label, icon=icons.get(status, icons["neutral"]), color=STATUS_COLORS.get(status, "grey")
+    )
 
 
 # ----------------------------------------------------------------------------- empty states
 
-def empty_state(title: str, body: str, *, links: tuple[tuple[str, str], ...] = (), action: Callable[[], None] | None = None) -> None:
+
+def empty_state(
+    title: str,
+    body: str,
+    *,
+    links: tuple[tuple[str, str], ...] = (),
+    action: Callable[[], None] | None = None,
+) -> None:
     """A bordered placeholder with a clear next step (never a bare warning)."""
     with st.container(border=True):
         st.markdown(f"**{title}**")
@@ -82,8 +105,12 @@ def empty_state(title: str, body: str, *, links: tuple[tuple[str, str], ...] = (
 
 def no_dataset() -> None:
     """Shown by every page that needs a dataset while none is loaded."""
+
     def _sample_button() -> None:
-        if st.button("Load the sample cohort", key=f"empty_sample_{st.session_state.get('_empty_state_n', 0)}"):
+        if st.button(
+            "Load the sample cohort",
+            key=f"empty_sample_{st.session_state.get('_empty_state_n', 0)}",
+        ):
             from ui.state import get_state
 
             get_state().load_sample_cohort()
@@ -112,7 +139,15 @@ def no_results(message: str = "Run the analysis to see results here.") -> None:
 
 # ----------------------------------------------------------------------------- confirmations and feedback
 
-def confirm(title: str, body: str, on_confirm: Callable[[], Any], *, confirm_label: str = "Confirm", danger: bool = True) -> None:
+
+def confirm(
+    title: str,
+    body: str,
+    on_confirm: Callable[[], Any],
+    *,
+    confirm_label: str = "Confirm",
+    danger: bool = True,
+) -> None:
     """Open a modal asking for confirmation before running ``on_confirm`` (destructive actions, audit U5)."""
 
     @st.dialog(title)
@@ -170,6 +205,7 @@ def glossary_popover(*terms: str, label: str = "Glossary") -> None:
 
 # ----------------------------------------------------------------------------- results
 
+
 def _fmt(value: float | None, digits: int = 3) -> str:
     return "n/a" if value is None else f"{value:.{digits}g}"
 
@@ -189,10 +225,15 @@ def result_card(result: Any, *, title: str | None = None) -> None:
                 status_chip("p < alpha" if sig else "p >= alpha", "info" if sig else "neutral")
         cols = st.columns(3)
         if result.estimate is not None:
-            cols[0].metric(result.estimate_label or "estimate", _fmt(result.estimate),
-                           help="The quantity of interest on the original scale, with its confidence interval below.")
+            cols[0].metric(
+                result.estimate_label or "estimate",
+                _fmt(result.estimate),
+                help="The quantity of interest on the original scale, with its confidence interval below.",
+            )
             if result.estimate_ci is not None:
-                cols[0].caption(f"95% CI {result.estimate_ci.as_text(3)} ({result.estimate_ci.method})")
+                cols[0].caption(
+                    f"95% CI {result.estimate_ci.as_text(3)} ({result.estimate_ci.method})"
+                )
         elif result.primary_effect is not None:
             eff = result.primary_effect
             cols[0].metric(eff.name, _fmt(eff.estimate))
@@ -205,10 +246,14 @@ def result_card(result: Any, *, title: str | None = None) -> None:
         if result.df:
             stat += ", df = " + ", ".join(f"{d:.4g}" for d in result.df)
         cols[1].metric("p-value", p_text, help=stat)
-        n_text = ", ".join(f"{g}: {n}" for g, n in zip(result.groups, result.n_per_group, strict=False)) or str(result.n_total)
+        n_text = ", ".join(
+            f"{g}: {n}" for g, n in zip(result.groups, result.n_per_group, strict=False)
+        ) or str(result.n_total)
         cols[2].metric("n", str(result.n_total), help=n_text)
         if result.reference_group:
-            cols[2].caption(f"reference: {result.reference_group}; comparison: {result.comparison_group}")
+            cols[2].caption(
+                f"reference: {result.reference_group}; comparison: {result.comparison_group}"
+            )
         if result.effect_sizes:
             parts = []
             for eff in result.effect_sizes:
@@ -230,6 +275,19 @@ def result_card(result: Any, *, title: str | None = None) -> None:
 
 
 __all__ = [
-    "confirm", "empty_state", "error_card", "glossary_popover", "help_popover", "long_op", "no_ai", "no_dataset", "no_results",
-    "page_header", "page_link", "result_card", "section", "status_chip", "switch_to",
+    "confirm",
+    "empty_state",
+    "error_card",
+    "glossary_popover",
+    "help_popover",
+    "long_op",
+    "no_ai",
+    "no_dataset",
+    "no_results",
+    "page_header",
+    "page_link",
+    "result_card",
+    "section",
+    "status_chip",
+    "switch_to",
 ]

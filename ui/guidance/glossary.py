@@ -4,15 +4,15 @@ from __future__ import annotations
 
 GLOSSARY: dict[str, str] = {
     "p-value": "The probability of seeing a result at least as extreme as the observed one if the null hypothesis were true. "
-               "It is not the probability that the null hypothesis is true, nor a measure of the size of an effect.",
+    "It is not the probability that the null hypothesis is true, nor a measure of the size of an effect.",
     "Confidence interval (CI)": "The range of true values compatible with the data at the chosen level (usually 95%). "
-                                "Values inside the interval are plausible; the width shows the precision.",
+    "Values inside the interval are plausible; the width shows the precision.",
     "Effect size": "A standardised or clinically meaningful measure of how large a difference or association is, independent of the sample size.",
     "Hedges' g": "The standardised mean difference (difference divided by the pooled standard deviation) with a small-sample correction. "
-                 "Reported with a confidence interval; 0.2, 0.5 and 0.8 are conventional small, medium and large benchmarks.",
+    "Reported with a confidence interval; 0.2, 0.5 and 0.8 are conventional small, medium and large benchmarks.",
     "Cohen's d": "The uncorrected standardised mean difference; Hedges' g is the same quantity with the small-sample bias removed.",
     "Rank-biserial r": "For rank tests: the probability that a value from the comparison group exceeds one from the reference group, "
-                       "rescaled to -1..1 (0 = no tendency).",
+    "rescaled to -1..1 (0 = no tendency).",
     "Hodges-Lehmann shift": "The median of all pairwise differences between two groups: the location shift that goes with the Mann-Whitney test.",
     "Eta squared": "Share of the total variance explained by the grouping in a one-way design (0.01 small, 0.06 medium, 0.14 large).",
     "Omega squared": "A less biased version of eta squared for the population.",
@@ -44,7 +44,7 @@ GLOSSARY: dict[str, str] = {
     "Shapiro-Wilk test": "A powerful normality test for small and moderate samples.",
     "Levene's test": "Tests whether groups have equal variances; a diagnostic, not a gate, in this application.",
     "MCAR / MAR / MNAR": "Missing completely at random (missingness unrelated to any value), missing at random (related to observed values), "
-                         "missing not at random (related to the missing values themselves).",
+    "missing not at random (related to the missing values themselves).",
     "Little's MCAR test": "Tests whether the observed means differ between missingness patterns; rejection argues against MCAR, non-rejection does not prove it.",
     "Imputation": "Filling in missing values with estimates; single imputation understates uncertainty, multiple imputation propagates it.",
     "Sensitivity": "Proportion of true cases that the test identifies as positive.",

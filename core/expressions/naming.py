@@ -23,7 +23,9 @@ def safe_format(pattern: str, **fields: object) -> str:
     def replace(match: re.Match[str]) -> str:
         name = match.group(1)
         if name not in fields:
-            raise ValueError(f"Unknown placeholder '{{{name}}}'. Available: {', '.join(sorted(fields)) or 'none'}.")
+            raise ValueError(
+                f"Unknown placeholder '{{{name}}}'. Available: {', '.join(sorted(fields)) or 'none'}."
+            )
         return str(fields[name])
 
     return _FIELD.sub(replace, pattern)

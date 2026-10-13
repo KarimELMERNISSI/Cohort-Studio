@@ -48,7 +48,9 @@ def active_renderer(renderer: BaseGraphRenderer | None = None) -> BaseGraphRende
     return manager.get(st.session_state.get(RENDERER_OVERRIDE_KEY))
 
 
-def render_graph(spec: GraphSpec, options: RenderOptions, *, renderer: BaseGraphRenderer | None = None) -> SelectionResult:
+def render_graph(
+    spec: GraphSpec, options: RenderOptions, *, renderer: BaseGraphRenderer | None = None
+) -> SelectionResult:
     """Render a graph spec with the active backend; never raises (errors are shown in place)."""
     manager = get_graph_renderer_manager()
     chosen = active_renderer(renderer)
@@ -72,7 +74,9 @@ def render_graph(spec: GraphSpec, options: RenderOptions, *, renderer: BaseGraph
         try:
             fallback = manager.get(GraphRendererType.PLOTLY)
             st.info("Falling back to the built-in offline Plotly engine.")
-            result = fallback.render(spec, resolved.model_copy(update={"key": f"{resolved.key}__fallback"}))
+            result = fallback.render(
+                spec, resolved.model_copy(update={"key": f"{resolved.key}__fallback"})
+            )
         except Exception as exc2:
             logger.exception("Fallback graph rendering failed")
             st.error(f"The fallback engine failed as well: {exc2}")
@@ -87,7 +91,9 @@ def render_graph(spec: GraphSpec, options: RenderOptions, *, renderer: BaseGraph
     return result
 
 
-def renderer_selector(*, container=None, key: str = RENDERER_OVERRIDE_KEY, label: str = "Graph engine") -> None:
+def renderer_selector(
+    *, container=None, key: str = RENDERER_OVERRIDE_KEY, label: str = "Graph engine"
+) -> None:
     """Selectbox listing the available renderers; the choice applies to the whole session."""
     manager = get_graph_renderer_manager()
     target = container if container is not None else st
@@ -107,14 +113,19 @@ def renderer_selector(*, container=None, key: str = RENDERER_OVERRIDE_KEY, label
         index=index,
         format_func=lambda value: labels.get(value, value),
         help="Automatic picks the offline Plotly engine. The yFiles engine needs internet access "
-             "(it loads its runtime from yworks.com) and reports anonymised usage data to yWorks.",
+        "(it loads its runtime from yworks.com) and reports anonymised usage data to yWorks.",
         key=f"{key}__selectbox",
     )
     st.session_state[key] = None if chosen == "auto" else chosen
 
 
-def render_graph_exports(spec: GraphSpec, options: RenderOptions, *, renderer: BaseGraphRenderer | None = None,
-                         file_stem: str = "graph") -> None:
+def render_graph_exports(
+    spec: GraphSpec,
+    options: RenderOptions,
+    *,
+    renderer: BaseGraphRenderer | None = None,
+    file_stem: str = "graph",
+) -> None:
     """Download buttons: JSON always, standalone HTML when the renderer supports it."""
     chosen = active_renderer(renderer)
     cols = st.columns(2)
@@ -145,4 +156,11 @@ def render_graph_exports(spec: GraphSpec, options: RenderOptions, *, renderer: B
                 )
 
 
-__all__ = ["RENDERER_OVERRIDE_KEY", "active_renderer", "current_theme", "render_graph", "render_graph_exports", "renderer_selector"]
+__all__ = [
+    "RENDERER_OVERRIDE_KEY",
+    "active_renderer",
+    "current_theme",
+    "render_graph",
+    "render_graph_exports",
+    "renderer_selector",
+]

@@ -42,8 +42,14 @@ def test_every_category_has_a_style_and_a_legend_entry(kind: GraphKind) -> None:
 
 
 def test_unknown_category_falls_back_without_error() -> None:
-    assert node_style_for(GraphKind.TAXONOMY, "???").color == node_style_for(GraphKind.TAXONOMY, "input").color
-    assert edge_style_for(GraphKind.DOCUMENT, "treats").color == edge_style_for(GraphKind.DOCUMENT, "relation").color
+    assert (
+        node_style_for(GraphKind.TAXONOMY, "???").color
+        == node_style_for(GraphKind.TAXONOMY, "input").color
+    )
+    assert (
+        edge_style_for(GraphKind.DOCUMENT, "treats").color
+        == edge_style_for(GraphKind.DOCUMENT, "relation").color
+    )
 
 
 def test_correlation_edge_rules_cover_both_signs_and_all_strengths() -> None:
@@ -51,7 +57,10 @@ def test_correlation_edge_rules_cover_both_signs_and_all_strengths() -> None:
     for sign in ("pos", "neg"):
         for slug in ("negligible", "weak", "moderate", "strong", "very_strong"):
             assert f"corr.{sign}.{slug}" in cats
-    assert edge_style_for(GraphKind.CORRELATION, "corr.pos.very_strong").width > edge_style_for(GraphKind.CORRELATION, "corr.pos.weak").width
+    assert (
+        edge_style_for(GraphKind.CORRELATION, "corr.pos.very_strong").width
+        > edge_style_for(GraphKind.CORRELATION, "corr.pos.weak").width
+    )
 
 
 def test_dark_theme_overrides_apply() -> None:

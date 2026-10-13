@@ -24,23 +24,37 @@ def _script(username: str) -> None:
     st.session_state["rename_dict"] = {"a": "b"}
     state = get_state()
     df = pd.DataFrame({"a": [1, 2, 3]})
-    ref = state.set_dataset(df, DatasetRef(name="demo", origin="upload", file_hash="abc"),
-                            source_bytes=b"a\n1\n2\n3\n", source_name="demo.csv")
+    ref = state.set_dataset(
+        df,
+        DatasetRef(name="demo", origin="upload", file_hash="abc"),
+        source_bytes=b"a\n1\n2\n3\n",
+        source_name="demo.csv",
+    )
     tm = state.transformation_manager
     ok, msg, saved = state.save_version("demo")
     st.session_state["probe"] = {
-        "name": ref.name, "rows": ref.n_rows, "cols": ref.n_cols,
-        "source_path": ref.source_path, "source_exists": os.path.exists(ref.source_path),
-        "stale_cleared": "epidemiology_results" not in st.session_state and "rename_dict" not in st.session_state,
+        "name": ref.name,
+        "rows": ref.n_rows,
+        "cols": ref.n_cols,
+        "source_path": ref.source_path,
+        "source_exists": os.path.exists(ref.source_path),
+        "stale_cleared": "epidemiology_results" not in st.session_state
+        and "rename_dict" not in st.session_state,
         "current": st.session_state["current_dataset_name"],
         "working_rows": len(st.session_state["working_df"]),
         "trace_path": tm.get_trace_path(),
         "steps": [s.get("function_name") or s.get("function") for s in tm.history],
-        "saved": saved, "save_ok": ok, "label": state.dataset.label,
+        "saved": saved,
+        "save_ok": ok,
+        "label": state.dataset.label,
     }
     sample = state.load_sample_cohort()
-    st.session_state["probe2"] = {"origin": sample.origin, "rows": sample.n_rows, "data_rows": len(st.session_state["data"]),
-                                  "dayfirst": sample.parse.dayfirst if sample.parse else None}
+    st.session_state["probe2"] = {
+        "origin": sample.origin,
+        "rows": sample.n_rows,
+        "data_rows": len(st.session_state["data"]),
+        "dayfirst": sample.parse.dayfirst if sample.parse else None,
+    }
 
 
 @pytest.fixture
@@ -58,8 +72,16 @@ def test_set_dataset_resets_derived_state_and_writes_trace(data_root: Path) -> N
     assert probe["stale_cleared"]
     assert probe["working_rows"] == 3
     assert probe["source_exists"]
-    assert Path(probe["source_path"]).resolve().is_relative_to((data_root / "users" / "alice").resolve())
-    assert Path(probe["trace_path"]).resolve().is_relative_to((data_root / "users" / "alice" / "traces").resolve())
+    assert (
+        Path(probe["source_path"])
+        .resolve()
+        .is_relative_to((data_root / "users" / "alice").resolve())
+    )
+    assert (
+        Path(probe["trace_path"])
+        .resolve()
+        .is_relative_to((data_root / "users" / "alice" / "traces").resolve())
+    )
     assert probe["save_ok"] and probe["saved"] == "demo_v1" and probe["label"] == "demo (v1)"
     assert probe["current"] == "demo_v1" or probe["current"] == "demo"
     assert (data_root / "users" / "alice" / "datasets" / "demo_v1.parquet").exists()

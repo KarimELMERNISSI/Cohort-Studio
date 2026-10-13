@@ -9,18 +9,23 @@ from graph.model import GraphSpec, LayoutHint, RenderOptions
 
 yfiles = pytest.importorskip("yfiles_graphs_for_streamlit")
 
-from graph.renderers.yfiles import YFilesGraphRenderer  # noqa: E402
+from graph.renderers.yfiles import YFilesGraphRenderer
 
 
 def _apply(payload):
     from yfiles_graphs_for_streamlit.apply_mappings import MappingClass
 
-    widget = yfiles.StreamlitGraphWidget(nodes=payload.nodes, edges=payload.edges, **payload.mappings)
+    widget = yfiles.StreamlitGraphWidget(
+        nodes=payload.nodes, edges=payload.edges, **payload.mappings
+    )
     mapper = MappingClass(widget, widget._data_importer, payload.show_kwargs["directed"])
     nodes, edges = mapper.apply_mappings(
-        copy.deepcopy(widget._user_nodes), copy.deepcopy(widget._user_edges), widget._user_nodes, widget._user_edges
+        copy.deepcopy(widget._user_nodes),
+        copy.deepcopy(widget._user_edges),
+        widget._user_nodes,
+        widget._user_edges,
     )
-    to_dict = lambda item: item.to_dict() if hasattr(item, "to_dict") else dict(item)  # noqa: E731
+    to_dict = lambda item: item.to_dict() if hasattr(item, "to_dict") else dict(item)
     return [to_dict(n) for n in nodes], [to_dict(e) for e in edges], widget
 
 
@@ -37,10 +42,14 @@ def test_capabilities_declare_internet_and_telemetry() -> None:
 
 def test_translate_taxonomy_graph(taxonomy_spec: GraphSpec) -> None:
     renderer = YFilesGraphRenderer()
-    payload = renderer.translate(taxonomy_spec, RenderOptions(key="kg", height=750, selectable=True, theme="light"))
+    payload = renderer.translate(
+        taxonomy_spec, RenderOptions(key="kg", height=750, selectable=True, theme="light")
+    )
 
     assert payload.show_kwargs["graph_layout"] == yfiles.Layout.HIERARCHICAL
-    assert payload.show_kwargs["directed"] is False  # mixed graph: arrows come from the per-edge mapping
+    assert (
+        payload.show_kwargs["directed"] is False
+    )  # mixed graph: arrows come from the per-edge mapping
     assert payload.show_kwargs["sync_selection"] is True
     assert payload.show_kwargs["height"] == 750 and payload.show_kwargs["key"] == "kg__yfiles"
     assert [n["id"] for n in payload.nodes] == list(taxonomy_spec.node_ids())
@@ -64,8 +73,12 @@ def test_translate_taxonomy_graph(taxonomy_spec: GraphSpec) -> None:
 
 
 def test_translate_heat_and_layout_override(taxonomy_spec: GraphSpec) -> None:
-    spec = taxonomy_spec.model_copy(update={"nodes": tuple(n.model_copy(update={"weight": 0.5}) for n in taxonomy_spec.nodes)})
-    payload = YFilesGraphRenderer().translate(spec, RenderOptions(key="k", heat=True, layout=LayoutHint.CIRCULAR, show_edge_labels=False))
+    spec = taxonomy_spec.model_copy(
+        update={"nodes": tuple(n.model_copy(update={"weight": 0.5}) for n in taxonomy_spec.nodes)}
+    )
+    payload = YFilesGraphRenderer().translate(
+        spec, RenderOptions(key="k", heat=True, layout=LayoutHint.CIRCULAR, show_edge_labels=False)
+    )
     assert payload.show_kwargs["graph_layout"] == yfiles.Layout.CIRCULAR
     nodes, edges, widget = _apply(payload)
     assert getattr(widget, "_error", None) is None

@@ -73,11 +73,19 @@ def test_selection_from_event(corr_matrix: pd.DataFrame) -> None:
     renderer = _renderer()
     spec = build_correlation_graph(corr_matrix, min_strength="Weak")
     payload = renderer.translate(spec, RenderOptions(key="k", selectable=True, theme="light"))
-    event = SimpleNamespace(selection=SimpleNamespace(points=[
-        {"curve_number": payload.node_curve, "point_index": 0, "customdata": "a"},
-        {"curve_number": payload.node_curve, "point_index": 1, "customdata": ["b"]},
-        {"curve_number": payload.edge_curve, "point_index": 0, "customdata": "corr:a|b"},
-        {"curve_number": 0, "point_index": 0},
-    ]))
+    event = SimpleNamespace(
+        selection=SimpleNamespace(
+            points=[
+                {"curve_number": payload.node_curve, "point_index": 0, "customdata": "a"},
+                {"curve_number": payload.node_curve, "point_index": 1, "customdata": ["b"]},
+                {"curve_number": payload.edge_curve, "point_index": 0, "customdata": "corr:a|b"},
+                {"curve_number": 0, "point_index": 0},
+            ]
+        )
+    )
     result = renderer._selection_from_event(event, payload)
-    assert result.node_ids == ("a", "b") and result.edge_ids == ("corr:a|b",) and result.renderer == "plotly"
+    assert (
+        result.node_ids == ("a", "b")
+        and result.edge_ids == ("corr:a|b",)
+        and result.renderer == "plotly"
+    )

@@ -22,8 +22,18 @@ _ALIASES: dict[str, str] = {
     "": "none",
 }
 
-LABELS: dict[str, str] = {"holm": "Holm", "bonferroni": "Bonferroni", "fdr_bh": "Benjamini-Hochberg (FDR)", "none": "none"}
-UI_OPTIONS: tuple[str, ...] = ("Holm (recommended)", "Benjamini-Hochberg (FDR)", "Bonferroni", "None")
+LABELS: dict[str, str] = {
+    "holm": "Holm",
+    "bonferroni": "Bonferroni",
+    "fdr_bh": "Benjamini-Hochberg (FDR)",
+    "none": "none",
+}
+UI_OPTIONS: tuple[str, ...] = (
+    "Holm (recommended)",
+    "Benjamini-Hochberg (FDR)",
+    "Bonferroni",
+    "None",
+)
 
 
 def normalize_method(label: str | None) -> str:
@@ -33,7 +43,9 @@ def normalize_method(label: str | None) -> str:
     return _ALIASES[key]
 
 
-def adjust(pvals: Sequence[float | None], method: str | None = "holm", alpha: float = 0.05) -> np.ndarray:
+def adjust(
+    pvals: Sequence[float | None], method: str | None = "holm", alpha: float = 0.05
+) -> np.ndarray:
     """Adjusted p-values over the whole family; ``None``/NaN entries stay NaN and do not count."""
     name = normalize_method(method)
     raw = np.array([np.nan if p is None else float(p) for p in pvals], dtype=float)

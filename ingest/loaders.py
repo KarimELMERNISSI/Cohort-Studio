@@ -75,10 +75,13 @@ def file_kind(filename: str) -> str:
         return "excel"
     if ext in PARQUET_EXTENSIONS:
         return "parquet"
-    raise ValueError(f"Unsupported file type '{ext or filename}'. Supported: {', '.join(SUPPORTED_EXTENSIONS)}.")
+    raise ValueError(
+        f"Unsupported file type '{ext or filename}'. Supported: {', '.join(SUPPORTED_EXTENSIONS)}."
+    )
 
 
 # ----------------------------------------------------------------------------- detection
+
 
 def detect_encoding(data: bytes) -> str:
     """
@@ -171,24 +174,34 @@ def excel_sheet_names(data: bytes) -> list[str]:
 
 # ----------------------------------------------------------------------------- parsing
 
+
 def _column_report(df: pd.DataFrame, report: ParseReport) -> None:
     report.n_rows, report.n_cols = int(df.shape[0]), int(df.shape[1])
     cols = [str(c) for c in df.columns]
     report.unnamed_columns = [c for c in cols if c.startswith("Unnamed:")]
-    report.empty_columns = [str(c) for c in df.columns if len(df) and df[c].isna().all()]
+    report.empty_columns = [str(c) for c in df.columns if len(df) and bool(df[c].isna().all())]
     bases = [re.sub(r"\.\d+$", "", c) for c in cols]
     report.duplicate_columns = sorted({b for b in bases if bases.count(b) > 1})
     if report.unnamed_columns:
-        report.warnings.append(f"{len(report.unnamed_columns)} column(s) have no header (shown as 'Unnamed: n'); check the header row.")
+        report.warnings.append(
+            f"{len(report.unnamed_columns)} column(s) have no header (shown as 'Unnamed: n'); check the header row."
+        )
     if report.empty_columns:
         report.warnings.append(f"{len(report.empty_columns)} column(s) are entirely empty.")
     if report.duplicate_columns:
-        report.warnings.append("Duplicate column names were suffixed with .1, .2: " + ", ".join(report.duplicate_columns))
+        report.warnings.append(
+            "Duplicate column names were suffixed with .1, .2: "
+            + ", ".join(report.duplicate_columns)
+        )
     if report.bad_lines:
-        report.warnings.append(f"{report.bad_lines} malformed line(s) were skipped (wrong number of fields); check the delimiter.")
+        report.warnings.append(
+            f"{report.bad_lines} malformed line(s) were skipped (wrong number of fields); check the delimiter."
+        )
 
 
-def _read_csv(data: bytes, options: ParseOptions, report: ParseReport, nrows: int | None) -> pd.DataFrame:
+def _read_csv(
+    data: bytes, options: ParseOptions, report: ParseReport, nrows: int | None
+) -> pd.DataFrame:
     bad: list[list[str]] = []
 
     def _on_bad_line(fields: list[str]) -> None:
@@ -210,38 +223,61 @@ def _read_csv(data: bytes, options: ParseOptions, report: ParseReport, nrows: in
         nrows=nrows,
     )
     report.bad_lines = len(bad)
-    report.bad_line_examples = [options.sep.join(str(f) for f in fields)[:160] for fields in bad[:3]]
+    report.bad_line_examples = [
+        options.sep.join(str(f) for f in fields)[:160] for fields in bad[:3]
+    ]
     return df
 
 
-def _read_excel(data: bytes, options: ParseOptions, report: ParseReport, nrows: int | None) -> pd.DataFrame:
+def _read_excel(
+    data: bytes, options: ParseOptions, report: ParseReport, nrows: int | None
+) -> pd.DataFrame:
     with pd.ExcelFile(io.BytesIO(data)) as xls:
         names = [str(s) for s in xls.sheet_names]
         sheets = list(options.sheets) or names[:1]
         missing = [s for s in sheets if s not in names]
         if missing:
-            raise ValueError(f"Sheet(s) not found: {', '.join(missing)}. Available: {', '.join(names)}.")
-        frames = [pd.read_excel(xls, sheet_name=s, header=options.header, skiprows=options.skiprows or None,
-                                na_values=list(options.na_values), nrows=nrows) for s in sheets]
+            raise ValueError(
+                f"Sheet(s) not found: {', '.join(missing)}. Available: {', '.join(names)}."
+            )
+        frames = [
+            pd.read_excel(
+                xls,
+                sheet_name=s,
+                header=options.header,
+                skiprows=options.skiprows or None,
+                na_values=list(options.na_values),
+                nrows=nrows,
+            )
+            for s in sheets
+        ]
     if len(frames) == 1:
         return frames[0]
     if options.merge_key:
         usable = []
         for name, frame in zip(sheets, frames, strict=True):
             if options.merge_key not in frame.columns:
-                report.warnings.append(f"Sheet '{name}' has no column '{options.merge_key}' and was skipped.")
+                report.warnings.append(
+                    f"Sheet '{name}' has no column '{options.merge_key}' and was skipped."
+                )
                 continue
             usable.append(frame)
         if not usable:
             raise ValueError(f"No sheet contains the merge key '{options.merge_key}'.")
-        merged = functools.reduce(lambda left, right: pd.merge(left, right, on=options.merge_key, how="outer"), usable)
-        report.warnings.append(f"{len(usable)} sheet(s) merged on '{options.merge_key}' (outer join).")
+        merged = functools.reduce(
+            lambda left, right: pd.merge(left, right, on=options.merge_key, how="outer"), usable
+        )
+        report.warnings.append(
+            f"{len(usable)} sheet(s) merged on '{options.merge_key}' (outer join)."
+        )
         return merged
     report.warnings.append(f"{len(frames)} sheet(s) stacked vertically (no merge key).")
     return pd.concat(frames, ignore_index=True)
 
 
-def read_table(data: bytes, filename: str, options: ParseOptions | None = None, *, nrows: int | None = None) -> LoadResult:
+def read_table(
+    data: bytes, filename: str, options: ParseOptions | None = None, *, nrows: int | None = None
+) -> LoadResult:
     """Parse ``data`` (the file's bytes) with ``options`` (sniffed when omitted) and report what happened."""
     kind = file_kind(filename)
     options = options or sniff(data, filename)

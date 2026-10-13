@@ -1,23 +1,19 @@
-import json
-
-import streamlit as st
-from graph.builders.document import build_document_graph, filter_by_documents
-from graph.model import LayoutHint, RenderOptions
-from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
-
 # ==========================================
 # 1. GRAPH HELPER FUNCTIONS (Adapted for Docs)
 # ==========================================
-
 # Filtering, merging and graph construction live in graph.builders.document.
-
-
 # ==========================================
 # 2. PERSISTENCE HELPERS
 # ==========================================
 import datetime
+import json
+
+import streamlit as st
 
 from core.workspace import UserScope, resolve_within, safe_filename
+from graph.builders.document import build_document_graph, filter_by_documents
+from graph.model import LayoutHint, RenderOptions
+from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.components import no_dataset
 
 

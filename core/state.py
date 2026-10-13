@@ -7,7 +7,20 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
-DEFAULT_NA_TOKENS: tuple[str, ...] = ("", "NA", "N/A", "n/a", "NaN", "nan", "NULL", "null", "None", "-", "?", "#N/A")
+DEFAULT_NA_TOKENS: tuple[str, ...] = (
+    "",
+    "NA",
+    "N/A",
+    "n/a",
+    "NaN",
+    "nan",
+    "NULL",
+    "null",
+    "None",
+    "-",
+    "?",
+    "#N/A",
+)
 
 _SAVED_NAME = re.compile(r"^(?P<base>.+)_v(?P<version>\d+)$")
 
@@ -79,7 +92,12 @@ class DatasetRef:
         """``cohort_v3`` -> name ``cohort``, version 3 (the DuckDB store's naming convention)."""
         match = _SAVED_NAME.match(saved_name)
         if match:
-            return cls(name=match.group("base"), version=int(match.group("version")), origin="saved", **extra)
+            return cls(
+                name=match.group("base"),
+                version=int(match.group("version")),
+                origin="saved",
+                **extra,
+            )
         return cls(name=saved_name, origin="saved", **extra)
 
 

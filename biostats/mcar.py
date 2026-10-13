@@ -16,7 +16,9 @@ from scipy import stats
 from biostats.references import cite
 
 
-def em_mean_cov(x: np.ndarray, *, max_iter: int = 200, tol: float = 1e-6) -> tuple[np.ndarray, np.ndarray, int]:
+def em_mean_cov(
+    x: np.ndarray, *, max_iter: int = 200, tol: float = 1e-6
+) -> tuple[np.ndarray, np.ndarray, int]:
     """EM for the multivariate normal with values missing (NaN). Returns (mu, Sigma, iterations)."""
     x = np.asarray(x, dtype=float)
     n, p = x.shape
@@ -30,7 +32,7 @@ def em_mean_cov(x: np.ndarray, *, max_iter: int = 200, tol: float = 1e-6) -> tup
         patterns.setdefault(tuple(row), []).append(i)  # type: ignore[arg-type]
     pattern_rows = {k: np.array(v) for k, v in patterns.items()}
     iterations = 0
-    for iterations in range(1, max_iter + 1):
+    for iterations in range(1, max_iter + 1):  # noqa: B007 - the final count is reported after the loop
         sum_x = np.zeros(p)
         sum_xx = np.zeros((p, p))
         for pattern, rows in pattern_rows.items():
@@ -97,12 +99,20 @@ def littles_mcar_test(df: pd.DataFrame, *, max_iter: int = 200) -> dict:
         return {"error": "Insufficient degrees of freedom (a single missingness pattern)."}
     p_value = float(stats.chi2.sf(d2, dof))
     return {
-        "statistic": float(d2), "df": int(dof), "p_value": p_value, "n_patterns": n_patterns, "n": int(n), "em_iterations": iterations,
+        "statistic": float(d2),
+        "df": int(dof),
+        "p_value": p_value,
+        "n_patterns": n_patterns,
+        "n": int(n),
+        "em_iterations": iterations,
         "result": "Evidence against MCAR" if p_value < 0.05 else "No evidence against MCAR",
-        "interpretation": ("The observed means differ between missingness patterns more than expected under MCAR; the mechanism is "
-                           "MAR or MNAR (this test cannot tell them apart)." if p_value < 0.05 else
-                           "No evidence against MCAR. A non-significant result does not prove MCAR, and the test cannot "
-                           "distinguish MAR from MNAR; inspect the dependency scan as well."),
+        "interpretation": (
+            "The observed means differ between missingness patterns more than expected under MCAR; the mechanism is "
+            "MAR or MNAR (this test cannot tell them apart)."
+            if p_value < 0.05
+            else "No evidence against MCAR. A non-significant result does not prove MCAR, and the test cannot "
+            "distinguish MAR from MNAR; inspect the dependency scan as well."
+        ),
         "references": cite("little1988", "dempster1977"),
     }
 

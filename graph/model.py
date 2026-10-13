@@ -151,7 +151,9 @@ class GraphSpec(_Frozen):
         dupes = sorted(i for i, c in edge_counts.items() if c > 1)
         if dupes:
             raise ValueError(f"duplicate edge ids: {dupes[:5]}")
-        dangling = [e.id for e in self.edges if e.source not in node_counts or e.target not in node_counts]
+        dangling = [
+            e.id for e in self.edges if e.source not in node_counts or e.target not in node_counts
+        ]
         if dangling:
             raise ValueError(f"edges reference unknown nodes: {dangling[:5]}")
         try:
@@ -237,7 +239,9 @@ class GraphSpec(_Frozen):
         edges = tuple(
             e
             for e in self.edges
-            if e.source in keep and e.target in keep and (edge_set is None or e.category in edge_set)
+            if e.source in keep
+            and e.target in keep
+            and (edge_set is None or e.category in edge_set)
         )
         return self.model_copy(update={"nodes": nodes, "edges": edges})
 
@@ -276,9 +280,23 @@ class GraphSpec(_Frozen):
         for n in self.nodes:
             g.add_node(n.id, label=n.label, category=n.category, weight=n.weight)
         for e in self.edges:
-            g.add_edge(e.source, e.target, id=e.id, category=e.category, weight=e.weight, directed=e.directed)
+            g.add_edge(
+                e.source,
+                e.target,
+                id=e.id,
+                category=e.category,
+                weight=e.weight,
+                directed=e.directed,
+            )
             if use_directed and not e.directed:
-                g.add_edge(e.target, e.source, id=e.id, category=e.category, weight=e.weight, directed=False)
+                g.add_edge(
+                    e.target,
+                    e.source,
+                    id=e.id,
+                    category=e.category,
+                    weight=e.weight,
+                    directed=False,
+                )
         return g
 
     def to_json(self) -> str:

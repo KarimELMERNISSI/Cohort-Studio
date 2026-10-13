@@ -95,8 +95,18 @@ _NODE_RULES: dict[GraphKind, dict[str, tuple[str, NodeShape, str, str]]] = {
         "derived": ("tax.node.derived", NodeShape.ELLIPSE, "Derived variable", "Nodes"),
         "outcome": ("tax.node.outcome", NodeShape.ELLIPSE, "Outcome variable", "Nodes"),
         "formula": ("tax.node.formula", NodeShape.HEXAGON, "Formula", "Nodes"),
-        "input_external": ("tax.node.input_external", NodeShape.ELLIPSE, "External input variable", "Nodes"),
-        "derived_external": ("tax.node.derived_external", NodeShape.ELLIPSE, "External derived variable", "Nodes"),
+        "input_external": (
+            "tax.node.input_external",
+            NodeShape.ELLIPSE,
+            "External input variable",
+            "Nodes",
+        ),
+        "derived_external": (
+            "tax.node.derived_external",
+            NodeShape.ELLIPSE,
+            "External derived variable",
+            "Nodes",
+        ),
     },
     GraphKind.DOCUMENT: {
         "Concept": ("doc.node.Concept", NodeShape.ELLIPSE, "Concept", "Entities"),
@@ -106,7 +116,12 @@ _NODE_RULES: dict[GraphKind, dict[str, tuple[str, NodeShape, str, str]]] = {
         "Treatment": ("doc.node.Treatment", NodeShape.ELLIPSE, "Treatment", "Entities"),
         "Method": ("doc.node.Method", NodeShape.ELLIPSE, "Method", "Entities"),
         "Other": ("doc.node.Other", NodeShape.ELLIPSE, "Other", "Entities"),
-        "Inferred": ("doc.node.Inferred", NodeShape.ROUND_RECTANGLE, "Inferred (mentioned only in a relation)", "Entities"),
+        "Inferred": (
+            "doc.node.Inferred",
+            NodeShape.ROUND_RECTANGLE,
+            "Inferred (mentioned only in a relation)",
+            "Entities",
+        ),
     },
     GraphKind.FORMULA: {
         "input": ("formula.node.input", NodeShape.ELLIPSE, "Input available", "Nodes"),
@@ -137,13 +152,25 @@ def _correlation_edge_rules() -> dict[str, tuple[str, LineStyle, float, str, str
 _EDGE_RULES: dict[GraphKind, dict[str, tuple[str, LineStyle, float, str, str]]] = {
     GraphKind.CORRELATION: _correlation_edge_rules(),
     GraphKind.TAXONOMY: {
-        "category_member": ("tax.edge.category_member", LineStyle.DASHED, 1.5, "Belongs to category", "Relations"),
+        "category_member": (
+            "tax.edge.category_member",
+            LineStyle.DASHED,
+            1.5,
+            "Belongs to category",
+            "Relations",
+        ),
         "input": ("tax.edge.input", LineStyle.SOLID, 2.0, "Input of a formula", "Relations"),
         "yields": ("tax.edge.yields", LineStyle.SOLID, 2.0, "Formula yields variable", "Relations"),
         "related": ("tax.edge.related", LineStyle.DOTTED, 1.5, "Related variables", "Relations"),
     },
     GraphKind.DOCUMENT: {
-        "relation": ("doc.edge.relation", LineStyle.SOLID, 2.0, "Relation (label shows its type)", "Relations"),
+        "relation": (
+            "doc.edge.relation",
+            LineStyle.SOLID,
+            2.0,
+            "Relation (label shows its type)",
+            "Relations",
+        ),
     },
     GraphKind.FORMULA: {
         "input": ("formula.edge.input", LineStyle.SOLID, 2.0, "Input available", "Relations"),
@@ -222,10 +249,21 @@ def legend_entries(kind: GraphKind, theme: str = "light") -> tuple[LegendEntry, 
     """Legend derived from the same rules that style the graph."""
     entries: list[LegendEntry] = []
     for token, shape, label, group in _NODE_RULES[kind].values():
-        entries.append(LegendEntry(label=label, swatch="node", color=color(token, theme), shape=shape, group=group))
+        entries.append(
+            LegendEntry(
+                label=label, swatch="node", color=color(token, theme), shape=shape, group=group
+            )
+        )
     for token, line, width, label, group in _EDGE_RULES[kind].values():
         entries.append(
-            LegendEntry(label=label, swatch="edge", color=color(token, theme), line=line, width=width, group=group)
+            LegendEntry(
+                label=label,
+                swatch="edge",
+                color=color(token, theme),
+                line=line,
+                width=width,
+                group=group,
+            )
         )
     return tuple(entries)
 

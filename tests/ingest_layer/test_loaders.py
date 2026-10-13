@@ -79,8 +79,12 @@ def test_na_tokens_and_header_options() -> None:
 def _excel_bytes() -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        pd.DataFrame({"id": [1, 2, 3], "age": [50, 60, 70]}).to_excel(writer, sheet_name="Baseline", index=False)
-        pd.DataFrame({"id": [1, 2, 4], "event": ["No", "Yes", "No"]}).to_excel(writer, sheet_name="Outcome", index=False)
+        pd.DataFrame({"id": [1, 2, 3], "age": [50, 60, 70]}).to_excel(
+            writer, sheet_name="Baseline", index=False
+        )
+        pd.DataFrame({"id": [1, 2, 4], "event": ["No", "Yes", "No"]}).to_excel(
+            writer, sheet_name="Outcome", index=False
+        )
     return buf.getvalue()
 
 
@@ -89,7 +93,9 @@ def test_excel_single_sheet_merge_and_stack() -> None:
     assert excel_sheet_names(data) == ["Baseline", "Outcome"]
     first = read_table(data, "study.xlsx")
     assert list(first.df.columns) == ["id", "age"]
-    merged = read_table(data, "study.xlsx", ParseOptions(sheets=("Baseline", "Outcome"), merge_key="id"))
+    merged = read_table(
+        data, "study.xlsx", ParseOptions(sheets=("Baseline", "Outcome"), merge_key="id")
+    )
     assert len(merged.df) == 4 and {"age", "event"} <= set(merged.df.columns)
     stacked = read_table(data, "study.xlsx", ParseOptions(sheets=("Baseline", "Outcome")))
     assert len(stacked.df) == 6
@@ -115,5 +121,7 @@ def test_sample_cohort_loads_with_documented_properties() -> None:
     assert df["age"].max() == 212  # the deliberate anomaly
     risk = df.groupby("arm")["event"].apply(lambda s: (s == "Yes").mean())
     assert risk["Placebo"] / risk["Treatment"] > 1.4
-    assert df.groupby("arm")["biomarker"].apply(lambda s: s.isna().mean())["Treatment"] > 0.15  # MAR
+    assert (
+        df.groupby("arm")["biomarker"].apply(lambda s: s.isna().mean())["Treatment"] > 0.15
+    )  # MAR
     assert 0.03 < df["lab_mcar"].isna().mean() < 0.15  # MCAR

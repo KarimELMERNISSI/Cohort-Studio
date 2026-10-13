@@ -6,23 +6,32 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.expressions import UnsafeExpressionError, column_references, evaluate, evaluate_tree, safe_format, validate
+from core.expressions import (
+    UnsafeExpressionError,
+    column_references,
+    evaluate,
+    evaluate_tree,
+    safe_format,
+    validate,
+)
 
 
 @pytest.fixture
 def df() -> pd.DataFrame:
-    return pd.DataFrame({
-        "age": [10, 25, 70, np.nan],
-        "sex": ["male", "female", "male", "female"],
-        "status": ["Active", "Pending", "Closed", "Active"],
-        "systolic": [120, 150, 135, 90],
-        "diastolic": [80, 95, 85, 60],
-        "Weight": [50.0, 80.0, 90.0, 60.0],
-        "Height": [160.0, 180.0, 170.0, 150.0],
-        "visit": ["01/02/2020", "15/06/2021", "31/12/2019", "05/05/2022"],
-        "dob": ["01/02/1990", "15/06/1950", "31/12/2010", "05/05/2000"],
-        "Lean mass": [40.0, 60.0, 65.0, 45.0],
-    })
+    return pd.DataFrame(
+        {
+            "age": [10, 25, 70, np.nan],
+            "sex": ["male", "female", "male", "female"],
+            "status": ["Active", "Pending", "Closed", "Active"],
+            "systolic": [120, 150, 135, 90],
+            "diastolic": [80, 95, 85, 60],
+            "Weight": [50.0, 80.0, 90.0, 60.0],
+            "Height": [160.0, 180.0, 170.0, 150.0],
+            "visit": ["01/02/2020", "15/06/2021", "31/12/2019", "05/05/2022"],
+            "dob": ["01/02/1990", "15/06/1950", "31/12/2010", "05/05/2000"],
+            "Lean mass": [40.0, 60.0, 65.0, 45.0],
+        }
+    )
 
 
 ALLOW_CORPUS = [
@@ -89,7 +98,10 @@ def test_results_match_pandas(df: pd.DataFrame) -> None:
     assert mask.tolist() == [False, True, False, False]
     bmi = evaluate("df['Weight'] / ((df['Height']/100) ** 2)", df)
     assert bmi.iloc[0] == pytest.approx(50 / 1.6**2)
-    age = evaluate("((pd.to_datetime(df['visit'], dayfirst=True) - pd.to_datetime(df['dob'], dayfirst=True)).dt.days / 365.25).round()", df)
+    age = evaluate(
+        "((pd.to_datetime(df['visit'], dayfirst=True) - pd.to_datetime(df['dob'], dayfirst=True)).dt.days / 365.25).round()",
+        df,
+    )
     assert age.tolist() == [30.0, 71.0, 9.0, 22.0]
 
 
@@ -106,7 +118,11 @@ def test_extra_locals_and_tree_api(df: pd.DataFrame) -> None:
         return a - b
 
     tree = ast.parse("__safe_sub__(var_0, var_1) * 2", mode="eval")
-    result = evaluate_tree(tree, df, extra_locals={"var_0": df["Weight"], "var_1": df["Lean mass"], "__safe_sub__": safe_sub})
+    result = evaluate_tree(
+        tree,
+        df,
+        extra_locals={"var_0": df["Weight"], "var_1": df["Lean mass"], "__safe_sub__": safe_sub},
+    )
     assert result.tolist() == [20.0, 40.0, 50.0, 30.0]
     with pytest.raises(UnsafeExpressionError, match="Unknown name"):
         evaluate("var_9 + 1", df, extra_locals={"var_0": df["Weight"]})
@@ -122,13 +138,22 @@ def test_validate_reports_syntax_and_length() -> None:
 
 
 def test_column_references() -> None:
-    assert column_references("(df['a'] > 1) & df[['b', 'c']].sum(axis=1).gt(df['a'])") == {"a", "b", "c"}
+    assert column_references("(df['a'] > 1) & df[['b', 'c']].sum(axis=1).gt(df['a'])") == {
+        "a",
+        "b",
+        "c",
+    }
     assert column_references("not an expression (") == set()
 
 
 class TestSafeFormat:
     def test_substitutes_known_fields(self) -> None:
-        assert safe_format("{initial_variable}_{method_applied}", initial_variable="age", method_applied="Z") == "age_Z"
+        assert (
+            safe_format(
+                "{initial_variable}_{method_applied}", initial_variable="age", method_applied="Z"
+            )
+            == "age_Z"
+        )
         assert safe_format("plain_name") == "plain_name"
 
     def test_rejects_attribute_access_and_unknown_fields(self) -> None:
