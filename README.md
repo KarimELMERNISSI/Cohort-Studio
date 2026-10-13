@@ -98,6 +98,9 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Effect Sizes**: Cohen's $d$, Hedges' $g$ (small-sample bias correction), Eta-squared ($\eta^2$), Partial $\eta^2$, and Omega-squared ($\omega^2$).
 - **Missingness Diagnostics**: Little's MCAR test on EM estimates of the mean and covariance (Little 1988) and a full-family scan of missingness-versus-observed dependencies with adjusted p-values.
 - **Multivariate ANCOVA**: Treatment comparisons adjusting for continuous baseline covariates, featuring automated test of homogeneity of regression slopes.
+- **Survival & regression**: Kaplan-Meier curves with pointwise Greenwood intervals, log-rank test, Cox proportional hazards (Efron ties, Grambsch-Therneau check with the optional `survival` extra), logistic regression (odds ratios, DeLong AUC) and Poisson / negative-binomial regression with person-time offsets.
+- **Paired, rates & stratified**: paired t and Wilcoxon signed-rank, one-sample tests, exact McNemar, incidence rates with exact Poisson intervals and rate ratios, Mantel-Haenszel odds and risk ratios with the Breslow-Day test, standardised mortality ratios, Cohen's kappa and intraclass correlations.
+- **Multiple imputation**: m completed datasets by chained equations with posterior sampling, pooled by Rubin's rules with the fraction of missing information.
 - **Diagnostic Test Accuracy**: Sensitivity, Specificity, Positive/Negative Predictive Values (PPV/NPV), Diagnostic Odds Ratio, Youden's Index, Likelihood Ratios (LR+, LR-), and ROC AUC.
 - **Multiple Testing Corrections**: False Discovery Rate (Benjamini-Hochberg) and Family-Wise Error Rate (Bonferroni).
 
@@ -243,7 +246,7 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-444 passed, 1 deselected (live-provider integration test) in about 3 minutes
+458 passed, 1 deselected (live-provider integration test) in about 4 minutes
 Line coverage 55 % (CI floor 50 %); ruff and pyright (scoped) clean
 ```
 

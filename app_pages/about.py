@@ -64,6 +64,8 @@ def app():
         *   **Multivariate Analysis**: Perform ANCOVA and regression models to adjust for confounding variables.
         *   **Epidemiological Metrics**: Calculation of Odds Ratios (OR), Relative Risks (RR), risk differences and numbers needed to treat with confidence intervals.
         *   **Power Analysis**: Sample size calculation and statistical power estimation.
+        *   **Survival & regression**: Kaplan-Meier curves, log-rank test, Cox proportional hazards (with the proportional-hazards check), logistic and Poisson/negative-binomial regression.
+        *   **Paired, rates & stratified**: paired and one-sample tests, McNemar, incidence rates and rate ratios, Mantel-Haenszel with Breslow-Day, standardised ratios, Cohen's kappa and ICC.
         """)
         
         st.warning("**Reproducibility & Reporting**")

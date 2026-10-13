@@ -15,6 +15,7 @@ from statsmodels.stats.power import TTestIndPower
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
+from app_pages.analysis_extras import run_paired_and_rates, run_reliability
 from biostats.multiplicity import adjust as adjust_pvalues
 from biostats.power import (
     ARE_NORMAL,
@@ -195,7 +196,8 @@ def app():
         
         st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
 
-    tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Power & Sample Size", "Z-Score & Reference", "Test Guide & Education"])
+    tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Paired, rates & stratified", "Power & Sample Size",
+                    "Z-Score & Reference", "Test Guide & Education"])
 
     with tabs[0]:
         if analysis_mode == "Univariate (Group Comparison)":
@@ -205,15 +207,19 @@ def app():
 
     with tabs[1]:
         run_diagnostic_accuracy(df, analyzer)
+        run_reliability(df, analyzer)
 
     with tabs[2]:
-        run_power_analysis(df, analyzer)
+        run_paired_and_rates(df, analyzer)
 
     with tabs[3]:
+        run_power_analysis(df, analyzer)
+
+    with tabs[4]:
         # Use raw data for Z-Score tab as it has its own standardization logic
         run_zscore_analysis(df, analyzer)
 
-    with tabs[4]:
+    with tabs[5]:
         show_educational_content()
 
 def run_univariate_analysis(df, analyzer):

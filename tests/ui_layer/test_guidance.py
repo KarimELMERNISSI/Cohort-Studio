@@ -48,8 +48,8 @@ def test_every_combination_yields_a_recommendation() -> None:
         if not rec.available:
             assert rec.caveats
     assert (
-        available == 16
-    )  # independent-group routes exist; paired, one-sample and survival routes are planned (P8)
+        available >= 40
+    )  # paired, one-sample and survival routes exist since Tier C; Cochran's Q, Bowker and goodness-of-fit are planned
 
 
 def test_specific_routes() -> None:
@@ -80,7 +80,7 @@ def test_specific_routes() -> None:
         "Independent groups",
         "Roughly symmetric, at least 15 per group",
     )
-    assert not survival.available and "Kaplan" in survival.test
+    assert survival.available and "Kaplan" in survival.test and survival.page == "survival"
     with pytest.raises(ValueError):
         recommend(
             "Weird", "Two groups", "Independent groups", "Roughly symmetric, at least 15 per group"

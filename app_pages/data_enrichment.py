@@ -15,6 +15,7 @@ from rapidfuzz import fuzz
 
 import enrich.data_imputation as edi
 import enrich.external_data as eed
+from app_pages.enrichment_mi import render_multiple_imputation
 from core.expressions import evaluate_tree, safe_format
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
@@ -2833,8 +2834,9 @@ def app():
                 "Single imputation fills each missing cell once. P-values and confidence intervals computed on the "
                 "imputed dataset will be too narrow because the uncertainty of the imputation is ignored. Use it for "
                 "exploration and visualisation; for inference prefer complete-case analysis with a sensitivity check "
-                "or multiple imputation (planned)."
+                "or multiple imputation (below)."
             )
+            render_multiple_imputation()
 
             main_data = st.session_state['enriched_df']
             

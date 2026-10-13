@@ -60,6 +60,17 @@ GLOSSARY: dict[str, str] = {
     "ANCOVA": "Compares group means after adjusting for continuous covariates.",
     "Z-score": "Number of standard deviations a value lies from the mean of a reference population.",
     "Trace": "The recorded sequence of every operation applied to a dataset, used to reproduce an analysis.",
+    "Kaplan-Meier curve": "The survival probability over time estimated from censored follow-up; censored subjects leave the risk set without counting as events.",
+    "Log-rank test": "Compares survival curves between groups across the whole follow-up; sensitive to proportional differences, not to crossing curves.",
+    "Hazard ratio (HR)": "Ratio of instantaneous event rates between groups from a Cox model; assumes the ratio is constant over time (proportional hazards).",
+    "Incidence rate": "Events divided by the person-time at risk, usually expressed per 1000 person-years, with an exact Poisson interval.",
+    "Mantel-Haenszel": "A pooled odds (or risk) ratio across strata that adjusts for the stratifying variable; the Breslow-Day test checks whether the ratio is the same in every stratum.",
+    "Standardised mortality ratio (SMR)": "Observed divided by expected events, where the expected count comes from reference rates applied to the cohort's structure.",
+    "McNemar's test": "Compares paired binary outcomes (before/after, two tests on the same subjects); only discordant pairs matter.",
+    "Cohen's kappa": "Agreement between two raters beyond chance for categorical ratings; weighted kappa credits near-misses on ordered scales.",
+    "Intraclass correlation (ICC)": "Reliability of continuous measurements across raters or occasions; ICC(2,1) measures absolute agreement, ICC(3,1) consistency.",
+    "Multiple imputation": "Several completed datasets are drawn from the imputation model, the analysis is run on each, and Rubin's rules combine the results so that the uncertainty of the imputation is carried into the standard errors.",
+    "Fraction of missing information (FMI)": "The share of the variance of a pooled estimate that is due to the missing data; values above about 0.3 call for more imputations.",
 }
 
 

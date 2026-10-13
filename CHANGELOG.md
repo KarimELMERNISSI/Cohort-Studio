@@ -4,7 +4,18 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ---
 
-## [Unreleased]
+## [2.3.0] - 2026-10-13
+
+The October 2026 audit and professionalisation programme (phases P0-P8; see `documentation/13_Audit_Report_2026-10.md`).
+
+### Statistics Tier C: survival, regression, rates, paired tests, reliability, multiple imputation (audit phase P8; findings S4, S11)
+
+- **Survival & regression page** — Kaplan-Meier curves with pointwise Greenwood intervals and medians, the log-rank test, Cox proportional hazards (Efron ties; Grambsch-Therneau proportional-hazards test and concordance with the optional `survival` extra, `lifelines`), logistic regression (odds ratios with Wald intervals, DeLong AUC, events-per-parameter warning) and Poisson / negative-binomial regression with person-time offsets (`biostats.survival`, `biostats.regression`).
+- **Paired, rates & stratified tab** — Paired t-test and Wilcoxon signed-rank with CIs and Cohen's d_z, one-sample t / Wilcoxon / exact binomial, exact McNemar, incidence rates with exact Poisson intervals and rate ratios, Mantel-Haenszel odds and risk ratios with the Breslow-Day test and a crude-vs-adjusted confounding note, standardised ratios (`biostats.paired`, `biostats.rates`).
+- **Reliability** — Cohen's kappa (unweighted, linear, quadratic) with CI and Cohen's kappa interpretation, ICC(2,1) and ICC(3,1) with Shrout-Fleiss intervals (`biostats.reliability`), on the Diagnostic accuracy & agreement tab.
+- **Multiple imputation** — m completed datasets by chained equations with posterior sampling, Rubin's rules with the fraction of missing information, on the Enrich page (`biostats.imputation`); adopting a completed dataset is traced.
+- **Guidance** — The test chooser now routes paired, one-sample and survival questions to the pages that run them; twelve glossary entries added.
+- **Tests** — Reference values: Gehan 6-MP trial (medians 23 / 8, log-rank 16.79, Cox log HR 1.572, SE 0.412), statsmodels spector logit (ORs 16.88 / 1.100 / 10.79), incidence 15/1200 py (7.00 to 20.62 per 1000), SMR 25/18.4 (0.879 to 2.006), McNemar [[59,6],[16,80]] p 0.0525, kappa [[20,5],[10,15]] 0.400 (0.151 to 0.649), Shrout-Fleiss ICC example, Rubin pooling (T 0.060, df 64, FMI 0.272).
 
 ### Quality gates (audit phase P7; finding E14)
 

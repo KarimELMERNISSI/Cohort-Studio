@@ -34,7 +34,7 @@ class Recommendation:
     caveats: tuple[str, ...] = field(default_factory=tuple)
 
 
-_PLANNED = "Not available in this release (planned with the survival/paired-test module); the handbook lists the method."
+_PLANNED = "Not available in this release; the handbook lists the method."
 
 
 def recommend(outcome: str, groups: str, design: str, distribution: str) -> Recommendation:
@@ -54,13 +54,13 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
             test="Kaplan-Meier curves with the log-rank test; Cox regression to adjust for covariates",
             why="Follow-up times are censored: ordinary group tests on durations are biased.",
             effect_size="hazard ratio with 95% CI; median survival per group",
-            page="analyze",
-            where="Survival (planned)",
-            available=False,
+            page="survival",
+            where="Survival & regression page (Kaplan-Meier, log-rank, Cox)",
+            available=not (paired or one),
             caveats=(
-                _PLANNED,
-                "Check the proportional-hazards assumption before reporting a single hazard ratio.",
-            ),
+                "Check the proportional-hazards assumption (Grambsch-Therneau test on the page) before reporting a single hazard ratio.",
+            )
+            + ((_PLANNED,) if (paired or one) else ()),
         )
 
     if outcome in ("Continuous (measurement)", "Ordinal (ranked levels)"):
@@ -71,12 +71,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 why="A single group is compared with a fixed reference value.",
                 effect_size="difference from the reference with 95% CI",
                 page="analyze",
-                where="Z-score & reference tab (standardisation only)",
-                available=False,
-                caveats=(
-                    _PLANNED,
-                    "Use the Z-score tab to express values relative to a reference population meanwhile.",
-                ),
+                where="Paired, rates & stratified tab > One sample vs a reference value",
             )
         if paired:
             return Recommendation(
@@ -84,11 +79,9 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 if (rank_only or not symmetric)
                 else "Paired t-test",
                 why="Each subject contributes two measurements; the pairing must be respected.",
-                effect_size="mean (or median) within-pair difference with 95% CI",
+                effect_size="mean (or pseudo-median) within-pair difference with 95% CI; Cohen's d_z",
                 page="analyze",
-                where="Paired tests (planned)",
-                available=False,
-                caveats=(_PLANNED,),
+                where="Paired, rates & stratified tab > Paired measurements",
             )
         if two:
             if rank_only or not symmetric:
@@ -134,17 +127,23 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 why="A single proportion is compared with a reference value.",
                 effect_size="proportion with 95% Wilson CI",
                 page="analyze",
-                where="planned",
-                available=False,
-                caveats=(_PLANNED,),
+                where="Paired, rates & stratified tab > One-sample proportion",
             )
-        if paired:
+        if paired and two:
             return Recommendation(
                 test="McNemar's test (exact)",
                 why="Paired binary outcomes: only the discordant pairs carry information.",
                 effect_size="difference in proportions with 95% CI",
                 page="analyze",
-                where="Paired tests (planned)",
+                where="Paired, rates & stratified tab > Paired binary outcomes",
+            )
+        if paired:
+            return Recommendation(
+                test="Cochran's Q test",
+                why="Three or more related binary measurements per subject.",
+                effect_size="pairwise McNemar differences with Holm adjustment",
+                page="analyze",
+                where="planned",
                 available=False,
                 caveats=(_PLANNED,),
             )

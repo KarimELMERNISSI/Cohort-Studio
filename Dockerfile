@@ -25,9 +25,9 @@ ARG WITH_YFILES=0
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$WITH_YFILES" = "1" ]; then \
-        uv sync --frozen --no-install-project --extra graph-yfiles; \
+        uv sync --frozen --no-install-project --extra survival --extra graph-yfiles; \
     else \
-        uv sync --frozen --no-install-project; \
+        uv sync --frozen --no-install-project --extra survival; \
     fi
 
 COPY . .

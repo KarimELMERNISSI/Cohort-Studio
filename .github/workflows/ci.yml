@@ -26,7 +26,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python and dependencies (locked; dev tools and the optional yFiles extra for its offline tests)
-        run: uv sync --frozen --extra dev --extra graph-yfiles
+        run: uv sync --frozen --extra dev --extra graph-yfiles --extra survival
 
       - name: Lint (ruff, project configuration)
         run: uv run ruff check --output-format github .

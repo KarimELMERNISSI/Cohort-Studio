@@ -104,6 +104,15 @@ PAGES: tuple[PageDef, ...] = (
         chapter="05_Epidemiology",
     ),
     PageDef(
+        "survival",
+        "survival.py",
+        "Survival & regression",
+        "survival",
+        "Analyze",
+        ":material/timeline:",
+        chapter="05_Epidemiology",
+    ),
+    PageDef(
         "variable_map",
         "variable_map.py",
         "Variable map",

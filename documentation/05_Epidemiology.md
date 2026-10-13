@@ -118,3 +118,31 @@ Convert raw variable values into Z-scores relative to a reference population or 
 - Always check **normality** (Shapiro-Wilk) before choosing parametric tests.
 - For multiple comparisons, always apply a correction method to control false positives.
 - Power analysis should be performed **before** data collection when possible (a priori).
+
+---
+
+## Survival & regression (Analyze > Survival & regression)
+
+| Method | What it gives | Reference |
+| --- | --- | --- |
+| Kaplan-Meier | survival curve per group with pointwise 95% Greenwood (log-log) intervals, median survival | Kaplan & Meier 1958 |
+| Log-rank test | chi-square test of equal survival across groups | Mantel 1966 |
+| Cox proportional hazards | hazard ratios with Wald intervals (Efron ties); Grambsch-Therneau proportional-hazards test and concordance when the `survival` extra (lifelines) is installed | Cox 1972 |
+| Logistic regression | adjusted odds ratios with Wald intervals, pseudo-R2, DeLong AUC; warns below 10 events per parameter | Hosmer et al. 2013 |
+| Poisson / negative binomial | incidence-rate ratios with an optional person-time offset; over-dispersion check | Cameron & Trivedi 2013 |
+
+Categorical covariates are one-hot coded with their first (alphabetical) level as reference; the page states it.
+
+## Paired, rates & stratified (Analyze > Hypothesis tests & epidemiology)
+
+| Method | What it gives |
+| --- | --- |
+| Paired t-test / Wilcoxon signed-rank | mean or pseudo-median within-pair difference with 95% CI, Cohen's d_z, matched-pairs rank-biserial r |
+| One-sample t / Wilcoxon / exact binomial | difference from a reference value, Wilson interval for a proportion |
+| McNemar (exact) | paired binary outcomes from the discordant pairs |
+| Incidence rates | exact Poisson intervals, rate ratio with a score interval and exact conditional test |
+| Mantel-Haenszel | pooled OR (Robins-Breslow-Greenland interval) and RR (Greenland-Robins), Breslow-Day homogeneity, crude vs adjusted comparison |
+| Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
+| Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales |
+
+Multiple imputation with Rubin's rules lives on the Enrich page (Global imputation tab).

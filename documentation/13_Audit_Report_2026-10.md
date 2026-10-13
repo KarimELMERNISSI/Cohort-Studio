@@ -95,7 +95,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | done (multiple imputation with Rubin pooling deferred to P8) |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | done (function splitting and the remaining `unsafe_allow_html` blocks deferred to P7/P8 clean-up) |
 | P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | done (Docker image not built in the audit environment: Docker unavailable) |
-| P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement | planned |
+| P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement, SMR, multiple imputation | done (`biostats/survival`, `regression`, `rates`, `paired`, `reliability`, `imputation`) |
 
 ## Owner actions required (cannot be done from the repository)
 
@@ -112,9 +112,9 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | G3 selection never returned | closed | P1 (`sync_selection` in the adapter; selection drives the panels) |
 | G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
 | G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
-| S1–S5 wrong numbers | closed (S4 stage 1) | P2 (`biostats/`); multiple imputation in P5 |
+| S1–S5 wrong numbers | closed | P2 (`biostats/`); multiple imputation with Rubin's rules in P8 |
 | S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
-| S11 missing methods (survival, regression, MH, paired, agreement) | open | P8 |
+| S11 missing methods (survival, regression, MH, paired, agreement) | closed | P8 (Survival & regression page; Paired, rates & stratified tab; reliability section) |
 | E1 leaked key | open | owner action |
 | E2 Visualization import | closed | P0 |
 | E3 eval code execution | closed | P3 (`core/expressions` AST whitelist evaluator, `safe_format`) |
