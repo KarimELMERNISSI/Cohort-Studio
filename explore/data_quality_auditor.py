@@ -8,6 +8,17 @@ import enrich.custom_metrics_and_filters as ecm
 
 logger = logging.getLogger(__name__)
 
+# What each dimension's details table holds: where the issue is, what it is, how many, and the share affected.
+DETAIL_COLUMNS: tuple[str, ...] = ("Where", "Issue", "Count", "Share")
+
+
+def _details(rows: list[tuple[str, str, float | None, float | None]]) -> pd.DataFrame:
+    frame = pd.DataFrame(rows, columns=list(DETAIL_COLUMNS))
+    if not frame.empty:
+        frame = frame.sort_values("Count", ascending=False, na_position="last", kind="stable").reset_index(drop=True)
+    return frame
+
+
 class DataQualityAuditor:
     """
     Audits a pandas DataFrame to assess data quality across multiple dimensions:
@@ -26,13 +37,20 @@ class DataQualityAuditor:
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
         self.uniformity_details: list[dict[str, str]] = []
+        # Per dimension: the columns, rows or rules behind the points it loses (see DETAIL_COLUMNS).
+        self.details: dict[str, pd.DataFrame] = {}
 
     def compute_completeness(self) -> float:
         """Calculates the percentage of non-missing values."""
         total_cells = self.df.size
         if total_cells == 0:
             return 0.0
-        missing_cells = self.df.isnull().sum().sum()
+        per_column = self.df.isnull().sum()
+        n_rows = len(self.df)
+        self.details["Completeness"] = _details(
+            [(str(col), "empty cells", int(n), n / n_rows) for col, n in per_column.items() if n > 0]
+        )
+        missing_cells = per_column.sum()
         score = (1 - (missing_cells / total_cells)) * 100
         return round(float(score), 2)
 
@@ -42,6 +60,10 @@ class DataQualityAuditor:
         if total_rows == 0:
             return 0.0
         unique_rows = len(self.df.drop_duplicates())
+        duplicates = total_rows - unique_rows
+        self.details["Uniqueness"] = _details(
+            [("whole rows", "exact duplicate of an earlier row", duplicates, duplicates / total_rows)] if duplicates else []
+        )
         score = (unique_rows / total_rows) * 100
         return round(float(score), 2)
 
@@ -67,12 +89,14 @@ class DataQualityAuditor:
         
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
         logger.debug("compute_validity numeric_cols=%s", list(numeric_cols))
-        
+        self.details["Statistical Validity"] = _details([])
+
         if len(numeric_cols) == 0:
             return 100.0  # No numeric columns to be invalid
 
         total_outliers = 0
         total_numeric_values = 0
+        detail_rows: list[tuple[str, str, float | None, float | None]] = []
 
         # Univariate methods
         if method in ["iqr", "zscore", "quantile"]:
@@ -118,6 +142,8 @@ class DataQualityAuditor:
                 
                 total_outliers += outliers
                 total_numeric_values += len(data)
+                if outliers:
+                    detail_rows.append((str(col), f"outliers ({method})", int(outliers), outliers / len(data)))
                 logger.debug("compute_validity col=%s, outliers=%s, total=%s", col, outliers, total_outliers)
         
         # Multivariate ML methods
@@ -149,6 +175,15 @@ class DataQualityAuditor:
                     
                     total_outliers = (predictions == -1).sum()
                     total_numeric_values = len(ml_data)
+                    if total_outliers:
+                        detail_rows.append(
+                            (
+                                "numeric columns together",
+                                f"rows flagged by {method}",
+                                int(total_outliers),
+                                total_outliers / total_numeric_values,
+                            )
+                        )
                     logger.debug("compute_validity ML outliers=%s", total_outliers)
                 else:
                     logger.debug("compute_validity not enough data for ML: %s", len(ml_data))
@@ -158,6 +193,7 @@ class DataQualityAuditor:
                 # Fall back to IQR if sklearn not available
                 return self.compute_validity(method="iqr")
 
+        self.details["Statistical Validity"] = _details(detail_rows)
         if total_numeric_values == 0:
             logger.debug("compute_validity total_numeric_values=0, returning 100")
             return 100.0
@@ -173,26 +209,32 @@ class DataQualityAuditor:
         If a column is text but contains mostly numbers, it might be inconsistent formatting.
         """
         object_cols = self.df.select_dtypes(include=['object', 'string']).columns
+        self.details["Consistency"] = _details([])
         if len(object_cols) == 0:
             return 100.0
 
         inconsistent_cols = 0
+        detail_rows: list[tuple[str, str, float | None, float | None]] = []
         for col in object_cols:
+            values = self.df[col].dropna()
             # Check if it looks like a number
             try:
-                pd.to_numeric(self.df[col].dropna())
+                pd.to_numeric(values)
                 inconsistent_cols += 1
+                detail_rows.append((str(col), "numbers stored as text", int(len(values)), None))
                 continue
             except:
                 pass
-            
+
             # Check if it looks like a date
             try:
-                pd.to_datetime(self.df[col].dropna())
+                pd.to_datetime(values)
                 inconsistent_cols += 1
+                detail_rows.append((str(col), "dates stored as text", int(len(values)), None))
                 continue
             except:
                 pass
+        self.details["Consistency"] = _details(detail_rows)
 
         # Score: 100 - (percentage of potentially mis-typed columns)
         score = (1 - (inconsistent_cols / len(object_cols))) * 100
@@ -254,7 +296,14 @@ class DataQualityAuditor:
             total_rows = len(self.df)
             if total_rows == 0:
                 return 100.0
-                
+
+            self.details["Clinical Validity"] = _details(
+                [
+                    (str(rule), "rows flagged by this rule", int(mask.sum()), float(mask.sum()) / total_rows)
+                    for rule, mask in anomaly_data.items()
+                    if mask.sum()
+                ]
+            )
             anomaly_count = any_anomaly_mask.sum()
             score = (1 - (anomaly_count / total_rows)) * 100
             return round(score, 2)
@@ -316,9 +365,12 @@ class DataQualityAuditor:
                     "Issues": "; ".join(col_issues)
                 })
 
+        self.details["Uniformity"] = _details(
+            [(d["Column"], d["Issues"], None, None) for d in self.uniformity_details]
+        )
         if total_checks == 0:
             return 100.0
-            
+
         score = (1 - (issues_count / total_checks)) * 100
         return round(score, 2)
 

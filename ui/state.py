@@ -56,6 +56,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "diag_result",
     "ba_result",
     "workflow_marks",
+    "quality_history",
 )
 
 

@@ -8,12 +8,13 @@ trace session, so loading another dataset (a new trace) starts the workflow afre
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
-from core.progress import MARKABLE, Progress, StepMark, data_revision, evaluate
+from core.progress import MARKABLE, Progress, StepMark, data_revision, evaluate, revision_labels
 from utils.session_scope import get_current_scope
 
 _KEY = "workflow_marks"
@@ -49,6 +50,37 @@ def mark_step(step: str, detail: str = "") -> None:
 
 def current_trace_session() -> str | None:
     return _trace()[0]
+
+
+_QUALITY_KEY = "quality_history"
+
+
+def record_quality_check(metrics: Mapping[str, float | None]) -> list[dict]:
+    """
+    Keep the audit metrics of the current data, one entry per revision (the latest check of a revision wins).
+
+    Returns the checks of this dataset in order: ``{"revision", "label", "metrics", "at"}``. Storing the
+    metrics, not the global score, lets the history follow the weights the user sets now.
+    """
+    session_id, steps = _trace()
+    revision = data_revision(steps)
+    labels = revision_labels(steps)
+    store = st.session_state.get(_QUALITY_KEY)
+    if not isinstance(store, dict) or store.get("session_id") != session_id:
+        store = {"session_id": session_id, "checks": []}
+    checks: list[dict] = list(store["checks"])
+    entry = {
+        "revision": revision,
+        "label": labels[revision] if revision < len(labels) else f"revision {revision}",
+        "metrics": {k: v for k, v in metrics.items() if v is not None},
+        "at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if checks and checks[-1]["revision"] == revision:
+        checks[-1] = entry
+    else:
+        checks.append(entry)
+    st.session_state[_QUALITY_KEY] = {"session_id": session_id, "checks": checks}
+    return checks
 
 
 def _count(directory: Path | None, pattern: str) -> int:
@@ -114,4 +146,10 @@ def current_progress() -> Progress:
     )
 
 
-__all__ = ["current_progress", "current_trace_session", "knowledge_evidence", "mark_step"]
+__all__ = [
+    "current_progress",
+    "current_trace_session",
+    "knowledge_evidence",
+    "mark_step",
+    "record_quality_check",
+]

@@ -69,7 +69,12 @@ def test_progress_follows_the_pages_and_the_data(app: AppTest) -> None:
 
     # Validating again brings the step back to done on the new revision
     app.switch_page(nav.page_path("validate")).run()
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]
     assert _marks(app)["validate"].revision == 1
+    # the quality dashboard keeps one check per version of the data, named after the change
+    checks = app.session_state["quality_history"]["checks"]
+    assert [c["revision"] for c in checks] == [0, 1]
+    assert [c["label"] for c in checks] == ["as loaded", "Computed variable age_over_65"]
     assert "Quality checked on the current data" in _start_captions(app)
 
     # Loading another dataset starts the workflow afresh (new trace session)

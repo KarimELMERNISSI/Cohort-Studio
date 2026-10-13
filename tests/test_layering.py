@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Modules that must not import Streamlit anywhere (not even lazily).
 NO_STREAMLIT = [
-    "core", "biostats", "ingest", "graph/model.py", "graph/palette.py", "graph/builders", "explore/correlation_strength.py",
+    "core", "biostats", "ingest", "graph/model.py", "graph/palette.py", "graph/builders", "explore/correlation_strength.py", "explore/quality_score.py",
     "manage/iam", "manage/db_manager.py", "manage/transformation_manager.py", "manage/reproduction_manager.py",
     "utils/analysis_utils.py", "utils/path_utils.py", "utils/statistics_utils.py", "utils/visualization_utils.py",
     "utils/multipage.py", "utils/data_paths.py", "enrich/transformation_logic.py",

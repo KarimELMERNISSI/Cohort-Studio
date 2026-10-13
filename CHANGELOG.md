@@ -6,6 +6,13 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Interactive global quality score (Validate)
+
+- **Ring built from the dimensions** — The static gauge is replaced by a ring whose coloured segments are the audit dimensions, sized by their weights; the grey gap after a segment is the points it loses. Hover a segment for its score, weight, points added and lost; the ring follows the weight sliders; the centre shows the score, its band and the change since the previous check. Theme-aware (light and dark).
+- **Where the score loses points** — A bar per dimension, most costly first; clicking a bar lists the columns, rows or rules behind the loss (empty cells per column, outliers per column or rows flagged by a multivariate method, numbers or dates stored as text, spacing or capitalisation issues, duplicated rows, clinical rules). The breakdown is a fragment, so a click does not rerun the audit.
+- **Score history** — One point per version of the data (as loaded, then after each merge, computed variable, imputation or applied filter), recomputed with the current weights; each dimension can be added from the legend.
+- **Code** — `explore/quality_score.py` (weighted decomposition, bands; pure), `DataQualityAuditor.details` (where points are lost), `ui/quality_charts.py` (ring, bars, history), `ui.progress.record_quality_check`, `core.progress.revision_labels`. Tests: `tests/test_quality_score.py`, history checked end to end in `tests/ui_layer/test_workflow_progress.py`.
+
 ### Workflow progress on the Start page
 
 - **Ticks and "suggested next" follow what you did** — The workflow diagram and the step cards show, for the dataset currently loaded, which steps are done (green tick), done before the data changed (amber circular arrow, "run again") and which step comes next (pulsing ring). Hovering a box gives its status in a sentence, e.g. "Checked before the last 2 changes to the data: check the quality again."

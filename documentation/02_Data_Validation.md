@@ -160,4 +160,19 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
 | **Uniqueness** | Percentage of unique (non-duplicate) rows. |
 
-> **Tip**: Focus on resolving high-impact issues first — anomalies and outliers that meaningfully shift the overall score.
+The **global score** is the weighted mean of the dimensions (Score Weights Configuration; clinical validity counts
+double by default, and is left out when no anomaly rule is declared). It is drawn as three linked charts:
+
+- **The ring** — each coloured segment is one dimension, sized by its weight; the grey gap after a segment is the
+  points that dimension loses, so the score in the centre is 100 minus the gaps. Hover a segment for its score,
+  weight, points added and points lost. Under the score: the change since the previous check of this dataset.
+- **Where the score loses points** — one bar per dimension that loses points, the most costly on top. Click a bar to
+  list where the points go: the columns with empty cells, the columns with outliers (or the rows flagged by a
+  multivariate method), the text columns that hold numbers or dates, the columns with spacing or capitalisation
+  issues, the duplicated rows, or the clinical rules that flag rows.
+- **Score across the checks of this dataset** — one point per version of the data: as loaded, then after each change
+  (merge, computed or transformed variable, imputation, applied filter). The line uses the current weights; click a
+  dimension in the legend to add its own line. Loading another dataset starts a new history.
+
+> **Tip**: Focus on resolving high-impact issues first — the top bar of "Where the score loses points" — then come
+> back after each change to see its effect on the score.

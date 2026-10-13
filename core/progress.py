@@ -84,6 +84,16 @@ def data_revision(steps: Iterable[Mapping[str, Any]]) -> int:
     return sum(1 for step in steps if _function(step) in DATA_CHANGES)
 
 
+def revision_labels(steps: Iterable[Mapping[str, Any]]) -> list[str]:
+    """What the data looked like at each revision: index 0 is "as loaded", index r follows the r-th change."""
+    labels = ["as loaded"]
+    for step in steps:
+        name = _function(step)
+        if name in DATA_CHANGES:
+            labels.append(str(step.get("description") or name.replace("_", " ")))
+    return labels
+
+
 def trace_marks(steps: Iterable[Mapping[str, Any]]) -> dict[str, StepMark]:
     """Marks that the trace itself proves: the last enrichment and the last saved version."""
     revision = 0
@@ -225,6 +235,7 @@ __all__ = [
     "data_revision",
     "evaluate",
     "initial_progress",
+    "revision_labels",
     "suggest_next",
     "trace_marks",
 ]

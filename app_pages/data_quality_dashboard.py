@@ -10,7 +10,84 @@ import streamlit as st
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from explore.data_quality_auditor import DataQualityAuditor
-from ui.progress import mark_step
+from explore.quality_score import (
+    DEFAULT_WEIGHTS,
+    DIMENSION_HELP,
+    DIMENSIONS,
+    interpretation,
+    ordered,
+    weighted_score,
+)
+from ui.progress import mark_step, record_quality_check
+from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
+
+
+def _selected_dimension(event) -> str | None:
+    """Dimension of the bar clicked in the "points lost" chart, if any."""
+    try:
+        points = event.selection.points  # type: ignore[union-attr]
+    except AttributeError:
+        try:
+            points = event["selection"]["points"]
+        except (KeyError, TypeError):
+            return None
+    if not points:
+        return None
+    point = points[0]
+    custom = point.get("customdata") if isinstance(point, dict) else None
+    if isinstance(custom, (list, tuple)) and custom:
+        return str(custom[0])
+    label = point.get("y") if isinstance(point, dict) else None
+    return str(label) if label is not None else None
+
+
+@st.fragment
+def _score_breakdown(quality, details, checks, weights) -> None:
+    """Where the score loses points (click a bar to see the columns or rules) and the score across checks."""
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("**Where the score loses points**")
+        fig = loss_figure(quality)
+        if fig is None:
+            st.success("No point lost: every dimension scores 100%.", icon=":material/verified:")
+        else:
+            event = st.plotly_chart(
+                fig, key="dq_loss", on_select="rerun", selection_mode="points", config=chart_config()
+            )
+            names = [d.name for d in quality.by_loss() if d.lost >= 0.005]
+            chosen = _selected_dimension(event)
+            name = chosen if chosen in names else names[0]
+            dim = next(d for d in quality.dimensions if d.name == name)
+            st.markdown(f"**{name}** · score {dim.score:.1f}% · loses {dim.lost:.2f} points")
+            st.caption(
+                DIMENSION_HELP.get(name, "")
+                + ("" if chosen else " Click a bar to see another dimension.")
+            )
+            table = details.get(name)
+            if table is None or table.empty:
+                st.caption("No single column or rule to point at for this dimension.")
+            else:
+                st.dataframe(
+                    table,
+                    hide_index=True,
+                    width="stretch",
+                    height=min(38 + 35 * len(table), 260),
+                    column_config={
+                        "Count": st.column_config.NumberColumn(format="%d"),
+                        "Share": st.column_config.NumberColumn(format="percent", help="Share of the rows or values concerned."),
+                    },
+                )
+    with right:
+        st.markdown("**Score across the checks of this dataset**")
+        if len(checks) >= 2:
+            st.plotly_chart(history_figure(checks, weights), key="dq_history", config=chart_config())
+            st.caption("One point per version of the data (each enrichment, imputation or filter); "
+                       "click a dimension in the legend to add its line.")
+        else:
+            st.caption(
+                "One check so far. After a change to the data (enrichment, imputation, applied filter), "
+                "come back to this page: the score is checked again and a point is added here."
+            )
 
 
 def render_dashboard(df, config):
@@ -37,70 +114,44 @@ def render_dashboard(df, config):
     
 
     # --- Global Score Calculation ---
+    preferred_order = list(DIMENSIONS)
     with st.expander("Score Weights Configuration", expanded=False):
         st.write("Adjust the importance of each metric for the Global Score:")
         weights = {}
-        total_weight = 0
-        
-        # Define preferred order for weights display too
-        preferred_order = ["Completeness", "Statistical Validity", "Clinical Validity", "Consistency", "Uniformity", "Uniqueness"]
-        ordered_keys = [k for k in preferred_order if k in metrics] + [k for k in metrics if k not in preferred_order]
-        
         cols = st.columns(3)
-        for i, metric_name in enumerate(ordered_keys):
-            # Default weights
-            default = 1.0
-            if metric_name == "Clinical Validity": default = 2.0 # Higher importance
-            
+        for i, metric_name in enumerate(ordered(metrics)):
             with cols[i % 3]:
-                weights[metric_name] = st.slider(f"{metric_name} Weight", 0.0, 5.0, default, 0.5)
-                total_weight += weights[metric_name]
-    
-    # Calculate Weighted Average
-    global_score = 0
-    if total_weight > 0:
-        for name, score in metrics.items():
-            global_score += score * weights[name]
-        global_score /= total_weight
-    mark_step("validate", f"quality score {global_score:.1f}/100")
+                weights[metric_name] = st.slider(
+                    f"{metric_name} Weight", 0.0, 5.0, DEFAULT_WEIGHTS.get(metric_name, 1.0), 0.5
+                )
 
-    # --- Global Score Gauge ---
+    quality = weighted_score(metrics, weights)
+    global_score = quality.total
+    mark_step("validate", f"quality score {global_score:.1f}/100")
+    # one check per revision of the data: the history and the change since the last check
+    checks = record_quality_check(metrics)
+    previous = weighted_score(checks[-2]["metrics"], weights).total if len(checks) >= 2 else None
+
+    # --- Global Score: interactive ring built from the dimensions ---
     col_gauge, col_kpi = st.columns([1, 2])
-    
+
     with col_gauge:
-        fig = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = global_score,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Global Quality Score"},
-            gauge = {
-                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': "darkblue"},
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
-                'steps': [
-                    {'range': [0, 50], 'color': '#ff4b4b'},
-                    {'range': [50, 80], 'color': '#ffa421'},
-                    {'range': [80, 100], 'color': '#21c354'}],
-                'threshold': {
-                    'line': {'color': "black", 'width': 4},
-                    'thickness': 0.75,
-                    'value': global_score}}))
-        fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20))
-        st.plotly_chart(fig, width='stretch')
+        st.markdown("**Global Quality Score**")
+        st.plotly_chart(ring_figure(quality, previous), key="dq_ring", config=chart_config())
+        st.caption(
+            "Each coloured segment is one dimension, sized by its weight; the grey gap after it is the points "
+            "it loses. Hover a segment for details; change the weights above to see the ring follow."
+        )
 
     with col_kpi:
         st.subheader("Health Scorecard")
-        
+
         # Reorder metrics for display
-        # Desired order: Completeness, Statistical Validity, Clinical Validity, Consistency, Uniqueness
         ordered_metrics = {k: metrics[k] for k in preferred_order if k in metrics}
-        # Add any others not in preferred list
         for k, v in metrics.items():
             if k not in ordered_metrics:
                 ordered_metrics[k] = v
-        
+
         # Display metrics in a grid with containers for better look
         cols = st.columns(3) # 3 columns grid
         for i, (name, value) in enumerate(ordered_metrics.items()):
@@ -113,11 +164,11 @@ def render_dashboard(df, config):
                         color = "#ffa421" # Orange
                     else:
                         color = "#ff4b4b" # Red
-                    
+
                     delta_val = value - 100
                     delta_str = f"{delta_val:.1f}%" if value < 100 else "Perfect"
                     arrow = "↓" if value < 100 else ""
-                    
+
                     st.markdown(f"""
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.875rem; opacity: 0.8;">{name}</span>
@@ -127,9 +178,11 @@ def render_dashboard(df, config):
                             </span>
                         </div>
                     """, unsafe_allow_html=True)
-        
-        st.info(f"**Global Score Interpretation:** Your dataset has a quality score of **{global_score:.1f}/100** based on your custom weights. "
-                f"{'Excellent! Ready for analysis.' if global_score >= 90 else 'Needs improvement before reliable analysis.'}")
+
+        st.info(f"**Global Score Interpretation:** Your dataset has a quality score of **{global_score:.1f}/100** "
+                f"based on your custom weights. {interpretation(global_score)}")
+
+    _score_breakdown(quality, auditor.details, checks, weights)
 
     st.divider()
 
