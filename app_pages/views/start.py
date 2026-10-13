@@ -4,6 +4,8 @@ import streamlit as st
 
 from ui.components import page_header, page_link, status_chip
 from ui.state import SAMPLE_DICTIONARY_PATH, get_state
+from ui.workflow import BRANCHES, workflow_dot
+from utils.session_scope import get_current_scope
 
 state = get_state()
 username = st.session_state.get("username") or "researcher"
@@ -33,7 +35,14 @@ with st.container(horizontal=True, gap="medium"):
 
 # ---------------------------------------------------------------------------- workflow
 st.subheader("Your workflow", icon=":material/route:", anchor=False)
+st.caption("Three core steps take you from a raw file to results. Optional paths branch off whenever they help: "
+           "enrich the cohort, map your variables to your field, or learn from your documents.")
 has_data = state.has_data
+with st.container(border=True):
+    st.graphviz_chart(workflow_dot(has_data), width="stretch",
+                      alt="Workflow: load, validate, explore and analyse, report; optional enrichment after validation; "
+                          "your documents ground a variable map that informs the analysis.")
+    st.caption("Filled boxes: core steps  ·  dashed boxes: optional paths  ·  dashed arrows: where an optional path joins")
 steps = (
     (1, ":material/upload_file:", "Load a dataset", "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
      "ok" if has_data else "info", "done" if has_data else "start here", (("import", "Import a file"),)),
@@ -51,6 +60,28 @@ for column, (number, icon, title, text, status, status_label, links) in zip(st.c
         st.caption(text)
         with st.container(horizontal=True):
             for key, label in links:
+                page_link(key, label)
+
+# ---------------------------------------------------------------------------- optional paths
+st.subheader("Optional paths", icon=":material/alt_route:", anchor=False)
+ai_on = state.ai_status()["initialized"]
+scope = get_current_scope()
+docs_dir = scope.documents_dir() if scope else None
+n_docs = len(list(docs_dir.glob("*.pdf"))) if docs_dir is not None and docs_dir.exists() else 0
+for column, branch in zip(st.columns(len(BRANCHES), gap="medium"), BRANCHES, strict=True):
+    with column, st.container(border=True, height="stretch"):
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.badge("Optional", color="gray")
+            if branch.needs_ai:
+                status_chip("AI engine on" if ai_on else "needs the AI engine", "ok" if ai_on else "caution")
+            elif branch.key == "enrich":
+                status_chip("ready" if has_data else "load data first", "info" if has_data else "neutral")
+        st.markdown(f"#### {branch.icon} {branch.title}")
+        st.caption(f"*{branch.when[:1].upper()}{branch.when[1:]}.* {branch.text}")
+        if branch.key == "documents":
+            st.caption(f":material/picture_as_pdf: {n_docs} PDF(s) in your library")
+        with st.container(horizontal=True):
+            for key, label in branch.links:
                 page_link(key, label)
 
 # ---------------------------------------------------------------------------- versions, sample, AI

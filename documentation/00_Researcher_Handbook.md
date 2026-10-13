@@ -14,6 +14,22 @@ This application is built around three principles:
 
 ---
 
+## Core path and optional paths
+
+The **Start** page shows the workflow as a diagram. Three core steps take you from a raw file to results:
+**Load** (Data > Import, a saved version or the sample cohort), **Validate** (Data > Validate) and
+**Explore & analyse** (Explore and Analyze). Optional paths branch off whenever they help:
+
+| Optional path | When | What it adds | Page |
+| --- | --- | --- | --- |
+| Enrich the cohort | after validation | merge external sources, derive variables (formulas or AI suggestions), impute missing values | Data > Enrich |
+| Map your variables to your field | any time (AI engine) | a taxonomy of your variables grounded in your clinical domain and documents: definitions, units, relationships, formulas | Knowledge > Variable map |
+| Learn from your documents | any time (AI engine) | index literature, protocols or data dictionaries; chat with them; extract a knowledge graph that informs the variable map and enrichment suggestions | Knowledge > Documents |
+| Report and reproduce | at the end, or any time | saved versions, the trace of every step, step-by-step replay and the Word report | Reproduce > Versions & traces |
+
+The AI engine is optional and local by default (Settings > AI engine); without it, every core step and the
+enrichment path still work.
+
 ## Workflow Phases
 
 The application is organised into seven phases, mirroring the natural flow of cohort research. Pages are grouped in the navigation bar at the top (Data, Explore, Analyze, Knowledge, Reproduce, Help, Admin); the sidebar always shows the current dataset (name, version, size) with **Change** and **Save version**, the AI engine status and a link to this handbook. The **Start** page lists the three steps, your saved versions and a bundled **sample cohort** (500 synthetic patients) to try everything before loading your own data.

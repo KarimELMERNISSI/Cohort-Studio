@@ -6,6 +6,19 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Fixed: imputation after adding variables, one-hot encoding, multivariate outliers
+
+- **Imputation column mismatch** — "Shape of passed values is (500, 20), indices imply (500, 19)": columns that were neither numerical nor categorical (dates stored as text, identifiers) were imputed and kept by the transformer but missing from the list of output names. It happened on any cohort with a date read from a CSV, with or without a new variable. Every column is now assigned to exactly one group (numerical, categorical, pass-through) and the names are built from that partition (`enrich.data_imputation.partition_columns`).
+- **Pandas 3 text columns** — High-cardinality text such as patient identifiers is recognised again as a pass-through column (pandas 3 stores text as `str`, not `object`), so identifiers are no longer imputed or one-hot encoded.
+- **Yes/no computed variables** — A variable such as `age > 65` (true/false) no longer fails with "Some column names are not columns of the dataframe"; the column reordering step no longer drops any column.
+- **One-hot encoding** — The "Apply one-hot encoding" option, and the multivariate outlier detectors (LOF, Isolation Forest, DBSCAN) on data with missing values, failed because the encoder returned a sparse matrix; the output is now a dense, named table.
+- **Clearer error** — An imputation failure shows a readable message with the technical details folded away. Unused copies of the imputer factory were removed.
+- **Tests** — `tests/test_imputation_columns.py`: the sample cohort with a computed numeric and a computed yes/no variable, every imputation method, one-hot encoding, the drop strategy and MissForest; names are checked against the values.
+
+### Workflow with optional paths
+
+- The Start page shows the workflow as a diagram: the core path (load, validate, explore and analyse, report) and the optional branches (enrich after validation; map your variables to your field and learn from your documents, both with the AI engine), with where each joins. Cards for each optional path give its purpose, when to use it, its status (AI engine on/off, PDFs in the library) and links (`ui/workflow.py`). The handbook describes the core and optional paths.
+
 ### Visual redesign
 
 - **Brand** — Theme built from the new logo (navy, teal, cyan, mint) with full light and dark variants, a tighter type scale, softer radii, widget borders and branded chart palettes; the top bar shows a "Cohort Monitoring" wordmark that switches with the theme (`assets/brand/`, `dev_scripts/make_brand_assets.py`); the Deploy button is hidden.
