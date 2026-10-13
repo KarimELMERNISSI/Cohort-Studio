@@ -15,6 +15,12 @@ All notable changes to the Cohort Monitoring Package are documented here.
 - **Clearer error** — An imputation failure shows a readable message with the technical details folded away. Unused copies of the imputer factory were removed.
 - **Tests** — `tests/test_imputation_columns.py`: the sample cohort with a computed numeric and a computed yes/no variable, every imputation method, one-hot encoding, the drop strategy and MissForest; names are checked against the values.
 
+### Interactive workflow map, incremental enrichment
+
+- **Clickable map** — Every box of the Start-page workflow opens its page (mouse, or Enter/Space from the keyboard). Hovering or focusing a box highlights it and the links that connect to it, dims the rest and explains the step in a line under the map, including when it needs the AI engine. Built as a Streamlit custom component (`ui/components/workflow_map.py`) that follows the light and dark themes.
+- **Enrichment is a loop** — Validate ↔ Enrich ↔ Explore & analyse are drawn as two-way links ("iterate"): derive or impute a variable, validate and analyse again, come back for the next one. Descriptions, the optional-path card and the handbook say so.
+- **Clean layout** — Each link has its own lane: no two links cross or share an anchor, labels sit beside their line, "suggested next" sits above its box, the pulse ring is drawn under the arrows and a legend explains boxes and arrows inside the drawing. `tests/ui_layer/test_workflow.py` checks the geometry (no crossings, no link or label over a box, a label, the legend or "suggested next").
+
 ### Workflow with optional paths
 
 - The Start page shows the workflow as a diagram: the core path (load, validate, explore and analyse, report) and the optional branches (enrich after validation; map your variables to your field and learn from your documents, both with the AI engine), with where each joins. Cards for each optional path give its purpose, when to use it, its status (AI engine on/off, PDFs in the library) and links (`ui/workflow.py`). The handbook describes the core and optional paths.

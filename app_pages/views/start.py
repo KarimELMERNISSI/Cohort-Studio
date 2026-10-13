@@ -2,9 +2,10 @@
 
 import streamlit as st
 
-from ui.components import page_header, page_link, status_chip
+from ui.components import page_header, page_link, status_chip, switch_to
+from ui.components.workflow_map import workflow_map
 from ui.state import SAMPLE_DICTIONARY_PATH, get_state
-from ui.workflow import BRANCHES, workflow_dot
+from ui.workflow import BRANCHES
 from utils.session_scope import get_current_scope
 
 state = get_state()
@@ -38,11 +39,11 @@ st.subheader("Your workflow", icon=":material/route:", anchor=False)
 st.caption("Three core steps take you from a raw file to results. Optional paths branch off whenever they help: "
            "enrich the cohort, map your variables to your field, or learn from your documents.")
 has_data = state.has_data
+ai_on = state.ai_status()["initialized"]
 with st.container(border=True):
-    st.graphviz_chart(workflow_dot(has_data), width="stretch",
-                      alt="Workflow: load, validate, explore and analyse, report; optional enrichment after validation; "
-                          "your documents ground a variable map that informs the analysis.")
-    st.caption("Filled boxes: core steps  ·  dashed boxes: optional paths  ·  dashed arrows: where an optional path joins")
+    target = workflow_map(has_data=has_data, ai_on=ai_on)
+if target:
+    switch_to(target)
 steps = (
     (1, ":material/upload_file:", "Load a dataset", "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
      "ok" if has_data else "info", "done" if has_data else "start here", (("import", "Import a file"),)),
@@ -64,7 +65,6 @@ for column, (number, icon, title, text, status, status_label, links) in zip(st.c
 
 # ---------------------------------------------------------------------------- optional paths
 st.subheader("Optional paths", icon=":material/alt_route:", anchor=False)
-ai_on = state.ai_status()["initialized"]
 scope = get_current_scope()
 docs_dir = scope.documents_dir() if scope else None
 n_docs = len(list(docs_dir.glob("*.pdf"))) if docs_dir is not None and docs_dir.exists() else 0
