@@ -19,7 +19,7 @@ from app_pages.enrichment_mi import render_multiple_imputation
 from core.expressions import evaluate_tree, safe_format
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
-from ui.components import no_dataset
+from ui.components import error_card, no_dataset
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
 from utils.date_parser import smart_parse_dates
@@ -2981,7 +2981,7 @@ def app():
                         st.dataframe(styled_df, width="stretch")
                         #st.write(st.session_state['enriched_df'].info(verbose=True))
                 except Exception as e:
-                    st.error(f"An error occurred: {e}")
+                    error_card("Imputation failed. Check the columns listed under Advanced settings.", e)
         
         with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None:

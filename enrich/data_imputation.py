@@ -164,10 +164,19 @@ class MissForestTransformer(TransformerMixin):
     
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 
-def detect_remainder_columns(data, threshold=0.8):
+def _is_text(series: pd.Series) -> bool:
+    """Text-like column: object, pandas string ('str' in pandas 3) or categorical dtype."""
+    return (
+        pd.api.types.is_object_dtype(series)
+        or pd.api.types.is_string_dtype(series)
+        or isinstance(series.dtype, pd.CategoricalDtype)
+    )
+
+
+def detect_remainder_columns(data, threshold=0.8, date_like_columns=None):
     """
-    Detects columns to be included in the remainder based on distinct value criteria for object or categorical types
-    or if they are date-related columns.
+    Columns that should not be imputed or encoded: dates (true date/time dtypes and text columns
+    recognised as dates) and high-cardinality text columns such as identifiers.
 
     Parameters:
     - data: pd.DataFrame
@@ -175,29 +184,31 @@ def detect_remainder_columns(data, threshold=0.8):
     - threshold: float, default=0.8
         The proportion of distinct values to non-null values to qualify as a remainder column.
         If the value is greater than 1, it defines the exact number of distinct values used as the threshold.
+    - date_like_columns: iterable of str, optional
+        Text columns already recognised as dates (e.g. ``DataAnalyzer.date_cols``).
 
     Returns:
     - list: Names of columns to be included in the remainder, preserving the order in the input DataFrame.
     """
+    date_like = set(date_like_columns or [])
     remainder_cols = []
-    date_cols = data.select_dtypes(include=['datetime', 'datetime64', 'timedelta64']).columns.tolist()
-
-    # Iterate through all columns in the DataFrame to preserve their original order
     for col in data.columns:
-        # Check for datetime, datetime64, or timedelta64 types
-        if col in date_cols:
+        series = data[col]
+        if (
+            col in date_like
+            or pd.api.types.is_datetime64_any_dtype(series)
+            or pd.api.types.is_timedelta64_dtype(series)
+        ):
             remainder_cols.append(col)
-            continue  # Skip further checks for this column
-
-        # Check for object or categorical columns with high cardinality
-        if data[col].dtype in ['object', 'category']:
-            non_null_count = data[col].notnull().sum()
-            distinct_count = data[col].nunique()
-
-            # Determine if the column meets the threshold criteria
-            if (threshold > 1 and distinct_count >= threshold) or (threshold <= 1 and distinct_count >= threshold * non_null_count):
+            continue
+        # High-cardinality text (identifiers, free text). Pandas 3 stores text as 'str', not 'object'.
+        if _is_text(series):
+            non_null_count = series.notnull().sum()
+            distinct_count = series.nunique()
+            if (threshold > 1 and distinct_count >= threshold) or (
+                threshold <= 1 and distinct_count >= threshold * non_null_count
+            ):
                 remainder_cols.append(col)
-    debug_print(f"\n---------------------------------------\n---------------------------------------\nremainder_cols:{remainder_cols}\n---------------------------------------\n---------------------------------------\n" , debug=True)
     return remainder_cols
 
 
@@ -276,26 +287,48 @@ def get_feature_names(preprocessor, column_names, num_scaler=False, cat_encoder=
 
 
 # Sort columns during our data pre-processing
-def reorder_data_columns(data, remainder_columns):
+def reorder_data_columns(data, numerical_columns, categorical_columns):
     """
-    Reorder columns in a DataFrame by placing numerical, categorical, and remainder columns in a specific order.
-
-    Parameters:
-    - data: The DataFrame to reorder.
-    - remainder_columns: List of columns to keep at the end of the DataFrame.
-
-    Returns:
-    - data: The reordered DataFrame.
+    Numerical columns first, then categorical ones, then every other column in its original order.
+    No column is ever dropped (true/false, date and text columns used to disappear here).
     """
-    # Select categorical and numerical columns, excluding the remainder columns
-    categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
-    numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
-    
-    # Define the new order for columns
-    new_order = list(numerical_cols) + list(categorical_cols) + list(remainder_columns)
-    
-    # Reorder the DataFrame and return
-    return data.reindex(columns=new_order)
+    first = [c for c in list(numerical_columns) + list(categorical_columns) if c in data.columns]
+    rest = [c for c in data.columns if c not in set(first)]
+    return data[first + rest]
+
+
+def partition_columns(data, remainder_columns, analyzer=None):
+    """
+    Assign every column to exactly one group: (numerical, categorical, passthrough).
+
+    - categorical: text and categorical columns, true/false columns, binary and low-cardinality numeric columns;
+    - numerical: the other numeric columns;
+    - passthrough: everything else (requested remainder columns, dates, identifiers, any other dtype), kept in
+      the input order, which is the order in which a ColumnTransformer appends its remainder.
+    """
+    analyzer = analyzer or DataAnalyzer(data)
+    remainder = [c for c in remainder_columns if c in data.columns]
+    excluded = set(remainder) | set(analyzer.date_cols)
+    categorical_like = (
+        set(analyzer.categorical_cols)
+        | set(analyzer.binary_cols)
+        | set(analyzer.non_binary_low_cardinality_numeric_cols)
+        | {c for c in data.columns if pd.api.types.is_bool_dtype(data[c])}
+    )
+    categorical = pd.Index([c for c in data.columns if c in categorical_like and c not in excluded])
+    numerical = pd.Index(
+        [
+            c
+            for c in data.columns
+            if pd.api.types.is_numeric_dtype(data[c])
+            and not pd.api.types.is_bool_dtype(data[c])
+            and c not in excluded
+            and c not in set(categorical)
+        ]
+    )
+    assigned = set(numerical) | set(categorical)
+    passthrough = [c for c in data.columns if c not in assigned]
+    return numerical, categorical, passthrough
 
 
 def get_imputer(numerical_imputation_method='mean',
@@ -334,53 +367,32 @@ def get_imputer(numerical_imputation_method='mean',
     # Handle remainder columns
     if remainder_strategy != 'drop':
         remainder_strategy = 'passthrough'
-    # Filter remainder_columns to only those present in the DataFrame
-    if remainder_columns is None:
-        remainder_columns = []
-    elif remainder_columns == 'auto':
-        remainder_columns = detect_remainder_columns(data, threshold=remainder_threshold)
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-    else:
-        remainder_columns = [col for col in remainder_columns if col in data.columns]
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-        
     # inject analyzer for binary+cat low cardinality tbd
     analyzer = DataAnalyzer(data)
-    
-    # Debugging block to print intermediate values
-    print("\n-----------\n----------- DEBUG INFO -----------")
-    print(f"\nanalyzer.numeric_cols (type: {type(analyzer.numeric_cols)}): {analyzer.numeric_cols}")
-    print(f"\nanalyzer.categorical_cols (type: {type(analyzer.categorical_cols)}): {analyzer.categorical_cols}")
-    print(f"\nanalyzer.binary_cols (type: {type(analyzer.binary_cols)}): {analyzer.binary_cols}")
-    print(f"\nanalyzer.non_binary_low_cardinality_numeric_cols (type: {type(analyzer.non_binary_low_cardinality_numeric_cols)}): {analyzer.non_binary_low_cardinality_numeric_cols}")
-    print(f"\nremainder_columns (type: {type(remainder_columns)}): {remainder_columns}")
-    print(f"\ndata columns (type: {type(data.columns)}): {data.columns.tolist()}")
-    # Combine categorical, binary, and low-cardinality numeric columns into a single pd.Index, excluding remainder_columns
-    categorical_cols = (
-        pd.Index(analyzer.categorical_cols)  # Categorical columns
-        .union(analyzer.binary_cols)         # Binary columns
-        .union(analyzer.non_binary_low_cardinality_numeric_cols)  # Low-cardinality numeric columns
-        .difference(remainder_columns)       # Exclude remainder columns
+
+    # Remainder columns are kept out of imputation/encoding (dates, identifiers, user choice)
+    if remainder_columns is None:
+        remainder_columns = []
+    elif isinstance(remainder_columns, str) and remainder_columns == 'auto':
+        remainder_columns = detect_remainder_columns(
+            data, threshold=remainder_threshold, date_like_columns=analyzer.date_cols
+        )
+    else:
+        remainder_columns = [col for col in remainder_columns if col in data.columns]
+
+    # Every column belongs to exactly one group, so the output names always match the output values.
+    # Anything that is neither numerical nor categorical (dates stored as text, identifiers, other dtypes)
+    # passes through unchanged (or is dropped with remainder_strategy='drop').
+    numerical_cols, categorical_cols, remainder_columns = partition_columns(data, remainder_columns, analyzer)
+    debug_print(
+        f"Imputer columns - numerical: {numerical_cols.tolist()}; categorical: {categorical_cols.tolist()}; "
+        f"pass-through/remainder: {remainder_columns}",
+        debug=debug,
     )
 
-    print(f"\nCombined categorical_cols (type: {type(categorical_cols)}): {categorical_cols.tolist()}")
+    data = reorder_data_columns(data, numerical_cols, categorical_cols)
+    debug_print(f"ordered data cols: {data.columns.tolist()}", debug=debug)
 
-    # Select numerical columns from the data, excluding `categorical_cols` and `remainder_columns`
-    numerical_cols = (
-        data.select_dtypes(include=['number']).columns  # All numeric columns as pd.Index
-        .difference(categorical_cols)                  # Exclude `categorical_cols`
-        .difference(remainder_columns)                 # Exclude `remainder_columns`
-    )
-
-    print(f"\nSelected numerical_cols (type: {type(numerical_cols)}): {numerical_cols.tolist()}")
-    print("----------- END DEBUG INFO -----------\n-----------\n")
-    #categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
-    #numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
-    print(f"\n-----------\n-----------\n categorical_cols {categorical_cols}\n-----------\n numeric:{numerical_cols}\n-----------\n-----------\n")
-    
-    data = reorder_data_columns(data, remainder_columns=remainder_columns)
-    debug_print(f"ordered data cols: {data.columns.tolist()}",debug=debug)
-    
     # If MissForest is chosen for both numerical and categorical imputation
     if numerical_imputation_method == categorical_imputation_method == 'missforest':
         imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps)
@@ -392,7 +404,7 @@ def get_imputer(numerical_imputation_method='mean',
         else:
             transformers.append(('num_variables', 'passthrough', numerical_cols))
         if cat_encoder:
-            transformers.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore'), categorical_cols))
+            transformers.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_cols))
         else:
             transformers.append(('cat_variables', 'passthrough', categorical_cols))
 
@@ -451,7 +463,7 @@ def get_imputer(numerical_imputation_method='mean',
     if num_scaler:
         num_pipeline.steps.insert(0, ('num_scaler', StandardScaler()))
     if cat_encoder:
-        cat_pipeline.steps.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore')))
+        cat_pipeline.steps.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False)))
 
     preprocessor = ColumnTransformer(transformers=[
         ('num_preprocessor', num_pipeline, numerical_cols),
@@ -473,341 +485,3 @@ def get_imputer(numerical_imputation_method='mean',
     debug_print("All output columns", all_output_columns, debug=debug)
 
     return preprocessor, all_output_columns
-
-
-
-
-def get_imputer_in_progress(numerical_imputation_method='mean',
-                categorical_imputation_method='most_frequent',
-                cat_encoder=False,
-                num_scaler=False,
-                data=None,
-                remainder_columns=None,
-                remainder_strategy='passthrough',
-                remainder_threshold=0.3,
-                total_steps=10,
-                progress_placeholder=None,
-                debug=False):
-    """
-    Returns the appropriate imputer based on the specified imputation methods for numerical and categorical columns.
-
-    Parameters:
-    - numerical_imputation_method (str): Imputation method for numerical columns ('mean', 'median', 'knn', 'missforest').
-    - categorical_imputation_method (str): Imputation method for categorical columns ('most_frequent', 'missforest').
-    - cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
-    - num_scaler (bool): Whether to scale numerical columns.
-    - data (pandas.DataFrame): Input DataFrame used to identify categorical and numerical columns.
-    - remainder_columns: list, default=None: Columns to pass through without transformation (e.g., ID columns), will be excluded from imputation, applying remainder strategy. 
-        NB : If it is set to 'auto', it will automatically guess the remainder columns based on your input data.
-    - remainder_threshold (float): Default (0.8), from 0 to 1, filter out non-numeric columns having a ratio distinct modalities / non empty rows higher than the fixed threshold if ramainder columns is set to 'auto'  
-    - remainder_strategy (str): 'passthrough' (keep as it is) or 'drop' (remove from the final dataset)
-    - progress_placeholder: Streamlit empty container for showing the progress bar, default=None.
-    - debug (bool): Whether to print debug information.
-
-    Returns:
-    - A ColumnTransformer object or a MissForestTransformer if using MissForest for both.
-    - A list of all output columns in the final transformed DataFrame.
-    """
-    if data is None or not isinstance(data, pd.DataFrame):
-        raise ValueError("Invalid input data. Please provide a pandas DataFrame.")
-    # Handle remainder columns
-    if remainder_strategy != 'drop':
-        remainder_strategy = 'passthrough'
-    # Filter remainder_columns to only those present in the DataFrame
-    if remainder_columns is None:
-        remainder_columns = []
-    elif remainder_columns == 'auto':
-        remainder_columns = detect_remainder_columns(data, threshold=remainder_threshold)
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-    else:
-        remainder_columns = [col for col in remainder_columns if col in data.columns]
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-        
-    # inject analyzer for binary+cat low cardinality tbd
-    analyzer = DataAnalyzer(data)
-    
-    # Debugging block to print intermediate values
-    print("\n-----------\n----------- DEBUG INFO -----------")
-    print(f"\nanalyzer.numeric_cols (type: {type(analyzer.numeric_cols)}): {analyzer.numeric_cols}")
-    print(f"\nanalyzer.categorical_cols (type: {type(analyzer.categorical_cols)}): {analyzer.categorical_cols}")
-    print(f"\nanalyzer.binary_cols (type: {type(analyzer.binary_cols)}): {analyzer.binary_cols}")
-    print(f"\nanalyzer.non_binary_low_cardinality_numeric_cols (type: {type(analyzer.non_binary_low_cardinality_numeric_cols)}): {analyzer.non_binary_low_cardinality_numeric_cols}")
-    print(f"\nremainder_columns (type: {type(remainder_columns)}): {remainder_columns}")
-    print(f"\ndata columns (type: {type(data.columns)}): {data.columns.tolist()}")
-    # Combine categorical, binary, and low-cardinality numeric columns into a single pd.Index, excluding remainder_columns
-    categorical_cols = (
-        pd.Index(analyzer.categorical_cols)  # Categorical columns
-        .union(analyzer.binary_cols)         # Binary columns
-        .union(analyzer.non_binary_low_cardinality_numeric_cols)  # Low-cardinality numeric columns
-        .difference(remainder_columns)       # Exclude remainder columns
-    )
-
-    print(f"\nCombined categorical_cols (type: {type(categorical_cols)}): {categorical_cols.tolist()}")
-
-    # Select numerical columns from the data, excluding `categorical_cols` and `remainder_columns`
-    numerical_cols = (
-        data.select_dtypes(include=['number']).columns  # All numeric columns as pd.Index
-        .difference(categorical_cols)                  # Exclude `categorical_cols`
-        .difference(remainder_columns)                 # Exclude `remainder_columns`
-    )
-
-    print(f"\nSelected numerical_cols (type: {type(numerical_cols)}): {numerical_cols.tolist()}")
-    print("----------- END DEBUG INFO -----------\n-----------\n")
-    #categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
-    #numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
-    print(f"\n-----------\n-----------\n categorical_cols {categorical_cols}\n-----------\n numeric:{numerical_cols}\n-----------\n-----------\n")
-    
-    data = reorder_data_columns(data, remainder_columns=remainder_columns)
-    debug_print(f"ordered data cols: {data.columns.tolist()}",debug=debug)
-    
-    # If MissForest is chosen for both numerical and categorical imputation
-    if numerical_imputation_method == categorical_imputation_method == 'missforest':
-        imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps)
-
-        # Handle scaling and encoding
-        transformers = []
-        if num_scaler and len(numerical_cols) > 0:
-            transformers.append(('num_scaler', StandardScaler(), numerical_cols))
-        else:
-            transformers.append(('num_variables', 'passthrough', numerical_cols))
-        if cat_encoder and len(categorical_cols) > 0:
-            transformers.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore'), categorical_cols))
-        else:
-            transformers.append(('cat_variables', 'passthrough', categorical_cols))
-
-        scaler_x_encoder = ColumnTransformer(transformers=transformers, remainder=remainder_strategy)
-
-        preprocess_selection = Pipeline(steps=[
-            ('missforest_imputation', imputer),
-            ('scaling_x_encoding', scaler_x_encoder)
-        ])
-        
-        preprocessor = ColumnTransformer(transformers=[
-            ('preprocess_selection', preprocess_selection, numerical_cols.union(categorical_cols)),
-            ('remainder_pass', remainder_strategy, remainder_columns)
-        ])
-        
-        preprocessor.fit(data)
-
-        new_num_cols = get_feature_names(preprocessor, numerical_cols, num_scaler=num_scaler, debug=debug)  
-        new_cat_cols = get_feature_names(preprocessor, categorical_cols, cat_encoder=cat_encoder, debug=debug)
-
-        if remainder_strategy == 'drop':
-            all_output_columns = list(new_num_cols) + list(new_cat_cols)
-        else:
-            all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
-
-        debug_print("Final new_num_cols", new_num_cols, debug=debug)
-        debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-        debug_print("All output columns", all_output_columns, debug=debug)
-
-        return preprocessor, all_output_columns
-
-    if numerical_imputation_method == 'mean':
-        num_imputer = SimpleImputer(strategy='mean')
-    elif numerical_imputation_method == 'median':
-        num_imputer = SimpleImputer(strategy='median')
-    elif numerical_imputation_method == 'knn':
-        num_imputer = KNNImputer()
-    elif numerical_imputation_method == 'mice':
-        # Single imputation by chained equations (one deterministic pass); not multiple imputation.
-        num_imputer = IterativeImputer(random_state=RANDOM_STATE)
-    elif numerical_imputation_method == 'missforest':
-        num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
-    else:
-        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', 'mice', or 'missforest'.")
-
-    if categorical_imputation_method == 'most_frequent':
-        cat_imputer = SimpleImputer(strategy='most_frequent')
-    elif categorical_imputation_method == 'missforest':
-        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
-    else:
-        raise ValueError("Unsupported categorical imputation method. Choose 'most_frequent' or 'missforest'.")
-
-    num_pipeline = Pipeline(steps=[('num_imputer', num_imputer)])
-    cat_pipeline = Pipeline(steps=[('cat_imputer', cat_imputer)])
-
-    # Define pipelines only if respective columns are present
-    if num_scaler and len(numerical_cols) > 0:
-        num_pipeline = Pipeline(steps=[('num_scaler', StandardScaler())])
-    else:
-        num_pipeline = None  # No pipeline for numerical data
-
-    if cat_encoder and len(categorical_cols) > 0:
-        cat_pipeline = Pipeline(steps=[('cat_encoder', OneHotEncoder(handle_unknown='ignore'))])
-    else:
-        cat_pipeline = None  # No pipeline for categorical data
-
-    # Initialize the ColumnTransformer with valid pipelines
-    transformers = []
-    if num_pipeline:
-        transformers.append(('num_preprocessor', num_pipeline, numerical_cols))
-    if cat_pipeline:
-        transformers.append(('cat_preprocessor', cat_pipeline, categorical_cols))
-
-    # Build the preprocessor
-    preprocessor = ColumnTransformer(
-        transformers=transformers,
-        remainder=remainder_strategy  # e.g., 'drop', 'passthrough'
-    )
-
-    # Fit the preprocessor only if there is data to process
-    if transformers:
-        preprocessor.fit(data)
-    else:
-        print("No columns to preprocess. Check your numerical and categorical column assignments.")
-
-    new_num_cols = get_feature_names(preprocessor, numerical_cols, num_scaler=num_scaler, debug=debug) #.named_transformers_['num_preprocessor']
-    new_cat_cols = get_feature_names(preprocessor, categorical_cols, cat_encoder=cat_encoder, debug=debug) #.named_transformers_['cat_preprocessor']
-
-    if remainder_strategy == 'drop':
-        all_output_columns = list(new_num_cols) + list(new_cat_cols)
-    else:
-        all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
-
-    debug_print("Final new_num_cols", new_num_cols, debug=debug)
-    debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-    debug_print("All output columns", all_output_columns, debug=debug)
-
-    return preprocessor, all_output_columns
-
-# Main function for creating the imputer and retrieving column names
-def get_imputer_classic(numerical_imputation_method='mean', 
-                categorical_imputation_method='most_frequent', 
-                cat_encoder=False, 
-                num_scaler=False, 
-                data=None,
-                remainder_columns=None,
-                remainder_strategy='passthrough',
-                remainder_threshold=0.5,
-                debug=False):
-    """
-    Returns the appropriate imputer based on the specified imputation methods for numerical and categorical columns.
-
-    Parameters:
-    - numerical_imputation_method (str): Imputation method for numerical columns ('mean', 'median', 'knn', 'missforest').
-    - categorical_imputation_method (str): Imputation method for categorical columns ('most_frequent', 'missforest').
-    - cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
-    - num_scaler (bool): Whether to scale numerical columns.
-    - data (pandas.DataFrame): Input DataFrame used to identify categorical and numerical columns.
-    - remainder_columns: list, default=None: Columns to pass through without transformation (e.g., ID columns), will be excluded from imputation, applying remainder strategy. 
-        NB : If it is set to 'auto', it will automatically guess the remainder columns based on your input data.
-    - remainder_threshold (float): Default (0.8), from 0 to 1, filter out non-numeric columns having a ratio distinct modalities / non empty rows higher than the fixed threshold if ramainder columns is set to 'auto'  
-    - remainder_strategy (str): 'passthrough' (keep as it is) or 'drop' (remove from the final dataset)
-    - debug (bool): Whether to print debug information.
-
-    Returns:
-    - A ColumnTransformer object or a MissForestTransformer if using MissForest for both.
-    - A list of all output columns in the final transformed DataFrame.
-    """
-    if data is None or not isinstance(data, pd.DataFrame):
-        raise ValueError("Invalid input data. Please provide a pandas DataFrame.")
-
-    if remainder_strategy != 'drop':
-        remainder_strategy = 'passthrough'
-    # Filter remainder_columns to only those present in the DataFrame
-    if remainder_columns is None:
-        remainder_columns = []
-    elif remainder_columns == 'auto':
-        remainder_columns = detect_remainder_columns(data, threshold=remainder_threshold)
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-    else:
-        remainder_columns = [col for col in remainder_columns if col in data.columns]
-        debug_print(f"Filtered remainder_columns to present DataFrame columns: {remainder_columns}", debug=debug)
-        
-        
-    categorical_cols = data.select_dtypes(include=['object', 'category']).columns.difference(remainder_columns)
-    numerical_cols = data.select_dtypes(include=['number']).columns.difference(remainder_columns)
-    data = reorder_data_columns(data, remainder_columns=remainder_columns)
-    debug_print(f"ordered data cols: {data.columns.tolist()}",debug=debug)
-
-    if numerical_imputation_method == categorical_imputation_method == 'missforest':
-        imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug)
-        
-        transformers = []
-        if num_scaler:
-            transformers.append(('num_scaler', StandardScaler(), numerical_cols))
-        else:
-            transformers.append(('num_variables', 'passthrough', numerical_cols))
-        if cat_encoder:
-            transformers.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore'), categorical_cols))
-        else:
-            transformers.append(('cat_variables', 'passthrough', categorical_cols))
-
-        scaler_x_encoder = ColumnTransformer(transformers=transformers, remainder=remainder_strategy)
-
-        preprocess_selection = Pipeline(steps=[
-            ('missforest_imputation', imputer),
-            ('scaling_x_encoding', scaler_x_encoder)
-        ])
-        
-        preprocessor = ColumnTransformer(transformers=[
-            ('preprocess_selection', preprocess_selection, numerical_cols.union(categorical_cols)),
-            ('remainder_pass', remainder_strategy, remainder_columns)
-        ])
-
-        preprocessor.fit(data)
-
-        new_num_cols = get_feature_names(preprocessor, numerical_cols, num_scaler=num_scaler, debug=debug)  
-        new_cat_cols = get_feature_names(preprocessor, categorical_cols, cat_encoder=cat_encoder, debug=debug)
-
-        if remainder_strategy == 'drop':
-            all_output_columns = list(new_num_cols) + list(new_cat_cols)
-        else:
-            all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
-
-        debug_print("Final new_num_cols", new_num_cols, debug=debug)
-        debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-        debug_print("All output columns", all_output_columns, debug=debug)
-
-        return preprocessor, all_output_columns
-
-    if numerical_imputation_method == 'mean':
-        num_imputer = SimpleImputer(strategy='mean')
-    elif numerical_imputation_method == 'median':
-        num_imputer = SimpleImputer(strategy='median')
-    elif numerical_imputation_method == 'knn':
-        num_imputer = KNNImputer()
-    elif numerical_imputation_method == 'missforest':
-        num_imputer = MissForestTransformer(categorical_cols=None, debug=True)
-    else:
-        raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', or 'missforest'.")
-
-    if categorical_imputation_method == 'most_frequent':
-        cat_imputer = SimpleImputer(strategy='most_frequent')
-    elif categorical_imputation_method == 'missforest':
-        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=True)
-    else:
-        raise ValueError("Unsupported categorical imputation method. Choose 'most_frequent' or 'missforest'.")
-
-    num_pipeline = Pipeline(steps=[('num_imputer', num_imputer)])
-    cat_pipeline = Pipeline(steps=[('cat_imputer', cat_imputer)])
-
-    if num_scaler:
-        num_pipeline.steps.insert(0, ('num_scaler', StandardScaler()))
-    if cat_encoder:
-        cat_pipeline.steps.append(('cat_encoder', OneHotEncoder(handle_unknown='ignore')))
-
-    preprocessor = ColumnTransformer(transformers=[
-        ('num_preprocessor', num_pipeline, numerical_cols),
-        ('cat_preprocessor', cat_pipeline, categorical_cols)
-    ], remainder=remainder_strategy)
-
-    preprocessor.fit(data)
-
-    new_num_cols = get_feature_names(preprocessor, numerical_cols, num_scaler=num_scaler, debug=debug) #.named_transformers_['num_preprocessor']
-    new_cat_cols = get_feature_names(preprocessor, categorical_cols, cat_encoder=cat_encoder, debug=debug) #.named_transformers_['cat_preprocessor']
-
-    if remainder_strategy == 'drop':
-        all_output_columns = list(new_num_cols) + list(new_cat_cols)
-    else:
-        all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
-
-    debug_print("Final new_num_cols", new_num_cols, debug=debug)
-    debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-    debug_print("All output columns", all_output_columns, debug=debug)
-
-    return preprocessor, all_output_columns
-
-
-

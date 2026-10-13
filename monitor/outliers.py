@@ -224,7 +224,7 @@ def find_lof_outliers(data, n_neighbors=25, contamination='auto',
         preprocessor = ColumnTransformer(
             transformers=[
                 ('num', StandardScaler(), numerical_cols),
-                ('cat', OneHotEncoder(drop='first'), categorical_cols)
+                ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_cols)
             ],
             remainder='drop'
         )
@@ -339,7 +339,7 @@ def find_isolation_forest_outliers(
         preprocessor = ColumnTransformer(
             transformers=[
                 ('num', StandardScaler(), numerical_cols),
-                ('cat', OneHotEncoder(drop='first'), categorical_cols)
+                ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_cols)
             ],
             remainder='drop'
         )
@@ -645,7 +645,7 @@ def find_dbscan_outliers(
         preprocessor = ColumnTransformer(
             transformers=[
                 ('num', StandardScaler(), numerical_cols),
-                ('cat', OneHotEncoder(drop='first'), categorical_cols)
+                ('cat', OneHotEncoder(drop='first', sparse_output=False), categorical_cols)
             ],
             remainder='drop'
         )
