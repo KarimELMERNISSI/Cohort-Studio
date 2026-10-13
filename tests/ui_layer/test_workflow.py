@@ -2,6 +2,7 @@
 
 import xml.dom.minidom
 
+from core.progress import StepMark, evaluate, initial_progress
 from ui import nav
 from ui.workflow import (
     BOX_H,
@@ -9,14 +10,15 @@ from ui.workflow import (
     BRANCHES,
     CANVAS,
     EDGES,
+    NEXT_TEXT,
     NODES,
+    default_hint,
     edge_points,
     label_box,
     legend_box,
     next_label_box,
     node_box,
     node_page,
-    suggested_next,
     workflow_model,
     workflow_svg,
 )
@@ -139,21 +141,78 @@ def test_legend_and_suggested_next_keep_clear_of_the_links() -> None:
             assert box is None or not _overlap(region, box, 2.0), (name, edge.label)
 
 
+NO_DATA = initial_progress(False)
+LOADED = initial_progress(True)
+
+
+def _node_group(svg: str, node_id: str):
+    doc = xml.dom.minidom.parseString(svg)
+    return next(g for g in doc.getElementsByTagName("g") if g.getAttribute("data-node") == node_id)
+
+
 def test_drawing_is_valid_svg_with_state_markers() -> None:
-    empty = workflow_svg(has_data=False, ai_on=False)
+    empty = workflow_svg(NO_DATA, ai_on=False)
     xml.dom.minidom.parseString(empty)  # well-formed
     assert empty.count('data-node="') == len(NODES)
     assert empty.count('class="edge') == len(EDGES)
     assert 'tabindex="0"' in empty and 'role="link"' in empty  # keyboard accessible
     assert 'class="check"' not in empty and empty.count("AI off") == 2
-    assert suggested_next(False) == "load" and 'class="node core next" data-node="load"' in empty
+    assert NO_DATA.next_step == "load" and 'class="node core next" data-node="load"' in empty
     assert 'data-ring-for="load"' in empty and 'class="legend"' in empty
     # the ring is drawn before every link, so arrow heads are painted over it
     assert empty.index('class="ring"') < empty.index('class="edge')
 
-    loaded = workflow_svg(has_data=True, ai_on=True)
-    assert 'class="check"' in loaded and "AI off" not in loaded
-    assert suggested_next(True) == "validate" and 'data-ring-for="validate"' in loaded
+    loaded = workflow_svg(LOADED, ai_on=True)
+    assert 'class="node core done" data-node="load"' in loaded and "AI off" not in loaded
+    assert LOADED.next_step == "validate" and 'data-ring-for="validate"' in loaded
+    assert f">{NEXT_TEXT['todo']}<" in loaded
+
+
+def test_progress_ticks_stale_badges_and_the_next_step() -> None:
+    steps = [
+        {"function": "initial_load"},
+        {"function": "imputation", "description": "Imputation (KNN)"},
+    ]
+    marks = {"validate": StepMark(0, detail="quality score 90/100"), "analyse": StepMark(0)}
+    knowledge = {
+        "docs": (True, "1 PDF in your library, 1 knowledge graph saved."),
+        "varmap": (False, ""),
+    }
+    progress = evaluate(steps, marks, has_data=True, knowledge=knowledge)
+    svg = workflow_svg(progress, ai_on=False)
+    xml.dom.minidom.parseString(svg)
+
+    validate = _node_group(svg, "validate")
+    assert validate.getAttribute("class") == "node core stale next"
+    assert validate.getElementsByTagName("circle")[0].getAttribute("class") == "stale-badge"
+    assert f">{NEXT_TEXT['stale']}<" in svg and 'data-ring-for="validate"' in svg
+    assert "Checked before the last 1 change" in validate.getAttribute("aria-label")
+
+    assert "done" in _node_group(svg, "enrich").getAttribute("class").split()
+    assert "stale" in _node_group(svg, "analyse").getAttribute("class").split()
+    # one corner mark per box: documents (done) keep the tick, the variable map (to do) the "AI off" pill
+    docs, varmap = _node_group(svg, "docs"), _node_group(svg, "varmap")
+    assert docs.getElementsByTagName("circle")[0].getAttribute("class") == "check"
+    assert all(r.getAttribute("class") != "pill" for r in docs.getElementsByTagName("rect"))
+    assert any(r.getAttribute("class") == "pill" for r in varmap.getElementsByTagName("rect"))
+    assert svg.count("AI off") == 1
+    assert default_hint(progress).startswith(
+        "Suggested next: Validate. Checked before the last 1 change"
+    )
+
+
+def test_no_ring_when_every_step_is_up_to_date() -> None:
+    steps = [
+        {"function": "initial_load"},
+        {"function": "save_version", "description": "Saved version: c_v2"},
+    ]
+    marks = {"validate": StepMark(0), "analyse": StepMark(0)}
+    progress = evaluate(steps, marks, has_data=True)
+    svg = workflow_svg(progress, ai_on=True)
+    assert progress.next_step is None and 'class="ring"' not in svg and "suggested next" not in svg
+    assert svg.count('class="check"') == 4  # load, validate, analyse, report
+    assert default_hint(progress).startswith("Every step is up to date")
+    assert default_hint(NO_DATA).startswith("Start here")
 
 
 def test_enrichment_loops_with_validation_and_analysis() -> None:
@@ -162,7 +221,7 @@ def test_enrichment_loops_with_validation_and_analysis() -> None:
         ("validate", "enrich"),
         ("enrich", "analyse"),
     }
-    doc = xml.dom.minidom.parseString(workflow_svg(has_data=True, ai_on=True))
+    doc = xml.dom.minidom.parseString(workflow_svg(LOADED, ai_on=True))
     for group in doc.getElementsByTagName("g"):
         classes = group.getAttribute("class").split()
         if "edge" not in classes:
@@ -170,17 +229,19 @@ def test_enrichment_loops_with_validation_and_analysis() -> None:
         path = group.getElementsByTagName("path")[0]
         assert path.getAttribute("marker-end") == "url(#wf-arrow)"
         assert bool(path.getAttribute("marker-start")) == ("both" in classes)
-    assert workflow_svg(has_data=True, ai_on=True).count(">iterate<") == 2
+    assert workflow_svg(LOADED, ai_on=True).count(">iterate<") == 2
 
 
 def test_model_carries_details_for_the_hint_line() -> None:
-    model = workflow_model(has_data=True, ai_on=False)
+    model = workflow_model(LOADED, ai_on=False)
     assert set(model["nodes"]) == {n.id for n in NODES}
     assert model["nodes"]["load"]["title"] == "Load data"
+    assert model["nodes"]["load"]["state"] == "done"
+    assert model["nodes"]["validate"]["status"] == "Not checked yet for this dataset."
     assert model["nodes"]["docs"]["needs_ai"] is True
     assert "Incremental" in model["nodes"]["enrich"]["description"]
     assert ["docs", "varmap"] in model["edges"] and ["enrich", "analyse"] in model["edges"]
-    assert model["hint"]
+    assert model["hint"].startswith("Suggested next: Validate.")
     # The version follows the drawing: stable for a state, different when the state changes.
-    assert model["version"] == workflow_model(has_data=True, ai_on=False)["version"]
-    assert model["version"] != workflow_model(has_data=False, ai_on=False)["version"]
+    assert model["version"] == workflow_model(LOADED, ai_on=False)["version"]
+    assert model["version"] != workflow_model(NO_DATA, ai_on=False)["version"]

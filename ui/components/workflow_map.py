@@ -1,7 +1,8 @@
 """
 Interactive workflow map (Streamlit custom component v2).
 
-Every box is a link: hovering highlights the box, the paths that connect to it and shows its purpose;
+Every box is a link: hovering highlights the box, the paths that connect to it and shows its purpose
+and its status for the current data (done, done before the data changed, not done yet);
 clicking it (or pressing Enter/Space when it has keyboard focus) returns the box id to Python, which
 switches to the matching page in the same session. Colours come from the active Streamlit theme
 (``--st-*`` CSS variables), so the map follows light and dark mode.
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.progress import Progress
 from ui.workflow import node_page, workflow_model
 
 _HTML = """
@@ -32,6 +34,9 @@ _CSS = """
   opacity: 0.8;
 }
 .wf-hint strong { color: var(--st-primary-color); }
+.wf-status { font-weight: 600; }
+.wf-status.done { color: var(--st-green-text-color, var(--st-green-color)); }
+.wf-status.stale { color: var(--st-orange-text-color, var(--st-orange-color)); }
 
 /* edges */
 .edge path {
@@ -77,6 +82,9 @@ _CSS = """
 .node:focus-visible .box { stroke: var(--st-text-color); }
 .check { fill: var(--st-green-color); }
 .tick { fill: none; stroke: #FFFFFF; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.stale-badge { fill: var(--st-orange-color); }
+.refresh { fill: none; stroke: #FFFFFF; stroke-width: 1.8; stroke-linecap: round; }
+.refresh-head { fill: #FFFFFF; }
 .pill { fill: var(--st-orange-background-color); }
 .pill-text { font-size: 10.5px; font-weight: 600; fill: var(--st-orange-text-color) !important; }
 .next-text { font-size: 11px; font-weight: 600; fill: var(--st-primary-color) !important; }
@@ -160,6 +168,12 @@ export default function (component) {
       title.textContent = info.title;
       hint.append(title, " - " + info.description);
       if (info.needs_ai && !data.ai_on) hint.append(" (needs the AI engine: Settings)");
+      if (info.status) {
+        const status = document.createElement("span");
+        status.className = "wf-status " + (info.state || "");
+        status.textContent = info.status;
+        hint.append(" ", status);
+      }
       hint.append(" Click to open.");
     }
   };
@@ -188,13 +202,13 @@ export default function (component) {
 """
 
 
-def workflow_map(*, has_data: bool, ai_on: bool, key: str = "cmp_workflow_map") -> str | None:
-    """Render the interactive map; returns the navigation key of the clicked box (once), else ``None``."""
+def workflow_map(*, progress: Progress, ai_on: bool, key: str = "cmp_workflow_map") -> str | None:
+    """Render the interactive map for ``progress``; returns the navigation key of the clicked box (once)."""
     # Registered on every render, not at import: the registry belongs to the running Streamlit runtime,
     # which can be replaced while this module stays imported (server reload, AppTest). Registering an
     # identical definition again is a silent no-op.
     mount = st.components.v2.component("cmp_workflow_map", html=_HTML, css=_CSS, js=_JS)
-    result = mount(data=workflow_model(has_data, ai_on), key=key, on_clicked_change=lambda: None)
+    result = mount(data=workflow_model(progress, ai_on), key=key, on_clicked_change=lambda: None)
     clicked = getattr(result, "clicked", None)
     return node_page(clicked) if clicked else None
 

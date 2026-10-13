@@ -6,6 +6,13 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Workflow progress on the Start page
+
+- **Ticks and "suggested next" follow what you did** — The workflow diagram and the step cards show, for the dataset currently loaded, which steps are done (green tick), done before the data changed (amber circular arrow, "run again") and which step comes next (pulsing ring). Hovering a box gives its status in a sentence, e.g. "Checked before the last 2 changes to the data: check the quality again."
+- **Evidence, not clicks** — Data changes come from the transformation trace (merge, computed and transformed variables, imputation, adopted multiple imputation, applied filters), which gives the revision of the data; saved versions count as reporting. Pages record a step when they perform it on the current data: the quality dashboard on Validate, descriptive statistics on Explore, every Run of a test or model on Analyze and Survival (not the calculators that take typed-in numbers), the Word report of the session's own trace on Reproduce. Documents and Variable map are done when the workspace holds a knowledge graph or index, or a saved variable map.
+- **The enrichment loop** — After an enrichment, Validate and Explore & analyse turn amber and Validate is suggested again; once both are redone, saving a new version completes the round. Loading another dataset starts afresh.
+- **Code** — `core/progress.py` (pure rules: revision, done / stale / to do, next step), `ui/progress.py` (`mark_step`, `current_progress`), the map and the Start page read the same progress. Tests: `tests/test_progress.py` (rules and the loop), `tests/ui_layer/test_workflow.py` (badges, ring, hints), `tests/ui_layer/test_workflow_progress.py` (Start, Validate, Explore, a data change and a new dataset, end to end).
+
 ### Fixed: imputation after adding variables, one-hot encoding, multivariate outliers
 
 - **Imputation column mismatch** — "Shape of passed values is (500, 20), indices imply (500, 19)": columns that were neither numerical nor categorical (dates stored as text, identifiers) were imputed and kept by the transformer but missing from the list of output names. It happened on any cohort with a date read from a CSV, with or without a new variable. Every column is now assigned to exactly one group (numerical, categorical, pass-through) and the names are built from that partition (`enrich.data_imputation.partition_columns`).

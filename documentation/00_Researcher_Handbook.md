@@ -30,6 +30,21 @@ The **Start** page shows the workflow as a diagram. Three core steps take you fr
 The AI engine is optional and local by default (Settings > AI engine); without it, every core step and the
 enrichment path still work.
 
+### How the diagram follows your progress
+
+The diagram on the Start page, and the step cards under it, show where you are with the dataset currently loaded:
+
+| Mark | Meaning | Evidence |
+| --- | --- | --- |
+| Green tick | done on the current data | Load: a dataset is loaded. Validate: the quality dashboard was computed (Data > Validate). Explore & analyse: descriptive statistics (Explore) or a test or model run (Analyze). Report & reproduce: a version saved or the Word report of this session's trace downloaded. Enrich: at least one change applied. Documents and Variable map: a knowledge graph or index, or a variable map, saved in your workspace. |
+| Amber circular arrow ("run again") | done, but the data changed afterwards | Every change to the data (merge, computed or transformed variable, imputation, adopted multiple imputation, applied filter) is a step of the trace. A step done before the latest change is out of date. |
+| Pulsing ring, "suggested next" | the first core step (Validate, Explore & analyse, Report) that is not done on the current data | |
+
+This is the enrichment loop in practice: after you derive or impute a variable, Validate and Explore & analyse turn
+amber and Validate becomes the suggested next step; check the quality, run the analyses again, then save a new version.
+Hover a box to read its status in a sentence. Loading another dataset starts a new trace, and the diagram starts
+afresh. Renaming columns does not count as a change to the data.
+
 ## Workflow Phases
 
 The application is organised into seven phases, mirroring the natural flow of cohort research. Pages are grouped in the navigation bar at the top (Data, Explore, Analyze, Knowledge, Reproduce, Help, Admin); the sidebar always shows the current dataset (name, version, size) with **Change** and **Save version**, the AI engine status and a link to this handbook. The **Start** page lists the three steps, your saved versions and a bundled **sample cohort** (500 synthetic patients) to try everything before loading your own data.

@@ -11,6 +11,7 @@ from biostats._types import TestResult
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import compare_survival, cox_regression
 from ui.components import error_card, help_popover, result_card, section
+from ui.progress import mark_step
 
 
 def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[str]:
@@ -117,6 +118,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                     "res": res,
                     "key": (time_col, event_col, group_col),
                 }
+                mark_step("analyse", "survival analysis")
             except Exception as exc:
                 error_card("The survival analysis could not be computed.", exc)
         cached = st.session_state.get("surv_result")
@@ -196,6 +198,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                     "res": cox_regression(df, cox_time, cox_event, covariates),
                     "key": (cox_time, cox_event, tuple(covariates)),
                 }
+                mark_step("analyse", "Cox model")
             except Exception as exc:
                 error_card("The Cox model could not be fitted.", exc)
         cached = st.session_state.get("cox_result")
@@ -256,6 +259,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                     "res": logistic_regression(df, outcome, covs, event_level=event_level),
                     "key": (outcome, event_level, tuple(covs)),
                 }
+                mark_step("analyse", "logistic regression")
             except Exception as exc:
                 error_card("The logistic model could not be fitted.", exc)
         cached = st.session_state.get("logit_result")
@@ -332,6 +336,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                     ),
                     "key": (count_col, exposure, family, tuple(covs)),
                 }
+                mark_step("analyse", "count regression")
             except Exception as exc:
                 error_card("The count model could not be fitted.", exc)
         cached = st.session_state.get("pois_result")

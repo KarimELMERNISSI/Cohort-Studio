@@ -10,6 +10,7 @@ from manage.reproduction_manager import run_trace
 
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
+from ui.progress import current_trace_session, mark_step
 from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
 from utils.path_utils import normalize_path, resolve_path
 from utils.session_scope import get_current_scope
@@ -407,7 +408,10 @@ def app():
                 label="Download Transformation Report (.docx)",
                 data=report_buffer,
                 file_name=f"trace_report_{session_id}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                # the report of the session's own trace documents the current data (workflow progress)
+                on_click=mark_step if session_id == current_trace_session() else "ignore",
+                args=("report", "Word report exported") if session_id == current_trace_session() else None,
             )
         except Exception as e:
             st.warning(f"Report generation unavailable: {e}")

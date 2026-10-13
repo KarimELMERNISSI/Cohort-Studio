@@ -12,6 +12,8 @@ import hashlib
 import html
 from dataclasses import dataclass
 
+from core.progress import DONE, STALE, TODO, Progress
+
 CANVAS = (1200, 346)
 BOX_W, BOX_H = 176, 60
 
@@ -314,9 +316,12 @@ def node_box(node: Node) -> Box:
     return node.x, node.y, node.x + BOX_W, node.y + BOX_H
 
 
-def next_label_box(node: Node) -> Box:
-    """Extent of the "suggested next" caption drawn above a box."""
-    return text_box(node.x + BOX_W / 2, node.y - 12, "suggested next", "middle")
+NEXT_TEXT = {TODO: "suggested next", STALE: "suggested next: run again"}
+
+
+def next_label_box(node: Node, text: str = NEXT_TEXT[STALE]) -> Box:
+    """Extent of the "suggested next" caption drawn above a box (the longest variant by default)."""
+    return text_box(node.x + BOX_W / 2, node.y - 12, text, "middle")
 
 
 def legend_box() -> Box:
@@ -350,14 +355,33 @@ def _legend_svg() -> str:
     return "".join(parts)
 
 
-def suggested_next(has_data: bool) -> str:
-    return "validate" if has_data else "load"
+def _title(node: Node) -> str:
+    return node.title.lstrip("0123456789 ").strip()
 
 
-def workflow_svg(has_data: bool, ai_on: bool) -> str:
+def _badge(state: str, x: float, y: float) -> list[str]:
+    """Tick for a step done on the current data; circular arrow for one done before the data changed."""
+    cx, cy = x + BOX_W - 14, y + 14
+    if state == DONE:
+        return [
+            f'<circle class="check" cx="{cx}" cy="{cy}" r="8"/>',
+            f'<path class="tick" d="M{cx - 4} {cy} l3 3 l5 -6"/>',
+        ]
+    if state == STALE:
+        # clockwise open circle (gap on the right) ending in an arrow head: "run again"
+        return [
+            f'<circle class="stale-badge" cx="{cx}" cy="{cy}" r="8"/>',
+            f'<path class="refresh" d="M{cx + 3.64:.2f} {cy + 2.1:.2f} A4.2 4.2 0 1 1 {cx + 3.64:.2f} {cy - 2.1:.2f}"/>',
+            f'<path class="refresh-head" d="M{cx + 4.74:.2f} {cy - 0.19:.2f} L{cx + 1.69:.2f} {cy - 1.67:.2f} '
+            f'L{cx + 4.99:.2f} {cy - 3.57:.2f} Z"/>',
+        ]
+    return []
+
+
+def workflow_svg(progress: Progress, ai_on: bool) -> str:
     """The workflow drawing; colours come from CSS classes so the component can apply the active theme."""
     width, height = CANVAS
-    nxt = suggested_next(has_data)
+    nxt = progress.next_step
     parts = [
         f'<svg viewBox="0 0 {width} {height}" role="group" aria-label="Research workflow" xmlns="http://www.w3.org/2000/svg">',
         "<defs>",
@@ -368,11 +392,12 @@ def workflow_svg(has_data: bool, ai_on: bool) -> str:
         "</defs>",
     ]
     # the pulse ring sits under the arrows so an arrow head is never crossed by it
-    ring = _NODE_BY_ID[nxt]
-    parts.append(
-        f'<rect class="ring" data-ring-for="{ring.id}" x="{ring.x - 5}" y="{ring.y - 5}" '
-        f'width="{BOX_W + 10}" height="{BOX_H + 10}" rx="16"/>'
-    )
+    if nxt is not None:
+        ring = _NODE_BY_ID[nxt]
+        parts.append(
+            f'<rect class="ring" data-ring-for="{ring.id}" x="{ring.x - 5}" y="{ring.y - 5}" '
+            f'width="{BOX_W + 10}" height="{BOX_H + 10}" rx="16"/>'
+        )
     for edge in EDGES:
         cls = "edge" + (" dashed" if edge.dashed else "") + (" both" if edge.both else "")
         start = ' marker-start="url(#wf-arrow)"' if edge.both else ""
@@ -387,18 +412,20 @@ def workflow_svg(has_data: bool, ai_on: bool) -> str:
         parts.append("</g>")
     parts.append(_legend_svg())
     for node in NODES:
+        state = progress.state(node.id)
         classes = [node.kind]
-        if node.id == "load" and has_data:
-            classes.append("done")
+        if state in (DONE, STALE):
+            classes.append(state)
         if node.id == nxt:
             classes.append("next")
         if node.needs_ai and not ai_on:
             classes.append("ai-off")
-        label = f"{node.title}: {node.description} Opens the {node.page.replace('_', ' ')} page."
+        status = progress.text(node.id)
+        label = f"{_title(node)}: {node.description} {status} Opens the {node.page.replace('_', ' ')} page."
         x, y = node.x, node.y
         parts.append(
             f'<g class="node {" ".join(classes)}" data-node="{node.id}" tabindex="0" role="link" '
-            f'aria-label="{html.escape(label, quote=True)}">'
+            f'aria-label="{html.escape(" ".join(label.split()), quote=True)}">'
         )
         parts.append(
             f'<rect class="box" x="{x}" y="{y}" width="{BOX_W}" height="{BOX_H}" rx="12"/>'
@@ -407,11 +434,10 @@ def workflow_svg(has_data: bool, ai_on: bool) -> str:
             f'<text class="title" x="{x + 14}" y="{y + 26}">{html.escape(node.title)}</text>'
         )
         parts.append(f'<text class="sub" x="{x + 14}" y="{y + 45}">{html.escape(node.sub)}</text>')
-        if node.id == "load" and has_data:
-            cx, cy = x + BOX_W - 14, y + 14
-            parts.append(f'<circle class="check" cx="{cx}" cy="{cy}" r="8"/>')
-            parts.append(f'<path class="tick" d="M{cx - 4} {cy} l3 3 l5 -6"/>')
-        if node.needs_ai and not ai_on:
+        badge = _badge(state, x, y)
+        parts.extend(badge)
+        # one corner mark per box: a step already done keeps its tick (the hint still says it needs the AI engine)
+        if node.needs_ai and not ai_on and not badge:
             parts.append(
                 f'<rect class="pill" x="{x + BOX_W - 56}" y="{y + 7}" width="48" height="17" rx="8.5"/>'
             )
@@ -419,31 +445,50 @@ def workflow_svg(has_data: bool, ai_on: bool) -> str:
                 f'<text class="pill-text" x="{x + BOX_W - 32}" y="{y + 19.5}" text-anchor="middle">AI off</text>'
             )
         if node.id == nxt:
+            caption = NEXT_TEXT[STALE] if state == STALE else NEXT_TEXT[TODO]
             parts.append(
-                f'<text class="next-text" x="{x + BOX_W / 2}" y="{y - 12}" text-anchor="middle">suggested next</text>'
+                f'<text class="next-text" x="{x + BOX_W / 2}" y="{y - 12}" text-anchor="middle">{caption}</text>'
             )
         parts.append("</g>")
     parts.append("</svg>")
     return "".join(parts)
 
 
-def workflow_model(has_data: bool, ai_on: bool) -> dict:
+_HOW_TO = "Hover a box for details; click it (or press Enter) to open that step."
+
+
+def default_hint(progress: Progress) -> str:
+    """The line under the map when no box is hovered: what to do next, and why."""
+    nxt = progress.next_step
+    if nxt is None:
+        return f"Every step is up to date for the current data. {_HOW_TO}"
+    if nxt == "load":
+        return f"Start here: load a dataset. {_HOW_TO}"
+    title = _title(_NODE_BY_ID[nxt])
+    if progress.state(nxt) == STALE:
+        return f"Suggested next: {title}. {progress.text(nxt)} {_HOW_TO}"
+    return f"Suggested next: {title}. {_HOW_TO}"
+
+
+def workflow_model(progress: Progress, ai_on: bool) -> dict:
     """Everything the interactive map needs: the drawing, per-node details for the hint line, and the edges."""
-    svg = workflow_svg(has_data, ai_on)
+    svg = workflow_svg(progress, ai_on)
     return {
         "svg": svg,
-        # The browser redraws only when the drawing changes (state or a new release of the diagram).
+        # The browser redraws only when the drawing changes (progress, AI engine, a new release of the diagram).
         "version": hashlib.sha1(svg.encode("utf-8"), usedforsecurity=False).hexdigest()[:12],
         "nodes": {
             n.id: {
-                "title": n.title.lstrip("0123456789 ").strip(),
+                "title": _title(n),
                 "description": n.description,
                 "needs_ai": n.needs_ai,
+                "state": progress.state(n.id),
+                "status": progress.text(n.id),
             }
             for n in NODES
         },
         "edges": [[e.src, e.dst] for e in EDGES],
-        "hint": "Hover a box to see what it does; click it (or press Enter) to open that step.",
+        "hint": default_hint(progress),
         "ai_on": ai_on,
     }
 
@@ -466,8 +511,8 @@ __all__ = [
     "legend_box",
     "next_label_box",
     "node_box",
+    "default_hint",
     "node_page",
-    "suggested_next",
     "workflow_model",
     "workflow_svg",
 ]

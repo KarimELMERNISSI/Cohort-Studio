@@ -55,6 +55,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "univariate_cache",
     "diag_result",
     "ba_result",
+    "workflow_marks",
 )
 
 

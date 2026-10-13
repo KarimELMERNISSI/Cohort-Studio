@@ -29,6 +29,7 @@ from biostats.power import (
 )
 from biostats.zscores import reference_zscores
 from ui.components import no_dataset, result_card
+from ui.progress import mark_step
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
 
@@ -286,6 +287,7 @@ def run_univariate_analysis(df, analyzer):
             progress_bar.progress((i + 1) / len(target_cols))
         progress_bar.empty()
         st.session_state["univariate_cache"] = {"signature": signature, "results": results}
+        mark_step("analyse", f"group comparison of {len(target_cols)} variable(s) by {group_col}")
     else:
         results = cached["results"]
 
@@ -697,6 +699,7 @@ def perform_ancova(df, target, group, covariates):
         
         # Fit OLS Model
         model = smf.ols(formula, data=data_safe).fit()
+        mark_step("analyse", f"ANCOVA of {target}")
         
         # ============ Results Section ============
         st.subheader("ANCOVA Results")
@@ -1199,6 +1202,7 @@ def run_zscore_analysis(df, analyzer):
         except ValueError as exc:
             st.error(f"Z-scores could not be computed: {exc}")
             return
+        mark_step("analyse", "reference z-scores")
         z_cols = [f"{var}_Z" for var in target_vars]
         ref_stats = {
             var: {"mean": round(r.mean, 3), "std": round(r.std, 3), "n": r.n, "source": r.source}

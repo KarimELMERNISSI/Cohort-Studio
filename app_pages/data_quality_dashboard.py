@@ -10,6 +10,7 @@ import streamlit as st
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from explore.data_quality_auditor import DataQualityAuditor
+from ui.progress import mark_step
 
 
 def render_dashboard(df, config):
@@ -61,7 +62,8 @@ def render_dashboard(df, config):
         for name, score in metrics.items():
             global_score += score * weights[name]
         global_score /= total_weight
-    
+    mark_step("validate", f"quality score {global_score:.1f}/100")
+
     # --- Global Score Gauge ---
     col_gauge, col_kpi = st.columns([1, 2])
     

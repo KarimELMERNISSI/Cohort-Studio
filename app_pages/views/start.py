@@ -2,11 +2,12 @@
 
 import streamlit as st
 
+from core.progress import DONE, STALE
 from ui.components import page_header, page_link, status_chip, switch_to
 from ui.components.workflow_map import workflow_map
+from ui.progress import current_progress
 from ui.state import SAMPLE_DICTIONARY_PATH, get_state
 from ui.workflow import BRANCHES
-from utils.session_scope import get_current_scope
 
 state = get_state()
 username = st.session_state.get("username") or "researcher"
@@ -40,46 +41,64 @@ st.caption("Three core steps take you from a raw file to results. Optional paths
            "enrich the cohort, map your variables to your field, or learn from your documents.")
 has_data = state.has_data
 ai_on = state.ai_status()["initialized"]
+progress = current_progress()  # ticks, "run again" badges and the suggested next step
 with st.container(border=True):
-    target = workflow_map(has_data=has_data, ai_on=ai_on)
+    target = workflow_map(progress=progress, ai_on=ai_on)
 if target:
     switch_to(target)
+
+
+def progress_chip(step: str) -> None:
+    """The step's status for the current data, as on the map."""
+    state_ = progress.state(step)
+    if state_ == DONE:
+        status_chip("done", "ok")
+    elif state_ == STALE:
+        status_chip("run again", "caution")
+    elif step == progress.next_step:
+        status_chip("suggested next" if has_data else "start here", "info")
+    else:
+        status_chip("to do" if has_data else "waiting", "neutral")
+
+
 steps = (
-    (1, ":material/upload_file:", "Load a dataset", "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
-     "ok" if has_data else "info", "done" if has_data else "start here", (("import", "Import a file"),)),
-    (2, ":material/fact_check:", "Validate the data", "Quality score, missingness pattern, clinical anomalies, inclusion criteria and outliers.",
-     "info" if has_data else "neutral", "ready" if has_data else "waiting", (("validate", "Open Validate"),)),
-    (3, ":material/science:", "Explore and analyse", "Descriptive statistics, correlations, hypothesis tests, epidemiological measures and survival.",
-     "info" if has_data else "neutral", "ready" if has_data else "waiting", (("explore", "Statistics"), ("analyze", "Hypothesis tests"))),
+    (1, "load", ":material/upload_file:", "Load a dataset", "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
+     (("import", "Import a file"),)),
+    (2, "validate", ":material/fact_check:", "Validate the data", "Quality score, missingness pattern, clinical anomalies, inclusion criteria and outliers.",
+     (("validate", "Open Validate"),)),
+    (3, "analyse", ":material/science:", "Explore and analyse", "Descriptive statistics, correlations, hypothesis tests, epidemiological measures and survival.",
+     (("explore", "Statistics"), ("analyze", "Hypothesis tests"))),
 )
-for column, (number, icon, title, text, status, status_label, links) in zip(st.columns(3, gap="medium"), steps, strict=True):
+for column, (number, step, icon, title, text, links) in zip(st.columns(3, gap="medium"), steps, strict=True):
     with column, st.container(border=True, height="stretch"):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.badge(f"Step {number}", color="blue")
-            status_chip(status_label, status)
+            progress_chip(step)
         st.markdown(f"#### {icon} {title}")
         st.caption(text)
+        st.caption(f":material/history: {progress.text(step)}")
         with st.container(horizontal=True):
             for key, label in links:
                 page_link(key, label)
 
 # ---------------------------------------------------------------------------- optional paths
 st.subheader("Optional paths", icon=":material/alt_route:", anchor=False)
-scope = get_current_scope()
-docs_dir = scope.documents_dir() if scope else None
-n_docs = len(list(docs_dir.glob("*.pdf"))) if docs_dir is not None and docs_dir.exists() else 0
+BRANCH_STEP = {"enrich": "enrich", "variable_map": "varmap", "documents": "docs", "reproduce": "report"}
 for column, branch in zip(st.columns(len(BRANCHES), gap="medium"), BRANCHES, strict=True):
+    step = BRANCH_STEP[branch.key]
     with column, st.container(border=True, height="stretch"):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.badge("Optional", color="gray")
             if branch.needs_ai:
                 status_chip("AI engine on" if ai_on else "needs the AI engine", "ok" if ai_on else "caution")
-            elif branch.key == "enrich":
+            if progress.state(step) in (DONE, STALE) or (has_data and step == progress.next_step):
+                progress_chip(step)
+            elif not branch.needs_ai:
                 status_chip("ready" if has_data else "load data first", "info" if has_data else "neutral")
         st.markdown(f"#### {branch.icon} {branch.title}")
         st.caption(f"*{branch.when[:1].upper()}{branch.when[1:]}.* {branch.text}")
-        if branch.key == "documents":
-            st.caption(f":material/picture_as_pdf: {n_docs} PDF(s) in your library")
+        if progress.text(step):
+            st.caption(f":material/history: {progress.text(step)}")
         with st.container(horizontal=True):
             for key, label in branch.links:
                 page_link(key, label)

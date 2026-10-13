@@ -16,6 +16,7 @@ from biostats.paired import (
 from biostats.rates import incidence_rate, mantel_haenszel, rate_ratio, standardised_ratio
 from biostats.reliability import cohens_kappa, icc
 from ui.components import error_card, help_popover, result_card, section, status_chip
+from ui.progress import mark_step
 
 
 def _ci(ci) -> str:
@@ -62,6 +63,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     else wilcoxon_signed_rank(df[after], df[before])
                 )
                 st.session_state["pair_result"] = {"res": res, "key": (before, after, kind)}
+                mark_step("analyse", "paired test")
             except Exception as exc:
                 error_card("The paired test could not be computed.", exc)
         cached = st.session_state.get("pair_result")
@@ -98,6 +100,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     else one_sample_wilcoxon(df[col], ref)
                 )
                 st.session_state["one_result"] = {"res": res, "key": (col, ref, kind)}
+                mark_step("analyse", "one-sample test")
             except Exception as exc:
                 error_card("The one-sample test could not be computed.", exc)
         cached = st.session_state.get("one_result")
@@ -129,6 +132,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     "table": table,
                     "key": (b1, b2),
                 }
+                mark_step("analyse", "McNemar test")
             except Exception as exc:
                 error_card("McNemar's test could not be computed.", exc)
         cached = st.session_state.get("mc_result")
@@ -281,6 +285,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     ),
                     "key": (exposure, outcome, stratum, exp_level, ev_level),
                 }
+                mark_step("analyse", "Mantel-Haenszel analysis")
             except Exception as exc:
                 error_card("The stratified analysis could not be computed.", exc)
         cached = st.session_state.get("mh_result")
@@ -401,6 +406,7 @@ def run_reliability(df: pd.DataFrame, analyzer) -> None:
                 )
                 st.dataframe(table, width="stretch")
                 st.caption("Method: " + " | ".join(res.references))
+                mark_step("analyse", "agreement (kappa)")
             except Exception as exc:
                 error_card("Kappa could not be computed.", exc)
 
@@ -435,6 +441,7 @@ def run_reliability(df: pd.DataFrame, analyzer) -> None:
                     f"95% CI {_ci(res.ci)}; {res.model}; {res.interpretation}; {res.n_subjects} subjects, {res.n_raters} raters"
                 )
                 st.caption("Method: " + " | ".join(res.references))
+                mark_step("analyse", "reliability (ICC)")
             except Exception as exc:
                 error_card("The ICC could not be computed.", exc)
 

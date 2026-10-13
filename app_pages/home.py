@@ -17,6 +17,7 @@ from graph.ui import current_theme, render_graph, render_graph_exports, renderer
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
+from ui.progress import mark_step
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
@@ -949,6 +950,7 @@ def app():
                         dataset_name=dataset_name,
                         _db_manager=st.session_state.db_manager
                     )
+                    mark_step("analyse", "descriptive statistics")
                     # Show available columns and let user select columns to retain
                     selected_quant_columns = st.multiselect(
                             "Select columns to retain in descriptive statistics of quantitative variables",
