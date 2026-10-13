@@ -4,7 +4,7 @@
 
 As clinical cohort analysis transitions from exploratory academic scripts to multi-institutional hospital registries and regulatory submissions (FDA 21 CFR Part 11, HIPAA, GDPR), robust Identity and Access Management (IAM) becomes indispensable.
 
-This document evaluates modern authentication frameworks—specifically **Better Auth**—and describes the modular, provider-agnostic IAM architecture implemented within the **Cohort Monitoring Package (CMP)**.
+This document evaluates modern authentication frameworks—specifically **Better Auth**—and describes the modular, provider-agnostic IAM architecture implemented within **CohortStudio**.
 
 ---
 
@@ -19,7 +19,7 @@ This document evaluates modern authentication frameworks—specifically **Better
 - Extensible plugin ecosystem (rate limiting, email verification, audit logs).
 
 ### 2.2 Feasibility & Runtime Constraints
-Better Auth is authored for JavaScript/TypeScript runtimes (Node.js, Bun, Deno). Because CMP is a Python 3.14+ platform built on Streamlit and DuckDB, direct in-process library execution is not possible.
+Better Auth is authored for JavaScript/TypeScript runtimes (Node.js, Bun, Deno). Because CohortStudio is a Python 3.14+ platform built on Streamlit and DuckDB, direct in-process library execution is not possible.
 
 However, Better Auth is designed to expose a clean RESTful HTTP API (`/api/auth/*`), making it suitable for architectural integration via a **Sidecar Microservice Pattern**.
 
@@ -28,7 +28,7 @@ However, Better Auth is designed to expose a clean RESTful HTTP API (`/api/auth/
 |                  Hospital Network / Cloud                   |
 |                                                             |
 |   +-----------------------+       +---------------------+   |
-|   |  Streamlit CMP App    | ----> | Better Auth Sidecar |   |
+|   |  CohortStudio app     | ----> | Better Auth Sidecar |   |
 |   |  (Python 3.14)        | REST  | (Node.js / Bun)     |   |
 |   |  - BetterAuthIAM      |       | - OAuth / OIDC      |   |
 |   |  - In-Memory Cache    |       | - 2FA / WebAuthn    |   |
@@ -51,7 +51,7 @@ If session verification requires a synchronous HTTP round-trip on every script r
 - A cloud-hosted auth round-trip takes **60 to 150 ms**.
 - **Impact**: UI responsiveness degrades noticeably, creating micro-stutters during cohort exploration.
 
-### 3.2 CMP's Solution: In-Memory TTL Session Caching
+### 3.2 CohortStudio's Solution: In-Memory TTL Session Caching
 To eliminate latency while retaining remote IAM security, `BetterAuthIAMProvider` implements an **in-memory Time-to-Live (TTL) cache**:
 1. When a user logs in or a session token is validated, the authenticated `UserProfile` is cached in memory with an expiration timestamp (`CMP_IAM_CACHE_TTL`, default 300 seconds).
 2. During subsequent Streamlit reruns, token validation executes in **$< 0.05$ ms** via local dictionary lookup.
@@ -64,7 +64,7 @@ To eliminate latency while retaining remote IAM security, `BetterAuthIAMProvider
 | :--- | :---: | :---: | :---: | :---: |
 | **Local DuckDB + bcrypt** (Default) | ~0.25 ms | ~0.05 ms | None (Zero network) | Yes (100% Offline) |
 | **Better Auth (Uncached)** | ~28.0 ms | ~28.0 ms | Required per rerun | No (Requires sidecar) |
-| **Better Auth (CMP TTL Cached)** | ~28.0 ms | **< 0.05 ms** | Cached for 300s | Yes (If sidecar is local) |
+| **Better Auth (CohortStudio TTL Cached)** | ~28.0 ms | **< 0.05 ms** | Cached for 300s | Yes (If sidecar is local) |
 | **Disabled IAM** (`bypass`) | 0.00 ms | 0.00 ms | None | Yes |
 
 ---
@@ -121,7 +121,7 @@ Every provider implements the following contract:
 
 ## 5. Configuration & Provider Switching
 
-CMP dynamically resolves the active provider through environment variables:
+CohortStudio dynamically resolves the active provider through environment variables:
 
 ### 5.1 Mode 1: Local DuckDB (Default)
 ```bash
@@ -149,7 +149,7 @@ uv run streamlit run main.py
 
 ## 6. Docker Compose Deployment Recipe (Better Auth Sidecar)
 
-For enterprise hospital environments requiring Better Auth alongside CMP:
+For enterprise hospital environments requiring Better Auth alongside CohortStudio:
 
 ```yaml
 version: '3.8'
@@ -179,7 +179,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # 3. Cohort Monitoring Package
+  # 3. CohortStudio
   cohort-app:
     build: .
     environment:
@@ -201,7 +201,7 @@ volumes:
 
 ## 7. Conclusion
 
-By separating Identity and Access Management into an abstract provider hierarchy, Cohort Monitoring Package achieves:
+By separating Identity and Access Management into an abstract provider hierarchy, CohortStudio achieves:
 - **Zero Lock-In**: Seamlessly operates in air-gapped hospital environments using local DuckDB, connects to enterprise Better Auth servers, or disables auth for automated pipelines.
 - **High Performance**: In-memory TTL session caching guarantees zero UI latency during interactive cohort exploration.
 - **Backward Compatibility**: Fully compatible with existing data isolation directories, user traces, and administrative workflows.

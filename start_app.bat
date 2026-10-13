@@ -1,5 +1,5 @@
 @echo off
-echo Starting Cohort Monitoring App...
+echo Starting CohortStudio...
 
 REM Check if Docker is running
 docker info >nul 2>&1

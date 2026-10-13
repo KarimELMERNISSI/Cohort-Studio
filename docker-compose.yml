@@ -1,11 +1,11 @@
 services:
-  cohort-app:
+  cohortstudio:
     build:
       context: .
       args:
         WITH_YFILES: "0"   # "1" adds the optional proprietary graph engine (online runtime, usage analytics)
-    image: cohort-monitoring-app:latest
-    container_name: cohort_monitoring_app
+    image: cohortstudio:latest
+    container_name: cohortstudio
     ports:
       - "8501:8501"
     volumes:
@@ -32,7 +32,7 @@ services:
   # Optional Qdrant server (uncomment, then set CMP_VECTOR_STORE / CMP_QDRANT_URL above)
   # qdrant:
   #   image: qdrant/qdrant:latest   # pin to the release matching qdrant-client in uv.lock (1.19)
-  #   container_name: cohort_monitoring_qdrant
+  #   container_name: cohortstudio_qdrant
   #   volumes:
   #     - ./data/qdrant:/qdrant/storage
   #   restart: unless-stopped

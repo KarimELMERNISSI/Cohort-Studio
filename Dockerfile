@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Cohort Monitoring Platform - production image (uv-managed, locked dependencies, non-root runtime).
+# CohortStudio - production image (uv-managed, locked dependencies, non-root runtime).
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

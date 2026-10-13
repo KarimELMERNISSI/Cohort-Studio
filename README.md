@@ -1,4 +1,4 @@
-# Cohort Monitoring Package
+# CohortStudio
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml)
@@ -15,9 +15,9 @@
 
 ## Executive Overview
 
-The **Cohort Monitoring Package (CMP)** is engineered for clinical researchers, biostatisticians, and health data scientists managing observational cohorts, registry databases, and clinical trial datasets.
+**CohortStudio** is engineered for clinical researchers, biostatisticians, and health data scientists managing observational cohorts, registry databases, and clinical trial datasets.
 
-Traditional cohort data workflows often oscillate between fragmented ad-hoc Python/R scripts, unversioned CSV spreadsheets, and rigid commercial Electronic Data Capture (EDC) systems. CMP provides a unified, local-first platform built on **Python 3.14+**, **DuckDB 1.5+**, and **Streamlit 1.65+** that enforces end-to-end data integrity, statistical validity, and reproducible audit trails.
+Traditional cohort data workflows often oscillate between fragmented ad-hoc Python/R scripts, unversioned CSV spreadsheets, and rigid commercial Electronic Data Capture (EDC) systems. CohortStudio provides a unified, local-first platform built on **Python 3.14+**, **DuckDB 1.5+**, and **Streamlit 1.65+** that enforces end-to-end data integrity, statistical validity, and reproducible audit trails.
 
 ### Core Architecture Pillars
 
@@ -31,7 +31,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ## Capability Comparison Matrix
 
-| Capability                        | Ad-Hoc Scripts / Notebooks   | Commercial EDC (REDCap/Medidata) | Cohort Monitoring Package                                                                  |
+| Capability                        | Ad-Hoc Scripts / Notebooks   | Commercial EDC (REDCap/Medidata) | CohortStudio                                                                               |
 | :-------------------------------- | :--------------------------- | :------------------------------- | :----------------------------------------------------------------------------------------- |
 | **Storage Architecture**          | Flat CSVs / Memory Pandas    | Row-based SQL / Cloud RDBMS      | **Columnar DuckDB + Parquet Snapshots**                                                    |
 | **Data Versioning**               | Manual copies or Git LFS     | Audit log only (no snapshotting) | **Automated Zero-Copy Versioning (`_v1`, `_v2`)**                                          |
@@ -193,7 +193,7 @@ streamlit run main.py
 
 ```bash
 # Build the production image
-docker build -t cohort-monitoring-package:latest .
+docker build -t cohortstudio:latest .
 
 # Run container with mounted local volume
 docker run -d \
@@ -201,7 +201,7 @@ docker run -d \
   -v ${PWD}/data:/app/data \
   -e GOOGLE_API_KEY="your-gemini-key" \
   --name cohort-platform \
-  cohort-monitoring-package:latest
+  cohortstudio:latest
 ```
 
 Using Docker Compose:
@@ -311,12 +311,12 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 
 Distributed under the **Apache License, Version 2.0**. See [`LICENSE`](LICENSE) for full legal text.
 
-If you use the Cohort Monitoring Package in academic or clinical research, please cite:
+If you use CohortStudio in academic or clinical research, please cite:
 
 ```bibtex
-@software{cohort_monitoring_package_2026,
+@software{cohortstudio_2026,
   author = {Karim El Mernissi},
-  title = {Cohort Monitoring Package: Intuitive Clinical Epidemiology & Cohort Data Exploration},
+  title = {CohortStudio: Intuitive Clinical Epidemiology & Cohort Data Exploration},
   year = {2026},
   publisher = {GitHub},
   journal = {GitHub repository},

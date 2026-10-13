@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is the central entry point for developers working on the **Cohort Monitoring Package**.
+This is the central entry point for developers working on **CohortStudio**.
 This documentation aims to provide a comprehensive view of the codebase structure, execution flow, and module details.
 
 ## Quick Links

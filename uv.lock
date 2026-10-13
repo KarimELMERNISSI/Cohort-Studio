@@ -438,7 +438,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cohort-monitoring-package"
+name = "cohortstudio"
 version = "2.3.0"
 source = { editable = "." }
 dependencies = [

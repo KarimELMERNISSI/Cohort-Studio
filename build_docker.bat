@@ -1,6 +1,6 @@
 @echo off
 echo Building Docker Container...
-docker build -t cohort-monitoring .
+docker build -t cohortstudio .
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Docker build failed. Please ensure Docker Desktop is running.

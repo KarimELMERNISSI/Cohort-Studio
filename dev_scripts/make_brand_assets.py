@@ -5,7 +5,7 @@ Generate the brand assets used by the app shell from the application logo.
 
 Outputs (assets/brand/):
     icon.png            square logo, transparent background (favicon, collapsed header, login card)
-    wordmark_light.png  logo + "Cohort Monitoring" for light themes (navy + teal lettering)
+    wordmark_light.png  logo + "CohortStudio" for light themes (navy + teal lettering)
     wordmark_dark.png   the same for dark themes (white + mint lettering)
 
 The lettering uses DejaVu Sans Bold, which ships with matplotlib (free licence), so the assets can be
@@ -47,7 +47,7 @@ def _icon(size: int) -> Image.Image:
 def _wordmark(first_colour: str, second_colour: str) -> Image.Image:
     icon = _icon(HEIGHT)
     font = _font(int(HEIGHT * 0.46))
-    first, second = "Cohort ", "Monitoring"
+    first, second = "Cohort", "Studio"
     probe = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
     w1 = probe.textlength(first, font=font)
     w2 = probe.textlength(second, font=font)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document analyzes the open-source licenses of the libraries used in the Cohort Monitoring Package to determine the licensing constraints for the application itself.
+This document analyzes the open-source licenses of the libraries used in CohortStudio to determine the licensing constraints for the application itself.
 
 ## License Summary
 
@@ -24,7 +24,7 @@ All *required* production dependencies use **Permissive** or **Weak Copyleft** l
 License: *yWorks yFiles Streamlit Component Free License v1.0* (October 2025), shipped in the package as `LICENSE.md`.
 Obligations and constraints that matter for this project:
 
-| Clause | Consequence for the Cohort Monitoring Package |
+| Clause | Consequence for CohortStudio |
 |---|---|
 | 1.2 Internet requirement | The component loads its "Cloud Runtime" from `https://www.yworks.com/streamlit-yfiles-core/` at render time. It cannot work on an air-gapped network. |
 | 1.4 No redistribution | Only designated redistributables may be shipped; the package is therefore **not** part of the default install or Docker image (`requirements.txt`), only of `requirements-yfiles.txt` / the `graph-yfiles` extra. |

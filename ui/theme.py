@@ -19,6 +19,11 @@ STYLES_PATH = Path(__file__).with_name("styles.css")
 BRAND_DIR = ROOT / "assets" / "brand"
 FALLBACK_LOGO = ROOT / "assets" / "karim-app-logo.png"
 
+APP_NAME = (
+    "CohortStudio"  # the product name, shown in the tab title, sign-in card, heroes and wordmark
+)
+APP_TAGLINE = "Clinical cohort data, from raw file to reproducible evidence"
+
 BRAND: dict[str, str] = {
     "navy": "#0B2B36",  # logo outline family; hero gradient start
     "teal": "#0E7C86",  # primary (4.9:1 with white text)
@@ -125,6 +130,8 @@ def apply_theme() -> None:
 
 
 __all__ = [
+    "APP_NAME",
+    "APP_TAGLINE",
     "BRAND",
     "OKABE_ITO",
     "PLOTLY_TEMPLATE_NAME",

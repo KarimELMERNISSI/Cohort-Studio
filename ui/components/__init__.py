@@ -13,7 +13,7 @@ from typing import Any
 import streamlit as st
 
 from ui import nav
-from ui.theme import STATUS_COLORS
+from ui.theme import APP_NAME, STATUS_COLORS
 
 # ----------------------------------------------------------------------------- navigation helpers
 
@@ -61,7 +61,7 @@ def page_header(
     link. Section and icon come from the navigation registry unless given explicitly.
     """
     meta = _page_meta(title)
-    section_name = eyebrow or (meta.section if meta and meta.section else "Cohort Monitoring")
+    section_name = eyebrow or (meta.section if meta and meta.section else APP_NAME)
     icon = icon or (meta.icon if meta else None)
     if chapter:
         st.session_state["handbook_chapter"] = chapter

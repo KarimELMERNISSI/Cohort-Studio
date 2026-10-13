@@ -6,7 +6,7 @@ import streamlit as st
 
 from manage.iam import UserCredentials, UserRole, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, validate_new_credentials
-from ui.theme import brand_asset
+from ui.theme import APP_NAME, APP_TAGLINE, brand_asset
 
 LOGO = brand_asset("icon.png")
 
@@ -25,10 +25,11 @@ def logout() -> None:
 def _login_card(iam) -> None:
     with st.container(border=True, key="cmp-login"):
         with st.container(key="cmp-hero", horizontal_alignment="center"):
-            st.image(LOGO, width=84, alt="Cohort Monitoring logo")
+            st.image(LOGO, width=84, alt=f"{APP_NAME} logo")
             with st.container(key="cmp-hero-eyebrow"):
                 st.markdown("Clinical cohort platform", text_alignment="center")
-            st.title("Cohort Monitoring", anchor=False, text_alignment="center")
+            st.title(APP_NAME, anchor=False, text_alignment="center")
+            st.markdown(f"**{APP_TAGLINE}**", text_alignment="center")
             st.caption(
                 "Sign in to open your workspace. Your datasets, traces and documents are private to your account.",
                 text_alignment="center",

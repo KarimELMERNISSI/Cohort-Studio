@@ -1,6 +1,6 @@
 # Tutorials
 
-Step-by-step guides for common workflows in the Cohort Monitoring Package.
+Step-by-step guides for common workflows in CohortStudio.
 
 ---
 

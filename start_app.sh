@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Starting Cohort Monitoring App..."
+echo "Starting CohortStudio..."
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then

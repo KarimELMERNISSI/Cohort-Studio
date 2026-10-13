@@ -1,6 +1,6 @@
 # Researcher Handbook
 
-Welcome to the **Cohort Monitoring Package**. This handbook walks you through the application's philosophy and the recommended workflow for cohort data analysis — from raw data ingestion to publication-ready outputs.
+Welcome to **CohortStudio**. This handbook walks you through the application's philosophy and the recommended workflow for cohort data analysis — from raw data ingestion to publication-ready outputs.
 
 ---
 

@@ -87,7 +87,7 @@ def cmd_list(_: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Manage Cohort Monitoring Package user accounts.")
+    parser = argparse.ArgumentParser(description="Manage CohortStudio user accounts.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("create-admin", help="create an ACTIVE administrator account")

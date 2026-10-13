@@ -1,6 +1,6 @@
 # Interactive Clinical Visualisation & Publication Export Suite
 
-The **Visualisation Suite** in the Cohort Monitoring Package (CMP) provides an intuitive, publication-grade clinical graphics and hypothesis testing engine built on Plotly, SciPy, and statsmodels. Every chart couples high-resolution visual exploration with rigorous biostatistical testing, clinical outlier filters, dynamic themes, and instant multi-format figure exports.
+The **Visualisation Suite** in CohortStudio provides an intuitive, publication-grade clinical graphics and hypothesis testing engine built on Plotly, SciPy, and statsmodels. Every chart couples high-resolution visual exploration with rigorous biostatistical testing, clinical outlier filters, dynamic themes, and instant multi-format figure exports.
 
 ---
 
@@ -66,7 +66,7 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
 
 ## 3. Integrated Statistical Testing & Significance Brackets
 
-CMP bridges visualization and formal inferential statistics by embedding hypothesis tests directly onto box and violin charts:
+CohortStudio bridges visualization and formal inferential statistics by embedding hypothesis tests directly onto box and violin charts:
 
 | Scenario | Parametric Route | Non-Parametric Route | Automated Significance Brackets |
 | :--- | :--- | :--- | :--- |
@@ -99,7 +99,7 @@ Significance formatting follows standard biomedical conventions:
 
 ## 5. Fast, Effortless Multi-Format Export Engine
 
-CMP eliminates the friction of capturing publication-ready graphics by providing both automated browser vector downloads and explicit one-click file exports.
+CohortStudio eliminates the friction of capturing publication-ready graphics by providing both automated browser vector downloads and explicit one-click file exports.
 
 ### Export Modalities
 
@@ -111,7 +111,7 @@ CMP eliminates the friction of capturing publication-ready graphics by providing
 3. **Standalone Interactive HTML (`.html`)**:
    - Single-click download via `fig_to_html_str(fig, include_plotlyjs="cdn")`.
    - Generates a self-contained HTML document that preserves interactive hover tooltips, zoom, pan, and trace toggling.
-   - Ideal for sharing findings with collaborators, principal investigators, or medical monitors without requiring Python or CMP installed.
+   - Ideal for sharing findings with collaborators, principal investigators, or medical monitors without requiring Python or CohortStudio installed.
 4. **Machine-Readable Plotly JSON (`.json`)**:
    - Exports complete JSON figure specification for programmatic storage, dashboard integration, or automated report compilation.
 5. **Filtered Cohort Data Slice (`.csv` & `.xlsx`)**:

@@ -1,4 +1,4 @@
-name: cohort-monitoring
+name: cohortstudio
 channels:
   - conda-forge
 dependencies:

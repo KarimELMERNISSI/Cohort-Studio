@@ -1,6 +1,6 @@
 # Process Flow & Architecture
 
-This document outlines the high-level execution flow and data movement within the Cohort Monitoring Package.
+This document outlines the high-level execution flow and data movement within CohortStudio.
 
 ## 1. High-Level Architecture
 

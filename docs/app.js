@@ -1,5 +1,5 @@
 /**
- * Cohort Monitoring Package — Interactive UI Controller
+ * CohortStudio — Interactive UI Controller
  */
 
 document.addEventListener('DOMContentLoaded', () => {

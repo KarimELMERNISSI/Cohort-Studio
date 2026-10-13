@@ -1,6 +1,6 @@
 # Developer Guide
 
-This guide covers the architecture, design patterns, and key subsystems of the Cohort Monitoring Package for developers who want to understand, extend, or maintain the application.
+This guide covers the architecture, design patterns, and key subsystems of CohortStudio for developers who want to understand, extend, or maintain the application.
 
 ---
 

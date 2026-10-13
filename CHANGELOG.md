@@ -1,10 +1,17 @@
 # Changelog
 
-All notable changes to the Cohort Monitoring Package are documented here.
+All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) are documented here.
 
 ---
 
 ## [Unreleased]
+
+### Renamed: Cohort Monitoring Package becomes CohortStudio
+
+- **Why** — "Monitoring" suggested clinical-trial monitoring or safety surveillance, and "Package" a library; the application is a workbench that takes a cohort from raw file to reproducible evidence (quality, enrichment, biostatistics, literature knowledge, traced reports). Tagline: *Clinical cohort data, from raw file to reproducible evidence.*
+- **Where** — Browser tab, sign-in card, page heroes and the header wordmark (regenerated: "Cohort" in navy, "Studio" in teal); the Python project (`cohortstudio`), the conda environment, the Docker image, container and compose service (`cohortstudio`), the launch scripts, the handbook, the developer docs, the documentation site and its citation (`elmernissi2026cohortstudio`). The name lives in one place in the code (`ui.theme.APP_NAME`); `tests/ui_layer/test_branding.py` keeps the former name out of the application.
+- **Unchanged on purpose** — The `CMP_` prefix of the server settings (existing deployments keep working), the GitHub repository and documentation-site addresses (until the repository itself is renamed), internal identifiers, and historical documents (audit report, legacy docs, earlier changelog entries).
+- **Also** — `requirements.txt` and `requirements-yfiles.txt` re-exported from the lockfile: they now list LanceDB and Qdrant instead of ChromaDB.
 
 ### Vector database connector: LanceDB or Qdrant (ChromaDB removed)
 

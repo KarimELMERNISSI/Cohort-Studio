@@ -1,7 +1,7 @@
 [project]
-name = "cohort-monitoring-package"
+name = "cohortstudio"
 version = "2.3.0"
-description = "Clinical and epidemiological cohort data management, monitoring, analysis, and enrichment platform"
+description = "CohortStudio: clinical cohort data from raw file to reproducible evidence (quality, enrichment, biostatistics, literature knowledge, traced reports)"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
