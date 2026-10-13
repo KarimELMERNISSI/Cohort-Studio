@@ -6,7 +6,7 @@ import logging
 import os
 
 _CONFIGURED = False
-_NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "chromadb", "watchdog", "PIL", "matplotlib", "numba")
+_NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "lancedb", "qdrant_client", "portalocker", "watchdog", "PIL", "matplotlib", "numba")
 
 
 def configure_logging(level: str | None = None) -> None:

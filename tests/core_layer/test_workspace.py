@@ -50,7 +50,7 @@ def test_scope_directories_are_per_user(root: Path) -> None:
     assert alice.datasets_dir() == root / "users" / "alice" / "datasets"
     assert bob.datasets_dir() == root / "users" / "bob" / "datasets"
     assert alice.artifacts_dir("session_1").parent == alice.traces_dir() / "artifacts"
-    assert alice.snapshots_dir().exists() and alice.chroma_dir().exists()
+    assert alice.snapshots_dir().exists() and alice.vectors_dir().exists()
     assert bob.is_admin and not alice.is_admin
     assert {s.username for s in all_user_scopes()} == {"alice", "bob"}
 

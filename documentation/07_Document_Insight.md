@@ -6,10 +6,25 @@ The **Documents Insight** page enables you to analyse research PDFs using AI —
 
 ## Document Selection
 
-Upload one or more PDF files. Documents are processed and indexed into the RAG vector store (ChromaDB) for retrieval.
+Upload one or more PDF files. Documents are split into chunks, embedded and indexed into your vector database for retrieval.
 - Supported format: `.pdf`
 - Documents are stored per-user for data isolation.
 - Previously uploaded documents can be reused across sessions.
+
+### Choosing the vector database
+
+Settings > AI engine > **Vector database** offers two engines; the app recommends one for your machine and says why
+(CPU cores, memory, free disk, size of your library, and whether a Qdrant server is available):
+
+| Engine | Choose it when |
+| --- | --- |
+| **LanceDB** (default) | You work on one machine. Nothing to install or run; vectors stay on disk, so memory use stays low even for large libraries. |
+| **Qdrant**, embedded | Your library is small to medium (up to about 20 000 chunks) and you prefer Qdrant; every vector is held in memory. |
+| **Qdrant**, server | Several people use the app or the library is very large. Enter the server URL (and API key if secured); each user gets their own collection. |
+
+Changing the engine or the embedding model needs a new index: turn off *Reuse the existing index* and click
+**Initialise / reindex**. The card shows what the current index holds (chunks, documents, embedding model, date).
+Indexes from earlier versions (ChromaDB) are no longer used; your PDFs are kept and the index is rebuilt from them.
 
 ---
 

@@ -215,6 +215,101 @@ Subclasses must implement:
 
 ---
 
+## base.py
+
+_Contract shared by the vector-database engines (LanceDB, Qdrant).
+
+The application never talks to an engine directly: it stores *chunks* (text, vector, source document,
+page, metadata) and asks for the nearest chunks of a query vector, optionally restricted to some
+source documents. Each engine translates that into its own storage and filter language. No
+Streamlit here (service layer)._
+
+**Imports**:
+`__future__.annotations`, `json`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.asdict`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `enum.StrEnum`, `pathlib.Path`, `typing.Any`, `typing.ClassVar`
+
+### class `VectorEngine` (base.py)
+
+No description available.
+
+### class `VectorStoreError` (base.py)
+
+An engine is unavailable, unreachable or holds an incompatible index.
+
+### class `ChunkRow` (base.py)
+
+One indexed piece of a document.
+
+**Methods:**
+
+- **metadata_json**(`self`) -> `str`
+  > No description available.
+
+### class `Hit` (base.py)
+
+A chunk returned by a search; ``score`` is the cosine similarity (1 = identical direction).
+
+### class `IndexManifest` (base.py)
+
+What an index holds and how it was built (stored next to it as ``manifest.json``).
+
+**Methods:**
+
+- **to_dict**(`self`) -> `dict[ComplexType]`
+  > No description available.
+
+- **from_dict**(`cls, data: dict[ComplexType]`) -> `IndexManifest`
+  > No description available.
+
+- **save**(`self, directory: Path`) -> `Path`
+  > No description available.
+
+- **load**(`cls, directory: Path`) -> `ComplexType`
+  > No description available.
+
+### class `BaseVectorIndex` (base.py)
+
+Storage of chunks in one engine. Implementations: :mod:`.lancedb_index`, :mod:`.qdrant_index`.
+
+**Methods:**
+
+- **__init__**(`self, manifest_dir: Path`) -> `None`
+  > No description available.
+
+- **availability**(`cls`) -> `tuple[ComplexType]`
+  > Whether the engine's client library can be used, and why not.
+
+- **location**(`self`) -> `str`
+  > Where the vectors live (folder or server), for display and the manifest.
+
+- **exists**(`self`) -> `bool`
+  > An index (possibly empty) is present.
+
+- **reset**(`self, dim: int`) -> `None`
+  > Drop any previous index and create an empty one for vectors of ``dim`` dimensions.
+
+- **add**(`self, rows: list[ChunkRow]`) -> `None`
+  > No description available.
+
+- **query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
+  > The ``k`` nearest chunks (cosine), with their vectors, optionally only from ``sources``.
+
+- **count**(`self`) -> `int`
+  > No description available.
+
+- **optimize**(`self`) -> `None`
+  > Build an approximate-search index when the engine benefits from it (large collections).
+
+- **close**(`self`) -> `None`
+  > Release files or connections.
+
+- **manifest**(`self`) -> `ComplexType`
+  > No description available.
+
+- **write_manifest**(`self, manifest: IndexManifest`) -> `None`
+  > No description available.
+
+---
+
 ## better_auth.py
 
 _Better Auth Remote IAM Provider.
@@ -291,7 +386,7 @@ degrade performance with repeated synchronous network requests.
 _No module description._
 
 **Imports**:
-`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`, `utils.session_scope.get_current_scope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`
+`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`, `utils.session_scope.get_current_scope`
 
 ### class `DBManager` (db_manager.py)
 
@@ -443,6 +538,101 @@ Bypass provider that allows unrestricted access as a local researcher.
 
 - **update_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
   > No description available.
+
+---
+
+## document_index.py
+
+_Engine-agnostic document index used by the RAG code.
+
+:class:`DocumentIndex` wraps a :class:`~manage.vectorstores.base.BaseVectorIndex` and the embedding
+model. It exposes the LangChain vector-store calls the application uses (``similarity_search``,
+``max_marginal_relevance_search``, ``as_retriever``), so the RAG code is identical whatever the
+engine. Filtering by document is expressed as a list of sources; the legacy Chroma filter
+(``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted._
+
+**Imports**:
+`__future__.annotations`, `hashlib`, `logging`, `time`, `collections.abc.Callable`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `langchain_core.callbacks.CallbackManagerForRetrieverRun`, `langchain_core.documents.Document`, `langchain_core.embeddings.Embeddings`, `langchain_core.retrievers.BaseRetriever`, `langchain_core.vectorstores.utils.maximal_marginal_relevance`, `pydantic.ConfigDict`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorStoreError`
+
+### class `DocumentIndex` (document_index.py)
+
+Chunks of the user's documents in the selected engine, searched with the selected embedding model.
+
+**Methods:**
+
+- **__init__**(`self, backend: BaseVectorIndex, embeddings: Embeddings`) -> `None`
+  > No description available.
+
+- **engine**(`self`) -> `str`
+  > No description available.
+
+- **location**(`self`) -> `str`
+  > No description available.
+
+- **manifest**(`self`) -> `ComplexType`
+  > No description available.
+
+- **count**(`self`) -> `int`
+  > No description available.
+
+- **_embed**(`self, texts: list[str], retries: int, first: int`) -> `list[list[float]]`
+  > No description available.
+
+- **build**(`self, chunks: Sequence[Document]`) -> `IndexManifest`
+  > Embed every chunk and replace the index; returns (and stores) the manifest.
+
+- **check_compatible**(`self, embedding_label: str`) -> `None`
+  > Refuse to reuse an index built with another embedding model (its vectors are not comparable).
+
+- **similarity_search**(`self, query: str, k: int, sources: ComplexType`) -> `list[Document]`
+  > No description available.
+
+- **max_marginal_relevance_search**(`self, query: str, k: int, fetch_k: int, lambda_mult: float, sources: ComplexType`) -> `list[Document]`
+  > Relevant and diverse chunks: the ``k`` best of the ``fetch_k`` nearest, penalising near-duplicates.
+
+- **as_retriever**(`self, search_type: str, search_kwargs: ComplexType`) -> `None`
+  > No description available.
+
+### class `IndexRetriever` (document_index.py)
+
+LangChain retriever over a :class:`DocumentIndex` (plain similarity or MMR).
+
+**Methods:**
+
+- **_get_relevant_documents**(`self, query: str`) -> `list[Document]`
+  > No description available.
+
+### def `_sources_from_filter` (document_index.py)
+
+- **Arguments**: `filter_: Any`
+
+- **Returns**: `ComplexType`
+
+Translate the legacy Chroma filter on ``source`` into a list of sources.
+
+### def `_page` (document_index.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `int`
+
+No description available.
+
+### def `chunk_id` (document_index.py)
+
+- **Arguments**: `document: Document, position: int`
+
+- **Returns**: `str`
+
+Stable identifier of a chunk: same document, page, position and text give the same id.
+
+### def `_to_document` (document_index.py)
+
+- **Arguments**: `hit: Hit`
+
+- **Returns**: `Document`
+
+No description available.
 
 ---
 
@@ -702,6 +892,72 @@ Embedding connector for Google Gemini models.
 
 ---
 
+## lancedb_index.py
+
+_LanceDB engine: embedded, serverless, columnar storage on disk (Lance format).
+
+Vectors live in files under the user's workspace, so memory use stays low and nothing has to run
+beside the application. Search is exact (brute force, cosine) up to :data:`ANN_THRESHOLD` chunks;
+beyond that :meth:`LanceDBIndex.optimize` builds an IVF index for approximate search._
+
+**Imports**:
+`__future__.annotations`, `logging`, `pathlib.Path`, `typing.Any`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.VectorEngine`, `base.VectorStoreError`
+
+### class `LanceDBIndex` (lancedb_index.py)
+
+No description available.
+
+**Methods:**
+
+- **__init__**(`self, directory: Path`) -> `None`
+  > No description available.
+
+- **availability**(`cls`) -> `tuple[ComplexType]`
+  > No description available.
+
+- **location**(`self`) -> `str`
+  > No description available.
+
+- **_connect**(`self`) -> `None`
+  > No description available.
+
+- **_tables**(`self`) -> `list[str]`
+  > No description available.
+
+- **exists**(`self`) -> `bool`
+  > No description available.
+
+- **_table**(`self`) -> `None`
+  > No description available.
+
+- **reset**(`self, dim: int`) -> `None`
+  > No description available.
+
+- **add**(`self, rows: list[ChunkRow]`) -> `None`
+  > No description available.
+
+- **query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
+  > No description available.
+
+- **count**(`self`) -> `int`
+  > No description available.
+
+- **optimize**(`self`) -> `None`
+  > No description available.
+
+- **close**(`self`) -> `None`
+  > No description available.
+
+### def `_sql_literal` (lancedb_index.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+No description available.
+
+---
+
 ## local_duckdb.py
 
 _Local DuckDB IAM Provider.
@@ -711,7 +967,7 @@ and bcrypt password hashing. Designed for single-node deployments, air-gapped
 clinical environments, and full backward compatibility._
 
 **Imports**:
-`logging`, `os`, `datetime.datetime`, `datetime.timedelta`, `bcrypt`, `duckdb`, `utils.data_paths`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `datetime.datetime`, `datetime.timedelta`, `typing.Any`, `typing.cast`, `bcrypt`, `duckdb`, `utils.data_paths`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `LocalDuckDBIAMProvider` (local_duckdb.py)
 
@@ -744,6 +1000,9 @@ Local embedded IAM backend using DuckDB and bcrypt.
 
 - **verify_session**(`self, token: str`) -> `AuthResult`
   > Validate local session token.
+
+- **_row_padded**(`raw: Any`) -> `tuple[ComplexType]`
+  > username, is_active, role, created_at (missing trailing columns become None).
 
 - **get_user**(`self, username: str`) -> `ComplexType`
   > Retrieve user profile from local database.
@@ -1012,6 +1271,93 @@ Embedding connector for OpenAI embeddings (text-embedding-3-small, text-embeddin
 
 - **embed_query**(`self, text: str`) -> `list[float]`
   > No description available.
+
+---
+
+## qdrant_index.py
+
+_Qdrant engine, in two modes.
+
+- **Server** (``CMP_QDRANT_URL``, optional ``CMP_QDRANT_API_KEY``): a Qdrant service shared by every
+  session, with HNSW approximate search, payload indexes and concurrent access. One collection
+  per user (``cmp_<user>_chunks``). Best for several users or very large libraries.
+
+- **Embedded** (no URL): Qdrant's local mode in the user's workspace. Every vector is held in
+  memory and a folder can be opened by one client only, so the client is shared per folder in this
+  process. Suited to small and medium libraries (tens of thousands of chunks).
+
+Every rebuild writes a new collection (``<base>_<id>``) and then drops the previous one; the active
+name is kept in ``collection.txt`` next to the manifest. Embedded Qdrant on Windows can reload a
+deleted collection's files when the same name is recreated, so names are never reused._
+
+**Imports**:
+`__future__.annotations`, `json`, `re`, `threading`, `uuid`, `pathlib.Path`, `typing.Any`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.VectorEngine`, `base.VectorStoreError`
+
+### class `QdrantIndex` (qdrant_index.py)
+
+No description available.
+
+**Methods:**
+
+- **__init__**(`self, manifest_dir: Path`) -> `None`
+  > No description available.
+
+- **availability**(`cls`) -> `tuple[ComplexType]`
+  > No description available.
+
+- **mode**(`self`) -> `str`
+  > No description available.
+
+- **location**(`self`) -> `str`
+  > No description available.
+
+- **_client**(`self`) -> `None`
+  > No description available.
+
+- **ping**(`self`) -> `tuple[ComplexType]`
+  > Reachability of the server (or the local folder).
+
+- **active_collection**(`self`) -> `str`
+  > Collection holding the current index (the base name for indexes built before generations).
+
+- **exists**(`self`) -> `bool`
+  > No description available.
+
+- **reset**(`self, dim: int`) -> `None`
+  > No description available.
+
+- **add**(`self, rows: list[ChunkRow]`) -> `None`
+  > No description available.
+
+- **query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
+  > No description available.
+
+- **count**(`self`) -> `int`
+  > No description available.
+
+### def `_client` (qdrant_index.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+One client per folder (local mode allows a single client) or per server and key.
+
+### def `release_clients` (qdrant_index.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Close every shared client (tests, shutdown).
+
+### def `user_collection` (qdrant_index.py)
+
+- **Arguments**: `username: ComplexType`
+
+- **Returns**: `str`
+
+Collection of a user on a shared Qdrant server.
 
 ---
 
@@ -1305,7 +1651,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`ast`, `json`, `logging`, `os`, `re`, `shutil`, `time`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`ast`, `json`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -1389,8 +1735,12 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **_analyze_global_context**(`self, texts, dataset_columns`) -> `None`
   > Analyzes a sample of the documents and dataset columns to determine the global context.
 
-- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url`) -> `None`
-  > Initialize the RAG system with documents, embeddings and LLM.
+- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url, vector_engine, qdrant_url, qdrant_api_key`) -> `None`
+  > Initialize the RAG system with documents, embeddings, the vector database and the LLM.
+  >
+  > ``vector_engine`` is "lancedb" or "qdrant" (None: the server default ``CMP_VECTOR_STORE``, else
+  > the engine recommended for this machine); ``qdrant_url`` selects a Qdrant server instead of
+  > the embedded mode (default ``CMP_QDRANT_URL``).
 
 - **update_adherence_score**(`self, adherence_score`) -> `None`
   > Updates the adherence score and rebuilds the chain without full re-initialization.
@@ -1700,6 +2050,106 @@ Attributes:
     fetch_k: Candidate pool size for Maximum Marginal Relevance (MMR) retrieval.
     search_type: Retrieval strategy ('mmr' or 'similarity').
     adherence_score: Degree of adherence to document context (0.0=creative, 1.0=strict).
+
+---
+
+## selection.py
+
+_Choosing and opening a vector database for the user's machine and needs.
+
+- :class:`VectorStoreSettings` reads the server defaults (``CMP_VECTOR_STORE``, ``CMP_QDRANT_URL``,
+  ``CMP_QDRANT_API_KEY``); the Settings page lets each user override the engine for the session.
+
+- :func:`probe_machine` measures CPU cores, memory and free disk without extra dependencies.
+
+- :func:`recommend` turns the machine, the size of the document library and the presence of a
+  Qdrant server into a recommendation with its reasons and warnings (pure, unit-tested).
+
+- :func:`open_index` opens the selected engine in the user's workspace._
+
+**Imports**:
+`__future__.annotations`, `ctypes`, `os`, `platform`, `shutil`, `sys`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `base.BaseVectorIndex`, `base.VectorEngine`, `base.VectorStoreError`, `lancedb_index.ANN_THRESHOLD`, `lancedb_index.LanceDBIndex`, `qdrant_index.QdrantIndex`, `qdrant_index.user_collection`
+
+### class `VectorStoreSettings` (selection.py)
+
+No description available.
+
+**Methods:**
+
+- **from_env**(`cls`) -> `VectorStoreSettings`
+  > No description available.
+
+### class `MachineProfile` (selection.py)
+
+No description available.
+
+### class `Recommendation` (selection.py)
+
+No description available.
+
+### def `_memory_bytes` (selection.py)
+
+- **Arguments**: ``
+
+- **Returns**: `tuple[ComplexType]`
+
+Total and available physical memory, without psutil.
+
+### def `probe_machine` (selection.py)
+
+- **Arguments**: `storage: ComplexType`
+
+- **Returns**: `MachineProfile`
+
+No description available.
+
+### def `estimate_chunks` (selection.py)
+
+- **Arguments**: `pdf_sizes: list[int]`
+
+- **Returns**: `int`
+
+Rough number of chunks a set of PDFs will produce (from their file sizes).
+
+### def `estimate_index_mb` (selection.py)
+
+- **Arguments**: `chunks: int, dim: int`
+
+- **Returns**: `float`
+
+Approximate size of an index: float32 vectors plus text and metadata.
+
+### def `recommend` (selection.py)
+
+- **Arguments**: `machine: MachineProfile`
+
+- **Returns**: `Recommendation`
+
+The engine that suits this machine and library best, with the reasons.
+
+### def `qdrant_embedded_warnings` (selection.py)
+
+- **Arguments**: `machine: MachineProfile`
+
+- **Returns**: `list[str]`
+
+Why embedded Qdrant may not suit this library or machine.
+
+### def `resolve_engine` (selection.py)
+
+- **Arguments**: `choice: ComplexType, settings: VectorStoreSettings, recommendation: Recommendation`
+
+- **Returns**: `VectorEngine`
+
+The user's choice, else the server default, else the recommendation.
+
+### def `open_index` (selection.py)
+
+- **Arguments**: `engine: ComplexType`
+
+- **Returns**: `BaseVectorIndex`
+
+Open the engine's index in ``base_dir/<engine>`` (Qdrant on a server when a URL is given).
 
 ---
 

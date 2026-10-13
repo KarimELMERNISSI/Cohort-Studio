@@ -22,7 +22,7 @@ This guide covers the architecture, design patterns, and key subsystems of the C
 - **App Pages** — Streamlit UI modules, one per page tab.
 - **Managers** — Backend logic for RAG, database, and reproduction.
 - **Utilities** — Reusable helpers for analysis, statistics, visualisation, and LLM interaction.
-- **Storage** — DuckDB databases, ChromaDB vector stores, Parquet snapshots, and trace JSON files.
+- **Storage** — DuckDB databases, vector indexes (LanceDB or Qdrant), Parquet snapshots, and trace JSON files.
 
 ---
 
@@ -35,16 +35,41 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
 ├── rag_taxonomy.py      # Taxonomy generation & refinement
 ├── rag_documents.py     # PDF processing, summarisation, knowledge graphs
 ├── rag_computed_vars.py # Variable suggestion & imputation formulas
-└── rag_manager.py       # Orchestrator: initialisation, ChromaDB, shared utilities
+└── rag_manager.py       # Orchestrator: initialisation, vector index, shared utilities
 ```
 
 ### Key Design Decisions
 
-- **ChromaDB** is used as the vector store for document embeddings.
+- **The vector database is a connector** in `manage/vectorstores/`: **LanceDB** (embedded, on disk; the
+  default) or **Qdrant** (embedded in memory, or a server). The RAG code only sees `DocumentIndex`
+  (`similarity_search`, `max_marginal_relevance_search`, `as_retriever`, `build`), so it is identical whatever the
+  engine; filtering by document is a list of sources that each engine translates (SQL `IN` for LanceDB, a `MatchAny`
+  payload filter for Qdrant). See "Vector databases" below.
 - **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI and Mistral as cloud providers that require an explicit data-sharing consent).
 - Each mixin accesses shared resources (`self.vectorstore`, `self.llm`) from the base `RAGManager`.
 
 ---
+
+### Vector databases
+
+| Engine | Mode | Where vectors live | Suits |
+| --- | --- | --- | --- |
+| LanceDB (default) | embedded | `<workspace>/vectors/lancedb/`, columnar Lance files on disk | one machine, any library size; low memory; exact search below 50 000 chunks, an IVF index above |
+| Qdrant | embedded | `<workspace>/vectors/qdrant/storage/`, every vector in memory | small and medium libraries (up to ~20 000 chunks); one process per folder (the client is shared per folder) |
+| Qdrant | server | a Qdrant service (`CMP_QDRANT_URL`, optional `CMP_QDRANT_API_KEY`), one collection per user | several users, very large libraries, concurrent sessions; HNSW search and payload indexes |
+
+- **Choice** — Settings > AI engine > *Vector database*. The default comes from `CMP_VECTOR_STORE` (`auto`, `lancedb`
+  or `qdrant`); `auto` follows `manage.vectorstores.recommend()`, which weighs the machine (CPU cores, memory, free
+  disk, probed without extra dependencies), the size of the library (from the current index, else estimated from the
+  PDF sizes) and whether a Qdrant server is configured, and explains its choice.
+- **Manifest** — every index has a `manifest.json` (engine, embedding model, dimensions, chunks, documents, location,
+  build time). Reusing an index built with another embedding model is refused, because the vectors would not be
+  comparable. Embedding failures are reported after three attempts instead of leaving silent gaps in the index.
+- **Qdrant rebuilds** write a new collection (`<base>_<id>`, recorded in `collection.txt`) and then drop the previous
+  one; embedded Qdrant on Windows can reload a deleted collection's files when the same name is recreated.
+- **Adding an engine** — one module implementing `BaseVectorIndex` (`availability`, `exists`, `reset`, `add`, `query`,
+  `count`, optional `optimize`) and one branch in `open_index()`; `tests/test_vectorstores.py` runs the same contract
+  tests on every engine.
 
 ## Authentication & User Management
 
@@ -71,9 +96,9 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 
 Per-user isolation is enforced by `core/workspace.py`:
 
-- **Workspace directories** — `UserScope.for_user(username)` maps every storage kind (`datasets`, `stats`, `traces` with `artifacts/` and `snapshots/`, `uploads`, `taxonomy`, `knowledge_graphs`, `documents`, `chroma_db`, `rag_eval_logs`) to `<DATA_ROOT>/users/<username>/<kind>/`. `DBManager`, `TransformationManager` and `RAGManager` resolve the signed-in user's scope from the session (`utils/session_scope.get_current_scope()`); outside a Streamlit session (CLI, tests) they fall back to the legacy shared directories and the username-prefix convention.
+- **Workspace directories** — `UserScope.for_user(username)` maps every storage kind (`datasets`, `stats`, `traces` with `artifacts/` and `snapshots/`, `uploads`, `taxonomy`, `knowledge_graphs`, `documents`, `vectors`, `rag_eval_logs`) to `<DATA_ROOT>/users/<username>/<kind>/`. `DBManager`, `TransformationManager` and `RAGManager` resolve the signed-in user's scope from the session (`utils/session_scope.get_current_scope()`); outside a Streamlit session (CLI, tests) they fall back to the legacy shared directories and the username-prefix convention.
 - **Path containment** — `UserScope.resolve_within()` rejects any manually entered or trace-recorded path that resolves outside the workspace; uploaded file names go through `safe_filename()`.
-- **Migration** — `python dev_scripts/migrate_user_layout.py --dry-run` previews, and without the flag moves, the legacy flat layout (`data/datasets/<user>_*.parquet`, `data/traces/<user>_session_*.json`, `data/taxonomy/<user>/`, `data/knowledge_graphs/<user>_*.json`, `DOCUMENTS/`, `data/chroma_db/`) into the per-user workspaces. Files without a username prefix are assigned to the administrator.
+- **Migration** — `python dev_scripts/migrate_user_layout.py --dry-run` previews, and without the flag moves, the legacy flat layout (`data/datasets/<user>_*.parquet`, `data/traces/<user>_session_*.json`, `data/taxonomy/<user>/`, `data/knowledge_graphs/<user>_*.json`, `DOCUMENTS/`) into the per-user workspaces; a legacy `data/chroma_db/` index is not migrated (the index is rebuilt from the PDFs). Files without a username prefix are assigned to the administrator.
 - **Login lockout** — `CMP_MAX_FAILED_LOGINS` consecutive failures lock an account for `CMP_LOCKOUT_MINUTES` (defaults 5 and 15).
 
 ---

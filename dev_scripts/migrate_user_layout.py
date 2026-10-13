@@ -3,7 +3,7 @@ One-shot migration of the legacy flat data layout to per-user workspaces.
 
 Before (audit E4): data/datasets/<user>_<name>_vN.parquet, data/traces/<user>_session_*.json,
 data/taxonomy/<user>/vN/, data/knowledge_graphs/<user>_<name>.json, shared DOCUMENTS/ and chroma_db/.
-After: <DATA_ROOT>/users/<user>/{datasets,stats,traces,taxonomy,knowledge_graphs,documents,chroma_db}/.
+After: <DATA_ROOT>/users/<user>/{datasets,stats,traces,taxonomy,knowledge_graphs,documents,vectors}/.
 
 Files whose owner cannot be inferred from a username prefix are assigned to the administrator account
 (``--admin``, default: the first active administrator in the user directory, else ``admin``).
@@ -125,7 +125,8 @@ def main() -> None:
             move(f, scope(admin).documents_dir() / f.name, args.dry_run)
     chroma = root / "chroma_db"
     if chroma.exists() and any(chroma.iterdir()):
-        move(chroma, scope(admin).chroma_dir(), args.dry_run)
+        # ChromaDB is no longer used (manage.vectorstores: LanceDB or Qdrant): the index is rebuilt from the PDFs.
+        print(f"skip  {chroma}  (legacy ChromaDB index: rebuild the index in Settings > AI engine)")
 
     print("\ndone" + (" (dry run)" if args.dry_run else ""))
 

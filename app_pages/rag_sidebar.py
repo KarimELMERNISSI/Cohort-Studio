@@ -4,17 +4,36 @@ AI engine configuration (Settings page).
 Provider-agnostic controls for the AI providers (local Ollama by default; Google Gemini, OpenAI and
 Mistral as cloud providers that require an explicit data-sharing consent), model and embedding
 selection, the document library, retrieval parameters and engine initialisation. Laid out as cards:
-provider and models, data sharing and document library on the left; retrieval and the engine on the
-right. Widget keys are stable because other pages read them from the session.
+provider and models, data sharing and document library on the left; retrieval, the vector database
+(LanceDB or Qdrant, see ``manage.vectorstores``) and the engine on the right. Widget keys are stable
+because other pages read them from the session.
 """
 
 import os
+import shutil
+from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
 
 from core.workspace import safe_filename
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
+from manage.vectorstores import (
+    ENGINE_SUMMARIES,
+    ENGINE_TITLES,
+    IndexManifest,
+    MachineProfile,
+    VectorEngine,
+    VectorStoreSettings,
+    estimate_chunks,
+    probe_machine,
+    qdrant_embedded_warnings,
+    recommend,
+    resolve_engine,
+)
+from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
+from ui.components import confirm
+from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
 
 load_dotenv()
@@ -237,19 +256,138 @@ def _retrieval_card() -> tuple[float, float]:
     return adherence, temperature
 
 
-def _engine_card(cfg: dict, consent: bool, adherence: float, temperature: float, selected_files: list[str] | None) -> None:
+@st.cache_data(ttl=300, show_spinner=False)
+def _machine(storage: str) -> MachineProfile:
+    """CPU, memory and free disk, probed at most every five minutes."""
+    return probe_machine(Path(storage))
+
+
+def _vectors_dir() -> Path:
+    scope = get_current_scope()
+    return scope.vectors_dir() if scope else Path(get_vectors_dir())
+
+
+def _vector_card(selected_files: list[str] | None) -> dict:
+    """Choice of the vector database for this machine and library; returns the engine settings."""
+    settings = VectorStoreSettings.from_env()
+    base_dir = _vectors_dir()
+    docs_dir = Path(_documents_dir())
+    sizes = [(docs_dir / f).stat().st_size for f in (selected_files or []) if (docs_dir / f).exists()]
+    built = [m for m in (IndexManifest.load(base_dir / e.value) for e in VectorEngine) if m is not None]
+    chunks = max([m.chunks for m in built], default=0) or estimate_chunks(sizes)
+    dim = built[0].dim if built else 768
+    machine = _machine(str(base_dir))
+    with st.container(border=True):
+        st.subheader("Vector database", icon=":material/database:", anchor=False)
+        st.session_state.setdefault("rag_qdrant_url", settings.qdrant_url or "")
+        server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
+        advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
+        default = resolve_engine(None, settings, advice)
+        choice = st.segmented_control(
+            "Engine",
+            options=[e.value for e in VectorEngine],
+            format_func=lambda v: ENGINE_TITLES[VectorEngine(v)],
+            default=default.value,
+            key="rag_vector_engine",
+            help="Where the chunks of your documents and their vectors are stored and searched.",
+        )
+        engine = VectorEngine(choice or default.value)
+        st.caption(ENGINE_SUMMARIES[engine])
+        if engine is advice.engine:
+            st.badge("Recommended for this machine", icon=":material/recommend:", color="green")
+        else:
+            st.badge(f"Recommended here: {ENGINE_TITLES[advice.engine]}", icon=":material/info:", color="gray")
+        with st.expander("Why, and this machine"):
+            for reason in advice.reasons:
+                st.markdown(f"- {reason}")
+            memory = f"{machine.memory_gb:.0f} GB memory" if machine.memory_gb else "memory unknown"
+            if machine.available_gb:
+                memory += f" ({machine.available_gb:.1f} GB free)"
+            disk = f"{machine.disk_free_gb:,.0f} GB free disk" if machine.disk_free_gb is not None else "free disk unknown"
+            source = "current index" if built else "rough estimate from the PDF sizes"
+            st.caption(f"{machine.cpu_count} CPU cores · {memory} · {disk} · library: ~{chunks:,} chunks ({source}).")
+
+        qdrant_url = qdrant_key = None
+        if engine is VectorEngine.QDRANT:
+            server_url = st.text_input(
+                "Qdrant server URL",
+                key="rag_qdrant_url",
+                placeholder="http://localhost:6333 (empty: embedded in your workspace)",
+                help="Leave empty for embedded Qdrant in your workspace. A server (Docker, self-hosted or Qdrant Cloud) "
+                "is shared by every session, with one collection per user. Default: CMP_QDRANT_URL.",
+                icon=":material/dns:",
+            ).strip()
+            qdrant_url = server_url or None
+            if qdrant_url:
+                qdrant_key = st.text_input(
+                    "Qdrant API key", value="", type="password", key="rag_qdrant_api_key", icon=":material/key:",
+                    help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY when configured.",
+                ) or settings.qdrant_api_key
+                if st.button("Test the connection", key="rag_qdrant_ping", icon=":material/network_check:"):
+                    scope = get_current_scope()
+                    probe = QdrantIndex(
+                        base_dir / "qdrant", url=qdrant_url, api_key=qdrant_key,
+                        collection=user_collection(scope.username if scope else None),
+                    )
+                    ok, message = probe.ping()
+                    (st.success if ok else st.error)(message)
+            else:
+                for note in qdrant_embedded_warnings(machine, chunks=chunks, dim=dim):
+                    st.caption(f":orange[:material/warning:] {note}")
+        for warning in advice.warnings:
+            st.warning(warning, icon=":material/storage:")
+
+        manifest = IndexManifest.load(base_dir / engine.value)
+        if manifest is not None:
+            st.caption(
+                f":material/inventory_2: Index: {manifest.chunks:,} chunks from {len(manifest.documents)} document(s), "
+                f"embedded with {manifest.embedding} ({manifest.dim} dimensions), built {manifest.built_at[:16].replace('T', ' ')}."
+            )
+        else:
+            st.caption(":material/inventory_2: No index for this engine yet: initialise the engine to build it.")
+
+        scope = get_current_scope()
+        legacy = scope.legacy_chroma_dir() if scope else None
+        if legacy is not None and legacy.is_dir() and not any(legacy.iterdir()):
+            legacy.rmdir()  # an empty folder left by earlier versions: nothing to keep
+        if legacy is not None and legacy.exists():
+            st.info(
+                "An index from ChromaDB (earlier versions) is still in your workspace. It is no longer used: "
+                "initialise the engine to rebuild the index with the selected database. Your PDFs are kept.",
+                icon=":material/history:",
+            )
+            if st.button("Remove the old ChromaDB index", key="rag_remove_chroma", icon=":material/delete:"):
+                confirm(
+                    "Remove the old ChromaDB index?",
+                    "Deletes the ChromaDB folder of your workspace. Your PDFs and the new index are not affected.",
+                    lambda: shutil.rmtree(legacy, ignore_errors=True),
+                    confirm_label="Remove",
+                )
+    return {"vector_engine": engine.value, "qdrant_url": qdrant_url, "qdrant_api_key": qdrant_key}
+
+
+def _engine_card(
+    cfg: dict,
+    consent: bool,
+    adherence: float,
+    temperature: float,
+    selected_files: list[str] | None,
+    vector: dict,
+) -> None:
     manager = st.session_state.rag_manager
     with st.container(border=True):
         st.subheader("AI engine", icon=":material/bolt:", anchor=False)
         if manager.initialized:
-            st.badge("Active", icon=":material/check_circle:", color="green")
+            engine_name = ENGINE_TITLES.get(VectorEngine(manager.vector_engine)) if getattr(manager, "vector_engine", None) else None
+            st.badge(f"Active · {engine_name} index" if engine_name else "Active", icon=":material/check_circle:", color="green")
         else:
             st.badge("Not initialised", icon=":material/radio_button_unchecked:", color="gray")
         use_existing_db = st.toggle(
             "Reuse the existing index",
             value=True,
             key="rag_use_existing_db",
-            help="Skips re-embedding documents that are already indexed (faster).",
+            help="Uses the index already built with the selected vector database and embedding model (faster). "
+            "Turn it off after adding documents or changing the embedding model.",
         )
         if not consent:
             st.caption("Confirm the data-sharing notice to enable initialisation.")
@@ -285,6 +423,9 @@ def _engine_card(cfg: dict, consent: bool, adherence: float, temperature: float,
                     use_existing_db=use_existing_db,
                     progress_callback=update_progress,
                     selected_files=selected_files,
+                    vector_engine=vector.get("vector_engine"),
+                    qdrant_url=vector.get("qdrant_url"),
+                    qdrant_api_key=vector.get("qdrant_api_key"),
                 )
                 status.update(label=msg if success else "Initialisation failed", state="complete" if success else "error")
                 if not success:
@@ -307,7 +448,8 @@ def render_ai_settings() -> None:
         selected_files = _library_card()
     with right:
         adherence, temperature = _retrieval_card()
-        _engine_card(cfg, consent, adherence, temperature, selected_files)
+        vector = _vector_card(selected_files)
+        _engine_card(cfg, consent, adherence, temperature, selected_files, vector)
 
 
 __all__ = ["CLOUD_PROVIDERS", "render_ai_settings"]

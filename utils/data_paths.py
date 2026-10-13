@@ -5,7 +5,7 @@ All data paths are configured relative to a single DATA_ROOT environment variabl
 This allows Docker deployments to use mounted volumes while keeping local development simple.
 
 Usage:
-    from utils.data_paths import get_datasets_dir, get_chroma_dir
+    from utils.data_paths import get_datasets_dir, get_vectors_dir
 
 Environment Variables:
     DATA_ROOT: Base directory for all data storage (default: "./data")
@@ -36,9 +36,9 @@ def get_stats_dir() -> str:
     return path
 
 
-def get_chroma_dir() -> str:
-    """Get the ChromaDB vector database directory path."""
-    path = os.path.join(DATA_ROOT, "chroma_db")
+def get_vectors_dir() -> str:
+    """Vector indexes outside a signed-in session (one folder per engine, see manage.vectorstores)."""
+    path = os.path.join(DATA_ROOT, "vectors")
     os.makedirs(path, exist_ok=True)
     return path
 

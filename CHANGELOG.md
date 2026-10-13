@@ -6,6 +6,15 @@ All notable changes to the Cohort Monitoring Package are documented here.
 
 ## [Unreleased]
 
+### Vector database connector: LanceDB or Qdrant (ChromaDB removed)
+
+- **Engine-agnostic RAG** — The document index goes through `manage/vectorstores/`: the RAG code only sees `DocumentIndex` (similarity search, maximal-marginal-relevance search, retriever, build), whatever the engine. Filtering by document is a list of sources that each engine translates (SQL `IN` for LanceDB, a payload filter for Qdrant).
+- **LanceDB** (default) — embedded and serverless, vectors on disk in the Lance format: low memory, exact search below 50 000 chunks and an IVF index above. **Qdrant** — embedded (in memory, small and medium libraries) or a server via `CMP_QDRANT_URL` / `CMP_QDRANT_API_KEY` (one collection per user; for several users or very large libraries). ChromaDB and `langchain-chroma` are removed.
+- **Choice for the machine** — Settings > AI engine > Vector database: LanceDB or Qdrant, with the recommended engine and its reasons from the machine (CPU cores, memory, free disk, probed without extra dependencies), the library size and the presence of a Qdrant server; Qdrant server URL, key and connection test; status of the current index. Server default: `CMP_VECTOR_STORE` (`auto`, `lancedb`, `qdrant`).
+- **Safer indexes** — Each index has a manifest (engine, embedding model, dimensions, chunks, documents, build time); reusing an index built with another embedding model is refused instead of returning meaningless neighbours; embedding failures are reported after three attempts instead of silently skipping chunks. Indexes live in `<workspace>/vectors/<engine>/`; an old ChromaDB index is detected and can be removed (the PDFs are kept, the index is rebuilt).
+- **Fix** — The Start-page evidence for Documents no longer creates an empty `chroma_db` folder; an empty one left behind is removed.
+- **Tests** — `tests/test_vectorstores.py` (the same contract on both engines: build, search, document filter with quotes, legacy filter, MMR, retriever, reopen, rebuild, embedding mismatch, failure reporting, recommendation, settings), `tests/test_rag_vector_integration.py` (RAGManager end to end on both engines).
+
 ### Interactive global quality score (Validate)
 
 - **Ring built from the dimensions** — The static gauge is replaced by a ring whose coloured segments are the audit dimensions, sized by their weights; the grey gap after a segment is the points it loses. Hover a segment for its score, weight, points added and lost; the ring follows the weight sliders; the centre shows the score, its band and the change since the previous check. Theme-aware (light and dark).

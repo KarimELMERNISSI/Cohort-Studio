@@ -1,0 +1,184 @@
+"""Vector-database connector: LanceDB and Qdrant behave the same behind DocumentIndex; engine recommendation."""
+
+import hashlib
+import math
+import re
+from pathlib import Path
+
+import pytest
+from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
+
+from manage.vectorstores import (
+    DocumentIndex,
+    MachineProfile,
+    VectorEngine,
+    VectorStoreError,
+    VectorStoreSettings,
+    estimate_chunks,
+    open_index,
+    qdrant_embedded_warnings,
+    recommend,
+    resolve_engine,
+)
+from manage.vectorstores.qdrant_index import release_clients, user_collection
+
+DIM = 64
+
+
+class WordHashEmbeddings(Embeddings):
+    """Deterministic bag-of-words vectors: texts sharing words point in similar directions."""
+
+    def __init__(self, label: str = "fake:words") -> None:
+        self.label = label
+        self.calls = 0
+
+    def _vec(self, text: str) -> list[float]:
+        vec = [0.0] * DIM
+        for word in re.findall(r"[a-z0-9]+", text.lower()):
+            vec[int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        return [v / norm for v in vec]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        return [self._vec(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._vec(text)
+
+
+CHUNKS = [
+    Document(
+        "Body mass index is weight divided by height squared",
+        metadata={"source": "a/bmi.pdf", "page": 1},
+    ),
+    Document("BMI above 30 defines obesity in adults", metadata={"source": "a/bmi.pdf", "page": 2}),
+    Document(
+        "eGFR estimates kidney function from serum creatinine",
+        metadata={"source": "b/kidney.pdf", "page": 4},
+    ),
+    Document(
+        "Creatinine clearance and eGFR staging of chronic kidney disease",
+        metadata={"source": "b/kidney.pdf", "page": 5},
+    ),
+    Document(
+        "Blood pressure targets in hypertension trials",
+        metadata={"source": "c/it's bp.pdf", "page": 1},
+    ),
+    Document(
+        "Systolic blood pressure above 140 mmHg is hypertension",
+        metadata={"source": "c/it's bp.pdf", "page": 2},
+    ),
+]
+
+
+@pytest.fixture(params=[VectorEngine.LANCEDB, VectorEngine.QDRANT], ids=["lancedb", "qdrant"])
+def index(request, tmp_path: Path):
+    backend = open_index(request.param, base_dir=tmp_path / "vectors", username="alice")
+    yield DocumentIndex(backend, WordHashEmbeddings())
+    release_clients()
+
+
+def test_build_count_and_manifest(index: DocumentIndex) -> None:
+    progress: list[tuple[int, int]] = []
+    manifest = index.build(
+        CHUNKS,
+        embedding_label="fake:words",
+        documents=["bmi.pdf", "kidney.pdf", "it's bp.pdf"],
+        batch_size=4,
+        progress=lambda done, total: progress.append((done, total)),
+    )
+    assert index.count() == len(CHUNKS) == manifest.chunks
+    assert manifest.dim == DIM and manifest.engine == index.engine
+    assert progress == [(4, 6), (6, 6)]
+    assert index.manifest == manifest  # stored next to the index
+
+
+def test_search_finds_the_nearest_chunks(index: DocumentIndex) -> None:
+    index.build(CHUNKS, embedding_label="fake:words")
+    docs = index.similarity_search("kidney function eGFR creatinine", k=2)
+    assert {d.metadata["source"] for d in docs} == {"b/kidney.pdf"}
+    assert docs[0].metadata["page"] in (4, 5) and 0 < docs[0].metadata["score"] <= 1.0
+
+
+def test_filter_by_document_including_quotes_and_legacy_filter(index: DocumentIndex) -> None:
+    index.build(CHUNKS, embedding_label="fake:words")
+    only_bp = index.similarity_search("kidney", k=5, sources=["c/it's bp.pdf"])
+    assert only_bp and {d.metadata["source"] for d in only_bp} == {"c/it's bp.pdf"}
+    legacy = index.similarity_search("obesity", k=5, filter={"source": {"$in": ["a/bmi.pdf"]}})
+    assert {d.metadata["source"] for d in legacy} == {"a/bmi.pdf"}
+
+
+def test_mmr_and_retriever(index: DocumentIndex) -> None:
+    index.build(CHUNKS, embedding_label="fake:words")
+    mmr = index.max_marginal_relevance_search("blood pressure hypertension kidney", k=3, fetch_k=6)
+    assert len(mmr) == 3 and len({d.page_content for d in mmr}) == 3
+    retriever = index.as_retriever(
+        search_type="mmr", search_kwargs={"k": 2, "fetch_k": 6, "sources": ["a/bmi.pdf"]}
+    )
+    docs = retriever.invoke("body mass index obesity")
+    assert len(docs) == 2 and all(d.metadata["source"] == "a/bmi.pdf" for d in docs)
+
+
+def test_reopen_reuse_and_embedding_mismatch(index: DocumentIndex, tmp_path: Path) -> None:
+    index.build(CHUNKS, embedding_label="fake:words")
+    reopened = DocumentIndex(
+        open_index(index.backend.engine, base_dir=tmp_path / "vectors", username="alice"),
+        WordHashEmbeddings(),
+    )
+    assert reopened.count() == len(CHUNKS)
+    reopened.check_compatible("fake:words")
+    with pytest.raises(VectorStoreError, match="built with fake:words"):
+        reopened.check_compatible("ollama:other-model")
+
+
+def test_rebuild_replaces_the_index(index: DocumentIndex) -> None:
+    index.build(CHUNKS, embedding_label="fake:words")
+    index.build(CHUNKS[:2], embedding_label="fake:words")
+    assert index.count() == 2
+
+
+def test_embedding_failures_are_reported_not_skipped(index: DocumentIndex) -> None:
+    class Failing(WordHashEmbeddings):
+        def embed_documents(self, texts):
+            raise RuntimeError("rate limited")
+
+    broken = DocumentIndex(index.backend, Failing())
+    with pytest.raises(VectorStoreError, match="Embedding failed for chunks 1-6 after 2 attempts"):
+        broken.build(CHUNKS, embedding_label="fake:words", batch_size=10, retries=2)
+
+
+def test_recommendation_follows_machine_and_library() -> None:
+    laptop = MachineProfile(cpu_count=8, memory_gb=16.0, available_gb=8.0, disk_free_gb=200.0)
+    rec = recommend(laptop, chunks=5_000)
+    assert rec.engine is VectorEngine.LANCEDB and rec.mode == "embedded"
+    assert any("Exact search" in r for r in rec.reasons)
+    server = recommend(laptop, chunks=5_000, qdrant_server=True)
+    assert server.engine is VectorEngine.QDRANT and server.mode == "server"
+    tiny_disk = recommend(MachineProfile(4, 4.0, 1.0, 0.01), chunks=200_000)
+    assert tiny_disk.warnings and "free on disk" in tiny_disk.warnings[0]
+    assert any("approximate (IVF)" in r for r in tiny_disk.reasons)
+    big = qdrant_embedded_warnings(MachineProfile(4, 4.0, 1.0, 50.0), chunks=300_000)
+    assert any("Qdrant server" in w for w in big) and any(
+        "quarter of the free memory" in w for w in big
+    )
+    assert estimate_chunks([2_500_000]) == 1_000
+
+
+def test_engine_resolution_and_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    rec = recommend(MachineProfile(8, 16.0, 8.0, 100.0), chunks=10)
+    monkeypatch.setenv("CMP_VECTOR_STORE", "qdrant")
+    monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant:6333")
+    settings = VectorStoreSettings.from_env()
+    assert settings.engine == "qdrant" and settings.qdrant_url == "http://qdrant:6333"
+    assert resolve_engine(None, settings, rec) is VectorEngine.QDRANT  # server default
+    assert (
+        resolve_engine("lancedb", settings, rec) is VectorEngine.LANCEDB
+    )  # the user's choice wins
+    assert (
+        resolve_engine(None, VectorStoreSettings(), rec) is VectorEngine.LANCEDB
+    )  # auto: the recommendation
+    monkeypatch.setenv("CMP_VECTOR_STORE", "chroma")
+    assert VectorStoreSettings.from_env().engine == "auto"  # unknown engines fall back to auto
+    assert user_collection("Dr. Alice-Smith") == "cmp_dr_alice_smith_chunks"

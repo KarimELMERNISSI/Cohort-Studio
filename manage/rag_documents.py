@@ -213,19 +213,11 @@ class DocumentsMixin:
             doc_names = [doc_names]
             
         full_paths = [os.path.join(self.documents_dir, d) for d in doc_names]
-        
-        filter_dict = {}
-        if len(full_paths) == 1:
-            filter_dict = {"source": full_paths[0]}
-        else:
-            filter_dict = {"source": {"$in": full_paths}}
-        
+
+        # Engine-agnostic filter: each vector database translates the list of sources itself.
         retriever = self.vector_store.as_retriever(
             search_type="mmr",
-            search_kwargs={
-                "k": 5,
-                "filter": filter_dict
-            }
+            search_kwargs={"k": 5, "fetch_k": 20, "sources": full_paths},
         )
         
         doc_list_str = ", ".join(doc_names)

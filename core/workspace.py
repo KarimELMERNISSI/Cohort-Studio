@@ -26,7 +26,7 @@ KINDS: tuple[str, ...] = (
     "taxonomy",
     "knowledge_graphs",
     "documents",
-    "chroma_db",
+    "vectors",
     "rag_eval_logs",
 )
 
@@ -138,8 +138,13 @@ class UserScope:
     def documents_dir(self) -> Path:
         return self.dir("documents")
 
-    def chroma_dir(self) -> Path:
-        return self.dir("chroma_db")
+    def vectors_dir(self) -> Path:
+        """Vector indexes of the document library, one folder per engine (``vectors/lancedb``, ``vectors/qdrant``)."""
+        return self.dir("vectors")
+
+    def legacy_chroma_dir(self) -> Path:
+        """ChromaDB index of earlier versions (no longer used; not created)."""
+        return self.root / "chroma_db"
 
     def rag_eval_logs_dir(self) -> Path:
         return self.dir("rag_eval_logs")

@@ -107,7 +107,9 @@ def knowledge_evidence() -> dict[str, tuple[bool, str]]:
         }
     n_pdfs = _count(scope.documents_dir(), "*.pdf")
     n_graphs = _count(scope.knowledge_graphs_dir(), "*.json")
-    indexed = _non_empty(scope.chroma_dir())
+    indexed = (
+        _count(scope.vectors_dir(), "*/manifest.json") > 0
+    )  # a LanceDB or Qdrant index was built
     n_maps = _count(scope.taxonomy_dir(), "v*/taxonomy_metadata.json")
 
     pdfs = f"{n_pdfs} PDF{'s' if n_pdfs != 1 else ''} in your library"

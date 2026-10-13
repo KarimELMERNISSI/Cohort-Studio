@@ -24,4 +24,15 @@ services:
       - CMP_GRAPH_RENDERER=plotly
       - CMP_IAM_PROVIDER=local
       - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      # Vector database: LanceDB embedded by default. For several users or large libraries, start the
+      # qdrant service below and set CMP_VECTOR_STORE=qdrant and CMP_QDRANT_URL=http://qdrant:6333
+      - CMP_VECTOR_STORE=auto
     restart: unless-stopped
+
+  # Optional Qdrant server (uncomment, then set CMP_VECTOR_STORE / CMP_QDRANT_URL above)
+  # qdrant:
+  #   image: qdrant/qdrant:latest   # pin to the release matching qdrant-client in uv.lock (1.19)
+  #   container_name: cohort_monitoring_qdrant
+  #   volumes:
+  #     - ./data/qdrant:/qdrant/storage
+  #   restart: unless-stopped

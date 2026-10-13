@@ -11,11 +11,9 @@ while maintaining a single class interface for existing code.
 """
 import ast
 import json
-import logging
 import os
 import re
-import shutil
-import time
+from pathlib import Path
 
 import pandas as pd
 from rapidfuzz import process
@@ -41,9 +39,6 @@ from .rag_documents import DocumentsMixin
 # Import mixins
 from .rag_taxonomy import TaxonomyMixin
 
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
-os.environ["CHROMA_TELEMETRY_IMPL"] = "false"
-
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral"}
 _ENV_KEY_NAMES = {"gemini": "GOOGLE_API_KEY", "openai": "OPENAI_API_KEY", "mistral": "MISTRAL_API_KEY"}
 
@@ -55,12 +50,8 @@ def _env_api_key(provider: str | None) -> str | None:
         return None
     return os.getenv(env_name) or None
 
-# Suppress specific ChromaDB telemetry errors
-logging.getLogger('chromadb.telemetry.product.posthog').setLevel(logging.CRITICAL)
-
 # Try importing RAG dependencies
 try:
-    from langchain_chroma import Chroma
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -70,6 +61,16 @@ try:
         PDFDocumentLoader,
         ProviderConfig,
         ProviderType,
+    )
+    from manage.vectorstores import (
+        DocumentIndex,
+        VectorEngine,
+        VectorStoreError,
+        VectorStoreSettings,
+        open_index,
+        probe_machine,
+        recommend,
+        resolve_engine,
     )
     RAG_AVAILABLE = True
 except ImportError as e:
@@ -125,7 +126,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.base_url = base_url
         self.client = None
         self.llm = None
-        self.vector_store = None
+        self.vector_store = None  # manage.vectorstores.DocumentIndex once initialised
+        self.vector_engine: str | None = None  # "lancedb" | "qdrant"
         self.qa_chain = None
         self.initialized = False
         self.global_context = "General Medical Domain"
@@ -245,8 +247,16 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         embedding_model="models/gemini-embedding-2",
         provider="gemini",
         base_url=None,
+        vector_engine=None,
+        qdrant_url=None,
+        qdrant_api_key=None,
     ):
-        """Initialize the RAG system with documents, embeddings and LLM."""
+        """Initialize the RAG system with documents, embeddings, the vector database and the LLM.
+
+        ``vector_engine`` is "lancedb" or "qdrant" (None: the server default ``CMP_VECTOR_STORE``, else
+        the engine recommended for this machine); ``qdrant_url`` selects a Qdrant server instead of
+        the embedded mode (default ``CMP_QDRANT_URL``).
+        """
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
         
@@ -303,73 +313,52 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 temperature=temperature,
             )
             
-            from utils.data_paths import get_chroma_dir
+            # 4. Vector database (engine-agnostic: manage.vectorstores)
+            from utils.data_paths import get_vectors_dir
             from utils.session_scope import get_current_scope
 
             _scope = get_current_scope()
-            persist_directory = str(_scope.chroma_dir()) if _scope else get_chroma_dir()  # per-user vector store
-            
-            if use_existing_db and os.path.exists(persist_directory):
-                if progress_callback: progress_callback(60, "Loading existing database...")
-                try:
-                    self.vector_store = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-                except Exception as e:
-                    return False, f"Failed to load existing database: {e}. Try disabling 'Use Existing Database'."
-            else:
-                if progress_callback: progress_callback(60, "Building new vector database...")
-                if os.path.exists(persist_directory):
-                    self.vector_store = None
-                    import gc
-                    import stat
-                    gc.collect()
-                    time.sleep(0.5)
-                    
-                    def remove_readonly(func, path, excinfo):
-                        os.chmod(path, stat.S_IWRITE)
-                        func(path)
-                        
-                    try:
-                        shutil.rmtree(persist_directory, onerror=remove_readonly)
-                    except Exception:
-                        pass
-                
-                if not texts:
-                    self.vector_store = Chroma(embedding_function=embeddings, persist_directory=persist_directory)
+            base_dir = _scope.vectors_dir() if _scope else Path(get_vectors_dir())  # per-user indexes
+            settings = VectorStoreSettings.from_env()
+            url = qdrant_url or settings.qdrant_url
+            api_key = qdrant_api_key or settings.qdrant_api_key
+            advice = recommend(probe_machine(base_dir), chunks=len(texts), qdrant_server=bool(url))
+            engine = resolve_engine(vector_engine, settings, advice)
+            embedding_label = f"{provider_clean}:{embedding_model}"
+            try:
+                backend = open_index(
+                    engine,
+                    base_dir=base_dir,
+                    username=_scope.username if _scope else None,
+                    qdrant_url=url if engine is VectorEngine.QDRANT else None,
+                    qdrant_api_key=api_key,
+                )
+                index = DocumentIndex(backend, embeddings)
+                if use_existing_db and backend.exists() and index.count() > 0:
+                    if progress_callback: progress_callback(60, f"Loading the existing {engine.value} index...")
+                    index.check_compatible(embedding_label)
                 else:
-                    batch_size = 5
-                    total_texts = len(texts)
-                    
-                    try:
-                        self.vector_store = Chroma.from_documents(
-                            documents=texts[:batch_size], 
-                            embedding=embeddings, 
-                            persist_directory=persist_directory
-                        )
-                    except Exception as e:
-                        return False, f"Failed to create vector store: {e}"
+                    if progress_callback: progress_callback(60, f"Building the {engine.value} index...")
+                    cloud = provider_clean in CLOUD_PROVIDERS
 
-                    if not self.vector_store:
-                        return False, "Failed to initialize vector store (Unknown Error)."
+                    def _embedding_progress(done, total):
+                        if progress_callback:
+                            progress_callback(60 + int(30 * done / max(total, 1)), f"Embedding chunks {done}/{total}...")
 
-                    start_index = batch_size if self.vector_store._collection.count() > 0 else 0
-                    
-                    for i in range(start_index, total_texts, batch_size):
-                        if progress_callback: 
-                            current_prog = 60 + int((i / total_texts) * 30)
-                            progress_callback(current_prog, f"Embedding batch {i // batch_size + 1}...")
-                            
-                        batch = texts[i : i + batch_size]
-                        retry_count = 0
-                        max_retries = 3
-                        
-                        while retry_count < max_retries:
-                            try:
-                                self.vector_store.add_documents(batch)
-                                time.sleep(0.5)
-                                break
-                            except Exception:
-                                retry_count += 1
-                                time.sleep(1.0 * retry_count)
+                    index.build(
+                        texts,
+                        embedding_label=embedding_label,
+                        documents=sorted({os.path.basename(str(t.metadata.get("source", ""))) for t in texts}),
+                        batch_size=8 if cloud else 16,
+                        pause=0.5 if cloud else 0.0,  # cloud embedding APIs rate-limit bursts
+                        progress=_embedding_progress,
+                    )
+            except VectorStoreError as e:
+                return False, str(e)
+            except Exception as e:
+                return False, f"Vector database error ({engine.value}): {e}"
+            self.vector_store = index
+            self.vector_engine = engine.value
 
             # 4. Analyze Global Context
             if progress_callback: progress_callback(95, "Setting up LLM chains...")
@@ -379,7 +368,10 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             self._update_internal_state(adherence_score)
             
             self.initialized = True
-            return True, f"RAG System Initialized Successfully ({provider_clean.upper()}). Processed {len(documents)} pages and {len(texts)} chunks."
+            return True, (
+                f"RAG System Initialized Successfully ({provider_clean.upper()}, {engine.value} index). "
+                f"Processed {len(documents)} pages and {len(texts)} chunks; the index holds {index.count()} chunks."
+            )
 
         except Exception as e:
             return False, f"Error initializing RAG: {e!s}"

@@ -95,7 +95,6 @@ The following table lists the licenses for all direct and transitive dependencie
 | **cffi** | MIT |
 | **chardet** | LGPL-2.1 |
 | **charset-normalizer** | MIT |
-| **chroma-hnswlib** | Apache-2.0 |
 | **click** | BSD-3-Clause |
 | **cloudpickle** | BSD-3-Clause |
 | **colorama** | BSD-3-Clause |
@@ -148,10 +147,12 @@ The following table lists the licenses for all direct and transitive dependencie
 | **groq** | Apache-2.0 |
 | **grpcio** | Apache-2.0 |
 | **h11** | MIT |
+| **h2** | MIT |
 | **h5py** | BSD-3-Clause |
 | **HeapDict** | BSD-3-Clause |
 | **hf-xet** | Apache-2.0 |
 | **holoviews** | BSD-3-Clause |
+| **hpack** | MIT |
 | **httpcore** | BSD-3-Clause |
 | **httplib2** | MIT |
 | **httptools** | MIT |
@@ -160,6 +161,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **huggingface-hub** | Apache-2.0 |
 | **humanfriendly** | MIT |
 | **hvplot** | BSD-3-Clause |
+| **hyperframe** | MIT |
 | **hyperlink** | MIT |
 | **idna** | BSD-3-Clause |
 | **imagecodecs** | BSD-3-Clause |
@@ -195,8 +197,9 @@ The following table lists the licenses for all direct and transitive dependencie
 | **keyring** | MIT |
 | **kiwisolver** | BSD-3-Clause |
 | **kubernetes** | Apache-2.0 |
+| **lance-namespace** | Apache-2.0 |
+| **lancedb** | Apache-2.0 |
 | **langchain** | MIT |
-| **langchain-chroma** | MIT |
 | **langchain-classic** | MIT |
 | **langchain-community** | MIT |
 | **langchain-core** | MIT |
@@ -275,6 +278,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **plotly** | MIT |
 | **pluggy** | MIT |
 | **ply** | BSD-3-Clause |
+| **portalocker** | BSD-3-Clause |
 | **posthog** | MIT |
 | **prince** | MIT |
 | **prometheus-client** | Apache-2.0 |
@@ -321,6 +325,7 @@ The following table lists the licenses for all direct and transitive dependencie
 | **pywavelets** | MIT |
 | **PyYAML** | MIT |
 | **pyzmq** | BSD-3-Clause / LGPL-3.0 |
+| **qdrant-client** | Apache-2.0 |
 | **qstylizer** | MIT |
 | **queuelib** | BSD-3-Clause |
 | **RapidFuzz** | MIT |

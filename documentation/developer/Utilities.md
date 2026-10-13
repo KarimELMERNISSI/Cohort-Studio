@@ -531,7 +531,7 @@ All data paths are configured relative to a single DATA_ROOT environment variabl
 This allows Docker deployments to use mounted volumes while keeping local development simple.
 
 Usage:
-    from utils.data_paths import get_datasets_dir, get_chroma_dir
+    from utils.data_paths import get_datasets_dir, get_vectors_dir
 
 Environment Variables:
     DATA_ROOT: Base directory for all data storage (default: "./data")_
@@ -563,13 +563,13 @@ Get the datasets directory path.
 
 Get the statistics cache directory path.
 
-### def `get_chroma_dir` (data_paths.py)
+### def `get_vectors_dir` (data_paths.py)
 
 - **Arguments**: ``
 
 - **Returns**: `str`
 
-Get the ChromaDB vector database directory path.
+Vector indexes outside a signed-in session (one folder per engine, see manage.vectorstores).
 
 ### def `get_traces_dir` (data_paths.py)
 
@@ -817,7 +817,7 @@ _Export Utilities.
 Functions for exporting DataFrames to various formats (Excel, etc.)_
 
 **Imports**:
-`io.BytesIO`, `re`, `typing.Any`, `pandas`
+`re`, `io.BytesIO`, `typing.Any`, `pandas`
 
 ### def `to_excel` (export_utils.py)
 
@@ -1063,7 +1063,7 @@ Configure the root logger from ``CMP_LOG_LEVEL`` (default INFO). Safe to call re
 _No module description._
 
 **Imports**:
-`warnings`, `collections.abc.Iterable`, `copy.deepcopy`, `typing.Any`, `numpy`, `pandas`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `sklearn.base.BaseEstimator`, `tqdm.tqdm`, `utils.miss_forest._errors.NotFittedError`, `utils.miss_forest._label_encoding._label_encoding`, `utils.miss_forest._label_encoding._rev_label_encoding`, `utils.miss_forest._metrics.nrmse`, `utils.miss_forest._metrics.pfc`, `utils.miss_forest._validate._is_estimator`, `utils.miss_forest._validate._validate_single_datatype_features`, `biostats._types.RANDOM_STATE`
+`warnings`, `collections.abc.Iterable`, `copy.deepcopy`, `typing.Any`, `numpy`, `pandas`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `sklearn.base.BaseEstimator`, `tqdm.tqdm`, `biostats._types.RANDOM_STATE`, `utils.miss_forest._errors.NotFittedError`, `utils.miss_forest._label_encoding._label_encoding`, `utils.miss_forest._label_encoding._rev_label_encoding`, `utils.miss_forest._metrics.nrmse`, `utils.miss_forest._metrics.pfc`, `utils.miss_forest._validate._is_estimator`, `utils.miss_forest._validate._validate_single_datatype_features`
 
 ### class `MissForest` (missforest.py)
 
@@ -1401,7 +1401,7 @@ MD5 of the upload's content.
 _No module description._
 
 **Imports**:
-`os`, `logging`
+`logging`, `os`
 
 ### def `normalize_path` (path_utils.py)
 
@@ -1506,7 +1506,7 @@ Compatibility shim: the guide widgets live in :mod:`app_pages.statistics_guides`
 _No module description._
 
 **Imports**:
-`re`, `numpy`, `pandas`, `plotly.colors`, `plotly.figure_factory`, `plotly.graph_objects`, `matplotlib.colors.to_rgba`, `scipy.stats`, `scipy.stats.zscore`, `logging`
+`logging`, `re`, `numpy`, `pandas`, `plotly.colors`, `plotly.figure_factory`, `plotly.graph_objects`, `matplotlib.colors.to_rgba`, `scipy.stats`, `scipy.stats.zscore`
 
 ### def `compute_pairwise_stats` (visualization_utils.py)
 
