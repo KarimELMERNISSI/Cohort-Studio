@@ -25,6 +25,13 @@ from utils.session_scope import get_current_scope
 
 SAMPLE_COHORT_PATH = Path(__file__).resolve().parents[1] / "assets" / "sample_cohort.csv"
 SAMPLE_DICTIONARY_PATH = SAMPLE_COHORT_PATH.with_name("sample_cohort_dictionary.md")
+# The tutorial pack: a richer cohort, its study configuration (anomaly rules, inclusion criteria),
+# a follow-up file to merge, and its dictionary (dev_scripts/make_tutorial_cohort.py).
+TUTORIAL_DIR = SAMPLE_COHORT_PATH.parent / "tutorial"
+TUTORIAL_COHORT_PATH = TUTORIAL_DIR / "tutorial_cohort.csv"
+TUTORIAL_CONFIG_PATH = TUTORIAL_DIR / "tutorial_config.json"
+TUTORIAL_FOLLOWUP_PATH = TUTORIAL_DIR / "tutorial_followup_labs.csv"
+TUTORIAL_DICTIONARY_PATH = TUTORIAL_DIR / "tutorial_dictionary.md"
 
 # Results derived from the current dataset: cleared whenever the dataset changes.
 DERIVED_KEYS: tuple[str, ...] = (
@@ -57,7 +64,26 @@ DERIVED_KEYS: tuple[str, ...] = (
     "ba_result",
     "workflow_marks",
     "quality_history",
+    "anomaly_check_done",
+    "inclusion_check_done",
+    "anomaly_data_applied",
+    "inclusion_data_applied",
+    "outliers_data_applied",
 )
+
+
+def tutorial_config() -> dict:
+    """The tutorial study configuration on top of the default configuration (folders, thresholds, ...)."""
+    import json
+
+    from utils.config_loader import create_empty_config
+
+    config = create_empty_config()
+    loaded = json.loads(TUTORIAL_CONFIG_PATH.read_text(encoding="utf-8"))
+    for key, value in loaded.items():
+        if key != "folder_names":  # machine-specific: keep this installation's folders
+            config[key] = value
+    return config
 
 
 class AppState:
@@ -236,6 +262,24 @@ class AppState:
             origin="sample",
         )
 
+    def load_tutorial_cohort(self, *, with_config: bool = True) -> DatasetRef:
+        """The tutorial cohort; its study configuration (anomaly rules, inclusion criteria) is loaded too."""
+        from ingest.loaders import read_table
+
+        data = TUTORIAL_COHORT_PATH.read_bytes()
+        result = read_table(data, TUTORIAL_COHORT_PATH.name, ParseOptions(dayfirst=True))
+        ref = self.load_parsed(
+            result.df,
+            filename=TUTORIAL_COHORT_PATH.name,
+            data=data,
+            options=result.options,
+            name="tutorial_cohort",
+            origin="sample",
+        )
+        if with_config:
+            st.session_state["config"] = tutorial_config()
+        return ref
+
     def saved_versions(self) -> list[str]:
         try:
             return list(self.db_manager.get_available_datasets(username=self.username))
@@ -298,4 +342,15 @@ def get_state() -> AppState:
     return state
 
 
-__all__ = ["DERIVED_KEYS", "SAMPLE_COHORT_PATH", "SAMPLE_DICTIONARY_PATH", "AppState", "get_state"]
+__all__ = [
+    "DERIVED_KEYS",
+    "SAMPLE_COHORT_PATH",
+    "SAMPLE_DICTIONARY_PATH",
+    "TUTORIAL_CONFIG_PATH",
+    "TUTORIAL_COHORT_PATH",
+    "TUTORIAL_DICTIONARY_PATH",
+    "TUTORIAL_FOLLOWUP_PATH",
+    "AppState",
+    "get_state",
+    "tutorial_config",
+]

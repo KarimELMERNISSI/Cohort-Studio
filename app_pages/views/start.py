@@ -6,7 +6,14 @@ from core.progress import DONE, STALE
 from ui.components import page_header, page_link, status_chip, switch_to
 from ui.components.workflow_map import workflow_map
 from ui.progress import current_progress
-from ui.state import SAMPLE_DICTIONARY_PATH, get_state
+from ui.state import (
+    SAMPLE_DICTIONARY_PATH,
+    TUTORIAL_COHORT_PATH,
+    TUTORIAL_CONFIG_PATH,
+    TUTORIAL_DICTIONARY_PATH,
+    TUTORIAL_FOLLOWUP_PATH,
+    get_state,
+)
 from ui.workflow import BRANCHES
 
 state = get_state()
@@ -137,6 +144,38 @@ with right:
                     st.markdown(SAMPLE_DICTIONARY_PATH.read_text(encoding="utf-8"))
                 except OSError:
                     st.caption("Dictionary not found (run dev_scripts/make_sample_cohort.py).")
+
+    with st.container(border=True):
+        st.subheader("Tutorial cohort", icon=":material/school:", anchor=False)
+        st.caption(
+            "A randomised heart-failure cohort from 4 sites (1,206 rows, 38 variables) with planted data-entry errors, "
+            "patients to exclude, documented missingness, two raters, paired measurements and survival data. "
+            "Its study configuration (8 anomaly rules, 4 inclusion criteria) is loaded with it."
+        )
+        with st.container(horizontal=True, vertical_alignment="center"):
+            if st.button("Load the tutorial cohort", key="start_tutorial", icon=":material/school:",
+                         help="Loads the cohort and its study configuration; follow the Full tutorial chapter step by step."):
+                state.load_tutorial_cohort()
+                st.toast("Tutorial cohort and its study configuration loaded.", icon=":material/school:")
+                st.rerun()
+            if st.button("Open the tutorial", key="start_tutorial_doc", icon=":material/menu_book:",
+                         help="The handbook chapter that walks through every step with this cohort."):
+                st.session_state["handbook_chapter"] = "14_Full_Tutorial"
+                switch_to("handbook")
+            with st.popover("Tutorial files", icon=":material/download:"):
+                st.caption("To practise the uploads yourself: the configuration on Data > Validate, the follow-up file "
+                           "on Data > Enrich.")
+                for label, path, mime in (
+                    ("Study configuration (JSON)", TUTORIAL_CONFIG_PATH, "application/json"),
+                    ("6-month follow-up labs (CSV)", TUTORIAL_FOLLOWUP_PATH, "text/csv"),
+                    ("Tutorial cohort (CSV)", TUTORIAL_COHORT_PATH, "text/csv"),
+                ):
+                    if path.exists():
+                        st.download_button(label, data=path.read_bytes(), file_name=path.name, mime=mime,
+                                           key=f"dl_{path.stem}", icon=":material/download:", width="stretch")
+                if TUTORIAL_DICTIONARY_PATH.exists():
+                    with st.expander("Data dictionary"):
+                        st.markdown(TUTORIAL_DICTIONARY_PATH.read_text(encoding="utf-8"))
 
     with st.container(border=True):
         st.subheader("AI engine", icon=":material/smart_toy:", anchor=False)

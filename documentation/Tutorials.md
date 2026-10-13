@@ -2,6 +2,9 @@
 
 Step-by-step guides for common workflows in CohortStudio.
 
+> **New here?** Start with the chapter **Full tutorial: from a raw file to a reproducible report**. It uses the
+> tutorial cohort and its study configuration (Start > Tutorial cohort), and every step says what you should see.
+
 ---
 
 ## Tutorial 1: Setting Up a New Study

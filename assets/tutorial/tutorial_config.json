@@ -1,0 +1,77 @@
+{
+  "description": "CohortStudio tutorial study configuration: clinical anomaly rules and inclusion criteria for assets/tutorial/tutorial_cohort.csv. Load it on Data > Validate (sidebar: Load Existing Config) or with the tutorial cohort from the Start page.",
+  "mask_families": {
+    "clinical_anomalies": {
+      "operator": "any",
+      "Implausible age": {
+        "numeric": false,
+        "expression": "(df['age'] < 0) | (df['age'] > 110)",
+        "description": "Ages below 0 or above 110 years are data-entry errors."
+      },
+      "Height not in centimetres": {
+        "numeric": false,
+        "expression": "df['height_cm'] < 100",
+        "description": "Adult heights below 100 cm were typed in metres (1.72 instead of 172)."
+      },
+      "Implausible weight": {
+        "numeric": false,
+        "expression": "(df['weight_kg'] <= 20) | (df['weight_kg'] > 300)",
+        "description": "Adult weights of 20 kg or less, or above 300 kg."
+      },
+      "Diastolic above systolic": {
+        "numeric": false,
+        "expression": "df['dbp_baseline'] >= df['sbp_baseline']",
+        "description": "Diastolic pressure cannot reach the systolic pressure: the two fields were swapped."
+      },
+      "lvef_pct": {
+        "numeric": true,
+        "lower_bound": 5,
+        "upper_bound": 85,
+        "strategy": "exclude",
+        "description": "Numeric rule on the column lvef_pct: values outside 5-85% are flagged."
+      },
+      "potassium_mmol_l": {
+        "numeric": true,
+        "lower_bound": 2.5,
+        "upper_bound": 7.0,
+        "strategy": "exclude",
+        "description": "Numeric rule on the column potassium_mmol_l: values outside 2.5-7.0 mmol/L are flagged (haemolysis or typing errors)."
+      },
+      "Negative follow-up": {
+        "numeric": false,
+        "expression": "df['fu_days'] < 0",
+        "description": "Follow-up time cannot be negative."
+      },
+      "Last contact before enrolment": {
+        "numeric": false,
+        "expression": "pd.to_datetime(df['last_contact_date'], dayfirst=True) < pd.to_datetime(df['enrol_date'], dayfirst=True)",
+        "description": "The last contact must follow enrolment (dates are day-first, dd/mm/yyyy)."
+      }
+    },
+    "study_inclusion": {
+      "operator": "all",
+      "Written consent": {
+        "numeric": false,
+        "expression": "df['consent'] == 'Yes'",
+        "description": "Patients without written informed consent are not analysed."
+      },
+      "age": {
+        "numeric": true,
+        "lower_bound": 18,
+        "upper_bound": 85,
+        "strategy": "include",
+        "description": "Numeric rule on the column age: adults aged 18 to 85 are included."
+      },
+      "Symptomatic heart failure (NYHA II-IV)": {
+        "numeric": false,
+        "expression": "df['nyha_class'].isin(['II', 'III', 'IV'])",
+        "description": "NYHA class I (no symptoms) is not eligible."
+      },
+      "No severe kidney disease": {
+        "numeric": false,
+        "expression": "df['creatinine_umol_l'] <= 265",
+        "description": "Creatinine above 265 umol/L (about 3 mg/dL) excludes the patient."
+      }
+    }
+  }
+}

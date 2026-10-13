@@ -203,15 +203,37 @@ This is primarily a developer and admin tool for diagnosing RAG performance issu
 
 ## Configuration
 
-### `config/config.json`
+### Study configuration (JSON)
 
-Contains data quality rules, validation thresholds, and anomaly definitions. Key sections:
+The study configuration lives in the session (`st.session_state.config`). It starts from
+`utils.config_loader.create_empty_config()` and is uploaded on **Data > Validate** (sidebar, *Load Existing
+Config*), which merges it into the session without overwriting existing rules. The Validate page reads
+`mask_families` only:
 
-| Section | Purpose |
-| --- | --- |
-| `anomalies` | Clinical anomaly rules per variable (min/max bounds, impossible values). |
-| `inclusion_criteria` | Mask family definitions for cohort filtering. |
-| `quality_weights` | Weights for completeness, validity, and consistency in the quality score. |
+| Family | Operator | A rule that matches... | Result column |
+| --- | --- | --- | --- |
+| `clinical_anomalies` | `any` (forced) | flags the row as an anomaly | `clinical_anomalies_any` (+ `_list`) |
+| `study_inclusion` | `all` (forced) | keeps the row in the study | `study_inclusion_all` (+ `_list`) |
+
+Each rule is a key of its family (the rule name) with one of two shapes:
+
+- **Expression rule:** `{"numeric": false, "expression": "<expression>"}`. The expression uses `df['column']`
+  (bare names are rejected), `& | ~` with parenthesised comparisons, and the allow-listed `pd.*` / `np.*`
+  functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`, `.str.*`, `.dt.*`,
+  `pd.to_datetime(..., dayfirst=True)`, ...). If present, the expression takes precedence.
+- **Numeric rule:** `{"numeric": true, "lower_bound": x, "upper_bound": y, "strategy": "include" | "exclude"}`.
+  The rule name must be the column name. With both bounds, *include* matches values inside the range and
+  *exclude* values outside it, so use *exclude* with the plausible range for anomalies and *include* with the
+  eligible range for inclusion. NaN never matches. Avoid leaving `strategy` empty when both bounds are set.
+
+Extra keys in a rule (for example `description`) are kept but not used. Do not add keys at family level
+other than `operator`: they would be read as rules. A rule that fails to evaluate (unknown column, syntax
+error) is logged and ignored. There is no exclusion family: write exclusions as inclusion rules
+(`df['creatinine_umol_l'] <= 265`).
+
+`assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion
+criteria). `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay
+machine-specific).
 
 ### `.streamlit/secrets.toml`
 

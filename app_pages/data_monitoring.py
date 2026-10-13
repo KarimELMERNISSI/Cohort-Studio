@@ -1499,8 +1499,11 @@ def handle_numeric_mask_input(st_container, base_key:str):
         disabled=not (is_lower_bound and is_upper_bound),
         key=f"{base_key}_strategy",
         help=(
-            "**include**: The range [Lower, Upper] is the *target* (e.g., normal range). Everything OUTSIDE is an anomaly.\n"
-            "**exclude**: The range [Lower, Upper] is *forbidden*. Everything INSIDE is an anomaly."
+            "**include**: rows with a value inside [Lower, Upper] match the rule. "
+            "**exclude**: rows with a value outside [Lower, Upper] match the rule.\n\n"
+            "For a clinical anomaly a match flags the row: use *exclude* with the plausible range "
+            "(potassium 2.5-7.0 flags 9.8). For an inclusion criterion a match keeps the row: use *include* "
+            "with the eligible range (age 18-85)."
         )
     ) if is_lower_bound and is_upper_bound else None
 
@@ -2181,7 +2184,7 @@ def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):
     with col2:
         st.metric(
             label="Rows to exclude from the study (%)",
-            value=f"{exclusion_percentage:.2}%",
+            value=f"{exclusion_percentage:.2f}%",
             delta=f"-{excluded_count}",
             help=(
                 "This metric indicates the percentage of rows to remove from the study compared to the total number of rows. "
@@ -2337,7 +2340,11 @@ def app():
             family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
             #st.json(family_config)
             if family_config:
-                detect = st.button("Run Anomaly Detection")
+                # The check stays on after the click, so the Results panel (and its Apply button) survive
+                # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
+                if st.button("Run Anomaly Detection"):
+                    st.session_state["anomaly_check_done"] = True
+                detect = bool(st.session_state.get("anomaly_check_done"))
 
                 if detect:
                     df, anom_cols = apply_family_mask(df, anomaly_family, family_config, st)
@@ -2355,7 +2362,7 @@ def app():
                 st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
         if 'anom_cols' in locals() and detect:
-            with st.expander("Results", expanded=False):
+            with st.expander("Results", expanded=True):
                 display_results_with_anomaly(df=df,anomaly_col=f"{anomaly_family}_any", st=st)
             
     with tab2:
@@ -2371,7 +2378,9 @@ def app():
             family_config = st.session_state.config["mask_families"].get(inclusion_family, {})
             #st.json(family_config)
             if family_config:
-                check_inc = st.button("Run Inclusion Criteria Check")
+                if st.button("Run Inclusion Criteria Check"):
+                    st.session_state["inclusion_check_done"] = True
+                check_inc = bool(st.session_state.get("inclusion_check_done"))
 
                 if check_inc:
                     df, inc_cols = apply_family_mask(df, inclusion_family, family_config, st)
@@ -2387,7 +2396,7 @@ def app():
                 st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
         if 'inc_cols' in locals() and check_inc:
-            with st.expander("Results", expanded=False):
+            with st.expander("Results", expanded=True):
                 display_results_with_inclusion(df=df,inclusion_col=f"{inclusion_family}_all", st=st)
 
 
