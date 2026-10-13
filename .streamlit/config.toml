@@ -9,8 +9,8 @@ maxUploadSize = 500
 enableXsrfProtection = true
 
 [client]
-# Hide the Deploy button and developer-only menu entries.
-toolbarMode = "minimal"
+# Hide the Deploy button and developer-only menu entries; the menu keeps Settings (light/dark theme switch).
+toolbarMode = "viewer"
 
 # ---------------------------------------------------------------------------------------------
 # Theme. Brand palette sampled from the logo (navy outlines, teal, cyan, mint); design tokens are
