@@ -74,6 +74,16 @@ def test_stored_analysis_results_are_cleared_when_the_dataset_changes() -> None:
     assert not stray, sorted(stray)
 
 
+def test_the_wheel_ships_every_first_party_package() -> None:
+    """A built wheel must contain every package the code imports (biostats/core/ingest/ui were once missing)."""
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    shipped = set(pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    first_party = set(pyproject["tool"]["ruff"]["lint"]["isort"]["known-first-party"])
+    on_disk = {p.name for p in ROOT.iterdir() if p.is_dir() and any(p.glob("*.py")) and p.name in first_party}
+    assert shipped == first_party, {"missing": sorted(first_party - shipped), "extra": sorted(shipped - first_party)}
+    assert on_disk == first_party, sorted(first_party - on_disk)
+
+
 def test_tests_are_not_named_like_packages() -> None:
     """A tests/<name>/ directory named like a top-level package shadows it under pytest."""
     packages = {p.name for p in ROOT.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
