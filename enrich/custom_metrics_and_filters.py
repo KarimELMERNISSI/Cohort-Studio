@@ -89,14 +89,14 @@ def create_numeric_mask(series, lower_bound=None, upper_bound=None, strategy=Non
 
         if exclude_na and series.isna().any():
             mask[series.isna()] = False
-        if lower_bound is not None and upper_bound is None:
-            mask &= series >= lower_bound
-        if upper_bound is not None and lower_bound is None:
-            mask &= series <= upper_bound
-        if strategy == 'include':
-            mask &= (series >= lower_bound) & (series <= upper_bound)
-        elif strategy == 'exclude':
-            mask &= ~((series >= lower_bound) & (series <= upper_bound))
+        # Same semantics as core.criteria: a missing bound is open (a single bound with a strategy used to
+        # compare with None, fail, and return an all-False mask)
+        inside = pd.Series(True, index=series.index, dtype=bool)
+        if lower_bound is not None:
+            inside &= series >= lower_bound
+        if upper_bound is not None:
+            inside &= series <= upper_bound
+        mask &= ~inside if strategy == 'exclude' else inside
 
         return mask
     
