@@ -62,7 +62,7 @@
     <div class="container">
       <div class="badge-pill">
         <span class="badge-dot"></span>
-        <span>Clinical Research Platform &middot; Python 3.14+ &middot; 165/165 Unit Tests Passing (100%)</span>
+        <span>Clinical Research Platform &middot; Python 3.14+ &middot; Tested in CI</span>
       </div>
 
       <h1 class="hero-title">
@@ -70,7 +70,7 @@
       </h1>
 
       <p class="hero-desc">
-        A transparent, easy-to-navigate software platform engineered for observational cohort curation, automated biostatistical hypothesis testing, and audited medical literature exploration — with zero boilerplate and deterministic reproducibility.
+        A transparent, easy-to-navigate software platform engineered for observational cohort curation, automated biostatistical hypothesis testing, and audited medical literature exploration — with zero boilerplate and recorded, replayable transformation traces.
       </p>
 
       <div class="hero-cta">
@@ -110,9 +110,9 @@
       <!-- Live Metric Tiles: 6 Pillars of Platform Rigor -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">165 / 165</span> Passing</div>
-          <div class="stat-label">100% Test Coverage</div>
-          <div class="stat-desc">Full automated pytest suite covering statistical engines, RAGAS metrics, clustering, date parsing, and IAM.</div>
+          <div class="stat-val"><span class="stat-val-accent">&ge; 90%</span> Coverage</div>
+          <div class="stat-label">Biostatistics Engine, CI-Enforced</div>
+          <div class="stat-desc">Automated pytest suite in CI; the statistical engines are checked against published reference values, with coverage floors enforced per package.</div>
         </div>
         <div class="stat-card">
           <div class="stat-val"><span class="stat-val-accent">6-Step</span> Tree</div>
@@ -125,14 +125,14 @@
           <div class="stat-desc">Vector SVG, 300+ DPI PNG, and standalone interactive HTML with automated significance brackets (***, **, *, ns).</div>
         </div>
         <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">RAGAS</span> Audited</div>
+          <div class="stat-val"><span class="stat-val-accent">RAGAS</span> Evaluated</div>
           <div class="stat-label">Scientific Medical RAG</div>
-          <div class="stat-desc">Faithfulness (9.6/10), Context Relevance, and 3-tier source attribution with page coordinates and 0 hallucinations.</div>
+          <div class="stat-desc">Faithfulness and context-relevance scoring (LLM-as-judge) with 3-tier source attribution and page coordinates; unsupported statements are flagged, not hidden.</div>
         </div>
         <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">100%</span> Trace Replay</div>
-          <div class="stat-label">Deterministic Provenance</div>
-          <div class="stat-desc">Complete headless and UI pipeline re-execution engine generating signed Word (.docx) audit dossiers.</div>
+          <div class="stat-val"><span class="stat-val-accent">Traced</span> Replay</div>
+          <div class="stat-label">Recorded Provenance</div>
+          <div class="stat-desc">Recorded transformation steps replay headless or in the UI, and a Word (.docx) report documents the trace (not an electronically signed record).</div>
         </div>
         <div class="stat-card">
           <div class="stat-val"><span class="stat-val-accent">Modular</span> IAM</div>
@@ -145,11 +145,11 @@
       <div class="standards-bar">
         <div class="standard-badge">
           <span class="badge-dot"></span>
-          <span>STROBE &amp; CONSORT Reporting Aligned</span>
+          <span>Reference-Validated Biostatistics</span>
         </div>
         <div class="standard-badge">
           <span class="badge-dot"></span>
-          <span>FDA 21 CFR Part 11 Audit Trail Integrity</span>
+          <span>Recorded &amp; Replayable Transformation Trace</span>
         </div>
         <div class="standard-badge">
           <span class="badge-dot"></span>
@@ -202,7 +202,7 @@
           <ul class="exploration-points">
             <li><strong>Tri-Method Outlier Isolation:</strong> Detects physiological anomalies using IQR bounds, Z-score screening, or unsupervised Isolation Forest scoring.</li>
             <li><strong>Clinical Anomaly Expressions:</strong> Real-time boolean expression evaluations (e.g., <code>Systolic_BP &lt; Diastolic_BP</code> or <code>HbA1c &gt; 20.0</code>) with visual cell highlighting.</li>
-            <li><strong>Signed Audit Certificates:</strong> Generates field-by-field completeness scorecards and data health certificates ready for trial review.</li>
+            <li><strong>Completeness Scorecards:</strong> Field-by-field completeness, uniqueness and validity scores rolled up into a global quality score for review.</li>
           </ul>
         </div>
 
@@ -387,7 +387,7 @@ famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</spa
         <span class="section-tag">Epidemiological Decision Engine</span>
         <h2 class="section-title">Automated Biostatistical Decision Tree &amp; Matrix</h2>
         <p class="section-desc">
-          CohortStudio eliminates methodological guesswork, human bias, and reviewer skepticism. By rigorously testing sample size, distributional shape, and homoscedasticity, the platform directs researchers to the exact STROBE- and CONSORT-compliant analytical test.
+          CohortStudio reduces methodological guesswork. It reports sample size, distributional shape and variance diagnostics, suggests an appropriate test (Welch-first, with non-parametric alternatives) and explains why, and reports effect sizes with confidence intervals.
         </p>
       </div>
 
@@ -1146,10 +1146,10 @@ modebar_config = eu.get_publication_plot_config(
   <section id="reproducibility" class="section">
     <div class="container">
       <div class="section-header">
-        <span class="section-tag">Deterministic Provenance</span>
-        <h2 class="section-title">End-to-End Pipeline Reproduction &amp; Signed Word Dossiers</h2>
+        <span class="section-tag">Recorded Provenance</span>
+        <h2 class="section-title">End-to-End Pipeline Reproduction &amp; Word Trace Reports</h2>
         <p class="section-desc">
-          Scientific conclusions must be 100% reproducible. Rather than relying on static scripts or ephemeral notebook state, CohortStudio captures immutable JSON execution traces that re-execute complete multi-step transformations and compile signed Word (.docx) audit dossiers for peer review.
+          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a JSON trace that can be replayed, and documents the trace in a Word (.docx) report. Steps that cannot be replayed yet (targeted and multiple imputation, outlier tagging, date standardisation) are reported by the replay rather than silently skipped.
         </p>
       </div>
 
@@ -1223,7 +1223,7 @@ modebar_config = eu.get_publication_plot_config(
               <td><strong>Test Suite &amp; Reliability</strong></td>
               <td>Typically unverified <span class="badge-tag loss">Untested</span></td>
               <td>Vendor validation package <span class="badge-tag neutral">Vendor SLA</span></td>
-              <td class="highlight-col">165/165 Automated Pytest Suite Passing (100%) <span class="badge-tag win">Triple Verified</span></td>
+              <td class="highlight-col">Automated pytest suite in CI with reference-value tests for the statistics engine <span class="badge-tag win">CI-Enforced</span></td>
             </tr>
             <tr>
               <td><strong>Cost &amp; License</strong></td>
@@ -1243,34 +1243,35 @@ modebar_config = eu.get_publication_plot_config(
             <div class="terminal-dot"></div>
             <div class="terminal-dot"></div>
           </div>
-          <span class="terminal-title">python &middot; headless deterministic pipeline execution</span>
-          <button class="copy-btn" data-clipboard-text="from manage.reproduction_manager import execute_trace_pipeline
+          <span class="terminal-title">python &middot; headless pipeline replay</span>
+          <button class="copy-btn" data-clipboard-text="from manage.reproduction_manager import run_trace
 from manage.trace_documenter import TraceDocumenter
 
-# 1. Deterministically re-execute complete pipeline trace
-reproduced_df, err = execute_trace_pipeline(trace_data)
-assert err is None
+# 1. Replay the recorded steps of the trace
+result = run_trace(trace_data)
+assert result.error is None, result.error
+print(result.warnings)  # steps that could not be replayed are listed here
 
-# 2. Compile signed Word (.docx) audit dossier for institutional review
-documenter = TraceDocumenter(trace_data)
-docx_path = documenter.generate_docx('trial_audit_dossier.docx')">
+# 2. Word report of the recorded trace (not an electronically signed record)
+report = TraceDocumenter(trace_data).generate_report()  # BytesIO
+open('trace_report.docx', 'wb').write(report.getvalue())">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             Copy
           </button>
         </div>
         <div class="terminal-content">
-          <pre><code><span class="token-cm"># Headless Deterministic Pipeline Re-Execution</span>
-<span class="token-kw">from</span> manage.reproduction_manager <span class="token-kw">import</span> execute_trace_pipeline
+          <pre><code><span class="token-cm"># Headless Pipeline Replay</span>
+<span class="token-kw">from</span> manage.reproduction_manager <span class="token-kw">import</span> run_trace
 <span class="token-kw">from</span> manage.trace_documenter <span class="token-kw">import</span> TraceDocumenter
 
-<span class="token-cm"># 1. Replay complete multi-step transformations (enrichment joins, MICE/MissForest, scalers)</span>
-reproduced_df, err = execute_trace_pipeline(trace_data)
-<span class="token-kw">assert</span> err <span class="token-kw">is None</span>
-<span class="token-fn">print</span>(f<span class="token-str">"Exact pipeline reproduced: {reproduced_df.shape}"</span>)
+<span class="token-cm"># 1. Replay the recorded steps (enrichment joins, single imputation, transformations)</span>
+result = run_trace(trace_data)
+<span class="token-kw">assert</span> result.error <span class="token-kw">is None</span>, result.error
+<span class="token-fn">print</span>(f<span class="token-str">"Replayed {result.steps_applied} steps: {result.df.shape}; warnings: {result.warnings}"</span>)
 
-<span class="token-cm"># 2. Compile signed Word (.docx) audit dossier for Institutional Review Board (IRB)</span>
-documenter = TraceDocumenter(trace_data)
-docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossier.docx"</span>)</code></pre>
+<span class="token-cm"># 2. Word report of the recorded trace (not an electronically signed record)</span>
+report = TraceDocumenter(trace_data).generate_report()  <span class="token-cm"># BytesIO</span>
+<span class="token-fn">open</span>(<span class="token-str">"trace_report.docx"</span>, <span class="token-str">"wb"</span>).write(report.getvalue())</code></pre>
         </div>
       </div>
     </div>
@@ -1330,7 +1331,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
             <div class="use-case-specs">
               <div class="spec-item">
                 <span class="spec-label">Imputation:</span>
-                <span class="spec-value">MICE &amp; MissForest Random Forest</span>
+                <span class="spec-value">Chained equations or MissForest-style (single); MI diagnostic</span>
               </div>
               <div class="spec-item">
                 <span class="spec-label">Phenotyping:</span>
@@ -1353,7 +1354,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
           </div>
           <div class="use-case-body">
             <p class="use-case-desc">
-              Avoids infinite odds ratios using the Haldane-Anscombe continuity correction (+0.5). Computes exact unbiased Hedges' g effect sizes and generates a signed Microsoft Word (.docx) transformation dossier for institutional review boards.
+              Avoids infinite odds ratios using the Haldane-Anscombe continuity correction (+0.5). Computes exact unbiased Hedges' g effect sizes and documents the transformation trace in a Microsoft Word (.docx) report.
             </p>
             <div class="use-case-specs">
               <div class="spec-item">
@@ -1366,7 +1367,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
               </div>
               <div class="spec-item">
                 <span class="spec-label">Deliverable:</span>
-                <span class="spec-value">Signed Word (.docx) Dossier</span>
+                <span class="spec-value">Word (.docx) Trace Report</span>
               </div>
             </div>
           </div>
@@ -1397,7 +1398,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
         <div class="arch-card">
           <h3 class="arch-title">2. Domain &amp; Computation</h3>
           <p class="arch-desc">
-            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, MICE and MissForest imputation pipelines, and biostatistical engines.
+            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, single imputation (chained equations, KNN, MissForest-style) with a multiple-imputation diagnostic, and biostatistical engines.
           </p>
         </div>
 
@@ -1465,7 +1466,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/03_Data_Enrichment.md" target="_blank" rel="noopener noreferrer" class="doc-item">
           <div class="doc-num">GUIDE 03</div>
           <div class="doc-name">Data Enrichment</div>
-          <div class="doc-summary">MICE &amp; MissForest imputation, PCA/FAMD, scaling, and clustering.</div>
+          <div class="doc-summary">Single imputation (chained equations, KNN, MissForest-style), PCA/FAMD, scaling, and clustering.</div>
         </a>
 
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/04_Visualization.md" target="_blank" rel="noopener noreferrer" class="doc-item">
@@ -1495,7 +1496,7 @@ docx_path = documenter.generate_docx(<span class="token-str">"trial_audit_dossie
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/08_Reproduction.md" target="_blank" rel="noopener noreferrer" class="doc-item">
           <div class="doc-num">GUIDE 08</div>
           <div class="doc-name">Reproduction &amp; Reporting</div>
-          <div class="doc-summary">Complete pipeline reproduction, deterministic trace replay engine, and Word report dossiers.</div>
+          <div class="doc-summary">Replay of the recorded transformation steps and a Word report of the trace.</div>
         </a>
 
         <a href="https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/blob/main/documentation/09_Clustering.md" target="_blank" rel="noopener noreferrer" class="doc-item">

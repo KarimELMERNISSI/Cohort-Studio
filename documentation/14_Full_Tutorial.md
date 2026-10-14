@@ -146,8 +146,10 @@ In **Handle Missing Data**:
 - `ldl_mmol_l` is missing at random: single imputation (KNN or MICE) is acceptable for exploration.
 - **Do not impute `sbp_6m`.** Its values are missing because the patient died or left. Analyse the patients who
   have the measurement and say so.
-- For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), use **multiple imputation** with
-  Rubin's rules rather than a single completed dataset.
+- For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), the right method is **multiple
+  imputation** with the analysis pooled by Rubin's rules. CohortStudio does not pool analyses yet: analyse the
+  complete cases for inference and say so, and use the multiple-imputation panel to see the fraction of missing
+  information. A single completed dataset gives standard errors and p-values that are too small.
 
 ---
 

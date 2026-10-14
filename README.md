@@ -25,7 +25,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 2. **Statistically Rigorous Epidemiology Engine**: Automated normality profiling, parametric and non-parametric comparative hypothesis testing, multivariate ANCOVA with parallel slope diagnostics, effect size quantification ($\text{Cohen's } d$, $\text{Hedges' } g$, $\eta^2$, $\omega^2$), Little's MCAR missingness testing, Haldane-Anscombe zero-cell continuity corrections for odds ratios, and diagnostic test accuracy analytics (ROC, PPV, NPV, Likelihood Ratios).
 3. **Multi-Dimensional Data Quality Auditing**: Real-time scoring across Completeness, Uniqueness, Consistency, Uniformity, Statistical Outlier Validity (IQR, Z-Score, Quantiles, Isolation Forest, Local Outlier Factor), and declared Clinical Anomaly Rules.
 4. **Model-Agnostic Medical RAG**: Pluggable connector architecture supporting Google Gemini 2.5, local Ollama (air-gapped/on-premise privacy), OpenAI, Mistral and Anthropic Claude for medical document synthesis, semantic column standardization (UMLS/LOINC/SNOMED), and automated variable engineering.
-5. **Deterministic Lineage, Complete Pipeline Reproduction & Audit Dossiers**: Every transformation step, imputation, and enrichment join is logged into an executable JSON session trace. The headless reproduction engine can re-execute the complete multi-step pipeline (`execute_trace_pipeline`) to recreate identical analytical datasets deterministically, while generating signed Microsoft Word (`.docx`) transformation certificates.
+5. **Recorded Lineage, Pipeline Replay & Trace Reports**: Transformation steps, global imputations and enrichment joins are logged into an executable JSON session trace. The headless engine (`run_trace`, or `execute_trace_pipeline` with the historical signature) replays the recorded steps to recreate the analytical dataset and lists any step it cannot replay: targeted and multiple imputation are not replayed yet, and outlier tagging and date standardisation are not recorded yet. A Microsoft Word (`.docx`) report documents the trace; it is not an electronically signed record.
 
 ---
 
@@ -41,7 +41,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 | **Clinical Anomaly Rules**        | Custom if-else blocks        | Form validation rules            | **Declarative Expression Masks & Highlight Tables**                                        |
 | **Document Intelligence**         | Disconnected LLM chats       | None                             | **Model-Agnostic RAG (Local Ollama, Gemini, OpenAI)**                                      |
 | **Knowledge Graph Taxonomy**      | Manual drawing               | Controlled terminologies         | **Interactive knowledge graphs (offline Plotly engine by default, yFiles optional)**       |
-| **Audit Trail & Pipeline Replay** | Fragile notebook state       | Fixed PDF audit trail            | **Full Pipeline Re-Execution (Headless & UI) + Word Dossiers**                             |
+| **Audit Trail & Pipeline Replay** | Fragile notebook state       | Fixed PDF audit trail            | **Replay of the recorded steps (headless & UI) + Word trace report**                       |
 | **Deployment Model**              | Local interpreter            | Cloud SaaS subscription          | **Self-Hosted / Docker / Cloud; air-gapped with the default graph engine and a local LLM** |
 | **License**                       | N/A                          | Proprietary / Commercial fees    | **Open-Source (Apache 2.0)**                                                               |
 
@@ -60,8 +60,8 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 +---------------------------------------------------------------------------------------+
 |                               DOMAIN & COMPUTATION LAYER                              |
 |  • utils.data_analyzer (DatasetProfile)    • explore.data_quality_auditor (Scoring)    |
-|  • explore.epidemiology_stats (Inference)  • enrich.imputation_pipeline (MICE, Forest) |
-|  • explore.corr_matrix (Rank/Bivariate)    • explore.outliers (Multi-method Detection) |
+|  • biostats (Tier A-C inference)           • enrich.data_imputation (Single, KNN, RF)  |
+|  • explore.corr_matrix (Rank/Bivariate)    • monitor.outliers (Multi-method Detection) |
 +-------------------------------------------+-------------------------------------------+
                                             |
                                             v
@@ -102,7 +102,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 - **Multivariate ANCOVA**: Treatment comparisons adjusting for continuous baseline covariates, featuring automated test of homogeneity of regression slopes.
 - **Survival & regression**: Kaplan-Meier curves with pointwise Greenwood intervals, log-rank test, Cox proportional hazards (Efron ties, Grambsch-Therneau check with the optional `survival` extra), logistic regression (odds ratios, DeLong AUC) and Poisson / negative-binomial regression with person-time offsets.
 - **Paired, rates & stratified**: paired t and Wilcoxon signed-rank, one-sample tests, exact McNemar, incidence rates with exact Poisson intervals and rate ratios, Mantel-Haenszel odds and risk ratios with the Breslow-Day test, standardised mortality ratios, Cohen's kappa and intraclass correlations.
-- **Multiple imputation**: m completed datasets by chained equations with posterior sampling, pooled by Rubin's rules with the fraction of missing information.
+- **Multiple imputation (diagnostic)**: m completed datasets by chained equations with posterior sampling; the per-variable means are pooled by Rubin's rules with the fraction of missing information, to show how much the imputation uncertainty matters. Analyses (regression, Cox, hypothesis tests) are not yet pooled across imputations.
 - **Diagnostic Test Accuracy**: Sensitivity, Specificity, Positive/Negative Predictive Values (PPV/NPV), Diagnostic Odds Ratio, Youden's Index, Likelihood Ratios (LR+, LR-), and ROC AUC.
 - **Multiple Testing Corrections**: False Discovery Rate (Benjamini-Hochberg) and Family-Wise Error Rate (Bonferroni).
 
@@ -116,7 +116,7 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ### 4. Advanced Data Enrichment
 
-- **Imputation Suites**: Targeted formula-driven imputation and global single imputation (mean/median, KNN, chained equations via IterativeImputer, tree-based missForest with LightGBM). Imputation uncertainty is not propagated; multiple imputation with pooling is planned.
+- **Imputation Suites**: Targeted formula-driven imputation and global single imputation (mean/median, KNN, chained equations via IterativeImputer, tree-based missForest with LightGBM). Single imputation does not propagate the imputation uncertainty, so standard errors and p-values computed on singly-imputed data are too small; pooled analyses over multiple imputations are planned (see the follow-up programme in the audit report).
 - **Dimensionality Reduction**: Principal Component Analysis (PCA), Factor Analysis of Mixed Data (FAMD), t-SNE, and UMAP.
 - **Feature Engineering**: One-Hot, Ordinal, Label encoding, mathematical transformations (log, square root, Box-Cox), and robust/standard scaling.
 - **Population Clustering**: K-Means, DBSCAN, and Gaussian Mixture Models (GMM) with automated hyperparameter sweeps.
@@ -130,10 +130,10 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ### 6. Pipeline Reproducibility & Audit Trail
 
-- **Deterministic Trace Engine**: Logs timestamped operational trees with function signatures, serialized parameters, and output snapshot paths.
-- **Complete Pipeline Reproduction**: Re-executes entire multi-step transformation pipelines (enrichment joins, MICE/MissForest imputations, feature scaling, mathematical transforms) headless (`execute_trace_pipeline`) or via UI (`reproduce_trace`) to guarantee exact reproducible results across environments.
+- **Trace Engine**: Logs timestamped steps with function names, serialized parameters, and output snapshot paths.
+- **Pipeline Replay**: Replays the recorded steps (enrichment joins, global single imputation, feature scaling, mathematical transforms) headless (`run_trace`) or from the Versions & traces page, and lists every step it could not replay. Targeted and multiple imputation are not replayed yet; outlier tagging and date standardisation are not recorded yet.
 - **Replay Verification**: Full (data re-execution) and Fast (parameter audit) replay capabilities with cross-platform path resolution.
-- **Word Dossier Generation**: Export publication-ready Microsoft Word (`.docx`) audit dossiers summarizing cohort transformations.
+- **Word Trace Report**: Export a Microsoft Word (`.docx`) report of the recorded steps and their parameters (not an electronically signed record).
 
 ### 7. Interactive Clinical Visualisation & 1-Click Fast Figure Export
 
@@ -247,6 +247,9 @@ ANTHROPIC_API_KEY=
 The automated suite covers the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, DuckDB persistence, transformation lineage and replay, the graph connector, the RAG connectors, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite with a coverage floor on every push:
 
 ```bash
+# Install the development tools (pytest, ruff, pyright) once
+uv sync --extra dev --extra survival
+
 # Run the complete test suite
 uv run pytest -v
 
@@ -255,8 +258,9 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-458 passed, 1 deselected (live-provider integration test) in about 4 minutes
-Line coverage 55 % (CI floor 50 %); ruff and pyright (scoped) clean
+551 passed, 1 deselected (live-provider integration test) in about 5 minutes
+Line coverage about 58 % of the non-test code (CI floor 55 %), with per-package floors in CI:
+biostats and core at least 90 %, graph 91 %, ingest 87 %, ui 75 %; ruff and pyright (scoped) clean
 ```
 
 | Test Module                                                                                                      | Coverage Scope                                                                                                                                                                                                                          | Status     |
@@ -294,12 +298,12 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 - [**00_Researcher_Handbook.md**](documentation/00_Researcher_Handbook.md): Methodological workflow, clinical philosophy, and phase-by-phase execution guide.
 - [**01_Home.md**](documentation/01_Home.md): Ingestion pipelines, automatic encoding/delimiter resolution, and DuckDB performance benchmarks.
 - [**02_Data_Validation.md**](documentation/02_Data_Validation.md): Quality scorecards, clinical anomaly masks, outlier clipping, and version comparisons.
-- [**03_Data_Enrichment.md**](documentation/03_Data_Enrichment.md): Targeted and global imputation (MICE, MissForest), dimensionality reduction, and clustering.
+- [**03_Data_Enrichment.md**](documentation/03_Data_Enrichment.md): Targeted and global single imputation (chained equations, KNN, MissForest-style), the multiple-imputation diagnostic, dimensionality reduction, and clustering.
 - [**04_Visualization.md**](documentation/04_Visualization.md): Interactive Plotly clinical graphics with integrated statistical significance overlays.
 - [**05_Epidemiology.md**](documentation/05_Epidemiology.md): Parametric/non-parametric testing, ANCOVA, power analysis, and epidemiological ratios.
 - [**06_Data_Insight.md**](documentation/06_Data_Insight.md): Knowledge graph generation, semantic taxonomy repair, and node enrichment.
 - [**07_Document_Insight.md**](documentation/07_Document_Insight.md): Clinical document summarization, PDF RAG chat, and study coverage analysis.
-- [**08_Reproduction.md**](documentation/08_Reproduction.md): Deterministic trace replay, session auditing, and Word report compilation.
+- [**08_Reproduction.md**](documentation/08_Reproduction.md): Trace replay, session auditing, and the Word report of the trace.
 - [**09_Clustering.md**](documentation/09_Clustering.md): Algorithmic population stratification guidelines.
 - [**10_Developer_Guide.md**](documentation/10_Developer_Guide.md): Architecture specifications, plugin connectors, and development guidelines.
 - [**11_RAG_Scientific_Evaluation.md**](documentation/11_RAG_Scientific_Evaluation.md): RAGAS framework metrics, Faithfulness, Answer Relevance, Context Precision, and benchmark audit procedures.

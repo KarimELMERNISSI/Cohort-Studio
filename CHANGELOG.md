@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Truth and safety net (follow-up programme M0, after an external architecture review)
+
+- **Claims brought back to what the code does** — The documentation site no longer claims FDA 21 CFR Part 11 audit-trail integrity, "signed" Word dossiers or certificates, "immutable" traces, STROBE/CONSORT compliance, 100 % test coverage, "0 hallucinations" or deterministic 100 % replay. It now describes a recorded, replayable trace and a Word report of it (not an electronically signed record), and names the steps that cannot be replayed yet. The code sample uses the real API (`run_trace`, `TraceDocumenter.generate_report`). README, About page, workflow map, tutorial and epidemiology chapter describe multiple imputation as what it is today: a diagnostic that pools the imputed means; analyses are not yet pooled. The README test section gives the real numbers and the install step for the test tools.
+- **Audit report** — S4 (multiple imputation) is marked partially open, E8 (stale state) and E10 (replay equals the analysed table) are reopened with the findings of the review, and a follow-up programme (M0 to M4) is recorded.
+- **Validate filter reaches Enrich** — Applying a filter restarts Enrich's working copy from the filtered rows; imputation can no longer be fitted on excluded rows or put them back into the analysed data.
+- **Results follow the data** — Analysis results (survival, regression, paired, McNemar, Mantel-Haenszel, multiple imputation, clustering, document coverage) are cleared when another dataset is loaded; the group-comparison results are keyed by a content fingerprint (`core/fingerprint.py`), so imputation, clipping or a change of transformation recomputes them.
+- **Traces stay in the workspace** — A trace saved under a relative name lands in the user's trace directory instead of the process working directory; traces are written as UTF-8 with an atomic replace.
+- **Multiple-imputation advice** — The panel no longer suggests leaving the outcome out of the imputation model; "adopt" is labelled as single imputation.
+
 ### Anthropic Claude connector
 
 - **Claude as an AI provider** (`manage/rag/providers/claude.py`, official `anthropic` SDK) — Next to Ollama, Gemini, OpenAI and Mistral. Models listed from the API when a key is given, otherwise `claude-fable-5-1` (default, most capable), `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`. System messages go to the `system` parameter, turns are made to alternate as the Messages API requires, stop sequences are passed, text blocks are returned with token usage. Errors come back as readable messages like the other connectors. Cloud provider: API key (`ANTHROPIC_API_KEY` or typed per session, never pre-filled) and the explicit data-sharing consent are required.

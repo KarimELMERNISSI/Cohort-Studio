@@ -36,7 +36,8 @@ BRANCHES: tuple[Branch, ...] = (
         "Enrich the cohort",
         "after validation, as often as needed",
         "Merge external sources, derive variables from formulas or AI suggestions, impute missing values "
-        "(single imputation for exploration, multiple imputation for inference). "
+        "(single imputation for exploration; multiple imputation shows how much the imputation uncertainty "
+        "matters, pooled analyses are planned). "
         "Each change can be validated and analysed again before the next one.",
         (("enrich", "Open Enrich"),),
     ),

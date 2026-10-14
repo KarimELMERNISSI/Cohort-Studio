@@ -95,7 +95,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | P5 | Science Tier B + UI-free biostats package + result cards + guidance | done (multiple imputation with Rubin pooling deferred to P8) |
 | P6 | Structure: layering rules, dead code removal, de-duplication, single replay engine | done (function splitting and the remaining `unsafe_allow_html` blocks deferred to P7/P8 clean-up) |
 | P7 | Quality gates: full CI, ruff/pyright, pre-commit, AppTest smoke suite, Docker hardening | done (Docker image not built in the audit environment: Docker unavailable) |
-| P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement, SMR, multiple imputation | done (`biostats/survival`, `regression`, `rates`, `paired`, `reliability`, `imputation`) |
+| P8 | Science Tier C: survival, regression, Mantel-Haenszel, paired tests, agreement, SMR, multiple imputation | done (`biostats/survival`, `regression`, `rates`, `paired`, `reliability`); multiple imputation delivered as a diagnostic only (`biostats/imputation`: pooled means), pooled analyses moved to follow-up M2 |
 
 ## Owner actions required (cannot be done from the repository)
 
@@ -112,7 +112,8 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | G3 selection never returned | closed | P1 (`sync_selection` in the adapter; selection drives the panels) |
 | G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
 | G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
-| S1–S5 wrong numbers | closed | P2 (`biostats/`); multiple imputation with Rubin's rules in P8 |
+| S1–S3, S5 wrong numbers | closed | P2 (`biostats/`) |
+| S4 single imputation presented as MICE | partially open (reviewed 2026-10-14): honest labelling, seeds and observed-rows fit (P2); m completed datasets with pooled *means* (P8). No analysis is pooled across imputations, "adopt" installs one completed dataset (single imputation again), and Barnard-Rubin degrees of freedom are never active | P2, P8; follow-up M2 |
 | S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
 | S11 missing methods (survival, regression, MH, paired, agreement) | closed | P8 (Survival & regression page; Paired, rates & stratified tab; reliability section) |
 | E1 leaked key | open | owner action |
@@ -122,9 +123,9 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | E5 admin takeover | closed | P0 (role-based checks, env/CLI bootstrap, password policy); P3 (login lockout) |
 | E6 cloud LLM by default / key exposure | closed for consent and keys | P0; Settings-page UX in P4 |
 | E7 PHI on stdout | closed | P0 |
-| E8 stale state / cache | closed | P4 (`AppState.set_dataset` single invalidation point); P6 (disk statistics cache keyed by a frame fingerprint) |
+| E8 stale state / cache | reopened (2026-10-14): closed for dataset swaps only. Within a session the Validate filter did not reach Enrich's working copy (imputation ran on excluded rows and "Use This Dataset" restored them; stop-gap in M0), analysis results were cached by column names (cleared on a dataset swap since M0, identity stamps in M1), Explore writes `working_df` back into `data`, and pages coerce types on render | P4, P6; M0 stop-gaps; follow-up M1 |
 | E9 undefined names / empty-state crashes | closed | P0 |
-| E10 reproducibility claims | closed for the recorded steps (single engine `run_trace`; rename and filters traced and replayed); outlier *tagging* and date re-parsing are still not recorded | P6 |
+| E10 reproducibility claims | reopened (2026-10-14): a replay can differ from the analysed table (filter vs Enrich hand-off, flag columns, targeted and multiple imputation not replayed, distinct-id merges untraced); outlier *tagging* and date re-parsing are still not recorded; traces are rewritten in full and not tamper-evident | P6; follow-up M1 |
 | E11 per-rerun expensive work | partially closed (upload hash once per file, AI probes cached and moved to Settings) | P4; remaining DataAnalyzer/audit recomputation in P6 |
 | E12 tracked secrets/config | closed | P0 |
 | E13 layering / dead code / duplication | closed for layering (test-enforced), dead code and duplicates; giant functions (59 > 100 lines) remain | P6; splitting with P7/P8 |
@@ -134,3 +135,21 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | U6 design | partially closed (theme tokens, components, interpretation quadrants); 30 `unsafe_allow_html` blocks remain, mostly the educational HTML tables | P4, P6; P7/P8 clean-up |
 | U4, U7 feedback and guidance | closed (result cards, test chooser, glossary, handbook, Run button on the Analyze page, no artificial sleeps); `long_op` adoption on the legacy pages pending | P5, P6 |
 | U8 copy | open | P6 |
+
+## Follow-up programme (2026-10-14)
+
+An external architecture review (October 2026) judged the engine strong and the orchestration between
+enrichment, models and the UI weak. Each of its claims was checked against the code. The checks confirmed
+and extended the orchestration findings: S4, E8 and E10 above are reopened. The owner approved the following
+order, with a review after each milestone.
+
+| Milestone | Goal | Status |
+|---|---|---|
+| M0 | Truth and safety net: false regulatory and reproducibility claims removed (21 CFR Part 11, "signed", "immutable", STROBE/CONSORT "compliant", 100 % coverage), MI advice corrected, result caches cleared on a dataset swap, Validate filter reaches Enrich, traces written inside the user workspace, wheel contents fixed, per-package coverage floors in CI | in progress |
+| M1 | One analysis population and one source of truth: inclusion and exclusion criteria become a shared, reversible selection (only an explicit, traced "freeze" deletes rows); single mutation path; data and population fingerprints; results stamped with the data they were computed on; hash-chained (tamper-evident) trace v2 with attrition counts | planned |
+| M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | planned |
+| M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | planned |
+| M4 | Packaging and deployment: optional dependency groups, engine-only CI job, Docker image built in CI, first-run administrator | planned |
+
+Owner decisions on the review: Python stays at 3.14; no repository split; staleness is handled with
+fingerprints and stamped results, not a workflow-orchestration framework.

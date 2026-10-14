@@ -170,4 +170,6 @@ Categorical covariates are one-hot coded with their first (alphabetical) level a
 | Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
 | Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales |
 
-Multiple imputation with Rubin's rules lives on the Enrich page (Global imputation tab).
+The multiple-imputation diagnostic lives on the Enrich page (Global imputation tab). It pools the imputed
+means with Rubin's rules; the analyses on this page are not yet pooled across imputations, so run them on the
+complete cases for inference (a singly-imputed dataset gives standard errors and p-values that are too small).
