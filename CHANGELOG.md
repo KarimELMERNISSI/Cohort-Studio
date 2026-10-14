@@ -14,6 +14,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Results follow the data** — Analysis results (survival, regression, paired, McNemar, Mantel-Haenszel, multiple imputation, clustering, document coverage) are cleared when another dataset is loaded; the group-comparison results are keyed by a content fingerprint (`core/fingerprint.py`), so imputation, clipping or a change of transformation recomputes them.
 - **Traces stay in the workspace** — A trace saved under a relative name lands in the user's trace directory instead of the process working directory; traces are written as UTF-8 with an atomic replace.
 - **Multiple-imputation advice** — The panel no longer suggests leaving the outcome out of the imputation model; "adopt" is labelled as single imputation.
+- **Wheel** — The wheel now ships `biostats`, `core`, `ingest` and `ui` (an installed wheel could not import before); a quality gate keeps the wheel list equal to the first-party packages, and CI installs the built wheel in a clean environment and imports every package.
+- **CI** — uv (0.10.9) and Python 3.14 are pinned: without a pin uv downloads the newest interpreter allowed by `requires-python` (3.15 since October 2026), for which duckdb, pyarrow, pydantic-core and others publish no wheel yet, so `uv sync` has to compile them. `uv lock --check` runs before the install, the workflow can be started by hand, the global coverage floor is 55 % (measured about 58 %), and per-package floors (biostats and core 90 %, graph 91 %, ingest 87 %, ui 75 %) are read from pytest-cov's report by `dev_scripts/check_coverage_floors.py`.
 
 ### Anthropic Claude connector
 

@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   quality:
@@ -20,10 +21,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      # Pinned: the uv release that writes uv.lock, and Python 3.14. Without a pin uv downloads the newest
+      # interpreter allowed by requires-python (3.15 since October 2026), for which several locked packages
+      # (duckdb, pyarrow, pydantic-core, ...) publish no wheel yet, so `uv sync` has to compile them and fails.
+      - name: Install uv and Python 3.14
         uses: astral-sh/setup-uv@v6
         with:
+          version: "0.10.9"
+          python-version: "3.14"
           enable-cache: true
+
+      - name: Check that uv.lock matches pyproject.toml
+        run: uv --version && uv lock --check
 
       - name: Install Python and dependencies (locked; dev tools and the optional yFiles extra for its offline tests)
         run: uv sync --frozen --extra dev --extra graph-yfiles --extra survival
@@ -38,7 +47,20 @@ jobs:
         run: uv run pyright --level error
 
       - name: Tests (offline; integration tests run from the manual workflow)
-        run: uv run pytest -m "not integration" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=50
+        run: uv run pytest -m "not integration" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=55
+
+      # Floors per package (statistics engine, core, graph, import, UI layer), read from pytest-cov's coverage.xml
+      - name: Coverage floors per package
+        run: uv run python dev_scripts/check_coverage_floors.py coverage.xml
+
+      - name: Wheel contents (build, install into a clean environment, import every package)
+        run: |
+          uv build --wheel --out-dir dist
+          uv export --frozen --no-dev --no-emit-project --no-hashes -o "$RUNNER_TEMP/requirements.txt"
+          uv venv "$RUNNER_TEMP/wheel-env" --python 3.14
+          uv pip install --python "$RUNNER_TEMP/wheel-env" -r "$RUNNER_TEMP/requirements.txt"
+          uv pip install --python "$RUNNER_TEMP/wheel-env" --no-deps dist/*.whl
+          cd "$RUNNER_TEMP" && "$RUNNER_TEMP/wheel-env/bin/python" -c "import app_pages.enrichment_mi, biostats, core, enrich.transformation_logic, explore.quality_score, graph, ingest, manage.db_manager, monitor.changes, prompts, ui, utils.data_paths; print('wheel imports OK')"
 
       - name: Upload coverage report
         if: always()
