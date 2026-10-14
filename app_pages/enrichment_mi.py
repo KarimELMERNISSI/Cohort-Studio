@@ -16,7 +16,8 @@ def render_multiple_imputation() -> None:
     with st.expander("Multiple imputation (Rubin's rules)", expanded=False):
         st.caption(
             "Draws m completed datasets with chained equations (posterior sampling), pools per-variable means with Rubin's rules, "
-            "and reports the fraction of missing information. Use it to see how much the imputation uncertainty matters."
+            "and reports the fraction of missing information. Use it to see how much the imputation uncertainty matters. "
+            "Only the means are pooled: analyses are not yet pooled across imputations."
         )
         numeric = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
         with_missing = [c for c in numeric if df[c].isna().any()]
@@ -35,10 +36,12 @@ def render_multiple_imputation() -> None:
             )
         )
         exclude = c2.multiselect(
-            "Columns not to impute (e.g. the outcome)",
+            "Columns to leave out of the imputation model (identifiers, free text)",
             numeric,
             key="mi_exclude",
-            help="Excluded columns keep their missing values and are not used as predictors.",
+            help="Left-out columns keep their missing values and are not used as predictors. Keep the outcome and "
+            "every analysis variable in the model: leaving the outcome out biases its associations toward the null "
+            "(Moons et al. 2006; White, Royston & Wood 2011).",
         )
         if st.button("Run multiple imputation", key="mi_run", type="primary"):
             try:
@@ -72,9 +75,10 @@ def render_multiple_imputation() -> None:
                     "The fraction of missing information exceeds 0.3 for some variables: increase m or review the imputation model."
                 )
             if st.button(
-                "Use the first completed dataset as the working data",
+                "Use the first completed dataset as the working data (single imputation)",
                 key="mi_adopt",
-                help="Keeps one completed copy for exploration; inference on it ignores the between-imputation variance shown above.",
+                help="Keeps one completed copy for exploration. This is a single imputation: inference on it ignores the "
+                "between-imputation variance shown above, so standard errors and p-values are too small.",
             ):
                 first = res["completed"][0]
                 st.session_state["enriched_df"] = first
