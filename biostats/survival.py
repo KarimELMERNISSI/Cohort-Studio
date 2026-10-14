@@ -199,6 +199,7 @@ class CoxResult:
     params: pd.Series | None = None
     vcov: pd.DataFrame | None = None
     df_resid: float | None = None
+    reference_levels: dict[str, str] = field(default_factory=dict)  # factor -> its reference level
 
 
 def cox_regression(
@@ -218,7 +219,7 @@ def cox_regression(
     """
     frame = df[[time_col, event_col, *covariates]].dropna()
     t, e = _clean(frame[time_col], frame[event_col])
-    x, _ = design_matrix(frame, covariates, levels=levels, intercept=False)
+    x, refs = design_matrix(frame, covariates, levels=levels, intercept=False)
     if x.shape[1] == 0:
         raise ValueError("no covariate with variation")
     model = PHReg(t, x.to_numpy(), status=e, ties=ties)
@@ -286,6 +287,7 @@ def cox_regression(
             columns=list(x.columns),
         ),
         df_resid=float(len(t) - x.shape[1]),
+        reference_levels=refs,
     )
 
 

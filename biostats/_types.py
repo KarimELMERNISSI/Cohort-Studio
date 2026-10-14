@@ -102,6 +102,7 @@ class AssumptionCheck(BaseModel):
 class TestResult(BaseModel):
     """Result of a group comparison: estimate and CI first, then the test, then diagnostics."""
 
+    __test__ = False  # not a pytest test class despite its name
     model_config = ConfigDict(frozen=True)
 
     name: str

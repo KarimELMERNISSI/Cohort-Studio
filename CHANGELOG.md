@@ -39,6 +39,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   it gains its multiple-imputation mode.
 - DeLong AUC: placement values by sorted search (identical, ties included): 25 ms at 50,000 rows instead of
   seconds, so the AUC can be computed on every imputed dataset.
+- **Analyses over imputed datasets** (`biostats/mi/data.py`, `analyze.py`, `adapters.py`):
+  - `MIData` stores a multiply imputed dataset compactly: the observed table plus the imputed cells per column.
+    It rebuilds any completed dataset, and exports and imports the mice long layout (`.imp`, `.id`) that R
+    and Stata read.
+  - `analyze_mi(fn, mi)` runs one analysis on every completed dataset and pools it through an adapter for
+    its result type:
+    - linear regression and ANCOVA: D1 test of each covariate (Type II), Harel R^2, pooled adjusted means;
+    - logistic and count regression and Cox: ratios reported back from the log scale, D1 test of each
+      factor;
+    - t-tests: a pooled test result with its MI information;
+    - 2x2 tables: odds ratio, risk ratio and risk difference, D2 on the chi-square;
+    - Kaplan-Meier: curves pooled on the cloglog scale, median read from the pooled curve, D2 on the
+      log-rank.
+  - A failure names the imputed dataset. Rank tests are refused with the reason and the alternative.
+    Warnings are counted across imputations, and the complete-case analysis is kept for comparison. A time
+    budget gives a result labelled as a preview.
 
 ### Repository moved to Cohort-Studio
 

@@ -19,7 +19,10 @@ import pytest
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
-from biostats.mi import d2_chisq, pool_r_squared, pool_scalar, pool_terms
+from biostats.linear import linear_regression
+from biostats.mi import MIData, analyze_mi, d2_chisq, pool_r_squared, pool_scalar, pool_terms
+from biostats.regression import count_regression, logistic_regression
+from biostats.survival import cox_regression
 
 FIXTURES = Path(__file__).resolve().parents[1] / "reference" / "fixtures" / "mi"
 REFERENCE = FIXTURES / "mice_reference.json"
@@ -144,3 +147,39 @@ def test_pooled_r_squared_matches_mice(reference: dict, completed: list[pd.DataF
     assert pooled.ci.upper == pytest.approx(expected["high"], rel=1e-4)
     adjusted = pool_r_squared([f.rsquared_adj for f in fits], n=n)
     assert adjusted.estimate == pytest.approx(expected["adjusted_estimate"], rel=1e-10)
+
+
+DESIGN_TERMS = {"(Intercept)": "const", "groupb": "group_b", "groupc": "group_c"}
+
+
+@pytest.mark.parametrize("kind", ["lm", "logistic", "poisson", "cox"])
+def test_analyze_mi_on_the_mice_imputations_matches_mice(reference: dict, kind: str) -> None:
+    """The whole chain: MIData from the mice long file, our models, the adapters and the pooling."""
+    mi = MIData.from_long(pd.read_csv(COMPLETED))
+    covariates = ["age", "group", "x"]
+    levels = mi.levels(covariates)
+    fit = {
+        "lm": lambda d: linear_regression(d, "y", covariates, levels=levels),
+        "logistic": lambda d: logistic_regression(
+            d, "bin", covariates, event_level="1", levels=levels
+        ),
+        "poisson": lambda d: count_regression(d, "count", covariates, levels=levels),
+        "cox": lambda d: cox_regression(d, "time", "status", covariates, levels=levels),
+    }[kind]
+    result = analyze_mi(fit, mi, complete_case=False)
+    model = next(m for m in reference["models"] if m["model"] == kind)
+    tol = TOLERANCE[kind]
+    for row in model["table"]:
+        term = result.term(DESIGN_TERMS.get(row["term"], row["term"]))
+        assert term.estimate == pytest.approx(row["estimate"], rel=tol, abs=tol * 1e-2), (
+            kind,
+            row["term"],
+        )
+        assert term.se == pytest.approx(row["std_error"], rel=tol), (kind, row["term"])
+        assert term.df == pytest.approx(row["df"], rel=tol), (kind, row["term"])
+        assert term.fmi == pytest.approx(row["fmi"], rel=tol, abs=tol * 1e-2), (kind, row["term"])
+    group = result.tests["group"]
+    expected = model["d1"]
+    assert group.statistic == pytest.approx(
+        expected.get("statistic", expected.get("F.value")), rel=tol
+    )
