@@ -6,7 +6,9 @@ import pandas as pd
 import streamlit as st
 
 from biostats.imputation import multiple_impute, pooled_statistics
+from core.fingerprint import frame_fingerprint
 from ui.components import error_card, help_popover, long_op
+from ui.state import get_state
 
 
 def render_multiple_imputation() -> None:
@@ -50,7 +52,12 @@ def render_multiple_imputation() -> None:
                     table = pooled_statistics(
                         completed, [c for c in with_missing if c not in exclude]
                     )
-                st.session_state["mi_result"] = {"completed": completed, "table": table, "m": m}
+                st.session_state["mi_result"] = {
+                    "completed": completed,
+                    "table": table,
+                    "m": m,
+                    "input_fp": frame_fingerprint(df),
+                }
             except Exception as exc:
                 error_card("Multiple imputation failed.", exc)
         res = st.session_state.get("mi_result")
@@ -80,12 +87,13 @@ def render_multiple_imputation() -> None:
                 help="Keeps one completed copy for exploration. This is a single imputation: inference on it ignores the "
                 "between-imputation variance shown above, so standard errors and p-values are too small.",
             ):
-                first = res["completed"][0]
-                st.session_state["enriched_df"] = first
-                st.session_state["data"] = first
-                st.session_state["working_df"] = first.copy()
-                if "transformation_manager" in st.session_state:
-                    st.session_state.transformation_manager.add_step(
+                if res.get("input_fp") != frame_fingerprint(df):
+                    st.warning(
+                        "The data changed since these imputations were drawn: run the multiple imputation again."
+                    )
+                else:
+                    get_state().stage(
+                        res["completed"][0],
                         "multiple_imputation",
                         {
                             "m": res["m"],
@@ -93,8 +101,11 @@ def render_multiple_imputation() -> None:
                             "excluded": list(st.session_state.get("mi_exclude", [])),
                         },
                         f"Multiple imputation (m = {res['m']}); first completed dataset adopted",
+                        replayable=False,
                     )
-                st.success("First completed dataset adopted as the working data.")
+                    st.success(
+                        "First completed dataset added to the Enrich draft: apply the draft to use it in the analyses."
+                    )
             help_popover(
                 "Rubin's rules: the pooled estimate is the mean of the m estimates; its variance adds the within-imputation "
                 "variance to (1 + 1/m) times the between-imputation variance. The fraction of missing information tells "

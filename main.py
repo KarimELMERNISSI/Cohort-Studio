@@ -29,10 +29,12 @@ def main() -> None:
         st.stop()
 
     state = get_state()
+    state.begin_run()  # the dataset views of this run (AppState is the only writer of the data)
     is_admin = is_admin_role(st.session_state.get("user_role"))  # privileges come from the stored role
     page = st.navigation(nav.build_navigation(is_admin), position=nav.NAV_POSITION)
     shell.render_sidebar(state)
     page.run()
+    state.end_run()  # strict mode (tests): the page must not have modified the views in place
 
 
 if __name__ == "__main__":

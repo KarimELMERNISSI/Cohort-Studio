@@ -74,6 +74,31 @@ def test_stored_analysis_results_are_cleared_when_the_dataset_changes() -> None:
     assert not stray, sorted(stray)
 
 
+_DATASET_KEYS = "data|working_df|enriched_df|dataset_ref|current_dataset_name"
+_DATASET_WRITE = (
+    rf"""session_state\[\s*["']({_DATASET_KEYS})["']\s*\]\s*(=(?!=)|\+=)"""
+    rf"""|session_state\.({_DATASET_KEYS})\s*=(?!=)"""
+    rf"""|session_state\.(pop|setdefault)\(\s*["']({_DATASET_KEYS})["']"""
+    rf"""|del\s+st\.session_state\[\s*["']({_DATASET_KEYS})["']"""
+)
+
+
+def test_only_app_state_writes_the_dataset() -> None:
+    """Every change of the session data goes through ui/state.py (AppState): one traced write path (audit E8)."""
+    hits = [
+        hit
+        for hit in _count(_DATASET_WRITE, *SOURCE_DIRS, exclude=("ui/state.py",))
+        if not _is_comment(hit)
+    ]
+    assert not hits, hits
+
+
+def _is_comment(hit: str) -> bool:
+    path, line = hit.rsplit(":", 1)
+    text = (ROOT / path).read_text(encoding="utf-8", errors="replace").splitlines()[int(line) - 1]
+    return text.lstrip().startswith("#")
+
+
 def test_the_wheel_ships_every_first_party_package() -> None:
     """A built wheel must contain every package the code imports (biostats/core/ingest/ui were once missing)."""
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))

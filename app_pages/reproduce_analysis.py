@@ -11,6 +11,7 @@ from manage.reproduction_manager import run_trace
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
 from ui.progress import current_trace_session, mark_step
+from ui.state import get_state
 from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
 from utils.path_utils import normalize_path, resolve_path
 from utils.session_scope import get_current_scope
@@ -498,8 +499,8 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                     st.error("Unknown file format for snapshot.")
                     return
                 
-                st.session_state['working_df'] = df
-                st.session_state['data'] = df # Update main data reference too
+                # The snapshot becomes the session dataset, linked to this trace (AppState)
+                get_state().install_replay(df, trace_data, upto=target_step_index, mode="snapshot")
                 st.success(f"Successfully loaded state at Step {target_step_index+1} (Fast Mode)")
                 return
         except Exception as e:
@@ -573,7 +574,5 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
         return
     for note in result.warnings:
         st.warning(note)
-    st.session_state['working_df'] = result.df
-    st.session_state['data'] = result.df
-    st.session_state['enriched_df'] = result.df
+    get_state().install_replay(result.df, trace_data, upto=target_step_index, mode="full replay")
     st.success(f"Successfully reproduced state at Step {target_step_index + 1} (full replay, {result.steps_applied} step(s))")

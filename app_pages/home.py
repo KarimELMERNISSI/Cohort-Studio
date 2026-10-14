@@ -18,6 +18,7 @@ from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
 from ui.progress import mark_step
+from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
@@ -52,11 +53,9 @@ class RenameColumnsComponent:
         self.original_df = df  # Preserve original DataFrame for reference
         self.analyzer = analyzer
 
-        # Initialize rename_dict and working_df in session state if they don't exist
+        # The pending renames live in session state until "Apply Renaming" commits them (AppState)
         if "rename_dict" not in st.session_state:
             st.session_state["rename_dict"] = {col: col for col in df.columns}
-        if "working_df" not in st.session_state:
-            st.session_state["working_df"] = df.copy()
 
     def _get_columns_info(self, columns_to_process=None):
         """Gather detailed information about columns for RAG context."""
@@ -261,14 +260,16 @@ class RenameColumnsComponent:
         # Apply renaming and refresh analyzer
         if st.button("Apply Renaming"):
             rename_dict = st.session_state["rename_dict"]
-            if rename_dict != {col: col for col in self.original_df.columns}:
-                # Apply renaming to working_df
-                st.session_state["working_df"] = st.session_state["working_df"].rename(columns=rename_dict)
-                changed = {old: new for old, new in rename_dict.items() if old != new}
-                if "transformation_manager" in st.session_state and changed:  # every mutating step is traced (audit E10)
-                    st.session_state.transformation_manager.add_step(
-                        "rename_columns", {"mapping": changed}, f"Renamed {len(changed)} column(s)"
-                    )
+            changed = {old: new for old, new in rename_dict.items() if old != new}
+            state = get_state()
+            if changed and state.base is not None:
+                # One traced step on the whole dataset (audit E10); the pending renames are reset by AppState
+                state.commit_change(
+                    state.base.rename(columns=changed),
+                    "rename_columns",
+                    {"mapping": changed},
+                    f"Renamed {len(changed)} column(s)",
+                )
                 st.success("Columns renamed successfully!")
                 self.analyzer.refresh(st.session_state["working_df"])
             else:
@@ -276,7 +277,7 @@ class RenameColumnsComponent:
 
         st.write("Updated DataFrame:")
         st.dataframe(st.session_state["working_df"], width="stretch")
-        
+
 
         return st.session_state["working_df"]
 def display_category_box(title, columns):
@@ -830,9 +831,8 @@ def app():
             #analyzer = DataAnalyzer(st.session_state.get('data', None))
             rename_component = RenameColumnsComponent(st.session_state.get('data', None), analyzer)
 
-            # Display the component and get the updated DataFrame
+            # Display the component (a rename is committed by AppState; nothing is written back here)
             df = rename_component.display()
-            st.session_state["data"] = df
             #st.write("test: ")
             #st.dataframe(st.session_state["data"])
             

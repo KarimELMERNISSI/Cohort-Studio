@@ -171,3 +171,41 @@ class TestTraceFileLocation:
         trace_path = Path(isolated_transformation_manager.get_trace_path())
         assert "Renommé « poids »" in json.loads(trace_path.read_text(encoding="utf-8"))["steps"][0]["description"]
         assert not list(trace_path.parent.glob("*.tmp"))
+
+
+class TestTraceChain:
+    """Schema-2 traces: each step is chained to the previous one; loaded traces are read-only."""
+
+    def test_steps_are_chained_and_verify(self, isolated_transformation_manager: TransformationManager) -> None:
+        from core.lineage import verify_trace
+
+        tm = isolated_transformation_manager
+        tm.initialize_session("cohort.csv")
+        tm.add_step("initial_load", {"source_path": "x.csv"}, "Loaded", data={"fp_in": "", "fp_out": "a"})
+        tm.add_step("rename_columns", {"mapping": {"a": "b"}}, "Renamed", data={"fp_in": "a", "fp_out": "b"})
+        trace = json.loads(Path(tm.get_trace_path()).read_text(encoding="utf-8"))
+        assert trace["schema_version"] == 2 and trace["head_hash"] == tm.head_hash
+        assert [s["index"] for s in trace["steps"]] == [1, 2]
+        assert trace["steps"][1]["prev_hash"] == trace["steps"][0]["hash"]
+        assert verify_trace(trace).ok and tm.verify().ok
+
+        trace["steps"][0]["params"]["source_path"] = "other.csv"
+        assert verify_trace(trace).first_bad_step == 1
+
+    def test_a_change_applied_later_keeps_when_it_was_made(self, isolated_transformation_manager: TransformationManager) -> None:
+        tm = isolated_transformation_manager
+        tm.initialize_session("cohort.csv")
+        tm.add_step("imputation", {}, "Median", recorded_at="2026-10-14T09:00:00", replayable=True)
+        step = tm.history[0]
+        assert step["timestamp"] == "2026-10-14T09:00:00" and step["applied_at"] > step["timestamp"]
+        assert step["replayable"] is True
+
+    def test_a_loaded_trace_cannot_be_extended(self, isolated_transformation_manager: TransformationManager) -> None:
+        tm = isolated_transformation_manager
+        tm.initialize_session("cohort.csv")
+        tm.add_step("rename_columns", {}, "Renamed")
+        reader = TransformationManager(trace_dir=tm.trace_dir)
+        reader.load_trace(tm.get_trace_path())
+        assert reader.verify().ok
+        with pytest.raises(RuntimeError, match="loaded for review"):
+            reader.add_step("x", {}, "x")

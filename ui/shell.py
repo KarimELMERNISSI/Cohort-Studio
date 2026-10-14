@@ -14,6 +14,7 @@ ORIGIN_LABELS = {
     "saved": ("saved version", ":material/inventory_2:"),
     "sample": ("sample cohort", ":material/science:"),
     "path": ("server file", ":material/folder_open:"),
+    "replay": ("replayed trace", ":material/history:"),
 }
 
 

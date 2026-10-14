@@ -20,6 +20,8 @@ from core.expressions import evaluate_tree, safe_format
 from manage.db_manager import DBManager
 from manage.transformation_manager import TransformationManager
 from ui.components import error_card, no_dataset
+from ui.components.staging import render_draft_banner
+from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
 from utils.date_parser import smart_parse_dates
@@ -129,65 +131,17 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> pd.DataFrame | 
 
 
 def handle_main_data_upload() -> pd.DataFrame | None:
-    """Handle the upload or path input for the main dataset."""
-    if 'data' in st.session_state and st.session_state.data is not None:
-        st.success("Main dataset loaded from session")
-        return st.session_state.data
+    """The main dataset of the enrichment: the session dataset with the Enrich draft applied.
 
-    upload_method = st.radio("Choose upload method for Main Dataset:", ["Upload File", "Enter File Path"], key='main_data_method')
-    
-    if upload_method == "Upload File":
-        uploaded_file = st.file_uploader(
-            "Drag and drop your main dataset here",
-            type=['csv', 'xlsx'],
-            key='main_data_uploader'
-        )
-        if uploaded_file is not None:
-            try:
-                st.write(f"file_name: {uploaded_file.name}")
-                file_path = uploaded_file.name
-                result = load_dataframe(uploaded_file)
-                
-                # Handle multi-sheet Excel
-                if isinstance(result, dict) and result.get("__multi_sheet__"):
-                    df = _handle_multisheet_inline(uploaded_file, "main_data")
-                    if df is None:
-                        return None  # User hasn't selected yet
-                else:
-                    df = result
-                
-                if df is not None:
-                    current_file_hash = get_file_hash(uploaded_file)
-                    
-                    if 'last_main_file_hash' not in st.session_state or \
-                       current_file_hash != st.session_state['last_main_file_hash']:
-                        st.session_state['last_main_file_hash'] = current_file_hash
-                        # Clear any stale multi-sheet cache from a previous file
-                        st.session_state.pop('main_data_loaded_df', None)
-                        st.success("Main dataset successfully loaded from upload.")
-                    
-                    st.session_state['data'] = df
-                    if 'enriched_df' not in st.session_state:
-                        st.session_state['enriched_df'] = df.copy()
-                    return df
-            except Exception as e:
-                st.error(f"Error loading file: {e!s}")
-                return None
-    else:
-        file_path = st.text_input("Enter file path for the main dataset:", key='main_data_path')
-        
-        if file_path:
-            try:
-                df = load_dataframe(_workspace_path(file_path))
-                st.success("Main dataset successfully loaded from provided path.")
-                st.session_state['data'] = df
-                if 'enriched_df' not in st.session_state:
-                    st.session_state['enriched_df'] = df.copy()
-                return df
-            except Exception as e:
-                st.error(f"Error loading file: {e!s}")
-                return None
-    return None
+    Datasets are loaded from Data > Import or the sidebar (AppState.set_dataset), so every load starts a
+    trace; this page no longer reads files of its own.
+    """
+    frame = get_state().working_frame()
+    if frame is None:
+        no_dataset()
+        return None
+    st.success("Main dataset: the current dataset, with the changes of the Enrich draft.")
+    return frame
 
 def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
     """Handle the upload or path input for the enrichment dataset."""
@@ -369,21 +323,18 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 if enriched_df is not None:
                     # Save snapshot
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
-                    
-                    # Log transformation step
                     params = {
                         "enrichment_file_path": enrichment_file_path,
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
                         "identifier": identifier,
-                        "add_choice": add_choice
+                        "add_choice": add_choice,
+                        "retained_main_columns": [str(c) for c in main_df.columns],
+                        "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                     }
-                    st.session_state.transformation_manager.add_step(
-                        "enrichment", 
-                        params, 
-                        "Enriched with external data",
-                        output_dataset_path=snapshot_path
-                    )
+                    # Into the Enrich draft; traced when the draft is applied (AppState, audit E10)
+                    get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
+                                      output_dataset_path=snapshot_path)
                 st.success("Enrichment completed successfully!")
             except Exception as e:
                 st.error(f"Error performing enrichment: {e!s}")
@@ -423,7 +374,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     strategy=strategy, 
                     conflict_resolution=conflict_resolution)
 
-                save_enrichment_config(enrichment_name=enrichment_name, 
+                save_enrichment_config(enrichment_name=enrichment_name,
                                        strategy=strategy,
                                        input_file_folder=input_file_folder,
                                        input_file=input_file,
@@ -432,6 +383,20 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                                        additional_columns=additional_columns,
                                        conflict_resolution=conflict_resolution
                                        )
+                if enriched_df is not None:
+                    snapshot_path = save_snapshot(enriched_df, "enrichment")
+                    params = {
+                        "enrichment_file_path": enrichment_file_path,
+                        "strategy": strategy,
+                        "conflict_resolution": conflict_resolution,
+                        "left_id_names": left_identifier,
+                        "right_id_names": right_identifier,
+                        "add_choice": add_choice,
+                        "retained_main_columns": [str(c) for c in main_df.columns],
+                        "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
+                    }
+                    get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
+                                      output_dataset_path=snapshot_path)
                 st.success("Enrichment completed successfully!")
             except Exception as e:
                 st.error(f"Error performing enrichment: {e!s}")
@@ -501,9 +466,13 @@ def display_results(enriched_df: pd.DataFrame, title: str=None ,key_base='k'):
     with col2:
         # Save to session state and persist automatically
         if st.button("Use This Dataset for Further Analysis", width='stretch', key=f"{key_base}_save_bt",):
-            st.session_state.data = enriched_df
-            st.session_state.working_df = enriched_df
-            
+            state = get_state()
+            applied, apply_msg = state.commit_staging()  # the Enrich draft becomes the dataset (traced)
+            if not applied:
+                st.warning(apply_msg)
+                return
+            st.success(apply_msg)
+
             # Automatic persistence
             if 'db_manager' in st.session_state:
                 # Determine a base name based on context
@@ -512,9 +481,8 @@ def display_results(enriched_df: pd.DataFrame, title: str=None ,key_base='k'):
                 elif "imputation" in key_base: base_name = "imputed_data"
                 elif "new_variables" in key_base: base_name = "calculated_data"
                 
-                success, msg, saved_name = st.session_state.db_manager.save_dataset(enriched_df, base_name=base_name, username=st.session_state.get('username'))
+                success, msg, saved_name = state.save_version(base_name)
                 if success:
-                    st.session_state['current_dataset_name'] = saved_name
                     
                     # Save a copy of the transformation trace next to the session traces (in the user's workspace)
                     if 'transformation_manager' in st.session_state:
@@ -1747,7 +1715,7 @@ def define_new_variables(main_data):
         else:
             try:
                 # Compute the new variable
-                succ, e, temp_main_data = evaluate_formula_safely(computation_formula, variable_name, main_data)
+                succ, e, temp_main_data = evaluate_formula_safely(computation_formula, variable_name, main_data.copy())
                 
                 if succ:
                     st.success(f"Variable '{variable_name}' successfully computed! Review the preview below.")
@@ -1804,18 +1772,13 @@ def define_new_variables(main_data):
             
             # Add Variable Button
             if st.button("Confirm & Add Variable to Dataset", type="primary"):
-                main_data = temp_data.copy()
-                
-                # Trace the operation
-                if 'transformation_manager' in st.session_state:
-                    st.session_state.transformation_manager.add_step(
-                        function_name="variable_computation",
-                        params={
-                            "variable_name": var_name,
-                            "formula": preview_info['formula']
-                        },
-                        description=f"Computed new variable: {var_name}"
-                    )
+                # Into the Enrich draft; traced when the draft is applied (AppState)
+                get_state().stage(
+                    main_data.assign(**{var_name: temp_data[var_name]}),
+                    "variable_computation",
+                    {"variable_name": var_name, "formula": preview_info['formula']},
+                    f"Computed new variable: {var_name}",
+                )
                 
                 st.success(f"Variable '{var_name}' successfully added to the dataset!")
                 st.session_state.preview_new_variable = None # Reset preview
@@ -2351,10 +2314,8 @@ def compute_transformations(dataframe):
                 st.success("Transformations applied successfully!")
                 st.dataframe(result_df, width='stretch')
 
-                # Update the session state
                 new_df = pd.concat([dataframe, result_df], axis=1)
-                st.session_state['enriched_df'] = new_df
-                
+
                 # Save snapshot
                 snapshot_path = save_snapshot(new_df, "variable_transformation")
 
@@ -2377,12 +2338,9 @@ def compute_transformations(dataframe):
                 if 'eps' in locals(): params['eps'] = eps
                 if 'min_samples' in locals(): params['min_samples'] = min_samples
 
-                st.session_state.transformation_manager.add_step(
-                    "variable_transformation", 
-                    params, 
-                    f"Applied {transformation}",
-                    output_dataset_path=snapshot_path
-                )
+                # Into the Enrich draft; traced when the draft is applied
+                get_state().stage(new_df, "variable_transformation", params, f"Applied {transformation}",
+                                  output_dataset_path=snapshot_path)
 
                 return result_df
             else:
@@ -2629,9 +2587,7 @@ def app():
     "Create New Variables"
     ])
 
-    if 'data' in st.session_state and st.session_state.data is not None:
-        if 'enriched_df' not in st.session_state:
-            st.session_state['enriched_df'] = st.session_state['data'].copy()
+    render_draft_banner()
     # 1. Add External Data
     with main_tab:
         with st.expander("Upload External Data", expanded=True):
@@ -2673,8 +2629,7 @@ def app():
                     enrichment_file_path=input_file
                 )
                 if enriched_df is not None:
-                    st.success("Enrichment successfully configured!")
-                    st.session_state['enriched_df'] = enriched_df
+                    st.success("Enrichment added to the Enrich draft.")
             else:
                 st.warning("Please upload both datasets first.")
 
@@ -2792,23 +2747,20 @@ def app():
                         
                         if success:
                             computed_series = result_or_error
-                            original_missing = main_data[target_var].isnull().sum()
-                            
+                            filled = main_data.copy()  # the session data changes through the draft only
+                            original_missing = filled[target_var].isnull().sum()
+
                             # Apply fillna
-                            main_data[target_var] = main_data[target_var].fillna(computed_series)
-                            
-                            new_missing = main_data[target_var].isnull().sum()
+                            filled[target_var] = filled[target_var].fillna(computed_series)
+
+                            new_missing = filled[target_var].isnull().sum()
                             filled_count = original_missing - new_missing
-                            
+
                             if filled_count > 0:
                                 st.success(f"Successfully filled {filled_count} missing values in '{target_var}'!")
-                                st.session_state['enriched_df'] = main_data
-                                
-                                # Snapshot
-                                snapshot_path = save_snapshot(main_data, f"impute_{target_var}")
-                                
-                                # Log
-                                st.session_state.transformation_manager.add_step(
+                                snapshot_path = save_snapshot(filled, f"impute_{target_var}")
+                                get_state().stage(
+                                    filled,
                                     "targeted_imputation",
                                     {
                                         "target_variable": target_var,
@@ -2948,13 +2900,11 @@ def app():
                     if df_imputed is not None:
                         # print(f"\n---------\n------\n --> Column dtypes after imputation:\n{df_imputed.dtypes}")
 
-                        st.success("Imputation Applied Successfully!")
-                        st.session_state['enriched_df'] = df_imputed
-                        
+                        st.success("Imputation added to the Enrich draft.")
+
                         # Save snapshot
                         snapshot_path = save_snapshot(df_imputed, "imputation")
 
-                        # Log imputation step
                         params = {
                             "numerical_imputation_method": numerical_imputation_method,
                             "categorical_imputation_method": categorical_imputation_method,
@@ -2964,12 +2914,8 @@ def app():
                             "remainder_strategy": remainder_strategy,
                             "remainder_threshold": remainder_threshold
                         }
-                        st.session_state.transformation_manager.add_step(
-                            "imputation", 
-                            params, 
-                            "Applied data imputation",
-                            output_dataset_path=snapshot_path
-                        )
+                        get_state().stage(df_imputed, "imputation", params, "Applied data imputation",
+                                          output_dataset_path=snapshot_path)
 
                         # Highlight imputed values
                         def highlight_imputed(data, mask):

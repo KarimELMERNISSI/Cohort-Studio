@@ -122,25 +122,34 @@ def _filter_script() -> None:
     import streamlit as st
 
     from app_pages.data_monitoring import commit_filter_to_session
+    from core.state import DatasetRef
+    from ui.state import get_state
 
     if "probe" not in st.session_state:
+        state = get_state()
         full = pd.DataFrame({"x": range(10), "flag": [False] * 6 + [True] * 4})
-        st.session_state["data"] = full
-        st.session_state["working_df"] = full.copy()
-        st.session_state["enriched_df"] = (
-            full.copy()
-        )  # Enrich's copy, made when the dataset was loaded
+        state.set_dataset(full, DatasetRef(name="filtered", origin="upload", file_hash="f"))
+        # a change prepared on Enrich before the filter: it must not be applied over the filtered data
+        state.stage(state.working_frame().assign(y=1), "variable_computation", {}, "y")
         commit_filter_to_session(full[~full["flag"]], "anomaly_data", 10, 6)
         st.session_state["probe"] = {
             "data": len(st.session_state["data"]),
-            "enriched": len(st.session_state["enriched_df"]),
-            "excluded_in_enrich": bool(st.session_state["enriched_df"]["flag"].any()),
+            "base": len(state.base),
+            "draft": state.staging_status().state,
+            "steps": [s["function"] for s in state.transformation_manager.history],
         }
 
 
-def test_an_applied_filter_reaches_the_enrich_copy() -> None:
-    """Imputation on Enrich must not be fitted on, or restore, rows excluded on Validate (audit E8 stop-gap)."""
+def test_an_applied_filter_reaches_the_dataset_and_outdates_the_enrich_draft(
+    data_root: Path,
+) -> None:
+    """Imputation on Enrich must not be fitted on, or restore, rows excluded on Validate (audit E8)."""
     at = AppTest.from_function(_filter_script, default_timeout=120)
     at.run()
     assert not at.exception, [str(e.value) for e in at.exception]
-    assert at.session_state["probe"] == {"data": 6, "enriched": 6, "excluded_in_enrich": False}
+    assert at.session_state["probe"] == {
+        "data": 6,
+        "base": 6,
+        "draft": "base_changed",
+        "steps": ["initial_load", "apply_filter"],
+    }

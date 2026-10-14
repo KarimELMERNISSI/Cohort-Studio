@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from core.lineage import TRACE_SCHEMA, genesis_hash, seal_step, verify_trace
 from core.workspace import UserScope
 from utils.data_paths import get_traces_dir
 from utils.session_scope import get_current_scope
@@ -34,14 +35,20 @@ class TransformationManager:
         self.history: list[dict[str, Any]] = []
         self.source_dataset: str | None = None
         self.session_id: str | None = None
-        
+        # Trace schema 2: every step is chained to the previous one by a hash (core.lineage)
+        self.schema_version: int = TRACE_SCHEMA
+        self.created_at: str | None = None
+        self.parent: dict[str, Any] | None = None
+        self.head_hash: str | None = None
+        self.read_only: bool = False
+
         # Ensure trace directory exists (get_traces_dir already does this)
 
-    def initialize_session(self, dataset_name: str, username: str | None = None) -> None:
-        """Initializes a new session trace."""
+    def initialize_session(self, dataset_name: str, username: str | None = None, *, parent: dict[str, Any] | None = None) -> None:
+        """Initializes a new session trace (``parent`` links it to the trace of a saved version it starts from)."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = "".join([c for c in dataset_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-        
+
         # Legacy name-prefix isolation only when no workspace scope is active
         if self.scope is None and username and username != 'admin':
             self.session_id = f"{username}_session_{timestamp}_{safe_name}"
@@ -50,6 +57,11 @@ class TransformationManager:
 
         self.source_dataset = dataset_name
         self.history = []
+        self.schema_version = TRACE_SCHEMA
+        self.created_at = datetime.now().isoformat(timespec="seconds")
+        self.parent = parent
+        self.head_hash = genesis_hash(self.session_id)
+        self.read_only = False
         logger.info("TransformationManager: Session initialized %s", self.session_id)
         self.save_trace()
 
@@ -59,10 +71,12 @@ class TransformationManager:
             return None
         return os.path.join(self.trace_dir, f"{self.session_id}.json")
 
-    def add_step(self, function_name, params, description, output_dataset_path=None, stats_cat_path=None, stats_num_path=None, corr_matrix_path=None):
+    def add_step(self, function_name, params, description, output_dataset_path=None, stats_cat_path=None,
+                 stats_num_path=None, corr_matrix_path=None, *, data=None, population=None, replayable=None,
+                 recorded_at=None):
         """
         Records a transformation step with optional references to intermediate data.
-        
+
         Parameters:
         -----------
         function_name : str
@@ -79,12 +93,24 @@ class TransformationManager:
              Path to numerical statistics file.
         corr_matrix_path : str, optional
              Path to correlation matrix file.
+        data : dict, optional
+             What the step did to the table (rows/columns in and out, fingerprints): core.lineage.Change.
+        population : dict, optional
+             The analysis population the step used (criteria, counts, rows kept).
+        replayable : bool, optional
+             False when the replay engine cannot redo the step.
+        recorded_at : str, optional
+             When the change was made, if it was applied later (an Enrich draft); the step then also records
+             ``applied_at``.
         """
+        if self.read_only:
+            raise RuntimeError("This trace was loaded for review and cannot be extended.")
         # Convert params to serializable format if necessary
         serializable_params = self._make_serializable(params)
-        
+        now = datetime.now().isoformat()
         step = {
-            "timestamp": datetime.now().isoformat(),
+            "index": len(self.history) + 1,
+            "timestamp": recorded_at or now,
             "function": function_name,
             "params": serializable_params,
             "description": description,
@@ -93,9 +119,21 @@ class TransformationManager:
             "stats_num_path": stats_num_path,
             "corr_matrix_path": corr_matrix_path
         }
-        self.history.append(step)
+        if recorded_at:
+            step["applied_at"] = now
+        if data is not None:
+            step["data"] = data
+        if population is not None:
+            step["population"] = population
+        if replayable is not None:
+            step["replayable"] = bool(replayable)
+        if self.head_hash is None:
+            self.head_hash = genesis_hash(self.session_id)
+        sealed = seal_step(step, self.head_hash)
+        self.history.append(sealed)
+        self.head_hash = sealed["hash"]
         self.save_trace() # Auto-save
-        logging.info(f"TransformationManager: Added step {function_name}")
+        logger.info("TransformationManager: Added step %s", function_name)
 
     def _make_serializable(self, obj):
         """Recursively converts objects to JSON-serializable formats."""
@@ -112,11 +150,24 @@ class TransformationManager:
 
     def get_trace(self):
         """Returns the current transformation trace."""
-        return {
+        trace = {
             "session_id": self.session_id,
             "source_dataset": self.source_dataset,
             "steps": self.history
         }
+        if self.schema_version >= TRACE_SCHEMA:
+            trace = {
+                "schema_version": self.schema_version,
+                **trace,
+                "created_at": self.created_at,
+                "parent": self.parent,
+                "head_hash": self.head_hash,
+            }
+        return trace
+
+    def verify(self):
+        """Integrity of the hash chain (core.lineage.TraceVerification)."""
+        return verify_trace(self.get_trace())
 
     def save_trace(self, filepath=None):
         """Saves the trace to a JSON file (UTF-8, atomic replace).
@@ -157,6 +208,11 @@ class TransformationManager:
             self.session_id = trace.get("session_id")
             self.source_dataset = trace.get("source_dataset")
             self.history = trace.get("steps", [])
+            self.schema_version = int(trace.get("schema_version") or 1)
+            self.created_at = trace.get("created_at")
+            self.parent = trace.get("parent")
+            self.head_hash = trace.get("head_hash")
+            self.read_only = True  # a loaded trace documents the past: new steps would break its chain
             return True, "Trace loaded successfully"
         except Exception as e:
             return False, str(e)
