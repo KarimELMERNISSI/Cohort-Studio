@@ -12,6 +12,7 @@ from biostats.regression import count_regression, logistic_regression
 from biostats.survival import compare_survival, cox_regression
 from ui.components import error_card, help_popover, result_card, section
 from ui.progress import mark_step
+from ui.results import provenance, recall, remember
 
 
 def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[str]:
@@ -114,16 +115,17 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                 res = compare_survival(
                     df, time_col, event_col, None if group_col == "(none)" else group_col
                 )
-                st.session_state["surv_result"] = {
-                    "res": res,
-                    "key": (time_col, event_col, group_col),
-                }
+                remember(
+                    "survival",
+                    res,
+                    config=(time_col, event_col, group_col),
+                    n_analysed=sum(c.n for c in res.curves),
+                )
                 mark_step("analyse", "survival analysis")
             except Exception as exc:
                 error_card("The survival analysis could not be computed.", exc)
-        cached = st.session_state.get("surv_result")
-        if cached and cached["key"] == (time_col, event_col, group_col):
-            res = cached["res"]
+        res = recall("survival", config=(time_col, event_col, group_col))
+        if res is not None:
             st.plotly_chart(_km_figure(res.curves), width="stretch")
             _table(
                 pd.DataFrame(
@@ -156,6 +158,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
                 )
             for w in res.warnings:
                 st.warning(w)
+            provenance("survival")
             help_popover(
                 "Each step down is an event; vertical ticks would mark censoring. The band is the pointwise 95% interval. "
                 "The log-rank test weights every time equally and loses power when curves cross; report medians and the "
@@ -194,16 +197,15 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
         )
         if st.button("Fit Cox model", key="cox_run", type="primary", disabled=not covariates):
             try:
-                st.session_state["cox_result"] = {
-                    "res": cox_regression(df, cox_time, cox_event, covariates),
-                    "key": (cox_time, cox_event, tuple(covariates)),
-                }
+                fitted = cox_regression(df, cox_time, cox_event, covariates)
+                remember(
+                    "cox", fitted, config=(cox_time, cox_event, tuple(covariates)), n_analysed=fitted.n
+                )
                 mark_step("analyse", "Cox model")
             except Exception as exc:
                 error_card("The Cox model could not be fitted.", exc)
-        cached = st.session_state.get("cox_result")
-        if cached and cached["key"] == (cox_time, cox_event, tuple(covariates)):
-            res = cached["res"]
+        res = recall("cox", config=(cox_time, cox_event, tuple(covariates)))
+        if res is not None:
             st.caption(
                 f"n = {res.n}, events = {res.events}, ties: {res.ties}"
                 + (f", concordance = {res.concordance:.3f}" if res.concordance is not None else "")
@@ -226,6 +228,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
+            provenance("cox")
 
     section(
         "Logistic regression (binary outcome)",
@@ -255,16 +258,15 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
         )
         if st.button("Fit logistic model", key="logit_run", type="primary", disabled=not covs):
             try:
-                st.session_state["logit_result"] = {
-                    "res": logistic_regression(df, outcome, covs, event_level=event_level),
-                    "key": (outcome, event_level, tuple(covs)),
-                }
+                fitted = logistic_regression(df, outcome, covs, event_level=event_level)
+                remember(
+                    "logistic", fitted, config=(outcome, event_level, tuple(covs)), n_analysed=fitted.n
+                )
                 mark_step("analyse", "logistic regression")
             except Exception as exc:
                 error_card("The logistic model could not be fitted.", exc)
-        cached = st.session_state.get("logit_result")
-        if cached and cached["key"] == (outcome, event_level, tuple(covs)):
-            res = cached["res"]
+        res = recall("logistic", config=(outcome, event_level, tuple(covs)))
+        if res is not None:
             auc_text = (
                 f", AUC = {res.auc:.3f} (95% CI {res.auc_ci[0]:.3f} to {res.auc_ci[1]:.3f})"
                 if res.auc is not None and res.auc_ci
@@ -288,6 +290,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
+            provenance("logistic")
 
     section(
         "Count regression (Poisson / negative binomial)",
@@ -326,22 +329,24 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
         )
         if st.button("Fit count model", key="pois_run", type="primary", disabled=not covs):
             try:
-                st.session_state["pois_result"] = {
-                    "res": count_regression(
-                        df,
-                        count_col,
-                        covs,
-                        exposure_col=None if exposure == "(none)" else exposure,
-                        family=family,
-                    ),
-                    "key": (count_col, exposure, family, tuple(covs)),
-                }
+                fitted = count_regression(
+                    df,
+                    count_col,
+                    covs,
+                    exposure_col=None if exposure == "(none)" else exposure,
+                    family=family,
+                )
+                remember(
+                    "count",
+                    fitted,
+                    config=(count_col, exposure, family, tuple(covs)),
+                    n_analysed=fitted.n,
+                )
                 mark_step("analyse", "count regression")
             except Exception as exc:
                 error_card("The count model could not be fitted.", exc)
-        cached = st.session_state.get("pois_result")
-        if cached and cached["key"] == (count_col, exposure, family, tuple(covs)):
-            res = cached["res"]
+        res = recall("count", config=(count_col, exposure, family, tuple(covs)))
+        if res is not None:
             disp = f", dispersion = {res.dispersion:.2f}" if res.dispersion is not None else ""
             st.caption(f"n = {res.n}, events = {res.events}, AIC = {res.aic:.1f}{disp}")
             _table(
@@ -359,6 +364,7 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
+            provenance("count")
 
 
 __all__ = ["run_survival"]

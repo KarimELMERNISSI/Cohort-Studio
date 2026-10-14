@@ -93,6 +93,17 @@ def test_only_app_state_writes_the_dataset() -> None:
     assert not hits, hits
 
 
+def test_analysis_pages_keep_results_in_the_result_store() -> None:
+    """Results are stamped with the data, population and settings they were computed on (ui/results.py)."""
+    hits = _count(
+        r"""session_state\[\s*["']\w+_results?["']\s*\]\s*=(?!=)""",
+        "app_pages/analysis_survival.py",
+        "app_pages/analysis_extras.py",
+        "app_pages/analysis_diagnostic.py",
+    )
+    assert not hits, hits
+
+
 def test_trace_steps_are_written_by_app_state_only() -> None:
     """Pages and helpers record trace steps through AppState (commit_change, stage, note)."""
     hits = [

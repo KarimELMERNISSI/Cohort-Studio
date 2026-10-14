@@ -1228,6 +1228,8 @@ def run_zscore_analysis(df, analyzer):
     
     # Create a configuration key to detect changes
     config_key = f"{','.join(sorted(target_vars))}_{ref_method}_{ref_group_col}_{ref_group_val}_{sorted(manual_refs.items())}"
+    # ... and the data the z-scores are computed on (the analysed rows and their values), audit E8
+    config_key += "_" + frame_fingerprint(df)
     
     # Check if we need to recalculate (config changed or button pressed)
     need_recalc = False

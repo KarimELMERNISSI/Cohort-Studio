@@ -105,6 +105,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "mi_result",
     "clustering_results",
     "doc_coverage_results",
+    "_results",  # the result store (ui/results.py): stamped results go stale on change, cleared on a swap
 )
 # Kept when the same dataset changes (they follow the trace, or describe the check rather than the data).
 KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
@@ -121,6 +122,7 @@ KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
         "anomaly_data_applied",
         "inclusion_data_applied",
         "outliers_data_applied",
+        "_results",
     }
 )
 DATA_DERIVED_KEYS: tuple[str, ...] = tuple(k for k in DERIVED_KEYS if k not in KEPT_ON_DATA_CHANGE)

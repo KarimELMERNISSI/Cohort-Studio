@@ -45,11 +45,12 @@ DONE, STALE, TODO = "done", "stale", "todo"
 
 @dataclass(frozen=True)
 class StepMark:
-    """A step performed at a given revision of the data."""
+    """A step performed at a given revision of the data (and, for analyses, on a given population)."""
 
     revision: int
     at: str = ""  # ISO timestamp
     detail: str = ""  # what was done, e.g. "quality score 87/100"
+    population_fp: str = ""  # analysis population the step used (empty: not recorded)
 
 
 @dataclass(frozen=True)
@@ -79,17 +80,30 @@ def _function(step: Mapping[str, Any]) -> str:
     return str(step.get("function") or "")
 
 
+def changes_data(step: Mapping[str, Any]) -> bool:
+    """Whether a trace step changed the data. Steps recorded since trace schema 2 say it with their data
+    fingerprints (a rename, a date conversion or a freeze counts; a step that changed nothing does not);
+    older steps are judged by their name."""
+    name = _function(step)
+    if name == "initial_load":
+        return False
+    data = step.get("data")
+    if isinstance(data, Mapping) and data.get("fp_out"):
+        return data.get("fp_in") != data.get("fp_out")
+    return name in DATA_CHANGES
+
+
 def data_revision(steps: Iterable[Mapping[str, Any]]) -> int:
     """Number of changes made to the data since it was loaded."""
-    return sum(1 for step in steps if _function(step) in DATA_CHANGES)
+    return sum(1 for step in steps if changes_data(step))
 
 
 def revision_labels(steps: Iterable[Mapping[str, Any]]) -> list[str]:
     """What the data looked like at each revision: index 0 is "as loaded", index r follows the r-th change."""
     labels = ["as loaded"]
     for step in steps:
-        name = _function(step)
-        if name in DATA_CHANGES:
+        if changes_data(step):
+            name = _function(step)
             labels.append(str(step.get("description") or name.replace("_", " ")))
     return labels
 
@@ -103,7 +117,7 @@ def trace_marks(steps: Iterable[Mapping[str, Any]]) -> dict[str, StepMark]:
         name = _function(step)
         at = str(step.get("timestamp") or "")
         description = str(step.get("description") or name.replace("_", " "))
-        if name in DATA_CHANGES:
+        if changes_data(step):
             revision += 1
         if name in ENRICH_CHANGES:
             n_enrich += 1
@@ -150,6 +164,7 @@ def evaluate(
     has_data: bool,
     dataset_label: str = "",
     knowledge: Mapping[str, tuple[bool, str]] | None = None,
+    population_fp: str = "",
 ) -> Progress:
     """
     Status of every step and the suggested next one.
@@ -177,6 +192,16 @@ def evaluate(
             statuses[step] = StepStatus(TODO, no_data)
         elif mark is None:
             statuses[step] = StepStatus(TODO, _TODO_TEXT[step])
+        elif (
+            step == "analyse"
+            and mark.revision >= revision
+            and population_fp
+            and mark.population_fp
+            and mark.population_fp != population_fp
+        ):
+            statuses[step] = StepStatus(
+                STALE, "Results were computed on another analysis population: run them again."
+            )
         elif mark.revision >= revision:
             statuses[step] = StepStatus(DONE, _DONE_TEXT[step].format(detail=mark.detail or "done"))
         else:
@@ -224,6 +249,7 @@ __all__ = [
     "DATA_CHANGES",
     "DONE",
     "ENRICH_CHANGES",
+    "changes_data",
     "MARKABLE",
     "SAVE_STEPS",
     "STALE",

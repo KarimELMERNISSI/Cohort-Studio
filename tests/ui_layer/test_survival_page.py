@@ -31,6 +31,11 @@ def app(tmp_path_factory: pytest.TempPathFactory):
     dp.DATA_ROOT = previous
 
 
+def _stored(at: AppTest, key: str):
+    """A result kept by the result store (ui/results.py)."""
+    return at.session_state["_results"][key].value
+
+
 def test_survival_page_runs_kaplan_meier_and_cox(app: AppTest) -> None:
     app.switch_page(nav.page_path("survival")).run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
@@ -39,7 +44,7 @@ def test_survival_page_runs_kaplan_meier_and_cox(app: AppTest) -> None:
     app.selectbox(key="surv_group").select("arm").run()
     app.button(key="surv_run").click().run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
-    res = app.session_state["surv_result"]["res"]
+    res = _stored(app, "survival")
     assert {c.label for c in res.curves} == {"Placebo", "Treatment"}
     assert (
         res.logrank_p is not None and res.logrank_p < 0.05
@@ -49,7 +54,8 @@ def test_survival_page_runs_kaplan_meier_and_cox(app: AppTest) -> None:
     app.multiselect(key="cox_covs").select("arm").select("age").run()
     app.button(key="cox_run").click().run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
-    table = app.session_state["cox_result"]["res"].table
+    table = _stored(app, "cox").table
+    assert any("Computed on" in c.value for c in app.caption)  # provenance under the result
     assert (
         "arm_Treatment" in set(table["term"])
         and float(table.loc[table["term"] == "arm_Treatment", "hr"].iloc[0]) < 1

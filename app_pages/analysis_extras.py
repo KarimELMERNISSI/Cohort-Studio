@@ -17,6 +17,7 @@ from biostats.rates import incidence_rate, mantel_haenszel, rate_ratio, standard
 from biostats.reliability import cohens_kappa, icc
 from ui.components import error_card, help_popover, result_card, section, status_chip
 from ui.progress import mark_step
+from ui.results import provenance, recall, remember
 
 
 def _ci(ci) -> str:
@@ -62,13 +63,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     if kind.startswith("Paired")
                     else wilcoxon_signed_rank(df[after], df[before])
                 )
-                st.session_state["pair_result"] = {"res": res, "key": (before, after, kind)}
+                remember("paired", res, config=(before, after, kind))
                 mark_step("analyse", "paired test")
             except Exception as exc:
                 error_card("The paired test could not be computed.", exc)
-        cached = st.session_state.get("pair_result")
-        if cached and cached["key"] == (before, after, kind):
-            result_card(cached["res"])
+        res = recall("paired", config=(before, after, kind))
+        if res is not None:
+            result_card(res)
+            provenance("paired")
     else:
         st.info("Two numeric columns are needed.")
 
@@ -99,13 +101,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                     if kind.startswith("One")
                     else one_sample_wilcoxon(df[col], ref)
                 )
-                st.session_state["one_result"] = {"res": res, "key": (col, ref, kind)}
+                remember("one_sample", res, config=(col, ref, kind))
                 mark_step("analyse", "one-sample test")
             except Exception as exc:
                 error_card("The one-sample test could not be computed.", exc)
-        cached = st.session_state.get("one_result")
-        if cached and cached["key"] == (col, ref, kind):
-            result_card(cached["res"])
+        res = recall("one_sample", config=(col, ref, kind))
+        if res is not None:
+            result_card(res)
+            provenance("one_sample")
 
     section("Paired binary outcomes (McNemar) and one-sample proportion")
     if len(binary) >= 2:
@@ -127,18 +130,20 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                 table = pd.crosstab(df[b1].astype(str), df[b2].astype(str))
                 if table.shape != (2, 2):
                     raise ValueError("both columns must have exactly two levels on complete pairs")
-                st.session_state["mc_result"] = {
-                    "res": mcnemar_test(table.to_numpy()),
-                    "table": table,
-                    "key": (b1, b2),
-                }
+                remember(
+                    "mcnemar",
+                    {"res": mcnemar_test(table.to_numpy()), "table": table},
+                    config=(b1, b2),
+                    n_analysed=int(table.to_numpy().sum()),
+                )
                 mark_step("analyse", "McNemar test")
             except Exception as exc:
                 error_card("McNemar's test could not be computed.", exc)
-        cached = st.session_state.get("mc_result")
-        if cached and cached["key"] == (b1, b2):
+        cached = recall("mcnemar", config=(b1, b2))
+        if cached is not None:
             st.dataframe(cached["table"], width="stretch")
             result_card(cached["res"])
+            provenance("mcnemar")
     p1, p2, p3 = st.columns(3)
     successes = p1.number_input(
         "Successes",
@@ -274,8 +279,9 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
         )
         if st.button("Run Mantel-Haenszel", key="mh_run", type="primary"):
             try:
-                st.session_state["mh_result"] = {
-                    "res": mantel_haenszel(
+                remember(
+                    "mantel_haenszel",
+                    mantel_haenszel(
                         df,
                         exposure,
                         outcome,
@@ -283,14 +289,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
                         exposure_level=exp_level,
                         event_level=ev_level,
                     ),
-                    "key": (exposure, outcome, stratum, exp_level, ev_level),
-                }
+                    config=(exposure, outcome, stratum, exp_level, ev_level),
+                )
                 mark_step("analyse", "Mantel-Haenszel analysis")
             except Exception as exc:
                 error_card("The stratified analysis could not be computed.", exc)
-        cached = st.session_state.get("mh_result")
-        if cached and cached["key"] == (exposure, outcome, stratum, exp_level, ev_level):
-            res = cached["res"]
+        res = recall("mantel_haenszel", config=(exposure, outcome, stratum, exp_level, ev_level))
+        if res is not None:
+            provenance("mantel_haenszel")
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("OR (Mantel-Haenszel)", f"{res.or_mh:.3f}")
             m1.caption(f"95% CI {_ci(res.or_mh_ci)}")

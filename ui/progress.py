@@ -44,8 +44,20 @@ def mark_step(step: str, detail: str = "") -> None:
         revision=data_revision(steps),
         at=datetime.now().isoformat(timespec="seconds"),
         detail=detail,
+        population_fp=_population_fp(),
     )
     st.session_state[_KEY] = {"session_id": session_id, "marks": marks}
+
+
+def _population_fp() -> str:
+    """Fingerprint of the analysis population (rows analysed), empty when it cannot be evaluated."""
+    from ui.state import get_state
+
+    try:
+        identity = get_state().identity()
+    except Exception:
+        return ""
+    return identity.population_fp if identity is not None else ""
 
 
 def current_trace_session() -> str | None:
@@ -145,6 +157,7 @@ def current_progress() -> Progress:
         has_data=df is not None,
         dataset_label=label,
         knowledge=knowledge_evidence(),
+        population_fp=_population_fp() if df is not None else "",
     )
 
 

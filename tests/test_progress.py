@@ -116,3 +116,26 @@ def test_knowledge_paths_follow_the_workspace_and_do_not_block_the_core_path() -
     assert progress.state("docs") == DONE and progress.text("docs").startswith("2 PDFs")
     assert progress.state("varmap") == TODO
     assert progress.next_step == "validate"
+
+
+def test_schema_2_steps_count_by_their_data_fingerprints() -> None:
+    def changed(function: str, fp_in: str, fp_out: str) -> dict:
+        return {**step(function), "data": {"fp_in": fp_in, "fp_out": fp_out}}
+
+    steps = [
+        {**LOAD, "data": {"fp_in": "", "fp_out": "a"}},
+        changed("rename_columns", "a", "b"),  # a rename changes what a result was computed on
+        changed("data_type_conversion", "b", "c"),
+        changed("imputation", "c", "c"),  # nothing actually changed
+        step("population_definition"),
+    ]
+    assert data_revision(steps) == 2
+
+
+def test_an_analysis_on_another_population_is_stale() -> None:
+    marks = {"analyse": StepMark(0, detail="Cox model", population_fp="p1")}
+    same = evaluate([LOAD], marks, has_data=True, population_fp="p1")
+    assert same.state("analyse") == DONE
+    other = evaluate([LOAD], marks, has_data=True, population_fp="p2")
+    assert other.state("analyse") == STALE
+    assert "another analysis population" in other.text("analyse")

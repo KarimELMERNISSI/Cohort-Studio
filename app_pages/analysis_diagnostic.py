@@ -10,6 +10,7 @@ import streamlit as st
 from biostats.agreement import bland_altman
 from biostats.diagnostic import confusion_at, delong_auc, diagnostic_accuracy, youden_cutoff
 from ui.components import error_card, help_popover, section, status_chip
+from ui.results import provenance, recall, remember
 
 
 def _ci_text(ci) -> str:
@@ -75,6 +76,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                                      step=0.01, key="diag_prev",
                                      help="PPV and NPV depend on the prevalence; enter the prevalence of the target population "
                                           "(default: the proportion observed in this dataset).")
+        diag_config = (outcome, score, str(pos_label), mode, float(manual), float(prevalence))
         if st.button("Run diagnostic accuracy", type="primary", key="diag_run"):
             try:
                 if clean[outcome].nunique() != 2:
@@ -84,13 +86,15 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                 cutoff = youden["cutoff"] if mode.startswith("Youden") else float(manual)
                 tp, fp, fn, tn = confusion_at(clean[outcome].tolist(), clean[score].tolist(), cutoff, pos_label=pos_label)
                 acc = diagnostic_accuracy(tp, fp, fn, tn, prevalence=float(prevalence))
-                st.session_state["diag_result"] = {"auc": auc, "youden": youden, "cutoff": cutoff, "acc": acc, "outcome": outcome,
-                                                   "score": score, "pos_label": pos_label, "mode": mode, "n": len(clean),
-                                                   "fig": _roc_figure(clean[outcome], clean[score], pos_label, auc, cutoff)}
+                remember("diagnostic",
+                         {"auc": auc, "youden": youden, "cutoff": cutoff, "acc": acc, "outcome": outcome,
+                          "score": score, "pos_label": pos_label, "mode": mode, "n": len(clean),
+                          "fig": _roc_figure(clean[outcome], clean[score], pos_label, auc, cutoff)},
+                         config=diag_config, n_analysed=len(clean))
             except Exception as exc:
                 error_card("Diagnostic accuracy could not be computed.", exc)
-        res = st.session_state.get("diag_result")
-        if res and res["outcome"] == outcome and res["score"] == score:
+        res = recall("diagnostic", config=diag_config)
+        if res is not None:
             acc, auc = res["acc"], res["auc"]
             with st.container(border=True):
                 m1, m2, m3, m4 = st.columns(4)
@@ -129,6 +133,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                              "prevalence. Likelihood ratios convert pre-test odds into post-test odds and do not depend on prevalence. "
                              "The AUC summarises discrimination across all cut-offs; its interval shows the precision.")
             st.plotly_chart(res["fig"], width="stretch")
+            provenance("diagnostic")
 
     section("Agreement between two measurement methods (Bland-Altman)",
             "Bias and limits of agreement with confidence intervals; a proportional-bias check (Bland & Altman 1986).")
@@ -141,12 +146,11 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
     if st.button("Run Bland-Altman", key="ba_run"):
         try:
             ba = bland_altman(df[method_a], df[method_b])
-            st.session_state["ba_result"] = {"ba": ba, "a": method_a, "b": method_b}
+            remember("bland_altman", ba, config=(method_a, method_b), n_analysed=ba.n)
         except Exception as exc:
             error_card("Bland-Altman could not be computed.", exc)
-    res = st.session_state.get("ba_result")
-    if res and res["a"] == method_a and res["b"] == method_b:
-        ba = res["ba"]
+    ba = recall("bland_altman", config=(method_a, method_b))
+    if ba is not None:
         with st.container(border=True):
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Bias (A - B)", f"{ba.bias:.3g}")
@@ -166,6 +170,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                          "Whether that range is acceptable is a clinical judgement, not a statistical one; the intervals around the "
                          "limits show how precisely they are estimated.")
         st.plotly_chart(_bland_altman_figure(ba, method_a, method_b), width="stretch")
+        provenance("bland_altman")
 
 
 __all__ = ["run_diagnostic_accuracy"]
