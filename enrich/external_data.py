@@ -4,6 +4,7 @@ import os
 import pandas as pd  # for Dataframes manipulation
 
 import manage.file_handling as mf
+from core.fingerprint import ROW_ID, extend_row_ids
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,38 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
     """
     Enrich the dataset by either merging on common identifiers (columns) or appending rows.
 
+    Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
+    right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
+    ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
+    Same parameters and result as :func:`_merge`.
+    """
+    carries_ids = df.index.name == ROW_ID
+    left = df.reset_index() if carries_ids else df
+    right = additional_df.drop(columns=[ROW_ID], errors="ignore")  # ids of another table mean nothing here
+    combined = _merge(left, right, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution)
+    if combined is left:  # the merge failed: the main dataset is returned unchanged
+        return df
+    if not carries_ids or ROW_ID not in combined.columns:
+        return combined
+    ids = pd.to_numeric(combined[ROW_ID], errors="coerce")
+    counts = {
+        "rows_before": int(len(df)),
+        "rows_after": int(len(combined)),
+        "rows_from_main": int(ids.notna().sum()),
+        "rows_added": int(ids.isna().sum()),
+        "main_rows_dropped": int(len(df) - ids.dropna().nunique()),
+        "main_rows_repeated": int(ids.dropna().duplicated().sum()),
+    }
+    combined = extend_row_ids(combined, used=df.index)
+    combined.attrs["join_counts"] = counts
+    logger.debug("Enrichment: %s", counts)
+    return combined
+
+
+def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
+    """
+    Enrich the dataset by either merging on common identifiers (columns) or appending rows.
+
     Parameters:
         df (DataFrame): The main dataset to augment.
         additional_df (DataFrame): The additional dataset to merge or append.
@@ -111,17 +144,11 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
         strategy = strategy.lower()
         valid_merge_strategies = {'left', 'right', 'outer', 'inner', 'cross'}
         
-        # Verbose debug info
-        print(f"Selected Strategy: {strategy}")
-        print(f"Conflict Resolution: {conflict_resolution}")
-        
-        print("Checking column names in DataFrames...")
-        print("\nMain DataFrame columns:", df.columns.tolist())
-        print("\nAdditional DataFrame columns:", additional_df.columns.tolist())
-        
-        print("\nChecking for IDs...")
-        print("Expected Left ID columns:", left_id_names)
-        print("Expected Right ID columns:", right_id_names)
+        # Names and sizes only: values are patient data and never go to stdout or the logs (audit E7)
+        logger.debug(
+            "Enrichment %s/%s: main %s, additional %s, ids %s / %s",
+            strategy, conflict_resolution, df.shape, additional_df.shape, left_id_names, right_id_names,
+        )
         if strategy == 'rows':
             # Filter to only the required columns in `additional_df`
             if additional_cols is not None:
@@ -171,7 +198,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
                 # Reset index to restore identifier columns
                 combined_df = combined_df.reset_index()
                 
-                print("Merged with update (upsert) strategy. Preserved columns.")
+
                 
                 
             elif conflict_resolution == 'ignore':
@@ -191,10 +218,9 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
             else:  # Default or 'keep'
                 # Directly append without removing duplicates
                 combined_df = pd.concat([df, additional_df], ignore_index=True)
-                print("Appending all rows, duplicates allowed.")
 
-            # Debugging final result for rows strategy
-            print("Final DataFrame after row appending:\n", combined_df)
+
+            logger.debug("Rows appended: %s", combined_df.shape)
 
         elif strategy in valid_merge_strategies:
             # Column-based merging strategy
@@ -217,7 +243,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
 
             # Perform merge with column-based strategy
             combined_df = pd.merge(df, additional_df, left_on=left_id_names, right_on=right_id_names, suffixes=suffixes, how=strategy)
-            print("DataFrame after column-based merging:\n", combined_df)
+            logger.debug("Columns merged: %s", combined_df.shape)
 
             # Remove unnecessary columns based on conflict_resolution
             if conflict_resolution in {'replace', 'ignore'}:

@@ -202,3 +202,36 @@ class TestDBManagerDatasetPersistence:
 
         loaded_again, _ = isolated_db_manager.load_stats("test_set", "numerical")
         assert loaded_again is None
+
+
+class TestDatasetRowIds:
+    """Saved versions keep the row ids and dtypes, so traces and populations name the same rows after a reload."""
+
+    def test_a_version_reloads_with_the_same_ids_and_fingerprint(self, isolated_db_manager: DBManager) -> None:
+        from core.fingerprint import ROW_ID, ensure_row_ids, frame_fingerprint
+
+        df = ensure_row_ids(
+            pd.DataFrame(
+                {
+                    "age": [61, 72, 55, 48],
+                    "arm": ["A", "B", None, "A"],
+                    "enrolled": pd.to_datetime(["2024-01-02", None, "2024-03-01", "2024-03-09"]),
+                    "visits": pd.array([1, None, 3, 2], dtype="Int64"),
+                }
+            )
+        ).iloc[[0, 2, 3]]  # a filtered table: ids 0, 2, 3
+        ok, _, name = isolated_db_manager.save_dataset(df, "ids")
+        loaded, _ = isolated_db_manager.load_dataset(name)
+        assert ok and loaded.index.name == ROW_ID and list(loaded.index) == [0, 2, 3]
+        assert frame_fingerprint(loaded) == frame_fingerprint(df)
+
+    def test_an_older_version_without_ids_gets_positional_ids(self, isolated_db_manager: DBManager) -> None:
+        from core.fingerprint import ensure_row_ids
+
+        ok, _ = isolated_db_manager.save_dataframe(pd.DataFrame({"x": [1, 2]}), name="legacy_v1")
+        loaded, _ = isolated_db_manager.load_dataset("legacy_v1")
+        assert ok and list(ensure_row_ids(loaded).index) == [0, 1]
+
+    def test_a_missing_version_is_reported(self, isolated_db_manager: DBManager) -> None:
+        loaded, message = isolated_db_manager.load_dataset("nothing_v9")
+        assert loaded is None and "not found" in message

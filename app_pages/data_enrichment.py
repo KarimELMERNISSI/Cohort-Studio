@@ -330,6 +330,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "add_choice": add_choice,
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
+                        "join_counts": enriched_df.attrs.get("join_counts"),
                     }
                     # Into the Enrich draft; traced when the draft is applied (AppState, audit E10)
                     get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
@@ -393,6 +394,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "add_choice": add_choice,
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
+                        "join_counts": enriched_df.attrs.get("join_counts"),
                     }
                     get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
                                       output_dataset_path=snapshot_path)

@@ -293,6 +293,7 @@ protobuf==7.36.2
     #   streamlit
 pyarrow==25.0.1
     # via
+    #   cohortstudio
     #   lancedb
     #   streamlit
 pyasn1==0.6.4

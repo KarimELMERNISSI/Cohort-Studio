@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 
 import enrich.external_data as eed
+from core.fingerprint import ensure_row_ids
 from core.state import ParseOptions
 from enrich.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
@@ -87,7 +88,7 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
         return None, f"Failed to load source dataset ({source}): {exc}"
     if df is None:
         return None, f"Failed to load source dataset ({source})"
-    return df, None
+    return ensure_row_ids(df), None  # the row ids a fresh load gives (AppState.set_dataset)
 
 
 def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: dict[str, str] | None,

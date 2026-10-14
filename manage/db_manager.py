@@ -21,6 +21,26 @@ def _sql_literal(value: str) -> str:
 
 logger = logging.getLogger(__name__)
 
+
+def write_parquet(df: pd.DataFrame, path: str) -> None:
+    """Write a dataset version: pyarrow keeps the dtypes and the row ids (the ``__row_id`` index); DuckDB
+    is the fallback for the rare column pyarrow refuses (the ids then travel as a ``__row_id`` column)."""
+    frame = df.copy(deep=False)
+    frame.columns = [str(c) for c in frame.columns]
+    try:
+        frame.to_parquet(path, index=frame.index.name is not None)
+        return
+    except Exception as exc:
+        logger.warning("pyarrow could not write %s (%s); writing it with DuckDB", os.path.basename(path), exc)
+    flat = frame.reset_index() if frame.index.name else frame
+    con = duckdb.connect()
+    try:
+        con.register("flat_frame", flat)
+        con.execute(f"COPY (SELECT * FROM flat_frame) TO '{_sql_literal(path)}' (FORMAT PARQUET)")
+    finally:
+        con.close()
+
+
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
     def __init__(self, db_path: str = ":memory:", scope: UserScope | None = None) -> None:
@@ -140,26 +160,19 @@ class DBManager:
             con.close()
 
     def save_dataset(self, df: pd.DataFrame, base_name: str = "dataset", username: str | None = None) -> tuple[bool, str, str | None]:
-        """Persists a pandas DataFrame to a Parquet file with automatic versioning."""
-        con = self._get_connection()
-        if con is None:
-            return False, "Database connection not available", None
+        """Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept)."""
         try:
             # Legacy name-prefix isolation only when no workspace scope is active
             if self.scope is None and username and username != 'admin':
                 base_name = f"{username}_{base_name}"
-            
+
             version = self._get_next_version(base_name)
             file_name = f"{base_name}_v{version}"
             file_path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
-            
-            # Use DuckDB to write parquet efficiently
-            con.execute(f"COPY (SELECT * FROM df) TO '{_sql_literal(file_path)}' (FORMAT PARQUET)")
+            write_parquet(df, file_path)
             return True, f"Data saved as '{file_name}'", file_name
         except Exception as e:
             return False, str(e), None
-        finally:
-            con.close()
 
     def load_dataframe(self, name: str = "main_data", folder: str | None = None) -> tuple[pd.DataFrame | None, str]:
         """Loads a Parquet file into a pandas DataFrame via DuckDB (Low level)."""
@@ -190,7 +203,13 @@ class DBManager:
         tuple
             (DataFrame, message) - The loaded DataFrame and a success/error message
         """
-        return self.load_dataframe(file_name)
+        path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
+        try:
+            return pd.read_parquet(path), f"Data loaded from '{path}'"  # row ids come back as the index
+        except FileNotFoundError:
+            return None, f"Failed to load '{file_name}': file not found"
+        except Exception:
+            return self.load_dataframe(file_name)  # files pandas cannot read (DuckDB fallback)
             
     def get_available_tables(self) -> list[str]:
         """List available parquet files in the current directory."""
