@@ -67,12 +67,14 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 | Negative follow-up | 1 |
 | Last contact before enrolment | 2 |
 
-3. In *Results*, click **Apply Filtering Criteria for Further Analysis**, then **Apply**. The working dataset now
-   has **1,190 rows**. In a real study you would correct these values at the source. Here, removing them keeps the
-   tutorial simple.
+3. In *Results*, click **Exclude these anomalies from the analysis population**. Criteria are filters: the 8 rules
+   are now ticked in the sidebar (*Population*), and every analysis uses the **1,190 rows** they keep. The dataset
+   itself still has its 1,206 rows, and you can untick a rule at any time. In a real study you would correct these
+   values at the source; here, excluding them keeps the tutorial simple.
 4. **Add your own rule.** In *New Anomaly Criterion*, create an expression rule named *Possible undiagnosed
    diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the detection again: **16 patients**
-   are flagged. These are not data-entry errors but patients to review clinically, so **do not apply** this filter.
+   are flagged. These are not data-entry errors but patients to review clinically, so **leave this rule unticked**
+   in the sidebar.
 
 ### 2.3 Inclusion criteria
 
@@ -90,14 +92,19 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 
 A patient can fail several criteria, so the rows do not add up to 262.
 
-3. Click **Apply Filtering Criteria for Further Analysis**, then **Apply**. The analysis set has **928 patients**:
-   462 Control and 466 Intervention.
+3. Click **Restrict the analysis population to these criteria**. With the anomaly rules, 12 criteria are ticked and
+   the analysis set has **928 patients**: 462 Control and 466 Intervention. The sidebar shows *928 of 1,206 rows*,
+   and every analysis page shows the same population in a banner.
+4. Open the **Analysis population** tab: it shows the participant flow (1,206 rows, 16 excluded by the anomaly
+   rules, 1,190, 262 excluded by the inclusion criteria, 928), what each criterion excludes, and the excluded rows
+   with their reasons. *Keep only these rows* would delete the excluded rows from the dataset; you do not need it,
+   because the criteria already filter every analysis.
 
 ### 2.4 Outliers
 
 In **Handle Outliers**, run the IQR method on `nt_probnp_pg_ml`. Many high values are flagged because NT-proBNP is
-strongly right-skewed. These are real patients, not errors. **Tag** them rather than removing them, and analyse
-NT-proBNP on a log scale.
+strongly right-skewed. These are real patients, not errors: **do not exclude them** from the analysis population
+(the button would add them as an *outliers* criterion) and analyse NT-proBNP on a log scale.
 
 ### 2.5 Missing data
 
@@ -120,9 +127,14 @@ Open **Data > Enrich**.
 
 ### 3.1 Merge the 6-month laboratory visit
 
+Changes made on this page go into the **Enrich draft**: a banner at the top of the page lists them, and they reach
+the analyses when you click **Apply to the dataset** (each becomes one step of the trace). If the data change while
+a draft is open, the banner offers to redo the changes on the new data instead.
+
 In **Import External Data**, upload `tutorial_followup_labs.csv`. Choose to add *Columns*, the *left* join and a
 *Common Row Identifier* on `patient_id`. This adds `visit_6m_date`, `nt_probnp_6m_pg_ml` and
-`creatinine_6m_umol_l`. **778 of the 928 patients** have a 6-month visit; the others keep empty cells.
+`creatinine_6m_umol_l`. **778 of the 928 patients** of the analysis population have a 6-month visit; the others
+keep empty cells.
 
 ### 3.2 Derive variables
 
@@ -135,15 +147,18 @@ In **Create New Variables**, add these one at a time. Formulas use column names 
 | `bmi` | `weight_kg / (height_cm / 100) ** 2` |
 | `egfr` (CKD-EPI 2021) | `142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0)` |
 
-`site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. eGFR averages about 68 mL/min/1.73 m2. On
-the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the data changed, so check
-the quality once more (step 2.1).
+`site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. eGFR averages about 68 mL/min/1.73 m2. Apply
+the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the data changed,
+so check the quality once more (step 2.1).
 
 ### 3.3 Missing values
 
 In **Handle Missing Data**:
 
-- `ldl_mmol_l` is missing at random: single imputation (KNN or MICE) is acceptable for exploration.
+- `ldl_mmol_l` is missing at random: single imputation (KNN or MICE) is acceptable for exploration. The imputation
+  is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients keep their missing
+  values. If you change the ticked criteria afterwards, the analysis pages warn that the imputation was fitted on
+  other rows.
 - **Do not impute `sbp_6m`.** Its values are missing because the patient died or left. Analyse the patients who
   have the measurement and say so.
 - For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), the right method is **multiple
@@ -254,16 +269,19 @@ Configure the AI engine in **Settings > AI engine**. Then:
 
 ## Step 8 - Reproduce and report
 
-Open **Reproduce > Versions & traces**. The trace of the session lists every step, in order:
+Open **Reproduce > Versions & traces**. The trace of the session is marked *integrity verified*: its steps are
+chained by hashes, so a later modification would show. It lists every step, in order:
 
 1. the load;
-2. the two filters (anomalies, then inclusion), with the rows kept;
+2. the analysis population (the 12 ticked criteria and the counts of each step), recorded when a result or a
+   version first used it;
 3. the merge;
 4. the derived variables;
-5. any imputation.
+5. any imputation, with the population it was fitted on.
 
-Download the **Word report**: it documents the whole pipeline, and the trace can be replayed step by step on the
-original file. On **Start**, every core step is now ticked.
+Replay a step: the engine recomputes the data and checks it against the fingerprint recorded for every step, and
+says when the replayed table is exactly the one you analysed. Download the **Word report**: it documents the whole
+pipeline with what each step did to the table. On **Start**, every core step is now ticked.
 
 ---
 

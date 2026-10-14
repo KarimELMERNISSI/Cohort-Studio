@@ -1,6 +1,19 @@
 # Data Enrichment
 
-The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to engineering new variables through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system for full reproducibility.
+The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to engineering new variables through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system and can be replayed.
+
+## The Enrich draft
+
+Changes made on this page — merges, derived variables, transformations, imputations — go into a **draft**. A banner at
+the top of the page lists them; **Apply to the dataset** makes each one a step of the trace and the analyses use them,
+**Discard the draft** forgets them. The main dataset is the one loaded from Data > Import or the sidebar.
+
+A draft can only be applied over the data it was built on. If the data change while it is open (a rename on
+Explore, a date conversion on Validate), the banner offers to **redo** the changes on the current data from their
+recorded settings, or to discard the draft. An imputation is fitted on, and fills, the rows of the **analysis
+population** only (the ticked inclusion and exclusion criteria); if the population changes before the draft is
+applied, the banner offers to refit it on the new population. When an applied imputation was fitted on other rows
+than the current population, the analysis pages say so.
 
 ---
 

@@ -1,6 +1,8 @@
 # Reproduce Analysis
 
-The **Reproduce Analysis** page enables full reproducibility of data transformation sessions. Every analysis step is automatically recorded in a trace file, which can be replayed to recreate results or generate documentation reports.
+The **Versions & traces** page replays and documents data transformation sessions. Every change of the data is
+recorded in a trace file, with what it did to the table; the trace can be replayed to recreate the data, checked
+step by step against what was recorded, and documented in a Word report.
 
 ---
 
@@ -17,6 +19,21 @@ A **trace** is a JSON file that captures every transformation applied during a s
 | **Username** | The user who ran the session. |
 | **Dataset Name** | The initial dataset loaded. |
 | **Steps** | Ordered list of transformations with parameters, descriptions, and snapshot paths. |
+| **Data** (each step) | Rows and columns before and after, columns added, removed or retyped, and the fingerprints of the table before and after. |
+| **Population** (some steps) | The ticked criteria and the counts of the participant flow, for imputations, saved versions and results. |
+| **Hash chain** | Each step carries the hash of the previous one: editing, removing or reordering a step afterwards is detected. |
+
+### Integrity
+
+The page checks the hash chain of every trace and shows it next to its name: *integrity verified*, *integrity not
+verifiable* (traces recorded before the chain existed), or *modified after recording*. The chain makes a trace
+tamper-evident; it is not an electronic signature.
+
+### Saved versions
+
+Saving a version writes, next to the Parquet file, a small lineage file: the fingerprint of the data, the trace
+it came from (session and head hash), the ticked criteria and the population. Loading the version links the new
+trace to that parent, restores the ticked criteria, and warns when the file was modified outside CohortStudio.
 
 ### Viewing Traces
 - Browse available traces from past sessions.
@@ -33,8 +50,13 @@ Replay a trace to reproduce the exact sequence of transformations.
 
 | Mode | Description |
 | --- | --- |
-| **Fast Replay** | Re-applies transformations using parameters only. Requires the original dataset to be available. Quick and lightweight. |
-| **Full Replay** | Uses embedded dataset snapshots from each step. Works even if the original dataset has been modified or deleted. |
+| **Fast (snapshots)** | Loads the snapshot saved with the step. Works even if the original dataset is no longer available. |
+| **Full replay** | Recomputes every step from the source file and the recorded parameters, and checks each step against the fingerprint recorded for it. |
+
+A full replay says when the replayed table is exactly the one that was recorded, reports the first step where it
+differs, and lists the steps it cannot recompute (an adopted multiple imputation, data replaced outside the app);
+for those it uses the recorded snapshot when there is one. The replayed state becomes the session dataset, linked to
+the trace it was replayed from.
 
 ### Path Resolution
 
@@ -59,8 +81,9 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 | Section | Description |
 | --- | --- |
 | **Header** | Session metadata (ID, user, dataset, date). |
-| **Steps Table** | Each transformation step with its function, parameters, and description. |
-| **Summary** | Total number of steps and overall session description. |
+| **Integrity** | Hash chain verified (with the head hash), not verifiable, or failed; the parent version or trace. |
+| **Steps** | Each step with its parameters, what it did to the table (rows, columns, fingerprints) and, for population steps, the participant flow. |
+| **Footer** | The report documents the recorded trace; it is not an electronically signed record. |
 
 ### How to Generate
 
@@ -74,5 +97,5 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
 - **Save traces regularly** — they are your audit trail for data provenance.
 - Use **Full Replay** when sharing analyses with collaborators who may not have the original dataset.
-- Generated `.docx` reports are useful for **supplementary materials** in publications or **audit documentation** for regulatory submissions.
-- The trace system also appears in the **Data Enrichment** sidebar, allowing quick access to replay and reporting without navigating away.
+- Generated `.docx` reports are useful as **supplementary material** in publications. They document the recorded
+  steps; they are not electronically signed records.

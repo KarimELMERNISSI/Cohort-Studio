@@ -6,6 +6,53 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### One analysis population, one source of truth (follow-up programme M1)
+
+**Behaviour changes**
+
+- **Inclusion and exclusion criteria are filters, not deletions.** Validate's buttons now tick the criteria
+  ("Exclude these anomalies from the analysis population", "Restrict the analysis population to these criteria");
+  the sidebar lists every criterion with what it excludes, and every page analyses the same population. The dataset
+  keeps all its rows: *Keep only these rows* (Validate > Analysis population) is the one action that deletes rows,
+  after a confirmation, as a traced step.
+- **Enrich works in a draft.** Merges, derived variables, transformations and imputations reach the analyses when
+  the draft is applied (banner at the top of the page, or "Use This Dataset for Further Analysis"). A draft built on
+  data that changed since, or whose imputation was fitted on another population, cannot be applied as it is: it can
+  be redone or refitted, or discarded. The Enrich page no longer loads files of its own (use Data > Import).
+- **Imputation is fitted on the analysis population.** Excluded patients neither inform nor receive imputed values;
+  one-hot encoding, scaling and dropping remainder columns need every row.
+- **Dates are no longer parsed silently.** Validate previews the text columns that look like dates and converts them
+  on request, as a traced and replayable step.
+- **Outliers**: excluding them adds a criterion of the *outliers* family (the flagged rows, frozen); clipping is a
+  traced step with its bounds.
+- **Results are not shown as current after a change.** A result computed on other data or another population
+  disappears with a notice; the analysis is run again. Every result says what it was computed on.
+
+**Under the hood**
+
+- `core/session.py` (`DataSession`) owns the data: committed table with row ids (`__row_id`), fingerprint and
+  revision; the Enrich draft; the ticked criteria. `ui/state.py` (`AppState`) is its Streamlit facade and the only
+  writer of the session data (quality gate); the legacy keys are views reinstalled every run, and the tests run in
+  strict mode (modifying them in place raises).
+- `core/population.py`, `core/criteria.py` (strict evaluation, one-sided bounds fixed), `core/lineage.py` (SHA-256
+  chain, `verify_trace`), `core/fingerprint.py` (row ids, ranges); `ui/results.py` (stamped results);
+  `ui/components/population.py` and `ui/components/staging.py`.
+- Trace schema 2: data block (rows, columns, fingerprints in and out) and hash chain on every step, population
+  block for population-scoped steps, `applied_at` for applied drafts; loaded traces are read-only.
+- Replay (`manage/reproduction_manager.py`): every step checked against its fingerprint; new handlers (targeted and
+  population-scoped imputation, population definition, freeze, clipping, merges with distinct identifiers);
+  non-recomputable steps listed, their snapshot used. The formula evaluator and the imputer moved to
+  `enrich/formulas.py` and `enrich/imputation_service.py`.
+- Saved versions keep row ids and dtypes (pyarrow) and get a lineage file; loading one links the trace to its parent,
+  restores the ticked criteria and detects a file modified outside the app.
+- Merges keep the row ids of the main table and record join counts; they no longer print the merged tables
+  (patient data) to stdout.
+- Workflow marks: a revision is a step that changed the data fingerprint; an analysis made on another population
+  shows as "run again".
+- Tests: end-to-end acceptance test (tutorial cohort 1,206 -> 1,190 -> 928, imputation on the population, replay to
+  the analysed table, chain verified), core suites for the population, criteria, lineage and session, AppTest suites
+  for the population selector, the Enrich draft, result provenance and saved-version lineage.
+
 ### Truth and safety net (follow-up programme M0, after an external architecture review)
 
 - **Claims brought back to what the code does** — The documentation site no longer claims FDA 21 CFR Part 11 audit-trail integrity, "signed" Word dossiers or certificates, "immutable" traces, STROBE/CONSORT compliance, 100 % test coverage, "0 hallucinations" or deterministic 100 % replay. It now describes a recorded, replayable trace and a Word report of it (not an electronically signed record), and names the steps that cannot be replayed yet. The code sample uses the real API (`run_trace`, `TraceDocumenter.generate_report`). README, About page, workflow map, tutorial and epidemiology chapter describe multiple imputation as what it is today: a diagnostic that pools the imputed means; analyses are not yet pooled. The README test section gives the real numbers and the install step for the test tools.

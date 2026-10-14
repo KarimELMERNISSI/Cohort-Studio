@@ -37,7 +37,7 @@ The diagram on the Start page, and the step cards under it, show where you are w
 | Mark | Meaning | Evidence |
 | --- | --- | --- |
 | Green tick | done on the current data | Load: a dataset is loaded. Validate: the quality dashboard was computed (Data > Validate). Explore & analyse: descriptive statistics (Explore) or a test or model run (Analyze). Report & reproduce: a version saved or the Word report of this session's trace downloaded. Enrich: at least one change applied. Documents and Variable map: a knowledge graph or index, or a variable map, saved in your workspace. |
-| Amber circular arrow ("run again") | done, but the data changed afterwards | Every change to the data (merge, computed or transformed variable, imputation, adopted multiple imputation, applied filter) is a step of the trace. A step done before the latest change is out of date. |
+| Amber circular arrow ("run again") | done, but the data changed afterwards | Every change to the data (merge, computed or transformed variable, imputation, renamed column, date conversion, kept population) is a step of the trace. A step done before the latest change is out of date, and so is an analysis made on another analysis population. |
 | Pulsing ring, "suggested next" | the first core step (Validate, Explore & analyse, Report) that is not done on the current data | |
 
 This is the enrichment loop in practice: after you derive or impute a variable, Validate and Explore & analyse turn
@@ -71,7 +71,7 @@ See: [01_Home.md](01_Home.md)
 | 2.1 | Review the **Data Quality Score** dashboard. |
 | 2.2 | **Diagnose missing data** patterns (Completeness) using visual and statistical tools. |
 | 2.3 | Check for **clinical anomalies** (impossible or suspect values). |
-| 2.4 | Define **inclusion criteria** to filter your cohort. |
+| 2.4 | Define **inclusion criteria**, then tick the criteria that define the **analysis population** (sidebar): they filter every analysis without deleting rows. |
 | 2.5 | Detect and handle **outliers** using statistical or ML methods. |
 | 2.6 | **Check conformity** (duplicates, consistency, uniformity). |
 | 2.7 | **Compare** the cleaned dataset against the original. |

@@ -1149,7 +1149,7 @@ modebar_config = eu.get_publication_plot_config(
         <span class="section-tag">Recorded Provenance</span>
         <h2 class="section-title">End-to-End Pipeline Reproduction &amp; Word Trace Reports</h2>
         <p class="section-desc">
-          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a JSON trace that can be replayed, and documents the trace in a Word (.docx) report. Steps that cannot be replayed yet (targeted and multiple imputation, outlier tagging, date standardisation) are reported by the replay rather than silently skipped.
+          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a hash-chained JSON trace (tamper-evident) with what it did to the table, replays it while checking every step against its recorded fingerprint, and documents it in a Word (.docx) report. The few steps that cannot be recomputed (an adopted multiple imputation) are reported by the replay rather than silently skipped.
         </p>
       </div>
 

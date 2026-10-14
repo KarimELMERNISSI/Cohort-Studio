@@ -45,7 +45,9 @@ The system checks your dataset for values that are clinically impossible or susp
 
 ## Yes Inclusion Criteria
 
-Define and apply inclusion/exclusion criteria to filter your cohort. Criteria are organised into **mask families** — groups of related conditions combined with logical operators.
+Define inclusion and exclusion criteria, then tick the ones that define your **analysis population**. Criteria are
+**filters**: ticking or unticking them changes which rows the analyses use, never the dataset itself. Criteria are
+organised into **mask families** — groups of related conditions combined with logical operators.
 
 ### Key Concepts
 
@@ -64,8 +66,26 @@ Define and apply inclusion/exclusion criteria to filter your cohort. Criteria ar
 
 1. Create a mask family and name it.
 2. Add individual masks (numeric or expression).
-3. Apply the family to filter your dataset.
-4. View flagged vs retained rows.
+3. Run the check to see the flagged and retained rows.
+4. Click **Exclude these anomalies from the analysis population** or **Restrict the analysis population to these
+   criteria**: the family is ticked in the sidebar (*Population*). You can also tick or untick single criteria there.
+
+### The analysis population
+
+- The sidebar shows the population on every page (for example *928 of 1,206 rows (12 criteria)*), and each analysis
+  page repeats it in a banner. Every result says which population it was computed on; a result computed on another
+  population is not shown as current.
+- Families are applied in the order of the configuration: an exclusion family (operator *any*) excludes a row when a
+  ticked rule fires; an inclusion family (operator *all*) excludes a row that fails a ticked criterion. A missing
+  value never fires a rule: it does not flag an anomaly and does not meet an inclusion criterion.
+- A ticked criterion that cannot be evaluated (a typo in a column name, a text column in a numeric rule) stops the
+  analyses with an explanation instead of silently keeping or dropping rows.
+- The **Analysis population** tab shows the participant flow: rows in, excluded and out for each family, what each
+  criterion excludes (on the whole table, at its step, and as the first reason), and the excluded rows with their
+  reasons. These are the numbers of a STROBE participant-flow diagram (item 13).
+- **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is
+  the one action that removes rows: it asks for confirmation, it is one step of the trace, saved versions are not
+  changed, and the criteria are then unticked.
 
 ---
 
@@ -107,6 +127,14 @@ A 2-D projection scatter plot overlays detected outliers onto a reduced represen
 - PCA, FAMD, t-SNE, UMAP
 
 Outlier points are colour-coded for easy visual inspection.
+
+### Acting on the outliers
+
+- **Remove** or **Tag**: *Exclude these outlier rows from the analysis population* adds the flagged rows as a
+  criterion of the *outliers* family (the row ids are frozen when you add it, so the criterion keeps meaning the
+  same rows) and ticks it. No row is deleted, and the criterion can be unticked in the sidebar.
+- **Clip** (z-score, IQR, quantile): *Clip the values in the dataset* sets the values outside the method's bounds
+  to the bounds, as one step of the trace that records the bounds and is replayed with them.
 
 ---
 
@@ -171,7 +199,8 @@ double by default, and is left out when no anomaly rule is declared). It is draw
   multivariate method), the text columns that hold numbers or dates, the columns with spacing or capitalisation
   issues, the duplicated rows, or the clinical rules that flag rows.
 - **Score across the checks of this dataset** — one point per version of the data: as loaded, then after each change
-  (merge, computed or transformed variable, imputation, applied filter). The line uses the current weights; click a
+  (merge, computed or transformed variable, imputation, renamed column, date conversion, kept population). The line
+  uses the current weights; click a
   dimension in the legend to add its own line. Loading another dataset starts a new history.
 
 > **Tip**: Focus on resolving high-impact issues first — the top bar of "Where the score loses points" — then come
