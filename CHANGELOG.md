@@ -17,6 +17,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   bootstrap intervals, ICC, Bland-Altman limits, standardised variables) are listed with the reason and the
   alternative.
 - `rubin_pool` keeps its signature. The pooled means of the Enrich MI panel now use the complete-data df n - 1.
+- **R parity harness**: `tests/reference/r/make_mi_fixtures.R` computes reference values with R mice and
+  mitml: pool.scalar cases, and linear, logistic, Poisson and Cox models pooled on datasets that mice imputed,
+  with D1, D2 and pooled R2. The manual workflow "R reference fixtures" runs it and pushes the values to the
+  `r-fixtures` branch under the repository owner's identity. `test_mi_r_parity.py` fits the same models on
+  the same completed datasets and compares every pooled quantity (1e-10 for pooling, 1e-8 for the linear
+  model, 1e-6 for the GLMs, 1e-5 for Cox).
 
 ### Repository moved to Cohort-Studio
 

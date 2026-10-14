@@ -192,6 +192,7 @@ class PooledRSquared(BaseModel):
 
     estimate: float
     ci: CI | None = None
+    fmi: float | None = None
     m: int
     references: list[str]
 
@@ -546,8 +547,9 @@ def pool_r_squared(
     """
     Harel's (2009) pooled R^2: average the Fisher z of sqrt(R^2) and square the back-transform.
 
-    With ``n`` (the number of rows analysed) an interval is derived from Rubin's rules on the z scale with
-    within-imputation variance 1 / (n - 3).
+    With ``n`` (the number of rows analysed) the interval is built as ``mice::pool.r.squared``: Rubin's rules on
+    the z scale with within-imputation variance 1 / (n - 3) and a normal quantile. When the interval crosses
+    zero on the z scale its lower bound is 0 (mice squares the negative value).
     """
     r2 = np.asarray(values, dtype=float)
     if len(r2) < 2:
@@ -557,9 +559,12 @@ def pool_r_squared(
     z = np.arctanh(np.sqrt(r2))
     zbar = float(z.mean())
     ci: CI | None = None
+    fmi: float | None = None
     if n is not None and n > 3:
         pooled = pool_scalar(z, np.full(len(z), 1.0 / (n - 3)), alpha=alpha)
-        low, high = math.tanh(max(pooled.ci.lower, 0.0)), math.tanh(max(pooled.ci.upper, 0.0))
+        half = float(stats.norm.ppf(1 - alpha / 2)) * pooled.se
+        low, high = math.tanh(max(zbar - half, 0.0)), math.tanh(max(zbar + half, 0.0))
+        fmi = pooled.fmi
         ci = CI(
             lower=low**2,
             upper=high**2,
@@ -567,7 +572,11 @@ def pool_r_squared(
             method="Harel (2009), Fisher z of sqrt(R2)",
         )
     return PooledRSquared(
-        estimate=math.tanh(zbar) ** 2, ci=ci, m=len(r2), references=[REFERENCES["harel2009"]]
+        estimate=math.tanh(zbar) ** 2,
+        ci=ci,
+        fmi=fmi,
+        m=len(r2),
+        references=[REFERENCES["harel2009"]],
     )
 
 
