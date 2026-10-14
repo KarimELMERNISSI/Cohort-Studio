@@ -461,7 +461,7 @@ urllib3==2.8.0
     #   lance-namespace-urllib3-client
     #   qdrant-client
     #   requests
-uuid-utils==0.17.1
+uuid-utils==1.0.0
     # via
     #   langchain-core
     #   langsmith
