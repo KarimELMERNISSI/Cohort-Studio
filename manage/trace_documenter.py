@@ -20,7 +20,7 @@ class TraceDocumenter:
             self.trace = trace_source
         elif isinstance(trace_source, str) and os.path.exists(trace_source):
             try:
-                with open(trace_source, 'r') as f:
+                with open(trace_source, 'r', encoding='utf-8') as f:  # JSON is UTF-8 (not the Windows code page)
                     self.trace = json.load(f)
             except Exception as e:
                 import logging

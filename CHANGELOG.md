@@ -6,6 +6,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: replay of Windows traces on Linux, trace files read as UTF-8, CI failures readable
+
+- A trace recorded on Windows names its source with backslashes; on Linux (the Docker image) the replay now finds
+  that file by its name in the data folders, as it already did on Windows.
+- The Word report reads a trace file as UTF-8, like the rest of the application (accented descriptions were
+  garbled on Windows).
+- CI: the failed tests and the coverage verdict are published as an annotation of the run.
+
 ### One analysis population, one source of truth (follow-up programme M1)
 
 **Behaviour changes**

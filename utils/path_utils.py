@@ -46,8 +46,9 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
     elif os.path.exists(original_path):
         return original_path
 
-    # 2. Extract filename and search in common directories
-    filename = os.path.basename(original_path)
+    # 2. Extract filename and search in common directories (a path recorded on Windows keeps its
+    #    backslashes, which are not separators on Linux, e.g. in the Docker image)
+    filename = os.path.basename(normalize_path(original_path))
     
     if search_dirs is None:
         if scope:

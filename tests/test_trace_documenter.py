@@ -34,3 +34,24 @@ def test_trace_documenter(tmp_path: Path):
     text = "\n".join([p.text for p in doc.paragraphs])
     assert "Data Transformation Report" in text
     assert "Session Information" in text
+
+
+def test_trace_file_is_read_as_utf8(tmp_path: Path):
+    """A trace file in UTF-8 (characters not escaped) is read as UTF-8, not in the Windows code page."""
+    trace_data = {
+        "session_id": "s",
+        "source_dataset": "cohorte.csv",
+        "steps": [
+            {
+                "timestamp": "2026-10-14T12:00:00",
+                "function": "rename_columns",
+                "description": "Renommé « poids » en poids_kg",
+                "params": {},
+            }
+        ],
+    }
+    trace_path = tmp_path / "trace.json"
+    trace_path.write_text(json.dumps(trace_data, ensure_ascii=False), encoding="utf-8")
+
+    doc = Document(TraceDocumenter(str(trace_path)).generate_report())
+    assert "Renommé « poids » en poids_kg" in "\n".join(p.text for p in doc.paragraphs)

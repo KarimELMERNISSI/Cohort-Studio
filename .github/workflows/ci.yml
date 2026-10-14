@@ -47,7 +47,21 @@ jobs:
         run: uv run pyright --level error
 
       - name: Tests (offline; integration tests run from the manual workflow)
-        run: uv run pytest -m "not integration" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=55
+        shell: bash  # with pipefail: the step fails when pytest fails, not when tee succeeds
+        env:
+          COLUMNS: "240"  # the short summary keeps the start of each failure message
+        run: uv run pytest -m "not integration" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=55 2>&1 | tee pytest.log
+
+      # The failed tests and the coverage verdict as one annotation: shown on the run page and readable through
+      # the public API (downloading the job log needs admin rights on the repository)
+      - name: Failed tests
+        if: failure()
+        shell: bash
+        run: |
+          grep -E '^(FAILED|ERROR) [^ ]+\.py|Required test coverage' pytest.log | head -60 > failures.txt || true
+          if [ -s failures.txt ]; then
+            echo "::error title=pytest::$(sed -e 's/%/%25/g' -e 's/\r//g' failures.txt | awk 'BEGIN{ORS="%0A"} {print}')"
+          fi
 
       # Floors per package (statistics engine, core, graph, import, UI layer), read from pytest-cov's coverage.xml
       - name: Coverage floors per package
