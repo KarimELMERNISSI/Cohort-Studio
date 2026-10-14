@@ -286,6 +286,20 @@ def evaluate_population(
     )
 
 
+def criteria_from_trace(block: Mapping[str, Any] | None) -> tuple[Criterion, ...]:
+    """The criteria recorded in a trace's population block, with their definitions as they were used."""
+    return tuple(
+        Criterion(
+            id=str(c["id"]),
+            family=str(c["family"]),
+            kind=str(c["kind"]),
+            name=str(c["name"]),
+            definition=dict(c.get("definition") or {}),
+        )
+        for c in ((block or {}).get("criteria") or [])
+    )
+
+
 def active_criteria(
     config: Mapping[str, Any] | None, ticked: Iterable[str]
 ) -> tuple[Criterion, ...]:
@@ -303,6 +317,7 @@ __all__ = [
     "Stage",
     "active_criteria",
     "catalogue",
+    "criteria_from_trace",
     "criterion_id",
     "evaluate_population",
     "family_kind",

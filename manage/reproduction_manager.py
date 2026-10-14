@@ -5,6 +5,12 @@ One engine for every caller (audit E10): :func:`run_trace` executes the recorded
 source dataset (or a pre-loaded frame) up to an optional step index, resolving file paths through
 the user's workspace and the ``path_overrides`` chosen in the UI. :func:`execute_trace_pipeline`
 keeps the historical ``(df, error)`` signature.
+
+Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
+replay checks each replayed step against it and reports the first *divergence*; steps that cannot be
+recomputed (an adopted multiple imputation, a table replaced outside the app) are listed as not
+replayable, and their recorded snapshot is used when there is one. A replay is *reproducible* when every
+step was replayed and matched.
 """
 
 from __future__ import annotations
@@ -18,8 +24,11 @@ from typing import Any
 import pandas as pd
 
 import enrich.external_data as eed
-from core.fingerprint import ensure_row_ids
+from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
+from core.population import criteria_from_trace, evaluate_population
 from core.state import ParseOptions
+from enrich.formulas import evaluate_formula_safely
+from enrich.imputation_service import fill_with_formula, impute_rows
 from enrich.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
 from utils.date_parser import smart_parse_dates
@@ -29,6 +38,8 @@ logger = logging.getLogger(__name__)
 
 # Steps that only document state (no data mutation to replay)
 SKIPPED_STEPS = {"initial_load", "parse_report", "save_version"}
+# Steps the engine cannot recompute: their snapshot is used when one was recorded
+NOT_REPLAYABLE = {"multiple_imputation", "external_write"}
 
 
 @dataclass
@@ -38,6 +49,23 @@ class ReplayResult:
     missing_file: tuple[int, str] | None = None  # (step index, recorded path) when a step needs a file that was not found
     warnings: list[str] = field(default_factory=list)
     steps_applied: int = 0
+    divergence: tuple[int, str, str] | None = None  # (step index, recorded fingerprint, replayed fingerprint)
+    not_replayable: list[int] = field(default_factory=list)  # step indexes that could not be recomputed
+    verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
+
+    @property
+    def reproducible(self) -> bool:
+        """Every step replayed, and every recorded fingerprint matched."""
+        return (
+            self.error is None
+            and self.missing_file is None
+            and self.divergence is None
+            and not self.not_replayable
+        )
+
+
+class _NotReplayable(Exception):
+    """A step the engine cannot recompute; carries the frame to continue from."""
 
 
 def _resolve(path: str | None, overrides: dict[str, str] | None) -> str | None:
@@ -80,7 +108,7 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
         if not os.path.splitext(str(source))[1]:  # a saved dataset name rather than a file
             df, _ = DBManager().load_dataset(str(source))
             if df is not None:
-                return df, None
+                return ensure_row_ids(df), None
         return None, f"Source file not found: {source}"
     try:
         df = _read_any(resolved, parse_options)
@@ -91,110 +119,260 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
     return ensure_row_ids(df), None  # the row ids a fresh load gives (AppState.set_dataset)
 
 
+def _population_rows(df: pd.DataFrame, block: dict[str, Any], index: int, warnings: list[str]) -> pd.Index:
+    """Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were)."""
+    criteria = criteria_from_trace(block)
+    if not criteria:
+        return df.index
+    result = evaluate_population(df, criteria)
+    if not result.ok:
+        raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
+    if block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
+        warnings.append(
+            f"step {index + 1}: the analysis population re-evaluated on the replayed data keeps other rows "
+            "than when the step was recorded"
+        )
+    return result.included
+
+
+def _snapshot(step: dict[str, Any], overrides: dict[str, str] | None) -> pd.DataFrame | None:
+    path = _resolve(step.get("output_dataset_path"), overrides)
+    if path and path.endswith(".parquet") and os.path.exists(path):
+        return ensure_row_ids(pd.read_parquet(path))
+    return None
+
+
+def _enrichment(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    enrichment_file_path = params.get("enrichment_file_path")
+    resolved = _resolve(enrichment_file_path, overrides)
+    if not resolved:
+        return df, str(enrichment_file_path)
+    enrichment_df = _read_any(resolved)
+    if enrichment_df is None:
+        raise ValueError(f"could not read enrichment file {resolved}")
+    identifier = params.get("identifier") or params.get("left_id_names")
+    left_ids = [identifier] if isinstance(identifier, str) else list(identifier or [])
+    right = params.get("right_id_names") or left_ids
+    right_ids = [right] if isinstance(right, str) else list(right)
+    retained = params.get("retained_enrichment_columns")
+    if retained:
+        enrichment_df = enrichment_df[[c for c in enrichment_df.columns if str(c) in set(retained)]]
+    main = df
+    if params.get("retained_main_columns"):
+        main = df[[c for c in df.columns if str(c) in set(params["retained_main_columns"])]]
+    additional_columns = [c for c in enrichment_df.columns if c not in set(right_ids)]
+    return eed.add_data(
+        df=main, additional_df=enrichment_df, left_id_names=left_ids, right_id_names=right_ids,
+        additional_cols=additional_columns, strategy=params.get("strategy", "left"),
+        conflict_resolution=params.get("conflict_resolution", "keep"),
+    ), None
+
+
+def _imputation(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    block = step.get("population")
+    rows = _population_rows(df, block, index, warnings) if block and block.get("criteria") else None
+    outcome = impute_rows(
+        df,
+        rows,
+        numerical=params.get("numerical_imputation_method", "Mean"),
+        categorical=params.get("categorical_imputation_method", "Most_Frequent"),
+        cat_encoder=params.get("cat_encoder", False),
+        num_scaler=params.get("num_scaler", False),
+        remainder_columns=params.get("remainder_columns", "auto"),
+        remainder_strategy=params.get("remainder_strategy", "passthrough"),
+        remainder_threshold=params.get("remainder_threshold", 0.3),
+    )
+    return outcome.frame, None
+
+
+def _targeted_imputation(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    new_df, filled = fill_with_formula(df, params["target_variable"], params["formula"])
+    recorded = params.get("filled_count")
+    if recorded is not None and int(recorded) != filled:
+        warnings.append(f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded")
+    return new_df, None
+
+
+def _variable_transformation(df, step, index, overrides, warnings):
+    result_df = apply_variable_transformation(df, step.get("params", {}) or {})
+    if result_df is None:
+        warnings.append(f"step {index + 1}: variable transformation returned no data")
+        return df, None
+    return pd.concat([df, result_df], axis=1), None
+
+
+def _variable_computation(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    success, msg, new_df = evaluate_formula_safely(params.get("formula"), params.get("variable_name"), df)
+    if not success:
+        raise ValueError(f"variable computation failed: {msg}")
+    return new_df, None
+
+
+def _data_type_conversion(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    new_df = df.copy()
+    new_type = params.get("new_type")
+    for col in params.get("columns", []):
+        if new_type == "datetime" and params.get("method") == "smart_parse_dates":
+            new_df[col], _ = smart_parse_dates(new_df[col])
+        elif new_type == "datetime":
+            new_df[col] = pd.to_datetime(new_df[col])
+        else:
+            new_df[col] = new_df[col].astype(new_type)
+    return new_df, None
+
+
+def _missing_value_handling(df, step, index, overrides, warnings):
+    params = step.get("params", {}) or {}
+    new_df = df.copy()
+    strategy = params.get("strategy")
+    columns = params.get("columns", [])
+    if strategy == "Drop rows":
+        return new_df.dropna(subset=columns), None
+    for col in columns:
+        if strategy == "Fill with mean":
+            new_df[col] = new_df[col].fillna(new_df[col].mean())
+        elif strategy == "Fill with median":
+            new_df[col] = new_df[col].fillna(new_df[col].median())
+        elif strategy == "Fill with mode":
+            mode = new_df[col].mode()
+            if not mode.empty:
+                new_df[col] = new_df[col].fillna(mode[0])
+        elif strategy == "Fill with value":
+            new_df[col] = new_df[col].fillna(params.get("fill_value"))
+    return new_df, None
+
+
+def _rename_columns(df, step, index, overrides, warnings):
+    return df.rename(columns=(step.get("params", {}) or {}).get("mapping", {}) or {}), None
+
+
+def _apply_filter(df, step, index, overrides, warnings):
+    kept = (step.get("params", {}) or {}).get("kept_index")
+    if kept is None:
+        warnings.append(f"step {index + 1}: filter recorded without the kept rows; it was not replayed")
+        return df, None
+    return df[df.index.isin(kept)], None
+
+
+def _population_definition(df, step, index, overrides, warnings):
+    _population_rows(df, step.get("population") or {}, index, warnings)  # verification only
+    return df, None
+
+
+def _freeze_population(df, step, index, overrides, warnings):
+    block = step.get("population") or {}
+    if block.get("criteria"):
+        rows = _population_rows(df, block, index, warnings)
+    elif block.get("included"):
+        rows = pd.Index(ranges_to_ids(block["included"]))
+    else:
+        raise ValueError("the frozen population was not recorded")
+    return df.loc[df.index.intersection(rows)], None
+
+
+def _outlier_clipping(df, step, index, overrides, warnings):
+    new_df = df.copy()
+    for col, (low, high) in ((step.get("params", {}) or {}).get("bounds") or {}).items():
+        new_df[col] = new_df[col].clip(lower=low, upper=high)
+    return new_df, None
+
+
+_HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
+    "enrichment": _enrichment,
+    "imputation": _imputation,
+    "targeted_imputation": _targeted_imputation,
+    "variable_transformation": _variable_transformation,
+    "variable_computation": _variable_computation,
+    "data_type_conversion": _data_type_conversion,
+    "missing_value_handling": _missing_value_handling,
+    "rename_columns": _rename_columns,
+    "apply_filter": _apply_filter,
+    "population_definition": _population_definition,
+    "freeze_population": _freeze_population,
+    "outlier_clipping": _outlier_clipping,
+}
+
+
 def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: dict[str, str] | None,
                 warnings: list[str]) -> tuple[pd.DataFrame, str | None]:
-    """Apply one recorded step; returns (df, missing_path)."""
-    func_name = step.get("function")
-    params = step.get("params", {}) or {}
+    """Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo."""
+    func_name = str(step.get("function"))
 
     if func_name in SKIPPED_STEPS:
         return df, None
 
-    if func_name == "enrichment":
-        enrichment_file_path = params.get("enrichment_file_path")
-        resolved = _resolve(enrichment_file_path, overrides)
-        if not resolved:
-            return df, str(enrichment_file_path)
-        enrichment_df = _read_any(resolved)
-        if enrichment_df is None:
-            raise ValueError(f"could not read enrichment file {resolved}")
-        identifier = params.get("identifier") or params.get("left_id_names")
-        id_list = [identifier] if isinstance(identifier, str) else list(identifier or [])
-        additional_columns = [c for c in enrichment_df.columns if c not in set(id_list)]
-        return eed.add_data(
-            df=df, additional_df=enrichment_df, left_id_names=id_list, right_id_names=id_list,
-            additional_cols=additional_columns, strategy=params.get("strategy", "left"),
-            conflict_resolution=params.get("conflict_resolution", "keep"),
-        ), None
+    if func_name in NOT_REPLAYABLE or step.get("replayable") is False:
+        snapshot = _snapshot(step, overrides)
+        if snapshot is not None:
+            warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed: its recorded snapshot was used")
+            return snapshot, None
+        handler = _HANDLED.get(func_name)
+        if handler is not None:  # recorded in part only (e.g. a filter that also clipped values)
+            warnings.append(f"step {index + 1} ({func_name}) was replayed only in part: it was not fully recorded")
+            partial, _ = handler(df, step, index, overrides, warnings)
+            raise _NotReplayable(partial)
+        warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed and has no snapshot: skipped")
+        raise _NotReplayable(df)
 
-    if func_name == "imputation":
-        from app_pages.data_enrichment import (
-            apply_imputer,
-        )
+    handler = _HANDLED.get(func_name)
+    if handler is None:
+        warnings.append(f"step {index + 1}: unknown step '{func_name}' skipped")
+        logger.warning("Skipping unknown pipeline step: %s", func_name)
+        raise _NotReplayable(df)
+    return handler(df, step, index, overrides, warnings)
 
-        new_df, _ = apply_imputer(
-            data=df,
-            numerical_imputation_method=params.get("numerical_imputation_method", "Mean"),
-            categorical_imputation_method=params.get("categorical_imputation_method", "Most_Frequent"),
-            cat_encoder=params.get("cat_encoder", False),
-            num_scaler=params.get("num_scaler", False),
-            remainder_columns=params.get("remainder_columns", "auto"),
-            remainder_strategy=params.get("remainder_strategy", "passthrough"),
-            remainder_threshold=params.get("remainder_threshold", 0.3),
-        )
-        return new_df, None
 
-    if func_name == "variable_transformation":
-        result_df = apply_variable_transformation(df, params)
-        if result_df is None:
-            warnings.append(f"step {index + 1}: variable transformation returned no data")
-            return df, None
-        return pd.concat([df, result_df], axis=1), None
-
-    if func_name == "variable_computation":
-        from app_pages.data_enrichment import (
-            evaluate_formula_safely,
-        )
-
-        success, msg, new_df = evaluate_formula_safely(params.get("formula"), params.get("variable_name"), df)
-        if not success:
-            raise ValueError(f"variable computation failed: {msg}")
-        return new_df, None
-
-    if func_name == "data_type_conversion":
-        new_df = df.copy()
-        new_type = params.get("new_type")
-        for col in params.get("columns", []):
-            if new_type == "datetime" and params.get("method") == "smart_parse_dates":
-                new_df[col], _ = smart_parse_dates(new_df[col])
-            elif new_type == "datetime":
-                new_df[col] = pd.to_datetime(new_df[col])
-            else:
-                new_df[col] = new_df[col].astype(new_type)
-        return new_df, None
-
-    if func_name == "missing_value_handling":
-        new_df = df.copy()
-        strategy = params.get("strategy")
-        columns = params.get("columns", [])
-        if strategy == "Drop rows":
-            return new_df.dropna(subset=columns), None
-        for col in columns:
-            if strategy == "Fill with mean":
-                new_df[col] = new_df[col].fillna(new_df[col].mean())
-            elif strategy == "Fill with median":
-                new_df[col] = new_df[col].fillna(new_df[col].median())
-            elif strategy == "Fill with mode":
-                mode = new_df[col].mode()
-                if not mode.empty:
-                    new_df[col] = new_df[col].fillna(mode[0])
-            elif strategy == "Fill with value":
-                new_df[col] = new_df[col].fillna(params.get("fill_value"))
-        return new_df, None
-
-    if func_name == "rename_columns":
-        return df.rename(columns=params.get("mapping", {}) or {}), None
-
-    if func_name == "apply_filter":
-        kept = params.get("kept_index")
-        if kept is None:
-            warnings.append(f"step {index + 1}: filter recorded without the kept rows; it was not replayed")
-            return df, None
-        return df[df.index.isin(kept)], None
-
-    warnings.append(f"step {index + 1}: unknown step '{func_name}' skipped")
-    logger.warning("Skipping unknown pipeline step: %s", func_name)
-    return df, None
+def apply_steps(
+    df: pd.DataFrame,
+    steps: list[dict[str, Any]],
+    *,
+    path_overrides: dict[str, str] | None = None,
+    start: int = 0,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> ReplayResult:
+    """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints."""
+    current = ensure_row_ids(df)
+    result = ReplayResult(df=None)
+    total = len(steps)
+    for offset, step in enumerate(steps):
+        i = start + offset
+        description = step.get("description", step.get("function"))
+        if progress_callback:
+            progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
+        replayed = True
+        try:
+            current, missing = _apply_step(current, step, i, path_overrides, result.warnings)
+        except _NotReplayable as skipped:
+            current, missing, replayed = skipped.args[0], None, False
+            result.not_replayable.append(i)
+        except Exception as exc:
+            message = f"Error during step {i + 1} ({step.get('function')}): {exc}"
+            logger.error(message)
+            result.error, result.steps_applied = message, offset
+            return result
+        if missing:
+            result.error = f"Could not find enrichment file: {missing}"
+            result.missing_file, result.steps_applied = (i, missing), offset
+            return result
+        expected = (step.get("data") or {}).get("fp_out")
+        if expected and replayed:
+            result.verified_steps += 1
+            actual = frame_fingerprint(current)
+            if actual != expected and result.divergence is None:
+                result.divergence = (i, str(expected), actual)
+                result.warnings.append(
+                    f"step {i + 1} ({step.get('function')}): the replayed table differs from the recorded one"
+                )
+    result.df = current
+    result.steps_applied = total
+    if progress_callback:
+        progress_callback(100, "Pipeline Execution Complete")
+    return result
 
 
 def run_trace(
@@ -214,27 +392,7 @@ def run_trace(
         source_df, error = load_source(trace_data, path_overrides)
         if error:
             return ReplayResult(df=None, error=error)
-    current = source_df.copy()
-    warnings: list[str] = []
-    total = len(steps)
-
-    for i, step in enumerate(steps):
-        description = step.get("description", step.get("function"))
-        if progress_callback:
-            progress_callback(int(i / max(total, 1) * 100), f"Step {i + 1}: {description}")
-        try:
-            current, missing = _apply_step(current, step, i, path_overrides, warnings)
-        except Exception as exc:
-            message = f"Error during step {i + 1} ({step.get('function')}): {exc}"
-            logger.error(message)
-            return ReplayResult(df=None, error=message, warnings=warnings, steps_applied=i)
-        if missing:
-            return ReplayResult(df=None, error=f"Could not find enrichment file: {missing}", missing_file=(i, missing),
-                                warnings=warnings, steps_applied=i)
-
-    if progress_callback:
-        progress_callback(100, "Pipeline Execution Complete")
-    return ReplayResult(df=current, warnings=warnings, steps_applied=total)
+    return apply_steps(source_df, steps, path_overrides=path_overrides, progress_callback=progress_callback)
 
 
 def execute_trace_pipeline(
@@ -246,4 +404,12 @@ def execute_trace_pipeline(
     return result.df, result.error
 
 
-__all__ = ["ReplayResult", "SKIPPED_STEPS", "execute_trace_pipeline", "load_source", "run_trace"]
+__all__ = [
+    "NOT_REPLAYABLE",
+    "SKIPPED_STEPS",
+    "ReplayResult",
+    "apply_steps",
+    "execute_trace_pipeline",
+    "load_source",
+    "run_trace",
+]

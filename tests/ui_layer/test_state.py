@@ -153,3 +153,65 @@ def test_an_applied_filter_reaches_the_dataset_and_outdates_the_enrich_draft(
         "draft": "base_changed",
         "steps": ["initial_load", "apply_filter"],
     }
+
+
+def _lineage_script(tamper: bool) -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.population import criterion_id
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    st.session_state["username"] = "lin"
+    st.session_state["user_role"] = "researcher"
+    if "probe" in st.session_state:
+        return
+    state = get_state()
+    st.session_state["config"] = {
+        "mask_families": {
+            "study_inclusion": {"operator": "all", "Adult": {"expression": "df['age'] >= 18"}}
+        }
+    }
+    state.set_dataset(
+        pd.DataFrame({"age": [10, 30, 50]}),
+        DatasetRef(name="cohort", origin="upload", file_hash="h"),
+    )
+    state.set_ticked([criterion_id("study_inclusion", "Adult")])
+    ok, _, saved = state.save_version("cohort")
+    lineage = state.db_manager.load_lineage(saved)
+    recorded = [s["function"] for s in state.transformation_manager.history]
+    head = state.transformation_manager.head_hash
+    if tamper:  # the file is replaced outside CohortStudio
+        pd.DataFrame({"age": [99]}).to_parquet(
+            state.db_manager.lineage_path(saved).replace(".lineage.json", ".parquet")
+        )
+    state.set_ticked([])
+    _, message = state.load_saved_version(saved)
+    st.session_state["probe"] = {
+        "saved": ok and saved == "cohort_v1",
+        "recorded": recorded,
+        "same_fp": lineage["fingerprint"] == state.session.data_fp,
+        "head": lineage["trace"]["head_hash"] == head,
+        "parent": state.transformation_manager.parent,
+        "ticked": list(state.ticked),
+        "population": (lineage["population"]["block"] or {}).get("n_included"),
+        "message": message,
+    }
+
+
+def test_a_saved_version_links_to_its_trace_and_restores_its_population(data_root: Path) -> None:
+    at = AppTest.from_function(_lineage_script, kwargs={"tamper": False}, default_timeout=120).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    probe = at.session_state["probe"]
+    assert probe["saved"] and probe["same_fp"] and probe["head"]
+    assert probe["recorded"] == ["initial_load", "population_definition", "save_version"]
+    assert probe["parent"]["dataset"] == "cohort_v1" and probe["parent"]["trace_head"]
+    assert probe["ticked"] == ["study_inclusion::Adult"] and probe["population"] == 2
+    assert "modified outside" not in probe["message"]
+
+
+def test_a_version_changed_outside_the_app_is_reported(data_root: Path) -> None:
+    at = AppTest.from_function(_lineage_script, kwargs={"tamper": True}, default_timeout=120).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert "modified outside" in at.session_state["probe"]["message"]

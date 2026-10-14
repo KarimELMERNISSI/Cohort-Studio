@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import streamlit as st
 
+from core.lineage import verify_trace
 from core.workspace import safe_filename
 from manage.reproduction_manager import run_trace
 
@@ -58,6 +59,29 @@ def _resolve_user_path(text: str | None) -> str | None:
 
 
 
+_INTEGRITY_LABELS = {
+    "verified": "integrity verified",
+    "unverifiable": "integrity not verifiable",
+    "tampered": "MODIFIED after recording",
+    "discontinuous": "gap in the data chain",
+}
+
+
+def render_trace_integrity(trace: dict) -> None:
+    """The hash chain of the trace (schema 2): verified, not verifiable (older traces) or broken."""
+    check = verify_trace(trace)
+    if check.status == "verified":
+        st.success(
+            f"Integrity verified: {check.n_steps} chained steps, head hash `{(check.head_hash or '')[:16]}`. "
+            "The trace is tamper-evident; it is not an electronically signed record.",
+            icon=":material/verified:",
+        )
+    elif check.status == "unverifiable":
+        st.info(check.message, icon=":material/info:")
+    else:
+        st.error(f"Integrity check failed: {check.message}", icon=":material/gpp_bad:")
+
+
 def app():
     
     # Option to upload trace directly
@@ -101,11 +125,12 @@ def app():
         for t in traces:
             try:
                 t_path = os.path.join(trace_dir, t)
-                with open(t_path, 'r') as f:
+                with open(t_path, 'r', encoding='utf-8') as f:
                     t_data = json.load(f)
                     step_count = len(t_data.get('steps', []))
                     suffix = "step" if step_count == 1 else "steps"
-                    label = f"{t} [{step_count} {suffix}]"
+                    integrity = _INTEGRITY_LABELS.get(verify_trace(t_data).status, "")
+                    label = f"{t} [{step_count} {suffix}, {integrity}]"
                     trace_options[label] = t
             except Exception:
                 # If a trace is corrupt or unreadable, just show the filename
@@ -116,10 +141,17 @@ def app():
         
         if selected_trace_file:
             trace_path = os.path.join(trace_dir, selected_trace_file)
-            with open(trace_path, 'r') as f:
+            with open(trace_path, 'r', encoding='utf-8') as f:
                 trace_data = json.load(f)
                 
 
+
+    if trace_data is not None and not (isinstance(trace_data, dict) and isinstance(trace_data.get("steps"), list)):
+        st.error("This file is not a CohortStudio trace: it has no list of steps.")
+        return
+    if trace_data:
+        # Checked on the trace as recorded, before file paths are resolved for this machine below
+        render_trace_integrity(trace_data)
 
     # --- GLOBAL PERSISTENCE LOGIC (Fixes Loop for both Drag & Drop and Select) ---
     # Initialize persistent storage for resolved paths
@@ -574,5 +606,12 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
         return
     for note in result.warnings:
         st.warning(note)
+    if result.reproducible and result.verified_steps:
+        st.success(
+            f"Reproduced exactly: the replayed table matches the {result.verified_steps} recorded fingerprints.",
+            icon=":material/verified:",
+        )
+    elif result.not_replayable:
+        st.info(f"{len(result.not_replayable)} step(s) could not be recomputed; see the warnings above.")
     get_state().install_replay(result.df, trace_data, upto=target_step_index, mode="full replay")
     st.success(f"Successfully reproduced state at Step {target_step_index + 1} (full replay, {result.steps_applied} step(s))")

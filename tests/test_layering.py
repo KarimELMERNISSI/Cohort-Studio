@@ -13,12 +13,13 @@ NO_STREAMLIT = [
     "manage/iam", "manage/vectorstores", "manage/db_manager.py", "manage/transformation_manager.py", "manage/reproduction_manager.py",
     "utils/analysis_utils.py", "utils/path_utils.py", "utils/statistics_utils.py", "utils/visualization_utils.py",
     "utils/multipage.py", "utils/data_paths.py", "enrich/transformation_logic.py",
-    "enrich/custom_metrics_and_filters.py", "explore/data_quality_auditor.py",
+    "enrich/custom_metrics_and_filters.py", "enrich/formulas.py", "enrich/imputation_service.py",
+    "explore/data_quality_auditor.py",
 ]  # utils/session_scope.py is the one bridge that reads the Streamlit session by design
 # Packages whose modules must not import pages (app_pages, ui) at module level.
 NO_PAGE_IMPORTS_AT_TOP = ["core", "biostats", "ingest", "graph", "manage", "utils", "enrich", "explore", "monitor"]
 # Lazy (function-level) page imports still present in service code: known debt, must not grow.
-LAZY_PAGE_IMPORT_CEILING = 6
+LAZY_PAGE_IMPORT_CEILING = 2
 
 
 def _py_files(spec: str):

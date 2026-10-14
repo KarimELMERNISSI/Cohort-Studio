@@ -211,6 +211,32 @@ class DBManager:
         except Exception:
             return self.load_dataframe(file_name)  # files pandas cannot read (DuckDB fallback)
             
+    def lineage_path(self, file_name: str) -> str:
+        return os.path.join(self.dataset_dir, f"{file_name}.lineage.json")
+
+    def save_lineage(self, file_name: str, lineage: dict[str, Any]) -> None:
+        """The lineage sidecar of a saved version (where it comes from: trace, fingerprint, population)."""
+        from core.lineage import canonical_json
+
+        path = self.lineage_path(file_name)
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(canonical_json(lineage))
+        os.replace(tmp, path)
+
+    def load_lineage(self, file_name: str) -> dict[str, Any] | None:
+        import json
+
+        path = self.lineage_path(file_name)
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            logger.warning("Unreadable lineage sidecar: %s", os.path.basename(path))
+            return None
+
     def get_available_tables(self) -> list[str]:
         """List available parquet files in the current directory."""
         files = glob.glob("*.parquet")

@@ -10,15 +10,10 @@ downstream"), written before the code that makes it pass.
 import json
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 TUTORIAL = ROOT / "assets" / "tutorial"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="population-scoped imputation and its replay land later in M1"
-)
 def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_table(
     tmp_path: Path,
 ) -> None:
@@ -67,7 +62,7 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     analysed = session.analysis_frame(config)
     excluded = original.index.difference(population.included)
     assert len(analysed) == 928
-    assert not analysed[imputed.columns].isna().any().any()
+    assert not analysed[list(imputed.columns)].isna().any().any()
     # the excluded rows are untouched: their missing values are still missing
     assert session.base.loc[excluded].isna().equals(original.loc[excluded].isna())
 

@@ -7,6 +7,8 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
+from core.lineage import verify_trace
+
 
 class TraceDocumenter:
     def __init__(self, trace_source):
@@ -85,6 +87,15 @@ class TraceDocumenter:
         self._add_row(table, "Session ID", self.trace.get("session_id", "N/A"))
         self._add_row(table, "Source Dataset", self.trace.get("source_dataset", "N/A"))
         self._add_row(table, "Step Count", str(len(self.trace.get("steps", []))))
+        check = verify_trace(self.trace)
+        integrity = {
+            "verified": f"Verified: hash chain intact, head {(check.head_hash or '')[:16]}",
+            "unverifiable": "Not verifiable: recorded before traces were chained",
+        }.get(check.status, f"FAILED: {check.message}")
+        self._add_row(table, "Integrity", integrity)
+        parent = self.trace.get("parent")
+        if parent:
+            self._add_row(table, "Continues", ", ".join(f"{k}: {v}" for k, v in parent.items() if v is not None))
 
         doc.add_paragraph() # Spacer
 
@@ -111,6 +122,41 @@ class TraceDocumenter:
         desc = step.get("description", "")
         if desc:
             doc.add_paragraph(desc)
+
+        # What the step did to the table (traces since schema 2)
+        data = step.get("data") or {}
+        if data.get("fp_out"):
+            line = (
+                f"Rows {data.get('rows_in', 0):,} -> {data.get('rows_out', 0):,} · "
+                f"columns {data.get('cols_in', 0)} -> {data.get('cols_out', 0)} · "
+                f"fingerprint {str(data.get('fp_in') or '-')[:8]} -> {str(data['fp_out'])[:8]}"
+            )
+            added = data.get("columns_added") or []
+            if added:
+                line += f" · added: {', '.join(added[:8])}{'...' if len(added) > 8 else ''}"
+            run = doc.add_paragraph().add_run(line)
+            run.font.size = Pt(9)
+        if step.get("replayable") is False:
+            run = doc.add_paragraph().add_run("This step cannot be recomputed by the replay engine.")
+            run.italic = True
+            run.font.size = Pt(9)
+
+        population = step.get("population") or {}
+        if population.get("criteria"):
+            p = doc.add_paragraph()
+            p.add_run(
+                f"Analysis population: {population.get('n_included', 0):,} of {population.get('n_base', 0):,} rows"
+            ).bold = True
+            table = doc.add_table(rows=1, cols=4)
+            table.style = 'Light Shading'
+            for cell, title in zip(table.rows[0].cells, ("Criteria family", "Rows in", "Excluded", "Rows out"), strict=True):
+                cell.text = title
+            for stage in population.get("stages") or []:
+                cells = table.add_row().cells
+                cells[0].text = f"{stage.get('family')} ({stage.get('kind')})"
+                cells[1].text = f"{stage.get('n_in', 0):,}"
+                cells[2].text = f"{stage.get('n_excluded', 0):,}"
+                cells[3].text = f"{stage.get('n_out', 0):,}"
             
         # Parameters Table
         params = step.get("params", {})
@@ -132,10 +178,10 @@ class TraceDocumenter:
             key_cell = table.add_row().cells
             key_cell[0].text = str(k)
             
-            # Format value
+            # Format value (long lists, such as kept row ids, are summarised)
             if isinstance(v, list):
-                if len(v) > 5 and isinstance(v[0], str):
-                    key_cell[1].text = f"{len(v)} items: {', '.join(v[:5])}..."
+                if len(v) > 10:
+                    key_cell[1].text = f"{len(v)} items: {', '.join(str(x) for x in v[:5])}, ..."
                 else:
                     key_cell[1].text = ", ".join([str(x) for x in v])
             elif isinstance(v, dict):
@@ -158,9 +204,22 @@ class TraceDocumenter:
             "variable_computation": "New Variable Computation",
             "outlier_handling": "Outlier Detection & Handling",
             "data_type_conversion": "Data Type Conversion",
-            "missing_value_handling": "Manual Missing Value Handling"
+            "missing_value_handling": "Manual Missing Value Handling",
+            "apply_filter": "Filter Applied to the Dataset",
+            "population_definition": "Analysis Population",
+            "freeze_population": "Analysis Population Kept as the Dataset",
+            "targeted_imputation": "Targeted Imputation (Formula)",
+            "multiple_imputation": "Multiple Imputation (Diagnostic, One Dataset Adopted)",
         }
         return mapping.get(func_name, func_name.replace("_", " ").title())
 
     def _add_footer(self, doc):
-        pass
+        p = doc.add_paragraph()
+        run = p.add_run(
+            "This report documents the steps recorded in the transformation trace. The trace is chained "
+            "by hashes, so a later modification of a step is detectable (see Integrity); it is not an "
+            "electronically signed record."
+        )
+        run.italic = True
+        run.font.size = Pt(8)
+        run.font.color.rgb = RGBColor(100, 100, 100)

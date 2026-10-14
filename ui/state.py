@@ -613,6 +613,8 @@ class AppState:
             return []
 
     def load_saved_version(self, saved_name: str) -> tuple[bool, str]:
+        """Load a saved version; its lineage sidecar links the new trace to the one that produced it, restores
+        the ticked criteria and detects a file modified outside CohortStudio."""
         df, msg = self.db_manager.load_dataset(saved_name)
         if df is None:
             return False, msg
@@ -620,7 +622,29 @@ class AppState:
         ref = DatasetRef.from_saved_name(
             saved_name, source_path=path, source_name=f"{saved_name}.parquet"
         )
-        self.set_dataset(df, ref, description=f"Loaded saved version: {saved_name}")
+        lineage = self.db_manager.load_lineage(saved_name) or {}
+        trace = lineage.get("trace") or {}
+        parent = (
+            {
+                "dataset": saved_name,
+                "trace_session": trace.get("session_id"),
+                "trace_head": trace.get("head_hash"),
+                "n_steps": trace.get("n_steps"),
+                "fingerprint": lineage.get("fingerprint"),
+            }
+            if lineage
+            else None
+        )
+        self.set_dataset(df, ref, description=f"Loaded saved version: {saved_name}", parent=parent)
+        if lineage:
+            if lineage.get("fingerprint") and lineage["fingerprint"] != self.session.data_fp:
+                msg += " Warning: the file differs from the version CohortStudio saved (modified outside the app)."
+            known = {c.id for c in catalogue(self.config)}
+            ticked = [
+                i for i in (lineage.get("population") or {}).get("ticked") or [] if i in known
+            ]
+            if ticked:
+                self.set_ticked(ticked)
         return True, msg
 
     def save_version(self, base_name: str | None = None) -> tuple[bool, str, str | None]:
@@ -631,6 +655,7 @@ class AppState:
         name = dataset_base_name(base_name or (ref.name if ref else "cohort"))
         ok, msg, saved = self.db_manager.save_dataset(base, base_name=name, username=self.username)
         if ok and saved:
+            self.session.record_population_use(self.config)
             new_ref = DatasetRef.from_saved_name(
                 saved,
                 file_hash=ref.file_hash if ref else None,
@@ -642,11 +667,55 @@ class AppState:
             )
             st.session_state["dataset_ref"] = new_ref
             st.session_state["current_dataset_name"] = saved
+            tm = self.transformation_manager
             with contextlib.suppress(Exception):
-                self.transformation_manager.add_step(
-                    "save_version", {"dataset_name": saved}, f"Saved version: {saved}"
+                tm.add_step(
+                    "save_version",
+                    {"dataset_name": saved, "fingerprint": self.session.data_fp},
+                    f"Saved version: {saved}",
                 )
+            self._save_lineage(saved, ref)
         return ok, msg, saved
+
+    def _save_lineage(self, saved: str, ref: DatasetRef | None) -> None:
+        from datetime import datetime
+
+        tm = self.transformation_manager
+        session = self.session
+        population = None
+        with contextlib.suppress(PopulationError, RuntimeError):
+            population = session.population(self.config)
+        lineage = {
+            "schema": 1,
+            "dataset": saved,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "fingerprint": session.data_fp,
+            "n_rows": int(len(session.base)) if session.base is not None else 0,
+            "n_cols": int(session.base.shape[1]) if session.base is not None else 0,
+            "row_id": "__row_id",
+            "parent_dataset": ref.label if ref else None,
+            "trace": {
+                "session_id": tm.session_id,
+                "file": os.path.basename(tm.get_trace_path() or ""),
+                "head_hash": getattr(tm, "head_hash", None),
+                "n_steps": len(tm.history),
+            },
+            "population": {
+                "ticked": list(session.ticked),
+                "block": population.to_trace()
+                if population is not None and population.criteria
+                else None,
+            },
+            "source": {
+                "name": ref.source_name if ref else None,
+                "file_hash": ref.file_hash if ref else None,
+                "parse": ref.parse.to_dict() if ref and ref.parse else None,
+            },
+        }
+        try:
+            self.db_manager.save_lineage(saved, lineage)
+        except OSError as exc:
+            logger.warning("Lineage sidecar of %s not written: %s", saved, exc)
 
     def note(self, step: str, params: dict[str, Any] | None, description: str) -> None:
         """A trace step that documents something without changing the data (parse report, export...)."""

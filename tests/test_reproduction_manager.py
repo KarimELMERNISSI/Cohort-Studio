@@ -182,8 +182,70 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        with patch("app_pages.data_enrichment.apply_imputer", side_effect=ValueError("Corrupt imputation matrix")):
+        with patch("manage.reproduction_manager.impute_rows", side_effect=ValueError("Corrupt imputation matrix")):
             df, err = execute_trace_pipeline(trace)
             assert df is None
             assert "error during step 1" in err.lower()
             assert "corrupt imputation matrix" in err.lower()
+
+
+class TestReplayVerification:
+    """Schema-2 traces carry the fingerprint of every step: the replay proves it reproduces the table."""
+
+    @staticmethod
+    def _recorded(tmp_path: Path):
+        from core.session import DataSession
+        from core.state import ParseOptions
+        from ingest.loaders import read_path
+        from manage.transformation_manager import TransformationManager
+
+        src = tmp_path / "cohort.csv"
+        pd.DataFrame({"age": [30, 40, None, 70], "w": [60.0, None, 80.0, 90.0]}).to_csv(src, index=False)
+        tm = TransformationManager(trace_dir=str(tmp_path / "traces"))
+        tm.initialize_session("cohort.csv")
+        tm.source_dataset = str(src)
+        session = DataSession(trace=tm)
+        options = ParseOptions()
+        session.install(
+            read_path(str(src), options).df,
+            params={"source_path": str(src), "parse_options": options.to_dict()},
+        )
+        return tm, session
+
+    def test_a_recorded_session_replays_to_the_same_table(self, tmp_path: Path) -> None:
+        from core.fingerprint import frame_fingerprint
+        from enrich.imputation_service import fill_with_formula
+        from manage.reproduction_manager import run_trace
+
+        tm, session = self._recorded(tmp_path)
+        session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
+        filled, n = fill_with_formula(session.working_frame(), "age", "weight / 2")
+        session.stage(filled, "targeted_imputation", {"target_variable": "age", "formula": "weight / 2", "filled_count": n}, "Imputed age")
+        session.commit_staging()
+
+        result = run_trace(tm.get_trace())
+        assert result.reproducible and result.verified_steps == 3 and not result.warnings
+        assert frame_fingerprint(result.df) == session.data_fp
+
+    def test_a_divergence_is_reported_at_its_step(self, tmp_path: Path) -> None:
+        import copy
+
+        from manage.reproduction_manager import run_trace
+
+        tm, session = self._recorded(tmp_path)
+        session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
+        trace = copy.deepcopy(tm.get_trace())
+        trace["steps"][1]["params"]["mapping"] = {"w": "other"}  # the recorded table had "weight"
+        result = run_trace(trace)
+        assert result.divergence is not None and result.divergence[0] == 1
+        assert not result.reproducible and "differs" in " ".join(result.warnings)
+
+    def test_steps_that_cannot_be_recomputed_are_listed(self, tmp_path: Path) -> None:
+        from manage.reproduction_manager import run_trace
+
+        tm, session = self._recorded(tmp_path)
+        session.stage(session.working_frame().fillna(0), "multiple_imputation", {"m": 5}, "MI adopted", replayable=False)
+        session.commit_staging()
+        result = run_trace(tm.get_trace())
+        assert result.not_replayable == [1] and not result.reproducible
+        assert result.error is None and "cannot be recomputed" in " ".join(result.warnings)
