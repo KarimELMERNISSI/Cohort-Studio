@@ -864,43 +864,10 @@ def app():
             
             st.subheader("Dataset Preview")
             with st.expander("Preview the first lines of your dataset", expanded=True):
-                col_inc, col_ano = st.columns(2)
-
-                # Checkbox for filtering out anomalies
-                with col_ano:
-                    filter_out_anomaly = st.checkbox(
-                        label="Exclude Rows with Anomalies",
-                        value=False,
-                        help="Check this box to exclude rows flagged as anomalies from the dataset."
-                    )
-
-                # Checkbox for limiting rows based on inclusion criteria
-                with col_inc:
-                    filter_on_inclusion = st.checkbox(
-                        label="Restrict to Inclusion Criteria",
-                        value=False,
-                        help="Check this box to limit the displayed rows to those meeting the inclusion criteria."
-                    )
-
-
-                # Base DataFrame
-                filtered_df = df.copy()
-
-                # Apply filters based on checkbox states
-                if filter_on_inclusion:
-                    if "study_inclusion_all" not in filtered_df.columns:
-                        st.warning("The inclusion criteria are missing and need to be defined first.")
-                    else:
-                        filtered_df = filtered_df[filtered_df['study_inclusion_all'] == True]
-
-                if filter_out_anomaly:
-                    if "clinical_anomalies_any" not in filtered_df.columns:
-                        st.warning("The anomaly criteria are missing and need to be defined first.")
-                    else:
-                        filtered_df = filtered_df[filtered_df['clinical_anomalies_any'] == False]
-
-                st.dataframe(filtered_df.head(), width='stretch', hide_index=True)
-                st.write(f"**Filtered Data Overview:** {filtered_df.shape[0]:,} rows and {filtered_df.shape[1]:,} columns selected.")
+                # The rows are the analysis population (criteria ticked in the sidebar)
+                filtered_df = df
+                st.dataframe(df.head(), width='stretch', hide_index=True)
+                st.write(f"**Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns.")
 
                 #st.subheader("Data session")
                 #st.dataframe(st.session_state["data"].head(), width='stretch', hide_index=True)

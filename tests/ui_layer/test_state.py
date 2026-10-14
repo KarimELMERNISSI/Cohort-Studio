@@ -117,41 +117,44 @@ def test_analysis_results_do_not_survive_a_dataset_swap(data_root: Path) -> None
     assert at.session_state["left"] == []
 
 
-def _filter_script() -> None:
+def _population_script() -> None:
     import pandas as pd
     import streamlit as st
 
-    from app_pages.data_monitoring import commit_filter_to_session
     from core.state import DatasetRef
+    from ui.components.population import activate_family
     from ui.state import get_state
 
     if "probe" not in st.session_state:
         state = get_state()
+        st.session_state["config"] = {
+            "mask_families": {
+                "clinical_anomalies": {"operator": "any", "Flagged": {"expression": "df['flag']"}}
+            }
+        }
         full = pd.DataFrame({"x": range(10), "flag": [False] * 6 + [True] * 4})
         state.set_dataset(full, DatasetRef(name="filtered", origin="upload", file_hash="f"))
-        # a change prepared on Enrich before the filter: it must not be applied over the filtered data
+        # a change prepared on Enrich before the criteria are ticked
         state.stage(state.working_frame().assign(y=1), "variable_computation", {}, "y")
-        commit_filter_to_session(full[~full["flag"]], "anomaly_data", 10, 6)
+        activate_family("clinical_anomalies")  # Validate's "Exclude these anomalies..." button
         st.session_state["probe"] = {
-            "data": len(st.session_state["data"]),
+            "analysed": len(st.session_state["data"]),
             "base": len(state.base),
             "draft": state.staging_status().state,
             "steps": [s["function"] for s in state.transformation_manager.history],
         }
 
 
-def test_an_applied_filter_reaches_the_dataset_and_outdates_the_enrich_draft(
-    data_root: Path,
-) -> None:
-    """Imputation on Enrich must not be fitted on, or restore, rows excluded on Validate (audit E8)."""
-    at = AppTest.from_function(_filter_script, default_timeout=120)
+def test_ticking_criteria_filters_the_analyses_without_deleting_rows(data_root: Path) -> None:
+    """Criteria are filters: the analyses see the population, the dataset keeps every row (audit E8)."""
+    at = AppTest.from_function(_population_script, default_timeout=120)
     at.run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert at.session_state["probe"] == {
-        "data": 6,
-        "base": 6,
-        "draft": "base_changed",
-        "steps": ["initial_load", "apply_filter"],
+        "analysed": 6,
+        "base": 10,
+        "draft": "ok",  # the data did not change: the Enrich draft can still be applied
+        "steps": ["initial_load"],  # ticking a criterion is not a change of the data
     }
 
 

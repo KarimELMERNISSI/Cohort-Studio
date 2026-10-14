@@ -4,6 +4,7 @@ import streamlit as st
 
 from app_pages.analysis_survival import run_survival
 from ui.components import no_dataset, page_header
+from ui.components.population import population_banner
 from utils.data_analyzer import DataAnalyzer
 
 page_header(
@@ -11,6 +12,7 @@ page_header(
     "Time-to-event curves and hazard ratios, adjusted odds ratios and incidence-rate ratios.",
     chapter="05_Epidemiology",
 )
+population_banner()
 df = st.session_state.get("data")
 if df is None:
     no_dataset()

@@ -31,43 +31,8 @@ def app():
     df_full[analyzer.date_cols] = df_full[analyzer.date_cols].apply(pd.to_datetime, errors='coerce')
 
 
-    with st.expander("Apply Inclusion and Anomaly Criteria",expanded=False):
-        col_inc, col_ano = st.columns(2)
-        # Checkbox for filtering out anomalies
-        with col_ano:
-            filter_out_anomaly = st.checkbox(
-                label="Exclude Rows with Anomalies.",
-                value=False,
-                help="Check this box to exclude rows flagged as anomalies from the dataset."
-            )
-
-        # Checkbox for limiting rows based on inclusion criteria
-        with col_inc:
-            filter_on_inclusion = st.checkbox(
-                label="Restrict to Inclusion Criteria.",
-                value=False,
-                help="Check this box to limit the displayed rows to those meeting the inclusion criteria."
-            )
-
-
-        # Base DataFrame
-        df = df_full.copy()
-
-        # Apply filters based on checkbox states
-        if filter_on_inclusion:
-            if "study_inclusion_all" not in df.columns:
-                st.warning("The inclusion criteria are missing and need to be defined first.")
-            else:
-                df = df[df['study_inclusion_all'] == True]
-
-        if filter_out_anomaly:
-            if "clinical_anomalies_any" not in df.columns:
-                st.warning("The anomaly criteria are missing and need to be defined first.")
-            else:
-                df = df[df['clinical_anomalies_any'] == False]
-
-        st.dataframe(df.head(), width='stretch', hide_index=True)
-        st.write(f"**Filtered Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns selected.")
+    # The rows are the analysis population (inclusion and exclusion criteria ticked in the sidebar)
+    df = df_full
 
     # Outliers Handler
     with st.expander("Outliers Handler"):

@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app_pages.data_enrichment import apply_imputer
 from enrich.data_imputation import detect_remainder_columns, partition_columns
+from enrich.imputation_service import apply_imputer
 from ingest.loaders import read_path
 
 SAMPLE = Path(__file__).resolve().parents[1] / "assets" / "sample_cohort.csv"

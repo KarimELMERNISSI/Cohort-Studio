@@ -416,6 +416,22 @@ class DataSession:
         self.set_ticked(())
         return change
 
+    def criterion_counts(self, config: Mapping[str, Any] | None) -> dict[str, int | None]:
+        """Rows of the whole table each criterion of the configuration would exclude (None: it errors),
+        whether ticked or not (shown next to the checkboxes)."""
+        base = self._require_base()
+        criteria = catalogue(config)
+        key = (self.data_fp, tuple(c.fingerprint for c in criteria))
+        cached = getattr(self, "_counts", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        result = evaluate_population(base, criteria, data_fp=self.data_fp)
+        counts: dict[str, int | None] = {c.id: None for c in criteria}
+        for count in result.counts:
+            counts[count.criterion.id] = count.marginal_base
+        self._counts = (key, counts)
+        return counts
+
     def families(self, config: Mapping[str, Any] | None) -> dict[str, list[str]]:
         """Criterion ids per family, in configuration order."""
         out: dict[str, list[str]] = {}

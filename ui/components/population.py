@@ -1,0 +1,246 @@
+"""
+The analysis population in the UI: the sidebar selector, the banner of the analysis pages and the panel of
+the Validate page.
+
+Inclusion and exclusion criteria are filters: ticking or unticking them changes which rows the analyses
+use, never the dataset. The ticked criteria live in the session (``AppState``); the checkboxes mirror them,
+because they also change from Validate (activate a whole family) and when a saved version is loaded.
+"""
+
+from __future__ import annotations
+
+import hashlib
+
+import pandas as pd
+import streamlit as st
+
+from core.population import EXCLUSION, catalogue
+
+_FREEZE_CONFIRM = "pop_freeze_confirm"
+
+
+def _widget_key(criterion_id: str) -> str:
+    return "pop::" + hashlib.sha1(criterion_id.encode("utf-8")).hexdigest()[:12]
+
+
+def _family_key(family: str) -> str:
+    return "popfam::" + hashlib.sha1(family.encode("utf-8")).hexdigest()[:12]
+
+
+def _on_toggle(criterion_id: str) -> None:
+    from ui.state import get_state
+
+    get_state().tick(criterion_id, bool(st.session_state.get(_widget_key(criterion_id))))
+
+
+def _on_family(family: str) -> None:
+    from ui.state import get_state
+
+    get_state().activate_family(family, bool(st.session_state.get(_family_key(family))))
+
+
+def activate_family(family: str, on: bool = True) -> None:
+    """Callback for buttons outside the sidebar (Validate): tick or untick a whole family."""
+    from ui.state import get_state
+
+    get_state().activate_family(family, on)
+
+
+def family_title(family: str, kind: str) -> str:
+    verb = "Exclude" if kind == EXCLUSION else "Require"
+    return f"{verb}: {family.replace('_', ' ')}"
+
+
+def render_population_selector(state) -> None:
+    """Sidebar: one checkbox per criterion, grouped by family, with what each excludes."""
+    criteria = catalogue(state.config)
+    population = state.population
+    if population is None:
+        return
+    if not criteria:
+        st.caption(
+            ":material/filter_alt: Analysis population: every row. Define inclusion or exclusion criteria "
+            "on Data > Validate to filter it."
+        )
+        return
+    ticked = set(state.ticked)
+    counts = state.session.criterion_counts(state.config)
+    icon = ":material/filter_alt:" if population.ok else ":material/error:"
+    with st.expander(f"Population: {population.label}", icon=icon, expanded=not population.ok):
+        if not population.ok:
+            st.error(
+                "A ticked criterion cannot be evaluated, so the analyses are stopped: "
+                + "; ".join(population.errors.values())
+            )
+        families: dict[str, list] = {}
+        for criterion in criteria:
+            families.setdefault(criterion.family, []).append(criterion)
+        ss = st.session_state
+        for family, members in families.items():
+            fam_key = _family_key(family)
+            ss[fam_key] = all(c.id in ticked for c in members)
+            st.checkbox(
+                f"**{family_title(family, members[0].kind)}**",
+                key=fam_key,
+                on_change=_on_family,
+                args=(family,),
+                help="Tick or untick every criterion of this family.",
+            )
+            for criterion in members:
+                key = _widget_key(criterion.id)
+                ss[key] = criterion.id in ticked
+                excludes = counts.get(criterion.id)
+                suffix = (
+                    " (cannot be evaluated)" if excludes is None else f" ({excludes:,} excluded)"
+                )
+                st.checkbox(
+                    f"{criterion.name}{suffix}",
+                    key=key,
+                    on_change=_on_toggle,
+                    args=(criterion.id,),
+                    help=criterion.description or None,
+                )
+        st.caption(
+            "Criteria are filters: no row is deleted, and every analysis says which population it used."
+        )
+
+
+def population_banner(*, purpose: str = "analyses") -> None:
+    """Top of an analysis page: which rows are analysed; stops the page when the population is broken."""
+    from ui.state import get_state
+
+    state = get_state()
+    if not state.has_data:
+        return
+    population = state.population
+    if population is None:
+        return
+    if not population.ok:
+        st.error(
+            "The analysis population cannot be evaluated: "
+            + "; ".join(population.errors.values())
+            + ". Untick the criterion in the sidebar or correct it on Data > Validate.",
+            icon=":material/error:",
+        )
+        st.stop()
+    if population.criteria:
+        st.info(
+            f"Analysis population: **{population.label}**. The {purpose} use these rows; "
+            "change the ticked criteria in the sidebar.",
+            icon=":material/filter_alt:",
+        )
+
+
+def _freeze(save_as: str) -> None:
+    from ui.state import get_state
+
+    state = get_state()
+    if not st.session_state.get(_FREEZE_CONFIRM):
+        return
+    state.freeze_population()
+    st.session_state[_FREEZE_CONFIRM] = False
+    if save_as.strip():
+        state.save_version(save_as.strip())
+
+
+def render_population_panel(state) -> None:
+    """Validate > Analysis population: the participant flow of the ticked criteria and the freeze action."""
+    population = state.population
+    if population is None:
+        return
+    criteria = catalogue(state.config)
+    if not criteria:
+        st.info(
+            "No inclusion or exclusion criterion is defined yet: add them in the anomaly and inclusion tabs."
+        )
+        return
+    if not population.criteria:
+        st.info(
+            "No criterion is ticked: the analyses use every row. Tick criteria in the sidebar, or use the "
+            "buttons of the anomaly and inclusion tabs."
+        )
+        return
+    if not population.ok:
+        st.error("; ".join(population.errors.values()))
+        return
+    st.markdown(f"**{population.label}**")
+    stages = pd.DataFrame(
+        [
+            {
+                "Step": family_title(s.family, s.kind),
+                "Rows in": s.n_in,
+                "Excluded": s.n_excluded,
+                "Rows out": s.n_out,
+            }
+            for s in population.stages
+        ]
+    )
+    st.dataframe(stages, hide_index=True, width="stretch")
+    counts = pd.DataFrame(
+        [
+            {
+                "Criterion": c.criterion.name,
+                "Family": c.criterion.family,
+                "Excludes (whole table)": c.marginal_base,
+                "Excludes at its step": c.marginal_in_stage,
+                "First reason for": c.sequential,
+            }
+            for c in population.counts
+        ]
+    )
+    st.dataframe(counts, hide_index=True, width="stretch")
+    st.caption(
+        "Excludes at its step: rows the criterion excludes among the rows entering its step. First reason "
+        "for: rows it excludes that no earlier criterion of the step excluded (these sum to the step's "
+        "exclusions, as in a STROBE participant-flow diagram)."
+    )
+    excluded = population_excluded_rows(state, limit=500)
+    if not excluded.empty:
+        with st.expander(
+            f"Excluded rows and their reasons ({population.n_base - population.n_included:,})"
+        ):
+            st.dataframe(excluded, hide_index=True, width="stretch")
+    with st.container(border=True):
+        st.markdown("**Keep only the analysis population in the dataset**")
+        st.caption(
+            "Use this to export or hand over the selected rows. It is one step of the trace; the excluded rows "
+            "are removed from the current data (saved versions are not changed), and the criteria are unticked."
+        )
+        save_as = st.text_input(
+            "Save the result as a version (optional)",
+            key="pop_freeze_name",
+            placeholder="e.g. analysis_set",
+        )
+        st.checkbox(
+            "I understand that the excluded rows are removed from the current data",
+            key=_FREEZE_CONFIRM,
+        )
+        st.button(
+            "Keep only these rows",
+            key="pop_freeze",
+            icon=":material/content_cut:",
+            disabled=not st.session_state.get(_FREEZE_CONFIRM),
+            on_click=_freeze,
+            args=(save_as,),
+        )
+
+
+def population_excluded_rows(state, limit: int = 500) -> pd.DataFrame:
+    population = state.population
+    base = state.base
+    if population is None or base is None:
+        return pd.DataFrame()
+    excluded = base.index.difference(population.included)[:limit]
+    return pd.DataFrame(
+        {"Row": excluded, "Excluded by": [", ".join(population.reasons(r)) for r in excluded]}
+    )
+
+
+__all__ = [
+    "activate_family",
+    "family_title",
+    "population_banner",
+    "population_excluded_rows",
+    "render_population_panel",
+    "render_population_selector",
+]

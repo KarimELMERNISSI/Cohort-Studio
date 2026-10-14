@@ -13,9 +13,12 @@ import monitor.changes as mc
 import monitor.outliers as mo
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
+from core.fingerprint import ids_to_ranges
+from core.population import catalogue, criterion_id
 from enrich import custom_metrics_and_filters as ecm
 from manage.db_manager import DBManager
-from ui.components import confirm, no_dataset
+from ui.components import no_dataset
+from ui.components.population import activate_family, render_population_panel
 from ui.state import get_state
 from utils.config_loader import create_empty_config, transform_expression
 from utils.data_analyzer import DataAnalyzer
@@ -951,6 +954,15 @@ def add_outlier_handling_ui(df, numeric_cols):
         handling_strategy=handling_strategy,
         **params
     )
+    # What was detected, for the actions of the Validate page (exclude from the population, or clip)
+    df_processed.attrs["outlier_detection"] = {
+        "method": detection_method,
+        "params": {k: (v if isinstance(v, (int, float, str, bool)) else str(v)) for k, v in params.items()},
+        "columns": [str(c) for c in selected_cols],
+        "strategy": handling_strategy,
+        "flagged": [int(i) for i in outlier_matrix.index[outlier_matrix.any(axis=1)]],
+        "bounds": _clip_bounds(df, selected_cols, detection_method, params) if handling_strategy == "clip" else None,
+    }
     #st.dataframe(df_processed)
 
     # Step 5: Generate Outlier Summary from Matrix
@@ -1431,17 +1443,6 @@ def outlier_values_dialog(outlier_summary):
         st.write(col_stats['outlier_values'])
 
 
-def display_results_with_outliers(filtered_df: pd.DataFrame, st):
-    """Display the results of the enrichment process."""
-    st.subheader("Outlier Detection Results")
-    
-    # Find potential tag columns
-    tag_cols = [col for col in filtered_df.columns if col.endswith('_tag')]
-    bool_column = tag_cols[-1] if tag_cols else None
-
-    # Preview the enriched dataset
-    display_results(df=filtered_df, bool_column=bool_column, title=None, key_base="outliers_data", st=st)
-
 #############################################################################################
 
 ################################ ANOMALY AND INCLUSION HANDLING ############################################################
@@ -1821,28 +1822,89 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
 # Convert DataFrame to Excel for download using openpyxl
 
 
-def commit_filter_to_session(df_masked: pd.DataFrame, key_base: str, n_before: int, n_after: int) -> None:
-    """Keep only the filtered rows in the dataset (the "Apply Filtering Criteria" callback), as one traced step.
+# Validate's check results act on the analysis population: (family ticked, button label, confirmation)
+_POPULATION_ACTIONS = {
+    "anomaly_data": ("clinical_anomalies", "Exclude these anomalies from the analysis population",
+                     "The anomaly rules are ticked."),
+    "inclusion_data": ("study_inclusion", "Restrict the analysis population to these criteria",
+                       "The inclusion criteria are ticked."),
+}
 
-    The flag columns the checks add for display are not committed. Enrich follows: a draft started on the
-    unfiltered rows can no longer be applied over the filtered dataset (AppState, audit E8).
-    """
+
+def _clip_bounds(df: pd.DataFrame, columns, method: str, params: dict) -> dict:
+    """The bounds a clipping uses, per column (recorded in the trace and replayed)."""
+    bounds = {}
+    for col in columns:
+        series = pd.to_numeric(df[col], errors="coerce")
+        if method == "iqr":
+            m = params.get("multiplier", 1.5)
+            q1, q3 = series.quantile(0.25), series.quantile(0.75)
+            low, high = q1 - m * (q3 - q1), q3 + m * (q3 - q1)
+        elif method == "quantile":
+            low, high = series.quantile(params.get("lower", 0.01)), series.quantile(params.get("upper", 0.99))
+        elif method == "zscore":
+            t = params.get("threshold", 3)
+            low, high = series.mean() - t * series.std(), series.mean() + t * series.std()
+        else:
+            continue
+        bounds[str(col)] = [float(low), float(high)]
+    return bounds
+
+
+def _exclude_outliers(detection: dict) -> None:
+    """Callback: the flagged rows become an exclusion criterion (row ids frozen now), ticked at once."""
+    config = st.session_state.config
+    family = config.setdefault("mask_families", {}).setdefault("outliers", {"operator": "any"})
+    columns = detection["columns"]
+    name = f"{detection['method']} outliers ({', '.join(columns[:3])}{', ...' if len(columns) > 3 else ''})"
+    family[name] = {
+        "row_ids": ids_to_ranges(detection["flagged"]),
+        "description": f"Rows flagged by {detection['method']} {detection['params']} on {', '.join(columns)}, "
+                       "frozen when added.",
+        "method": detection["method"],
+        "params": detection["params"],
+        "columns": list(columns),
+    }
+    get_state().tick(criterion_id("outliers", name), True)
+
+
+def _clip_outliers(detection: dict) -> None:
+    """Callback: clip the values to the method's bounds in the dataset, as one traced, replayable step."""
     state = get_state()
-    base = state.base
-    if base is None:
+    clipped = state.base
+    if clipped is None:
         return
-    kept = df_masked[[c for c in df_masked.columns if c in base.columns]]
-    changed = state.commit_change(
-        kept,
-        "apply_filter",
-        {"criterion": key_base, "rows_before": n_before, "rows_after": n_after,
-         "kept_index": [int(i) if isinstance(i, (int, np.integer)) else str(i) for i in kept.index]},
-        f"Applied {key_base.replace('_data', '')} criteria: kept {n_after} of {n_before} rows",
-        replayable=key_base != "outliers_data",  # outlier clipping is not recorded by this step
+    for col, (low, high) in detection["bounds"].items():
+        clipped[col] = clipped[col].clip(lower=low, upper=high)
+    state.commit_change(
+        clipped,
+        "outlier_clipping",
+        {"bounds": detection["bounds"], "method": detection["method"], "params": detection["params"]},
+        f"Clipped {len(detection['bounds'])} column(s) to the {detection['method']} bounds",
     )
-    if changed:
-        st.toast(f"The dataset now has the {n_after} filtered rows.")
-    st.session_state[f"{key_base}_applied"] = True
+
+
+def render_outlier_actions(detection: dict | None) -> None:
+    """What to do with the detected outliers: exclude them from the population, or clip the values."""
+    if not detection or detection["strategy"] in ("None", "none"):
+        st.caption("Choose a handling strategy above to exclude or clip the detected outliers.")
+        return
+    n = len(detection["flagged"])
+    if detection["strategy"] == "clip":
+        if not detection.get("bounds"):
+            st.caption("Clipping is available for the z-score, IQR and quantile methods.")
+            return
+        st.button(f"Clip the values of {len(detection['bounds'])} column(s) in the dataset", key="outliers_clip",
+                  type="primary", on_click=_clip_outliers, args=(detection,),
+                  help="Values outside the bounds are set to the bounds; one step of the trace, replayed with "
+                       "the same bounds.")
+    elif n:
+        st.button(f"Exclude these {n} outlier rows from the analysis population", key="outliers_data_apply_criteria",
+                  type="primary", on_click=_exclude_outliers, args=(detection,),
+                  help="The flagged rows become a criterion of the 'outliers' family: no row is deleted, and the "
+                       "criterion can be unticked in the sidebar.")
+    else:
+        st.caption("No outlier was detected with these settings.")
 
 
 def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: str, st):
@@ -1876,30 +1938,18 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         )
     
     with col2:
-        # Save to session state
-        if bool_column is not None:
-            if key_base in ["anomaly_data","outliers_data"]:
-                df_masked = df[~mask]
-            elif key_base == "inclusion_data":
-                df_masked = df[mask]
-        else:
-            df_masked = df       
-
-
-        if f"{key_base}_applied" not in st.session_state:
-            st.session_state[f"{key_base}_applied"] = False
-
-        if st.button("Apply Filtering Criteria for Further Analysis", width='stretch', key=f"{key_base}_apply_criteria"):
-            n_before, n_after = len(df), len(df_masked)
-
-            def _apply_filter(df_masked=df_masked, key_base=key_base, n_before=n_before, n_after=n_after):
-                commit_filter_to_session(df_masked, key_base, n_before, n_after)
-
-            confirm("Apply this filter to the working dataset?",
-                    f"{n_before - n_after} of {n_before} rows will be excluded from further analyses in this session. "
-                    "Saved versions are not changed.", _apply_filter, confirm_label="Apply")
-        if st.session_state.get(f"{key_base}_applied"):
-            st.success("Filter applied: the working dataset is ready for further analysis.")
+        # Criteria are filters of the analysis population: ticking them deletes no row (AppState)
+        action = _POPULATION_ACTIONS.get(key_base)
+        if action is not None:
+            family, label, done = action
+            st.button(label, width='stretch', key=f"{key_base}_apply_criteria", type="primary",
+                      on_click=activate_family, args=(family,),
+                      help="No row is deleted: the analyses use the rows the ticked criteria keep, and the criteria "
+                           "can be unticked in the sidebar at any time.")
+            state = get_state()
+            members = [c.id for c in catalogue(state.config) if c.family == family]
+            if members and all(m in state.ticked for m in members) and state.population is not None:
+                st.success(f"{done} Analysis population: {state.population.label}.")
 # Debug outputs to confirm updates
             #st.write("Updated working DataFrame:")
             #st.dataframe(st.session_state.working_df)
@@ -2333,7 +2383,13 @@ def app():
         
 
     # Create tabs for different visualization aspects
-    tab_dashboard, tab1, tab2, tab3, tab4 = st.tabs(["Data Quality Dashboard", "Handle Clinical Anomalies", "Handle Inclusion Criteria", "Handle Outliers", "Compare Data Files"])
+    tab_dashboard, tab1, tab2, tab3, tab_population, tab4 = st.tabs(["Data Quality Dashboard", "Handle Clinical Anomalies", "Handle Inclusion Criteria", "Handle Outliers", "Analysis population", "Compare Data Files"])
+
+    with tab_population:
+        if df is None:
+            no_dataset()
+        else:
+            render_population_panel(state)
 
     with tab_dashboard:
         if df is not None:
@@ -2422,9 +2478,7 @@ def app():
             # Outliers Handler
             with st.expander("Outliers Handler"):
                 df = add_outlier_handling_ui(df, analyzer.numeric_cols)
-
-            with st.expander("Results", expanded=False):
-                display_results_with_outliers(filtered_df=df, st=st)
+            render_outlier_actions(df.attrs.get("outlier_detection"))
     #    st.json(st.session_state.config["mask_families"])
     #    add_mask_family(st.session_state.config, st)
 

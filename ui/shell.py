@@ -7,6 +7,7 @@ import streamlit as st
 from manage.iam.authz import is_admin_role
 from ui.auth import logout
 from ui.components import confirm, page_link
+from ui.components.population import render_population_selector
 from ui.state import AppState
 
 ORIGIN_LABELS = {
@@ -85,6 +86,7 @@ def _dataset_card(state: AppState) -> None:
                 st.badge(f"v{ref.version}", color="primary")
             st.badge(origin_label, icon=origin_icon, color="gray")
         st.caption(f"{len(df):,} rows · {df.shape[1]} columns")
+        render_population_selector(state)
         with st.container(horizontal=True, gap="small"):
             if st.button(
                 "Change", key="shell_change_dataset", width="stretch", icon=":material/swap_horiz:"

@@ -67,10 +67,10 @@ def test_validate_applies_the_inclusion_criteria(app: AppTest) -> None:
     _ok(app)
     app.button(key="inclusion_data_apply_criteria").click().run()
     _ok(app)
-    texts = " ".join(m.value for m in app.markdown)
-    assert (
-        "267 of 1206 rows will be excluded" in texts
-    )  # the confirmation dialog (its button runs in the browser)
+    # criteria are filters: the analyses use 939 rows, the dataset keeps its 1,206
+    assert len(app.session_state["data"]) == 939
+    assert len(app.session_state["_data_session"].base) == 1206
+    assert any("939 of 1,206 rows (4 criteria)" in s.value for s in app.success)
 
 
 def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
@@ -84,4 +84,9 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     app.run()
     app.button(key="anomaly_data_apply_criteria").click().run()
     _ok(app)
-    assert "16 of 1206 rows will be excluded" in " ".join(m.value for m in app.markdown)
+    assert len(app.session_state["data"]) == 1190
+    # with the inclusion criteria as well: the analysis set of the tutorial
+    _click(app, "Run Inclusion Criteria Check")
+    app.button(key="inclusion_data_apply_criteria").click().run()
+    _ok(app)
+    assert len(app.session_state["data"]) == 928

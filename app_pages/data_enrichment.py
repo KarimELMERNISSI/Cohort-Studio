@@ -21,7 +21,7 @@ from enrich.formulas import (
     validate_and_extract_columns_ast,
     validate_variable_name,
 )
-from enrich.imputation_service import apply_imputer
+from enrich.imputation_service import impute_rows
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
 from ui.components.staging import render_draft_banner
@@ -2326,10 +2326,25 @@ def app():
             render_multiple_imputation()
 
             main_data = st.session_state['enriched_df']
-            
-            # --- Missing Data Overview ---
-            missing_counts = main_data.isnull().sum()
-            total_cells = np.prod(main_data.shape)
+
+            # The imputation is fitted on, and fills, the rows of the analysis population only: excluded patients
+            # neither inform nor receive imputed values (follow-up programme M1)
+            state = get_state()
+            population = state.population
+            blocked = population is not None and not population.ok
+            scoped = population is not None and bool(population.criteria) and not blocked
+            if blocked:
+                st.error("The analysis population cannot be evaluated: correct or untick the criterion in the "
+                         "sidebar before imputing.")
+            rows = main_data.index.intersection(population.included) if scoped else main_data.index
+            if scoped:
+                st.info(f"Imputation is fitted on, and fills, the {len(rows):,} rows of the analysis population "
+                        f"({population.label}); the excluded rows keep their missing values.",
+                        icon=":material/filter_alt:")
+
+            # --- Missing Data Overview (rows that would be imputed) ---
+            missing_counts = main_data.loc[rows].isnull().sum()
+            total_cells = np.prod(main_data.loc[rows].shape)
             total_missing = missing_counts.sum()
             missing_percent = (total_missing / total_cells) * 100
             
@@ -2377,10 +2392,14 @@ def app():
                 st.info(f"{categorical_imputation_method} has been chosen for both numerical and categorical columns, a unified approach will be used.")
             
             col3, col4 = st.columns(2)
+            column_changing_help = ("Changes the columns of the table, so it is only available when every row is "
+                                    "imputed (no criterion ticked).") if scoped else None
             with col3:
-                cat_encoder = st.checkbox("Apply One-Hot Encoding to Categorical Columns?", value=False)
+                cat_encoder = st.checkbox("Apply One-Hot Encoding to Categorical Columns?", value=False,
+                                          disabled=scoped, help=column_changing_help)
             with col4:
-                num_scaler = st.checkbox("Scale Numerical Columns?", value=False)
+                num_scaler = st.checkbox("Scale Numerical Columns?", value=False, disabled=scoped,
+                                         help=column_changing_help)
 
             # --- Advanced Settings ---
             with st.expander("Advanced Settings (Remainder Columns)"):
@@ -2401,7 +2420,8 @@ def app():
 
                 remainder_strategy = st.selectbox(
                     "Remainder Strategy",
-                    ["passthrough", "drop"]
+                    ["passthrough"] if scoped else ["passthrough", "drop"],
+                    help="Dropping remainder columns changes the table: only when every row is imputed."
                 )
                 remainder_threshold = st.slider(
                     "Remainder Threshold for Auto-detection",
@@ -2413,42 +2433,38 @@ def app():
                 )
 
             # Apply imputation
-            if st.button("Apply Imputer", type="primary"):
+            if st.button("Apply Imputer", type="primary", disabled=blocked):
                 try:
                     # Define a placeholder for the progress bar
                     progress_placeholder = st.empty()
-                    # Call the imputer function
-                    df_imputed, imputed_mask = apply_imputer(
-                        data=main_data,
-                        numerical_imputation_method=numerical_imputation_method,
-                        categorical_imputation_method=categorical_imputation_method,
+                    # Fitted on the analysis population (every row when no criterion is ticked)
+                    outcome = impute_rows(
+                        main_data,
+                        rows if scoped else None,
+                        numerical=numerical_imputation_method,
+                        categorical=categorical_imputation_method,
                         cat_encoder=cat_encoder,
                         num_scaler=num_scaler,
                         remainder_columns=remainder_columns,
                         remainder_strategy=remainder_strategy,
                         remainder_threshold=remainder_threshold,
                         progress_placeholder=progress_placeholder,
-                        debug=True
                     )
+                    df_imputed = outcome.frame
+                    imputed_mask = outcome.mask.reindex(index=df_imputed.index, columns=df_imputed.columns,
+                                                        fill_value=False)
                     if df_imputed is not None:
-                        # print(f"\n---------\n------\n --> Column dtypes after imputation:\n{df_imputed.dtypes}")
-
-                        st.success("Imputation added to the Enrich draft.")
-
+                        st.success("Imputation added to the Enrich draft: apply the draft (top of the page) to use "
+                                   "it in the analyses.")
+                        
                         # Save snapshot
                         snapshot_path = save_snapshot(df_imputed, "imputation")
-
-                        params = {
-                            "numerical_imputation_method": numerical_imputation_method,
-                            "categorical_imputation_method": categorical_imputation_method,
-                            "cat_encoder": cat_encoder,
-                            "num_scaler": num_scaler,
-                            "remainder_columns": remainder_columns,
-                            "remainder_strategy": remainder_strategy,
-                            "remainder_threshold": remainder_threshold
-                        }
-                        get_state().stage(df_imputed, "imputation", params, "Applied data imputation",
-                                          output_dataset_path=snapshot_path)
+                        state.stage(df_imputed, "imputation", outcome.params,
+                                    f"Applied data imputation ({numerical_imputation_method} / "
+                                    f"{categorical_imputation_method}"
+                                    + (f", fitted on the analysis population of {len(rows):,} rows)" if scoped else ")"),
+                                    population=population if scoped else None,
+                                    output_dataset_path=snapshot_path)
 
                         # Highlight imputed values
                         def highlight_imputed(data, mask):
