@@ -53,6 +53,9 @@ class EffectSize(BaseModel):
     n: int | None = None
     reference: str = ""  # method citation
     note: str = ""
+    se: float | None = (
+        None  # standard error of the estimate, when it has one (pooling across imputations)
+    )
 
     def magnitude(self) -> str:
         bounds = _MAGNITUDE_THRESHOLDS.get(self.kind)
@@ -67,6 +70,22 @@ class EffectSize(BaseModel):
         if value < large:
             return "medium"
         return "large"
+
+
+class MIInfo(BaseModel):
+    """How a result was pooled across multiply imputed datasets (Rubin's rules)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    m: int  # number of imputed datasets analysed
+    fmi: float  # fraction of missing information
+    riv: float  # relative increase in variance due to the missing data
+    lam: float  # proportion of the total variance due to the missing data
+    df: float  # Barnard-Rubin degrees of freedom
+    dfcom: float  # complete-data degrees of freedom
+    scale: str = "identity"  # scale on which the estimate was pooled
+    method: str = "Rubin's rules, Barnard-Rubin df"
+    note: str = ""
 
 
 class AssumptionCheck(BaseModel):
@@ -96,6 +115,8 @@ class TestResult(BaseModel):
     estimate: float | None = None
     estimate_label: str = ""
     estimate_ci: CI | None = None
+    se: float | None = None  # standard error of ``estimate`` (pooling across imputations)
+    mi: MIInfo | None = None  # set when the result pools multiply imputed datasets
     effect_sizes: list[EffectSize] = Field(default_factory=list)
     assumptions: list[AssumptionCheck] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -120,4 +141,4 @@ class TestResult(BaseModel):
         return None if p is None else bool(p < self.alpha)
 
 
-__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "TestResult"]
+__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "MIInfo", "TestResult"]

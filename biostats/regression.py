@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -10,6 +10,7 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
 
+from biostats.design import design_matrix
 from biostats.references import REFERENCES
 
 REFERENCES.setdefault(
@@ -37,23 +38,29 @@ class RegressionResult:
     reference_levels: dict[str, str]
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # every coefficient (``const`` included) on the log scale, its covariance and the residual df n - p:
+    # what pooling across imputed datasets needs
+    params: pd.Series | None = None
+    vcov: pd.DataFrame | None = None
+    df_resid: float | None = None
 
 
-def _design(df: pd.DataFrame, covariates: Sequence[str]) -> tuple[pd.DataFrame, dict[str, str]]:
-    raw = df[list(covariates)]
-    refs: dict[str, str] = {}
-    for col in covariates:
-        if (
-            not pd.api.types.is_numeric_dtype(raw[col])
-            or raw[col].nunique(dropna=True) <= 2
-            and raw[col].dtype == object
-        ):
-            levels = sorted(raw[col].dropna().astype(str).unique())
-            if levels:
-                refs[col] = levels[0]
-    x = pd.get_dummies(raw.astype({c: str for c in refs}), drop_first=True, dtype=float)
-    x = x.loc[:, x.std(ddof=0) > 0]
-    return sm.add_constant(x, has_constant="add"), refs
+def _design(
+    df: pd.DataFrame, covariates: Sequence[str], levels: Mapping[str, Sequence[str]] | None = None
+) -> tuple[pd.DataFrame, dict[str, str]]:
+    return design_matrix(df, covariates, levels=levels)
+
+
+def _coefficients(res, x: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame | None]:
+    """Regression coefficients and their covariance, restricted to the design columns."""
+    k = x.shape[1]
+    names = list(x.columns)
+    params = pd.Series(np.asarray(res.params, dtype=float)[:k], index=names)
+    try:
+        cov = np.asarray(res.cov_params(), dtype=float)[:k, :k]
+    except ValueError:  # no Hessian (a parameter at the boundary): no covariance to pool
+        return params, None
+    return params, pd.DataFrame(cov, index=names, columns=names)
 
 
 def _table(res, x: pd.DataFrame, alpha: float, ratio_label: str) -> pd.DataFrame:
@@ -82,16 +89,21 @@ def logistic_regression(
     *,
     event_level=None,
     alpha: float = 0.05,
+    levels: Mapping[str, Sequence[str]] | None = None,
 ) -> RegressionResult:
-    """Binary logistic regression; odds ratios with Wald CIs, DeLong AUC of the fitted probabilities."""
+    """
+    Binary logistic regression; odds ratios with Wald CIs, DeLong AUC of the fitted probabilities.
+
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    """
     frame = df[[outcome_col, *covariates]].dropna()
     y_raw = frame[outcome_col]
-    levels = sorted(y_raw.astype(str).unique())
-    if len(levels) != 2:
+    outcome_levels = sorted(y_raw.astype(str).unique())
+    if len(outcome_levels) != 2:
         raise ValueError("the outcome must have exactly two levels")
-    event_level = str(event_level) if event_level is not None else levels[1]
+    event_level = str(event_level) if event_level is not None else outcome_levels[1]
     y = (y_raw.astype(str) == event_level).astype(float).to_numpy()
-    x, refs = _design(frame, covariates)
+    x, refs = _design(frame, covariates, levels)
     warnings: list[str] = []
     try:
         res = sm.Logit(y, x).fit(disp=0, maxiter=200)
@@ -115,6 +127,7 @@ def logistic_regression(
     except Exception:
         pass
     events = int(y.sum())
+    params, vcov = _coefficients(res, x)
     if events < 10 * (x.shape[1] - 1) or (len(y) - events) < 10 * (x.shape[1] - 1):
         warnings.append(
             "fewer than 10 events per parameter: odds ratios may be unstable (Peduzzi rule of thumb)"
@@ -133,6 +146,9 @@ def logistic_regression(
         reference_levels={**refs, outcome_col: f"event = {event_level}"},
         references=[REFERENCES["hosmer2013"]],
         warnings=warnings,
+        params=params,
+        vcov=vcov,
+        df_resid=float(len(y) - x.shape[1]),
     )
 
 
@@ -144,12 +160,17 @@ def count_regression(
     exposure_col: str | None = None,
     family: str = "poisson",
     alpha: float = 0.05,
+    levels: Mapping[str, Sequence[str]] | None = None,
 ) -> RegressionResult:
-    """Poisson (or negative binomial) regression for counts, with an optional exposure offset; incidence-rate ratios."""
+    """
+    Poisson (or negative binomial) regression for counts, with an optional exposure offset; incidence-rate ratios.
+
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    """
     cols = [count_col, *covariates] + ([exposure_col] if exposure_col else [])
     frame = df[cols].dropna()
     y = pd.to_numeric(frame[count_col], errors="coerce").to_numpy(dtype=float)
-    x, refs = _design(frame, covariates)
+    x, refs = _design(frame, covariates, levels)
     offset = None
     if exposure_col:
         exposure = pd.to_numeric(frame[exposure_col], errors="coerce").to_numpy(dtype=float)
@@ -190,6 +211,7 @@ def count_regression(
         table = table[table["term"] != "const"].reset_index(drop=True)
     else:
         table = _table(res, x, alpha, "rate_ratio")
+    params, vcov = _coefficients(res, x)
     return RegressionResult(
         kind=family,
         table=table,
@@ -204,6 +226,9 @@ def count_regression(
         reference_levels=refs,
         references=[REFERENCES["cameron2013"]],
         warnings=warnings,
+        params=params,
+        vcov=vcov,
+        df_resid=float(len(y) - x.shape[1]),
     )
 
 

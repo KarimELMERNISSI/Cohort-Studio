@@ -23,6 +23,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   `r-fixtures` branch under the repository owner's identity. `test_mi_r_parity.py` fits the same models on
   the same completed datasets and compares every pooled quantity (1e-10 for pooling, 1e-8 for the linear
   model, 1e-6 for the GLMs, 1e-5 for Cox).
+- **What pooling needs from each analysis** (additive; existing callers unchanged):
+  - `biostats/design.py` builds the design matrices of the regression and Cox models. Factor levels can be
+    fixed from the observed data, so every imputed dataset estimates the same terms. A level absent from
+    the rows or a value outside the levels is named in the error (instead of "singular matrix").
+  - Logistic, Poisson, negative-binomial and Cox results carry their coefficients, covariance matrix and
+    complete-data df (n - p, as R's df.residual and mice).
+  - t-test results carry the standard error of their estimate. The 2x2 analysis keeps the SEs of the log
+    odds ratio, the log risk ratio and the risk difference. Kaplan-Meier curves keep their Greenwood SE.
+    `MIInfo` describes a pooled result.
 
 ### Repository moved to Cohort-Studio
 

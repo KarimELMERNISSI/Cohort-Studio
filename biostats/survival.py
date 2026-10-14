@@ -8,7 +8,7 @@ indicator 1 = event, 0 = censored.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -18,6 +18,7 @@ from statsmodels.duration.hazard_regression import PHReg
 from statsmodels.duration.survfunc import SurvfuncRight
 
 from biostats._types import CI
+from biostats.design import design_matrix
 from biostats.references import REFERENCES
 
 REFERENCES.setdefault(
@@ -70,6 +71,9 @@ class KMCurve:
     median: float | None
     at_risk_times: np.ndarray
     at_risk: np.ndarray
+    se: np.ndarray | None = (
+        None  # Greenwood standard error of the survival probability at ``times``
+    )
 
 
 @dataclass
@@ -117,6 +121,7 @@ def kaplan_meier(
         median=None if median is None else float(median),
         at_risk_times=unique_times,
         at_risk=at_risk,
+        se=se,
     )
 
 
@@ -190,6 +195,10 @@ class CoxResult:
     )  # per term: statistic, p (Grambsch-Therneau) when lifelines is installed
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # log hazard ratios, their covariance and the complete-data df n - p used when pooling imputations
+    params: pd.Series | None = None
+    vcov: pd.DataFrame | None = None
+    df_resid: float | None = None
 
 
 def cox_regression(
@@ -200,12 +209,16 @@ def cox_regression(
     *,
     alpha: float = 0.05,
     ties: str = "efron",
+    levels: Mapping[str, Sequence[str]] | None = None,
 ) -> CoxResult:
-    """Cox proportional-hazards model (Efron ties by default); categorical covariates are one-hot coded (first level reference)."""
+    """
+    Cox proportional-hazards model (Efron ties by default); categorical covariates are one-hot coded (first level reference).
+
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    """
     frame = df[[time_col, event_col, *covariates]].dropna()
     t, e = _clean(frame[time_col], frame[event_col])
-    x = pd.get_dummies(frame[list(covariates)], drop_first=True, dtype=float)
-    x = x.loc[:, x.std(ddof=0) > 0]
+    x, _ = design_matrix(frame, covariates, levels=levels, intercept=False)
     if x.shape[1] == 0:
         raise ValueError("no covariate with variation")
     model = PHReg(t, x.to_numpy(), status=e, ties=ties)
@@ -266,6 +279,13 @@ def cox_regression(
         ph_test=ph_table,
         references=[REFERENCES["cox1972"], REFERENCES["efron1977"], REFERENCES["grambsch1994"]],
         warnings=warnings,
+        params=pd.Series(params, index=list(x.columns)),
+        vcov=pd.DataFrame(
+            np.asarray(res.cov_params(), dtype=float),
+            index=list(x.columns),
+            columns=list(x.columns),
+        ),
+        df_resid=float(len(t) - x.shape[1]),
     )
 
 

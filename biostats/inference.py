@@ -198,6 +198,12 @@ def compare_groups(
             res = stats.ttest_ind(x, y, equal_var=(kind == "student"))
             ci_obj = res.confidence_interval(1 - alpha)
             df = float(res.df) if hasattr(res, "df") else float(len(x) + len(y) - 2)
+            nx, ny, vx, vy = len(x), len(y), float(np.var(x, ddof=1)), float(np.var(y, ddof=1))
+            if kind == "welch":
+                se = float(np.sqrt(vx / nx + vy / ny))
+            else:
+                pooled = ((nx - 1) * vx + (ny - 1) * vy) / (nx + ny - 2)
+                se = float(np.sqrt(pooled * (1 / nx + 1 / ny)))
             effects = [
                 cohens_d(x, y, alpha=alpha, hedges=True),
                 rank_biserial(x, y, alpha=alpha, n_boot=min(n_boot, 1000), seed=seed),
@@ -218,6 +224,7 @@ def compare_groups(
                     level=1 - alpha,
                     method="Welch t" if kind == "welch" else "Student t",
                 ),
+                se=se,
                 effect_sizes=effects,
                 assumptions=checks,
                 warnings=warnings,

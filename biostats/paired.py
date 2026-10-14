@@ -74,6 +74,7 @@ def paired_t(after: Sequence, before: Sequence, *, alpha: float = 0.05) -> TestR
         estimate=float(d.mean()),
         estimate_label="mean within-pair difference (after - before)",
         estimate_ci=CI(lower=float(ci.low), upper=float(ci.high), level=1 - alpha, method="t"),
+        se=float(sd / np.sqrt(n)),
         effect_sizes=[
             EffectSize(
                 name="Cohen's d_z",
@@ -185,6 +186,7 @@ def one_sample_t(values: Sequence, reference_value: float, *, alpha: float = 0.0
             level=1 - alpha,
             method="t",
         ),
+        se=float(sd / np.sqrt(n)),
         effect_sizes=[
             EffectSize(
                 name="Cohen's d",

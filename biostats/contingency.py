@@ -227,6 +227,11 @@ class TwoByTwoResult(BaseModel):
     nnt_label: str = ""
     attributable_fraction_exposed: float | None = None
     attributable_fraction_ci: CI | None = None
+    # standard errors for pooling across imputed datasets: log OR (Woolf) and log RR (Katz), with the
+    # Haldane correction when it was applied, and the Wald SE of the risk difference
+    log_or_se: float | None = None
+    log_rr_se: float | None = None
+    rd_se: float | None = None
 
     chi2_statistic: float
     chi2_pvalue: float
@@ -442,6 +447,9 @@ def analyze_twobytwo(
         nnt_label=nnt_label,
         attributable_fraction_exposed=afe,
         attributable_fraction_ci=afe_ci,
+        log_or_se=se_log_or,
+        log_rr_se=se_log_rr,
+        rd_se=math.sqrt(p1 * (1 - p1) / n1 + p0 * (1 - p0) / n0),
         chi2_statistic=float(chi2_stat),
         chi2_pvalue=float(chi2_p),
         chi2_yates_statistic=float(yates_stat),

@@ -19,7 +19,7 @@ Anderson-Darling), :mod:`biostats.mcar` (EM-based Little's test), :mod:`biostats
 :mod:`biostats.references` (citations).
 """
 
-from biostats._types import CI, RANDOM_STATE, AssumptionCheck, EffectSize, TestResult
+from biostats._types import CI, RANDOM_STATE, AssumptionCheck, EffectSize, MIInfo, TestResult
 from biostats.references import cite
 
-__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "TestResult", "cite"]
+__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "MIInfo", "TestResult", "cite"]
