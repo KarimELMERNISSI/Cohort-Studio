@@ -168,9 +168,12 @@ def delong_auc(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha: fl
     m, n = len(x), len(y)
     if m == 0 or n == 0:
         raise ValueError("both outcome classes are required")
-    # placement values
-    v10 = np.array([(np.sum(y < xi) + 0.5 * np.sum(y == xi)) / n for xi in x])
-    v01 = np.array([(np.sum(x > yj) + 0.5 * np.sum(x == yj)) / m for yj in y])
+    # placement values (ties count one half), by sorted search: O((m + n) log(m + n)) instead of m x n
+    ys, xs = np.sort(y), np.sort(x)
+    below = np.searchsorted(ys, x, side="left")
+    v10 = (below + 0.5 * (np.searchsorted(ys, x, side="right") - below)) / n
+    not_above = np.searchsorted(xs, y, side="right")
+    v01 = (m - not_above + 0.5 * (not_above - np.searchsorted(xs, y, side="left"))) / m
     auc = float(v10.mean())
     var = (np.var(v10, ddof=1) / m if m > 1 else 0.0) + (np.var(v01, ddof=1) / n if n > 1 else 0.0)
     z = stats.norm.ppf(1 - alpha / 2)
