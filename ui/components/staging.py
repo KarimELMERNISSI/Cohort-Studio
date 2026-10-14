@@ -33,6 +33,13 @@ def _discard() -> None:
     )
 
 
+def _rebase(refit_population: bool) -> None:
+    from ui.state import get_state
+
+    ok, message = get_state().rebase_staging(refit_population=refit_population)
+    st.session_state[_NOTICE_KEY] = ("success" if ok else "warning", message)
+
+
 def render_draft_banner() -> None:
     """Status of the Enrich draft with Apply / Discard (callback buttons, so they work in tests too)."""
     from ui.state import get_state
@@ -76,23 +83,42 @@ def render_draft_banner() -> None:
                     help="Forget these changes; the dataset is not modified.",
                 )
             return
+        population_changed = status.state == POPULATION_CHANGED
         what = (
             "the analysis population changed after the imputation in it was fitted"
-            if status.state == POPULATION_CHANGED
-            else "the dataset changed after it was started (for example a filter or a rename)"
+            if population_changed
+            else "the dataset changed after it was started (for example a rename or a date conversion)"
         )
         st.warning(
-            f"**This draft cannot be applied:** {what}. Applying it would overwrite those changes. "
-            "Discard it and redo the changes on the current data."
+            f"**This draft cannot be applied as it is:** {what}. Applying it would overwrite those changes."
         )
         st.markdown(listing)
-        st.button(
-            "Discard the draft and restart from the current data",
-            key="draft_discard_stale",
-            type="primary",
-            icon=":material/restart_alt:",
-            on_click=_discard,
-        )
+        redoable = all(step.replayable for step in steps)
+        with st.container(horizontal=True):
+            if redoable:
+                st.button(
+                    "Refit on the current population"
+                    if population_changed
+                    else f"Redo my {n} change{'s' if n != 1 else ''} on the current data",
+                    key="draft_rebase",
+                    type="primary",
+                    icon=":material/sync:",
+                    on_click=_rebase,
+                    args=(population_changed,),
+                    help="Each change is recomputed from its recorded settings on the current data"
+                    + (
+                        " and the imputation is fitted on the current population."
+                        if population_changed
+                        else "."
+                    ),
+                )
+            st.button(
+                "Discard the draft and restart from the current data",
+                key="draft_discard_stale",
+                type="secondary" if redoable else "primary",
+                icon=":material/restart_alt:",
+                on_click=_discard,
+            )
 
 
 __all__ = ["render_draft_banner"]

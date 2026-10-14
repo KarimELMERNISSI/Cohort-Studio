@@ -86,6 +86,14 @@ def _dataset_card(state: AppState) -> None:
                 st.badge(f"v{ref.version}", color="primary")
             st.badge(origin_label, icon=origin_icon, color="gray")
         st.caption(f"{len(df):,} rows · {df.shape[1]} columns")
+        draft = state.staging_status()
+        if draft.n_steps:
+            st.badge(
+                f"Enrich draft: {draft.n_steps} change{'s' if draft.n_steps != 1 else ''}"
+                + ("" if draft.can_apply else " (outdated)"),
+                icon=":material/edit_note:",
+                color="blue" if draft.can_apply else "orange",
+            )
         render_population_selector(state)
         with st.container(horizontal=True, gap="small"):
             if st.button(

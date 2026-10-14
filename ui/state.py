@@ -426,6 +426,79 @@ class AppState:
         self.session.discard_staging()
         self._install_views()
 
+    def rebase_staging(self, *, refit_population: bool = False) -> tuple[bool, str]:
+        """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
+        population-scoped imputations on the current population. Only replayable changes can be redone."""
+        from manage.reproduction_manager import apply_steps
+
+        session = self.session
+        draft = session.draft
+        if draft is None or not draft.steps:
+            return False, "There is no change to re-apply."
+        blocked = [p.description for p in draft.steps if not p.replayable]
+        if blocked:
+            return (
+                False,
+                f"'{blocked[0]}' cannot be redone automatically: discard the draft and redo it.",
+            )
+        population = self.population if refit_population else None
+        if population is not None and not population.ok:
+            return False, "The analysis population cannot be evaluated."
+        frame = session.base
+        assert frame is not None
+        redone = []
+        for pending in draft.steps:
+            step = {
+                "function": pending.function,
+                "params": dict(pending.params),
+                "description": pending.description,
+            }
+            if pending.population is not None:
+                if population is None:  # redo on the population it was fitted on
+                    step["population"] = pending.population
+                elif population.criteria:  # refit on the current population
+                    step["population"] = population.to_trace()
+                    step["params"].update(rows="population", n_rows_fitted=population.n_included)
+                else:  # no criterion ticked any more: refit on every row
+                    step["params"].update(rows="all", n_rows_fitted=population.n_base)
+            result = apply_steps(frame, [step])
+            if result.error or result.df is None:
+                return False, result.error or f"'{pending.description}' could not be redone."
+            frame = result.df
+            redone.append((pending, frame, step.get("population")))
+        session.discard_staging()
+        for pending, staged, block in redone:
+            session.stage(
+                staged,
+                pending.function,
+                pending.params,
+                pending.description,
+                population=block,
+                replayable=pending.replayable,
+                output_dataset_path=None,
+            )
+        self._install_views()
+        n = len(redone)
+        return True, f"{n} change{'s' if n != 1 else ''} redone on the current data."
+
+    def imputations_on_other_rows(self) -> list[str]:
+        """Imputations applied in this session that were fitted on other rows than the current population."""
+        population = self.population
+        if population is None or not population.ok:
+            return []
+        current = population.rows_fingerprint
+        out = []
+        for step in self.transformation_manager.history:
+            block = step.get("population") if isinstance(step, dict) else None
+            if (
+                step.get("function") in ("imputation", "multiple_imputation")
+                and block
+                and block.get("rows_fp")
+                and block["rows_fp"] != current
+            ):
+                out.append(f"{step.get('description')} ({block.get('n_included', '?')} rows)")
+        return out
+
     # ------------------------------------------------------------------ the analysis population
 
     @property

@@ -129,6 +129,15 @@ def population_banner(*, purpose: str = "analyses") -> None:
             "change the ticked criteria in the sidebar.",
             icon=":material/filter_alt:",
         )
+    mismatched = state.imputations_on_other_rows()
+    if mismatched:
+        st.warning(
+            "The data contain imputed values fitted on other rows than the current population: "
+            + "; ".join(mismatched)
+            + ". Rows outside that population were not imputed. Tick the same criteria again, or redo the "
+            "imputation on the current population (Enrich).",
+            icon=":material/warning:",
+        )
 
 
 def _freeze(save_as: str) -> None:
