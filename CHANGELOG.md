@@ -6,6 +6,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Multiple imputation end-to-end (follow-up programme M2, in progress)
+
+- **Pooling layer** (`biostats/mi`): Rubin's rules with the formulas of R mice, including Barnard-Rubin
+  degrees of freedom from the complete-data df and lambda floored at 1e-4 instead of switching to the normal
+  distribution. Each term reports riv, lambda and FMI. Tables of regression terms come with a D1 Wald test of
+  several terms (a factor; Reiter's small-sample df) and a D2 combination of chi-square statistics. R^2 is
+  pooled with Harel's method. Ratios, proportions, correlations and survival probabilities are pooled on the
+  log, logit, Fisher z and cloglog scales and reported back. Analyses that cannot be pooled (rank tests,
+  bootstrap intervals, ICC, Bland-Altman limits, standardised variables) are listed with the reason and the
+  alternative.
+- `rubin_pool` keeps its signature. The pooled means of the Enrich MI panel now use the complete-data df n - 1.
+
 ### Repository moved to Cohort-Studio
 
 - The code is now at https://github.com/KarimELMERNISSI/Cohort-Studio and the documentation site at
