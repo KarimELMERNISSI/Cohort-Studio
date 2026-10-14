@@ -150,11 +150,17 @@ data/
 main.dist/
 main.build/
 *.duckdb
+*.parquet
 *_trace.json
 correlation_matrix.xlsx
 execution_log.txt
+# Data files exported or dropped at the root (study data never belongs in the repository)
+/*.csv
+/*.xlsx
+/*.xls
 
 # Secrets and local-only material (audit E12)
 .streamlit/secrets.toml
 DOCUMENTS/
 config/*.json
+/config*.json
