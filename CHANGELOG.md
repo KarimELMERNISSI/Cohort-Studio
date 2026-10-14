@@ -32,6 +32,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - t-test results carry the standard error of their estimate. The 2x2 analysis keeps the SEs of the log
     odds ratio, the log risk ratio and the risk difference. Kaplan-Meier curves keep their Greenwood SE.
     `MIInfo` describes a pooled result.
+- **Linear regression and ANCOVA** (`biostats/linear.py`): OLS with the coefficient table, covariance and
+  residual df, a Type II table (Wald F of each covariate, equal to the extra-sum-of-squares test in a model
+  without interactions) with partial eta squared, and adjusted (least-squares) means with their SE. It
+  reproduces statsmodels' `ols`, `anova_lm(typ=2)` and `get_prediction`. The ANCOVA page switches to it when
+  it gains its multiple-imputation mode.
 
 ### Repository moved to Cohort-Studio
 

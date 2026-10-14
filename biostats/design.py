@@ -53,12 +53,13 @@ def design_matrix(
     for col in covariates:
         if col in used:
             observed = df[col].notna()
-            values = pd.Categorical(df[col].astype(str).where(observed), categories=used[col])
-            unknown = int((pd.isna(values) & observed.to_numpy()).sum())
+            text = df[col].astype(str).where(observed)
+            unknown = int((observed & ~text.isin(used[col])).sum())
             if unknown:
                 raise ValueError(
                     f"{col} has {unknown} value(s) outside the levels {used[col]} fixed for the analysis"
                 )
+            values = pd.Categorical(text, categories=used[col])
             counts = pd.Series(values).value_counts()
             missing_levels = [lvl for lvl in used[col] if counts.get(lvl, 0) == 0]
             if missing_levels:
