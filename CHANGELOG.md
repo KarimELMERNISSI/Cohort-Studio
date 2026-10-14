@@ -6,6 +6,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Repository moved to Cohort-Studio
+
+- The code is now at https://github.com/KarimELMERNISSI/Cohort-Studio and the documentation site at
+  https://karimelmernissi.github.io/Cohort-Studio/. The former `Cohort-Monitoring-Package` addresses no longer
+  exist; clone the repository again from the new address.
+
 ### Fixed: replay of Windows traces on Linux, trace files read as UTF-8, CI failures readable
 
 - A trace recorded on Windows names its source with backslashes; on Linux (the Docker image) the replay now finds

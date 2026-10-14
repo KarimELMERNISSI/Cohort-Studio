@@ -1,12 +1,12 @@
 # CohortStudio
 
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![CI](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package/actions/workflows/ci.yml)
+[![CI](https://github.com/KarimELMERNISSI/Cohort-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimELMERNISSI/Cohort-Studio/actions/workflows/ci.yml)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9.svg)](https://karimelmernissi.github.io/Cohort-Monitoring-Package/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9.svg)](https://karimelmernissi.github.io/Cohort-Studio/)
 
 > **High-Performance Clinical Cohort Intelligence & Epidemiological Analytics**  
 > An open-source, enterprise-grade platform uniting zero-lock-in DuckDB Parquet persistence, rigorous biostatistical inference, and model-agnostic medical RAG in an intuitive, production-ready interface.
@@ -160,8 +160,8 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 
 ```bash
 # Clone the repository
-git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
-cd Cohort-Monitoring-Package
+git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
+cd Cohort-Studio
 
 # Sync virtual environment and dependencies
 uv sync
@@ -174,8 +174,8 @@ uv run streamlit run main.py
 
 ```bash
 # Clone the repository
-git clone https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package.git
-cd Cohort-Monitoring-Package
+git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
+cd Cohort-Studio
 
 # Create and activate Python 3.14+ virtual environment
 python -m venv .venv
@@ -327,6 +327,6 @@ If you use CohortStudio in academic or clinical research, please cite:
   year = {2026},
   publisher = {GitHub},
   journal = {GitHub repository},
-  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Monitoring-Package}}
+  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Studio}}
 }
 ```
