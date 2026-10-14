@@ -1,3 +1,4 @@
+import contextlib
 import json
 import logging
 import os
@@ -118,19 +119,30 @@ class TransformationManager:
         }
 
     def save_trace(self, filepath=None):
-        """Saves the trace to a JSON file."""
+        """Saves the trace to a JSON file (UTF-8, atomic replace).
+
+        A relative ``filepath`` is reduced to its file name and placed in ``trace_dir``, so a trace never
+        lands outside the user's workspace (for example in the process working directory).
+        """
         if filepath is None:
             filepath = self.get_trace_path()
-            
+
         if not filepath:
             return False, "No session initialized, cannot determine trace path."
+        if not os.path.isabs(filepath):
+            filepath = os.path.join(self.trace_dir, os.path.basename(filepath))
 
         trace = self.get_trace()
+        tmp_path = f"{filepath}.tmp"
         try:
-            with open(filepath, 'w') as f:
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(trace, f, indent=4)
+            os.replace(tmp_path, filepath)
             return True, f"Trace saved to {filepath}"
         except Exception as e:
+            with contextlib.suppress(OSError):
+                os.remove(tmp_path)
             return False, str(e)
 
     def load_trace(self, filepath):
@@ -139,7 +151,7 @@ class TransformationManager:
             return False, "Trace file not found"
 
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 trace = json.load(f)
             
             self.session_id = trace.get("session_id")
@@ -167,7 +179,7 @@ class TransformationManager:
         
         for trace_file in trace_files:
             try:
-                with open(os.path.join(self.trace_dir, trace_file), 'r') as f:
+                with open(os.path.join(self.trace_dir, trace_file), 'r', encoding='utf-8') as f:
                     trace = json.load(f)
                     
                 session_id = trace.get("session_id", "Unknown Session")

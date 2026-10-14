@@ -90,3 +90,57 @@ def test_set_dataset_resets_derived_state_and_writes_trace(data_root: Path) -> N
     probe2 = at.session_state["probe2"]
     assert probe2["origin"] == "sample" and probe2["rows"] == 500 and probe2["data_rows"] == 500
     assert probe2["dayfirst"] is True
+
+
+def _results_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    st.session_state["username"] = "bob"
+    st.session_state["user_role"] = "researcher"
+    stored = ("cox_result", "surv_result", "mh_result", "mi_result", "clustering_results")
+    for key in stored:
+        st.session_state[key] = {"from": "the previous dataset"}
+    get_state().set_dataset(
+        pd.DataFrame({"a": [1, 2]}), DatasetRef(name="next", origin="upload", file_hash="def")
+    )
+    st.session_state["left"] = [key for key in stored if key in st.session_state]
+
+
+def test_analysis_results_do_not_survive_a_dataset_swap(data_root: Path) -> None:
+    at = AppTest.from_function(_results_script, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["left"] == []
+
+
+def _filter_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.data_monitoring import commit_filter_to_session
+
+    if "probe" not in st.session_state:
+        full = pd.DataFrame({"x": range(10), "flag": [False] * 6 + [True] * 4})
+        st.session_state["data"] = full
+        st.session_state["working_df"] = full.copy()
+        st.session_state["enriched_df"] = (
+            full.copy()
+        )  # Enrich's copy, made when the dataset was loaded
+        commit_filter_to_session(full[~full["flag"]], "anomaly_data", 10, 6)
+        st.session_state["probe"] = {
+            "data": len(st.session_state["data"]),
+            "enriched": len(st.session_state["enriched_df"]),
+            "excluded_in_enrich": bool(st.session_state["enriched_df"]["flag"].any()),
+        }
+
+
+def test_an_applied_filter_reaches_the_enrich_copy() -> None:
+    """Imputation on Enrich must not be fitted on, or restore, rows excluded on Validate (audit E8 stop-gap)."""
+    at = AppTest.from_function(_filter_script, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"] == {"data": 6, "enriched": 6, "excluded_in_enrich": False}

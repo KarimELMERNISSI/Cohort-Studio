@@ -1,5 +1,4 @@
 # pages/home.py
-import hashlib
 import json
 import time
 from io import BytesIO
@@ -10,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 import explore.corr_matrix as ecm
+from core.fingerprint import frame_fingerprint
 from graph.builders.correlation import build_correlation_graph
 from graph.legend import render_legend
 from graph.model import LayoutHint, RenderOptions
@@ -30,11 +30,7 @@ def _q(identifier) -> str:
 
 def _frame_fingerprint(df) -> str:
     """Short content hash so cached statistics follow the frame (filters, renames), not only its name (audit E8)."""
-    head = f"{df.shape}|{list(map(str, df.columns))}".encode()
-    try:
-        return hashlib.md5(head + pd.util.hash_pandas_object(df, index=False).values.tobytes()).hexdigest()[:12]
-    except Exception:
-        return hashlib.md5(head).hexdigest()[:12]
+    return frame_fingerprint(df, index=False, length=12)
 
 
 def _top_correlations(corr_matrix: pd.DataFrame, node_ids, limit: int = 10) -> pd.DataFrame:

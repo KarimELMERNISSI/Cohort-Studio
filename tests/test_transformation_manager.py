@@ -1,6 +1,7 @@
 """
 Unit tests for TransformationManager (Session Tracing, Data Lineage, and Serialization).
 """
+import json
 from pathlib import Path
 
 import numpy as np
@@ -140,3 +141,33 @@ class TestTransformationManager:
         # admin sees both datasets
         admin_datasets = isolated_transformation_manager.get_available_datasets_from_traces(username="admin")
         assert len(admin_datasets) == 2
+
+
+class TestTraceFileLocation:
+    """Traces stay inside the trace directory whatever path a page passes (audit E4/E8)."""
+
+    def test_relative_paths_are_placed_in_the_trace_directory(
+        self, isolated_transformation_manager: TransformationManager, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)  # a relative path used to land in the process working directory
+        isolated_transformation_manager.initialize_session("cohort.csv")
+        ok, msg = isolated_transformation_manager.save_trace("cohort_v1_trace.json")
+        trace_dir = Path(isolated_transformation_manager.trace_dir)
+        assert ok, msg
+        assert (trace_dir / "cohort_v1_trace.json").exists()
+        assert not (tmp_path / "cohort_v1_trace.json").exists()
+
+    def test_parent_directory_segments_cannot_escape(self, isolated_transformation_manager: TransformationManager) -> None:
+        isolated_transformation_manager.initialize_session("cohort.csv")
+        ok, _ = isolated_transformation_manager.save_trace("../../escape_trace.json")
+        trace_dir = Path(isolated_transformation_manager.trace_dir)
+        assert ok
+        assert (trace_dir / "escape_trace.json").exists()
+        assert not (trace_dir.parent / "escape_trace.json").exists()
+
+    def test_traces_are_written_atomically_as_utf8(self, isolated_transformation_manager: TransformationManager) -> None:
+        isolated_transformation_manager.initialize_session("cohort.csv")
+        isolated_transformation_manager.add_step("rename_columns", {"mapping": {"poids": "poids_kg"}}, "Renommé « poids »")
+        trace_path = Path(isolated_transformation_manager.get_trace_path())
+        assert "Renommé « poids »" in json.loads(trace_path.read_text(encoding="utf-8"))["steps"][0]["description"]
+        assert not list(trace_path.parent.glob("*.tmp"))

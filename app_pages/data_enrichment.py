@@ -516,11 +516,13 @@ def display_results(enriched_df: pd.DataFrame, title: str=None ,key_base='k'):
                 if success:
                     st.session_state['current_dataset_name'] = saved_name
                     
-                    # Save transformation trace
+                    # Save a copy of the transformation trace next to the session traces (in the user's workspace)
                     if 'transformation_manager' in st.session_state:
-                        trace_path = f"{saved_name}_trace.json"
-                        st.session_state.transformation_manager.save_trace(trace_path)
-                        st.info(f"Transformation trace saved to {trace_path}")
+                        saved, trace_msg = st.session_state.transformation_manager.save_trace(f"{saved_name}_trace.json")
+                        if saved:
+                            st.info(trace_msg)
+                        else:
+                            st.warning(f"The transformation trace could not be saved: {trace_msg}")
 
                     st.success(f"Dataset saved as {saved_name} and ready for analysis!")
                 else:

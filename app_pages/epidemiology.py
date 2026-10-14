@@ -36,6 +36,7 @@ from biostats.power import (
     kruskal_sample_size,
 )
 from biostats.zscores import reference_zscores
+from core.fingerprint import frame_fingerprint
 from ui.components import no_dataset, result_card
 from ui.guidance.analysis import (
     HELP,
@@ -316,9 +317,10 @@ def run_univariate_analysis(df, analyzer, transformed=False):
             correction_key="correction",
         )
 
-    # Explicit run (audit U4): results are computed on demand and kept until the configuration changes
+    # Explicit run (audit U4): results are computed on demand and kept until the configuration or the analysed
+    # values change (a content fingerprint, so imputation, clipping or another transformation invalidates them)
     signature = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method,
-                 len(df_analysis_filtered))
+                 len(df_analysis_filtered), frame_fingerprint(df_analysis_filtered[[group_col, *target_cols]]))
     cached = st.session_state.get("univariate_cache")
     run_now = st.button("Run analysis", type="primary", key="univariate_run",
                         help="Runs every test for the selected variables. Results stay until the configuration changes.")

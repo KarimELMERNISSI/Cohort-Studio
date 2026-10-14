@@ -1822,6 +1822,25 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
 # Convert DataFrame to Excel for download using openpyxl
 
 
+def commit_filter_to_session(df_masked: pd.DataFrame, key_base: str, n_before: int, n_after: int) -> None:
+    """Install the filtered rows as the working data (the "Apply Filtering Criteria" callback)."""
+    st.session_state.data = df_masked
+    st.session_state.working_df = df_masked
+    # Enrich works on its own copy: restart it from the filtered rows, otherwise imputation would be fitted on
+    # excluded rows and "Use This Dataset" would put them back (audit E8; stop-gap until the shared analysis
+    # population replaces destructive filters)
+    st.session_state.enriched_df = df_masked.copy()
+    st.toast(f"Enrich now starts from the {n_after} filtered rows.")
+    st.session_state[f"{key_base}_applied"] = True
+    if "transformation_manager" in st.session_state:  # every mutating step is traced (audit E10)
+        st.session_state.transformation_manager.add_step(
+            "apply_filter",
+            {"criterion": key_base, "rows_before": n_before, "rows_after": n_after,
+             "kept_index": [int(i) if isinstance(i, (int, np.integer)) else str(i) for i in df_masked.index]},
+            f"Applied {key_base.replace('_data', '')} criteria: kept {n_after} of {n_before} rows",
+        )
+
+
 def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: str, st):
     """Display the results of the enrichment process."""
     if bool_column is not None:
@@ -1870,16 +1889,7 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
             n_before, n_after = len(df), len(df_masked)
 
             def _apply_filter(df_masked=df_masked, key_base=key_base, n_before=n_before, n_after=n_after):
-                st.session_state.data = df_masked
-                st.session_state.working_df = df_masked
-                st.session_state[f"{key_base}_applied"] = True
-                if "transformation_manager" in st.session_state:  # every mutating step is traced (audit E10)
-                    st.session_state.transformation_manager.add_step(
-                        "apply_filter",
-                        {"criterion": key_base, "rows_before": n_before, "rows_after": n_after,
-                         "kept_index": [int(i) if isinstance(i, (int, np.integer)) else str(i) for i in df_masked.index]},
-                        f"Applied {key_base.replace('_data', '')} criteria: kept {n_after} of {n_before} rows",
-                    )
+                commit_filter_to_session(df_masked, key_base, n_before, n_after)
 
             confirm("Apply this filter to the working dataset?",
                     f"{n_before - n_after} of {n_before} rows will be excluded from further analyses in this session. "

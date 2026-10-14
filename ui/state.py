@@ -69,6 +69,18 @@ DERIVED_KEYS: tuple[str, ...] = (
     "anomaly_data_applied",
     "inclusion_data_applied",
     "outliers_data_applied",
+    # Analysis results kept by the analysis pages; they describe the previous dataset after a swap.
+    "surv_result",
+    "cox_result",
+    "logit_result",
+    "pois_result",
+    "pair_result",
+    "one_result",
+    "mc_result",
+    "mh_result",
+    "mi_result",
+    "clustering_results",
+    "doc_coverage_results",
 )
 
 

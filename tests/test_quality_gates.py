@@ -60,6 +60,20 @@ def test_version_is_recorded_in_the_changelog() -> None:
     assert f"## [{version}]" in changelog or "## [Unreleased]" in changelog
 
 
+def test_stored_analysis_results_are_cleared_when_the_dataset_changes() -> None:
+    """Every ``*_result(s)`` key a page stores is dropped by ``AppState.set_dataset`` (audit E8)."""
+    from ui.state import DERIVED_KEYS
+
+    written = re.compile(r"""session_state(?:\[\s*["'](\w+_results?)["']\s*\]|\.(\w+_results?))\s*=(?!=)""")
+    stray = set()
+    for file in _files("app_pages", "ui"):
+        for match in written.finditer(file.read_text(encoding="utf-8", errors="replace")):
+            key = match.group(1) or match.group(2)
+            if key not in DERIVED_KEYS:
+                stray.add(f"{file.relative_to(ROOT).as_posix()}: {key}")
+    assert not stray, sorted(stray)
+
+
 def test_tests_are_not_named_like_packages() -> None:
     """A tests/<name>/ directory named like a top-level package shadows it under pytest."""
     packages = {p.name for p in ROOT.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
