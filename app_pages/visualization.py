@@ -25,7 +25,7 @@ def app():
         no_dataset()
         return
     
-    df_full = st.session_state["data"]
+    df_full = st.session_state["data"].copy(deep=False)  # local: date parsing below stays on this page
     analyzer = DataAnalyzer(df_full)
     # Apply pd.to_datetime with infer_datetime_format=True for each date column
     df_full[analyzer.date_cols] = df_full[analyzer.date_cols].apply(pd.to_datetime, errors='coerce')

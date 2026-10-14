@@ -33,6 +33,10 @@ def _ok(at: AppTest) -> None:
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
 
 
+def _metric(at: AppTest, label: str):
+    return next(m for m in at.metric if m.label == label)
+
+
 def _click(at: AppTest, label: str) -> None:
     next(b for b in at.button if b.label == label).click().run()
     _ok(at)
@@ -55,7 +59,9 @@ def test_validate_applies_the_inclusion_criteria(app: AppTest) -> None:
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
     _click(app, "Run Inclusion Criteria Check")
-    assert int(app.session_state["data"]["study_inclusion_all"].sum()) == 939
+    # the check shows its counts; it no longer writes flag columns into the dataset
+    assert _metric(app, "Rows to include in the study (%)").delta == "939"
+    assert "study_inclusion_all" not in app.session_state["data"].columns
     # the Results panel (and its Apply button) survives any later rerun: it used to vanish, so Apply never worked
     app.run()
     _ok(app)
@@ -74,7 +80,7 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     _ok(app)
     assert "anomaly_check_done" not in app.session_state
     _click(app, "Run Anomaly Detection")
-    assert int(app.session_state["data"]["clinical_anomalies_any"].sum()) == 16
+    assert _metric(app, "Irregular Rows (%)").delta == "16"
     app.run()
     app.button(key="anomaly_data_apply_criteria").click().run()
     _ok(app)

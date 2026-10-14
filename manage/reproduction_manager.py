@@ -21,6 +21,7 @@ import enrich.external_data as eed
 from core.state import ParseOptions
 from enrich.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
+from utils.date_parser import smart_parse_dates
 from utils.path_utils import resolve_path
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,12 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         new_df = df.copy()
         new_type = params.get("new_type")
         for col in params.get("columns", []):
-            new_df[col] = pd.to_datetime(new_df[col]) if new_type == "datetime" else new_df[col].astype(new_type)
+            if new_type == "datetime" and params.get("method") == "smart_parse_dates":
+                new_df[col], _ = smart_parse_dates(new_df[col])
+            elif new_type == "datetime":
+                new_df[col] = pd.to_datetime(new_df[col])
+            else:
+                new_df[col] = new_df[col].astype(new_type)
         return new_df, None
 
     if func_name == "missing_value_handling":

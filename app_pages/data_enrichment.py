@@ -18,7 +18,6 @@ import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.expressions import evaluate_tree, safe_format
 from manage.db_manager import DBManager
-from manage.transformation_manager import TransformationManager
 from ui.components import error_card, no_dataset
 from ui.components.staging import render_draft_banner
 from ui.state import get_state
@@ -1157,7 +1156,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         - A success message OR the computed Series (if return_series=True), OR an error message.
         - The modified DataFrame (or the original DataFrame on failure).
     """
-    # ... (rest of function until check)
+    dataset = dataset.copy(deep=False)  # dates are parsed and the variable added on a copy (audit E8)
     column_names = dataset.columns.tolist()
     formula = formula.strip()
     
@@ -2567,9 +2566,8 @@ def app():
     if 'db_manager' not in st.session_state:
         st.session_state.db_manager = DBManager()
 
-    # Initialize Transformation Manager
-    if 'transformation_manager' not in st.session_state:
-        st.session_state.transformation_manager = TransformationManager()
+    # The transformation trace belongs to the session (AppState)
+    get_state().transformation_manager
 
     # Initialize RAG Manager if not present
     if 'rag_manager' not in st.session_state:

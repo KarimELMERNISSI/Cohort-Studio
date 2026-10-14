@@ -218,8 +218,10 @@ class AppState:
 
     @property
     def base(self) -> pd.DataFrame | None:
-        """The committed dataset, every row (the analysis population is :meth:`analysis_frame`)."""
-        return self.session.base
+        """The committed dataset, every row, as a copy-on-write copy: changing it changes nothing in the
+        session (the analysis population is :meth:`analysis_frame`)."""
+        base = self.session.base
+        return None if base is None else base.copy(deep=False)
 
     @property
     def df(self) -> pd.DataFrame | None:
@@ -369,8 +371,9 @@ class AppState:
     # ------------------------------------------------------------------ the Enrich draft
 
     def working_frame(self) -> pd.DataFrame | None:
-        """What Enrich works on: the draft when there is one, otherwise the dataset (every row)."""
-        return self.session.working_frame()
+        """What Enrich works on: the draft when there is one, otherwise the dataset (every row), as a copy."""
+        frame = self.session.working_frame()
+        return None if frame is None else frame.copy(deep=False)
 
     def stage(
         self,
@@ -644,6 +647,13 @@ class AppState:
                     "save_version", {"dataset_name": saved}, f"Saved version: {saved}"
                 )
         return ok, msg, saved
+
+    def note(self, step: str, params: dict[str, Any] | None, description: str) -> None:
+        """A trace step that documents something without changing the data (parse report, export...)."""
+        tm = self.transformation_manager
+        if tm.session_id:
+            with contextlib.suppress(Exception):
+                tm.add_step(step, params or {}, description)
 
     # ------------------------------------------------------------------ misc
 

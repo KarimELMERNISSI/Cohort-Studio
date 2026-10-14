@@ -803,7 +803,8 @@ def app():
     df = st.session_state.get('data', None)
 
     if df is not None:
-        analyzer = DataAnalyzer(st.session_state.get('data', None))
+        df = df.copy(deep=False)  # local: the coercion below must not change the session data (audit E8)
+        analyzer = DataAnalyzer(df)
         cols_to_convert = analyzer.low_cardinality_numeric_cols + analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols
         # Ensure no duplicates in the column list
         cols_to_convert = list(set(cols_to_convert))

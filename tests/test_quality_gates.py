@@ -93,6 +93,23 @@ def test_only_app_state_writes_the_dataset() -> None:
     assert not hits, hits
 
 
+def test_trace_steps_are_written_by_app_state_only() -> None:
+    """Pages and helpers record trace steps through AppState (commit_change, stage, note)."""
+    hits = [
+        hit
+        for hit in _count(
+            r"\.add_step\(", "app_pages", "ui", "utils", "enrich", "explore", "monitor", exclude=("ui/state.py",)
+        )
+        if not _is_comment(hit)
+    ]
+    assert not hits, hits
+
+
+def test_pages_use_the_session_trace() -> None:
+    """A page never starts a trace of its own: the session has one (AppState.transformation_manager)."""
+    assert not _count(r"TransformationManager\(", "app_pages")
+
+
 def _is_comment(hit: str) -> bool:
     path, line = hit.rsplit(":", 1)
     text = (ROOT / path).read_text(encoding="utf-8", errors="replace").splitlines()[int(line) - 1]

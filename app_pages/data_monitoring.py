@@ -15,8 +15,8 @@ import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from enrich import custom_metrics_and_filters as ecm
 from manage.db_manager import DBManager
-from manage.transformation_manager import TransformationManager
 from ui.components import confirm, no_dataset
+from ui.state import get_state
 from utils.config_loader import create_empty_config, transform_expression
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
@@ -815,8 +815,7 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         return st.session_state['data'].copy(), "Current Session Data"
 
     elif selection_method == "Select from History":
-        tm = TransformationManager()
-        datasets = tm.get_available_datasets_from_traces()
+        datasets = get_state().transformation_manager.get_available_datasets_from_traces()
         
         if datasets:
             # Create formatted labels for the selectbox
@@ -1828,8 +1827,6 @@ def commit_filter_to_session(df_masked: pd.DataFrame, key_base: str, n_before: i
     The flag columns the checks add for display are not committed. Enrich follows: a draft started on the
     unfiltered rows can no longer be applied over the filtered dataset (AppState, audit E8).
     """
-    from ui.state import get_state
-
     state = get_state()
     base = state.base
     if base is None:
@@ -2215,6 +2212,47 @@ def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):
 
 ####################### APP PART ###############################
 
+def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
+    """Text columns that look like dates: preview the parsing, convert them as one traced step on request.
+
+    Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
+    """
+    candidates = [c for c in analyzer.date_cols
+                  if c in df.columns and not pd.api.types.is_datetime64_any_dtype(df[c])]
+    if not candidates:
+        return
+    parsed, notes, lost = {}, {}, {}
+    for col in candidates:
+        series, used_notes = smart_parse_dates(df[col])
+        parsed[col] = series
+        notes[col] = ", ".join(used_notes)
+        lost[col] = int(series.isna().sum() - df[col].isna().sum())
+    n = len(candidates)
+    with st.expander(f"{n} text column{'s' if n != 1 else ''} look like dates", icon=":material/calendar_month:"):
+        st.caption("They stay as text until you convert them. The conversion is one step of the trace and is "
+                   "replayed with the others.")
+        st.dataframe(pd.DataFrame({"Column": candidates,
+                                   "Detected format": [notes[c] for c in candidates],
+                                   "Values that would become missing": [lost[c] for c in candidates]}),
+                     hide_index=True, width="stretch")
+        for col, count in lost.items():
+            if count > len(df) * 0.05:
+                st.warning(f"High data loss in '{col}': {count} values could not be parsed.")
+        if st.button(f"Convert {n} column{'s' if n != 1 else ''} to dates", key="convert_dates", type="primary"):
+            converted = state.base
+            for col in candidates:
+                converted[col] = parsed[col]
+            state.commit_change(
+                converted,
+                "data_type_conversion",
+                {"columns": candidates, "new_type": "datetime", "method": "smart_parse_dates",
+                 "notes": notes, "values_lost": lost},
+                f"Converted {n} column{'s' if n != 1 else ''} to dates",
+            )
+            st.rerun()
+
+
+
 def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """Process dataset using DataAnalyzer to fix types."""
     if df is None:
@@ -2284,56 +2322,16 @@ def app():
                 st.error("Invalid JSON file. Please upload a valid configuration file.")
             
     
-    # Load or select dataset (assuming df is already loaded into session state) 
-    df = st.session_state.get('data', None)
+    # Every row of the dataset (validation ignores the analysis population); a copy: the checks below add
+    # display columns, and changes to the data go through AppState (audit E8)
+    state = get_state()
+    df = state.base
     analyzer = None
     if df is not None:
-        analyzer = DataAnalyzer(st.session_state.get('data', None))
+        analyzer = DataAnalyzer(df)
+        render_date_conversion(state, df, analyzer)
         
-        # Standardize Date Columns to ensure consistency across the app
-        date_cols_standardized = []
-        parsing_report = {}
-        
-        for col in analyzer.date_cols:
-            original_values = df[col].copy()
-            
-            # SMART DATE PARSING (Heuristic-Based)
-            parsed_series, used_notes = smart_parse_dates(df[col])
-            
-            # Check for data loss
-            original_nans = df[col].isna().sum()
-            new_nans = parsed_series.isna().sum()
-            loss = new_nans - original_nans
-            
-            df[col] = parsed_series
-            date_cols_standardized.append(f"{col} ({', '.join(used_notes)})")
-            
-            if loss > len(df) * 0.05: # >5% loss
-                st.warning(f"High data loss in '{col}': {loss} rows could not be parsed.")
 
-            # IMPORTANT: Since we modified the data in place (potentially fixing thousands of rows), 
-            # we MUST invalidate any cached statistics that might have been computed on the "bad" data.
-            # We do this UNCONDITIONALLY if we processed a date column.
-            if 'current_dataset' in st.session_state:
-                st.session_state.db_manager.clear_stats(st.session_state.current_dataset)
-            if 'dataset_name' in st.session_state: # Another common key
-                    st.session_state.db_manager.clear_stats(st.session_state.dataset_name)
-            
-            # Also clear Streamlit's data cache if possible, though 'st.cache_data.clear()' is global.
-            # We rely on DBManager clearing the parquet files.
-
-            # Note: Removed redundant 'else' block and 'res_primary' logic.
-            
-        if date_cols_standardized:
-            st.info(f"**Date Consistency Applied**: {', '.join(date_cols_standardized)}")
-            
-        if parsing_report:
-            with st.expander("Date Parsing Issues Detected", expanded=True):
-                st.warning("Some values could not be converted to dates. Please check the examples below:")
-                for col, examples in parsing_report.items():
-                    st.write(f"**{col}**: Failed to parse strings like `{examples}`")
-    
-    
     # Create tabs for different visualization aspects
     tab_dashboard, tab1, tab2, tab3, tab4 = st.tabs(["Data Quality Dashboard", "Handle Clinical Anomalies", "Handle Inclusion Criteria", "Handle Outliers", "Compare Data Files"])
 

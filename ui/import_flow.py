@@ -5,7 +5,6 @@ user can override, a 20-row preview and a parse report), then name and load it.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import io
 from typing import Any
@@ -291,10 +290,7 @@ def render_import_flow(state: AppState) -> None:
             options=options,
             name=dataset_base_name(name),
         )
-        with contextlib.suppress(Exception):
-            state.transformation_manager.add_step(
-                "parse_report", result.report.to_dict(), "Parse report of the imported file"
-            )
+        state.note("parse_report", result.report.to_dict(), "Parse report of the imported file")
         if save_now:
             ok, msg, saved = state.save_version(ref.name)
             if not ok:
