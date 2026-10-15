@@ -73,6 +73,30 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 
 After imputation, an **imputation mask** highlights which values were filled, and a **before/after summary** is displayed.
 
+Values filled here are single imputations: fine for exploration, clustering and figures, but the analyses treat them as observed, so their standard errors and p-values are too small. CohortStudio remembers which cells were filled (also in saved versions and replays), and every result that uses them shows a warning.
+
+### Multiple imputation (for inference)
+
+The **Multiple imputation (for inference)** tab creates m completed versions of the analysis population. The analysis pages run each analysis on every version and pool the results with Rubin's rules (chapter 5). The dataset itself is not changed. The panel has five steps.
+
+1. **Population and missingness**: rows, share of incomplete rows, the suggested m (at least the percentage of incomplete rows; White, Royston & Wood 2011) and the missing values of each variable. Values filled earlier by a single imputation are flagged: the multiple imputation would treat them as observed.
+2. **Imputation model**: the variables. Identifiers, dates, free text and categories with more than 20 levels are left out by default. Keep every variable of the planned analyses, the outcome included: leaving it out biases the associations towards zero (Moons et al. 2006). Each incomplete variable gets a method:
+
+   | Method | For | How |
+   | --- | --- | --- |
+   | `pmm` | numeric | predictive mean matching: a Bayesian regression draw, then an observed value of one of the 5 closest donors (default) |
+   | `norm` | numeric | Bayesian linear regression with a random residual |
+   | `logreg` | two categories | Bayesian logistic regression, augmented against perfect prediction (White, Daniel & Royston 2010) |
+   | `polyreg` | several categories | multinomial logistic regression on a bootstrap sample of the observed rows |
+   | `rf` | any | random-forest donors (Doove, van Buuren & Dusseldorp 2014) |
+   | *do not impute* | structurally missing values | the variable stays missing and is not used as a predictor (for example a 6-month measurement of a patient who died before 6 months) |
+
+3. **Settings**: m, iterations, seed (the same settings give the same imputations), imputation within the levels of a variable (`by`), a planned Cox model (the event and the Nelson-Aalen cumulative hazard then replace the follow-up time as predictors; White & Royston 2009), and several processor cores.
+4. **Diagnostics**: chain traces (mean and SD of each variable per iteration: the chains should mix, without a trend), an indicative R-hat, observed against imputed values, and the predictors left out (constant or collinear).
+5. **Use, save, export**: the status of the imputation against the current population (fresh, a union of whole strata, fitted on more rows, or out of date), saving a version with the imputation, mice long and Stata flong files, and a methods paragraph to adapt for the paper (Sterne et al. 2009).
+
+The imputation is recorded in the trace (`mi_impute`, with a fingerprint of the imputed cells); a full replay re-runs it and checks that it finds the same cells.
+
 ---
 
 ## Create New Variables

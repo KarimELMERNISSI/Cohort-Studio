@@ -11,8 +11,8 @@ FEATURES = (
     (":material/auto_fix_high:", "Data enrichment", (
         "**Merge and harmonise** external datasets into one cohort.",
         "**Derived variables** from formulas evaluated in a sandbox, manually or with AI suggestions.",
-        "**Imputation**: single imputation for exploration; a multiple-imputation diagnostic that pools the "
-        "imputed means with Rubin's rules (pooled analyses are planned).",
+        "**Imputation**: single imputation for exploration; multiple imputation for inference, with the "
+        "analyses pooled by Rubin's rules on the Survival & regression and Analyze pages.",
     )),
     (":material/analytics:", "Descriptive analytics", (
         "**Univariate statistics** by variable type with normality diagnostics.",

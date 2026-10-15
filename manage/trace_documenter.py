@@ -158,14 +158,41 @@ class TraceDocumenter:
                 cells[2].text = f"{stage.get('n_excluded', 0):,}"
                 cells[3].text = f"{stage.get('n_out', 0):,}"
             
-        # Parameters Table
+        # Multiple imputation: the methods paragraph (reporting items of Sterne et al. 2009)
         params = step.get("params", {})
+        if step.get("function") == "mi_impute" and isinstance(params, dict) and params.get("spec"):
+            self._add_mi_methods(doc, params)
+
+        # Parameters Table
         if params:
             p = doc.add_paragraph()
             p.add_run("Parameters:").bold = True
             self._render_params(doc, params)
             
         doc.add_paragraph() # Spacer
+
+    def _add_mi_methods(self, doc, params):
+        """The methods paragraph of a multiple imputation, written from its recorded specification."""
+        from types import SimpleNamespace
+
+        from biostats.mi.report import methods_paragraph
+
+        spec = params["spec"]
+        binding = SimpleNamespace(
+            spec=spec, methods=params.get("methods") or {}, columns=list(spec.get("columns") or [])
+        )
+        try:
+            text = methods_paragraph(
+                binding,
+                n_rows=int(params.get("n_rows", 0)),
+                incomplete=params.get("incomplete"),
+                info={"engine": params.get("engine", "CohortStudio")},
+            )
+        except (KeyError, TypeError, ValueError):
+            return
+        p = doc.add_paragraph()
+        p.add_run("Methods paragraph (reporting items of Sterne et al. 2009): ").bold = True
+        p.add_run(text)
 
     def _render_params(self, doc, params, indent=0):
         if not params:

@@ -113,7 +113,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
 | G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
 | S1–S3, S5 wrong numbers | closed | P2 (`biostats/`) |
-| S4 single imputation presented as MICE | partially open (reviewed 2026-10-14): honest labelling, seeds and observed-rows fit (P2); m completed datasets with pooled *means* (P8). No analysis is pooled across imputations, "adopt" installs one completed dataset (single imputation again), and Barnard-Rubin degrees of freedom are never active | P2, P8; follow-up M2 |
+| S4 single imputation presented as MICE | closed (2026-10-15, M2, awaiting the owner's review): chained-equations engine with m independent chains (pmm, norm, logreg, polyreg, rf); the Survival & regression and Analyze pages pool their analyses with Rubin's rules (Barnard-Rubin df, D1/D2), with parity against R mice 3.19 and mitml 0.4.5; the imputation is bound to the analysis population, saved with versions, replayed and checked; values filled by single imputation are flagged under the results that use them | P2, P8; M2 |
 | S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
 | S11 missing methods (survival, regression, MH, paired, agreement) | closed | P8 (Survival & regression page; Paired, rates & stratified tab; reliability section) |
 | E1 leaked key | open | owner action |
@@ -125,7 +125,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | E7 PHI on stdout | closed | P0 |
 | E8 stale state / cache | closed (2026-10-14): one write path (`AppState` over `core/session.py`), dataset views reinstalled every run (strict mode in the tests), the Enrich draft cannot be applied over newer data or another population, results stamped with the data, population and settings (`ui/results.py`), no render-time mutation, inclusion and exclusion criteria as a shared, reversible analysis population | P4, P6; M0; M1 |
 | E9 undefined names / empty-state crashes | closed | P0 |
-| E10 reproducibility claims | closed (2026-10-14): trace schema 2 (data block per step, SHA-256 chain, `verify_trace`), replay checked step by step against the recorded fingerprints (divergence and non-recomputable steps reported), row ids kept through merges, saves and replays, lineage file for saved versions, dates converted by an explicit traced step, outlier exclusion as a criterion and clipping as a traced step; an adopted multiple imputation is reported as not recomputable (M2 rebuilds it) | P6; M1 |
+| E10 reproducibility claims | closed (2026-10-14): trace schema 2 (data block per step, SHA-256 chain, `verify_trace`), replay checked step by step against the recorded fingerprints (divergence and non-recomputable steps reported), row ids kept through merges, saves and replays, lineage file for saved versions, dates converted by an explicit traced step, outlier exclusion as a criterion and clipping as a traced step; an adopted multiple imputation is reported as not recomputable; since M2 a multiple imputation (`mi_impute`) is re-run by the replay and its imputed cells checked | P6; M1; M2 |
 | E11 per-rerun expensive work | partially closed (upload hash once per file, AI probes cached and moved to Settings) | P4; remaining DataAnalyzer/audit recomputation in P6 |
 | E12 tracked secrets/config | closed | P0 |
 | E13 layering / dead code / duplication | closed for layering (test-enforced), dead code and duplicates; giant functions (59 > 100 lines) remain | P6; splitting with P7/P8 |
@@ -147,7 +147,7 @@ order, with a review after each milestone.
 |---|---|---|
 | M0 | Truth and safety net: false regulatory and reproducibility claims removed (21 CFR Part 11, "signed", "immutable", STROBE/CONSORT "compliant", 100 % coverage), MI advice corrected, result caches cleared on a dataset swap, Validate filter reaches Enrich, traces written inside the user workspace, wheel contents fixed, per-package coverage floors in CI | done |
 | M1 | One analysis population and one source of truth: inclusion and exclusion criteria become a shared, reversible selection (only an explicit, traced "freeze" deletes rows); single mutation path; data and population fingerprints; results stamped with the data they were computed on; hash-chained (tamper-evident) trace v2 with attrition counts | done |
-| M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | planned |
+| M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | done (2026-10-15), awaiting the owner's review |
 | M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | planned |
 | M4 | Packaging and deployment: optional dependency groups, engine-only CI job, Docker image built in CI, first-run administrator | planned |
 

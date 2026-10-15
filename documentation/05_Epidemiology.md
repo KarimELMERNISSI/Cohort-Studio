@@ -170,6 +170,37 @@ Categorical covariates are one-hot coded with their first (alphabetical) level a
 | Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
 | Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales |
 
-The multiple-imputation diagnostic lives on the Enrich page (Global imputation tab). It pools the imputed
-means with Rubin's rules; the analyses on this page are not yet pooled across imputations, so run them on the
-complete cases for inference (a singly-imputed dataset gives standard errors and p-values that are too small).
+## Analyses with multiply imputed data
+
+Run the multiple imputation on **Data > Enrich > Handle missing data > Multiple imputation (for inference)**
+(chapter 3). The sidebar then offers **Analysis data**: *Observed* or *Imputed (m = ...)*. With *Imputed*, the
+analysis pages run each analysis on every imputed dataset of the analysis population and combine the results
+with Rubin's rules (van Buuren 2018). The complete-case analysis is shown under each pooled result.
+
+| Page | Pooled analyses |
+| --- | --- |
+| Survival & regression | Kaplan-Meier curves (pooled on the log(-log) scale, median read from the pooled curve), log-rank test (D2), Cox, logistic and count models (ratios pooled on the log scale, D1 test of each factor) |
+| Hypothesis tests > Analysis | Welch t-test (two groups); group means and a D1 test (three or more groups); odds ratio, risk ratio and risk difference (binary variable); chi-square test of independence (D2); ANCOVA (Type II tests by D1, adjusted means, R2 by Harel's method) |
+| Hypothesis tests > Paired, rates & stratified | paired and one-sample t-tests |
+
+How to read a pooled table:
+
+- **df**: Barnard-Rubin degrees of freedom. They are small when the imputed datasets disagree.
+- **FMI**, the fraction of missing information: the share of the information about the estimate that the
+  missing values cost. A large FMI with a small m calls for more imputations (White, Royston & Wood 2011).
+- **RIV**: the relative increase in variance due to the missing values.
+- **D1** tests several coefficients at once (a factor) with a pooled Wald test. **D2** combines chi-square
+  statistics; it is approximate.
+
+Not pooled: rank tests (Mann-Whitney, Kruskal-Wallis, Wilcoxon), Fisher's exact test, Hodges-Lehmann shifts
+and bootstrap intervals give no estimate with a variance to combine; the ICC and Bland-Altman limits have no
+validated pooling rule; z-scores and min-max scaling depend on each imputed dataset. The page gives the reason
+and the alternative. McNemar, Mantel-Haenszel, diagnostic accuracy and kappa analyse the observed data in this
+version.
+
+An imputation is used only while it fits the analysis population. After a change of the ticked criteria or
+of the imputed variables, the pages say why the imputed data are not used and analyse the observed data until
+the imputation is run again.
+
+Values filled by **single imputation** (Global imputation, formula imputation) are treated as observed by
+every analysis. A result that uses them shows a warning: its standard errors and p-values are too small.

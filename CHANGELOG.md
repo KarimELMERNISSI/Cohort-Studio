@@ -6,7 +6,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
-### Multiple imputation end-to-end (follow-up programme M2, in progress)
+### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
 - **Pooling layer** (`biostats/mi`): Rubin's rules with the formulas of R mice, including Barnard-Rubin
   degrees of freedom from the complete-data df (as mice 3.19: imputations that agree give infinite df). Each
@@ -152,8 +152,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     standard errors and p-values are too small.
   - The multiple-imputation panel flags them too, since it would treat them as observed. The analysis-data
     selector then reads "Observed + single-imputed".
-
-### Repository moved to Cohort-Studio
+- **Documentation**: the README, the About page, the workflow map, the documentation site and the handbook
+  describe multiple imputation as it now works:
+  - chapter 3: the multiple-imputation panel;
+  - chapter 5: what each page pools, how to read df, FMI, RIV, D1 and D2, and what is not pooled;
+  - chapter 8: the replay of a multiple imputation;
+  - the tutorial: multiple imputation in step 3.3 and pooled analyses in step 6.1.
+  - The audit report closes S4 and marks M2 done, pending the owner's review.
+- The Word report gives the methods paragraph of a multiple imputation (Sterne et al. 2009), written from its trace
+  step, which now records the share of incomplete rows.
 
 - The code is now at https://github.com/KarimELMERNISSI/Cohort-Studio and the documentation site at
   https://karimelmernissi.github.io/Cohort-Studio/. The former `Cohort-Monitoring-Package` addresses no longer

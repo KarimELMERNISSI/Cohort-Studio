@@ -92,9 +92,12 @@ def incomplete_share(df: pd.DataFrame, columns: Sequence[str]) -> float:
 
 
 def methods_paragraph(
-    binding: Any, *, n_rows: int, incomplete: float, info: dict[str, Any] | None = None
+    binding: Any, *, n_rows: int, incomplete: float | None, info: dict[str, Any] | None = None
 ) -> str:
-    """The methods paragraph of a report for an imputation (biostats.mi.binding.MIBinding)."""
+    """
+    The methods paragraph of a report for an imputation (biostats.mi.binding.MIBinding, or anything with its
+    ``spec``, ``methods`` and ``columns``), covering the reporting items of Sterne et al. (2009).
+    """
     spec = binding.spec
     methods = binding.methods
     groups: dict[str, list[str]] = {}
@@ -106,7 +109,9 @@ def methods_paragraph(
         "Missing data were handled by multiple imputation by chained equations (fully conditional specification), "
         "under the assumption that the data are missing at random given the variables of the imputation model.",
         f"Of the {n_rows:,} participants of the analysis population, {incomplete:.1%} had at least one missing value "
-        "in these variables.",
+        "in these variables."
+        if incomplete is not None
+        else f"The analysis population had {n_rows:,} participants.",
         f"The imputation model included {len(binding.columns)} variables ({', '.join(binding.columns)}); the outcome "
         "of the analyses was included as a predictor.",
         f"Missing values were imputed as follows: {how}{donors}.",

@@ -54,8 +54,11 @@ Replay a trace to reproduce the exact sequence of transformations.
 | **Full replay** | Recomputes every step from the source file and the recorded parameters, and checks each step against the fingerprint recorded for it. |
 
 A full replay says when the replayed table is exactly the one that was recorded, reports the first step where it
-differs, and lists the steps it cannot recompute (an adopted multiple imputation, data replaced outside the app);
-for those it uses the recorded snapshot when there is one. The replayed state becomes the session dataset, linked to
+differs, and lists the steps it cannot recompute (the single imputation adopted from the former
+multiple-imputation panel, data replaced outside the app); for those it uses the recorded snapshot when there is
+one. A multiple imputation (`mi_impute`) is re-run from its recorded settings and checked against the
+fingerprint of its imputed cells. A full replay also finds the cells filled by single imputations, so results
+on the replayed data carry the same warning; a fast replay from snapshots does not know them. The replayed state becomes the session dataset, linked to
 the trace it was replayed from.
 
 ### Path Resolution

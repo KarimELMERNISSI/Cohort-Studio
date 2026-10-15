@@ -227,6 +227,7 @@
           </p>
           <ul class="exploration-points">
             <li><strong>Imputation:</strong> Iterative tree imputation (missForest algorithm, LightGBM learners) and single imputation by chained equations; the pages state that single imputation does not propagate imputation uncertainty.</li>
+            <li><strong>Multiple imputation:</strong> chained equations like R mice (m independent chains, diagnostics); survival, regression and group comparisons pooled with Rubin's rules, with parity tests against R.</li>
             <li><strong>Mixed-Data Phenotyping:</strong> Factor Analysis of Mixed Data (FAMD) handles continuous lab panels alongside categorical diagnosis flags.</li>
             <li><strong>Standard Semantic Ontologies:</strong> AI-driven variable renaming mapped directly to UMLS, SNOMED CT, and LOINC clinical terminology.</li>
           </ul>
@@ -1149,7 +1150,7 @@ modebar_config = eu.get_publication_plot_config(
         <span class="section-tag">Recorded Provenance</span>
         <h2 class="section-title">End-to-End Pipeline Reproduction &amp; Word Trace Reports</h2>
         <p class="section-desc">
-          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a hash-chained JSON trace (tamper-evident) with what it did to the table, replays it while checking every step against its recorded fingerprint, and documents it in a Word (.docx) report. The few steps that cannot be recomputed (an adopted multiple imputation) are reported by the replay rather than silently skipped.
+          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a hash-chained JSON trace (tamper-evident) with what it did to the table, replays it while checking every step against its recorded fingerprint, and documents it in a Word (.docx) report. A multiple imputation is re-run and its imputed cells are checked; the few steps that cannot be recomputed (the single imputation adopted from the former multiple-imputation panel) are reported by the replay rather than silently skipped.
         </p>
       </div>
 
@@ -1398,7 +1399,7 @@ report = TraceDocumenter(trace_data).generate_report()  <span class="token-cm">#
         <div class="arch-card">
           <h3 class="arch-title">2. Domain &amp; Computation</h3>
           <p class="arch-desc">
-            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, single imputation (chained equations, KNN, MissForest-style) with a multiple-imputation diagnostic, and biostatistical engines.
+            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, single imputation (chained equations, KNN, MissForest-style) multiple imputation with pooled analyses (<code>biostats/mi</code>), and biostatistical engines.
           </p>
         </div>
 

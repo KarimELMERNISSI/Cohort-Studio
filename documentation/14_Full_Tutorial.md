@@ -155,16 +155,29 @@ so check the quality once more (step 2.1).
 
 In **Handle Missing Data**:
 
-- `ldl_mmol_l` is missing at random: single imputation (KNN or MICE) is acceptable for exploration. The imputation
-  is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients keep their missing
-  values. If you change the ticked criteria afterwards, the analysis pages warn that the imputation was fitted on
-  other rows.
+- `ldl_mmol_l` is missing completely at random: single imputation (KNN or MICE) is acceptable for exploration.
+  The imputation is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients
+  keep their missing values. Every result computed on the filled values then shows a warning, because the
+  analyses treat them as observed. If you plan inferential analyses, skip this and use the multiple imputation
+  below for every incomplete variable.
 - **Do not impute `sbp_6m`.** Its values are missing because the patient died or left. Analyse the patients who
   have the measurement and say so.
-- For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), the right method is **multiple
-  imputation** with the analysis pooled by Rubin's rules. CohortStudio does not pool analyses yet: analyse the
-  complete cases for inference and say so, and use the multiple-imputation panel to see the fraction of missing
-  information. A single completed dataset gives standard errors and p-values that are too small.
+- For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), use **multiple imputation** on
+  the **Multiple imputation (for inference)** tab:
+  1. Step 1 shows the 928 rows of the analysis population, the share of incomplete rows and the suggested
+     number of imputations.
+  2. Step 2 keeps the variables of the planned analyses in the model, outcomes included (`death`, `fu_days`,
+     `hf_hospitalisation`): leaving an outcome out would bias its associations towards zero. Set the method of
+     `sbp_6m` to *do not impute*: its values are missing because the patient died or left.
+  3. In step 3, keep the suggested m (the percentage of incomplete rows: about half of them miss at least one
+     value), tick the planned Cox model with time `fu_days` and event `death`, and use several processor
+     cores.
+  4. Run it. In step 4 the chain traces should mix without a trend. The imputed HbA1c values are lower than the
+     observed ones: HbA1c is mostly missing in patients without diabetes, whose values are lower.
+  5. Step 5 saves the imputation with a version, exports it for R or Stata, and writes a methods paragraph.
+
+  The dataset itself is unchanged: the analyses use the imputed datasets when you choose **Analysis data:
+  Imputed** in the sidebar (step 6.1).
 
 ---
 
@@ -254,6 +267,20 @@ Open **Analyze > Survival & regression**.
 - **Count model:** count `n_hospital_visits`, exposure (person-time) `fu_days`, covariate `arm`. The incidence
   rate ratio is about **0.80**.
 
+### 6.1 With multiple imputation
+
+In the sidebar, set **Analysis data** to *Imputed*. The banner says that the analyses pool the imputed datasets
+of the 928 rows. Fit the Cox model again with `arm`, `age`, `diabetes` and `hba1c_pct`:
+
+- each hazard ratio comes with its 95% CI, the Barnard-Rubin df, the fraction of missing information (FMI) and
+  the relative increase in variance (RIV); `hba1c_pct` has the largest FMI;
+- *Complete-case analysis, for comparison* fits the same model on the patients with every value: about a
+  fifth fewer patients and wider intervals.
+
+On **Hypothesis tests & epidemiology**, compare `hba1c_pct` between the arms: the Welch t-test is pooled, and
+the Mann-Whitney test is listed as not poolable, with the reason. Untick a criterion in the sidebar: the pages
+say that the imputation no longer fits the population and analyse the observed data until you run it again.
+
 ---
 
 ## Step 7 - Knowledge (optional, needs the AI engine)
@@ -277,7 +304,9 @@ chained by hashes, so a later modification would show. It lists every step, in o
    version first used it;
 3. the merge;
 4. the derived variables;
-5. any imputation, with the population it was fitted on.
+5. any imputation, with the population it was fitted on;
+6. the multiple imputation, with its settings and a fingerprint of the imputed cells. A full replay re-runs it
+   and checks that it finds the same cells, and the Word report gives its methods paragraph.
 
 Replay a step: the engine recomputes the data and checks it against the fingerprint recorded for every step, and
 says when the replayed table is exactly the one you analysed. Download the **Word report**: it documents the whole

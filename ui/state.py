@@ -585,6 +585,7 @@ class AppState:
             import sklearn
 
             from biostats.mi.engine import ENGINE
+            from biostats.mi.report import incomplete_share
 
             mi = run.mi
             params = {
@@ -593,6 +594,7 @@ class AppState:
                 "m": mi.m,
                 "n_rows": int(len(mi.base)),
                 "n_imputed": mi.n_imputed(),
+                "incomplete": incomplete_share(mi.base, list(run.spec.columns)),
                 "cells_fp": mi.fingerprint(),
                 "engine": ENGINE,
                 "versions": {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__},
