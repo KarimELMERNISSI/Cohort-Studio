@@ -2183,10 +2183,13 @@ def app():
                 no_dataset()
             return
 
-        tab_targeted, tab_global = st.tabs([
-            "Targeted Imputation (Custom Formula)", 
-            "Global Imputation (single imputation)"
+        tab_targeted, tab_global, tab_multiple = st.tabs([
+            "Targeted Imputation (Custom Formula)",
+            "Global Imputation (single imputation)",
+            "Multiple imputation (for inference)",
         ])
+        with tab_multiple:
+            render_multiple_imputation()
         
         # --- TAB 1: Targeted Imputation ---
         with tab_targeted:
@@ -2321,9 +2324,8 @@ def app():
                 "Single imputation fills each missing cell once. P-values and confidence intervals computed on the "
                 "imputed dataset will be too narrow because the uncertainty of the imputation is ignored. Use it for "
                 "exploration and visualisation; for inference prefer complete-case analysis with a sensitivity check "
-                "or multiple imputation (below)."
+                "or multiple imputation (next tab)."
             )
-            render_multiple_imputation()
 
             main_data = st.session_state['enriched_df']
 

@@ -101,7 +101,7 @@ def _results_script() -> None:
 
     st.session_state["username"] = "bob"
     st.session_state["user_role"] = "researcher"
-    stored = ("cox_result", "surv_result", "mh_result", "mi_result", "clustering_results")
+    stored = ("cox_result", "surv_result", "mh_result", "clustering_results")
     for key in stored:
         st.session_state[key] = {"from": "the previous dataset"}
     get_state().set_dataset(

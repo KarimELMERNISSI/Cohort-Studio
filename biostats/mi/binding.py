@@ -97,6 +97,10 @@ def bind(
         "dropped": dict(run.dropped),
         "warnings": list(run.warnings),
         "elapsed": run.elapsed,
+        # chain means and SDs per iteration (lists: they are saved with the version for the trace plots)
+        "trace": {
+            name: {k: v.tolist() for k, v in values.items()} for name, values in run.trace.items()
+        },
     }
     return StoredMI(
         mi=mi,

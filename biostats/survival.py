@@ -42,19 +42,24 @@ REFERENCES.setdefault(
 )
 
 
-def _clean(times: Sequence, events: Sequence) -> tuple[np.ndarray, np.ndarray]:
-    t = np.asarray(pd.to_numeric(pd.Series(list(times)), errors="coerce"), dtype=float)
+EVENT_WORDS = ("1", "1.0", "true", "yes", "y", "event", "died", "dead")
+
+
+def event_indicator(events: Sequence) -> np.ndarray:
+    """1 = event, 0 = censored; text and booleans read with EVENT_WORDS, missing values stay NaN."""
     e = pd.Series(list(events))
     if e.dtype == object or e.dtype == bool or str(e.dtype).startswith("str"):
         e = e.map(
             lambda v: (
-                1.0
-                if str(v).strip().lower()
-                in ("1", "1.0", "true", "yes", "y", "event", "died", "dead")
-                else 0.0
+                np.nan if pd.isna(v) else (1.0 if str(v).strip().lower() in EVENT_WORDS else 0.0)
             )
         )
-    e = np.asarray(pd.to_numeric(e, errors="coerce"), dtype=float)
+    return np.asarray(pd.to_numeric(e, errors="coerce"), dtype=float)
+
+
+def _clean(times: Sequence, events: Sequence) -> tuple[np.ndarray, np.ndarray]:
+    t = np.asarray(pd.to_numeric(pd.Series(list(times)), errors="coerce"), dtype=float)
+    e = event_indicator(events)
     mask = ~(np.isnan(t) | np.isnan(e)) & (t >= 0)
     return t[mask], e[mask].astype(int)
 

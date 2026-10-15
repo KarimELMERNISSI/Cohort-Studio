@@ -94,6 +94,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     finds exactly the same cells; a difference is reported, with any library version that changed since.
   - The adopted single imputation of the former MI panel (`multiple_imputation`) stays reported as not
     recomputable.
+- **Guided multiple-imputation panel** (Enrich > Handle missing data > Multiple imputation, replaces the former
+  expander that pooled only means):
+  1. Population and missingness: rows, share of incomplete rows, suggested m, missingness per variable, the MAR
+     assumption.
+  2. Model: variables (identifiers, dates, free text and categories with more than 20 levels left out by
+     default), the outcome of the planned analyses kept in, and a method per incomplete variable.
+  3. Settings: m, iterations, seed, strata, a planned Cox model, several processor cores.
+  4. Diagnostics: chain traces, R-hat, observed against imputed values, predictors left out.
+  5. Use, save, export: status against the analysis population, saving a version with the imputation, mice long
+     and Stata flong files, and a methods paragraph following Sterne et al. (2009).
+  - The single imputation of "Global imputation" remains, for exploration.
+  - Parallel imputation runs in a separate Python process: worker processes no longer re-run the Streamlit page
+    script, which is `__main__` inside the application.
+  - The event indicator of survival analyses reads text (yes, event, died) everywhere (`event_indicator`).
 
 ### Repository moved to Cohort-Studio
 

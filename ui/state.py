@@ -102,7 +102,6 @@ DERIVED_KEYS: tuple[str, ...] = (
     "one_result",
     "mc_result",
     "mh_result",
-    "mi_result",
     "clustering_results",
     "doc_coverage_results",
     "_results",  # the result store (ui/results.py): stamped results go stale on change, cleared on a swap

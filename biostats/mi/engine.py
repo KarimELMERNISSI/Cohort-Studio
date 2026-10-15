@@ -317,10 +317,18 @@ def impute(
     """
     Multiple imputation of ``df`` by chained equations; returns the imputed data and the diagnostics.
 
-    ``workers`` > 1 runs the chains in that many processes; the result is identical (one stream per chain).
+    ``workers`` > 1 runs the chains in that many processes; the result is identical (one stream per chain). The
+    processes are started from a separate interpreter (:mod:`biostats.mi.parallel`), so that they never re-run
+    the Streamlit page script that is ``__main__`` in the application.
     """
-    started = time.perf_counter()
+    import os
+
+    from biostats.mi.parallel import IN_SUBPROCESS, run_in_subprocess
+
     _check(df, spec)
+    if workers > 1 and spec.m > 1 and not os.environ.get(IN_SUBPROCESS):
+        return run_in_subprocess(df, spec, workers, progress)
+    started = time.perf_counter()
     methods, predictors, warnings = _resolve(df, spec)
     strata: list[tuple[int, Any, np.ndarray]] = []
     if spec.by is None:
@@ -352,9 +360,11 @@ def impute(
             if c in methods and c not in vars_:
                 vars_[c] = _encode(part[c])
         if spec.survival is not None:
+            from biostats.survival import event_indicator
+
             hazard = nelson_aalen(
                 part[spec.survival[0]].to_numpy(dtype=float),
-                part[spec.survival[1]].to_numpy(dtype=float),
+                event_indicator(part[spec.survival[1]]),
             )
             vars_[HAZARD] = _Var(HAZARD, True, [], hazard, np.zeros(len(part), dtype=bool))
             if spec.survival[1] not in vars_:
