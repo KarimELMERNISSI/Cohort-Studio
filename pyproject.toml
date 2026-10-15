@@ -121,6 +121,7 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 markers = [
     "integration: integration tests requiring external services or API keys",
+    "slow: statistical simulation suites (minutes; run with -m slow)",
 ]
-addopts = "-m 'not integration' -ra"
+addopts = "-m 'not integration and not slow' -ra"
 

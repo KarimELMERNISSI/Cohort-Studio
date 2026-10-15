@@ -59,6 +59,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - A failure names the imputed dataset. Rank tests are refused with the reason and the alternative.
     Warnings are counted across imputations, and the complete-case analysis is kept for comparison. A time
     budget gives a result labelled as a preview.
+- **Imputation engine** (`biostats/mi/engine.py`, `methods.py`, `spec.py`): chained equations like R mice.
+  - Methods: `pmm` (Bayesian regression draw, type-1 matching, 5 donors), `norm`, `logreg` (augmented against
+    perfect prediction, White, Daniel & Royston 2010), `polyreg` (augmented, bootstrap of the observed rows
+    for parameter uncertainty) and `rf` (random-forest donors, Doove et al. 2014). miceforest was evaluated
+    and not adopted: its imputations carry no parameter uncertainty and its inference is unvalidated.
+  - The m chains are independent, one random stream each (`SeedSequence(seed, (stratum, chain))`): results
+    are reproducible, do not depend on m, and are identical when the chains run in parallel processes
+    (`workers`). 50,000 rows x 20 variables, m = 20, 10 iterations: 2.7 minutes with 10 processes.
+  - Constant, collinear and dependent predictors are left out before each fit (scale-free).
+  - Options: imputation within the levels of a variable (`by`); for a Cox analysis, the event indicator and
+    the Nelson-Aalen H(T) replace the follow-up time as predictors (White & Royston 2009). Chain traces come
+    with an indicative R-hat. `suggest_m` gives the percentage of incomplete cases (White, Royston & Wood
+    2011).
+  - A `slow` test suite (200 replications under MAR, `pytest -m slow`) checks that the pooled estimate is
+    unbiased with 95% coverage while the complete-case estimate is biased. It is excluded from the default
+    run and from CI.
 
 ### Repository moved to Cohort-Studio
 
