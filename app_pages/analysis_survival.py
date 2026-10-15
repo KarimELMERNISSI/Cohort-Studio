@@ -1,4 +1,9 @@
-"""Survival & regression page body: Kaplan-Meier, log-rank, Cox, logistic and count regression (audit S11)."""
+"""Survival & regression page body: Kaplan-Meier, log-rank, Cox, logistic and count regression (audit S11).
+
+With multiply imputed data (``mi``), every analysis is run on the m imputed datasets and pooled
+(biostats.mi.analyze_mi): Kaplan-Meier curves on the cloglog scale with the median read from the pooled
+curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +16,12 @@ from biostats._types import TestResult
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import compare_survival, cox_regression
 from ui.components import error_card, help_popover, result_card, section
+from ui.components.mi_mode import mi_token, show_mi_notes, show_pooled_terms, show_tests
 from ui.progress import mark_step
 from ui.results import provenance, recall, remember
+from ui.state import get_state
+
+PH_TEST_IMPUTATIONS = 5  # the proportional-hazards test (lifelines) runs on the first imputed datasets only
 
 
 def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[str]:
@@ -61,6 +70,30 @@ def _km_figure(curves) -> go.Figure:
     return fig
 
 
+def _pooled_km_figure(curves: dict[str, pd.DataFrame]) -> go.Figure:
+    fig = go.Figure()
+    for label, curve in curves.items():
+        times = np.concatenate([[0.0], curve["time"].to_numpy()])
+        surv = np.concatenate([[1.0], curve["survival"].to_numpy()])
+        band = curve.dropna(subset=["lower", "upper"])
+        fig.add_trace(go.Scatter(x=times, y=surv, mode="lines", line={"shape": "hv"}, name=f"{label} (pooled)"))
+        if not band.empty:
+            t = band["time"].to_numpy()
+            fig.add_trace(
+                go.Scatter(
+                    x=np.concatenate([t, t[::-1]]),
+                    y=np.concatenate([band["upper"].to_numpy(), band["lower"].to_numpy()[::-1]]),
+                    fill="toself",
+                    line={"width": 0, "shape": "hv"},
+                    fillcolor="rgba(31,95,139,0.10)",
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+    fig.update_layout(xaxis_title="time", yaxis_title="survival probability", yaxis={"range": [0, 1.02]}, height=440)
+    return fig
+
+
 def _table(df: pd.DataFrame, formats: dict) -> None:
     st.dataframe(df.style.format(formats, na_rep=""), hide_index=True, width="stretch")
 
@@ -76,11 +109,85 @@ def _default_index(options: list[str], hints: tuple[str, ...]) -> int:
 TIME_HINTS = ("time", "days", "months", "years", "duration", "follow", "fu_")
 EVENT_HINTS = ("died", "death", "dead", "event", "status", "relapse", "fail")
 
+COX_FORMATS = {"log_hr": "{:.3f}", "se": "{:.3f}", "hr": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
+LOGIT_FORMATS = {"coef": "{:.3f}", "se": "{:.3f}", "odds_ratio": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
+COUNT_FORMATS = {"coef": "{:.3f}", "se": "{:.3f}", "rate_ratio": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
 
-def run_survival(df: pd.DataFrame, analyzer) -> None:
+
+def _show_survival(res) -> None:
+    st.plotly_chart(_km_figure(res.curves), width="stretch")
+    _table(
+        pd.DataFrame(
+            [
+                {
+                    "group": c.label,
+                    "n": c.n,
+                    "events": c.events,
+                    "median survival": c.median,
+                    "survival at last time": float(c.survival[-1]),
+                }
+                for c in res.curves
+            ]
+        ),
+        {"median survival": "{:.3g}", "survival at last time": "{:.3f}"},
+    )
+    if res.logrank_statistic is not None:
+        result_card(
+            TestResult(
+                name="Log-rank test",
+                family="nonparametric",
+                statistic=res.logrank_statistic,
+                statistic_label="chi2",
+                df=[float(res.logrank_df)],
+                p_value=res.logrank_p,
+                groups=[c.label for c in res.curves],
+                n_per_group=[c.n for c in res.curves],
+                references=res.references,
+            )
+        )
+    for w in res.warnings:
+        st.warning(w)
+
+
+def _show_pooled_survival(res) -> None:
+    curves = res.extra["curves"]
+    st.plotly_chart(_pooled_km_figure(curves), width="stretch")
+    _table(
+        pd.DataFrame(
+            [
+                {
+                    "group": label,
+                    "median survival (pooled curve)": res.extra["medians"].get(label),
+                    "survival at last time": float(curve["survival"].iloc[-1]),
+                }
+                for label, curve in curves.items()
+            ]
+        ),
+        {"median survival (pooled curve)": "{:.3g}", "survival at last time": "{:.3f}"},
+    )
+    test = res.tests.get("log_rank")
+    if test is not None:
+        result_card(
+            TestResult(
+                name="Log-rank test, pooled (D2)",
+                family="nonparametric",
+                statistic=test.statistic,
+                statistic_label="F",
+                df=[test.df1, test.df2],
+                p_value=test.p_value,
+                groups=list(curves),
+                warnings=[test.note],
+                references=test.references,
+            )
+        )
+    show_mi_notes(res, complete_case=_show_survival)
+
+
+def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
     numeric = list(analyzer.numeric_cols)
     binary = list(analyzer.binary_cols)
     groups = _group_candidates(df, analyzer)
+    token = mi_token(get_state()) if mi is not None else ""
 
     section(
         "Kaplan-Meier survival and the log-rank test",
@@ -110,59 +217,34 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             key="surv_group",
             help="Curves per level and the log-rank test between them.",
         )
+        group = None if group_col == "(none)" else group_col
+        key, config = ("survival_mi", (time_col, event_col, group_col, token)) if mi is not None else (
+            "survival",
+            (time_col, event_col, group_col),
+        )
         if st.button("Run survival analysis", type="primary", key="surv_run"):
             try:
-                res = compare_survival(
-                    df, time_col, event_col, None if group_col == "(none)" else group_col
-                )
-                remember(
-                    "survival",
-                    res,
-                    config=(time_col, event_col, group_col),
-                    n_analysed=sum(c.n for c in res.curves),
-                )
+                if mi is not None:
+                    from biostats.mi import analyze_mi
+
+                    columns = [time_col, event_col, *([group] if group else [])]
+                    res = analyze_mi(lambda d: compare_survival(d, time_col, event_col, group), mi, columns=columns)
+                    remember(key, res, config=config, n_analysed=len(mi.base))
+                else:
+                    res = compare_survival(df, time_col, event_col, group)
+                    remember(key, res, config=config, n_analysed=sum(c.n for c in res.curves))
                 mark_step("analyse", "survival analysis")
             except Exception as exc:
                 error_card("The survival analysis could not be computed.", exc)
-        res = recall("survival", config=(time_col, event_col, group_col))
+        res = recall(key, config=config)
         if res is not None:
-            st.plotly_chart(_km_figure(res.curves), width="stretch")
-            _table(
-                pd.DataFrame(
-                    [
-                        {
-                            "group": c.label,
-                            "n": c.n,
-                            "events": c.events,
-                            "median survival": c.median,
-                            "survival at last time": float(c.survival[-1]),
-                        }
-                        for c in res.curves
-                    ]
-                ),
-                {"median survival": "{:.3g}", "survival at last time": "{:.3f}"},
-            )
-            if res.logrank_statistic is not None:
-                result_card(
-                    TestResult(
-                        name="Log-rank test",
-                        family="nonparametric",
-                        statistic=res.logrank_statistic,
-                        statistic_label="chi2",
-                        df=[float(res.logrank_df)],
-                        p_value=res.logrank_p,
-                        groups=[c.label for c in res.curves],
-                        n_per_group=[c.n for c in res.curves],
-                        references=res.references,
-                    )
-                )
-            for w in res.warnings:
-                st.warning(w)
-            provenance("survival")
+            (_show_pooled_survival if mi is not None else _show_survival)(res)
+            provenance(key)
             help_popover(
                 "Each step down is an event; vertical ticks would mark censoring. The band is the pointwise 95% interval. "
                 "The log-rank test weights every time equally and loses power when curves cross; report medians and the "
-                "hazard ratio from the Cox model with it."
+                "hazard ratio from the Cox model with it. With imputed data the curves are pooled on the "
+                "log(-log S) scale at every time any curve steps, and the median is read from the pooled curve."
             )
 
     section(
@@ -187,48 +269,57 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
         )
         covariates = st.multiselect(
             "Covariates",
-            [
-                c
-                for c in df.columns
-                if c not in (cox_time, cox_event) and (c in numeric or c in groups)
-            ],
+            [c for c in df.columns if c not in (cox_time, cox_event) and (c in numeric or c in groups)],
             key="cox_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
+        key, config = ("cox_mi", (cox_time, cox_event, tuple(covariates), token)) if mi is not None else (
+            "cox",
+            (cox_time, cox_event, tuple(covariates)),
+        )
         if st.button("Fit Cox model", key="cox_run", type="primary", disabled=not covariates):
             try:
-                fitted = cox_regression(df, cox_time, cox_event, covariates)
-                remember(
-                    "cox", fitted, config=(cox_time, cox_event, tuple(covariates)), n_analysed=fitted.n
-                )
+                if mi is not None:
+                    from biostats.mi import analyze_mi
+
+                    levels = mi.levels(covariates)
+                    fitted = analyze_mi(
+                        lambda d, i: cox_regression(
+                            d, cox_time, cox_event, covariates, levels=levels, diagnostics=i <= PH_TEST_IMPUTATIONS
+                        ),
+                        mi,
+                        columns=[cox_time, cox_event, *covariates],
+                    )
+                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                else:
+                    fitted = cox_regression(df, cox_time, cox_event, covariates)
+                    remember(key, fitted, config=config, n_analysed=fitted.n)
                 mark_step("analyse", "Cox model")
             except Exception as exc:
                 error_card("The Cox model could not be fitted.", exc)
-        res = recall("cox", config=(cox_time, cox_event, tuple(covariates)))
-        if res is not None:
+        res = recall(key, config=config)
+        if res is not None and mi is not None:
+            show_pooled_terms(res, ratio_label="hazard_ratio", alt="Pooled hazard ratios")
+            show_tests(res, title="Tests of each factor (all its levels at once)")
+            st.caption(
+                f"The proportional-hazards test ran on the first {PH_TEST_IMPUTATIONS} imputed datasets; its warnings "
+                "say on how many it flagged a term."
+            )
+            show_mi_notes(res, complete_case=lambda cc: _table(cc.table, COX_FORMATS))
+            provenance(key)
+        elif res is not None:
             st.caption(
                 f"n = {res.n}, events = {res.events}, ties: {res.ties}"
                 + (f", concordance = {res.concordance:.3f}" if res.concordance is not None else "")
             )
-            _table(
-                res.table,
-                {
-                    "log_hr": "{:.3f}",
-                    "se": "{:.3f}",
-                    "hr": "{:.3f}",
-                    "ci_low": "{:.3f}",
-                    "ci_high": "{:.3f}",
-                    "z": "{:.2f}",
-                    "p": "{:.4f}",
-                },
-            )
+            _table(res.table, COX_FORMATS)
             if res.ph_test is not None:
                 with st.expander("Proportional-hazards test (Grambsch-Therneau)"):
                     _table(res.ph_test, {"statistic": "{:.3f}", "p": "{:.4f}"})
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
-            provenance("cox")
+            provenance(key)
 
     section(
         "Logistic regression (binary outcome)",
@@ -242,11 +333,11 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             key="logit_outcome",
             help="Binary outcome; the event level is the second sorted level unless chosen.",
         )
-        levels = sorted(df[outcome].dropna().astype(str).unique())
+        levels_of_outcome = sorted(df[outcome].dropna().astype(str).unique())
         event_level = c2.selectbox(
             "Event level",
-            levels,
-            index=len(levels) - 1,
+            levels_of_outcome,
+            index=len(levels_of_outcome) - 1,
             key="logit_event",
             help="Level modelled as the event.",
         )
@@ -256,17 +347,35 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             key="logit_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
+        key, config = ("logistic_mi", (outcome, event_level, tuple(covs), token)) if mi is not None else (
+            "logistic",
+            (outcome, event_level, tuple(covs)),
+        )
         if st.button("Fit logistic model", key="logit_run", type="primary", disabled=not covs):
             try:
-                fitted = logistic_regression(df, outcome, covs, event_level=event_level)
-                remember(
-                    "logistic", fitted, config=(outcome, event_level, tuple(covs)), n_analysed=fitted.n
-                )
+                if mi is not None:
+                    from biostats.mi import analyze_mi
+
+                    levels = mi.levels(covs)
+                    fitted = analyze_mi(
+                        lambda d: logistic_regression(d, outcome, covs, event_level=event_level, levels=levels),
+                        mi,
+                        columns=[outcome, *covs],
+                    )
+                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                else:
+                    fitted = logistic_regression(df, outcome, covs, event_level=event_level)
+                    remember(key, fitted, config=config, n_analysed=fitted.n)
                 mark_step("analyse", "logistic regression")
             except Exception as exc:
                 error_card("The logistic model could not be fitted.", exc)
-        res = recall("logistic", config=(outcome, event_level, tuple(covs)))
-        if res is not None:
+        res = recall(key, config=config)
+        if res is not None and mi is not None:
+            show_pooled_terms(res, ratio_label="odds_ratio", alt="Pooled odds ratios")
+            show_tests(res, title="Tests of each factor (all its levels at once)")
+            show_mi_notes(res, complete_case=lambda cc: _table(cc.table, LOGIT_FORMATS))
+            provenance(key)
+        elif res is not None:
             auc_text = (
                 f", AUC = {res.auc:.3f} (95% CI {res.auc_ci[0]:.3f} to {res.auc_ci[1]:.3f})"
                 if res.auc is not None and res.auc_ci
@@ -275,22 +384,11 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
             st.caption(
                 f"n = {res.n}, events = {res.events}, pseudo-R2 = {res.pseudo_r2:.3f}{auc_text}; reference levels: {res.reference_levels}"
             )
-            _table(
-                res.table,
-                {
-                    "coef": "{:.3f}",
-                    "se": "{:.3f}",
-                    "odds_ratio": "{:.3f}",
-                    "ci_low": "{:.3f}",
-                    "ci_high": "{:.3f}",
-                    "z": "{:.2f}",
-                    "p": "{:.4f}",
-                },
-            )
+            _table(res.table, LOGIT_FORMATS)
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
-            provenance("logistic")
+            provenance(key)
 
     section(
         "Count regression (Poisson / negative binomial)",
@@ -319,52 +417,49 @@ def run_survival(df: pd.DataFrame, analyzer) -> None:
         )
         covs = st.multiselect(
             "Covariates  ",
-            [
-                c
-                for c in df.columns
-                if c not in (count_col, exposure) and (c in numeric or c in groups)
-            ],
+            [c for c in df.columns if c not in (count_col, exposure) and (c in numeric or c in groups)],
             key="pois_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
+        exposure_col = None if exposure == "(none)" else exposure
+        key, config = ("count_mi", (count_col, exposure, family, tuple(covs), token)) if mi is not None else (
+            "count",
+            (count_col, exposure, family, tuple(covs)),
+        )
         if st.button("Fit count model", key="pois_run", type="primary", disabled=not covs):
             try:
-                fitted = count_regression(
-                    df,
-                    count_col,
-                    covs,
-                    exposure_col=None if exposure == "(none)" else exposure,
-                    family=family,
-                )
-                remember(
-                    "count",
-                    fitted,
-                    config=(count_col, exposure, family, tuple(covs)),
-                    n_analysed=fitted.n,
-                )
+                if mi is not None:
+                    from biostats.mi import analyze_mi
+
+                    levels = mi.levels(covs)
+                    fitted = analyze_mi(
+                        lambda d: count_regression(
+                            d, count_col, covs, exposure_col=exposure_col, family=family, levels=levels
+                        ),
+                        mi,
+                        columns=[count_col, *covs, *([exposure_col] if exposure_col else [])],
+                    )
+                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                else:
+                    fitted = count_regression(df, count_col, covs, exposure_col=exposure_col, family=family)
+                    remember(key, fitted, config=config, n_analysed=fitted.n)
                 mark_step("analyse", "count regression")
             except Exception as exc:
                 error_card("The count model could not be fitted.", exc)
-        res = recall("count", config=(count_col, exposure, family, tuple(covs)))
-        if res is not None:
+        res = recall(key, config=config)
+        if res is not None and mi is not None:
+            show_pooled_terms(res, ratio_label="rate_ratio", alt="Pooled rate ratios")
+            show_tests(res, title="Tests of each factor (all its levels at once)")
+            show_mi_notes(res, complete_case=lambda cc: _table(cc.table, COUNT_FORMATS))
+            provenance(key)
+        elif res is not None:
             disp = f", dispersion = {res.dispersion:.2f}" if res.dispersion is not None else ""
             st.caption(f"n = {res.n}, events = {res.events}, AIC = {res.aic:.1f}{disp}")
-            _table(
-                res.table,
-                {
-                    "coef": "{:.3f}",
-                    "se": "{:.3f}",
-                    "rate_ratio": "{:.3f}",
-                    "ci_low": "{:.3f}",
-                    "ci_high": "{:.3f}",
-                    "z": "{:.2f}",
-                    "p": "{:.4f}",
-                },
-            )
+            _table(res.table, COUNT_FORMATS)
             for w in res.warnings:
                 st.warning(w)
             st.caption("Method: " + " | ".join(res.references))
-            provenance("count")
+            provenance(key)
 
 
 __all__ = ["run_survival"]

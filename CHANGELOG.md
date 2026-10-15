@@ -108,6 +108,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Parallel imputation runs in a separate Python process: worker processes no longer re-run the Streamlit page
     script, which is `__main__` inside the application.
   - The event indicator of survival analyses reads text (yes, event, died) everywhere (`event_indicator`).
+- **Pooled analyses on the Survival & regression page** (`ui/components/mi_mode.py`):
+  - Once an imputation exists, the sidebar offers "Analysis data: Observed | Imputed (m = ...)" under the
+    population, with the status of the imputation.
+  - With imputed data every analysis of the page runs on the m datasets of the analysis population and is
+    pooled: Kaplan-Meier curves (cloglog scale, median read from the pooled curve, log-rank by D2), and Cox,
+    logistic and count models (ratio, 95% CI, df, FMI and RIV per term, a D1 test per factor). The
+    complete-case analysis is shown for comparison. The proportional-hazards test runs on the first 5 imputed
+    datasets.
+  - An imputation that is out of date, or fitted on more rows than the current population, is never used
+    silently: the page says why and analyses the observed data. The second case can be used with a caveat.
+- Fixed: a negative follow-up time made the log-rank test and the Cox model fail with a length error when a
+  group or covariates were given. Such rows are now left out of every survival analysis, with a warning.
 
 ### Repository moved to Cohort-Studio
 

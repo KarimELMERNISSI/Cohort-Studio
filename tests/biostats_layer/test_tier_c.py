@@ -77,6 +77,27 @@ def test_cox_hazard_ratio_gehan_efron() -> None:
     assert res.n == 42 and res.events == 30 and res.ties == "efron"
 
 
+def test_a_negative_follow_up_time_is_left_out_with_groups_and_covariates() -> None:
+    clean = _gehan()
+    dirty = pd.concat(
+        [clean, pd.DataFrame([{"time": -3, "event": 0, "arm": "placebo"}])], ignore_index=True
+    )
+    km, km_clean = (
+        compare_survival(dirty, "time", "event", "arm"),
+        compare_survival(clean, "time", "event", "arm"),
+    )
+    assert km.logrank_statistic == pytest.approx(km_clean.logrank_statistic)
+    assert km.warnings == ["1 row(s) with a negative follow-up time were left out"]
+    cox, cox_clean = (
+        cox_regression(dirty, "time", "event", ["arm"]),
+        cox_regression(clean, "time", "event", ["arm"]),
+    )
+    assert cox.n == 42 and cox.table["log_hr"].iloc[0] == pytest.approx(
+        cox_clean.table["log_hr"].iloc[0]
+    )
+    assert "1 row(s) with a negative follow-up time were left out" in cox.warnings
+
+
 def test_logistic_regression_spector() -> None:
     from statsmodels.datasets import spector
 

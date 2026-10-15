@@ -16,6 +16,7 @@ stale       rows that were not imputed, or observed values that changed: run the
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -45,6 +46,7 @@ class MIBinding(BaseModel):
     population: dict[str, Any] | None = None  # population snapshot (criteria, counts)
     n_rows: int
     created_at: str
+    run_id: str = ""  # identifies this imputation (results computed on it carry it)
     spec: dict[str, Any]  # the ImputationSpec
     methods: dict[str, str]
 
@@ -89,6 +91,7 @@ def bind(
         population=population,
         n_rows=len(mi.base),
         created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        run_id=uuid.uuid4().hex,
         spec=run.spec.model_dump(),
         methods=dict(run.methods),
     )

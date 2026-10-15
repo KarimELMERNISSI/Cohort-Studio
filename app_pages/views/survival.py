@@ -4,7 +4,9 @@ import streamlit as st
 
 from app_pages.analysis_survival import run_survival
 from ui.components import no_dataset, page_header
+from ui.components.mi_mode import mi_banner
 from ui.components.population import population_banner
+from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 
 page_header(
@@ -17,4 +19,4 @@ df = st.session_state.get("data")
 if df is None:
     no_dataset()
 else:
-    run_survival(df, DataAnalyzer(df))
+    run_survival(df, DataAnalyzer(df), mi=mi_banner(get_state()))

@@ -64,6 +64,21 @@ def _clean(times: Sequence, events: Sequence) -> tuple[np.ndarray, np.ndarray]:
     return t[mask], e[mask].astype(int)
 
 
+def _usable(frame: pd.DataFrame, time_col: str, event_col: str) -> tuple[pd.DataFrame, list[str]]:
+    """
+    The rows ``_clean`` keeps (known time >= 0, known event), so that groups and covariates stay aligned with the
+    times; a warning says how many rows with a negative follow-up time were left out.
+    """
+    t = np.asarray(pd.to_numeric(frame[time_col], errors="coerce"), dtype=float)
+    e = event_indicator(frame[event_col])
+    negative = int((t < 0).sum())
+    keep = ~(np.isnan(t) | np.isnan(e)) & (t >= 0)
+    warnings = (
+        [f"{negative} row(s) with a negative follow-up time were left out"] if negative else []
+    )
+    return frame.loc[keep], warnings
+
+
 @dataclass
 class KMCurve:
     label: str
@@ -139,9 +154,10 @@ def compare_survival(
     alpha: float = 0.05,
 ) -> SurvivalComparison:
     """Kaplan-Meier per group and the log-rank test (Mantel 1966) when there are two or more groups."""
-    frame = df[[time_col, event_col] + ([group_col] if group_col else [])].dropna()
+    frame, warnings = _usable(
+        df[[time_col, event_col] + ([group_col] if group_col else [])].dropna(), time_col, event_col
+    )
     curves: list[KMCurve] = []
-    warnings: list[str] = []
     if not group_col:
         curves.append(kaplan_meier(frame[time_col], frame[event_col], "all", alpha=alpha))
         return SurvivalComparison(
@@ -171,10 +187,6 @@ def compare_survival(
         )
     t, e = _clean(frame[time_col], frame[event_col])
     g = frame[group_col].astype(str).to_numpy()
-    keep = ~(
-        pd.to_numeric(frame[time_col], errors="coerce").isna() | pd.isna(frame[event_col])
-    ).to_numpy()
-    g = g[keep]
     from statsmodels.duration.survfunc import survdiff
 
     stat, p = survdiff(t, e, g)
@@ -207,6 +219,10 @@ class CoxResult:
     reference_levels: dict[str, str] = field(default_factory=dict)  # factor -> its reference level
 
 
+class _Skipped(Exception):
+    """The optional diagnostics were not requested."""
+
+
 def cox_regression(
     df: pd.DataFrame,
     time_col: str,
@@ -216,13 +232,15 @@ def cox_regression(
     alpha: float = 0.05,
     ties: str = "efron",
     levels: Mapping[str, Sequence[str]] | None = None,
+    diagnostics: bool = True,
 ) -> CoxResult:
     """
     Cox proportional-hazards model (Efron ties by default); categorical covariates are one-hot coded (first level reference).
 
-    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset). ``diagnostics=False`` skips the
+    proportional-hazards test and the concordance (lifelines), which pooled analyses run on a few imputations only.
     """
-    frame = df[[time_col, event_col, *covariates]].dropna()
+    frame, warnings = _usable(df[[time_col, event_col, *covariates]].dropna(), time_col, event_col)
     t, e = _clean(frame[time_col], frame[event_col])
     x, refs = design_matrix(frame, covariates, levels=levels, intercept=False)
     if x.shape[1] == 0:
@@ -244,10 +262,11 @@ def cox_regression(
             "p": 2 * stats.norm.sf(np.abs(params / bse)),
         }
     )
-    warnings: list[str] = []
     concordance = None
     ph_table = None
     try:
+        if not diagnostics:
+            raise _Skipped
         from lifelines import CoxPHFitter
         from lifelines.statistics import proportional_hazard_test
 
@@ -270,6 +289,8 @@ def cox_regression(
                 + ", ".join(ph_table.loc[ph_table["p"] < 0.05, "term"])
                 + " (Grambsch-Therneau p < 0.05)"
             )
+    except _Skipped:
+        pass
     except ImportError:
         warnings.append(
             "install the 'survival' extra (lifelines) for the proportional-hazards test and the concordance index"

@@ -7,6 +7,7 @@ import streamlit as st
 from manage.iam.authz import is_admin_role
 from ui.auth import logout
 from ui.components import confirm, page_link
+from ui.components.mi_mode import render_mi_selector
 from ui.components.population import render_population_selector
 from ui.state import AppState
 
@@ -95,6 +96,7 @@ def _dataset_card(state: AppState) -> None:
                 color="blue" if draft.can_apply else "orange",
             )
         render_population_selector(state)
+        render_mi_selector(state)
         with st.container(horizontal=True, gap="small"):
             if st.button(
                 "Change", key="shell_change_dataset", width="stretch", icon=":material/swap_horiz:"
