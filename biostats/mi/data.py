@@ -86,6 +86,24 @@ class MIData:
         for i in range(1, self.m + 1):
             yield i, self.complete(i, columns)
 
+    def subset(self, rows: pd.Index | Sequence[Any]) -> MIData:
+        """The same imputations restricted to ``rows`` (row ids of the observed data)."""
+        index = pd.Index(rows)
+        unknown = index.difference(self.base.index)
+        if len(unknown):
+            raise ValueError(f"{len(unknown)} row id(s) are not in the imputed data")
+        imputations = {
+            col: frame.loc[frame.index.intersection(index)]
+            for col, frame in self.imputations.items()
+        }
+        return MIData(
+            base=self.base.loc[index],
+            imputations=imputations,
+            m=self.m,
+            methods=self.methods,
+            info=self.info,
+        )
+
     # --- formats ------------------------------------------------------------------------------------
 
     def long(self, *, include_original: bool = True) -> pd.DataFrame:
@@ -96,6 +114,13 @@ class MIData:
             frame.insert(0, ".imp", i)
             parts.append(frame)
         return pd.concat(parts, ignore_index=True)
+
+    def flong(self) -> pd.DataFrame:
+        """
+        The Stata "flong" layout: ``_mi_m`` (0 = observed data) and ``_mi_id`` (row id) followed by the columns;
+        in Stata, ``mi import flong, m(_mi_m) id(_mi_id) imputed(<the imputed variables>)``.
+        """
+        return self.long().rename(columns={".imp": "_mi_m", ".id": "_mi_id"})
 
     @classmethod
     def from_completed(

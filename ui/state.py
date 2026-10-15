@@ -106,6 +106,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "clustering_results",
     "doc_coverage_results",
     "_results",  # the result store (ui/results.py): stamped results go stale on change, cleared on a swap
+    "_mi",  # the multiple imputation (biostats.mi.binding.StoredMI); its status follows the rows
 )
 # Kept when the same dataset changes (they follow the trace, or describe the check rather than the data).
 KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
@@ -123,11 +124,13 @@ KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
         "inclusion_data_applied",
         "outliers_data_applied",
         "_results",
+        "_mi",
     }
 )
 DATA_DERIVED_KEYS: tuple[str, ...] = tuple(k for k in DERIVED_KEYS if k not in KEPT_ON_DATA_CHANGE)
 
 _SESSION_KEY = "_data_session"
+MI_KEY = "_mi"
 _VIEWS_KEY = "_data_views"
 
 
@@ -530,6 +533,55 @@ class AppState:
         ticked = [c for c in self.session.ticked if c not in members]
         self.set_ticked(ticked + (members if on else []))
 
+    # ------------------------------------------------------------------ multiple imputation
+
+    @property
+    def mi(self) -> Any:
+        """The multiple imputation of this dataset (biostats.mi.binding.StoredMI), if any."""
+        return st.session_state.get(MI_KEY)
+
+    def set_mi(self, run: Any) -> Any:
+        """Keep an imputation run (biostats.mi.engine.ImputationRun) bound to the current data and population."""
+        from biostats.mi.binding import bind
+
+        identity = self.identity()
+        population = None
+        with contextlib.suppress(PopulationError, RuntimeError):
+            population = self.population
+        stored = bind(
+            run,
+            data_fp=identity.data_fp if identity else "",
+            population_fp=identity.population_fp if identity else "",
+            population=population.to_trace() if population is not None else None,
+        )
+        st.session_state[MI_KEY] = stored
+        return stored
+
+    def clear_mi(self) -> None:
+        st.session_state.pop(MI_KEY, None)
+
+    def mi_status(self) -> Any:
+        """fresh, by_subset, subset or stale against the current analysis population (None without imputation)."""
+        from biostats.mi.binding import MIStatus, status
+
+        stored = self.mi
+        if stored is None or not self.has_data:
+            return None
+        try:
+            frame = self.analysis_frame()
+        except PopulationError as exc:
+            return MIStatus("stale", f"the analysis population cannot be evaluated: {exc}", 0)
+        return status(stored, frame)
+
+    def analysis_mi(self, *, allow_subset: bool = False) -> Any:
+        """The imputed datasets restricted to the analysis population, when the imputation still fits it."""
+        from biostats.mi.binding import restrict
+
+        current = self.mi_status()
+        if current is None or not (current.usable or (allow_subset and current.kind == "subset")):
+            return None
+        return restrict(self.mi, self.analysis_frame().index)
+
     def freeze_population(self) -> bool:
         """Keep only the analysis population in the dataset (traced; the criteria are then unticked)."""
         change = self.session.freeze_population(self.config)
@@ -720,6 +772,16 @@ class AppState:
             ]
             if ticked:
                 self.set_ticked(ticked)
+        from manage.mi_store import has_mi, load_mi
+
+        if has_mi(self.db_manager.dataset_dir, saved_name):
+            try:
+                stored = load_mi(self.db_manager.dataset_dir, saved_name, df)
+            except (ValueError, OSError) as exc:
+                msg += f" Its multiple imputation could not be restored: {exc}"
+            else:
+                st.session_state[MI_KEY] = stored
+                msg += f" Multiple imputation restored (m = {stored.mi.m})."
         return True, msg
 
     def save_version(self, base_name: str | None = None) -> tuple[bool, str, str | None]:
@@ -750,6 +812,15 @@ class AppState:
                     f"Saved version: {saved}",
                 )
             self._save_lineage(saved, ref)
+            current = self.mi_status()
+            if current is not None:
+                if current.usable:
+                    from manage.mi_store import save_mi
+
+                    save_mi(self.mi, self.db_manager.dataset_dir, saved)
+                    msg += f" Saved with its multiple imputation (m = {self.mi.mi.m})."
+                else:
+                    msg += f" Its multiple imputation was not saved ({current.kind}: {current.reason})."
         return ok, msg, saved
 
     def _save_lineage(self, saved: str, ref: DatasetRef | None) -> None:

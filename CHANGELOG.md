@@ -75,6 +75,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - A `slow` test suite (200 replications under MAR, `pytest -m slow`) checks that the pooled estimate is
     unbiased with 95% coverage while the complete-case estimate is biased. It is excluded from the default
     run and from CI.
+- **Imputation bound to its data, saved with versions** (`biostats/mi/binding.py`, `manage/mi_store.py`,
+  `ui/state.py`):
+  - An imputation keeps a hash of the model columns of every row it was fitted on. A change elsewhere in the
+    table (a new derived variable) leaves it valid.
+  - Against the current analysis population it is fresh, an exact union of whole strata (`by`), a strict
+    subset (usable only with a caveat, or run again) or stale (rows not imputed, observed values changed),
+    with the reason.
+  - `AppState` keeps it across changes of the same dataset (`set_mi`, `mi_status`, `analysis_mi`) and drops
+    it when another dataset is loaded.
+  - Saving a version saves a still-valid imputation with it (cells, row hashes, binding and diagnostics in
+    the `mi/` folder). Loading the version restores it.
+  - `MIData.flong()` gives the Stata "flong" layout next to the mice long layout.
 
 ### Repository moved to Cohort-Studio
 
