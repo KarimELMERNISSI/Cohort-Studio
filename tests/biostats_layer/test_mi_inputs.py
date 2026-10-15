@@ -111,7 +111,7 @@ def test_cox_regression_exposes_log_hazard_ratios_and_df() -> None:
     assert list(res.params.index) == ["age", "smoker_yes"]
     np.testing.assert_allclose(res.params.to_numpy(), res.table["log_hr"].to_numpy())
     np.testing.assert_allclose(np.sqrt(np.diag(res.vcov.to_numpy())), res.table["se"].to_numpy())
-    assert res.df_resid == res.n - 2
+    assert res.df_resid == res.events - 2  # events - parameters, as mice
     levels = factor_levels(df, ["site"])
     frozen = cox_regression(df, "time", "event", ["site"], levels=levels)
     assert frozen.params is not None and list(frozen.params.index) == [

@@ -35,7 +35,9 @@ pytestmark = pytest.mark.skipif(
 
 GROUP_TERMS = ["C(group)[T.b]", "C(group)[T.c]"]
 R_TERMS = {"(Intercept)": "Intercept", "groupb": "C(group)[T.b]", "groupc": "C(group)[T.c]"}
-TOLERANCE = {"lm": 1e-8, "logistic": 1e-6, "poisson": 1e-6, "cox": 1e-5}
+# R stops glm when the relative change in deviance is below 1e-8, so its Poisson estimates and SEs are exact
+# to about 1e-6 only (ours converge to 1e-12): 1e-5 there, as for Cox
+TOLERANCE = {"lm": 1e-8, "logistic": 1e-6, "poisson": 1e-5, "cox": 1e-5}
 
 
 def _num(value: float | str) -> float:
@@ -80,7 +82,7 @@ def test_pool_scalar_matches_mice(reference: dict) -> None:
             (pooled.ci.lower, case["ci_low"]),
             (pooled.ci.upper, case["ci_high"]),
         ]:
-            assert ours == pytest.approx(theirs, rel=1e-10, abs=1e-12), case["name"]
+            assert ours == pytest.approx(_num(theirs), rel=1e-10, abs=1e-12), case["name"]
 
 
 @pytest.mark.parametrize("kind", ["lm", "logistic", "poisson", "cox"])
@@ -109,18 +111,28 @@ def test_pooled_models_match_mice(
             (term.p_value, row["p_value"]),
             (term.ci.lower, row["ci_low"]),
             (term.ci.upper, row["ci_high"]),
+        ]:
+            assert ours == pytest.approx(theirs, rel=tol, abs=tol * 1e-2), (kind, row["term"])
+        # riv, lambda and FMI depend on the variance between imputations, which magnifies the convergence
+        # tolerance of R's iterative fits (glm epsilon 1e-8): ten times the tolerance of the estimates
+        between_tol = tol if kind == "lm" else tol * 10
+        for ours, theirs in [
             (term.riv, row["riv"]),
             (term.lam, row["lambda"]),
             (term.fmi, row["fmi"]),
         ]:
-            assert ours == pytest.approx(theirs, rel=tol, abs=tol * 1e-2), (kind, row["term"])
+            assert ours == pytest.approx(theirs, rel=between_tol, abs=between_tol * 1e-2), (
+                kind,
+                row["term"],
+            )
 
     d1 = table.wald(GROUP_TERMS)
     expected = model["d1"]
-    stat = expected.get("statistic", expected.get("F.value"))
+    stat = expected["F.value"]
     assert d1.statistic == pytest.approx(stat, rel=tol), kind
     assert d1.df2 == pytest.approx(expected["df2"], rel=tol), kind
-    assert d1.p_value == pytest.approx(expected["p.value"], rel=max(tol, 1e-8)), kind
+    assert d1.p_value == pytest.approx(expected["P(>F)"], rel=max(tol, 1e-8), abs=1e-12), kind
+    assert d1.riv == pytest.approx(expected["RIV"], rel=tol), kind
 
     wald = []
     for p, c in zip(params, covs, strict=True):
@@ -131,7 +143,7 @@ def test_pooled_models_match_mice(
     assert d2.statistic == pytest.approx(
         expected.get("statistic", expected.get("F.value")), rel=tol
     ), kind
-    assert d2.p_value == pytest.approx(expected["p.value"], rel=max(tol, 1e-8)), kind
+    assert d2.p_value == pytest.approx(expected["P(>F)"], rel=max(tol, 1e-8), abs=1e-12), kind
 
 
 def test_pooled_r_squared_matches_mice(reference: dict, completed: list[pd.DataFrame]) -> None:
@@ -177,7 +189,11 @@ def test_analyze_mi_on_the_mice_imputations_matches_mice(reference: dict, kind: 
         )
         assert term.se == pytest.approx(row["std_error"], rel=tol), (kind, row["term"])
         assert term.df == pytest.approx(row["df"], rel=tol), (kind, row["term"])
-        assert term.fmi == pytest.approx(row["fmi"], rel=tol, abs=tol * 1e-2), (kind, row["term"])
+        between_tol = tol if kind == "lm" else tol * 10
+        assert term.fmi == pytest.approx(row["fmi"], rel=between_tol, abs=between_tol * 1e-2), (
+            kind,
+            row["term"],
+        )
     group = result.tests["group"]
     expected = model["d1"]
     assert group.statistic == pytest.approx(

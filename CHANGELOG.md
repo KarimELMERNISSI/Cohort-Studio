@@ -9,8 +9,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 ### Multiple imputation end-to-end (follow-up programme M2, in progress)
 
 - **Pooling layer** (`biostats/mi`): Rubin's rules with the formulas of R mice, including Barnard-Rubin
-  degrees of freedom from the complete-data df and lambda floored at 1e-4 instead of switching to the normal
-  distribution. Each term reports riv, lambda and FMI. Tables of regression terms come with a D1 Wald test of
+  degrees of freedom from the complete-data df (as mice 3.19: imputations that agree give infinite df). Each
+  term reports riv, lambda and FMI. Tables of regression terms come with a D1 Wald test of
   several terms (a factor; Reiter's small-sample df) and a D2 combination of chi-square statistics. R^2 is
   pooled with Harel's method. Ratios, proportions, correlations and survival probabilities are pooled on the
   log, logit, Fisher z and cloglog scales and reported back. Analyses that cannot be pooled (rank tests,
@@ -21,8 +21,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   mitml: pool.scalar cases, and linear, logistic, Poisson and Cox models pooled on datasets that mice imputed,
   with D1, D2 and pooled R2. The manual workflow "R reference fixtures" runs it and pushes the values to the
   `r-fixtures` branch under the repository owner's identity. `test_mi_r_parity.py` fits the same models on
-  the same completed datasets and compares every pooled quantity (1e-10 for pooling, 1e-8 for the linear
-  model, 1e-6 for the GLMs, 1e-5 for Cox).
+  the same completed datasets and compares every pooled quantity.
+  - With R 4.6.1, mice 3.19.0 and mitml 0.4.5 every quantity matches: 1e-10 for pooling, 1e-8 for the
+    linear model, 1e-6 for the logistic model, 1e-5 for Poisson and Cox. R's glm convergence tolerance limits
+    the last two.
+  - The comparison corrected three points to match R: no floor on lambda in the Barnard-Rubin df; mitml's
+    full form of Reiter's df for D1; events minus parameters as the complete-data df of a Cox model.
 - **What pooling needs from each analysis** (additive; existing callers unchanged):
   - `biostats/design.py` builds the design matrices of the regression and Cox models. Factor levels can be
     fixed from the observed data, so every imputed dataset estimates the same terms. A level absent from

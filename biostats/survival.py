@@ -195,7 +195,7 @@ class CoxResult:
     )  # per term: statistic, p (Grambsch-Therneau) when lifelines is installed
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    # log hazard ratios, their covariance and the complete-data df n - p used when pooling imputations
+    # log hazard ratios, their covariance and the complete-data df (events - p, as mice) used when pooling
     params: pd.Series | None = None
     vcov: pd.DataFrame | None = None
     df_resid: float | None = None
@@ -286,7 +286,7 @@ def cox_regression(
             index=list(x.columns),
             columns=list(x.columns),
         ),
-        df_resid=float(len(t) - x.shape[1]),
+        df_resid=float(e.sum() - x.shape[1]),  # events - parameters, as mice for coxph
         reference_levels=refs,
     )
 

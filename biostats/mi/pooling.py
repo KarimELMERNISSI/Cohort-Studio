@@ -11,7 +11,7 @@ One estimand (a coefficient, a difference, a log ratio), m imputations:
 * riv = (1 + 1/m) B / U-bar (relative increase in variance), lambda = (1 + 1/m) B / T (proportion of the
   variance due to the missing data) and fmi = (riv + 2 / (df + 3)) / (riv + 1).
 * df: Barnard & Rubin (1999) with nu_com, the degrees of freedom of the complete-data analysis (the
-  residual df n - k of a regression); lambda is floored at 1e-4 for the df only, as in mice.
+  residual df n - k of a regression), as mice 3.19 (no between-imputation variance gives infinite df).
 
 Several estimands at once (all the dummy terms of a factor): the D1 Wald test (Li, Raghunathan & Rubin
 1991, with Reiter's 2007 small-sample df when nu_com is known). m chi-square statistics (log-rank,
@@ -71,8 +71,6 @@ REFERENCES.setdefault(
     "Marshall A, Altman DG, Holder RL, Royston P (2009). Combining estimates of interest in prognostic modelling "
     "studies after multiple imputation: current practice and guidelines. BMC Med Res Methodol 9:57.",
 )
-
-LAMBDA_FLOOR = 1e-4  # mice::barnard.rubin
 
 
 class TermMismatchError(ValueError):
@@ -218,13 +216,14 @@ def _f_sf(x: float, df1: float, df2: float) -> float:
 
 
 def barnard_rubin_df(m: int, b: float, t: float, dfcom: float = math.inf) -> float:
-    """mice::barnard.rubin: Barnard & Rubin (1999) degrees of freedom, lambda floored at 1e-4."""
+    """mice::barnard.rubin (mice 3.19): Barnard & Rubin (1999) degrees of freedom."""
     lam = (1.0 + 1.0 / m) * b / t if t > 0 else 0.0
-    lam = max(lam, LAMBDA_FLOOR)
-    dfold = (m - 1) / lam**2
+    dfold = (m - 1) / lam**2 if lam > 0 else math.inf
     if math.isinf(dfcom):
         return float(dfold)
     dfobs = (dfcom + 1.0) / (dfcom + 3.0) * dfcom * (1.0 - lam)
+    if math.isinf(dfold):
+        return float(dfobs)
     return float(dfold * dfobs / (dfold + dfobs))
 
 
@@ -491,7 +490,14 @@ def d1_wald(
         c0 = 1 / (t - 4)
         c1 = vstar - 2 * (1 + a)
         c2 = vstar - 4 * (1 + a)
-        z = 1 / c2 + c0 * (a**2 * c1 / ((1 + a) ** 2 * c2))
+        # Reiter (2007) eq. 1-2 in full, as mitml's .D1
+        z = (
+            1 / c2
+            + c0 * (a**2 * c1 / ((1 + a) ** 2 * c2))
+            + c0 * (8 * a**2 * c1 / ((1 + a) * c2**2) + 4 * a**2 / ((1 + a) * c2))
+            + c0 * (4 * a**2 / (c2 * c1) + 16 * a**2 * c1 / c2**3)
+            + c0 * (8 * a**2 / c2**2)
+        )
         df2 = 4 + 1 / z
     refs = [REFERENCES["li1991_d1"]] + ([] if math.isinf(dfcom) else [REFERENCES["reiter2007"]])
     return MultiParameterTest(
@@ -581,7 +587,6 @@ def pool_r_squared(
 
 
 __all__ = [
-    "LAMBDA_FLOOR",
     "MultiParameterTest",
     "PooledRSquared",
     "PooledTable",

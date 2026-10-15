@@ -58,14 +58,14 @@ def test_barnard_rubin_df_with_the_complete_data_df() -> None:
     assert pooled.df < pool_scalar(Q, U).df  # a finite sample never gives more df
 
 
-def test_lambda_is_floored_for_the_df_when_imputations_agree() -> None:
+def test_no_between_imputation_variance_gives_infinite_df_as_mice() -> None:
     pooled = pool_scalar([2.0, 2.0, 2.0], [0.25, 0.25, 0.25])
-    assert pooled.b == 0 and pooled.lam == 0 and pooled.riv == 0
-    assert pooled.df == pytest.approx(
-        2 / 1e-8
-    )  # mice floors lambda at 1e-4 instead of switching to z
-    assert pooled.ci.lower == pytest.approx(2 - stats.norm.ppf(0.975) * 0.5, abs=1e-6)
-    assert barnard_rubin_df(3, 0.0, 0.25, dfcom=10) < 10  # bounded by the observed-data df
+    assert pooled.b == 0 and pooled.lam == 0 and pooled.riv == 0 and pooled.fmi == 0
+    assert math.isinf(pooled.df)  # mice 3.19 no longer floors lambda
+    assert pooled.ci.lower == pytest.approx(2 - stats.norm.ppf(0.975) * 0.5)
+    assert barnard_rubin_df(3, 0.0, 0.25, dfcom=10) == pytest.approx(
+        11 / 13 * 10
+    )  # the observed-data df
 
 
 def test_scalar_pooling_rejects_unusable_inputs() -> None:
