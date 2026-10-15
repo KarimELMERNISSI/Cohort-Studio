@@ -101,6 +101,9 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
     )
     welch = stored["results"]["hba1c_pct"].result.extra["result"]
     assert welch.mi is not None and welch.mi.m == 3 and welch.mi.fmi > 0  # HbA1c has imputed values
+    assert not any(
+        "selected manually" in w.value for w in app.warning
+    )  # Welch is the pooled test by design
     for target in ("diabetes", "smoking_status"):  # every detail view renders
         app.selectbox(key="mi_cmp_detail").select(target).run()
         _ok(app)

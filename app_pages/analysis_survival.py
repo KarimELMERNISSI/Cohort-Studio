@@ -94,6 +94,11 @@ def _pooled_km_figure(curves: dict[str, pd.DataFrame]) -> go.Figure:
     return fig
 
 
+def _median_text(median: float | None) -> str:
+    """The median survival time, or 'not reached' when the curve stays above 0.5."""
+    return "not reached" if median is None else f"{median:.3g}"
+
+
 def _table(df: pd.DataFrame, formats: dict) -> None:
     st.dataframe(df.style.format(formats, na_rep=""), hide_index=True, width="stretch")
 
@@ -123,13 +128,13 @@ def _show_survival(res) -> None:
                     "group": c.label,
                     "n": c.n,
                     "events": c.events,
-                    "median survival": c.median,
+                    "median survival": _median_text(c.median),
                     "survival at last time": float(c.survival[-1]),
                 }
                 for c in res.curves
             ]
         ),
-        {"median survival": "{:.3g}", "survival at last time": "{:.3f}"},
+        {"survival at last time": "{:.3f}"},
     )
     if res.logrank_statistic is not None:
         result_card(
@@ -157,13 +162,13 @@ def _show_pooled_survival(res) -> None:
             [
                 {
                     "group": label,
-                    "median survival (pooled curve)": res.extra["medians"].get(label),
+                    "median survival (pooled curve)": _median_text(res.extra["medians"].get(label)),
                     "survival at last time": float(curve["survival"].iloc[-1]),
                 }
                 for label, curve in curves.items()
             ]
         ),
-        {"median survival (pooled curve)": "{:.3g}", "survival at last time": "{:.3f}"},
+        {"survival at last time": "{:.3f}"},
     )
     test = res.tests.get("log_rank")
     if test is not None:

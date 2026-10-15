@@ -93,7 +93,9 @@ def compare_pooled(mi, group: str, levels: list[str], target: str, *, numeric: b
             data = data.dropna(subset=columns)
             key = data[group].astype(str)
             groups = {lvl: data.loc[key == lvl, target] for lvl in (reference, comparison)}
-            return compare_groups(groups, kind="welch", reference=reference, effect_sizes=False)
+            res = compare_groups(groups, kind="welch", reference=reference, effect_sizes=False)
+            # Welch is the pooled analysis by design: the "selected manually" note would only be noise
+            return res.model_copy(update={"warnings": [w for w in res.warnings if "selected manually" not in w]})
 
         return Pooled("welch", analyze_mi(welch, mi, columns=columns), reference, comparison)
     if numeric:
