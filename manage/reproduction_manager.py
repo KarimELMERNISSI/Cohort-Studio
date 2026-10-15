@@ -52,6 +52,8 @@ class ReplayResult:
     divergence: tuple[int, str, str] | None = None  # (step index, recorded fingerprint, replayed fingerprint)
     not_replayable: list[int] = field(default_factory=list)  # step indexes that could not be recomputed
     verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
+    imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
+    mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
 
     @property
     def reproducible(self) -> bool:
@@ -61,6 +63,7 @@ class ReplayResult:
             and self.missing_file is None
             and self.divergence is None
             and not self.not_replayable
+            and not self.mi_divergence
         )
 
 
@@ -264,6 +267,31 @@ def _population_definition(df, step, index, overrides, warnings):
     return df, None
 
 
+def _mi_impute(df, step, index, overrides, warnings, result=None):
+    """Re-run a multiple imputation on its population and check the imputed cells against the recorded hash."""
+    import numpy
+    import sklearn
+
+    from biostats.mi import ImputationSpec, impute
+
+    params = step.get("params", {}) or {}
+    block = step.get("population") or {}
+    rows = _population_rows(df, block, index, warnings) if block else df.index
+    run = impute(df.loc[rows], ImputationSpec(**params["spec"]))
+    if result is not None:
+        result.imputations[index] = run.mi
+    recorded = params.get("cells_fp")
+    if recorded and run.mi.fingerprint() != recorded:
+        if result is not None:
+            result.mi_divergence.append(index)
+        versions = params.get("versions") or {}
+        now = {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__}
+        changed = [f"{k} {versions.get(k)} -> {v}" for k, v in now.items() if versions.get(k) != v]
+        why = f" (changed since: {', '.join(changed)})" if changed else ""
+        warnings.append(f"step {index + 1} (mi_impute): the re-computed imputation differs from the recorded one{why}")
+    return df, None
+
+
 def _freeze_population(df, step, index, overrides, warnings):
     block = step.get("population") or {}
     if block.get("criteria"):
@@ -295,11 +323,12 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
     "population_definition": _population_definition,
     "freeze_population": _freeze_population,
     "outlier_clipping": _outlier_clipping,
+    "mi_impute": _mi_impute,
 }
 
 
 def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: dict[str, str] | None,
-                warnings: list[str]) -> tuple[pd.DataFrame, str | None]:
+                warnings: list[str], result: ReplayResult | None = None) -> tuple[pd.DataFrame, str | None]:
     """Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo."""
     func_name = str(step.get("function"))
 
@@ -324,6 +353,8 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         warnings.append(f"step {index + 1}: unknown step '{func_name}' skipped")
         logger.warning("Skipping unknown pipeline step: %s", func_name)
         raise _NotReplayable(df)
+    if func_name == "mi_impute":
+        return _mi_impute(df, step, index, overrides, warnings, result)
     return handler(df, step, index, overrides, warnings)
 
 
@@ -346,7 +377,7 @@ def apply_steps(
             progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
         replayed = True
         try:
-            current, missing = _apply_step(current, step, i, path_overrides, result.warnings)
+            current, missing = _apply_step(current, step, i, path_overrides, result.warnings, result)
         except _NotReplayable as skipped:
             current, missing, replayed = skipped.args[0], None, False
             result.not_replayable.append(i)

@@ -208,6 +208,7 @@ class TraceDocumenter:
             "apply_filter": "Filter Applied to the Dataset",
             "population_definition": "Analysis Population",
             "freeze_population": "Analysis Population Kept as the Dataset",
+            "mi_impute": "Multiple Imputation",
             "targeted_imputation": "Targeted Imputation (Formula)",
             "multiple_imputation": "Multiple Imputation (Diagnostic, One Dataset Adopted)",
         }

@@ -86,6 +86,19 @@ class MIData:
         for i in range(1, self.m + 1):
             yield i, self.complete(i, columns)
 
+    def fingerprint(self, length: int = 16) -> str:
+        """Hash of the imputed cells (columns, row ids, every imputation): equal imputations, equal hash."""
+        import hashlib
+
+        digest = hashlib.sha256(f"m={self.m}".encode())
+        for col in sorted(self.imputations):
+            frame = self.imputations[col].sort_index()
+            digest.update(col.encode())
+            digest.update(
+                pd.util.hash_pandas_object(frame.astype(str), index=True).to_numpy().tobytes()
+            )
+        return digest.hexdigest()[:length]
+
     def subset(self, rows: pd.Index | Sequence[Any]) -> MIData:
         """The same imputations restricted to ``rows`` (row ids of the observed data)."""
         index = pd.Index(rows)

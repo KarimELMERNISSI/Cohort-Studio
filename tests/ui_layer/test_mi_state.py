@@ -39,6 +39,30 @@ def _script() -> None:
         ss["load"] = state.load_saved_version(ss["saved"])
     elif action == "swap":
         state.load_sample_cohort()
+    elif action == "impute_population":
+        state.load_tutorial_cohort()
+        state.activate_family("study_inclusion", True)
+        spec = ImputationSpec(
+            columns=["hba1c_pct", "ldl_mmol_l", "age", "sex"], m=2, maxit=2, seed=3
+        )
+        state.set_mi(impute(state.analysis_frame(), spec))
+    elif action == "replay":
+        from manage.reproduction_manager import run_trace
+
+        trace = state.transformation_manager.get_trace()
+        steps = [s["function"] for s in trace["steps"]]
+        result = run_trace(trace)
+        index = steps.index("mi_impute")
+        ss["replay"] = {
+            "steps": steps,
+            "error": result.error,
+            "reproducible": result.reproducible,
+            "recorded": trace["steps"][index]["params"]["cells_fp"],
+            "replayed": result.imputations[index].fingerprint()
+            if index in result.imputations
+            else None,
+            "rows": len(result.imputations[index].base) if index in result.imputations else None,
+        }
     current = state.mi_status()
     ss["status"] = None if current is None else current.kind
     usable = state.analysis_mi()
@@ -81,3 +105,13 @@ def test_imputation_follows_the_population_and_travels_with_versions(data_root: 
     assert at.session_state["status"] == "fresh" and at.session_state["mi_rows"] == 1206
     _run(at, "swap")  # another dataset: the imputation is dropped
     assert at.session_state["status"] is None
+
+
+def test_the_imputation_is_traced_and_replayed_on_the_same_population(data_root: Path) -> None:
+    at = _run(_app(), "impute_population")
+    assert at.session_state["status"] == "fresh" and at.session_state["mi_rows"] == 939
+    _run(at, "replay")
+    replay = at.session_state["replay"]
+    assert "mi_impute" in replay["steps"] and replay["error"] is None
+    assert replay["rows"] == 939  # the population re-evaluated from the recorded criteria
+    assert replay["replayed"] == replay["recorded"] and replay["reproducible"]

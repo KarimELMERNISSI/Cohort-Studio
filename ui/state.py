@@ -540,8 +540,12 @@ class AppState:
         """The multiple imputation of this dataset (biostats.mi.binding.StoredMI), if any."""
         return st.session_state.get(MI_KEY)
 
-    def set_mi(self, run: Any) -> Any:
-        """Keep an imputation run (biostats.mi.engine.ImputationRun) bound to the current data and population."""
+    def set_mi(self, run: Any, *, record: bool = True) -> Any:
+        """
+        Keep an imputation run (biostats.mi.engine.ImputationRun) bound to the current data and population, and
+        record it in the trace (``mi_impute``: the specification and the fingerprint of the imputed cells, which
+        the replay re-computes and checks).
+        """
         from biostats.mi.binding import bind
 
         identity = self.identity()
@@ -555,6 +559,32 @@ class AppState:
             population=population.to_trace() if population is not None else None,
         )
         st.session_state[MI_KEY] = stored
+        tm = self.transformation_manager
+        if record and tm.session_id:
+            import numpy
+            import sklearn
+
+            from biostats.mi.engine import ENGINE
+
+            mi = run.mi
+            params = {
+                "spec": run.spec.model_dump(),
+                "methods": dict(run.methods),
+                "m": mi.m,
+                "n_rows": int(len(mi.base)),
+                "n_imputed": mi.n_imputed(),
+                "cells_fp": mi.fingerprint(),
+                "engine": ENGINE,
+                "versions": {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__},
+            }
+            label = ", ".join(f"{c} ({m})" for c, m in run.methods.items())
+            with contextlib.suppress(Exception):
+                tm.add_step(
+                    "mi_impute",
+                    params,
+                    f"Multiple imputation, m = {mi.m}: {label}",
+                    population=stored.binding.population,
+                )
         return stored
 
     def clear_mi(self) -> None:

@@ -87,6 +87,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Saving a version saves a still-valid imputation with it (cells, row hashes, binding and diagnostics in
     the `mi/` folder). Loading the version restores it.
   - `MIData.flong()` gives the Stata "flong" layout next to the mice long layout.
+- **Imputation replayed and checked** (trace step `mi_impute`):
+  - Keeping an imputation records the specification, the population and a fingerprint of the imputed cells
+    in the trace, with the engine and library versions.
+  - The replay re-evaluates the population, re-runs the engine (it is deterministic) and checks that it
+    finds exactly the same cells; a difference is reported, with any library version that changed since.
+  - The adopted single imputation of the former MI panel (`multiple_imputation`) stays reported as not
+    recomputable.
 
 ### Repository moved to Cohort-Studio
 
