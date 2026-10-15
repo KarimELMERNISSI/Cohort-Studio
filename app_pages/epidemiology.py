@@ -271,14 +271,19 @@ def app(mi=None):
 
     with tabs[1]:
         if mi is not None:
-            st.info(observed_only, icon=":material/info:")
+            _observed_agreement_note()
         run_diagnostic_accuracy(df, analyzer)
         run_reliability(df, analyzer)
 
     with tabs[2]:
         if mi is not None:
-            st.info(observed_only, icon=":material/info:")
-        run_paired_and_rates(df, analyzer)
+            st.info(
+                "Imputed data selected: the paired and one-sample t-tests are pooled over the imputed datasets; "
+                "McNemar and Mantel-Haenszel analyse the observed data. Rates and standardised ratios use the "
+                "counts you enter.",
+                icon=":material/info:",
+            )
+        run_paired_and_rates(df, analyzer, mi=mi)
 
     with tabs[3]:
         run_power_analysis(df, analyzer)
@@ -291,6 +296,26 @@ def app(mi=None):
 
     with tabs[5]:
         show_educational_content()
+
+def _observed_agreement_note():
+    """Diagnostic accuracy and agreement with imputed data selected: what is analysed, and why it is not pooled."""
+    from biostats.mi import not_poolable
+
+    st.info(
+        "Imputed data selected: diagnostic accuracy, Bland-Altman, kappa and the ICC analyse the observed data "
+        "(complete cases).",
+        icon=":material/info:",
+    )
+    with st.expander("Why these analyses are not pooled"):
+        st.markdown(
+            "**Diagnostic accuracy and kappa.** Sensitivity, specificity, the AUC and kappa can be pooled on a "
+            "transformed scale; this version does not pool them yet."
+        )
+        for key, label in (("bland_altman", "Bland-Altman limits of agreement"), ("icc", "Intraclass correlation")):
+            entry = not_poolable(key)
+            if entry is not None:
+                st.markdown(f"**{label}.** {entry.reason} {entry.alternative}")
+
 
 def run_univariate_analysis(df, analyzer, transformed=False):
     st.header("Univariate Group Comparison")

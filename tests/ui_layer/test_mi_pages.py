@@ -126,6 +126,31 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
     app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
 
 
+def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
+    app.session_state["analysis_data_mode"] = "multiple"
+    app.switch_page(nav.page_path("analyze")).run()
+    _ok(app)
+    assert any("analyse the observed data" in i.value for i in app.info)  # diagnostic & agreement
+    app.selectbox(key="pair_before").select("sbp_baseline").run()
+    app.selectbox(key="pair_after").select("sbp_6m").run()  # 183 imputed values
+    app.button(key="pair_run").click().run()
+    _ok(app)
+    paired = _stored(app, "paired_mi").extra["result"]
+    assert (
+        "pooled over 3 imputations" in paired.name and paired.mi is not None and paired.mi.fmi > 0
+    )
+    app.radio(key="pair_kind").set_value("Wilcoxon signed-rank").run()
+    _ok(app)
+    assert any("Not pooled with imputed data" in i.value for i in app.info)
+    app.radio(key="pair_kind").set_value("Paired t-test").run()
+    app.selectbox(key="one_col").select("hba1c_pct").run()
+    app.number_input(key="one_ref").set_value(7.0).run()
+    app.button(key="one_run").click().run()
+    _ok(app)
+    one = _stored(app, "one_sample_mi").extra["result"]
+    assert one.mi is not None and one.mi.m == 3 and one.estimate_ci is not None
+
+
 def test_observed_mode_is_unchanged_and_a_stale_imputation_is_not_used(app: AppTest) -> None:
     app.session_state["analysis_data_mode"] = "observed"
     app.switch_page(nav.page_path("survival")).run()

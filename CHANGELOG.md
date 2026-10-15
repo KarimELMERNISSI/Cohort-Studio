@@ -139,6 +139,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   settings change.
 - t-tests can skip their standardised effect sizes (`effect_sizes=False`). Their bootstrap took about 2 s per
   call, too slow to repeat on every imputed dataset.
+- **Paired and one-sample t-tests pooled** (Analyze > Paired, rates & stratified): with imputed data, the mean
+  paired difference and the difference from a reference value are pooled. The Wilcoxon tests say why they cannot
+  be pooled.
+  - McNemar, Mantel-Haenszel, diagnostic accuracy, Bland-Altman, kappa and the ICC say that they analyse the
+    observed data.
+  - Diagnostic accuracy and kappa are not pooled yet. Bland-Altman limits and the ICC have no pooling rule.
 
 ### Repository moved to Cohort-Studio
 

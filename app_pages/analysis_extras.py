@@ -16,15 +16,43 @@ from biostats.paired import (
 from biostats.rates import incidence_rate, mantel_haenszel, rate_ratio, standardised_ratio
 from biostats.reliability import cohens_kappa, icc
 from ui.components import error_card, help_popover, result_card, section, status_chip
+from ui.components.mi_mode import mi_token, show_mi_notes
 from ui.progress import mark_step
 from ui.results import provenance, recall, remember
+from ui.state import get_state
 
 
 def _ci(ci) -> str:
     return f"{ci.lower:.3g} to {ci.upper:.3g}"
 
 
-def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
+OBSERVED_NOTE = "Not pooled over the imputed datasets: this analysis uses the observed data (complete cases)."
+
+
+def _not_pooled(analysis: str) -> None:
+    """The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable)."""
+    from biostats.mi import not_poolable
+
+    entry = not_poolable(analysis)
+    if entry is not None:
+        st.info(f"Not pooled with imputed data. {entry.reason} {entry.alternative}", icon=":material/block:")
+
+
+def _show_test(res, key: str, *, pooled: bool) -> None:
+    """A stored test result: the pooled test with its notes and complete-case comparison, or the observed one."""
+    if res is None:
+        return
+    if pooled:
+        result_card(res.extra["result"])
+        show_mi_notes(res, complete_case=result_card)
+    else:
+        result_card(res)
+    provenance(key)
+
+
+def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
+    """Paired and one-sample tests (pooled over the imputed datasets ``mi`` when given), McNemar, rates,
+    Mantel-Haenszel and standardised ratios."""
     numeric = list(analyzer.numeric_cols)
     binary = list(analyzer.binary_cols)
     small_cats = [
@@ -56,21 +84,31 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
             horizontal=True,
             help="Paired t for roughly symmetric differences; Wilcoxon for skewed differences or outliers.",
         )
-        if st.button("Run paired test", key="pair_run", type="primary"):
-            try:
-                res = (
-                    paired_t(df[after], df[before])
-                    if kind.startswith("Paired")
-                    else wilcoxon_signed_rank(df[after], df[before])
-                )
-                remember("paired", res, config=(before, after, kind))
-                mark_step("analyse", "paired test")
-            except Exception as exc:
-                error_card("The paired test could not be computed.", exc)
-        res = recall("paired", config=(before, after, kind))
-        if res is not None:
-            result_card(res)
-            provenance("paired")
+        if mi is not None and not kind.startswith("Paired"):
+            _not_pooled("wilcoxon_signed_rank")
+        else:
+            key, config = ("paired_mi", (before, after, kind, mi_token(get_state()))) if mi is not None else (
+                "paired",
+                (before, after, kind),
+            )
+            if st.button("Run paired test", key="pair_run", type="primary"):
+                try:
+                    if mi is not None:
+                        from biostats.mi import analyze_mi
+
+                        res = analyze_mi(lambda d: paired_t(d[after], d[before]), mi, columns=[before, after])
+                        remember(key, res, config=config, n_analysed=len(mi.base))
+                    else:
+                        res = (
+                            paired_t(df[after], df[before])
+                            if kind.startswith("Paired")
+                            else wilcoxon_signed_rank(df[after], df[before])
+                        )
+                        remember(key, res, config=config)
+                    mark_step("analyse", "paired test")
+                except Exception as exc:
+                    error_card("The paired test could not be computed.", exc)
+            _show_test(recall(key, config=config), key, pooled=mi is not None)
     else:
         st.info("Two numeric columns are needed.")
 
@@ -94,23 +132,35 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
             horizontal=True,
             help="t-test for roughly symmetric data; Wilcoxon otherwise.",
         )
-        if st.button("Run one-sample test", key="one_run", type="primary"):
-            try:
-                res = (
-                    one_sample_t(df[col], ref)
-                    if kind.startswith("One")
-                    else one_sample_wilcoxon(df[col], ref)
-                )
-                remember("one_sample", res, config=(col, ref, kind))
-                mark_step("analyse", "one-sample test")
-            except Exception as exc:
-                error_card("The one-sample test could not be computed.", exc)
-        res = recall("one_sample", config=(col, ref, kind))
-        if res is not None:
-            result_card(res)
-            provenance("one_sample")
+        if mi is not None and not kind.startswith("One"):
+            _not_pooled("wilcoxon_signed_rank")
+        else:
+            key, config = ("one_sample_mi", (col, ref, kind, mi_token(get_state()))) if mi is not None else (
+                "one_sample",
+                (col, ref, kind),
+            )
+            if st.button("Run one-sample test", key="one_run", type="primary"):
+                try:
+                    if mi is not None:
+                        from biostats.mi import analyze_mi
+
+                        res = analyze_mi(lambda d: one_sample_t(d[col], ref), mi, columns=[col])
+                        remember(key, res, config=config, n_analysed=len(mi.base))
+                    else:
+                        res = (
+                            one_sample_t(df[col], ref)
+                            if kind.startswith("One")
+                            else one_sample_wilcoxon(df[col], ref)
+                        )
+                        remember(key, res, config=config)
+                    mark_step("analyse", "one-sample test")
+                except Exception as exc:
+                    error_card("The one-sample test could not be computed.", exc)
+            _show_test(recall(key, config=config), key, pooled=mi is not None)
 
     section("Paired binary outcomes (McNemar) and one-sample proportion")
+    if mi is not None:
+        st.caption(OBSERVED_NOTE)
     if len(binary) >= 2:
         c1, c2 = st.columns(2)
         b1 = c1.selectbox(
@@ -240,6 +290,8 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer) -> None:
         "Stratified 2x2 tables (Mantel-Haenszel)",
         "Pooled odds and risk ratios adjusted for a stratifying variable; Breslow-Day tests homogeneity.",
     )
+    if mi is not None:
+        st.caption(OBSERVED_NOTE)
     if len(binary) >= 2 and small_cats:
         c1, c2, c3 = st.columns(3)
         exposure = c1.selectbox(
