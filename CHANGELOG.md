@@ -120,6 +120,25 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     silently: the page says why and analyses the observed data. The second case can be used with a caveat.
 - Fixed: a negative follow-up time made the log-rank test and the Cox model fail with a length error when a
   group or covariates were given. Such rows are now left out of every survival analysis, with a warning.
+- **Pooled analyses on the Analyze page** (`app_pages/analysis_pooled.py`):
+  - Group comparison with imputed data, per variable:
+    - numeric, two groups: Welch t-test with the mean difference pooled;
+    - numeric, three or more groups: a linear model with pooled group means and a D1 test of the groups;
+    - binary variable: odds ratio, risk ratio and risk difference, with a Wald test on the pooled log odds
+      ratio and the chi-square by D2;
+    - other categorical variables: the chi-square test of independence by D2 (`chi_square_independence`).
+  - The multiple-testing correction applies to the pooled p-values. A pooled test card shows m, df, FMI and
+    RIV.
+  - ANCOVA with imputed data: Type II tests by D1, pooled adjusted means and Harel's R2.
+  - Rank tests and Fisher's exact test are listed as not poolable, with the reason and the alternative.
+    Transformations are not offered with imputed data: z-scores and min-max scaling differ between imputed
+    datasets.
+  - The other tabs say that they analyse the observed data.
+- The observed ANCOVA runs on `biostats.linear`: the same Type II table and partial eta squared as before, plus
+  the adjusted (least-squares) means with their CI. Its result stays until the data, the population or the
+  settings change.
+- t-tests can skip their standardised effect sizes (`effect_sizes=False`). Their bootstrap took about 2 s per
+  call, too slow to repeat on every imputed dataset.
 
 ### Repository moved to Cohort-Studio
 

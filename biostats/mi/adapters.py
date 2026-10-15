@@ -265,6 +265,31 @@ class TestAdapter(Adapter):
         return {"result": pooled}
 
 
+class ChiSquareAdapter(Adapter):
+    """A chi-square test with no estimate (r x c independence): D2 combination of the statistics."""
+
+    kind = "chisq"
+
+    def extract(self, result: TestResult) -> Extract:
+        if result.statistic is None or not result.df:
+            raise ValueError(f"{result.name} reports no chi-square statistic and cannot be pooled")
+        return Extract(
+            params=pd.Series(dtype=float),
+            chisq={"chi_square": (float(result.statistic), float(result.df[0]))},
+            warnings=list(result.warnings),
+            extra={"n": result.n_total},
+        )
+
+    def tests(
+        self, extracts: list[Extract], table: PooledTable | None
+    ) -> dict[str, MultiParameterTest]:
+        if len({e.chisq["chi_square"][1] for e in extracts}) > 1:
+            raise ValueError(
+                "the tables have different shapes in the imputed datasets; fix the levels"
+            )
+        return super().tests(extracts, table)
+
+
 class TwoByTwoAdapter(Adapter):
     """2x2 table: log odds ratio, log risk ratio and risk difference; D2 for the chi-square."""
 
@@ -406,6 +431,8 @@ def adapter_for(result: Any) -> Adapter:
     if isinstance(result, CoxResult):
         return CoxAdapter()
     if isinstance(result, TestResult):
+        if result.estimate is None and result.statistic_label == "chi2":
+            return ChiSquareAdapter()
         return TestAdapter()
     if isinstance(result, TwoByTwoResult):
         return TwoByTwoAdapter()
@@ -416,6 +443,7 @@ def adapter_for(result: Any) -> Adapter:
 
 __all__ = [
     "Adapter",
+    "ChiSquareAdapter",
     "Extract",
     "NotPoolableError",
     "adapter_for",

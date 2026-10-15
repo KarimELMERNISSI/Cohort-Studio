@@ -94,3 +94,21 @@ def test_ancova_model_check(app: AppTest) -> None:
     app.run()
     _ok(app)
     assert "Model check" in _markdown(app)
+
+
+def test_ancova_runs_on_the_linear_model_and_keeps_its_result(app: AppTest) -> None:
+    app.session_state["epi_analysis_mode"] = "Multivariate (ANCOVA/Regression)"
+    app.run()
+    app.selectbox(key="ancova_group").select("arm").run()
+    covariate = app.multiselect(key="ancova_covs").options[0]
+    app.multiselect(key="ancova_covs").select(covariate).run()
+    app.button(key="ancova_run").click().run()
+    _ok(app)
+    result = app.session_state["_results"]["ancova"].value
+    assert list(result.type2["source"]) == ["arm", covariate, "Residual"]
+    assert len(result.adjusted_means) == 2
+    assert "Adjusted means" in _markdown(app)
+    app.toggle(key="epi_guidance").set_value(False).run()  # another widget: the result stays
+    _ok(app)
+    assert "Adjusted means" in _markdown(app)
+    app.toggle(key="epi_guidance").set_value(True).run()

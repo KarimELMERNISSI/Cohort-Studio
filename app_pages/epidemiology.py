@@ -1,12 +1,9 @@
-import re
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 import streamlit as st
 from scipy import stats
 from scipy.stats import t as t_dist
@@ -37,7 +34,7 @@ from biostats.power import (
 )
 from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
-from ui.components import no_dataset, result_card
+from ui.components import error_card, no_dataset, result_card
 from ui.guidance.analysis import (
     HELP,
     ancova_check,
@@ -51,6 +48,7 @@ from ui.guidance.analysis import (
     sample_size_sentence,
 )
 from ui.progress import mark_step
+from ui.results import provenance, recall, remember
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
 
@@ -165,7 +163,7 @@ def _render_twobytwo_panel(epi):
 
 
 
-def app():
+def app(mi=None):
     """
     Main application function for the Epidemiology Analysis page.
 
@@ -175,6 +173,9 @@ def app():
     3. Power Analysis & Sample Size Calculation.
     4. Z-Score Calculation (Reference Standardization).
     5. Educational Content display.
+
+    With multiply imputed data (``mi``, see ui.components.mi_mode) the group comparison and the ANCOVA are
+    pooled over the imputed datasets (app_pages.analysis_pooled).
     """
     if 'data' not in st.session_state or st.session_state['data'] is None:
         no_dataset()
@@ -193,14 +194,24 @@ def app():
             key="epi_analysis_mode",
             help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
         )
-        transformation = st.selectbox(
-            "Transform numeric variables",
-            ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
-            key="epi_transformation",
-            width=300,
-            help=HELP["transform"],
-        )
+        transformation = "None (Raw Data)"
+        if mi is None:
+            transformation = st.selectbox(
+                "Transform numeric variables",
+                ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
+                key="epi_transformation",
+                width=300,
+                help=HELP["transform"],
+            )
         guidance_toggle()
+    if mi is not None:
+        from biostats.mi import not_poolable
+
+        entry = not_poolable("standardised_variables")
+        st.caption(
+            "No transformation with imputed data: " + (entry.reason if entry else "")
+            + " For a log scale, derive the variable on Enrich before imputing it."
+        )
     if guidance_on():
         render_orientation()
 
@@ -242,23 +253,39 @@ def app():
     tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Paired, rates & stratified", "Power & Sample Size",
                     "Z-Score & Reference", "Test Guide & Education"])
 
+    observed_only = (
+        "Imputed data selected: this tab analyses the observed data (complete cases of each analysis)."
+    )
     with tabs[0]:
-        if analysis_mode == "Univariate (Group Comparison)":
+        if mi is not None:
+            from app_pages.analysis_pooled import run_pooled_ancova, run_pooled_comparison
+
+            if analysis_mode == "Univariate (Group Comparison)":
+                run_pooled_comparison(mi, analyzer)
+            else:
+                run_pooled_ancova(mi, analyzer)
+        elif analysis_mode == "Univariate (Group Comparison)":
             run_univariate_analysis(df_analysis, analyzer, transformed=transformation != "None (Raw Data)")
         else:
             run_multivariate_analysis(df_analysis, analyzer)
 
     with tabs[1]:
+        if mi is not None:
+            st.info(observed_only, icon=":material/info:")
         run_diagnostic_accuracy(df, analyzer)
         run_reliability(df, analyzer)
 
     with tabs[2]:
+        if mi is not None:
+            st.info(observed_only, icon=":material/info:")
         run_paired_and_rates(df, analyzer)
 
     with tabs[3]:
         run_power_analysis(df, analyzer)
 
     with tabs[4]:
+        if mi is not None:
+            st.info(observed_only, icon=":material/info:")
         # Use raw data for Z-Score tab as it has its own standardization logic
         run_zscore_analysis(df, analyzer)
 
@@ -686,20 +713,23 @@ def run_multivariate_analysis(df, analyzer):
         target_col = st.selectbox(
             "Target Variable (Y)",
             options=analyzer.numeric_cols,
+            key="ancova_target",
             help="The continuous dependent variable you want to compare across groups."
         )
-        
+
     with col2:
         group_col = st.selectbox(
             "Grouping Variable (Factor)",
             options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 10],
+            key="ancova_group",
             help="The main categorical variable defining your groups (e.g., Treatment, Sex)."
         )
-        
+
     with col3:
         covariates = st.multiselect(
             "Covariates (Confounders)",
             options=[c for c in analyzer.numeric_cols if c != target_col],
+            key="ancova_covs",
             help=HELP["ancova_covariates"]
         )
     
@@ -725,256 +755,235 @@ def run_multivariate_analysis(df, analyzer):
     # Run Button
     col_btn1, col_btn2 = st.columns([1, 3])
     with col_btn1:
-        run_button = st.button("Run ANCOVA", type="primary", width="stretch")
+        run_button = st.button("Run ANCOVA", type="primary", width="stretch", key="ancova_run")
     with col_btn2:
-        st.caption("This will fit an OLS regression model and compute Type II ANOVA table.")
-        
-    if run_button:
-        perform_ancova(df, target_col, group_col, covariates)
+        st.caption("Fits an OLS model and computes the Type II table and the adjusted (least-squares) means.")
 
-def perform_ancova(df, target, group, covariates):
-    # Prepare data
-    cols = [target, group] + (covariates if covariates else [])
-    data = df[cols].dropna()
-    
-    if data.empty:
-        st.error("No valid data after dropping missing values.")
-        return
-    
-    n_missing = len(df) - len(data)
+    config = (target_col, group_col, tuple(covariates))
+    if run_button:
+        from biostats.linear import ancova
+
+        try:
+            fitted = ancova(df, target_col, group_col, covariates)
+        except Exception as exc:
+            error_card("The ANCOVA could not be computed.", exc)
+        else:
+            remember("ancova", fitted, config=config, n_analysed=fitted.n)
+            mark_step("analyse", f"ANCOVA of {target_col}")
+    res = recall("ancova", config=config)
+    if res is not None:
+        show_ancova(df, res, target_col, group_col, covariates)
+        provenance("ancova")
+
+
+def show_ancova(df, res, target, group, covariates):
+    """ANCOVA results (biostats.linear): Type II table, interpretation, adjusted means, coefficients, diagnostics."""
+    data = df[[target, group, *covariates]].dropna()
+    n_missing = len(df) - res.n
     if n_missing > 0:
         st.warning(f"{n_missing} rows with missing values were excluded from analysis.")
+    st.info(
+        f"**Model:** {target} ~ {group}" + "".join(f" + {c}" for c in covariates)
+        + f" (OLS; {group} coded against its reference level {res.reference_levels.get(group)})"
+    )
 
-    try:
-        # Sanitize column names for statsmodels formula
-        safe_cols = {col: re.sub(r'[^a-zA-Z0-9_]', '_', col) for col in cols}
-        data_safe = data.rename(columns=safe_cols)
-        
-        target_safe = safe_cols[target]
-        group_safe = safe_cols[group]
-        covariates_safe = [safe_cols[c] for c in covariates]
-        
-        # Construct Formula
-        if covariates_safe:
-            formula = f"{target_safe} ~ C({group_safe}) + {' + '.join(covariates_safe)}"
-        else:
-            formula = f"{target_safe} ~ C({group_safe})"
-        
-        st.info(f"**Model Formula:** `{formula}`")
-        
-        # Fit OLS Model
-        model = smf.ols(formula, data=data_safe).fit()
-        mark_step("analyse", f"ANCOVA of {target}")
-        
-        # ============ Results Section ============
-        st.subheader("ANCOVA Results")
-        
-        # ANOVA Table
-        anova_table = sm.stats.anova_lm(model, typ=2)
-        
-        # Calculate Partial Eta-Squared for effect size
-        anova_table['Partial η²'] = anova_table['sum_sq'] / (anova_table['sum_sq'] + anova_table.loc['Residual', 'sum_sq'])
-        
-        # Display ANOVA Table with styling
-        st.markdown("#### Type II ANOVA Table")
-        
-        formatted_anova = anova_table.copy()
-        formatted_anova = formatted_anova.rename(columns={
-            'sum_sq': 'Sum of Squares',
-            'df': 'DF',
-            'F': 'F-statistic',
-            'PR(>F)': 'P-value'
-        })
-        
-        st.dataframe(
-            formatted_anova.style.format({
-                'Sum of Squares': '{:.2f}',
-                'F-statistic': '{:.3f}',
-                'P-value': '{:.4f}',
-                'Partial η²': '{:.3f}'
-            }).map(
-                lambda x: 'background-color: #c8e6c9' if isinstance(x, float) and x < 0.05 else '',
-                subset=['P-value']
-            ),
-            width="stretch"
-        )
-        
-        # Extract and interpret group effect
-        group_row = anova_table.loc[f"C({group_safe})"]
-        p_value = group_row["PR(>F)"]
-        f_stat = group_row["F"]
-        eta_sq = group_row["Partial η²"]
-        
-        # Interpretation box
-        st.markdown("#### Results Interpretation")
-        
-        # Effect size interpretation
-        if eta_sq < 0.01:
-            eta_interp = "negligible"
-            eta_color = "#e0e0e0"
-        elif eta_sq < 0.06:
-            eta_interp = "small"
-            eta_color = "#fff3e0"
-        elif eta_sq < 0.14:
-            eta_interp = "medium"
-            eta_color = "#ffe0b2"
-        else:
-            eta_interp = "large"
-            eta_color = "#ffcc80"
-        
-        col_res1, col_res2 = st.columns(2)
-        
-        with col_res1:
-            if p_value < 0.05:
-                st.markdown(f"""
-                <div style="background-color: #c8e6c9; padding: 18px; border-radius: 10px; border-left: 4px solid #4caf50;">
-                    <h4 style="margin:0; color: #2e7d32;">Significant Group Effect</h4>
-                    <p style="margin: 10px 0 5px 0;">
-                        <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
-                        <strong>p = {p_value:.4f}</strong>
-                    </p>
-                    <p style="margin: 0; font-size: 0.9em;">
-                        Groups differ significantly on {target} after adjusting for covariates.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style="background-color: #fff3e0; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
-                    <h4 style="margin:0; color: #e65100;">No Significant Group Effect</h4>
-                    <p style="margin: 10px 0 5px 0;">
-                        <strong>F({int(group_row['df'])}, {int(anova_table.loc['Residual', 'df'])}) = {f_stat:.2f}</strong>, 
-                        <strong>p = {p_value:.4f}</strong>
-                    </p>
-                    <p style="margin: 0; font-size: 0.9em;">
-                        No significant group difference after adjusting for covariates.
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        with col_res2:
+    # ============ Results Section ============
+    st.subheader("ANCOVA Results")
+    type2 = res.type2.set_index("source")
+    st.markdown("#### Type II ANOVA Table")
+    formatted_anova = type2.rename(columns={
+        'sum_sq': 'Sum of Squares',
+        'df': 'DF',
+        'F': 'F-statistic',
+        'p': 'P-value',
+        'partial_eta2': 'Partial η²',
+    })
+    st.dataframe(
+        formatted_anova.style.format({
+            'DF': '{:.0f}',
+            'Sum of Squares': '{:.2f}',
+            'F-statistic': '{:.3f}',
+            'P-value': '{:.4f}',
+            'Partial η²': '{:.3f}'
+        }, na_rep="").map(
+            lambda x: 'background-color: #c8e6c9' if isinstance(x, float) and x < 0.05 else '',
+            subset=['P-value']
+        ),
+        width="stretch"
+    )
+
+    # Extract and interpret group effect
+    group_row = type2.loc[group]
+    p_value = group_row["p"]
+    f_stat = group_row["F"]
+    eta_sq = group_row["partial_eta2"]
+    df1, df2 = int(group_row["df"]), int(type2.loc["Residual", "df"])
+
+    st.markdown("#### Results Interpretation")
+    if eta_sq < 0.01:
+        eta_interp = "negligible"
+        eta_color = "#e0e0e0"
+    elif eta_sq < 0.06:
+        eta_interp = "small"
+        eta_color = "#fff3e0"
+    elif eta_sq < 0.14:
+        eta_interp = "medium"
+        eta_color = "#ffe0b2"
+    else:
+        eta_interp = "large"
+        eta_color = "#ffcc80"
+
+    col_res1, col_res2 = st.columns(2)
+    with col_res1:
+        if p_value < 0.05:
             st.markdown(f"""
-            <div style="background-color: {eta_color}; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
-                <h4 style="margin:0; color: #5d4037;">Effect Size</h4>
+            <div style="background-color: #c8e6c9; padding: 18px; border-radius: 10px; border-left: 4px solid #4caf50;">
+                <h4 style="margin:0; color: #2e7d32;">Significant Group Effect</h4>
                 <p style="margin: 10px 0 5px 0;">
-                    <strong>Partial η² = {eta_sq:.3f}</strong> ({eta_interp} effect)
+                    <strong>F({df1}, {df2}) = {f_stat:.2f}</strong>,
+                    <strong>p = {p_value:.4f}</strong>
                 </p>
-                <p style="margin: 0; font-size: 0.85em;">
-                    {eta_sq*100:.1f}% of variance in {target} is explained by {group} (after controlling for covariates).
+                <p style="margin: 0; font-size: 0.9em;">
+                    Groups differ significantly on {target} after adjusting for covariates.
                 </p>
             </div>
             """, unsafe_allow_html=True)
-        
-        # Covariate effects
-        if covariates:
-            st.markdown("#### Covariate Effects")
-            cov_data = []
-            for cov in covariates_safe:
-                if cov in anova_table.index:
-                    cov_row = anova_table.loc[cov]
-                    cov_p = cov_row["PR(>F)"]
-                    cov_eta = cov_row["Partial η²"]
-                    cov_beta = model.params.get(cov, 0)
-                    cov_data.append({
-                        "Covariate": cov,
-                        "β (coefficient)": f"{cov_beta:.3f}",
-                        "P-value": f"{cov_p:.4f}",
-                        "Partial η²": f"{cov_eta:.3f}",
-                        "Significant?": "Yes (p < 0.05)" if cov_p < 0.05 else "No"
-                    })
-            
-            if cov_data:
-                st.dataframe(pd.DataFrame(cov_data), width="stretch", hide_index=True)
-                st.caption("**β coefficient**: Change in target per 1-unit increase in covariate, holding other variables constant.")
-        
-        # Full model summary (collapsible)
-        with st.expander("Full Model Summary (OLS Regression)"):
-            st.write(model.summary())
-            st.caption("**R²** = proportion of variance explained by model. **Adj. R²** = penalized for number of predictors.")
-            
-        # ============ Visualizations & Diagnostics ============
-        st.subheader("Visualizations & Diagnostics")
-        
-        viz_tabs = st.tabs(["Adjusted Means", "Raw vs Adjusted", "Model Diagnostics"])
-        
-        with viz_tabs[0]:
-            # Calculate adjusted values
-            data_adj = data.copy()
-            y_adj = data_safe[target_safe].copy()
-            
-            for cov in covariates_safe:
-                beta = model.params.get(cov, 0)
-                mean_val = data_safe[cov].mean()
-                y_adj -= beta * (data_safe[cov] - mean_val)
-                
-            data_adj['Adjusted ' + target] = y_adj
-            
-            fig = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, 
-                         title=f"Adjusted {target} by {group} (Covariates evaluated at group means)",
-                         points="outliers")
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, width="stretch")
-            st.caption("Adjusted values = Original values minus covariate effects evaluated at covariate means.")
-        
-        with viz_tabs[1]:
-            col_viz1, col_viz2 = st.columns(2)
-            with col_viz1:
-                fig_raw = px.box(data, x=group, y=target, color=group, title=f"Raw {target} by {group}")
-                fig_raw.update_layout(showlegend=False)
-                st.plotly_chart(fig_raw, width="stretch")
-                st.caption("Raw (unadjusted) observed distributions")
-            with col_viz2:
-                fig_adj = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, title=f"Adjusted {target} by {group}")
-                fig_adj.update_layout(showlegend=False)
-                st.plotly_chart(fig_adj, width="stretch")
-                st.caption("Adjusted distributions with covariate confounding controlled")
-        
-        with viz_tabs[2]:
-            st.markdown("#### Methodological Assumptions Verification")
-            
-            # Formally check ANCOVA assumptions using epidemiology engine
-            from utils.epidemiology_utils import check_ancova_assumptions
-            ancova_diag = check_ancova_assumptions(data, target=target, group=group, covariates=covariates)
+        else:
+            st.markdown(f"""
+            <div style="background-color: #fff3e0; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
+                <h4 style="margin:0; color: #e65100;">No Significant Group Effect</h4>
+                <p style="margin: 10px 0 5px 0;">
+                    <strong>F({df1}, {df2}) = {f_stat:.2f}</strong>,
+                    <strong>p = {p_value:.4f}</strong>
+                </p>
+                <p style="margin: 0; font-size: 0.9em;">
+                    No significant group difference after adjusting for covariates.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+    with col_res2:
+        st.markdown(f"""
+        <div style="background-color: {eta_color}; padding: 18px; border-radius: 10px; border-left: 4px solid #ff9800;">
+            <h4 style="margin:0; color: #5d4037;">Effect Size</h4>
+            <p style="margin: 10px 0 5px 0;">
+                <strong>Partial η² = {eta_sq:.3f}</strong> ({eta_interp} effect)
+            </p>
+            <p style="margin: 0; font-size: 0.85em;">
+                {eta_sq*100:.1f}% of the variance in {target} not explained by the covariates is explained by {group}.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
-            # 1. Homogeneity of Regression Slopes
-            if covariates and ancova_diag.homogeneity_of_slopes_pvalue is not None:
-                st.markdown("##### 1. Homogeneity of Regression Slopes (Parallel Slopes)")
-                if ancova_diag.slopes_homogeneous:
-                    st.success(
-                        f"No evidence against parallel slopes (interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} >= 0.05). "
-                        "The covariate effect is uniform across groups; standard ANCOVA adjusted means are statistically valid."
-                    )
-                else:
-                    st.warning(
-                        f"Violation of parallel slopes detected (Interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} < 0.05). "
-                        "The covariate effect differs significantly by group. Standard ANCOVA adjusted means may be misleading. "
-                        "Consider moderation analysis or reporting group-specific slopes."
-                    )
+    st.markdown("#### Adjusted means")
+    st.dataframe(
+        res.adjusted_means.style.format({"mean": "{:.3f}", "se": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}"}),
+        hide_index=True,
+    )
+    st.caption("Least-squares means: the model's prediction for each group with every covariate at its mean "
+               "(Searle, Speed & Milliken 1980).")
 
-            # 2. Residual Normality and Homoscedasticity Plots
-            st.markdown("##### 2. Residual Distribution & Homoscedasticity")
-            col_diag1, col_diag2 = st.columns(2)
-            
-            with col_diag1:
-                fig_qq = vu.create_qq_plot(model.resid, title="Q-Q Plot of Residuals")
-                st.plotly_chart(fig_qq, width="stretch")
-                norm_status = "No evidence against residual normality" if ancova_diag.residuals_normal else "Residuals deviate from normality"
-                st.caption(f"{norm_status} (p = {ancova_diag.residual_normality_pvalue:.4f})")
-            
-            with col_diag2:
-                fig_rvf = px.scatter(x=model.fittedvalues, y=model.resid, 
-                                     labels={'x': 'Fitted Values', 'y': 'Residuals'},
-                                     title="Residuals vs Fitted Values")
-                fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
-                st.plotly_chart(fig_rvf, width="stretch")
-                homo_status = "No evidence of heteroscedasticity" if ancova_diag.homoscedastic else "Heteroscedasticity detected"
-                homo_p_str = f"p = {ancova_diag.homoscedasticity_pvalue:.4f}" if ancova_diag.homoscedasticity_pvalue is not None else "N/A"
-                st.caption(f"{homo_status} ({homo_p_str})")
+    # Covariate effects
+    if covariates:
+        st.markdown("#### Covariate Effects")
+        cov_data = []
+        for cov in covariates:
+            if cov in type2.index:
+                cov_row = type2.loc[cov]
+                cov_data.append({
+                    "Covariate": cov,
+                    "β (coefficient)": f"{res.params.get(cov, float('nan')):.3f}",
+                    "P-value": f"{cov_row['p']:.4f}",
+                    "Partial η²": f"{cov_row['partial_eta2']:.3f}",
+                    "Significant?": "Yes (p < 0.05)" if cov_row["p"] < 0.05 else "No"
+                })
+        if cov_data:
+            st.dataframe(pd.DataFrame(cov_data), width="stretch", hide_index=True)
+            st.caption("**β coefficient**: Change in target per 1-unit increase in covariate, holding other variables constant.")
 
-        
-    except Exception as e:
-        st.error(f"An error occurred during ANCOVA computation: {e}")
-        st.write("**Tip:** Ensure categorical variables are properly encoded. Check for multicollinearity among covariates.")
+    with st.expander("Full model (OLS coefficients)"):
+        st.dataframe(
+            res.table.style.format({"coef": "{:.4f}", "se": "{:.4f}", "ci_low": "{:.4f}", "ci_high": "{:.4f}",
+                                    "t": "{:.3f}", "p": "{:.4f}"}),
+            hide_index=True, width="stretch",
+        )
+        st.caption(f"n = {res.n}, R² = {res.r2:.3f}, adjusted R² = {res.r2_adj:.3f}, residual SD = {res.sigma:.3f}. "
+                   "**R²** = proportion of variance explained by the model; **adjusted R²** is penalised for the "
+                   "number of predictors.")
+    for warning in res.warnings:
+        st.warning(warning)
+
+    # ============ Visualizations & Diagnostics ============
+    st.subheader("Visualizations & Diagnostics")
+    viz_tabs = st.tabs(["Adjusted Means", "Raw vs Adjusted", "Model Diagnostics"])
+
+    # Adjusted values: each value minus the covariate effects evaluated at the covariate means
+    data_adj = data.copy()
+    y_adj = data[target].astype(float).copy()
+    for cov in covariates:
+        y_adj -= res.params.get(cov, 0.0) * (data[cov] - data[cov].mean())
+    data_adj['Adjusted ' + target] = y_adj
+
+    with viz_tabs[0]:
+        fig = px.box(data_adj, x=group, y='Adjusted ' + target, color=group,
+                     title=f"Adjusted {target} by {group} (covariates at their means)",
+                     points="outliers")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Adjusted values = Original values minus covariate effects evaluated at covariate means.")
+
+    with viz_tabs[1]:
+        col_viz1, col_viz2 = st.columns(2)
+        with col_viz1:
+            fig_raw = px.box(data, x=group, y=target, color=group, title=f"Raw {target} by {group}")
+            fig_raw.update_layout(showlegend=False)
+            st.plotly_chart(fig_raw, width="stretch")
+            st.caption("Raw (unadjusted) observed distributions")
+        with col_viz2:
+            fig_adj = px.box(data_adj, x=group, y='Adjusted ' + target, color=group, title=f"Adjusted {target} by {group}")
+            fig_adj.update_layout(showlegend=False)
+            st.plotly_chart(fig_adj, width="stretch")
+            st.caption("Adjusted distributions with covariate confounding controlled")
+
+    with viz_tabs[2]:
+        st.markdown("#### Methodological Assumptions Verification")
+
+        # Formally check ANCOVA assumptions using epidemiology engine
+        from utils.epidemiology_utils import check_ancova_assumptions
+        ancova_diag = check_ancova_assumptions(data, target=target, group=group, covariates=covariates)
+
+        # 1. Homogeneity of Regression Slopes
+        if covariates and ancova_diag.homogeneity_of_slopes_pvalue is not None:
+            st.markdown("##### 1. Homogeneity of Regression Slopes (Parallel Slopes)")
+            if ancova_diag.slopes_homogeneous:
+                st.success(
+                    f"No evidence against parallel slopes (interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} >= 0.05). "
+                    "The covariate effect is uniform across groups; standard ANCOVA adjusted means are statistically valid."
+                )
+            else:
+                st.warning(
+                    f"Violation of parallel slopes detected (Interaction test p = {ancova_diag.homogeneity_of_slopes_pvalue:.4f} < 0.05). "
+                    "The covariate effect differs significantly by group. Standard ANCOVA adjusted means may be misleading. "
+                    "Consider moderation analysis or reporting group-specific slopes."
+                )
+
+        # 2. Residual Normality and Homoscedasticity Plots
+        st.markdown("##### 2. Residual Distribution & Homoscedasticity")
+        col_diag1, col_diag2 = st.columns(2)
+        with col_diag1:
+            fig_qq = vu.create_qq_plot(pd.Series(res.residuals), title="Q-Q Plot of Residuals")
+            st.plotly_chart(fig_qq, width="stretch")
+            norm_status = "No evidence against residual normality" if ancova_diag.residuals_normal else "Residuals deviate from normality"
+            st.caption(f"{norm_status} (p = {ancova_diag.residual_normality_pvalue:.4f})")
+        with col_diag2:
+            fig_rvf = px.scatter(x=res.fitted, y=res.residuals,
+                                 labels={'x': 'Fitted Values', 'y': 'Residuals'},
+                                 title="Residuals vs Fitted Values")
+            fig_rvf.add_hline(y=0, line_dash="dash", line_color="red")
+            st.plotly_chart(fig_rvf, width="stretch")
+            homo_status = "No evidence of heteroscedasticity" if ancova_diag.homoscedastic else "Heteroscedasticity detected"
+            homo_p_str = f"p = {ancova_diag.homoscedasticity_pvalue:.4f}" if ancova_diag.homoscedasticity_pvalue is not None else "N/A"
+            st.caption(f"{homo_status} ({homo_p_str})")
+
 
 def visualize_result(df, group_col, target, analyzer):
     is_numeric = target in analyzer.numeric_cols

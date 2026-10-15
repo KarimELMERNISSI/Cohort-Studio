@@ -155,10 +155,13 @@ def compare_groups(
     nonparametric: bool = False,
     n_boot: int = 1000,
     seed: int = RANDOM_STATE,
+    effect_sizes: bool = True,
 ) -> TestResult:
     """
     Compare 2 or more independent groups. ``groups`` maps level -> values; ``reference`` names the
     reference level for two-group estimates (default: the first level). ``kind`` is one of KINDS.
+    ``effect_sizes=False`` skips the standardised effect sizes of the t-tests (their bootstrap is the
+    costly part); pooled analyses over imputed datasets report the mean difference instead.
     """
     kind = LEGACY_NAMES.get(kind, kind)
     if kind not in KINDS:
@@ -204,10 +207,14 @@ def compare_groups(
             else:
                 pooled = ((nx - 1) * vx + (ny - 1) * vy) / (nx + ny - 2)
                 se = float(np.sqrt(pooled * (1 / nx + 1 / ny)))
-            effects = [
-                cohens_d(x, y, alpha=alpha, hedges=True),
-                rank_biserial(x, y, alpha=alpha, n_boot=min(n_boot, 1000), seed=seed),
-            ]
+            effects = (
+                [
+                    cohens_d(x, y, alpha=alpha, hedges=True),
+                    rank_biserial(x, y, alpha=alpha, n_boot=min(n_boot, 1000), seed=seed),
+                ]
+                if effect_sizes
+                else []
+            )
             references = cite("welch1947", "delacre2017") if kind == "welch" else cite("hedges1981")
             return TestResult(
                 name=DISPLAY_NAMES[kind],

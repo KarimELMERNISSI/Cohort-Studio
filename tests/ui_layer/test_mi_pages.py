@@ -82,6 +82,50 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
     assert any("Complete-case analysis" in e.label for e in app.expander)
 
 
+def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
+    app.session_state["analysis_data_mode"] = "multiple"
+    app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
+    app.switch_page(nav.page_path("analyze")).run()
+    _ok(app)
+    assert any("No transformation with imputed data" in c.value for c in app.caption)
+    app.selectbox(key="mi_cmp_group").select("arm").run()
+    app.multiselect(key="mi_cmp_targets").set_value(
+        ["hba1c_pct", "diabetes", "smoking_status"]
+    ).run()
+    app.button(key="mi_cmp_run").click().run()
+    _ok(app)
+    stored = _stored(app, "univariate_mi")
+    kinds = {target: item.kind for target, item in stored["results"].items()}
+    assert kinds == {"hba1c_pct": "welch", "diabetes": "twobytwo", "smoking_status": "chisq"}, (
+        stored["errors"]
+    )
+    welch = stored["results"]["hba1c_pct"].result.extra["result"]
+    assert welch.mi is not None and welch.mi.m == 3 and welch.mi.fmi > 0  # HbA1c has imputed values
+    for target in ("diabetes", "smoking_status"):  # every detail view renders
+        app.selectbox(key="mi_cmp_detail").select(target).run()
+        _ok(app)
+
+    app.selectbox(key="mi_cmp_group").select(
+        "site"
+    ).run()  # three or more groups: D1 on a linear model
+    app.button(key="mi_cmp_run").click().run()
+    _ok(app)
+    by_site = _stored(app, "univariate_mi")["results"]["hba1c_pct"]
+    assert by_site.kind == "anova" and by_site.result.tests["site"].method == "D1"
+
+    app.session_state["epi_analysis_mode"] = "Multivariate (ANCOVA/Regression)"
+    app.run()
+    app.selectbox(key="mi_anc_target").select("hba1c_pct").run()
+    app.selectbox(key="mi_anc_group").select("arm").run()
+    app.multiselect(key="mi_anc_covs").select("age").run()
+    app.button(key="mi_anc_run").click().run()
+    _ok(app)
+    pooled = _stored(app, "ancova_mi")
+    assert pooled.kind == "linear" and pooled.tests["arm"].method == "D1"
+    assert len(pooled.extra["adjusted_means"]) == 2 and pooled.complete_case is not None
+    app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
+
+
 def test_observed_mode_is_unchanged_and_a_stale_imputation_is_not_used(app: AppTest) -> None:
     app.session_state["analysis_data_mode"] = "observed"
     app.switch_page(nav.page_path("survival")).run()

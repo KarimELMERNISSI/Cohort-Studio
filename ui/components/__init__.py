@@ -285,6 +285,12 @@ def result_card(result: Any, *, title: str | None = None) -> None:
                     text += f", {eff.magnitude()}"
                 parts.append(text)
             st.caption("Effect sizes: " + "; ".join(parts))
+        if result.mi is not None:
+            info = result.mi
+            st.caption(
+                f":material/stacks: Pooled over {info.m} imputed datasets with Rubin's rules: df = {info.df:.4g}, "
+                f"FMI = {info.fmi:.3f}, RIV = {info.riv:.3f}."
+            )
         if result.assumptions:
             chips = st.columns(min(4, len(result.assumptions)))
             for i, check in enumerate(result.assumptions[:8]):

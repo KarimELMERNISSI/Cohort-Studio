@@ -49,6 +49,13 @@ NOT_POOLABLE: dict[str, NotPoolable] = {
             "combination of the Kruskal-Wallis chi-square is only an approximation.",
         ),
         NotPoolable(
+            analysis="fisher_exact",
+            reason="Fisher's exact p-value is conditional on the margins of one table; there is no rule to combine "
+            "exact p-values across imputed datasets.",
+            alternative="Pool the odds ratio, risk ratio and risk difference with their intervals; the D2 combination "
+            "of the chi-square statistic is approximate, all the more when expected counts are small.",
+        ),
+        NotPoolable(
             analysis="hodges_lehmann",
             reason="The Hodges-Lehmann shift has a rank-based interval but no variance to combine.",
             alternative="Pool the difference in means, or a median difference from quantile regression with its "

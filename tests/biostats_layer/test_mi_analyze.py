@@ -7,12 +7,21 @@ import math
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
 
 from biostats import TestResult
-from biostats.contingency import TwoByTwo, analyze_twobytwo
+from biostats.contingency import TwoByTwo, analyze_twobytwo, chi_square_independence
 from biostats.inference import compare_groups
 from biostats.linear import ancova, linear_regression
-from biostats.mi import MIAnalysisError, MIData, NotPoolableError, analyze_mi, pool_terms
+from biostats.mi import (
+    MIAnalysisError,
+    MIData,
+    NotPoolableError,
+    analyze_mi,
+    not_poolable,
+    pool_terms,
+)
+from biostats.mi.pooling import d2_chisq
 from biostats.regression import logistic_regression
 from biostats.survival import compare_survival, cox_regression
 
@@ -242,6 +251,47 @@ def test_two_by_two_pools_ratios_and_the_chi_square() -> None:
         and result.term("risk_difference").scale == "identity"
     )
     assert result.tests["chi_square"].method == "D2" and result.complete_case is None
+
+
+def test_chi_square_independence_matches_scipy_and_names_absent_levels() -> None:
+    df = pd.DataFrame({"g": ["a"] * 30 + ["b"] * 30 + ["c"] * 40, "y": ["x", "y", "z", "x"] * 25})
+    res = chi_square_independence(df, "g", "y")
+    statistic, p, dof, _ = stats.chi2_contingency(pd.crosstab(df["g"], df["y"]), correction=False)
+    assert res.statistic == pytest.approx(statistic) and res.p_value == pytest.approx(p)
+    assert res.df == [dof] and res.groups == ["a", "b", "c"] and res.n_per_group == [30, 30, 40]
+    with pytest.raises(ValueError, match="absent from these rows"):
+        chi_square_independence(df[df["g"] != "c"], "g", "y", levels={"g": ["a", "b", "c"]})
+    with pytest.raises(ValueError, match="outside the levels"):
+        chi_square_independence(df, "g", "y", levels={"g": ["a", "b"]})
+
+
+def test_a_chi_square_of_independence_is_combined_with_d2() -> None:
+    mi, _ = _mi()
+    levels = {"site": ["Ettelbruck", "Luxembourg", "Metz"], "smoker": ["no", "yes"]}
+    result = analyze_mi(lambda d: chi_square_independence(d, "site", "smoker", levels=levels), mi)
+    assert result.kind == "chisq" and result.table is None
+    statistics = [
+        chi_square_independence(d, "site", "smoker", levels=levels).statistic
+        for _, d in mi.completed(["site", "smoker"])
+    ]
+    assert result.tests["chi_square"] == d2_chisq([float(s) for s in statistics], df=2)
+    assert result.complete_case is not None and result.complete_case.n_total < len(mi.base)
+    fisher = not_poolable("fisher_exact")
+    assert fisher is not None and "odds ratio" in fisher.alternative
+
+
+def test_welch_without_effect_sizes_gives_the_same_test() -> None:
+    rng = np.random.default_rng(3)
+    groups = {"a": rng.normal(0, 1, 80), "b": rng.normal(0.4, 1.2, 90)}
+    full = compare_groups(groups, kind="welch", reference="a")
+    light = compare_groups(groups, kind="welch", reference="a", effect_sizes=False)
+    assert light.effect_sizes == [] and len(full.effect_sizes) == 2
+    assert (light.estimate, light.se, light.p_value, light.df) == (
+        full.estimate,
+        full.se,
+        full.p_value,
+        full.df,
+    )
 
 
 def test_survival_curves_are_pooled_with_medians_and_log_rank() -> None:

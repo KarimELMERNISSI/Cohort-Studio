@@ -16,6 +16,7 @@ the expected-count rule.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -25,7 +26,7 @@ from pydantic import BaseModel, Field
 from scipy import stats
 from scipy.stats import norm
 
-from biostats._types import CI
+from biostats._types import CI, TestResult
 
 Design = Literal["unknown", "cohort", "rct", "case-control", "cross-sectional"]
 
@@ -468,11 +469,72 @@ def analyze_twobytwo(
     )
 
 
+def chi_square_independence(
+    df: pd.DataFrame,
+    row_col: str,
+    col_col: str,
+    *,
+    levels: Mapping[str, Sequence[Any]] | None = None,
+    alpha: float = 0.05,
+) -> TestResult:
+    """
+    Pearson chi-square test of independence of two categorical columns (no continuity correction).
+
+    ``levels`` fixes the categories of a column, so every imputed dataset gives a table of the same shape; a
+    value outside them, or a category absent from the rows, is named in the error.
+    """
+    data = df[[row_col, col_col]].dropna()
+    cats: dict[str, list[str]] = {}
+    codes: dict[str, np.ndarray] = {}
+    for col in (row_col, col_col):
+        text = data[col].astype(str)
+        cats[col] = (
+            [str(v) for v in levels[col]] if levels and col in levels else sorted(text.unique())
+        )
+        unknown = int((~text.isin(cats[col])).sum())
+        if unknown:
+            raise ValueError(
+                f"{col} has {unknown} value(s) outside the levels {cats[col]} fixed for the analysis"
+            )
+        if len(cats[col]) < 2:
+            raise ValueError(f"{col} needs at least two levels")
+        codes[col] = pd.Categorical(text, categories=cats[col]).codes
+    counts = np.zeros((len(cats[row_col]), len(cats[col_col])), dtype=int)
+    np.add.at(counts, (codes[row_col], codes[col_col]), 1)
+    absent = [
+        f"{col}: {cats[col][i]}"
+        for col, totals in ((row_col, counts.sum(axis=1)), (col_col, counts.sum(axis=0)))
+        for i in np.flatnonzero(totals == 0)
+    ]
+    if absent:
+        raise ValueError(f"level(s) absent from these rows ({'; '.join(absent)})")
+    statistic, p_value, dof, expected = stats.chi2_contingency(counts, correction=False)
+    warnings: list[str] = []
+    small = float((expected < 5).mean())
+    if small > 0.2:
+        warnings.append(
+            f"{small:.0%} of the expected counts are below 5: the chi-square approximation may be poor"
+        )
+    return TestResult(
+        name="Pearson chi-square test of independence",
+        statistic=float(statistic),
+        statistic_label="chi2",
+        df=[float(dof)],
+        p_value=float(p_value),
+        warnings=warnings,
+        references=["Pearson K (1900) Philos Mag 50:157-175"],
+        groups=cats[row_col],
+        n_per_group=[int(x) for x in counts.sum(axis=1)],
+        alpha=alpha,
+    )
+
+
 __all__ = [
     "Design",
     "TwoByTwo",
     "TwoByTwoResult",
     "analyze_twobytwo",
+    "chi_square_independence",
     "detect_event_level",
     "detect_reference_level",
 ]
