@@ -87,7 +87,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 
 | Phase | Goal | Status |
 |---|---|---|
-| P0 | Stop the bleeding: key rotation, crashes, admin takeover, secrets, cloud-LLM consent, PHI on stdout, lite CI | done (commit `ea6bd09`); key rotation remains an owner action |
+| P0 | Stop the bleeding: key rotation, crashes, admin takeover, secrets, cloud-LLM consent, PHI on stdout, lite CI | done (commit `ea6bd09`); the key was revoked and replaced by the owner on 2026-10-15 |
 | P1 | Library-agnostic graph connector (model, builders, yFiles + Plotly adapters, license compliance) | done (commit `3c9b55e`) |
 | P2 | Science Tier A: the five wrong-number bugs | done (S4 stage 1: honest labelling, seeds, observed-rows fit; multiple imputation with pooling is P5) |
 | P3 | Security hardening: safe expression evaluator, per-user workspace, SQL quoting | done (`core/expressions`, `core/workspace`, lockout; migration script `dev_scripts/migrate_user_layout.py`) |
@@ -99,8 +99,8 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 
 ## Owner actions required (cannot be done from the repository)
 
-1. Revoke the Google API key that was committed in `fdd29cb` (it is still the key in the local `.env`); create a restricted replacement and keep it only in untracked `.env`.
-2. Purge the key from history (`git filter-repo --replace-text`), force-push, ask collaborators to re-clone, and enable GitHub secret scanning with push protection. Treat the old key as compromised regardless.
+1. Revoke the Google API key that was committed in `fdd29cb`; create a restricted replacement and keep it only in untracked `.env`. **Done 2026-10-15**: the key is revoked and replaced.
+2. Purge the key from history (`git filter-repo --replace-text`), force-push, ask collaborators to re-clone, and enable GitHub secret scanning with push protection. Treat the old key as compromised regardless. **Purge done 2026-10-14**: the history was rewritten with `git filter-repo --sensitive-data-removal`, the code moved to `Cohort-Studio` and the former repository was deleted, so its commits, including `fdd29cb`, no longer exist on GitHub. Push protection remains to be enabled.
 3. Rotate the admin password that was tracked in `.streamlit/secrets.toml`.
 
 ## Item status
@@ -116,7 +116,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | S4 single imputation presented as MICE | closed (2026-10-15, M2, awaiting the owner's review): chained-equations engine with m independent chains (pmm, norm, logreg, polyreg, rf); the Survival & regression and Analyze pages pool their analyses with Rubin's rules (Barnard-Rubin df, D1/D2), with parity against R mice 3.19 and mitml 0.4.5; the imputation is bound to the analysis population, saved with versions, replayed and checked; values filled by single imputation are flagged under the results that use them | P2, P8; M2 |
 | S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
 | S11 missing methods (survival, regression, MH, paired, agreement) | closed | P8 (Survival & regression page; Paired, rates & stratified tab; reliability section) |
-| E1 leaked key | open | owner action |
+| E1 leaked key | closed (2026-10-15): key revoked and replaced; history purged and the former repository deleted (2026-10-14) | owner action; history purge |
 | E2 Visualization import | closed | P0 |
 | E3 eval code execution | closed | P3 (`core/expressions` AST whitelist evaluator, `safe_format`) |
 | E4 per-user isolation | closed | P3 (`UserScope` workspaces, contained path inputs, parameterised DuckDB paths); P6 (quoted identifiers in the DuckDB benchmark) |

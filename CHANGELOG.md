@@ -162,9 +162,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The Word report gives the methods paragraph of a multiple imputation (Sterne et al. 2009), written from its trace
   step, which now records the share of incomplete rows.
 
+### Repository moved to Cohort-Studio
+
 - The code is now at https://github.com/KarimELMERNISSI/Cohort-Studio and the documentation site at
   https://karimelmernissi.github.io/Cohort-Studio/. The former `Cohort-Monitoring-Package` addresses no longer
   exist; clone the repository again from the new address.
+- The Google API key exposed in the former repository's history (owner action of 2.3.0) was revoked and replaced
+  on 2026-10-15. The history had been purged and the former repository deleted on 2026-10-14.
 
 ### Fixed: replay of Windows traces on Linux, trace files read as UTF-8, CI failures readable
 
