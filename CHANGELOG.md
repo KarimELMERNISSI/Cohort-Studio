@@ -145,6 +145,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - McNemar, Mantel-Haenszel, diagnostic accuracy, Bland-Altman, kappa and the ICC say that they analyse the
     observed data.
   - Diagnostic accuracy and kappa are not pooled yet. Bland-Altman limits and the ICC have no pooling rule.
+- **Values filled by single imputation are flagged** (`core/session.py`, `ui/results.py`):
+  - The session remembers which cells the global and formula imputations filled (row ids per column). Saved
+    versions keep them in their lineage file, and a full replay finds them again.
+  - Every result that reads such values shows a warning under it: the analysis treats them as observed, so its
+    standard errors and p-values are too small.
+  - The multiple-imputation panel flags them too, since it would treat them as observed. The analysis-data
+    selector then reads "Observed + single-imputed".
 
 ### Repository moved to Cohort-Studio
 

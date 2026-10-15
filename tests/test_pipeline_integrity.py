@@ -71,3 +71,9 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     replayed = evaluate_population(replay.df, active_criteria(config, session.ticked))
     assert frame_fingerprint(replay.df.loc[replayed.included]) == frame_fingerprint(analysed)
     assert verify_trace(tm.get_trace()).ok
+
+    # the cells the single imputation filled are known, in the session and after the replay (M2, C10)
+    filled = {col: set(ids.tolist()) for col, ids in session.single_imputed.items()}
+    assert {col: len(ids) for col, ids in filled.items()} == imputed.params["imputed_values"]
+    assert all(ids <= set(population.included) for ids in filled.values())
+    assert {col: set(ids.tolist()) for col, ids in replay.single_imputed.items()} == filled

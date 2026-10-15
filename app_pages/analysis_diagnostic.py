@@ -90,7 +90,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                          {"auc": auc, "youden": youden, "cutoff": cutoff, "acc": acc, "outcome": outcome,
                           "score": score, "pos_label": pos_label, "mode": mode, "n": len(clean),
                           "fig": _roc_figure(clean[outcome], clean[score], pos_label, auc, cutoff)},
-                         config=diag_config, n_analysed=len(clean))
+                         config=diag_config, n_analysed=len(clean), columns=[outcome, score])
             except Exception as exc:
                 error_card("Diagnostic accuracy could not be computed.", exc)
         res = recall("diagnostic", config=diag_config)
@@ -146,7 +146,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
     if st.button("Run Bland-Altman", key="ba_run"):
         try:
             ba = bland_altman(df[method_a], df[method_b])
-            remember("bland_altman", ba, config=(method_a, method_b), n_analysed=ba.n)
+            remember("bland_altman", ba, config=(method_a, method_b), n_analysed=ba.n, columns=[method_a, method_b])
         except Exception as exc:
             error_card("Bland-Altman could not be computed.", exc)
     ba = recall("bland_altman", config=(method_a, method_b))

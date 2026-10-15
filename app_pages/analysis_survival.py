@@ -229,10 +229,16 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
 
                     columns = [time_col, event_col, *([group] if group else [])]
                     res = analyze_mi(lambda d: compare_survival(d, time_col, event_col, group), mi, columns=columns)
-                    remember(key, res, config=config, n_analysed=len(mi.base))
+                    remember(key, res, config=config, n_analysed=len(mi.base), columns=columns)
                 else:
                     res = compare_survival(df, time_col, event_col, group)
-                    remember(key, res, config=config, n_analysed=sum(c.n for c in res.curves))
+                    remember(
+                        key,
+                        res,
+                        config=config,
+                        n_analysed=sum(c.n for c in res.curves),
+                        columns=[time_col, event_col, group or ""],
+                    )
                 mark_step("analyse", "survival analysis")
             except Exception as exc:
                 error_card("The survival analysis could not be computed.", exc)
@@ -290,10 +296,14 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         mi,
                         columns=[cox_time, cox_event, *covariates],
                     )
-                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                    remember(
+                        key, fitted, config=config, n_analysed=len(mi.base), columns=[cox_time, cox_event, *covariates]
+                    )
                 else:
                     fitted = cox_regression(df, cox_time, cox_event, covariates)
-                    remember(key, fitted, config=config, n_analysed=fitted.n)
+                    remember(
+                        key, fitted, config=config, n_analysed=fitted.n, columns=[cox_time, cox_event, *covariates]
+                    )
                 mark_step("analyse", "Cox model")
             except Exception as exc:
                 error_card("The Cox model could not be fitted.", exc)
@@ -362,10 +372,10 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         mi,
                         columns=[outcome, *covs],
                     )
-                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                    remember(key, fitted, config=config, n_analysed=len(mi.base), columns=[outcome, *covs])
                 else:
                     fitted = logistic_regression(df, outcome, covs, event_level=event_level)
-                    remember(key, fitted, config=config, n_analysed=fitted.n)
+                    remember(key, fitted, config=config, n_analysed=fitted.n, columns=[outcome, *covs])
                 mark_step("analyse", "logistic regression")
             except Exception as exc:
                 error_card("The logistic model could not be fitted.", exc)
@@ -439,10 +449,18 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         mi,
                         columns=[count_col, *covs, *([exposure_col] if exposure_col else [])],
                     )
-                    remember(key, fitted, config=config, n_analysed=len(mi.base))
+                    remember(
+                        key,
+                        fitted,
+                        config=config,
+                        n_analysed=len(mi.base),
+                        columns=[count_col, *covs, exposure_col or ""],
+                    )
                 else:
                     fitted = count_regression(df, count_col, covs, exposure_col=exposure_col, family=family)
-                    remember(key, fitted, config=config, n_analysed=fitted.n)
+                    remember(
+                        key, fitted, config=config, n_analysed=fitted.n, columns=[count_col, *covs, exposure_col or ""]
+                    )
                 mark_step("analyse", "count regression")
             except Exception as exc:
                 error_card("The count model could not be fitted.", exc)

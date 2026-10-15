@@ -364,7 +364,13 @@ def run_pooled_comparison(mi, analyzer) -> None:
                 errors[target] = f"{type(exc).__name__}: {exc}"
             bar.progress((i + 1) / len(targets), text=f"Pooling: {target}")
         bar.empty()
-        remember("univariate_mi", {"results": results, "errors": errors}, config=config, n_analysed=len(mi.base))
+        remember(
+            "univariate_mi",
+            {"results": results, "errors": errors},
+            config=config,
+            n_analysed=len(mi.base),
+            columns=[group, *targets],
+        )
         mark_step("analyse", f"pooled group comparison of {len(targets)} variable(s) by {group}")
     stored = recall("univariate_mi", config=config)
     if stored is None:
@@ -400,7 +406,7 @@ def run_pooled_ancova(mi, analyzer) -> None:
                 mi,
                 columns=[target, group, *covariates],
             )
-            remember("ancova_mi", res, config=config, n_analysed=len(mi.base))
+            remember("ancova_mi", res, config=config, n_analysed=len(mi.base), columns=[target, group, *covariates])
             mark_step("analyse", f"pooled ANCOVA of {target}")
         except Exception as exc:
             error_card("The pooled ANCOVA could not be computed.", exc)

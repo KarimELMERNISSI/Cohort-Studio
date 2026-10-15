@@ -145,6 +145,28 @@ def test_the_population_is_traced_once_when_used(session: DataSession) -> None:
     assert len(recorded) == 1 and recorded[0]["population"]["n_included"] == 4
 
 
+def test_cells_filled_by_a_single_imputation_are_remembered(session: DataSession) -> None:
+    session.stage(session.working_frame().assign(bmi_sq=1.0), "variable_computation", {}, "x")
+    assert session.draft is not None and session.draft.single_imputed == {}  # not an imputation
+    imputed = session.working_frame().assign(bmi=lambda f: f["bmi"].fillna(21.0))
+    session.stage(imputed, "imputation", {"numerical": "Median"}, "Median")
+    assert session.single_imputed == {}  # still a draft
+    session.commit_staging(CONFIG)
+    assert {col: ids.tolist() for col, ids in session.single_imputed.items()} == {"bmi": [1, 3]}
+    assert session.single_imputed_counts(session.base.index) == {"bmi": 2}
+    assert session.single_imputed_counts(session.base.index[:2], ["bmi"]) == {"bmi": 1}
+    assert session.single_imputed_counts(session.base.index, ["age"]) == {}
+    session.set_ticked([ANOMALY, ADULT])
+    session.freeze_population(CONFIG)  # rows 1, 3 and 4 stay
+    assert session.single_imputed["bmi"].tolist() == [1, 3]
+    session.commit(session.base.drop(columns="bmi"), "drop_columns", {}, "Dropped")
+    assert session.single_imputed == {}
+    session.restore_single_imputed({"age": [1, 99]})
+    assert session.single_imputed["age"].tolist() == [1]  # row ids not in the data are dropped
+    session.install(pd.DataFrame({"age": [1]}))
+    assert session.single_imputed == {}
+
+
 def test_freezing_keeps_only_the_population(session: DataSession) -> None:
     session.set_ticked([ANOMALY, ADULT])
     change = session.freeze_population(CONFIG)

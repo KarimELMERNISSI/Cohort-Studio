@@ -7,7 +7,10 @@ One object owns every change of the data a researcher analyses (follow-up progra
 - the *draft*: changes prepared on the Enrich page (merges, derived variables, imputations) that reach the
   base only when applied, and only if neither the base nor the population changed underneath;
 - the *population*: the ticked inclusion and exclusion criteria, evaluated on the base. Criteria are
-  filters: they never delete rows (only :meth:`DataSession.freeze_population` does, on request).
+  filters: they never delete rows (only :meth:`DataSession.freeze_population` does, on request);
+- the *single-imputed cells*: the row ids, per column, of the values a single imputation filled
+  (``SINGLE_IMPUTATION_STEPS``). Analyses treat them as observed, so their standard errors are too small;
+  the pages say so (follow-up programme M2, C10).
 
 Every change of the base is written as one trace step through ``trace`` (the TransformationManager), with
 what it did to the table: rows and columns in and out, and the fingerprints before and after.
@@ -20,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 
+import numpy as np
 import pandas as pd
 
 from core.fingerprint import ensure_row_ids, frame_fingerprint
@@ -56,6 +60,44 @@ class StagingError(RuntimeError):
 
 EMPTY, OK, BASE_CHANGED, POPULATION_CHANGED = "empty", "ok", "base_changed", "population_changed"
 
+# steps that fill missing values with one value each (Enrich: global imputation, formula; the former MI panel)
+SINGLE_IMPUTATION_STEPS = frozenset({"imputation", "targeted_imputation", "multiple_imputation"})
+
+Cells = dict[str, np.ndarray]  # column -> row ids
+
+
+def filled_cells(before: pd.DataFrame, after: pd.DataFrame) -> Cells:
+    """Row ids, per column, of the values missing in ``before`` and present in ``after`` (shared rows and columns)."""
+    rows = before.index.intersection(after.index)
+    cols = before.columns.intersection(after.columns)
+    if not len(rows) or not len(cols):
+        return {}
+    filled = before.loc[rows, cols].isna().to_numpy() & after.loc[rows, cols].notna().to_numpy()
+    ids = rows.to_numpy()
+    return {
+        str(col): np.asarray(ids[filled[:, j]], dtype=np.int64)
+        for j, col in enumerate(cols)
+        if filled[:, j].any()
+    }
+
+
+def merge_cells(a: Cells, b: Cells) -> Cells:
+    out = dict(a)
+    for col, ids in b.items():
+        out[col] = np.union1d(out[col], ids) if col in out else np.asarray(ids, dtype=np.int64)
+    return out
+
+
+def restrict_cells(cells: Cells, frame: pd.DataFrame) -> Cells:
+    """The cells still in ``frame`` (rows and columns present)."""
+    out: Cells = {}
+    for col, ids in cells.items():
+        if col in frame.columns:
+            kept = ids[np.isin(ids, frame.index.to_numpy())]
+            if len(kept):
+                out[col] = kept
+    return out
+
 
 @dataclass(frozen=True)
 class PendingStep:
@@ -77,6 +119,7 @@ class Draft:
     frame: pd.DataFrame
     steps: list[PendingStep] = field(default_factory=list)
     population_fp: str | None = None  # population used by the population-scoped steps
+    single_imputed: Cells = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -127,6 +170,7 @@ class DataSession:
         self._population: tuple[tuple[str, tuple[str, ...]], PopulationResult] | None = None
         self._analysis: tuple[str, pd.DataFrame] | None = None
         self._recorded_populations: set[str] = set()
+        self.single_imputed: Cells = {}
 
     # ------------------------------------------------------------------ state
 
@@ -189,6 +233,7 @@ class DataSession:
         self.base, self.data_fp, self.revision = base, fp, 0
         self.draft = None
         self.ticked = ()
+        self.single_imputed = {}
         self._population = None
         self._analysis = None
         self._recorded_populations.clear()
@@ -199,6 +244,7 @@ class DataSession:
     def clear(self) -> None:
         self.base, self.data_fp, self.revision = None, "", 0
         self.draft = None
+        self.single_imputed = {}
         self.ticked = ()
         self._population = None
         self._analysis = None
@@ -227,6 +273,10 @@ class DataSession:
         if fp == self.data_fp:
             return None
         change = describe_change(self.base, new, fp_in=self.data_fp, fp_out=fp)
+        cells = self.single_imputed
+        if function in SINGLE_IMPUTATION_STEPS and self.base is not None:
+            cells = merge_cells(cells, filled_cells(self.base, new))
+        self.single_imputed = restrict_cells(cells, new)
         self._set_base(new, fp)
         self._record(
             function,
@@ -259,7 +309,9 @@ class DataSession:
         """Add a change to the draft (not traced until applied); ``None`` when it changes nothing."""
         base = self._require_base()
         if self.draft is None:
-            self.draft = Draft(base_fp=self.data_fp, frame=base)
+            self.draft = Draft(
+                base_fp=self.data_fp, frame=base, single_imputed=dict(self.single_imputed)
+            )
         after = ensure_row_ids(df)
         before = self.draft.frame
         fp_in = self.draft.steps[-1].change.fp_out if self.draft.steps else self.data_fp
@@ -277,6 +329,10 @@ class DataSession:
             output_dataset_path,
             _now(),
         )
+        cells = self.draft.single_imputed
+        if function in SINGLE_IMPUTATION_STEPS:
+            cells = merge_cells(cells, filled_cells(before, after))
+        self.draft.single_imputed = restrict_cells(cells, after)
         self.draft.frame = after
         self.draft.steps.append(step)
         if block and block.get("fingerprint"):
@@ -325,12 +381,36 @@ class DataSession:
             )
         fp = draft.steps[-1].change.fp_out
         change = describe_change(self.base, draft.frame, fp_in=self.data_fp, fp_out=fp)
+        self.single_imputed = restrict_cells(draft.single_imputed, draft.frame)
         self._set_base(draft.frame, fp, revisions=len(draft.steps))
         self.draft = None
         return change
 
     def discard_staging(self) -> None:
         self.draft = None
+
+    # ------------------------------------------------------------------ single-imputed cells
+
+    def restore_single_imputed(self, cells: Mapping[str, Any]) -> None:
+        """The single-imputed cells of a reloaded version or a replay (row ids per column)."""
+        base = self._require_base()
+        self.single_imputed = restrict_cells(
+            {str(c): np.asarray(ids, dtype=np.int64) for c, ids in cells.items()}, base
+        )
+
+    def single_imputed_counts(
+        self, rows: pd.Index, columns: Iterable[str] | None = None
+    ) -> dict[str, int]:
+        """How many single-imputed values each column has among ``rows`` (columns with none left out)."""
+        wanted = None if columns is None else {str(c) for c in columns}
+        ids = rows.to_numpy()
+        out: dict[str, int] = {}
+        for col, filled in self.single_imputed.items():
+            if wanted is None or col in wanted:
+                n = int(np.isin(filled, ids).sum())
+                if n:
+                    out[col] = n
+        return out
 
     # ------------------------------------------------------------------ population
 

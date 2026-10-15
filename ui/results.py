@@ -5,13 +5,15 @@ A page stores a result with :func:`remember` and shows it again with :func:`reca
 data fingerprint, the analysis population, a hash of the analysis settings, the revision of the data and
 the number of rows analysed. :func:`recall` returns the result only when all of them still hold: after a
 change of the data, of the ticked criteria or of the settings, the old numbers are not shown as current;
-a notice says why and the analysis is run again. :func:`provenance` prints the stamp under the result.
+a notice says why and the analysis is run again. :func:`provenance` prints the stamp under the result,
+with a caveat when values filled by a single imputation were analysed (``columns``).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -41,6 +43,8 @@ class ResultStamp:
     not_used: str
     computed_at: str
     trace_head: str | None
+    # (column, number of values filled by a single imputation) among the columns the analysis read
+    single_imputed: tuple[tuple[str, int], ...] = ()
 
     @property
     def caption(self) -> str:
@@ -88,8 +92,13 @@ def remember(
     config: Any,
     n_analysed: int | None = None,
     not_used: str = "missing values",
+    columns: Sequence[str] | None = None,
 ) -> ResultStamp | None:
-    """Store ``value`` with the identity of the data, the population and the settings it was computed on."""
+    """
+    Store ``value`` with the identity of the data, the population and the settings it was computed on.
+
+    ``columns`` (the variables the analysis reads) lets the stamp count the values a single imputation filled.
+    """
     from ui.state import get_state
 
     state = get_state()
@@ -111,6 +120,9 @@ def remember(
         not_used=not_used,
         computed_at=datetime.now().isoformat(timespec="seconds"),
         trace_head=getattr(tm, "head_hash", None),
+        single_imputed=tuple(
+            state.single_imputed_counts([c for c in columns if c]).items() if columns else ()
+        ),
     )
     _store()[key] = StoredResult(value, stamp)
     return stamp
@@ -161,10 +173,25 @@ def recall(key: str, *, config: Any, notice: bool = True) -> Any | None:
     return None
 
 
+def single_imputation_warning(counts: Mapping[str, int]) -> None:
+    """Analysed values that a single imputation filled: the result treats them as observed."""
+    if not counts:
+        return
+    total = sum(counts.values())
+    detail = ", ".join(f"{col}: {n:,}" for col, n in counts.items())
+    st.warning(
+        f"{total:,} of the values analysed were filled by single imputation ({detail}). The analysis treats "
+        "them as observed, so standard errors are too small and p-values too optimistic. For inference, use "
+        "multiple imputation on the data before the single imputation.",
+        icon=":material/warning:",
+    )
+
+
 def provenance(key: str) -> None:
-    """Caption with what the stored result was computed on."""
+    """Caption with what the stored result was computed on (and the single-imputation caveat)."""
     stored = _store().get(key)
     if stored is not None:
+        single_imputation_warning(dict(stored.stamp.single_imputed))
         st.caption(f":material/fingerprint: {stored.stamp.caption}")
 
 

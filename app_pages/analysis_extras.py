@@ -97,14 +97,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         from biostats.mi import analyze_mi
 
                         res = analyze_mi(lambda d: paired_t(d[after], d[before]), mi, columns=[before, after])
-                        remember(key, res, config=config, n_analysed=len(mi.base))
+                        remember(key, res, config=config, n_analysed=len(mi.base), columns=[before, after])
                     else:
                         res = (
                             paired_t(df[after], df[before])
                             if kind.startswith("Paired")
                             else wilcoxon_signed_rank(df[after], df[before])
                         )
-                        remember(key, res, config=config)
+                        remember(key, res, config=config, columns=[before, after])
                     mark_step("analyse", "paired test")
                 except Exception as exc:
                     error_card("The paired test could not be computed.", exc)
@@ -145,14 +145,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         from biostats.mi import analyze_mi
 
                         res = analyze_mi(lambda d: one_sample_t(d[col], ref), mi, columns=[col])
-                        remember(key, res, config=config, n_analysed=len(mi.base))
+                        remember(key, res, config=config, n_analysed=len(mi.base), columns=[col])
                     else:
                         res = (
                             one_sample_t(df[col], ref)
                             if kind.startswith("One")
                             else one_sample_wilcoxon(df[col], ref)
                         )
-                        remember(key, res, config=config)
+                        remember(key, res, config=config, columns=[col])
                     mark_step("analyse", "one-sample test")
                 except Exception as exc:
                     error_card("The one-sample test could not be computed.", exc)
@@ -185,6 +185,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                     {"res": mcnemar_test(table.to_numpy()), "table": table},
                     config=(b1, b2),
                     n_analysed=int(table.to_numpy().sum()),
+                    columns=[b1, b2],
                 )
                 mark_step("analyse", "McNemar test")
             except Exception as exc:
@@ -342,6 +343,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         event_level=ev_level,
                     ),
                     config=(exposure, outcome, stratum, exp_level, ev_level),
+                    columns=[exposure, outcome, stratum],
                 )
                 mark_step("analyse", "Mantel-Haenszel analysis")
             except Exception as exc:

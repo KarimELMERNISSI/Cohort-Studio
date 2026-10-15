@@ -26,6 +26,7 @@ import pandas as pd
 import enrich.external_data as eed
 from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
 from core.population import criteria_from_trace, evaluate_population
+from core.session import SINGLE_IMPUTATION_STEPS, filled_cells, merge_cells, restrict_cells
 from core.state import ParseOptions
 from enrich.formulas import evaluate_formula_safely
 from enrich.imputation_service import fill_with_formula, impute_rows
@@ -54,6 +55,7 @@ class ReplayResult:
     verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
     imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
     mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
+    single_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids filled by single imputation
 
     @property
     def reproducible(self) -> bool:
@@ -376,6 +378,7 @@ def apply_steps(
         if progress_callback:
             progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
         replayed = True
+        before = current
         try:
             current, missing = _apply_step(current, step, i, path_overrides, result.warnings, result)
         except _NotReplayable as skipped:
@@ -386,6 +389,8 @@ def apply_steps(
             logger.error(message)
             result.error, result.steps_applied = message, offset
             return result
+        if step.get("function") in SINGLE_IMPUTATION_STEPS and current is not None:
+            result.single_imputed = merge_cells(result.single_imputed, filled_cells(before, current))
         if missing:
             result.error = f"Could not find enrichment file: {missing}"
             result.missing_file, result.steps_applied = (i, missing), offset
@@ -400,6 +405,7 @@ def apply_steps(
                     f"step {i + 1} ({step.get('function')}): the replayed table differs from the recorded one"
                 )
     result.df = current
+    result.single_imputed = restrict_cells(result.single_imputed, current)
     result.steps_applied = total
     if progress_callback:
         progress_callback(100, "Pipeline Execution Complete")

@@ -48,7 +48,8 @@ from ui.guidance.analysis import (
     sample_size_sentence,
 )
 from ui.progress import mark_step
-from ui.results import provenance, recall, remember
+from ui.results import provenance, recall, remember, single_imputation_warning
+from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
 
@@ -427,6 +428,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
 
     # Formatting for display
     st.subheader("Summary Results")
+    single_imputation_warning(get_state().single_imputed_counts([group_col, *target_cols]))
     
     # Improve readability of columns for display and download
     if not results_df.empty:
@@ -793,7 +795,8 @@ def run_multivariate_analysis(df, analyzer):
         except Exception as exc:
             error_card("The ANCOVA could not be computed.", exc)
         else:
-            remember("ancova", fitted, config=config, n_analysed=fitted.n)
+            remember("ancova", fitted, config=config, n_analysed=fitted.n,
+                     columns=[target_col, group_col, *covariates])
             mark_step("analyse", f"ANCOVA of {target_col}")
     res = recall("ancova", config=config)
     if res is not None:

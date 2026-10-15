@@ -86,6 +86,15 @@ def render_multiple_imputation() -> None:
     # --- 1. population and missingness ---------------------------------------------------------------
     with st.container(border=True):
         st.markdown("**1. Population and missingness**")
+        filled = state.single_imputed_counts(candidates)
+        if filled:
+            st.warning(
+                f"{sum(filled.values()):,} values of these variables were filled by single imputation earlier "
+                f"({', '.join(f'{c}: {n:,}' for c, n in filled.items())}). The multiple imputation treats them "
+                "as observed, which understates the uncertainty. Impute the data as they were before the single "
+                "imputation: reload a version saved before it, or replay the trace up to the step before it.",
+                icon=":material/warning:",
+            )
         if summary.empty:
             st.success(
                 "No variable of the analysis population has missing values: there is nothing to impute."

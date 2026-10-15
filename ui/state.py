@@ -24,6 +24,7 @@ import contextlib
 import hashlib
 import logging
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from core.fingerprint import frame_fingerprint
+from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
 from core.population import PopulationResult, catalogue
 from core.session import (
     EMPTY,
@@ -344,9 +345,16 @@ class AppState:
         return True
 
     def install_replay(
-        self, df: pd.DataFrame, trace: dict[str, Any], *, upto: int, mode: str
+        self,
+        df: pd.DataFrame,
+        trace: dict[str, Any],
+        *,
+        upto: int,
+        mode: str,
+        single_imputed: Mapping[str, Any] | None = None,
     ) -> DatasetRef:
-        """A replayed state becomes the session dataset, linked to the trace it was replayed from."""
+        """A replayed state becomes the session dataset, linked to the trace it was replayed from (with the
+        cells its single imputations filled, when the replay recomputed them)."""
         session_id = str(trace.get("session_id") or "trace")
         parent = {
             "trace_session": session_id,
@@ -355,12 +363,15 @@ class AppState:
             "mode": mode,
         }
         ref = DatasetRef(name=dataset_base_name(f"{session_id}_step{upto + 1}"), origin="replay")
-        return self.set_dataset(
+        out = self.set_dataset(
             df,
             ref,
             description=f"Replayed {session_id} up to step {upto + 1} ({mode})",
             parent=parent,
         )
+        if single_imputed:
+            self.session.restore_single_imputed(single_imputed)
+        return out
 
     def _after_data_change(self) -> None:
         ss = st.session_state
@@ -513,6 +524,16 @@ class AppState:
 
     def identity(self) -> DataIdentity | None:
         return self.session.identity(self.config) if self.session.loaded else None
+
+    def single_imputed_counts(self, columns: Iterable[str] | None = None) -> dict[str, int]:
+        """Values filled by a single imputation in the analysis population, per column (``columns`` only)."""
+        if not self.session.loaded or not self.session.single_imputed:
+            return {}
+        try:
+            rows = self.analysis_frame().index
+        except PopulationError:
+            return {}
+        return self.session.single_imputed_counts(rows, columns)
 
     @property
     def ticked(self) -> tuple[str, ...]:
@@ -801,6 +822,11 @@ class AppState:
             ]
             if ticked:
                 self.set_ticked(ticked)
+            cells = lineage.get("single_imputed") or {}
+            if cells:
+                self.session.restore_single_imputed(
+                    {col: ranges_to_ids(ranges) for col, ranges in cells.items()}
+                )
         from manage.mi_store import has_mi, load_mi
 
         if has_mi(self.db_manager.dataset_dir, saved_name):
@@ -868,6 +894,9 @@ class AppState:
             "n_rows": int(len(session.base)) if session.base is not None else 0,
             "n_cols": int(session.base.shape[1]) if session.base is not None else 0,
             "row_id": "__row_id",
+            "single_imputed": {
+                col: ids_to_ranges(ids.tolist()) for col, ids in session.single_imputed.items()
+            },
             "parent_dataset": ref.label if ref else None,
             "trace": {
                 "session_id": tm.session_id,

@@ -36,10 +36,11 @@ def render_mi_selector(state) -> None:
         st.session_state.pop(MODE_KEY, None)
         return
     current = state.mi_status()
+    observed = "Observed + single-imputed" if state.single_imputed_counts() else "Observed"
     st.segmented_control(
         "Analysis data",
         [OBSERVED, MULTIPLE],
-        format_func=lambda v: "Observed" if v == OBSERVED else f"Imputed (m = {stored.mi.m})",
+        format_func=lambda v: observed if v == OBSERVED else f"Imputed (m = {stored.mi.m})",
         key=MODE_KEY,
         default=OBSERVED,
         help="Observed: complete cases of each analysis. Imputed: every analysis is run on the m imputed datasets "
