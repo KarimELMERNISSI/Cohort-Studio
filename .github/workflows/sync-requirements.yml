@@ -1,0 +1,49 @@
+name: Sync requirements
+
+# requirements.txt and requirements-yfiles.txt are exported from uv.lock (pip installation, Option B of the
+# README). When uv.lock changes on main, for example after a Dependabot pull request, this workflow exports them
+# again and commits them if they differ. Run it by hand to resynchronise them at any time.
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "uv.lock" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-requirements
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Export the requirements files from uv.lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.9"
+
+      - name: Export (the same commands as in the headers of the files)
+        run: |
+          uv export --frozen --no-hashes --no-emit-project --extra all -o requirements.txt
+          uv export --frozen --no-hashes --no-emit-project --extra all --extra graph-yfiles -o requirements-yfiles.txt
+
+      - name: Commit the files when they changed
+        run: |
+          if git diff --quiet -- requirements.txt requirements-yfiles.txt; then
+            echo "The requirements files already match uv.lock."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.txt requirements-yfiles.txt
+          git commit -m "chore: export requirements.txt and requirements-yfiles.txt from uv.lock"
+          git push

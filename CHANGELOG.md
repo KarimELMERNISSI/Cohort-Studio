@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Dependency updates through `uv.lock`
+
+- Dependabot updated only `requirements.txt` and `requirements-yfiles.txt` (its `pip` ecosystem). Those files are
+  exported from `uv.lock`, which CI and the Docker image install from, so merging its pull requests would have
+  made pip and uv install different versions.
+- Dependabot now updates `uv.lock` (its `uv` ecosystem). The GitHub Actions updates are unchanged.
+- A new workflow (`.github/workflows/sync-requirements.yml`) exports the two requirements files from `uv.lock`
+  whenever `uv.lock` changes on `main`, and commits them when they differ. It can also be run by hand.
+
 ### Licence inventory generated from the lock file
 
 - `documentation/developer/License_Dependencies.md` listed the packages of a whole development machine (Sphinx,

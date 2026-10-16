@@ -183,6 +183,9 @@ pip install -r requirements.txt
 streamlit run main.py
 ```
 
+`requirements.txt` and `requirements-yfiles.txt` are exported from `uv.lock`, so pip installs the same versions as
+uv; a workflow exports them again whenever `uv.lock` changes on `main`.
+
 ### Option C: Containerized Deployment (Docker)
 
 ```bash
@@ -264,6 +267,8 @@ biostats and core 92 %, graph 91 %, ingest 87 %, ui 81 %, explore 74 %, manage 6
 
 CI also runs the suite in an environment without the optional groups (the AI tests are skipped), builds the Docker
 image and checks a fresh container, and runs the statistical simulation suites (`pytest -m slow`) every week.
+Dependabot proposes the dependency updates in `uv.lock` (and the GitHub Actions versions); the requirements files
+follow automatically.
 
 | Test Module                                                                                                      | Coverage Scope                                                                                                                                                                                                                          | Status     |
 | :--------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------- |

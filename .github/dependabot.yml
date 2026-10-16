@@ -1,6 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # Python dependencies: uv.lock is the source of truth (CI and the Docker image install from it). Dependabot
+  # updates it; after a merge, the "Sync requirements" workflow regenerates requirements.txt and
+  # requirements-yfiles.txt from it, so the pip installation gets the same versions.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
