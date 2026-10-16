@@ -128,7 +128,7 @@ joblib==1.6.0
     # via
     #   pynndescent
     #   scikit-learn
-jsonpatch==1.33
+jsonpatch==1.35
     # via langchain-core
 jsonpointer==3.2.1
     # via jsonpatch
