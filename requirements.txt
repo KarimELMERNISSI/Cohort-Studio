@@ -356,7 +356,7 @@ streamlit==1.65.0
     # via cohortstudio
 tabulate==0.10.0
     # via cohortstudio
-tenacity==9.1.4
+tenacity==9.2.1
     # via
     #   google-genai
     #   langchain-core
