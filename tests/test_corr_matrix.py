@@ -139,6 +139,31 @@ class TestExcelCorrelationExport:
         assert len(buf.getvalue()) > 0
 
 
+class TestHeatmapColourScale:
+    """Both correlation heatmaps (Explore and Visualize) put the colour scale on [-1, 1], centred on zero: with a
+    diverging map a correlation of zero is the neutral colour, and two matrices are read on the same scale."""
+
+    @staticmethod
+    def _heatmap(fig):
+        return next(trace for trace in fig.data if trace.type == "heatmap")
+
+    def test_explore_heatmap(self, clinical_df: pd.DataFrame) -> None:
+        cols = ["age", "bmi", "systolic_bp"]
+        trace = self._heatmap(ecm.plotly_corr_mat(clinical_df, cols, cols, selected_color="RdBu"))
+        assert (trace.zmin, trace.zmid, trace.zmax) == (-1, 0, 1)
+
+    @pytest.mark.parametrize("clustered", [False, True])
+    def test_visualize_heatmap(self, clinical_df: pd.DataFrame, clustered: bool) -> None:
+        import utils.visualization_utils as vu
+
+        fig = vu.create_correlation_matrix_streamlit(
+            clinical_df, ["age", "bmi", "systolic_bp"], cmap="RdBu", cluster_rows=clustered,
+            cluster_cols=clustered, show_row_dendrogram=clustered, show_col_dendrogram=clustered,
+        )
+        trace = self._heatmap(fig)
+        assert (trace.zmin, trace.zmid, trace.zmax) == (-1, 0, 1)
+
+
 class TestYFilesNetworkData:
     """Tests for get_yfiles_network_data function."""
 

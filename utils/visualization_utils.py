@@ -1041,6 +1041,9 @@ def create_correlation_matrix_streamlit(
         y = y_vals,
         z = X_ordered.values,
         colorscale = cmap,
+        zmid = 0,  # centred on zero correlation, as on Explore (audit S13)
+        zmin = -1,
+        zmax = 1,
         colorbar=dict(len=0.4, thickness=10, x=1.05, y=0.4)
     )
     fig.add_trace(heatmap)

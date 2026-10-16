@@ -6,6 +6,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fix: the colour scale of the Visualize correlation matrix
+
+- On Explore > Visualize, the correlation matrix fitted its colour scale to the values shown. With a diverging
+  map such as RdBu, a correlation of zero could therefore be drawn dark red. The scale is now fixed from −1 to 1
+  and centred on zero, as on the Explore correlation heatmap (audit S13). A test covers both heatmaps.
+
 ### Documentation: the data and statistics engine
 
 - The README architecture diagram and the site call the plain-Python layer the **data and statistics engine**,
