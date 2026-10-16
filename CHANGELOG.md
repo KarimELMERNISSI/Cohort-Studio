@@ -33,6 +33,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - Dependabot now proposes updates of direct dependencies only. For an indirect dependency, its `uv` support edits
   the requirements files without touching `uv.lock`, so CI never installed the proposed version. Indirect updates
   are made with `uv lock --upgrade-package` and tested.
+- The requirements files are also left out of Dependabot's scan (`exclude-paths`). They list every package, so
+  Dependabot took each one for a direct dependency and kept proposing requirements-only updates.
 - The requirements workflow also runs when the requirements files alone change on `main`, and brings them back to
   `uv.lock`.
 

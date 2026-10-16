@@ -6,8 +6,13 @@ updates:
   # Direct dependencies only: for an indirect one, Dependabot's uv support edits the requirements files without
   # updating uv.lock, so CI never installs the proposed version (seen on 2026-10-16, including versions that
   # conflict with other packages). Indirect updates come with `uv lock --upgrade-package <name>`, tested locally.
+  # The requirements files list every package, so Dependabot would take each one for a direct dependency: they
+  # are left out of its scan (the workflow exports them from uv.lock).
   - package-ecosystem: "uv"
     directory: "/"
+    exclude-paths:
+      - "requirements.txt"
+      - "requirements-yfiles.txt"
     schedule:
       interval: "weekly"
     allow:
