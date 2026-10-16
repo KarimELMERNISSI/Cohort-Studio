@@ -24,6 +24,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     Cox models, the comparison, the dossier, the Enrich draft and the Variable map.
   - Streamlit 1.66's breaking changes do not touch the application's stylesheet: the main area is a `<main>` element
     and the sidebar state moved to `data-collapsed`.
+- GitHub Actions, the versions Dependabot had proposed:
+  - `actions/checkout` v7, `astral-sh/setup-uv` v7 and `actions/upload-artifact` v7;
+  - for the documentation site, `actions/configure-pages` v6, `actions/upload-pages-artifact` v5 and
+    `actions/deploy-pages` v5.
 
 ### Fixed: a Streamlit warning on Analyze > Power & Sample Size
 

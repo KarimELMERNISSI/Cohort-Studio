@@ -20,11 +20,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Pinned like ci.yml: an unpinned uv picks the newest Python allowed (3.15), without wheels for the lock
       - name: Install uv and Python 3.14
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           version: "0.10.9"
           python-version: "3.14"
