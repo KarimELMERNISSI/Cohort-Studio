@@ -67,7 +67,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - `dev_scripts/site_screenshots.py` (Playwright) and `dev_scripts/make_site_assets.py` regenerate the
   screenshots, the WebP page images, the icons and the social preview.
 
-### Packaging, deployment and CI (follow-up programme M4, awaiting the owner's review)
+### Packaging, deployment and CI (follow-up programme M4)
 
 - **Optional dependency groups** (`pyproject.toml`). The statistics engine, the data pipeline and the analysis
   pages need none of them; `uv sync --extra all` installs everything (the Docker image, `requirements.txt`).
@@ -101,8 +101,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The start scripts use Docker Compose v2.
   - The optional Qdrant server is pinned to `qdrant/qdrant:v1.19.2`, the client's release.
 - Documentation: the README and the site describe the optional groups, Docker Compose with the setup token and
-  the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
-  review.
+  the CI jobs, with the current test and coverage numbers. The audit report marks M4 done.
 
 ### Fixed: wording in the application and a Student's t in the MAR check
 
@@ -190,7 +189,7 @@ were stale or never true. They are corrected:
   warning. This happened intermittently under load in a full test run. The result is the same, since each chain
   has its own random stream.
 
-### Participant flow and study dossier (follow-up programme M3, awaiting the owner's review)
+### Participant flow and study dossier (follow-up programme M3)
 
 - **Participant flow model** (`core/attrition.py`, STROBE item 13). The flow runs from the records read in the
   file (malformed lines skipped) through the rows removed or added by recorded steps and the rows excluded by
@@ -226,9 +225,9 @@ were stale or never true. They are corrected:
   - The dossier says it supports STROBE item 13 and the Sterne et al. (2009) items, without claiming compliance.
 - The Word trace report summarises long nested parameters (row-id ranges) instead of printing them whole.
 - Documentation: the README, handbook chapters 2 (the flow diagram) and 8 (the Study dossier page), the tutorial
-  (step 8 builds the dossier), the documentation site and the audit report (M3 done, pending the owner's review).
+  (step 8 builds the dossier), the documentation site and the audit report (M3 done).
 
-### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
+### Multiple imputation end-to-end (follow-up programme M2)
 
 - **Pooling layer** (`biostats/mi`): Rubin's rules with the formulas of R mice, including Barnard-Rubin
   degrees of freedom from the complete-data df (as mice 3.19: imputations that agree give infinite df). Each
@@ -380,7 +379,7 @@ were stale or never true. They are corrected:
   - chapter 5: what each page pools, how to read df, FMI, RIV, D1 and D2, and what is not pooled;
   - chapter 8: the replay of a multiple imputation;
   - the tutorial: multiple imputation in step 3.3 and pooled analyses in step 6.1.
-  - The audit report closes S4 and marks M2 done, pending the owner's review.
+  - The audit report closes S4 and marks M2 done.
 - The Word report gives the methods paragraph of a multiple imputation (Sterne et al. 2009), written from its trace
   step, which now records the share of incomplete rows.
 

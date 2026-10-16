@@ -113,7 +113,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | G4 license vs air-gapped claims | closed | P1 (opt-in extra, About notice, docs/README wording) |
 | G5–G8 coupling, duplication, data defects | closed | P1 (`graph/` builders, palette, deterministic ids) |
 | S1–S3, S5 wrong numbers | closed | P2 (`biostats/`) |
-| S4 single imputation presented as MICE | closed (2026-10-15, M2, awaiting the owner's review): chained-equations engine with m independent chains (pmm, norm, logreg, polyreg, rf); the Survival & regression and Analyze pages pool their analyses with Rubin's rules (Barnard-Rubin df, D1/D2), with parity against R mice 3.19 and mitml 0.4.5; the imputation is bound to the analysis population, saved with versions, replayed and checked; values filled by single imputation are flagged under the results that use them | P2, P8; M2 |
+| S4 single imputation presented as MICE | closed (2026-10-15, M2): chained-equations engine with m independent chains (pmm, norm, logreg, polyreg, rf); the Survival & regression and Analyze pages pool their analyses with Rubin's rules (Barnard-Rubin df, D1/D2), with parity against R mice 3.19 and mitml 0.4.5; the imputation is bound to the analysis population, saved with versions, replayed and checked; values filled by single imputation are flagged under the results that use them | P2, P8; M2 |
 | S6–S10, S12–S16 soundness | closed (S12 category denominators and S13 UI table of associations remain) | P5 (`biostats/` Tier B) |
 | S11 missing methods (survival, regression, MH, paired, agreement) | closed | P8 (Survival & regression page; Paired, rates & stratified tab; reliability section) |
 | E1 leaked key | closed (2026-10-15): key revoked and replaced; history purged and the former repository deleted (2026-10-14) | owner action; history purge |
@@ -147,12 +147,15 @@ order, with a review after each milestone.
 |---|---|---|
 | M0 | Truth and safety net: false regulatory and reproducibility claims removed (21 CFR Part 11, "signed", "immutable", STROBE/CONSORT "compliant", 100 % coverage), MI advice corrected, result caches cleared on a dataset swap, Validate filter reaches Enrich, traces written inside the user workspace, wheel contents fixed, per-package coverage floors in CI | done |
 | M1 | One analysis population and one source of truth: inclusion and exclusion criteria become a shared, reversible selection (only an explicit, traced "freeze" deletes rows); single mutation path; data and population fingerprints; results stamped with the data they were computed on; hash-chained (tamper-evident) trace v2 with attrition counts | done |
-| M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | done (2026-10-15), awaiting the owner's review |
-| M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | done (2026-10-16), awaiting the owner's review |
-| M4 | Packaging and deployment: optional dependency groups, engine-only CI job, Docker image built in CI, first-run administrator | done (2026-10-16), awaiting the owner's review: extras `ai`, `ml`, `survival` and `all`; a CI job without them; the image built, started fresh and health-checked in CI; the first administrator created with a one-time setup token; coverage floors raised |
+| M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | done (2026-10-15), approved by the owner |
+| M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | done (2026-10-16), approved by the owner |
+| M4 | Packaging and deployment: optional dependency groups, engine-only CI job, Docker image built in CI, first-run administrator | done (2026-10-16), approved by the owner: extras `ai`, `ml`, `survival` and `all`; a CI job without them; the image built, started fresh and health-checked in CI; the first administrator created with a one-time setup token; coverage floors raised |
 
 Owner decisions on the review: Python stays at 3.14; no repository split; staleness is handled with
 fingerprints and stamped results, not a workflow-orchestration framework.
+
+**Programme completed (2026-10-16).** M0 to M4 are done and approved by the owner. Deferred as planned: a PyPI
+library under a `cohortstudio.` namespace, until there is an external user.
 
 **Documentation claims (2026-10-16).** After M4, a read-only comparison of the README, the handbook chapters and
 the About page with the code found stale and unsupported statements. They concerned storage, transformations,
