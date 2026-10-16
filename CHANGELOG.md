@@ -6,6 +6,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Licence inventory generated from the lock file
+
+- `documentation/developer/License_Dependencies.md` listed the packages of a whole development machine (Sphinx,
+  Scrapy, aiobotocore and others the application does not use). It also recommended a licence for a project
+  already released under Apache 2.0.
+- `dev_scripts/license_inventory.py` now writes it:
+  - The packages and versions come from `uv.lock`, per group: core, `ai`, `ml`, `survival`, `graph-yfiles`, and the
+    development tools, which are not shipped.
+  - The licences come from the installed package metadata.
+  - Packages installed only on other platforms (the browser) are left out.
+- The copyleft licences among the shipped packages are named. They are three weak, file-level MPL-2.0 licences:
+  `certifi`, `orjson` and `tqdm`. The analysis of the proprietary yFiles engine is kept.
+- `tests/test_license_inventory.py` fails when the lock file lists a package or a version that the inventory
+  does not.
+
 ### Fixed: the Enrich draft banner was at the bottom of the page (Data > Enrich)
 
 - The banner with **Apply to the dataset** was drawn after the tabs, so it appeared under all their content,
