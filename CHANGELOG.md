@@ -6,6 +6,25 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Dependency updates: pyarrow 26 and Streamlit 1.66, Google libraries, ruff 0.17
+
+- Updated in `uv.lock`:
+  - google-genai 2.30.0 and google-auth 2.62.0;
+  - pyarrow 26.0.0, which brings Streamlit 1.66.0: Streamlit 1.65 required a pyarrow below 26, and it no longer
+    needs `toml` and `httptools`;
+  - jsonpatch 1.35, pycparser 3.11 and truststore 0.10.5;
+  - for development, ruff 0.17.0; the pre-commit hook follows it.
+- Not taken:
+  - websockets 17.2 and tenacity 9.2.1, because google-genai requires a websockets below 17 and a tenacity below
+    9.2;
+  - aiohttp, which is no longer a dependency.
+- Checks:
+  - ruff 0.17 reports nothing and changes no formatting, and the whole suite passes.
+  - A browser walk-through on Streamlit 1.66 covered the tutorial, the multiple imputation, the pooled survival and
+    Cox models, the comparison, the dossier, the Enrich draft and the Variable map.
+  - Streamlit 1.66's breaking changes do not touch the application's stylesheet: the main area is a `<main>` element
+    and the sidebar state moved to `data-collapsed`.
+
 ### Fixed: a Streamlit warning on Analyze > Power & Sample Size
 
 - A group comparison and **Load Parameters into Calculator** prefill twelve inputs of the power calculator

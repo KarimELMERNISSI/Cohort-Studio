@@ -9,7 +9,7 @@ CohortStudio is released under the Apache License 2.0.
 
 ## Summary
 
-- The core application installs 75 packages. The optional groups add 41 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
+- The core application installs 73 packages. The optional groups add 41 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
 - Copyleft licences among the shipped packages: `certifi` (MPL-2.0), `orjson` (MPL-2.0 AND (Apache-2.0 OR MIT)), `tqdm` (MPL-2.0 AND MIT). They are weak, file-level licences: they apply to the library's own files, which CohortStudio uses unmodified, and require keeping their notices.
 - One optional component is proprietary and needs an internet connection: the yFiles graph engine (group `graph-yfiles`, not installed by default). See below.
 
@@ -53,7 +53,6 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | fonttools | 4.66.1 | MIT |
 | formulaic | 1.2.2 | MIT |
 | h11 | 0.16.0 | MIT |
-| httptools | 0.8.0 | MIT |
 | idna | 3.20 | BSD-3-Clause |
 | interface-meta | 2.0.1 | MIT |
 | itsdangerous | 2.2.0 | BSD |
@@ -75,7 +74,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pillow | 12.3.0 | MIT-CMU |
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
-| pyarrow | 25.0.1 | Apache-2.0 |
+| pyarrow | 26.0.0 | Apache-2.0 |
 | pydantic | 2.14.1 | MIT |
 | pydantic-core | 2.50.1 | MIT |
 | pydantic-settings | 2.15.0 | MIT |
@@ -96,10 +95,9 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | six | 1.17.0 | MIT |
 | starlette | 1.8.0 | BSD-3-Clause |
 | statsmodels | 0.15.0 | BSD-3-Clause |
-| streamlit | 1.65.0 | Apache-2.0 |
+| streamlit | 1.66.0 | Apache-2.0 |
 | tabulate | 0.10.0 | MIT |
 | threadpoolctl | 3.7.0 | BSD-3-Clause |
-| toml | 0.10.2 | MIT |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
 | typing-extensions | 4.16.0 | PSF-2.0 |
 | typing-inspection | 0.4.4 | MIT |
@@ -121,8 +119,8 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | deprecation | 2.1.0 | Apache |
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
-| google-auth | 2.61.0 | Apache |
-| google-genai | 2.29.0 | Apache-2.0 |
+| google-auth | 2.62.0 | Apache |
+| google-genai | 2.30.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -132,7 +130,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | httpx2 | 2.13.1 | BSD-3-Clause |
 | hyperframe | 6.1.0 | MIT |
 | jiter | 0.17.0 | MIT |
-| jsonpatch | 1.33 | BSD |
+| jsonpatch | 1.35 | BSD-3-Clause |
 | jsonpointer | 3.2.1 | BSD |
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
@@ -145,14 +143,14 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.4 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
-| pycparser | 3.1 | BSD-3-Clause |
+| pycparser | 3.11 | BSD-3-Clause |
 | pypdf | 6.20.1 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.19.1 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
 | sniffio | 1.3.1 | Apache / MIT |
 | tenacity | 9.1.4 | Apache |
-| truststore | 0.10.4 | MIT |
+| truststore | 0.10.5 | MIT |
 | uuid-utils | 0.17.1 | BSD-3-Clause |
 | xxhash | 4.0.1 | BSD-2-Clause |
 | zstandard | 0.25.0 | BSD-3-Clause |
@@ -202,5 +200,5 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pytest-cov | 7.1.0 | MIT |
 | pytest-mock | 3.16.0 | MIT |
 | python-discovery | 1.6.2 | MIT |
-| ruff | 0.16.10 | MIT |
+| ruff | 0.17.0 | MIT |
 | virtualenv | 21.14.7 | MIT |
