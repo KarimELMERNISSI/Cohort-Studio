@@ -173,6 +173,9 @@ def render_population_panel(state) -> None:
         st.error("; ".join(population.errors.values()))
         return
     st.markdown(f"**{population.label}**")
+    from ui.components.flow import current_flow, render_flow
+
+    render_flow(current_flow(state), key="validate_flow")
     stages = pd.DataFrame(
         [
             {

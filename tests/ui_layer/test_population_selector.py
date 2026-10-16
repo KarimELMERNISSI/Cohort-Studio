@@ -84,6 +84,24 @@ def test_freezing_keeps_only_the_population_as_one_traced_step(app: AppTest) -> 
     assert steps[-1] == "freeze_population"
 
 
+def test_validate_shows_the_participant_flow_and_the_reasons_of_each_exclusion(
+    app: AppTest,
+) -> None:
+    app.checkbox(key=_family_key("clinical_anomalies")).check().run()
+    app.checkbox(key=_family_key("study_inclusion")).check().run()
+    app.switch_page(nav.page_path("validate")).run()
+    _ok(app)
+    assert app.get("plotly_chart")  # the diagram
+    assert not any("does not add up" in w.value for w in app.warning)
+    details = app.selectbox(key="validate_flow::item")
+    assert details.options[0].startswith("Records read in tutorial_cohort")
+    details.set_value("stage:study_inclusion").run()
+    _ok(app)
+    reasons = next(d.value for d in app.dataframe if "Rows it excluded first" in d.value.columns)
+    assert reasons["Rows it excluded first"].sum() == 262
+    assert any(c.value.startswith("Written consent:") for c in app.caption)  # its definition
+
+
 def test_imputation_on_enrich_is_fitted_on_the_population_only(app: AppTest) -> None:
     app.checkbox(key=_family_key("clinical_anomalies")).check().run()
     app.checkbox(key=_family_key("study_inclusion")).check().run()

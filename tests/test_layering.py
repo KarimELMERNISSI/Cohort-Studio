@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NO_STREAMLIT = [
     "core", "biostats", "ingest", "graph/model.py", "graph/palette.py", "graph/builders", "explore/correlation_strength.py", "explore/quality_score.py",
     "manage/iam", "manage/vectorstores", "manage/db_manager.py", "manage/transformation_manager.py", "manage/reproduction_manager.py",
+    "manage/flow_figure.py",
     "utils/analysis_utils.py", "utils/path_utils.py", "utils/statistics_utils.py", "utils/visualization_utils.py",
     "utils/multipage.py", "utils/data_paths.py", "enrich/transformation_logic.py",
     "enrich/custom_metrics_and_filters.py", "enrich/formulas.py", "enrich/imputation_service.py",

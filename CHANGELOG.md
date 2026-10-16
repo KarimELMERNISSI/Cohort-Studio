@@ -14,6 +14,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   datasets it pooled).
   - Each exclusion lists the criteria that excluded the rows first, with their definitions.
   - Every box is checked to add up.
+- **Participant flow diagram** on Validate > Analysis population (`ui/components/flow.py`). Clicking a box, or
+  choosing it in the menu below, shows its details: the criteria with the rows each excluded first, and their
+  definitions. The same diagram is drawn as a picture for the Word dossier (`manage/flow_figure.py`).
 
 ### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
