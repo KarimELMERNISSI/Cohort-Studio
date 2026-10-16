@@ -6,6 +6,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: a saved Variable map version needed two loads to show its formulas (Knowledge > Variable map)
+
+- **Load vN** on the page without a taxonomy read only the taxonomy file. The formulas, the links between the
+  variables and their formulas, and the AI-engine sync came only with a second load from the sidebar.
+- Both buttons now use the same loader, so one click brings the taxonomy, its formulas and the repaired links.
+  The loaded version is also remembered for **Overwrite**.
+- The files are read as UTF-8.
+
+### Legacy Excel workbooks (`.xls`)
+
+- `xlrd` joins the core dependencies: `.xls` files import like `.xlsx` (sheets, merges, decimals, accented text).
+- Every upload of the application (Import, Enrich, the comparison on Validate, the missing files of a replay)
+  accepts the same file types.
+
 ### Documentation site redesigned (`docs/`)
 
 - The site at karimelmernissi.github.io/Cohort-Studio now uses the application's logo and wordmarks

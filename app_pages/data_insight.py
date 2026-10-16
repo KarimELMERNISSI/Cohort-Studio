@@ -117,14 +117,14 @@ def load_and_repair_taxonomy(target_path, rag_manager=None):
     """
     try:
         # 1. Load Taxonomy
-        with open(target_path, "r") as f:
+        with open(target_path, encoding="utf-8") as f:
             loaded_taxonomy = json.load(f)
 
         # 2. Load Formulas
         formulas_path = os.path.join(os.path.dirname(target_path), "formulas_metadata.json")
         loaded_formulas = {}
         if os.path.exists(formulas_path):
-            with open(formulas_path, "r") as f:
+            with open(formulas_path, encoding="utf-8") as f:
                 loaded_formulas = json.load(f)
 
         # 3. Repair Links
@@ -387,7 +387,7 @@ def app():
     
     # Case A: No Taxonomy (Empty State)
     if not taxonomy:
-        st.info("Welcome to Data Interpretation")
+        st.info("No taxonomy loaded: load a saved version or generate a new one.")
         
         col1, col2 = st.columns(2)
         
@@ -410,11 +410,16 @@ def app():
                 path_to_load = next(v[1] for v in local_versions if f"v{v[0]}" == sel_v)
 
                 if st.button(f"Load {sel_v}", type="primary", width='stretch'):
-                    with open(path_to_load, "r") as f:
-                        st.session_state.offline_taxonomy = json.load(f)
-                    st.rerun()
+                    # the same loader as the sidebar: taxonomy, formulas, link repair and AI-engine sync in one
+                    # click (this button used to read the taxonomy only, so the formulas needed a second load)
+                    success, info = load_and_repair_taxonomy(path_to_load, rag_manager if rag_active else None)
+                    if success:
+                        st.toast(f"Loaded {sel_v} with {info} formulas.")
+                        st.rerun()
+                    else:
+                        st.error(f"Load failed: {info}")
             else:
-                st.warning("No saved taxonomy files found in `data/taxonomy/`.")
+                st.warning("No saved taxonomy version in your workspace yet.")
 
         with col2:
             st.subheader("Generate New")

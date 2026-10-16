@@ -25,7 +25,8 @@ Edges link a variable to its category, the input variables of a formula to the f
 
 ### Steps
 
-1. **Load or Create** — Load a saved version (choose it in the sidebar, then **Load**), or generate a new taxonomy from the current dataset with **Generate Taxonomy** (shown while no taxonomy is open) or **New Taxonomy** (sidebar, *Graph Actions*). Generation needs a loaded dataset and an initialised AI engine.
+1. **Load or Create** — Load a saved version (choose it in the sidebar, then **Load**; while no taxonomy is open,
+   the page also offers **Load vN**), or generate a new taxonomy from the current dataset with **Generate Taxonomy** (shown while no taxonomy is open) or **New Taxonomy** (sidebar, *Graph Actions*). Generation needs a loaded dataset and an initialised AI engine.
 2. **AI Generation** — The AI engine analyses the column names (with simple summaries of their values when you start from **Generate Taxonomy**) and passages retrieved from your indexed documents, to infer standard names, categories, clinical usage and formulas.
 3. **Review** — Inspect the generated graph in the interactive visualisation (offline Plotly engine by default; yFiles optional).
 4. **Iterate** — Enrich or refine the taxonomy as needed, then save it as a version.
@@ -52,7 +53,8 @@ After initial generation, several tools are available to improve the taxonomy. T
 
 ### Link repair on load
 
-Loading a version with **Load** in the sidebar re-links each variable to the saved formulas that use or produce it. There is no separate structure check, JSON repair or manual editor for nodes and edges: change the taxonomy with the tools above.
+Loading a version, with **Load** in the sidebar or **Load vN** on the empty page, brings its formulas and re-links
+each variable to the saved formulas that use or produce it, in one click. There is no separate structure check, JSON repair or manual editor for nodes and edges: change the taxonomy with the tools above.
 
 ---
 
