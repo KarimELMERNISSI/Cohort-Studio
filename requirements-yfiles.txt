@@ -152,7 +152,7 @@ langchain-protocol==0.0.19
     # via langchain-core
 langchain-text-splitters==1.1.3
     # via cohortstudio
-langsmith==0.14.4
+langsmith==0.14.8
     # via langchain-core
 lifelines==0.30.0
     # via cohortstudio
