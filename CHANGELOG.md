@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Participant flow and study dossier (follow-up programme M3, in progress)
+
+- **Participant flow model** (`core/attrition.py`, STROBE item 13). The flow runs from the records read in the
+  file (malformed lines skipped) through the rows removed or added by recorded steps and the rows excluded by
+  each family of criteria, to the analysis population and the N of each reported analysis (or the imputed
+  datasets it pooled).
+  - Each exclusion lists the criteria that excluded the rows first, with their definitions.
+  - Every box is checked to add up.
+
 ### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
 - **Pooling layer** (`biostats/mi`): Rubin's rules with the formulas of R mice, including Barnard-Rubin
