@@ -384,7 +384,7 @@
         <div class="section-head">
           <p class="eyebrow">Scientific rigour</p>
           <h2 id="methods-title">Methods you can cite</h2>
-          <p class="lead">Defaults follow current methodological guidance, and every method comes with its reference. The statistics engine is a plain Python package with no interface code, tested against R and published values.</p>
+          <p class="lead">Defaults follow current methodological guidance, and every method comes with its reference. The statistics package (<code>biostats</code>) is plain Python with no interface code, tested against R and published values.</p>
         </div>
 
         <div class="parity">
@@ -499,7 +499,7 @@
         <div class="section-head">
           <p class="eyebrow">Architecture</p>
           <h2 id="architecture-title">Layered, tested and light to install</h2>
-          <p class="lead">A Streamlit interface on a plain Python engine. Tests check the direction of the dependencies, and the optional groups can be left out.</p>
+          <p class="lead">A Streamlit interface on a plain Python data and statistics engine. Tests check the direction of the dependencies, and the optional groups can be left out.</p>
         </div>
         <div class="arch-grid">
           <figure class="arch" aria-labelledby="arch-caption">
@@ -516,11 +516,11 @@
                 <code>manage · enrich · explore · monitor · graph</code>
               </div>
               <div class="layer layer-engine">
-                <span class="layer-label">Engine · no Streamlit, checked by tests</span>
+                <span class="layer-label">Data and statistics engine · no Streamlit, checked by tests</span>
                 <div class="pkgs">
-                  <div class="pkg"><code>biostats</code><span>statistics, MI, pooling</span></div>
-                  <div class="pkg"><code>ingest</code><span>import, parse report</span></div>
-                  <div class="pkg"><code>core</code><span>session, population, lineage</span></div>
+                  <div class="pkg"><b>Statistics</b><code>biostats</code><span>tests and effect sizes, regression and survival models, multiple imputation and pooling</span></div>
+                  <div class="pkg"><b>File import</b><code>ingest</code><span>CSV, Excel and Parquet files, with a parse report</span></div>
+                  <div class="pkg"><b>Data session</b><code>core</code><span>analysis population, fingerprints and lineage, participant flow</span></div>
                 </div>
               </div>
               <div class="layer layer-storage">
@@ -534,11 +534,11 @@
               <div class="opt"><code>ml</code><span>LightGBM, UMAP, FAMD</span></div>
               <div class="opt"><code>survival</code><span>lifelines: PH test, concordance</span></div>
             </div>
-            <figcaption class="sr-only" id="arch-caption">The architecture in four layers: the Streamlit interface; the services; the engine (biostats, ingest, core), which imports no Streamlit; and the storage. The optional groups ai, ml and survival plug into the services.</figcaption>
+            <figcaption class="sr-only" id="arch-caption">The architecture in four layers: the Streamlit interface; the services; the data and statistics engine (statistics in biostats, file import in ingest, the data session in core), which imports no Streamlit; and the storage. The optional groups ai, ml and survival plug into the services.</figcaption>
           </figure>
           <ul class="arch-points">
             <li><b>One write path.</b> Every change to the data goes through one session object that records a trace step; nothing changes the data while a page is drawn.</li>
-            <li><b>A clean engine.</b> <code>biostats</code>, <code>ingest</code> and <code>core</code> import no Streamlit, and <code>core</code> imports nothing above it. A layering test enforces both.</li>
+            <li><b>A clean engine.</b> Its statistics (<code>biostats</code>), file import (<code>ingest</code>) and data session (<code>core</code>) packages import no Streamlit, and <code>core</code> imports nothing above it. A layering test enforces both.</li>
             <li><b>Light core install.</b> The application runs without the <code>ai</code>, <code>ml</code> and <code>survival</code> groups; CI tests that minimal install in its own job.</li>
             <li><b>Accounts and workspaces.</b> Role-based accounts with bcrypt and login lockout, one workspace per user, and a first administrator created from a one-time setup token.</li>
           </ul>

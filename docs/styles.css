@@ -476,10 +476,13 @@ cite::after { content: ")"; }
 .layer-engine { border: 1.5px solid var(--teal); background: var(--teal-50); }
 .layer-engine .layer-label { color: var(--teal); }
 .layer-storage { border: 1px solid var(--line); background: var(--surface); }
-.pkgs { margin-top: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pkgs { margin-top: 8px; display: grid; gap: 8px; }
 .pkg, .opt { display: grid; gap: 2px; }
-.pkg { padding: 10px 12px; border: 1px solid #BFDDE1; border-radius: 10px; background: #fff; }
-.pkg code, .opt code { color: var(--ink); font-size: 14px; font-weight: 700; }
+.pkg { padding: 9px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border: 1px solid #BFDDE1; border-radius: 10px; background: #fff; }
+.pkg span { flex-basis: 100%; }
+.pkg b { color: var(--ink); font-size: 14.5px; line-height: 1.3; }
+.pkg code { color: var(--teal-700); font-size: 12.5px; font-weight: 600; }
+.opt code { color: var(--ink); font-size: 14px; font-weight: 700; }
 .pkg span, .opt span { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
 .arch-optional { position: relative; padding: 16px; display: grid; gap: 12px; border: 1.5px dashed var(--mint); border-radius: 14px; }
 .arch-optional::before { content: ""; position: absolute; top: 50%; left: -21px; width: 19px; border-top: 2px dashed var(--mint); }

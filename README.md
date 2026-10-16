@@ -24,7 +24,7 @@ Cohort analyses are often spread across ad-hoc Python or R scripts, unversioned 
 ### Core Architecture Pillars
 
 1. **Plain files and per-user workspaces**: each saved version is a complete Parquet file (`name_v1`, `name_v2`, …) written with pyarrow, with a lineage file next to it; DuckDB holds the user accounts and the statistics cache. Every account works in its own workspace.
-2. **Statistics engine** (`biostats`): Welch-first group comparisons with effect sizes and confidence intervals ($\text{Hedges' } g$, rank-biserial $r$, $\eta^2$, $\omega^2$), ANCOVA (one outcome, several covariates) with a test of parallel slopes, 2x2 measures with the Haldane-Anscombe correction, Little's MCAR test, diagnostic accuracy (ROC, PPV, NPV, likelihood ratios), survival and regression models, and multiple imputation. Normality and variance checks are diagnostics, never gates.
+2. **Statistics** (`biostats`, in the data and statistics engine): Welch-first group comparisons with effect sizes and confidence intervals ($\text{Hedges' } g$, rank-biserial $r$, $\eta^2$, $\omega^2$), ANCOVA (one outcome, several covariates) with a test of parallel slopes, 2x2 measures with the Haldane-Anscombe correction, Little's MCAR test, diagnostic accuracy (ROC, PPV, NPV, likelihood ratios), survival and regression models, and multiple imputation. Normality and variance checks are diagnostics, never gates.
 3. **Data quality**: a score across completeness, uniqueness, consistency, uniformity, statistical validity (IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN) and the clinical anomaly rules you declare.
 4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions and variable engineering. Cloud providers need an explicit consent; the suggestions come from the language model and are not checked against a terminology.
 5. **Analysis Population, Recorded Lineage & Verified Replay**: Inclusion and exclusion criteria are filters you tick in the sidebar; every page analyses the same population, every result says which population and data it was computed on, and a result computed on other data is not shown as current. Every change of the data goes through one write path and is one step of a hash-chained (tamper-evident) JSON trace that records what it did to the table. The headless engine (`run_trace`) replays the trace, checks every step against the fingerprint recorded for it, and says when the replayed table is exactly the analysed one; a multiple imputation is re-run and its imputed cells are checked; the few steps it cannot recompute (the single imputation adopted from the former multiple-imputation panel) are listed. A Microsoft Word (`.docx`) report documents the trace, and a Word **study dossier** gathers the provenance, the participant flow (STROBE item 13), the data handling, the missing data (with the multiple-imputation items of Sterne et al. 2009) and the results you add to it. Neither is an electronically signed record, and neither certifies compliance with a reporting guideline.
@@ -55,12 +55,19 @@ Cohort analyses are often spread across ad-hoc Python or R scripts, unversioned 
 flowchart TB
     UI["<b>Interface</b><br/>app_pages, ui: Streamlit pages, state facade, population selector, result cards"]
     SVC["<b>Services</b><br/>manage: traces, replay, Word report and study dossier, accounts (IAM)<br/>enrich, explore, monitor, graph"]
-    ENG["<b>Engine</b>, no Streamlit (checked by tests/test_layering.py)<br/>biostats: statistics, multiple imputation, pooling<br/>ingest: file import · core: session, population, lineage, participant flow"]
+    subgraph CORE["Data and statistics engine"]
+        STATS["<b>Statistics</b><br/>biostats<br/>tests and effect sizes,<br/>regression and survival models,<br/>multiple imputation, pooling"]
+        IMPORT["<b>File import</b><br/>ingest<br/>CSV, Excel and Parquet,<br/>with a parse report"]
+        SESSION["<b>Data session</b><br/>core<br/>analysis population,<br/>fingerprints and lineage,<br/>participant flow"]
+    end
     DATA["<b>Storage</b><br/>Parquet versions with lineage files · JSON traces · DuckDB accounts and statistics cache · per-user workspaces"]
     AI["<b>AI engine</b> (optional ai group)<br/>manage.rag_manager · manage.rag.providers: Ollama, Gemini, OpenAI, Mistral, Claude<br/>manage.vectorstores: LanceDB, Qdrant"]
-    UI --> SVC --> ENG --> DATA
+    UI --> SVC --> CORE --> DATA
     SVC -.-> AI
 ```
+
+The data and statistics engine is plain Python: it imports no Streamlit, and `core` imports nothing above it, which
+`tests/test_layering.py` checks. It can therefore be used and tested without the interface.
 
 ---
 

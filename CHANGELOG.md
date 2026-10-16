@@ -6,6 +6,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: the data and statistics engine
+
+- The README architecture diagram and the site call the plain-Python layer the **data and statistics engine**,
+  next to the AI engine. Its three parts are named by what they do: statistics (`biostats`), file import
+  (`ingest`) and the data session (`core`). The layer used to be called "Engine", which was easy to confuse with
+  the AI engine.
+
 ### Dependency updates: pyarrow 26 and Streamlit 1.66, Google libraries, ruff 0.17
 
 - Updated in `uv.lock`:
