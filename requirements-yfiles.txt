@@ -130,7 +130,7 @@ joblib==1.6.0
     #   scikit-learn
 jsonpatch==1.33
     # via langchain-core
-jsonpointer==3.2.0
+jsonpointer==3.2.1
     # via jsonpatch
 jsonschema==4.26.0
     # via altair
