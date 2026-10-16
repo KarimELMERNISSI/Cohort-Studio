@@ -2,1744 +2,752 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CohortStudio — Clinical Epidemiology &amp; Cohort Data Exploration</title>
-  <meta name="description" content="Intuitive clinical epidemiology and observational cohort exploration platform. Automated biostatistical decision tree, data quality auditing, and RAGAS-evaluated medical document synthesis.">
-  <meta name="keywords" content="clinical epidemiology, cohort data exploration, biostatistical decision tree, hypothesis testing, RAGAS evaluation, data quality audit, duckdb, streamlit">
-  <meta property="og:title" content="CohortStudio — Clinical Epidemiology &amp; Cohort Exploration">
-  <meta property="og:description" content="An intuitive, transparent software environment for observational health data curation, biostatistical hypothesis testing, and audited literature exploration.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CohortStudio · Clinical cohort data, from raw file to reproducible evidence</title>
+  <meta name="description" content="Open-source, local-first application for clinical cohort studies: data quality, a toggleable analysis population with its participant flow, multiple imputation pooled with Rubin's rules, guided statistics, survival models and a Word study dossier.">
+  <meta name="theme-color" content="#0B2B36">
+  <link rel="canonical" href="https://karimelmernissi.github.io/Cohort-Studio/">
+
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CohortStudio">
+  <meta property="og:title" content="CohortStudio · Clinical cohort data, from raw file to reproducible evidence">
+  <meta property="og:description" content="Data quality, one analysis population, multiple imputation, guided statistics, survival models and a Word study dossier, on your own machine. Open source, Apache 2.0.">
   <meta property="og:url" content="https://karimelmernissi.github.io/Cohort-Studio/">
-  <meta property="og:image" content="assets/logo.png">
+  <meta property="og:image" content="https://karimelmernissi.github.io/Cohort-Studio/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The CohortStudio wordmark and tagline next to the Survival and regression page of the application">
+  <meta name="twitter:card" content="summary_large_image">
 
-  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/brand/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/brand/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
-  <link rel="icon" type="image/png" href="assets/logo.png">
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="bg-glow-top"></div>
-  <div class="bg-glow-middle"></div>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <!-- Header & Navigation -->
-  <header class="header">
-    <div class="container nav-wrapper">
-      <a href="#" class="brand">
-        <img src="assets/logo.png" alt="CohortStudio Logo" class="brand-logo">
-        <span class="brand-text">CohortStudio</span>
-        <span class="brand-tag">v0.2.0</span>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></symbol>
+    <symbol id="i-validate" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 10 4-1.7 7-5.6 7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-enrich" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/></symbol>
+    <symbol id="i-explore" viewBox="0 0 24 24"><path d="M4 4v16h16"/><rect x="7.5" y="11" width="3" height="6" rx="1"/><rect x="12.5" y="7" width="3" height="10" rx="1"/><rect x="17.5" y="13" width="2.5" height="4" rx="1"/></symbol>
+    <symbol id="i-analyze" viewBox="0 0 24 24"><path d="M4 4v16h16"/><path d="M7 7h4v4h3v3h3v3h2"/></symbol>
+    <symbol id="i-reproduce" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></symbol>
+    <symbol id="i-local" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/><path d="M9 16v4M15 16v4"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4"/><path d="m16 8 4 4-4 4"/><path d="m14 5-4 14"/></symbol>
+    <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0"/><path d="m12 16 4-5"/><path d="M4 20h16"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+    <symbol id="i-plan" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5A3.75 3.75 0 0 1 17.5 18z"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></symbol>
+  </svg>
+
+  <header class="site-header" id="top">
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="CohortStudio, back to the top">
+        <img src="assets/brand/wordmark-light.png" width="738" height="160" alt="CohortStudio">
       </a>
-
-      <ul class="nav-menu">
-        <li><a href="#exploration" class="nav-link">Exploration</a></li>
-        <li><a href="#decision-tree" class="nav-link">Decision Tree</a></li>
-        <li><a href="#visualization" class="nav-link">Visualisation</a></li>
-        <li><a href="#rag-evaluation" class="nav-link">RAGAS</a></li>
-        <li><a href="#reproducibility" class="nav-link">Reproducibility</a></li>
-        <li><a href="#use-cases" class="nav-link">Use Cases</a></li>
-        <li><a href="#install" class="nav-link">Install</a></li>
-        <li><a href="#docs" class="nav-link">Docs</a></li>
-        <li><a href="#citation" class="nav-link">Citation</a></li>
-      </ul>
-
-      <div class="nav-actions">
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-          </svg>
-          GitHub
+      <nav class="site-nav" id="site-nav" aria-label="Main">
+        <a href="#workflow">Workflow</a>
+        <a href="#features">Features</a>
+        <a href="#methods">Methods</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#install">Install</a>
+        <a href="#docs">Docs</a>
+        <a class="nav-github-mobile" href="https://github.com/KarimELMERNISSI/Cohort-Studio">GitHub</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-quiet header-github" href="https://github.com/KarimELMERNISSI/Cohort-Studio">
+          <svg class="i i-fill" aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span>
         </a>
-        <a href="#install" class="btn btn-primary btn-sm">Get Started</a>
+        <a class="btn btn-primary" href="#install">Get started</a>
+        <button class="nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false" aria-label="Open the menu">
+          <svg class="i" aria-hidden="true"><use href="#i-menu"/></svg>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <section class="hero" id="overview">
-    <div class="container">
-      <div class="badge-pill">
-        <span class="badge-dot"></span>
-        <span>Clinical Research Platform &middot; Python 3.14+ &middot; Tested in CI</span>
-      </div>
-
-      <h1 class="hero-title">
-        Intuitive <span class="text-gradient">Clinical Epidemiology</span> &amp; Cohort Data Exploration
-      </h1>
-
-      <p class="hero-desc">
-        A transparent, easy-to-navigate software platform engineered for observational cohort curation, automated biostatistical hypothesis testing, and audited medical literature exploration — with zero boilerplate and recorded, replayable transformation traces.
-      </p>
-
-      <div class="hero-cta">
-        <a href="#exploration" class="btn btn-primary">
-          Explore Cohort Suite
-        </a>
-        <a href="#decision-tree" class="btn btn-secondary">
-          Biostatistical Decision Tree &amp; Matrix
-        </a>
-      </div>
-
-      <!-- Quickstart Copy Box -->
-      <div class="terminal-box">
-        <div class="terminal-header">
-          <div class="terminal-dots">
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-          </div>
-          <span class="terminal-title">bash &middot; quickstart with uv</span>
-          <button class="copy-btn" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git && cd Cohort-Studio && uv sync --extra all && uv run streamlit run main.py">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            Copy
-          </button>
-        </div>
-        <div class="terminal-content">
-          <div>
-            <span class="terminal-prompt">$</span>
-            <span>git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git &amp;&amp; uv sync --extra all</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Live Metric Tiles: 6 Pillars of Platform Rigor -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">&ge; 90%</span> Coverage</div>
-          <div class="stat-label">Biostatistics Engine, CI-Enforced</div>
-          <div class="stat-desc">Automated pytest suite in CI; the statistical engines are checked against published reference values, with coverage floors enforced per package.</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">6-Step</span> Tree</div>
-          <div class="stat-label">Automated Biostatistics</div>
-          <div class="stat-desc">Normality and variance screening routing parametric vs non-parametric tests with exact effect sizes (Hedges' g, &eta;&sup2;).</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">1-Click</span> Visuals</div>
-          <div class="stat-label">Publication Graphics</div>
-          <div class="stat-desc">Vector SVG, 300+ DPI PNG, and standalone interactive HTML with automated significance brackets (***, **, *, ns).</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">RAGAS</span> Evaluated</div>
-          <div class="stat-label">Scientific Medical RAG</div>
-          <div class="stat-desc">Faithfulness and context-relevance scoring (LLM-as-judge) with 3-tier source attribution and page coordinates; unsupported statements are flagged, not hidden.</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">Traced</span> Replay</div>
-          <div class="stat-label">Recorded Provenance</div>
-          <div class="stat-desc">Recorded transformation steps replay headless or in the UI; a Word (.docx) report documents the trace, and a Word study dossier gathers the participant flow (STROBE item 13), the missing data and the results (not electronically signed records).</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val"><span class="stat-val-accent">Modular</span> IAM</div>
-          <div class="stat-label">Enterprise Access Control</div>
-          <div class="stat-desc">Pluggable authentication supporting Local DuckDB + bcrypt, Better Auth REST sidecar with TTL caching, or bypass.</div>
-        </div>
-      </div>
-
-      <!-- Regulatory & Clinical Standards Ribbon -->
-      <div class="standards-bar">
-        <div class="standard-badge">
-          <span class="badge-dot"></span>
-          <span>Reference-Validated Biostatistics</span>
-        </div>
-        <div class="standard-badge">
-          <span class="badge-dot"></span>
-          <span>Recorded &amp; Replayable Transformation Trace</span>
-        </div>
-        <div class="standard-badge">
-          <span class="badge-dot"></span>
-          <span>Good Epidemiological Practice (GEP) Ready</span>
-        </div>
-        <div class="standard-badge">
-          <span class="badge-dot"></span>
-          <span>Zero Telemetry &middot; Air-Gapped Hospital Privacy</span>
-        </div>
-        <div class="standard-badge">
-          <span class="badge-dot"></span>
-          <span>Standard Ontologies: UMLS, SNOMED, LOINC</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Cohort Data Exploration Suite -->
-  <section id="exploration" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Cohort Data Exploration</span>
-        <h2 class="section-title">Intuitive, Rapid Exploration for Clinical Cohorts</h2>
-        <p class="section-desc">
-          Designed specifically for observational cohorts, disease registries, and real-world clinical datasets. Move effortlessly from raw, heterogeneous hospital files to structured, analysis-ready patient cohorts with continuous quality monitoring.
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="container hero-copy">
+        <p class="hero-badge"><span class="pulse" aria-hidden="true"></span>Open source · Apache 2.0 · Version 2.3.0</p>
+        <h1 id="hero-title">Clinical cohort data, from raw file<br class="br-wide"> to <span class="grad">reproducible evidence</span></h1>
+        <p class="hero-lead">
+          CohortStudio is a local-first application for observational cohort studies. Check the quality of your data,
+          tick the criteria that define your analysis population, impute missing values for inference, run guided
+          statistics and survival models, and hand over a Word study dossier that states what every result was
+          computed on.
         </p>
+        <div class="hero-ctas">
+          <a class="btn btn-mint btn-lg" href="#install">Install in a few minutes <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="btn btn-outline-light btn-lg" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/14_Full_Tutorial.md">Follow the tutorial</a>
+        </div>
+        <ul class="hero-meta">
+          <li>Python 3.14 and Streamlit</li>
+          <li>Your machine, your server or Docker</li>
+          <li>No cloud service required</li>
+        </ul>
       </div>
 
-      <!-- 4 Pillars Exploration Grid -->
-      <div class="exploration-grid">
-        <div class="exploration-card">
-          <span class="card-kicker">01 // INGESTION &amp; PROFILING</span>
-          <h3 class="exploration-title">Zero-Boilerplate Ingestion &amp; Profile Dataclass</h3>
-          <p class="exploration-desc">
-            Instantly ingest multi-gigabyte CSV, Parquet, or Excel files with automated encoding discovery, dialect detection, and streaming DuckDB persistence. Generates an immutable <code>DatasetProfile</code> dataclass capturing memory footprint, column archetypes, and value cardinalities.
-          </p>
-          <ul class="exploration-points">
-            <li><strong>Automated Schema Typing:</strong> Resolves date-time variations, discrete ICD codes, and continuous biomarkers without manual type conversions.</li>
-            <li><strong>Zero-Copy Parquet Storage:</strong> In-process DuckDB engine guarantees snappy querying and instant column filtering without external database drivers.</li>
-            <li><strong>User Data Isolation:</strong> Strict row-level boundaries and segregated working directories per research account for privacy and data governance.</li>
-          </ul>
-        </div>
+      <div class="container hero-visual">
+        <div class="hero-shot">
+          <figure class="browser">
+            <div class="browser-bar" aria-hidden="true">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="browser-url">localhost:8501 · Survival &amp; regression</span>
+            </div>
+            <img src="assets/shots/hero-survival.webp" width="2240" height="1400" fetchpriority="high" decoding="async"
+                 alt="The Survival and regression page. The sidebar shows the analysis population, 928 of 1,206 rows with 12 criteria, and the analysis data set to imputed (m = 10); the page shows Kaplan-Meier curves of the control and intervention arms pooled over the ten imputed datasets.">
+          </figure>
 
-        <div class="exploration-card">
-          <span class="card-kicker">02 // 6-PILLAR HEALTH AUDIT</span>
-          <h3 class="exploration-title">Automated Health Auditing &amp; Clinical Anomaly Rules</h3>
-          <p class="exploration-desc">
-            Continuous multi-dimensional cohort validation evaluating Completeness, Uniqueness, Uniformity, and Validity. Define custom boolean clinical masks to immediately isolate biologically impossible or contradictory values.
-          </p>
-          <ul class="exploration-points">
-            <li><strong>Tri-Method Outlier Isolation:</strong> Detects physiological anomalies using IQR bounds, Z-score screening, or unsupervised Isolation Forest scoring.</li>
-            <li><strong>Clinical Anomaly Expressions:</strong> Real-time boolean expression evaluations (e.g., <code>Systolic_BP &lt; Diastolic_BP</code> or <code>HbA1c &gt; 20.0</code>) with visual cell highlighting.</li>
-            <li><strong>Completeness Scorecards:</strong> Field-by-field completeness, uniqueness and validity scores rolled up into a global quality score for review.</li>
-          </ul>
-        </div>
+          <aside class="float-card float-flow" aria-label="Participant flow of the tutorial cohort">
+            <div class="float-head">
+              <span class="float-title"><svg class="i" aria-hidden="true"><use href="#i-funnel"/></svg>Participant flow</span>
+              <span class="chip">tutorial cohort</span>
+            </div>
+            <ol class="mini-flow">
+              <li class="mf-node"><span>Records read</span><b>1,206</b></li>
+              <li class="mf-out"><span>Clinical anomalies</span><b>−16</b></li>
+              <li class="mf-out"><span>Study inclusion not met</span><b>−262</b></li>
+              <li class="mf-node mf-final"><span>Analysis population</span><b>928</b></li>
+            </ol>
+          </aside>
 
-        <div class="exploration-card">
-          <span class="card-kicker">03 // MISSINGNESS PATTERNS</span>
-          <h3 class="exploration-title">Little's MCAR Diagnostics &amp; Pairwise MAR Dependency</h3>
-          <p class="exploration-desc">
-            Opaque missing data biases epidemiological inference. CohortStudio runs Little's MCAR test on EM estimates of the mean and covariance alongside pairwise dependency tests (whole family adjusted) to detect whether omissions are missing completely at random or dependent on clinical covariates.
-          </p>
-          <ul class="exploration-points">
-            <li><strong>Little's MCAR Test:</strong> Tests mean vector equivalence across missingness patterns (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>, EM estimates); rejection argues against MCAR, non-rejection does not prove it.</li>
-            <li><strong>Pairwise MAR Dependency:</strong> Evaluates chi-square associations between missing indicators and observed clinical predictors.</li>
-            <li><strong>Interactive Sparsity Matrix:</strong> Visual heatmap and dendrogram clustering co-missing variable blocks across longitudinal patient records.</li>
-          </ul>
-        </div>
-
-        <div class="exploration-card">
-          <span class="card-kicker">04 // CLINICAL PHENOTYPING</span>
-          <h3 class="exploration-title">Single imputation (chained equations, missForest) &amp; Multidimensional Stratification</h3>
-          <p class="exploration-desc">
-            Combine flexible multivariate imputation with unsupervised patient stratification. Automatically reduces high-dimensional clinical profiles using FAMD or PCA before clustering into actionable patient sub-phenotypes.
-          </p>
-          <ul class="exploration-points">
-            <li><strong>Imputation:</strong> Iterative tree imputation (missForest algorithm, LightGBM learners) and single imputation by chained equations; the pages state that single imputation does not propagate imputation uncertainty.</li>
-            <li><strong>Multiple imputation:</strong> chained equations like R mice (m independent chains, diagnostics); survival, regression and group comparisons pooled with Rubin's rules, with parity tests against R.</li>
-            <li><strong>Mixed-Data Phenotyping:</strong> Factor Analysis of Mixed Data (FAMD) handles continuous lab panels alongside categorical diagnosis flags.</li>
-            <li><strong>Standard Semantic Ontologies:</strong> AI-driven variable renaming mapped directly to UMLS, SNOMED CT, and LOINC clinical terminology.</li>
-          </ul>
+          <aside class="float-card float-pool" aria-label="Pooled analysis">
+            <span class="float-icon"><svg class="i" aria-hidden="true"><use href="#i-layers"/></svg></span>
+            <div>
+              <p class="float-title">10 imputed datasets, pooled</p>
+              <p class="float-text">Rubin's rules with Barnard–Rubin degrees of freedom, and the complete-case analysis alongside.</p>
+            </div>
+          </aside>
         </div>
       </div>
+    </section>
 
-      <!-- Tabbed Feature Showcase -->
-      <div class="showcase-tabs">
-        <button class="tab-btn active" data-tab="tab-ingest">DuckDB Parquet Ingestion</button>
-        <button class="tab-btn" data-tab="tab-quality">Quality &amp; Health Scoring</button>
-        <button class="tab-btn" data-tab="tab-mcar">Missingness &amp; MCAR Diagnostics</button>
-        <button class="tab-btn" data-tab="tab-enrich">Imputation &amp; Phenotyping</button>
-      </div>
-
-      <!-- Tab 1: DuckDB Ingestion -->
-      <div id="tab-ingest" class="showcase-panel active">
-        <div class="panel-content">
-          <h3 class="panel-title">Columnar Parquet Ingestion &amp; Automated Version Snapshots</h3>
-          <p class="panel-desc">
-            DuckDB powers zero-overhead in-process transformations and writes datasets directly to versioned Parquet files. Researchers get instant responsiveness with zero connection lock-in, transactional stability, and multi-user data isolation.
-          </p>
-          <ul class="panel-features">
-            <li>
-              <span><strong>Atomic Version Snapshots:</strong> Automatically archives version increments (e.g. <code>cardio_cohort_v1</code>, <code>v2</code>) with complete metadata.</span>
-            </li>
-            <li>
-              <span><strong>Ultra-Fast Statistics Cache:</strong> Pre-calculates numerical and categorical aggregates directly in Parquet format.</span>
-            </li>
-            <li>
-              <span><strong>Multi-Tenant Workspace:</strong> Row-level privacy and directory boundaries enforced per research account.</span>
-            </li>
-          </ul>
+    <!-- Key facts -->
+    <section class="facts" aria-labelledby="facts-title">
+      <h2 class="sr-only" id="facts-title">Key facts</h2>
+      <div class="container facts-grid">
+        <div class="fact">
+          <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-local"/></svg></span>
+          <h3>Local-first</h3>
+          <p>Your data stay on your machine or server. The AI assistant is optional and local by default.</p>
         </div>
-        <div class="panel-code">
-          <pre><code><span class="token-cm"># Native DuckDB Parquet Persistence with Versioning</span>
-<span class="token-kw">from</span> manage.db_manager <span class="token-kw">import</span> DBManager
-
-db = DBManager()
-
-<span class="token-cm"># Persist cohort snapshot with automatic version increment</span>
-ok, msg, version_id = db.save_dataset(
-    df=clinical_df, 
-    base_name=<span class="token-str">"diabetic_cohort"</span>, 
-    username=<span class="token-str">"dr_smith"</span>
-)
-<span class="token-fn">print</span>(version_id)  <span class="token-cm"># -> "dr_smith_diabetic_cohort_v2"</span>
-
-<span class="token-cm"># Reload dataset with zero-copy DuckDB execution</span>
-df_loaded, msg = db.load_dataset(<span class="token-str">"diabetic_cohort_v2"</span>)</code></pre>
+        <div class="fact">
+          <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-check-circle"/></svg></span>
+          <h3>Checked against R</h3>
+          <p>Pooled results match R <code>mice</code> 3.19 and <code>mitml</code> 0.4.5 on reference datasets.</p>
+        </div>
+        <div class="fact">
+          <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg></span>
+          <h3>Traced and replayable</h3>
+          <p>Every change to the data is one step of a hash-chained trace that can be replayed and checked.</p>
+        </div>
+        <div class="fact">
+          <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-flask"/></svg></span>
+          <h3>Tested on every push</h3>
+          <p>About 780 automated tests, type checks and per-package coverage floors run in CI.</p>
+        </div>
+        <div class="fact">
+          <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg></span>
+          <h3>Open source</h3>
+          <p>Apache 2.0. Your data live in plain Parquet and JSON files, with no lock-in.</p>
         </div>
       </div>
+    </section>
 
-      <!-- Tab 2: Quality & Health -->
-      <div id="tab-quality" class="showcase-panel">
-        <div class="panel-content">
-          <h3 class="panel-title">6-Pillar Quality Scoring &amp; Declarative Clinical Masks</h3>
-          <p class="panel-desc">
-            Audit cohort health across completeness, uniqueness, consistency, and physiological validity. Define custom medical constraint expressions to instantly pinpoint biologically implausible data entry errors.
-          </p>
-          <ul class="panel-features">
-            <li>
-              <span><strong>Multi-Dimensional Scoring:</strong> Completeness, Uniqueness, Uniformity, and IQR / ML Outlier Validity metrics.</span>
-            </li>
-            <li>
-              <span><strong>Clinical Anomaly Rules:</strong> Evaluates boolean masks (e.g. <code>Systolic_BP &lt; Diastolic_BP</code>) across millions of patient rows in milliseconds.</span>
-            </li>
-            <li>
-              <span><strong>Visual Diff Inspection:</strong> Side-by-side inspection of raw versus cleansed patient data records.</span>
-            </li>
-          </ul>
+    <!-- Workflow -->
+    <section class="section" id="workflow" aria-labelledby="workflow-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Workflow</p>
+          <h2 id="workflow-title">One guided path, from the file to the report</h2>
+          <p class="lead">The navigation follows the order of a study. Every step works on the same analysis population and records what it changed.</p>
         </div>
-        <div class="panel-code">
-          <pre><code><span class="token-cm"># Multi-Dimensional Quality Audit with Clinical Rules</span>
-<span class="token-kw">from</span> explore.data_quality_auditor <span class="token-kw">import</span> DataQualityAuditor
-
-auditor = DataQualityAuditor(
-    df=cohort_df, 
-    rules_config={<span class="token-str">"bp_check"</span>: <span class="token-str">"Systolic &lt; Diastolic"</span>, <span class="token-str">"hba1c_max"</span>: <span class="token-str">"HbA1c &gt; 20.0"</span>}
-)
-
-<span class="token-cm"># Execute comprehensive audit</span>
-metrics = auditor.run_audit(validity_method=<span class="token-str">"iqr"</span>)
-<span class="token-fn">print</span>(f<span class="token-str">"Overall Health Score: {metrics['overall_score']:.1f}%"</span>)
-<span class="token-fn">print</span>(f<span class="token-str">"Anomalous Records Flagged: {metrics['anomalies_detected']}"</span>)</code></pre>
-        </div>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-import"/></svg></span>
+            <span class="step-num">01</span>
+            <h3>Import</h3>
+            <p>CSV, Excel and Parquet files, with encoding, delimiter and decimal detection and a parse report.</p>
+          </li>
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-validate"/></svg></span>
+            <span class="step-num">02</span>
+            <h3>Validate</h3>
+            <p>Quality score, clinical anomaly rules, inclusion criteria, outliers and the participant flow.</p>
+          </li>
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-enrich"/></svg></span>
+            <span class="step-num">03</span>
+            <h3>Enrich</h3>
+            <p>Merge external data, derive variables with a safe formula language and impute missing values.</p>
+          </li>
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg></span>
+            <span class="step-num">04</span>
+            <h3>Explore</h3>
+            <p>Descriptive statistics, correlations and interactive figures, exported as SVG or interactive HTML.</p>
+          </li>
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-analyze"/></svg></span>
+            <span class="step-num">05</span>
+            <h3>Analyze</h3>
+            <p>Guided tests with a plan before you run them, effect sizes, regression and survival models.</p>
+          </li>
+          <li class="step">
+            <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-reproduce"/></svg></span>
+            <span class="step-num">06</span>
+            <h3>Reproduce</h3>
+            <p>Replay and check the trace, then export the Word report and the study dossier.</p>
+          </li>
+        </ol>
       </div>
+    </section>
 
-      <!-- Tab 3: Missingness & MCAR -->
-      <div id="tab-mcar" class="showcase-panel">
-        <div class="panel-content">
-          <h3 class="panel-title">Missingness Topology &amp; Little's MCAR Test</h3>
-          <p class="panel-desc">
-            Determine whether missing lab results or survey fields introduce systematic bias. CohortStudio runs Little's MCAR test (EM estimates) and a family-adjusted scan of pairwise dependencies across all observed clinical variables.
-          </p>
-          <ul class="panel-features">
-            <li>
-              <span><strong>Little's MCAR Test:</strong> Chi-square test of pattern-wise mean differences against EM estimates (<span class="formula-tag">d&sup2; ~ &chi;&sup2;</span>).</span>
-            </li>
-            <li>
-              <span><strong>Pairwise MAR Scans:</strong> Isolates specific baseline covariates that predict missingness in downstream endpoints.</span>
-            </li>
-            <li>
-              <span><strong>Guidance on Imputation:</strong> Informs the researcher whether complete-case analysis or an imputation strategy is methodologically indicated.</span>
-            </li>
-          </ul>
+    <!-- Features -->
+    <section class="section section-tint" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Features</p>
+          <h2 id="features-title">Ready for the questions reviewers ask</h2>
+          <p class="lead">Who was analysed, how the missing data were handled, which test was used and why, and whether the numbers can be reproduced.</p>
         </div>
-        <div class="panel-code">
-          <pre><code><span class="token-cm"># Little's MCAR test (EM estimates) & missingness diagnostics</span>
-<span class="token-kw">from</span> biostats.mcar <span class="token-kw">import</span> littles_mcar_test
 
-mcar_res = littles_mcar_test(
-    longitudinal_cohort[[<span class="token-str">"cholesterol"</span>, <span class="token-str">"ldl"</span>, <span class="token-str">"creatinine"</span>, <span class="token-str">"egfr"</span>]]
-)
-
-<span class="token-cm"># Check if data satisfies Missing Completely at Random</span>
-<span class="token-fn">print</span>(f<span class="token-str">"MCAR p-value: {mcar_res['p_value']:.4f} ({mcar_res['interpretation']})"</span>)</code></pre>
-        </div>
-      </div>
-
-      <!-- Tab 4: Imputation & Phenotyping -->
-      <div id="tab-enrich" class="showcase-panel">
-        <div class="panel-content">
-          <h3 class="panel-title">Single Imputation Chained with Patient Phenotyping</h3>
-          <p class="panel-desc">
-            Resolve missing data with iterative tree imputation or chained equations (single imputation, uncertainty not propagated). Feed imputed features directly into dimensionality reduction and unsupervised clustering.
-          </p>
-          <ul class="panel-features">
-            <li>
-              <span><strong>MissForest Algorithm:</strong> Non-parametric iterative random forest handling non-linear physiological interactions and mixed data types.</span>
-            </li>
-            <li>
-              <span><strong>FAMD Mixed-Data Reduction:</strong> Factor Analysis of Mixed Data handles categorical comorbidities and continuous vitals simultaneously.</span>
-            </li>
-            <li>
-              <span><strong>Gaussian Mixture Models &amp; DBSCAN:</strong> Discovers distinct patient phenotypes with soft probability assignments or density boundaries.</span>
-            </li>
-          </ul>
-        </div>
-        <div class="panel-code">
-          <pre><code><span class="token-cm"># MissForest Imputation & FAMD Dimensionality Reduction</span>
-<span class="token-kw">from</span> explore.data_enrichment_engine <span class="token-kw">import</span> run_missforest, run_famd
-
-<span class="token-cm"># 1. Non-linear iterative imputation</span>
-imputed_df, err = run_missforest(cohort_df, max_iter=<span class="token-num">5</span>)
-
-<span class="token-cm"># 2. Extract orthogonal clinical axes across continuous + categorical features</span>
-famd_res, err = run_famd(imputed_df, n_components=<span class="token-num">3</span>)
-<span class="token-fn">print</span>(f<span class="token-str">"Explained Variance: {famd_res['explained_variance_ratio']}"</span>)</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Epidemiological Decision Tree & Matrix -->
-  <section id="decision-tree" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Epidemiological Decision Engine</span>
-        <h2 class="section-title">Automated Biostatistical Decision Tree &amp; Matrix</h2>
-        <p class="section-desc">
-          CohortStudio reduces methodological guesswork. It reports sample size, distributional shape and variance diagnostics, suggests an appropriate test (Welch-first, with non-parametric alternatives) and explains why, and reports effect sizes with confidence intervals.
-        </p>
-      </div>
-
-      <!-- Visual Step-by-Step Decision Routing Flow -->
-      <div class="decision-tree-flow">
-        <!-- Node 1 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 01 // NORMALITY &amp; SAMPLE SIZE</span>
-            <span class="badge-tag win">Screening Pre-Requisite</span>
+        <article class="feature" id="population">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-funnel"/></svg>Analysis population</p>
+            <h3>One population, ticked in the sidebar, used everywhere</h3>
+            <p>Inclusion, anomaly and outlier criteria are filters, not deletions. Tick or untick them and Explore, Analyze, Survival and Enrich all work on the same rows. Rows are removed only when you freeze the population as a new version.</p>
+            <ul class="checks">
+              <li>A participant flow diagram (STROBE item 13), with per-criterion counts and the reason for each exclusion</li>
+              <li>Every result is stamped with its data, its population and the N analysed</li>
+              <li>A result computed on another population is marked stale, never shown as current</li>
+            </ul>
+            <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/02_Data_Validation.md">Data validation guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
-          <h3 class="tree-node-title">Distribution Normality Assessment</h3>
-          <p class="tree-node-desc">
-            Evaluates the null hypothesis H<sub>0</sub> that clinical continuous measurements are drawn from a normally distributed population prior to selecting between parametric and non-parametric estimators.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF N &lt; 5,000 AND Shapiro-Wilk p &ge; 0.05 (OR N &ge; 5,000 AND D'Agostino p &ge; 0.05)</span>
-              <span class="branch-action">Parametric Pathway Approved</span>
-              <span class="branch-details">Normal Gaussian distribution confirmed. Proceed to variance homogeneity check (Node 02). Computes mean &plusmn; standard deviation.</span>
-              <span class="formula-tag">Effect Size: Cohen's d or Hedges' g</span>
-            </div>
-            <div class="tree-branch non-parametric">
-              <span class="branch-condition">IF Normality p &lt; 0.05 OR Absolute Skewness |s| &gt; 1.5</span>
-              <span class="branch-action">Non-Parametric Pathway Enforced</span>
-              <span class="branch-details">Significant distributional skew or heavy tails detected. Routes directly to rank-sum tests (Mann-Whitney U, Kruskal-Wallis). Reports median and IQR.</span>
-              <span class="formula-tag">Effect Size: Rank-Biserial r or Cliff's &Delta;</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Node 2 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 02 // VARIANCE HOMOGENEITY</span>
-            <span class="badge-tag win">Homoscedasticity Check</span>
-          </div>
-          <h3 class="tree-node-title">Levene Test for Equality of Variances</h3>
-          <p class="tree-node-desc">
-            Standard Student's t-test and Fisher's ANOVA assume equal population variances (&sigma;<sub>1</sub>&sup2; = &sigma;<sub>2</sub>&sup2; = ... = &sigma;<sub>k</sub>&sup2;). Violations drastically inflate false positive (Type I) rates in clinical trials.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF Levene's Test p &ge; 0.05 (Equal Variances Confirmed)</span>
-              <span class="branch-action">Student's t-Test / One-Way ANOVA</span>
-              <span class="branch-details">Equal variance assumption satisfied. Post-hoc testing utilizes Tukey's Honestly Significant Difference (HSD) with pooled standard error.</span>
-              <span class="formula-tag">Eta-squared (&eta;&sup2;) &amp; Omega-squared (&omega;&sup2;)</span>
-            </div>
-            <div class="tree-branch robust">
-              <span class="branch-condition">IF Levene's Test p &lt; 0.05 (Heteroscedasticity Detected)</span>
-              <span class="branch-action">Welch's t-Test / Welch's ANOVA</span>
-              <span class="branch-details">Applies Welch-Satterthwaite degrees of freedom correction. Post-hoc pairwise evaluations automatically execute Games-Howell adjustments.</span>
-              <span class="formula-tag">Welch-adjusted F-statistic &amp; Hedges' g</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Node 3 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 03 // MULTI-GROUP COHORT STRATA</span>
-            <span class="badge-tag win">&ge; 3 Groups Comparison</span>
-          </div>
-          <h3 class="tree-node-title">Multi-Arm Stratification &amp; False Discovery Correction</h3>
-          <p class="tree-node-desc">
-            Evaluates continuous biomarkers across three or more trial arms or disease severity tiers with multiple testing control.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF Normality &amp; Homoscedasticity Met (&ge; 3 Groups)</span>
-              <span class="branch-action">One-Way ANOVA + Tukey HSD</span>
-              <span class="branch-details">Calculates between-group vs within-group variance ratio (F-statistic). Reports omnibus p-value followed by pairwise Tukey HSD intervals.</span>
-              <span class="formula-tag">&eta;&sup2; = SS_between / SS_total</span>
-            </div>
-            <div class="tree-branch non-parametric">
-              <span class="branch-condition">IF Normality Rejected or Ordinal Severity Scale</span>
-              <span class="branch-action">Kruskal-Wallis + Dunn (Holm) post-hoc</span>
-              <span class="branch-details">Calculates H-statistic based on average rank sums across cohorts. Pairwise post-hoc comparisons report every pair with Holm-adjusted p-values.</span>
-              <span class="formula-tag">&epsilon;&sup2; = (H - k + 1) / (N - k)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Node 4 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 04 // BASELINE CONFOUNDING</span>
-            <span class="badge-tag win">Covariate Adjustment</span>
-          </div>
-          <h3 class="tree-node-title">Multivariate ANCOVA with Slope Homogeneity Diagnostic</h3>
-          <p class="tree-node-desc">
-            Tests treatment arm efficacy while adjusting for baseline continuous covariates (e.g., baseline HbA1c, age, eGFR). Automatically validates whether regression slopes are parallel across study arms before reporting adjusted means.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF Group &times; Covariate Interaction F p &ge; 0.05</span>
-              <span class="branch-action">Homogeneous Slopes Validated &rarr; Standard ANCOVA</span>
-              <span class="branch-details">Parallel slopes confirmed. Covariate-adjusted marginal means and 95% confidence intervals are reported alongside adjusted F-statistic.</span>
-              <span class="formula-tag">Partial &eta;&sup2; = SS_effect / (SS_effect + SS_error)</span>
-            </div>
-            <div class="tree-branch warning-rule">
-              <span class="branch-condition">IF Interaction F p &lt; 0.05 (Violation: Non-Parallel Slopes)</span>
-              <span class="branch-action">Interaction Alert &rarr; Johnson-Neyman Floodlight</span>
-              <span class="branch-details">Standard ANCOVA is biased because treatment effect varies as a function of the baseline covariate. Flags model and maps regions of significance.</span>
-              <span class="formula-tag">Moderation Analysis Enforced</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Node 5 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 05 // 2&times;2 CONTINGENCY &amp; RARE OUTCOMES</span>
-            <span class="badge-tag win">Categorical Epidemiology</span>
-          </div>
-          <h3 class="tree-node-title">Relative Risk (RR) vs Odds Ratio (OR) with Zero-Cell Correction</h3>
-          <p class="tree-node-desc">
-            Differentiates prospective longitudinal cohort incidence from retrospective case-control odds, applying continuity corrections when rare adverse events occur in only one study arm.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF Prospective Cohort / RCT (Expected Cells &ge; 5)</span>
-              <span class="branch-action">Relative Risk (RR) &amp; Pearson &chi;&sup2;</span>
-              <span class="branch-details">Computes cumulative incidence ratio [a/(a+b)] / [c/(c+d)], Risk Difference (RD), Number Needed to Treat (NNT), and Taylor series 95% CIs.</span>
-              <span class="formula-tag">RR = Incidence_exposed / Incidence_unexposed</span>
-            </div>
-            <div class="tree-branch robust">
-              <span class="branch-condition">IF Zero-Cell Event (a, b, c, or d = 0) OR Case-Control Design</span>
-              <span class="branch-action">Haldane-Anscombe (+0.5) Odds Ratio &amp; Fisher's Exact</span>
-              <span class="branch-details">Adds +0.5 to all contingency cells to eliminate singular log-odds. Validates that OR &approx; RR only when disease outcome prevalence &lt; 10%.</span>
-              <span class="formula-tag">OR_ha = [(a+0.5)(d+0.5)] / [(b+0.5)(c+0.5)]</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Node 6 -->
-        <div class="tree-node-card">
-          <div class="tree-node-header">
-            <span class="tree-node-step">DECISION NODE 06 // DIAGNOSTIC SCREENING</span>
-            <span class="badge-tag win">Biomarker Benchmarking</span>
-          </div>
-          <h3 class="tree-node-title">Diagnostic Test Accuracy &amp; Cutoff Optimization</h3>
-          <p class="tree-node-desc">
-            Evaluates clinical screening tools, biomarker cutoffs, and diagnostic assays against definitive clinical ground truth.
-          </p>
-          <div class="tree-branches">
-            <div class="tree-branch parametric">
-              <span class="branch-condition">IF Continuous Biomarker Assay vs Binary Disease Status</span>
-              <span class="branch-action">Empirical ROC AUC Curve &amp; DeLong 95% CIs</span>
-              <span class="branch-details">Computes non-parametric Area Under the ROC Curve with DeLong asymptotic variance estimation. Evaluates discrimination power.</span>
-              <span class="formula-tag">Diagnostic Odds Ratio: DOR = (Sens/(1-Sens)) / ((1-Spec)/Spec)</span>
-            </div>
-            <div class="tree-branch robust">
-              <span class="branch-condition">IF Optimal Clinical Decision Threshold Required</span>
-              <span class="branch-action">Youden's Index J Cutoff Optimization</span>
-              <span class="branch-details">Selects the threshold maximizing J = Sensitivity + Specificity - 1. Reports positive/negative likelihood ratios (LR+, LR-) and predictive values.</span>
-              <span class="formula-tag">J_max = max(Sensitivity_t + Specificity_t - 1)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Comprehensive Epidemiological Inference Matrix -->
-      <div class="decision-table-wrapper">
-        <table class="decision-table">
-          <thead>
-            <tr>
-              <th>Clinical Scenario</th>
-              <th>Prerequisite Diagnostic Assumptions</th>
-              <th>Standard Parametric Test</th>
-              <th>Robust / Non-Parametric Route</th>
-              <th>Effect Size &amp; Mathematical Formulation</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>2 Independent Treatment Arms</strong></td>
-              <td>Normality: Shapiro-Wilk (N&lt;5k) or D'Agostino (N&ge;5k)<br>Homoscedasticity: Levene p &ge; 0.05</td>
-              <td><span class="test-pill">Student's t-test</span></td>
-              <td><span class="test-pill robust">Welch's t-test</span> (unequal variance)<br><span class="test-pill robust">Mann-Whitney U</span> (non-normal)</td>
-              <td>Hedges' <em>g</em> with exact gamma correction factor:<br><code>g = d &times; [1 - 3/(4(n1+n2)-9)]</code></td>
-            </tr>
-            <tr>
-              <td><strong>2 Paired / Longitudinal Visits</strong></td>
-              <td>Normality of within-subject pairwise differences (visit 2 - visit 1)</td>
-              <td><span class="test-pill">Paired t-test</span></td>
-              <td><span class="test-pill robust">Wilcoxon Signed-Rank</span></td>
-              <td>Cohen's <em>d<sub>z</sub></em> (standardized difference) or Rank-Biserial Correlation <em>r</em></td>
-            </tr>
-            <tr>
-              <td><strong>&ge; 3 Stratified Trial Arms</strong></td>
-              <td>Omnibus normality and equal variance across all strata</td>
-              <td><span class="test-pill">One-Way ANOVA</span> + Tukey HSD</td>
-              <td><span class="test-pill robust">Welch's ANOVA</span> + Games-Howell<br><span class="test-pill robust">Kruskal-Wallis</span> + Dunn (Holm)</td>
-              <td>Eta-squared: <code>&eta;&sup2; = SS_between / SS_total</code><br>Omega-squared: <code>&omega;&sup2; = (SS_b - df_b&times;MS_w) / (SS_t + MS_w)</code></td>
-            </tr>
-            <tr>
-              <td><strong>Baseline Confounder Control</strong></td>
-              <td>Linearity &amp; Homogeneity of Regression Slopes (F_interaction p &ge; 0.05)</td>
-              <td><span class="test-pill">Multivariate ANCOVA</span></td>
-              <td>Moderation / Johnson-Neyman region of significance if slopes interact</td>
-              <td>Partial Eta-squared:<br><code>Partial &eta;&sup2; = SS_treatment / (SS_treatment + SS_residual)</code></td>
-            </tr>
-            <tr>
-              <td><strong>2&times;2 Cohort Cumulative Incidence</strong></td>
-              <td>Prospective follow-up; expected cell counts &ge; 5</td>
-              <td><span class="test-pill">Relative Risk (RR)</span><br>Pearson &chi;&sup2; Test</td>
-              <td><span class="test-pill robust">Fisher's Exact Test</span> (if expected count &lt; 5)</td>
-              <td>Relative Risk (RR) with log-scale Taylor CI:<br><code>SE(ln RR) = &radic;(1/a - 1/(a+b) + 1/c - 1/(c+d))</code></td>
-            </tr>
-            <tr>
-              <td><strong>2&times;2 Rare Events &amp; Zero-Cells</strong></td>
-              <td>Zero-cell occurrence (a, b, c, or d = 0) in rare disease outcomes</td>
-              <td>Standard Odds Ratio (fails with division by zero)</td>
-              <td><span class="test-pill robust">Haldane-Anscombe (+0.5) Odds Ratio</span></td>
-              <td>Haldane-Anscombe OR:<br><code>OR = [(a+0.5)(d+0.5)] / [(b+0.5)(c+0.5)]</code></td>
-            </tr>
-            <tr>
-              <td><strong>Missing Data Pattern Diagnosis</strong></td>
-              <td>Chi-square test comparing pattern-wise observed means with EM estimates</td>
-              <td>Complete-case analysis (defensible only without evidence against MCAR)</td>
-              <td><span class="test-pill robust">Little's MCAR (EM)</span> + family-adjusted MAR scan</td>
-              <td>Mahalanobis distance of pattern means:<br><code>d&sup2; = (x̄_obs - x̄_all)' &Sigma;⁻¹ (x̄_obs - x̄_all) ~ &chi;&sup2;</code></td>
-            </tr>
-            <tr>
-              <td><strong>Diagnostic Biomarker Cutoffs</strong></td>
-              <td>Continuous lab index vs binary gold standard clinical outcome</td>
-              <td>Empirical ROC Curve &amp; AUC</td>
-              <td><span class="test-pill robust">Youden's Index J Cutoff</span><br>DeLong 95% Confidence Intervals</td>
-              <td>Youden's J: <code>J = Sensitivity + Specificity - 1</code><br>Likelihood Ratios: <code>LR+ = Sens/(1-Spec)</code>, <code>LR- = (1-Sens)/Spec</code></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- Clinical Visualisation & Fast Figure Export Suite -->
-  <section id="visualization" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Publication-Grade Visual Analytics</span>
-        <h2 class="section-title">Clinical Visualisation &amp; 1-Click Fast Figure Export</h2>
-        <p class="section-desc">
-          Tailored for clinical epidemiology and observational health studies. Combine automated hypothesis significance overlays, exclusive hierarchical clustermaps with minimal conflict diagnostics, and zero-latency multi-format figure exports for peer-reviewed manuscripts.
-        </p>
-      </div>
-
-      <!-- 4 Visualization Pillars Grid -->
-      <div class="vis-pillars-grid">
-        <div class="vis-pillar-card">
-          <span class="card-kicker">01 // DISTRIBUTION &amp; COMPARISON</span>
-          <h3 class="vis-title">Box &amp; Violin Plots with Automated Hypothesis Overlays</h3>
-          <p class="vis-desc">
-            Seamlessly transitions between discrete histograms, frequency polygons, and kernel density estimation (KDE). Automates parametric (Student's t-test / ANOVA) or non-parametric (Mann-Whitney U / Kruskal-Wallis) group comparisons with Bonferroni and Benjamini-Hochberg FDR adjustments, rendered directly with publication significance brackets.
-          </p>
-          <ul class="vis-points">
-            <li><strong>Dynamic Orientation:</strong> Instant vertical or horizontal flipping for presentation flexibility.</li>
-            <li><strong>Significance Brackets:</strong> Direct figure annotations with formatted p-values (***, **, *, ns).</li>
-            <li><strong>Tabulated Summaries:</strong> Cross-tabulated five-number summary statistics with formatted styling.</li>
-          </ul>
-        </div>
-
-        <div class="vis-pillar-card">
-          <span class="card-kicker">02 // HIERARCHICAL CLUSTERING &amp; DIAGNOSTICS</span>
-          <h3 class="vis-title">Interactive Clustermap &amp; Minimal Conflict Search</h3>
-          <p class="vis-desc">
-            Uncover hidden phenotypic co-regulations in complex biomarker panels with dual row and column interactive Plotly dendrograms, sample group coloring tracks, and Z-score transformations. Features an exclusive Minimal Conflict Search diagnostic that identifies the exact minimal subset of variables lacking shared patient observations.
-          </p>
-          <ul class="vis-points">
-            <li><strong>Matrix Standardization:</strong> Automated log and Z-score transformations across continuous assays.</li>
-            <li><strong>Color Track Annotation:</strong> Categorical grouping bars for patient cohorts and clinical phenotypes.</li>
-            <li><strong>Conflict Search Diagnostic:</strong> Automatically detects and flags non-overlapping missing feature pairs.</li>
-          </ul>
-        </div>
-
-        <div class="vis-pillar-card">
-          <span class="card-kicker">03 // CLINICAL ACCURACY &amp; AGREEMENT</span>
-          <h3 class="vis-title">Diagnostic ROC AUC &amp; Bland-Altman Method Comparison</h3>
-          <p class="vis-desc">
-            Rigorous diagnostic biomarker evaluation. Empirical Receiver Operating Characteristic (ROC) curves compute Area Under the Curve (AUC), optimal Youden's J decision threshold, sensitivity, specificity, and likelihood ratios (LR+/LR-). Bland-Altman plots evaluate instrument agreement with mean bias and 95% Limits of Agreement (LoA).
-          </p>
-          <ul class="vis-points">
-            <li><strong>Optimal Cutoff Determination:</strong> Computes Youden's J statistic [J = Sensitivity + Specificity - 1].</li>
-            <li><strong>Diagnostic Accuracy:</strong> Reports sensitivity, specificity, and positive/negative likelihood ratios.</li>
-            <li><strong>Limits of Agreement:</strong> Bland-Altman mean bias with 95% LoA [&plusmn; 1.96 SD] confidence intervals.</li>
-          </ul>
-        </div>
-
-        <div class="vis-pillar-card">
-          <span class="card-kicker">04 // RELATIONAL FLOWS &amp; TAXONOMIES</span>
-          <h3 class="vis-title">Correlation Heatmaps, Sankey Flows &amp; Hierarchies</h3>
-          <p class="vis-desc">
-            Pairwise Pearson, Spearman rank, and Kendall correlation matrices with hierarchical clustering reordering and automatic p-value significance masking. Multi-stage Sankey flow diagrams chart longitudinal patient treatment transitions and adverse event pathways, while Sunburst, Icicle, and Treemap charts visualize nested ICD-10 hierarchies.
-          </p>
-          <ul class="vis-points">
-            <li><strong>Significance Masking:</strong> Automatically suppresses non-significant correlation pairs (p &ge; 0.05).</li>
-            <li><strong>Longitudinal Sankey:</strong> Maps patient transitions across sequential trial visit milestones.</li>
-            <li><strong>Hierarchical Breakdowns:</strong> Deep multi-level Sunburst and Icicle charts for disease taxonomies.</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- Interactive Visual Showcase -->
-      <div class="vis-showcase-box">
-        <div class="vis-tabs">
-          <button class="vis-tab-btn active" data-vis-tab="vtab-box">Box Plot &amp; Significance Brackets</button>
-          <button class="vis-tab-btn" data-vis-tab="vtab-clustermap">Clustermap &amp; Conflict Finder</button>
-          <button class="vis-tab-btn" data-vis-tab="vtab-roc">Diagnostic ROC Curve &amp; Youden's J</button>
-          <button class="vis-tab-btn" data-vis-tab="vtab-bland">Bland-Altman Agreement Plot</button>
-          <button class="vis-tab-btn" data-vis-tab="vtab-code">Python Automation API</button>
-        </div>
-
-        <!-- Tab 1: Box Plot & Significance -->
-        <div id="vtab-box" class="vis-tab-panel active">
-          <div class="chart-mockup">
-            <div class="chart-mockup-header">
-              <div class="chart-mockup-title">Biomarker Distribution by Treatment Arm // Systolic Blood Pressure (mmHg)</div>
-              <div class="chart-mockup-meta">
-                <span class="mockup-pill">Test: Mann-Whitney U</span>
-                <span class="mockup-pill emerald">Correction: Benjamini-Hochberg (FDR)</span>
-                <span class="mockup-pill">&alpha; = 0.05</span>
-              </div>
-            </div>
-
-            <!-- Visual SVG Mockup of Box Plot with Significance Brackets -->
-            <div style="background: rgba(3, 7, 18, 0.7); border-radius: var(--radius-sm); padding: 20px; margin-bottom: 20px; overflow-x: auto;">
-              <svg width="100%" height="260" viewBox="0 0 760 260" style="display: block; min-width: 650px;">
-                <!-- Gridlines -->
-                <line x1="80" y1="40" x2="720" y2="40" stroke="#1e293b" stroke-dasharray="4,4"/>
-                <line x1="80" y1="90" x2="720" y2="90" stroke="#1e293b" stroke-dasharray="4,4"/>
-                <line x1="80" y1="140" x2="720" y2="140" stroke="#1e293b" stroke-dasharray="4,4"/>
-                <line x1="80" y1="190" x2="720" y2="190" stroke="#1e293b" stroke-dasharray="4,4"/>
-                <!-- Y-axis labels -->
-                <text x="65" y="45" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">180</text>
-                <text x="65" y="95" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">160</text>
-                <text x="65" y="145" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">140</text>
-                <text x="65" y="195" fill="#64748b" font-family="JetBrains Mono" font-size="11" text-anchor="end">120</text>
-                <!-- Axis lines -->
-                <line x1="80" y1="20" x2="80" y2="210" stroke="#334155" stroke-width="1.5"/>
-                <line x1="80" y1="210" x2="720" y2="210" stroke="#334155" stroke-width="1.5"/>
-
-                <!-- Significance Bracket: Control vs Arm B (p < 0.001 ***) -->
-                <path d="M 200 48 L 200 32 L 600 32 L 600 48" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
-                <rect x="340" y="22" width="120" height="20" rx="4" fill="#070b14" stroke="#38bdf8" stroke-width="1"/>
-                <text x="400" y="36" fill="#38bdf8" font-family="JetBrains Mono" font-size="11" font-weight="600" text-anchor="middle">p &lt; 0.001 ***</text>
-
-                <!-- Significance Bracket: Control vs Arm A (p = 0.032 *) -->
-                <path d="M 200 82 L 200 68 L 400 68 L 400 82" fill="none" stroke="#10b981" stroke-width="1.5"/>
-                <rect x="255" y="58" width="90" height="18" rx="4" fill="#070b14" stroke="#10b981" stroke-width="1"/>
-                <text x="300" y="71" fill="#10b981" font-family="JetBrains Mono" font-size="10.5" font-weight="600" text-anchor="middle">p = 0.032 *</text>
-
-                <!-- Group 1: Control (Center: x=200) -->
-                <!-- Whiskers -->
-                <line x1="200" y1="92" x2="200" y2="198" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="180" y1="92" x2="220" y2="92" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="180" y1="198" x2="220" y2="198" stroke="#94a3b8" stroke-width="1.5"/>
-                <!-- Box -->
-                <rect x="165" y="112" width="70" height="66" rx="4" fill="rgba(56, 189, 248, 0.25)" stroke="#38bdf8" stroke-width="2"/>
-                <!-- Median line -->
-                <line x1="165" y1="144" x2="235" y2="144" stroke="#f8fafc" stroke-width="2.5"/>
-                <!-- X-label -->
-                <text x="200" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Control Arm (N=420)</text>
-
-                <!-- Group 2: Treatment Arm A (Center: x=400) -->
-                <!-- Whiskers -->
-                <line x1="400" y1="110" x2="400" y2="204" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="380" y1="110" x2="420" y2="110" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="380" y1="204" x2="420" y2="204" stroke="#94a3b8" stroke-width="1.5"/>
-                <!-- Box -->
-                <rect x="365" y="130" width="70" height="58" rx="4" fill="rgba(16, 185, 129, 0.25)" stroke="#10b981" stroke-width="2"/>
-                <!-- Median line -->
-                <line x1="365" y1="158" x2="435" y2="158" stroke="#f8fafc" stroke-width="2.5"/>
-                <!-- X-label -->
-                <text x="400" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Treatment Arm A (N=415)</text>
-
-                <!-- Group 3: Treatment Arm B (Center: x=600) -->
-                <!-- Whiskers -->
-                <line x1="600" y1="130" x2="600" y2="208" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="580" y1="130" x2="620" y2="130" stroke="#94a3b8" stroke-width="1.5"/>
-                <line x1="580" y1="208" x2="620" y2="208" stroke="#94a3b8" stroke-width="1.5"/>
-                <!-- Box -->
-                <rect x="565" y="152" width="70" height="46" rx="4" fill="rgba(168, 85, 247, 0.25)" stroke="#a855f7" stroke-width="2"/>
-                <!-- Median line -->
-                <line x1="565" y1="176" x2="635" y2="176" stroke="#f8fafc" stroke-width="2.5"/>
-                <!-- X-label -->
-                <text x="600" y="232" fill="#f8fafc" font-family="Plus Jakarta Sans" font-size="13" font-weight="600" text-anchor="middle">Treatment Arm B (N=412)</text>
-              </svg>
-            </div>
-
-            <!-- Tabulated Summary Statistics -->
-            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: #94a3b8; overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                <thead>
-                  <tr style="border-bottom: 1px solid var(--border-subtle); color: #cbd5e1;">
-                    <th style="padding: 8px 12px;">Cohort Arm</th>
-                    <th style="padding: 8px 12px;">Count</th>
-                    <th style="padding: 8px 12px;">Mean &plusmn; SD</th>
-                    <th style="padding: 8px 12px;">Median (IQR)</th>
-                    <th style="padding: 8px 12px;">Min – Max</th>
-                    <th style="padding: 8px 12px;">Pairwise vs Control</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.08);">
-                    <td style="padding: 8px 12px; color: #38bdf8; font-weight: 600;">Control</td>
-                    <td style="padding: 8px 12px;">420</td>
-                    <td style="padding: 8px 12px;">146.2 &plusmn; 16.4</td>
-                    <td style="padding: 8px 12px;">144.0 (132.0 – 158.0)</td>
-                    <td style="padding: 8px 12px;">108 – 192</td>
-                    <td style="padding: 8px 12px; color: var(--text-muted);">Reference</td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.08);">
-                    <td style="padding: 8px 12px; color: #10b981; font-weight: 600;">Treatment Arm A</td>
-                    <td style="padding: 8px 12px;">415</td>
-                    <td style="padding: 8px 12px;">139.8 &plusmn; 14.8</td>
-                    <td style="padding: 8px 12px;">138.0 (128.0 – 150.0)</td>
-                    <td style="padding: 8px 12px;">102 – 184</td>
-                    <td style="padding: 8px 12px; color: #10b981;">p = 0.032 * (FDR)</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px 12px; color: #c084fc; font-weight: 600;">Treatment Arm B</td>
-                    <td style="padding: 8px 12px;">412</td>
-                    <td style="padding: 8px 12px;">131.4 &plusmn; 12.6</td>
-                    <td style="padding: 8px 12px;">130.0 (122.0 – 140.0)</td>
-                    <td style="padding: 8px 12px;">98 – 174</td>
-                    <td style="padding: 8px 12px; color: #c084fc;">p &lt; 0.001 *** (FDR)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 2: Clustermap & Conflict Finder -->
-        <div id="vtab-clustermap" class="vis-tab-panel">
-          <div class="chart-mockup">
-            <div class="chart-mockup-header">
-              <div class="chart-mockup-title">Hierarchical Clustermap &amp; Conflict Finder // 24-Biomarker Inflammatory Panel</div>
-              <div class="chart-mockup-meta">
-                <span class="mockup-pill">Distance: Correlation</span>
-                <span class="mockup-pill">Linkage: Average</span>
-                <span class="mockup-pill emerald">Scaling: Column Z-Score</span>
-              </div>
-            </div>
-
-            <!-- Diagnostics Alert -->
-            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 18px; font-family: var(--font-mono); font-size: 0.825rem; color: #10b981;">
-              <strong>[PASS] Minimal Conflict Search:</strong> Validated 24/24 continuous features across 1,248 complete patient records. Zero non-overlapping feature pairs detected.
-            </div>
-
-            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px;">
-              Interactive dual-dendrogram clustermap automatically reorders features and patients into co-regulated phenotypic clusters. If missing values create disjoint observation sets, the <strong>Minimal Conflict Search</strong> identifies the minimal conflict tuple (e.g. <code>['Troponin_T', 'NT_proBNP']</code>) to avoid clustering errors.
-            </p>
-
-            <div style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono); font-size: 0.825rem; color: #cbd5e1;">
-              <span style="color:#64748b;">// Clustermap Phenotype Cluster Identifiers:</span><br>
-              <span style="color:#38bdf8;">Cluster 1:</span> High IL-6, hs-CRP, TNF-&alpha; &rarr; Resistant Hypertension / Systemic Inflammation Phenotype (N=312)<br>
-              <span style="color:#10b981;">Cluster 2:</span> Normal Cytokines, Elevated LDL-C, ApoB &rarr; Atherogenic Dyslipidemia Phenotype (N=488)<br>
-              <span style="color:#c084fc;">Cluster 3:</span> Baseline Homogeneous Biomarker Profile &rarr; Normotensive Controls (N=448)
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 3: Diagnostic ROC & Youden's J -->
-        <div id="vtab-roc" class="vis-tab-panel">
-          <div class="chart-mockup">
-            <div class="chart-mockup-header">
-              <div class="chart-mockup-title">Diagnostic Accuracy Evaluation // Novel Inflammatory Index vs 30-Day MACE</div>
-              <div class="chart-mockup-meta">
-                <span class="mockup-pill emerald">AUC = 0.914</span>
-                <span class="mockup-pill purple">Youden's J = 0.746</span>
-                <span class="mockup-pill">DeLong 95% CI: [0.887, 0.941]</span>
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px;">
-              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Area Under Curve</div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #10b981;">0.914</div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">High Diagnostic Power</div>
-              </div>
-              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Optimal Cutoff</div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">14.20 mg/L</div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">Youden's J Threshold</div>
-              </div>
-              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Sensitivity at Cutoff</div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #c084fc;">89.1%</div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">True Positive Rate</div>
-              </div>
-              <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                <div style="font-family: var(--font-mono); font-size: 0.725rem; color: var(--text-muted); text-transform: uppercase;">Specificity at Cutoff</div>
-                <div style="font-size: 1.4rem; font-weight: 800; color: #38bdf8;">85.5%</div>
-                <div style="font-size: 0.75rem; color: #94a3b8;">True Negative Rate</div>
-              </div>
-            </div>
-
-            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6;">
-              Calculates likelihood ratios at the optimal Youden's J discrimination boundary: 
-              <strong>Positive Likelihood Ratio (LR+) = 6.14</strong> (confers substantial increase in post-test disease probability); 
-              <strong>Negative Likelihood Ratio (LR-) = 0.13</strong> (confers decisive rule-out value).
-            </p>
-          </div>
-        </div>
-
-        <!-- Tab 4: Bland-Altman Agreement -->
-        <div id="vtab-bland" class="vis-tab-panel">
-          <div class="chart-mockup">
-            <div class="chart-mockup-header">
-              <div class="chart-mockup-title">Bland-Altman Agreement Analysis // Digital Cuff vs Invasive Arterial Line</div>
-              <div class="chart-mockup-meta">
-                <span class="mockup-pill">N = 650 Comparisons</span>
-                <span class="mockup-pill emerald">Mean Bias: +1.40 mmHg</span>
-                <span class="mockup-pill purple">Limits of Agreement: [-5.40, +8.20]</span>
-              </div>
-            </div>
-
-            <p style="font-size: 0.875rem; color: #94a3b8; line-height: 1.6; margin-bottom: 16px;">
-              Evaluates method agreement across the full physiological dynamic range (90 – 210 mmHg). Verifies absence of proportional bias via linear regression of differences on means (r = 0.041, p = 0.298), confirming clinical interchangeability under AAMI/ESH/ISO standards.
-            </p>
-
-            <div style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px; font-family: var(--font-mono); font-size: 0.825rem; color: #cbd5e1;">
-              <span style="color:#38bdf8;">Mean Bias (&Delta;):</span> +1.40 mmHg (95% CI: [+1.14, +1.66])<br>
-              <span style="color:#10b981;">Upper Limit of Agreement (+1.96 SD):</span> +8.20 mmHg (95% CI: [+7.75, +8.65])<br>
-              <span style="color:#10b981;">Lower Limit of Agreement (-1.96 SD):</span> -5.40 mmHg (95% CI: [-5.85, -4.95])<br>
-              <span style="color:#c084fc;">Outlier Observations outside &plusmn;1.96 SD:</span> 31 / 650 (4.77%, within theoretical 5% expectation)
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 5: Python Automation API -->
-        <div id="vtab-code" class="vis-tab-panel">
-          <div class="code-snippet-box">
-            <pre><code class="language-python"><span class="token-kw">import</span> pandas <span class="token-kw">as</span> pd
-<span class="token-kw">import</span> utils.visualization_utils <span class="token-kw">as</span> vu
-<span class="token-kw">import</span> utils.export_utils <span class="token-kw">as</span> eu
-
-<span class="token-cm"># 1. Load active cohort dataset</span>
-df = pd.read_parquet(<span class="token-str">"datasets/cardio_registry_v3.parquet"</span>)
-
-<span class="token-cm"># 2. Generate publication-ready box plot with hypothesis test overlay</span>
-fig = vu.create_boxplot_with_significance_streamlit(
-    df=df,
-    x_col=<span class="token-str">"treatment_group"</span>,
-    y_cols=[<span class="token-str">"systolic_bp"</span>, <span class="token-str">"ldl_cholesterol"</span>],
-    test_type=<span class="token-str">"Auto-Detect"</span>,  <span class="token-cm"># Auto-routes to Mann-Whitney or ANOVA</span>
-    correction_method=<span class="token-str">"Benjamini-Hochberg (FDR)"</span>,
-    alpha=0.05,
-)
-
-<span class="token-cm"># 3. 1-Click fast export: standalone interactive HTML for clinical trial monitors</span>
-html_markup = eu.fig_to_html_str(fig)
-<span class="token-kw">with</span> <span class="token-fn">open</span>(<span class="token-str">"figure_1_blood_pressure.html"</span>, <span class="token-str">"w"</span>, encoding=<span class="token-str">"utf-8"</span>) <span class="token-kw">as</span> f:
-    f.write(html_markup)
-
-<span class="token-cm"># 4. Generate 300+ DPI publication vector config for modebar download</span>
-modebar_config = eu.get_publication_plot_config(
-    filename=<span class="token-str">"figure_1_blood_pressure"</span>,
-    format_type=<span class="token-str">"svg"</span>,  <span class="token-cm"># Vector SVG format</span>
-    scale=3,  <span class="token-cm"># 300+ DPI raster equivalent</span>
-)</code></pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Fast 1-Click Multi-Format Export Suite -->
-      <div class="export-suite-card">
-        <div class="export-header">
-          <span class="export-tag">Zero-Friction Distribution</span>
-          <h3 class="export-title">1-Click Fast Multi-Format Export Suite</h3>
-          <p class="export-subtitle">
-            No external CLI utilities or server roundtrips required. Download publication-ready graphics, interactive web bundles, and slice data directly in 1 click.
-          </p>
-        </div>
-
-        <div class="export-grid">
-          <div class="export-card">
-            <span class="export-card-badge">VECTOR // 300+ DPI</span>
-            <h4 class="export-card-name">Scalable Vector (SVG)</h4>
-            <p class="export-card-desc">
-              Infinite-resolution vector graphics with selectable text and clean lines. Meets strict author guidelines for Nature, NEJM, Lancet, and JAMA.
-            </p>
-            <div class="export-specs">
-              <div>Engine: <span>Client Canvas SVG</span></div>
-              <div>Resolution: <span>Lossless Vector</span></div>
-            </div>
-          </div>
-
-          <div class="export-card">
-            <span class="export-card-badge">RASTER // HIGH-RES</span>
-            <h4 class="export-card-name">High-DPI Raster (PNG)</h4>
-            <p class="export-card-desc">
-              Pre-configured at 3x scaling (3600 x 2400 px) for razor-sharp presentation slides, conference posters, and institutional monographs.
-            </p>
-            <div class="export-specs">
-              <div>Scale: <span>3x Native Canvas</span></div>
-              <div>Output: <span>300+ DPI Equivalent</span></div>
-            </div>
-          </div>
-
-          <div class="export-card">
-            <span class="export-card-badge">STANDALONE WEB</span>
-            <h4 class="export-card-name">Interactive HTML (.html)</h4>
-            <p class="export-card-desc">
-              Self-contained HTML package preserving full zoom, pan, tooltip inspection, and trace isolation to share with medical monitors without Python.
-            </p>
-            <div class="export-specs">
-              <div>Dependencies: <span>0 (Self-Contained)</span></div>
-              <div>Interactivity: <span>100% Preserved</span></div>
-            </div>
-          </div>
-
-          <div class="export-card">
-            <span class="export-card-badge">DATA &amp; SPECIFICATION</span>
-            <h4 class="export-card-name">JSON &amp; Excel/CSV Slices</h4>
-            <p class="export-card-desc">
-              Exports full Plotly JSON trace schemas for programmatic dashboards, plus active cohort subsets and cross-tabulated statistics in Excel (.xlsx) or CSV.
-            </p>
-            <div class="export-specs">
-              <div>Format: <span>Plotly JSON / Excel</span></div>
-              <div>Auditability: <span>Exact Cohort Slice</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Scientific RAG & RAGAS Triad Evaluation -->
-  <section id="rag-evaluation" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Quantitative LLM Validation</span>
-        <h2 class="section-title">Scientific RAGAS Framework &amp; Source Provenance</h2>
-        <p class="section-desc">
-          Clinical decision support demands verifiable, evidence-based truth—not plausible hallucination. CohortStudio integrates the scientific RAGAS framework alongside a three-tier attribution mechanism to audit every generated answer against verbatim peer-reviewed text.
-        </p>
-      </div>
-
-      <!-- RAGAS Triad Metrics Grid -->
-      <div class="ragas-grid">
-        <div class="ragas-card">
-          <span class="ragas-metric-badge">RAGAS METRIC 01</span>
-          <h3 class="ragas-title">Faithfulness (Factual Groundedness)</h3>
-          <div class="ragas-formula">Faithfulness = |Claims Supported by Context| / |Total Claims in Answer| &isin; [0, 10]</div>
-          <p class="ragas-desc">
-            An LLM-as-judge parser extracts every atomic factual statement from the generated clinical response and verifies each against the retrieved document chunks. Any assertion lacking direct textual evidence is flagged as an unsupported hallucination.
-          </p>
-        </div>
-
-        <div class="ragas-card">
-          <span class="ragas-metric-badge">RAGAS METRIC 02</span>
-          <h3 class="ragas-title">Context Relevance (Signal-to-Noise)</h3>
-          <div class="ragas-formula">Context Relevance = |Relevant Sentences in Context| / |Total Sentences in Chunks| &isin; [0, 10]</div>
-          <p class="ragas-desc">
-            Evaluates ChromaDB vector retrieval efficiency. Quantifies whether retrieved document passages contain actionable clinical evidence or extraneous background noise, preventing prompt context bloat and distraction.
-          </p>
-        </div>
-
-        <div class="ragas-card">
-          <span class="ragas-metric-badge">RAGAS METRIC 03</span>
-          <h3 class="ragas-title">Answer Relevance (Semantic Fidelity)</h3>
-          <div class="ragas-formula">Answer Relevance = Cosine_Sim(Embedding(q), Embedding(q_gen)) &isin; [0, 10]</div>
-          <p class="ragas-desc">
-            Reversely generates synthetic clinical questions from the generated response and computes cosine embedding similarity against the original investigator query. Penalizes evasive, redundant, or non-pertinent replies.
-          </p>
-        </div>
-      </div>
-
-      <!-- Three-Tier Source Attribution & Provenance -->
-      <div class="provenance-wrapper">
-        <h3 class="provenance-title">Three-Tier Provenance &amp; Evidence Attribution</h3>
-        <p class="provenance-desc">
-          Every statement generated by the CohortStudio Document Insight engine is classified into an auditable evidence tier with complete document coordinates (Document Name, Page Number, Chunk ID, and Cosine Similarity).
-        </p>
-
-        <div class="provenance-grid">
-          <div class="provenance-card">
-            <span class="provenance-tag verbatim">TIER 1 // VERBATIM EXTRACTION</span>
-            <h4 class="provenance-name">Direct Document Citation</h4>
-            <p class="provenance-detail">
-              Cosine similarity &ge; 0.85. The claim is a direct quote or near-verbatim extract from the indexed protocol, clinical guideline, or paper. Displays exact document name, page number, and highlighted source paragraph.
-            </p>
-          </div>
-
-          <div class="provenance-card">
-            <span class="provenance-tag hybrid">TIER 2 // MULTI-CHUNK SYNTHESIS</span>
-            <h4 class="provenance-name">Cross-Document Evidence Synthesis</h4>
-            <p class="provenance-detail">
-              Cosine similarity between 0.70 and 0.85. The claim synthesizes clinical evidence spanning multiple sections or trials. Displays weighted ranking across all contributing source chunks.
-            </p>
-          </div>
-
-          <div class="provenance-card">
-            <span class="provenance-tag model">TIER 3 // PARAMETRIC MODEL PRIOR</span>
-            <h4 class="provenance-name">Pretrained Foundation Prior</h4>
-            <p class="provenance-detail">
-              Cosine similarity &lt; 0.70. Explicitly flags when an LLM utilizes general background medical knowledge not directly verified in local indexed files, alerting researchers to check external literature.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Real-World Evaluation Audit Dossier Card -->
-      <div class="eval-audit-card">
-        <div class="eval-audit-header">
-          <div class="eval-audit-title">RAGAS CLINICAL AUDIT DOSSIER // TRIAL SAFETY &amp; DOSING QUERY</div>
-          <div class="eval-audit-scores">
-            <div class="eval-score-pill">Faithfulness: <span class="score-num">9.6 / 10.0</span></div>
-            <div class="eval-score-pill">Context Relevance: <span class="score-num">9.2 / 10.0</span></div>
-            <div class="eval-score-pill">Answer Relevance: <span class="score-num">9.8 / 10.0</span></div>
-            <div class="eval-score-pill" style="border-color: rgba(16, 185, 129, 0.4);">Hallucination Risk: <span class="score-num" style="color:#10b981;">0 Unsupported Claims</span></div>
-          </div>
-        </div>
-
-        <div class="eval-audit-body">
-          <div class="eval-audit-item">
-            <div class="eval-item-label">Investigator Clinical Query</div>
-            <div class="eval-item-content">
-              <strong>"What is the recommended dosing adjustment and bleeding monitoring protocol for dual antiplatelet therapy in patients with moderate renal impairment (eGFR 30–59 mL/min/1.73m²) according to the trial protocol?"</strong>
-            </div>
-          </div>
-
-          <div class="eval-audit-item">
-            <div class="eval-item-label">Retrieved Source Context // Document: cardio_trial_protocol_v4.pdf &middot; Page 42 &middot; Chunk #18 &middot; Sim: 0.912</div>
-            <div class="eval-context-quote">
-              "Section 7.4.2 Renal Impairment: For participants presenting with baseline eGFR between 30 and 59 mL/min/1.73m², ticagrelor dose remains 90 mg BID with mandatory baseline platelet function assay. In the event of bleeding events (BARC Type 2 or higher), study drug shall be temporarily withheld and renal clearance re-assessed within 48 hours."
-            </div>
-          </div>
-
-          <div class="eval-audit-item">
-            <div class="eval-item-label">Synthesized Clinical Response (RAGAS Verified)</div>
-            <div class="eval-item-content">
-              Dual antiplatelet therapy maintains standard ticagrelor dosing (90 mg twice daily) for moderate renal impairment (eGFR 30–59 mL/min/1.73m²), but requires baseline platelet function testing. For BARC Type &ge;2 bleeding events, dosing must be temporarily withheld with renal clearance re-evaluated within 48 hours.
-            </div>
-          </div>
-
-          <div class="eval-audit-item">
-            <div class="eval-item-label">Atomic Claim Verification Log (LLM-as-Judge Breakdown)</div>
-            <div class="eval-item-content" style="font-family: var(--font-mono); font-size: 0.825rem; color: #94a3b8;">
-              <span style="color:#10b981;">[PASS] Claim 1:</span> Ticagrelor dose remains 90 mg BID for eGFR 30-59 mL/min &rarr; <span style="color:#38bdf8;">Verified p.42</span><br>
-              <span style="color:#10b981;">[PASS] Claim 2:</span> Mandatory baseline platelet function assay required &rarr; <span style="color:#38bdf8;">Verified p.42</span><br>
-              <span style="color:#10b981;">[PASS] Claim 3:</span> Withhold drug on BARC Type 2 or higher bleeding &rarr; <span style="color:#38bdf8;">Verified p.42</span><br>
-              <span style="color:#10b981;">[PASS] Claim 4:</span> Re-assess renal clearance within 48 hours &rarr; <span style="color:#38bdf8;">Verified p.42</span><br>
-              <span style="color:#a855f7;">Result:</span> 4 / 4 claims grounded in context. 0 hallucinations detected.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Reproducibility & Pipeline Trace Replay -->
-  <section id="reproducibility" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Recorded Provenance</span>
-        <h2 class="section-title">End-to-End Pipeline Reproduction &amp; Word Trace Reports</h2>
-        <p class="section-desc">
-          Scientific conclusions must be reproducible. Rather than relying on ephemeral notebook state, CohortStudio records each transformation step in a hash-chained JSON trace (tamper-evident) with what it did to the table, replays it while checking every step against its recorded fingerprint, and documents it in a Word (.docx) report. A multiple imputation is re-run and its imputed cells are checked; the few steps that cannot be recomputed (the single imputation adopted from the former multiple-imputation panel) are reported by the replay rather than silently skipped.
-        </p>
-      </div>
-
-      <!-- Detailed Benchmark Matrix (Solon Style) -->
-      <div class="comparison-wrapper" style="margin-bottom: 40px;">
-        <table class="comparison-table">
-          <thead>
-            <tr>
-              <th>Evaluation Dimension</th>
-              <th>Ad-Hoc Scripts / Notebooks</th>
-              <th>Commercial EDC (REDCap / Medidata)</th>
-              <th class="highlight-col">CohortStudio</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Storage &amp; Persistence</strong></td>
-              <td>In-memory Pandas / CSVs <span class="badge-tag loss">Slow on scale</span></td>
-              <td>Row-based SQL / Cloud RDBMS <span class="badge-tag neutral">Proprietary</span></td>
-              <td class="highlight-col">Embedded DuckDB Columnar Parquet <span class="badge-tag win">Zero-Lock-in</span></td>
-            </tr>
-            <tr>
-              <td><strong>Dataset Versioning</strong></td>
-              <td>Manual files or Git LFS <span class="badge-tag loss">Fragile</span></td>
-              <td>Audit log only (no snapshot storage) <span class="badge-tag neutral">Limited</span></td>
-              <td class="highlight-col">Automated Zero-Copy Versioning (_v1, _v2) <span class="badge-tag win">Native</span></td>
-            </tr>
-            <tr>
-              <td><strong>Biostatistical Test Guidance</strong></td>
-              <td>Manual script assembly <span class="badge-tag loss">Manual</span></td>
-              <td>Add-on export required <span class="badge-tag loss">External</span></td>
-              <td class="highlight-col">Automated Normality &amp; Variance Decision Tree <span class="badge-tag win">Built-in</span></td>
-            </tr>
-            <tr>
-              <td><strong>Missingness Diagnostics</strong></td>
-              <td>Custom R or Python code <span class="badge-tag neutral">Ad-hoc</span></td>
-              <td>None <span class="badge-tag loss">Unavailable</span></td>
-              <td class="highlight-col">Automated Little's MCAR &amp; Pairwise MAR <span class="badge-tag win">Automated</span></td>
-            </tr>
-            <tr>
-              <td><strong>Clinical Anomaly Rules</strong></td>
-              <td>Hardcoded if-else statements <span class="badge-tag loss">Fragile</span></td>
-              <td>Form field validation rules <span class="badge-tag neutral">Basic</span></td>
-              <td class="highlight-col">Declarative Expression Masks &amp; Highlight Grid <span class="badge-tag win">Configurable</span></td>
-            </tr>
-            <tr>
-              <td><strong>Scientific Medical RAG</strong></td>
-              <td>Disconnected LLM chats <span class="badge-tag loss">None</span></td>
-              <td>None <span class="badge-tag loss">None</span></td>
-              <td class="highlight-col">RAGAS-Audited Local Ollama / Gemini / Mistral <span class="badge-tag win">Air-Gapped Capable</span></td>
-            </tr>
-            <tr>
-              <td><strong>Pipeline Audit &amp; Replay</strong></td>
-              <td>Jupyter cells (non-linear, fragile) <span class="badge-tag loss">High Risk</span></td>
-              <td>Static PDF log (no execution replay) <span class="badge-tag neutral">Static</span></td>
-              <td class="highlight-col">Full Pipeline Re-Execution (Headless &amp; UI) + Word Dossiers <span class="badge-tag win">Full Replay</span></td>
-            </tr>
-            <tr>
-              <td><strong>Interactive Visualisation &amp; Export</strong></td>
-              <td>Static PNGs (pixelated, manual saving) <span class="badge-tag loss">Manual</span></td>
-              <td>Basic charts / add-on BI license <span class="badge-tag neutral">Limited</span></td>
-              <td class="highlight-col">Automated Significance Overlays + 1-Click Vector SVG &amp; Standalone HTML <span class="badge-tag win">Publication-Ready</span></td>
-            </tr>
-            <tr>
-              <td><strong>Access Control &amp; Modular IAM</strong></td>
-              <td>None (unprotected local files) <span class="badge-tag loss">No Security</span></td>
-              <td>Proprietary vendor user management <span class="badge-tag neutral">Locked-in</span></td>
-              <td class="highlight-col">Pluggable Modular IAM: Local DuckDB, Better Auth REST Sidecar, or Bypass <span class="badge-tag win">Framework-Agnostic</span></td>
-            </tr>
-            <tr>
-              <td><strong>Test Suite &amp; Reliability</strong></td>
-              <td>Typically unverified <span class="badge-tag loss">Untested</span></td>
-              <td>Vendor validation package <span class="badge-tag neutral">Vendor SLA</span></td>
-              <td class="highlight-col">Automated pytest suite in CI with reference-value tests for the statistics engine <span class="badge-tag win">CI-Enforced</span></td>
-            </tr>
-            <tr>
-              <td><strong>Cost &amp; License</strong></td>
-              <td>Open, but high maintenance <span class="badge-tag neutral">High Effort</span></td>
-              <td>Expensive annual SaaS seat pricing <span class="badge-tag loss">Commercial</span></td>
-              <td class="highlight-col">Free &amp; Open Source (Apache 2.0) <span class="badge-tag win">Free</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Reproduction Engine Code Snippet -->
-      <div class="terminal-box" style="max-width: 100%;">
-        <div class="terminal-header">
-          <div class="terminal-dots">
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-          </div>
-          <span class="terminal-title">python &middot; headless pipeline replay</span>
-          <button class="copy-btn" data-clipboard-text="from manage.reproduction_manager import run_trace
-from manage.trace_documenter import TraceDocumenter
-
-# 1. Replay the recorded steps of the trace
-result = run_trace(trace_data)
-assert result.error is None, result.error
-print(result.warnings)  # steps that could not be replayed are listed here
-
-# 2. Word report of the recorded trace (not an electronically signed record)
-report = TraceDocumenter(trace_data).generate_report()  # BytesIO
-open('trace_report.docx', 'wb').write(report.getvalue())">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            Copy
-          </button>
-        </div>
-        <div class="terminal-content">
-          <pre><code><span class="token-cm"># Headless Pipeline Replay</span>
-<span class="token-kw">from</span> manage.reproduction_manager <span class="token-kw">import</span> run_trace
-<span class="token-kw">from</span> manage.trace_documenter <span class="token-kw">import</span> TraceDocumenter
-
-<span class="token-cm"># 1. Replay the recorded steps (enrichment joins, single imputation, transformations)</span>
-result = run_trace(trace_data)
-<span class="token-kw">assert</span> result.error <span class="token-kw">is None</span>, result.error
-<span class="token-fn">print</span>(f<span class="token-str">"Replayed {result.steps_applied} steps: {result.df.shape}; warnings: {result.warnings}"</span>)
-
-<span class="token-cm"># 2. Word report of the recorded trace (not an electronically signed record)</span>
-report = TraceDocumenter(trace_data).generate_report()  <span class="token-cm"># BytesIO</span>
-<span class="token-fn">open</span>(<span class="token-str">"trace_report.docx"</span>, <span class="token-str">"wb"</span>).write(report.getvalue())</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Clinical Research Archetypes & Use Cases -->
-  <section id="use-cases" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Clinical Scenarios</span>
-        <h2 class="section-title">Engineered for Real-World Clinical Research</h2>
-        <p class="section-desc">
-          From multi-center prospective registries to rare disease observational studies, CohortStudio delivers end-to-end auditability and mathematical rigor.
-        </p>
-      </div>
-
-      <div class="use-cases-grid">
-        <!-- Card 1 -->
-        <div class="use-case-card">
-          <div class="use-case-header">
-            <span class="use-case-tag cardio">Cardiovascular Cohort</span>
-            <h3 class="use-case-title">Prospective Longitudinal Registry</h3>
-            <div class="use-case-subtitle">12,500 Patients &middot; Multi-Year Follow-Up</div>
-          </div>
-          <div class="use-case-body">
-            <p class="use-case-desc">
-              Analyzes primary cardiovascular endpoints adjusting for baseline hypertension, statin therapy, and age. Diagnoses missing longitudinal lipid panels using Little's MCAR before applying multivariate imputation.
-            </p>
-            <div class="use-case-specs">
-              <div class="spec-item">
-                <span class="spec-label">Primary Method:</span>
-                <span class="spec-value">ANCOVA with slope validation</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Missingness:</span>
-                <span class="spec-value">Little's MCAR Permutation</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Lineage:</span>
-                <span class="spec-value">JSON Trace Replay Engine</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 2 -->
-        <div class="use-case-card">
-          <div class="use-case-header">
-            <span class="use-case-tag onco">Oncology Multi-Center</span>
-            <h3 class="use-case-title">Biomarker Screening &amp; Phenotyping</h3>
-            <div class="use-case-subtitle">3,420 Patients &middot; High-Dimensional Assays</div>
-          </div>
-          <div class="use-case-body">
-            <p class="use-case-desc">
-              Harmonizes heterogeneous EHR lab exports with UMLS semantic mappings. Resolves missing proteomic values via MissForest, stratifies molecular subgroups with PCA/FAMD clustering, and optimizes diagnostic ROC thresholds.
-            </p>
-            <div class="use-case-specs">
-              <div class="spec-item">
-                <span class="spec-label">Imputation:</span>
-                <span class="spec-value">Chained equations or MissForest-style (single); MI diagnostic</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Phenotyping:</span>
-                <span class="spec-value">FAMD + GMM / DBSCAN</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Accuracy:</span>
-                <span class="spec-value">ROC AUC, Youden's J, LR+/LR-</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3 -->
-        <div class="use-case-card">
-          <div class="use-case-header">
-            <span class="use-case-tag rare">Rare Pediatric Cohort</span>
-            <h3 class="use-case-title">Small-Sample Inference &amp; Regulatory Dossier</h3>
-            <div class="use-case-subtitle">48 Patients &middot; Zero-Cell Rare Outcomes</div>
-          </div>
-          <div class="use-case-body">
-            <p class="use-case-desc">
-              Avoids infinite odds ratios using the Haldane-Anscombe continuity correction (+0.5). Computes exact unbiased Hedges' g effect sizes and documents the transformation trace in a Microsoft Word (.docx) report.
-            </p>
-            <div class="use-case-specs">
-              <div class="spec-item">
-                <span class="spec-label">Contingency:</span>
-                <span class="spec-value">Haldane-Anscombe 2x2</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Effect Size:</span>
-                <span class="spec-value">Hedges' g (Exact Gamma)</span>
-              </div>
-              <div class="spec-item">
-                <span class="spec-label">Deliverable:</span>
-                <span class="spec-value">Word (.docx) Trace Report</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Architectural Blueprint -->
-  <section id="architecture" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">System Design</span>
-        <h2 class="section-title">Clean, Modular Layered Architecture</h2>
-        <p class="section-desc">
-          Strict separation of concerns across presentation, domain calculation, orchestration, and persistence layers.
-        </p>
-      </div>
-
-      <div class="arch-grid">
-        <div class="arch-card">
-          <h3 class="arch-title">1. Presentation Layer</h3>
-          <p class="arch-desc">
-            Streamlit 1.65+ multi-page application with responsive layouts, accessible typography, Plotly clinical graphics, and zero unprofessional emoji noise.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <h3 class="arch-title">2. Domain &amp; Computation</h3>
-          <p class="arch-desc">
-            Immutable <code>DatasetProfile</code> dataclass, multi-method outlier isolation, single imputation (chained equations, KNN, MissForest-style) multiple imputation with pooled analyses (<code>biostats/mi</code>), and biostatistical engines.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <h3 class="arch-title">3. Orchestration &amp; Pipeline Replay</h3>
-          <p class="arch-desc">
-            <code>TransformationManager</code> lineage logger, <code>reproduction_manager</code> headless/UI pipeline replay engine, and <code>TraceDocumenter</code> Word (.docx) audit dossier generator.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <h3 class="arch-title">4. Persistence Layer</h3>
-          <p class="arch-desc">
-            Embedded DuckDB 1.5+ Parquet storage with versioning, bcrypt credential verification, and on-demand connection cycling preventing Windows file locks.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <h3 class="arch-title">5. RAG &amp; Intelligence</h3>
-          <p class="arch-desc">
-            Provider-agnostic connector factory supporting local Ollama, Google Gemini, OpenAI, Mistral and Anthropic Claude with Pydantic response validation and schema fallback.
-          </p>
-        </div>
-
-        <div class="arch-card">
-          <h3 class="arch-title">6. Security &amp; Modular IAM</h3>
-          <p class="arch-desc">
-            Agnostic authentication subsystem supporting embedded Local DuckDB + bcrypt, external Better Auth REST sidecar with 300s TTL session caching, and zero-auth bypass for offline single-researcher laptops.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Complete Documentation Index -->
-  <section id="docs" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Documentation Hub</span>
-        <h2 class="section-title">Comprehensive Methodological Guides</h2>
-        <p class="section-desc">
-          Detailed documentation and tutorials located in the repository's <code>documentation/</code> directory.
-        </p>
-      </div>
-
-      <div class="docs-grid">
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/00_Researcher_Handbook.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 00</div>
-          <div class="doc-name">Researcher Handbook</div>
-          <div class="doc-summary">Core methodology, cohort philosophy, and phase-by-phase execution guide.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/01_Home.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 01</div>
-          <div class="doc-name">Ingestion &amp; Benchmarks</div>
-          <div class="doc-summary">Automatic encoding resolution, delimiter detection, and DuckDB benchmark.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/02_Data_Validation.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 02</div>
-          <div class="doc-name">Quality &amp; Anomaly Audits</div>
-          <div class="doc-summary">Completeness scores, clinical anomaly masks, outlier clipping, and diffs.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/03_Data_Enrichment.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 03</div>
-          <div class="doc-name">Data Enrichment</div>
-          <div class="doc-summary">Single imputation (chained equations, KNN, MissForest-style), PCA/FAMD, scaling, and clustering.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/04_Visualization.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 04</div>
-          <div class="doc-name">Visualisation &amp; Fast Export</div>
-          <div class="doc-summary">Plotly clinical graphics, hypothesis overlays, exclusive clustermaps, and multi-format exports.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/05_Epidemiology.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 05</div>
-          <div class="doc-name">Epidemiology &amp; Statistics</div>
-          <div class="doc-summary">Hypothesis testing, ANCOVA, effect sizes, power analysis, and MCAR test.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/06_Data_Insight.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 06</div>
-          <div class="doc-name">Knowledge Graphs &amp; Taxonomy</div>
-          <div class="doc-summary">Induce and refine biomedical variable graphs using yFiles.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/07_Document_Insight.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 07</div>
-          <div class="doc-name">Document Intelligence &amp; RAG</div>
-          <div class="doc-summary">Literature extraction, PDF chat, study variable coverage verification.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/08_Reproduction.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 08</div>
-          <div class="doc-name">Reproduction &amp; Reporting</div>
-          <div class="doc-summary">Replay of the recorded transformation steps and a Word report of the trace.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/09_Clustering.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 09</div>
-          <div class="doc-name">Population Stratification</div>
-          <div class="doc-summary">K-Means, DBSCAN, Gaussian Mixture Models, and clinical subgroup analysis.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/10_Developer_Guide.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 10</div>
-          <div class="doc-name">Developer Guide</div>
-          <div class="doc-summary">Software architecture, custom adapters, testing workflows, and contributing.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/Tutorials.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 11</div>
-          <div class="doc-name">End-to-End Tutorials</div>
-          <div class="doc-summary">Step-by-step clinical trial and cohort observational workflows.</div>
-        </a>
-
-        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/12_IAM_Architecture_and_BetterAuth_Evaluation.md" target="_blank" rel="noopener noreferrer" class="doc-item">
-          <div class="doc-num">GUIDE 12</div>
-          <div class="doc-name">IAM &amp; Better Auth</div>
-          <div class="doc-summary">Modular authentication architecture, sidecar evaluation, and latency mitigation.</div>
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Academic Citation -->
-  <section id="citation" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Academic Attribution</span>
-        <h2 class="section-title">Citing CohortStudio</h2>
-        <p class="section-desc">
-          If you utilize CohortStudio in clinical trials, observational cohorts, or epidemiological publications, please cite the software package.
-        </p>
-      </div>
-
-      <div class="citation-card">
-        <div class="citation-header">
-          <div class="citation-header-title">
-            BibTeX Citation
-          </div>
-          <button class="copy-btn" data-clipboard-text="@software{elmernissi2026cohortstudio,
-  author = {El Mernissi, Karim},
-  title = {CohortStudio: Clinical Cohort Intelligence and Epidemiological Analytics Platform},
-  year = {2026},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Studio}},
-  version = {0.2.0}
-}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            Copy BibTeX
-          </button>
-        </div>
-        <div class="citation-body">
-          <p class="citation-text">
-            <strong>APA Format:</strong> El Mernissi, K. (2026). <em>CohortStudio: Clinical Cohort Intelligence and Epidemiological Analytics Platform</em> (Version 0.2.0) [Computer software]. GitHub. https://github.com/KarimELMERNISSI/Cohort-Studio
-          </p>
-          <pre class="citation-code"><code>@software{elmernissi2026cohortstudio,
-  author = {El Mernissi, Karim},
-  title = {CohortStudio: Clinical Cohort Intelligence and Epidemiological Analytics Platform},
-  year = {2026},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/KarimELMERNISSI/Cohort-Studio}},
-  version = {0.2.0}
-}</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Quickstart & Installation -->
-  <section id="install" class="section">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Deployment</span>
-        <h2 class="section-title">Install in Seconds</h2>
-        <p class="section-desc">
-          Run locally with UV or Pip, or deploy into production with Docker.
-        </p>
-      </div>
-
-      <div class="deploy-card">
-        <div class="deploy-nav">
-          <button class="deploy-tab active" data-deploy="deploy-uv">uv (Recommended)</button>
-          <button class="deploy-tab" data-deploy="deploy-pip">pip &amp; venv</button>
-          <button class="deploy-tab" data-deploy="deploy-docker">Docker</button>
-          <button class="deploy-tab" data-deploy="deploy-compose">Docker Compose</button>
-        </div>
-
-        <div class="deploy-body">
-          <!-- Snippet: uv -->
-          <div id="deploy-uv" class="deploy-snippet active">
-            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
-cd Cohort-Studio
-uv sync --extra all
-uv run streamlit run main.py">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copy
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the participant flow">
+              <img src="assets/shots/population.webp" width="990" height="1030" loading="lazy" decoding="async"
+                   alt="Validate, Analysis population tab: the participant flow goes from 1,206 records read, minus 16 clinical anomalies and 262 not meeting the study inclusion criteria, to an analysis population of 928.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
             </button>
-            <pre><code><span class="token-cm"># 1. Clone the repository</span>
+          </figure>
+        </article>
+
+        <article class="feature" id="quality">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg>Data quality</p>
+            <h3>A quality score you can act on</h3>
+            <p>Six dimensions, from completeness to clinical validity, with weights you can adjust and a breakdown of where the score loses points, so you know where to look first.</p>
+            <ul class="checks">
+              <li>Clinical anomaly rules you declare, such as an implausible weight or a height entered in metres</li>
+              <li>Outlier detection by IQR, z-score, Isolation Forest, local outlier factor or DBSCAN</li>
+              <li>Little's MCAR test and a scan of what predicts missingness</li>
+            </ul>
+            <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/00_Researcher_Handbook.md">Researcher handbook <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the quality dashboard">
+              <img src="assets/shots/quality.webp" width="1600" height="1074" loading="lazy" decoding="async"
+                   alt="Validate, Data quality dashboard: a global quality score of 97.3 out of 100 shown as a ring, and a scorecard for completeness, statistical validity, clinical validity, consistency, uniformity and uniqueness.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <article class="feature" id="imputation">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-layers"/></svg>Multiple imputation</p>
+            <h3>Missing data handled for inference, not hidden</h3>
+            <p>A chained-equations engine modelled on R's <code>mice</code>: predictive mean matching, Bayesian normal, logistic and polytomous regression, and random-forest donors. It is fitted on the analysis population, and the outcome of the planned analyses always stays in the imputation model.</p>
+            <ul class="checks">
+              <li>A five-step panel: missingness, model, settings, diagnostics, then use, save and export</li>
+              <li>Chain traces, R-hat and observed-against-imputed distributions</li>
+              <li>Exports for R (<code>mice</code> long) and Stata (flong), and a methods paragraph following Sterne et al. (2009)</li>
+            </ul>
+            <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/03_Data_Enrichment.md">Enrichment and imputation guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the imputation diagnostics">
+              <img src="assets/shots/mi-diagnostics.webp" width="1600" height="1101" loading="lazy" decoding="async"
+                   alt="Multiple imputation diagnostics for HbA1c: chain means per iteration for ten imputations mixing without a trend, observed against imputed distributions, and R-hat values close to 1 for four variables.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <article class="feature" id="statistics">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-plan"/></svg>Guided statistics</p>
+            <h3>See the plan before you run the tests</h3>
+            <p>Choose the grouping variable and the outcomes: CohortStudio shows which test will run for each variable and why, then reports effect sizes with confidence intervals and adjusted p-values.</p>
+            <ul class="checks">
+              <li>Welch's t-test and Welch ANOVA by default; assumption checks are diagnostics, not gates</li>
+              <li>Holm, Benjamini–Hochberg or Bonferroni corrections, explained in plain words</li>
+              <li>2×2 tables, ANCOVA, diagnostic accuracy, kappa and ICC, McNemar, Mantel–Haenszel and power</li>
+            </ul>
+            <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/05_Epidemiology.md">Epidemiology and testing guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the analysis plan">
+              <img src="assets/shots/plan.webp" width="1600" height="1227" loading="lazy" decoding="async"
+                   alt="Univariate group comparison by treatment arm: before running, a plan table lists for each variable the test that will run, Welch's t-test, why, the n and the share missing, with Holm's correction for five tests.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <article class="feature" id="survival">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-analyze"/></svg>Survival and regression</p>
+            <h3>Survival and regression models, pooled across imputations</h3>
+            <p>Kaplan–Meier curves, log-rank tests, Cox, logistic and Poisson or negative-binomial models run on the observed data or on every imputed dataset, combined with Rubin's rules.</p>
+            <ul class="checks">
+              <li>Barnard–Rubin degrees of freedom, fraction of missing information and relative increase in variance for every term</li>
+              <li>The complete-case analysis next to the pooled one</li>
+              <li>Grambsch–Therneau proportional-hazards test and DeLong AUC</li>
+            </ul>
+            <p class="provenance"><span>Each result says what it was computed on</span><code>Computed on tutorial_cohort · revision 0 · population: 928 of 1,206 rows (12 criteria) · N analysed 928 · trace 629d3651</code></p>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the pooled Cox model">
+              <img src="assets/shots/cox.webp" width="1600" height="1000" loading="lazy" decoding="async"
+                   alt="Cox proportional-hazards regression of death on treatment arm, age and HbA1c, pooled over ten imputed datasets: hazard ratios with 95% confidence intervals, p-values, degrees of freedom, FMI and RIV for each term.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <article class="feature" id="dossier">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-file"/></svg>Reproduce and report</p>
+            <h3>A study dossier you can hand over</h3>
+            <p>Add any result to the dossier from the button under it. Reproduce › Study dossier downloads a Word document with the provenance, the participant flow, the data handling, the missing data and the results, each with what it was computed on.</p>
+            <ul class="checks">
+              <li>A hash-chained trace, tamper-evident and checked when it is loaded</li>
+              <li>Headless replay that checks every step against its recorded fingerprint</li>
+              <li>Results computed on other data are left out, or kept and marked</li>
+            </ul>
+            <p class="verified"><svg class="i" aria-hidden="true"><use href="#i-check-circle"/></svg><span><b>Integrity verified:</b> 3 chained steps, head hash <code>dd466ba4e194b5d6</code>. The trace is tamper-evident; it is not an electronically signed record.</span></p>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the study dossier">
+              <img src="assets/shots/dossier.webp" width="1600" height="766" loading="lazy" decoding="async"
+                   alt="Reproduce, Study dossier page: the results added to the dossier, each marked current with what it was computed on, and the Word dossier section with a title, an author and the download button.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <div class="more-shots">
+          <figure>
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the imputation set-up">
+              <img src="assets/shots/mi-setup.webp" width="1200" height="749" loading="lazy" decoding="async"
+                   alt="Multiple imputation, step 1: an analysis population of 928 rows, 48% incomplete rows, a suggested 49 imputations, and the missingness of each variable.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+            <figcaption>Multiple imputation, step 1: the population and its missing values</figcaption>
+          </figure>
+          <figure>
+            <button class="zoom" type="button" aria-label="Enlarge the screenshot of the comparison results">
+              <img src="assets/shots/comparison.webp" width="1200" height="751" loading="lazy" decoding="async"
+                   alt="Summary results of the group comparison: Welch's t-tests with Holm-adjusted p-values, Hedges' g with confidence intervals and the estimated differences.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+            <figcaption>Results with Holm-adjusted p-values, and Hedges' g with its confidence interval</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Methods -->
+    <section class="section" id="methods" aria-labelledby="methods-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Scientific rigour</p>
+          <h2 id="methods-title">Methods you can cite</h2>
+          <p class="lead">Defaults follow current methodological guidance, and every method comes with its reference. The statistics engine is a plain Python package with no interface code, tested against R and published values.</p>
+        </div>
+
+        <div class="parity">
+          <div class="parity-copy">
+            <h3>Checked against R</h3>
+            <p>The pooling, the D1 and D2 tests and the models fitted on R's completed datasets are compared with R <code>mice</code> 3.19 and <code>mitml</code> 0.4.5 on reference datasets generated by a CI workflow. A weekly simulation checks bias and coverage under data missing at random.</p>
+          </div>
+          <dl class="parity-stats">
+            <div><dt>10<sup>−10</sup></dt><dd>relative agreement of the pooled estimates with R</dd></div>
+            <div><dt>10<sup>−8</sup>–10<sup>−5</sup></dt><dd>models on R's completed data, from linear to Cox</dd></div>
+            <div><dt>200</dt><dd>simulated datasets in the weekly run: bias and 95% coverage</dd></div>
+          </dl>
+        </div>
+
+        <div class="methods-grid">
+          <div class="method-card">
+            <h3>Missing data</h3>
+            <ul>
+              <li>Rubin's rules <cite>Rubin 1987</cite></li>
+              <li>Barnard–Rubin degrees of freedom <cite>Barnard &amp; Rubin 1999</cite></li>
+              <li>D1 and D2 tests of several parameters <cite>Li et al. 1991; Reiter 2007</cite></li>
+              <li>Chained equations as in <code>mice</code> <cite>van Buuren 2018</cite></li>
+              <li>Little's MCAR test <cite>Little 1988</cite></li>
+            </ul>
+          </div>
+          <div class="method-card">
+            <h3>Group comparisons</h3>
+            <ul>
+              <li>Welch's t-test and Welch ANOVA <cite>Welch 1947, 1951</cite></li>
+              <li>Games–Howell, Tukey HSD and Dunn post-hoc tests</li>
+              <li>Mann–Whitney with the Hodges–Lehmann shift <cite>Hodges &amp; Lehmann 1963</cite></li>
+              <li>Hedges' g with noncentral-t intervals <cite>Hedges 1981; Steiger 2004</cite></li>
+              <li>Holm and Benjamini–Hochberg corrections <cite>Holm 1979; Benjamini &amp; Hochberg 1995</cite></li>
+            </ul>
+          </div>
+          <div class="method-card">
+            <h3>Survival and regression</h3>
+            <ul>
+              <li>Kaplan–Meier with Greenwood intervals <cite>Kaplan &amp; Meier 1958</cite></li>
+              <li>Log-rank test <cite>Mantel 1966</cite></li>
+              <li>Cox model with Efron ties <cite>Cox 1972; Efron 1977</cite></li>
+              <li>Proportional-hazards test <cite>Grambsch &amp; Therneau 1994</cite></li>
+              <li>Logistic regression with DeLong AUC <cite>DeLong et al. 1988</cite>; Poisson and negative binomial with offsets</li>
+            </ul>
+          </div>
+          <div class="method-card">
+            <h3>Epidemiology</h3>
+            <ul>
+              <li>Risk ratio, odds ratio and risk difference with the Haldane–Anscombe correction</li>
+              <li>Mantel–Haenszel estimates with the Breslow–Day test <cite>Mantel &amp; Haenszel 1959</cite></li>
+              <li>Incidence rates with exact Poisson intervals and rate ratios</li>
+              <li>Standardised mortality ratios</li>
+            </ul>
+          </div>
+          <div class="method-card">
+            <h3>Diagnostics and agreement</h3>
+            <ul>
+              <li>Sensitivity, specificity and predictive values with Wilson intervals <cite>Wilson 1927</cite></li>
+              <li>Likelihood ratios <cite>Simel et al. 1991</cite> and the Youden index <cite>Youden 1950</cite></li>
+              <li>Bland–Altman limits of agreement <cite>Bland &amp; Altman 1986, 1999</cite></li>
+              <li>Cohen's kappa and intraclass correlations</li>
+            </ul>
+          </div>
+          <div class="method-card">
+            <h3>Reporting</h3>
+            <ul>
+              <li>Participant flow for STROBE item 13 <cite>von Elm et al. 2007</cite></li>
+              <li>Multiple-imputation reporting items <cite>Sterne et al. 2009</cite></li>
+              <li>Imputation guidance <cite>White, Royston &amp; Wood 2011</cite></li>
+              <li>The references of the methods used are collected in the dossier</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Optional AI -->
+    <section class="section section-tint" id="ai" aria-labelledby="ai-title">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Optional AI</p>
+          <h2 id="ai-title">An assistant that stays on your side</h2>
+          <p class="lead">Install the <code>ai</code> group to add a document library you can question, a variable map of your study and AI suggestions. Ollama on your own server is the default. Cloud providers are opt-in and ask for your consent before any data is sent.</p>
+          <ul class="checks">
+            <li>The statistics never depend on the assistant</li>
+            <li>Gemini, OpenAI, Mistral and Claude connectors, selectable in Settings</li>
+            <li>Documents indexed in LanceDB (embedded) or Qdrant</li>
+            <li>Without the group, the application runs and says which features need it</li>
+          </ul>
+        </div>
+        <div class="ai-diagram" role="img" aria-label="Your data go to CohortStudio on your machine or server. By default the assistant uses Ollama on your network. Cloud providers stay off until you give consent.">
+          <div class="ai-node ai-data"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg><div><b>Your cohort data</b><span>Parquet files in your workspace</span></div></div>
+          <div class="ai-link"></div>
+          <div class="ai-node ai-app"><img src="assets/brand/icon-256.webp" width="256" height="256" alt=""><div><b>CohortStudio</b><span>on your machine or server</span></div></div>
+          <div class="ai-branches">
+            <div class="ai-branch ai-local">
+              <div class="ai-link"></div>
+              <div class="ai-node"><svg class="i" aria-hidden="true"><use href="#i-server"/></svg><div><b>Ollama</b><span>on your network · default</span></div></div>
+            </div>
+            <div class="ai-branch ai-cloud">
+              <div class="ai-link ai-link-dashed"></div>
+              <div class="ai-node"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><div><b>Cloud providers</b><span><svg class="i i-sm" aria-hidden="true"><use href="#i-lock"/></svg>off until you consent</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture -->
+    <section class="section" id="architecture" aria-labelledby="architecture-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Architecture</p>
+          <h2 id="architecture-title">Layered, tested and light to install</h2>
+          <p class="lead">A Streamlit interface on a plain Python engine. Tests check the direction of the dependencies, and the optional groups can be left out.</p>
+        </div>
+        <div class="arch-grid">
+          <figure class="arch" aria-labelledby="arch-caption">
+            <div class="arch-stack">
+              <div class="layer layer-ui">
+                <span class="layer-label">Interface</span>
+                <b>Streamlit pages and components</b>
+                <code>app_pages · ui</code>
+              </div>
+              <div class="layer layer-services">
+                <span class="layer-label">Services</span>
+                <b>Traces, replay, Word dossier, accounts</b>
+                <span class="layer-text">Enrichment, quality scoring, knowledge-graph model</span>
+                <code>manage · enrich · explore · monitor · graph</code>
+              </div>
+              <div class="layer layer-engine">
+                <span class="layer-label">Engine · no Streamlit, checked by tests</span>
+                <div class="pkgs">
+                  <div class="pkg"><code>biostats</code><span>statistics, MI, pooling</span></div>
+                  <div class="pkg"><code>ingest</code><span>import, parse report</span></div>
+                  <div class="pkg"><code>core</code><span>session, population, lineage</span></div>
+                </div>
+              </div>
+              <div class="layer layer-storage">
+                <span class="layer-label">Storage</span>
+                <span class="layer-text">Parquet versions with lineage files · JSON traces · per-user workspaces</span>
+              </div>
+            </div>
+            <div class="arch-optional">
+              <span class="layer-label">Optional groups</span>
+              <div class="opt"><code>ai</code><span>LLM connectors, documents, vector databases</span></div>
+              <div class="opt"><code>ml</code><span>LightGBM, UMAP, FAMD</span></div>
+              <div class="opt"><code>survival</code><span>lifelines: PH test, concordance</span></div>
+            </div>
+            <figcaption class="sr-only" id="arch-caption">The architecture in four layers: the Streamlit interface; the services; the engine (biostats, ingest, core), which imports no Streamlit; and the storage. The optional groups ai, ml and survival plug into the services.</figcaption>
+          </figure>
+          <ul class="arch-points">
+            <li><b>One write path.</b> Every change to the data goes through one session object that records a trace step; nothing changes the data while a page is drawn.</li>
+            <li><b>A clean engine.</b> <code>biostats</code>, <code>ingest</code> and <code>core</code> import no Streamlit, and <code>core</code> imports nothing above it. A layering test enforces both.</li>
+            <li><b>Light core install.</b> The application runs without the <code>ai</code>, <code>ml</code> and <code>survival</code> groups; CI tests that minimal install in its own job.</li>
+            <li><b>Accounts and workspaces.</b> Role-based accounts with bcrypt and login lockout, one workspace per user, and a first administrator created from a one-time setup token.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section section-tint" id="install" aria-labelledby="install-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">Running in a few minutes</h2>
+          <p class="lead">Python 3.14 with uv or pip, or a container. The core application needs none of the optional groups.</p>
+        </div>
+        <div class="install-grid">
+          <div class="terminal">
+            <div class="tabs" role="tablist" aria-label="Installation method">
+              <button class="tab" type="button" role="tab" id="tab-uv" aria-controls="panel-uv" aria-selected="true">uv <span class="tab-note">recommended</span></button>
+              <button class="tab" type="button" role="tab" id="tab-pip" aria-controls="panel-pip" aria-selected="false" tabindex="-1">pip</button>
+              <button class="tab" type="button" role="tab" id="tab-compose" aria-controls="panel-compose" aria-selected="false" tabindex="-1">Docker Compose</button>
+              <button class="tab" type="button" role="tab" id="tab-docker" aria-controls="panel-docker" aria-selected="false" tabindex="-1">Docker</button>
+            </div>
+            <div class="panel" role="tabpanel" id="panel-uv" aria-labelledby="tab-uv" tabindex="0">
+              <button class="copy" type="button" data-copy="code-uv"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+<pre><code id="code-uv"><span class="c"># Clone the repository</span>
 git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
 cd Cohort-Studio
 
-<span class="token-cm"># 2. Sync the locked environment (every optional group: AI engine, ML methods, survival</span>
-<span class="token-cm">#    diagnostics; plain `uv sync` installs the core application only)</span>
+<span class="c"># Every optional group (ai, ml, survival); plain `uv sync` installs the core application</span>
 uv sync --extra all
 
-<span class="token-cm"># 3. Launch the platform</span>
+<span class="c"># Start the application on http://localhost:8501</span>
 uv run streamlit run main.py</code></pre>
-          </div>
-
-          <!-- Snippet: pip -->
-          <div id="deploy-pip" class="deploy-snippet">
-            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
+            </div>
+            <div class="panel" role="tabpanel" id="panel-pip" aria-labelledby="tab-pip" tabindex="0" hidden>
+              <button class="copy" type="button" data-copy="code-pip"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+<pre><code id="code-pip"><span class="c"># Clone the repository</span>
+git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
 cd Cohort-Studio
+
+<span class="c"># Python 3.14 virtual environment (Windows: .venv\Scripts\activate)</span>
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run main.py">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copy
-            </button>
-            <pre><code><span class="token-cm"># 1. Clone repository</span>
-git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
-cd Cohort-Studio
 
-<span class="token-cm"># 2. Create Python 3.14+ environment</span>
-python -m venv .venv
-source .venv/bin/activate  <span class="token-cm"># On Windows: .venv\Scripts\activate</span>
-
-<span class="token-cm"># 3. Install packages &amp; start</span>
+<span class="c"># requirements.txt holds every optional group</span>
 pip install -r requirements.txt
 streamlit run main.py</code></pre>
-          </div>
+            </div>
+            <div class="panel" role="tabpanel" id="panel-compose" aria-labelledby="tab-compose" tabindex="0" hidden>
+              <button class="copy" type="button" data-copy="code-compose"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+<pre><code id="code-compose"><span class="c"># Build and start; data, accounts and traces live in ./data</span>
+git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
+cd Cohort-Studio
+docker compose up -d --build
 
-          <!-- Snippet: docker -->
-          <div id="deploy-docker" class="deploy-snippet">
-            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="docker build -t cohortstudio .
-docker run -d -p 8501:8501 -v $(pwd)/data:/app/data --name cohortstudio cohortstudio
-docker logs cohortstudio">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copy
-            </button>
-            <pre><code><span class="token-cm"># Build container image</span>
-docker build -t cohortstudio .
+<span class="c"># First start: the log shows a one-time setup token for the administrator</span>
+docker compose logs cohortstudio</code></pre>
+            </div>
+            <div class="panel" role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" tabindex="0" hidden>
+              <button class="copy" type="button" data-copy="code-docker"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+<pre><code id="code-docker"><span class="c"># Build the image (it installs every optional group)</span>
+docker build -t cohortstudio:latest .
 
-<span class="token-cm"># Run container with persistent data volume</span>
-docker run -d \
-  -p 8501:8501 \
-  -v $(pwd)/data:/app/data \
-  --name cohortstudio \
-  cohortstudio
+<span class="c"># Run with a persistent data folder (add --env-file .env for your settings)</span>
+docker run -d -p 8501:8501 -v "$(pwd)/data:/app/data" --name cohortstudio cohortstudio:latest
 
-<span class="token-cm"># First start: the one-time setup token for the administrator</span>
+<span class="c"># First start: the one-time setup token for the administrator</span>
 docker logs cohortstudio</code></pre>
+            </div>
           </div>
-
-          <!-- Snippet: compose -->
-          <div id="deploy-compose" class="deploy-snippet">
-            <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="docker compose up -d">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copy
-            </button>
-            <pre><code><span class="token-cm"># Start services in detached mode</span>
-docker compose up -d
-
-<span class="token-cm"># First start: the one-time setup token for the administrator; then the running logs</span>
-docker compose logs -f</code></pre>
+          <div class="install-notes">
+            <div class="note">
+              <h3>Optional groups</h3>
+              <p><code>ai</code> adds the LLM connectors, the document library and the vector databases; <code>ml</code> adds MissForest (LightGBM), UMAP and FAMD; <code>survival</code> adds the proportional-hazards test and the concordance of the Cox model. <code>all</code> installs all three.</p>
+            </div>
+            <div class="note">
+              <h3>First administrator</h3>
+              <p>Set <code>CMP_ADMIN_USERNAME</code> and <code>CMP_ADMIN_PASSWORD</code> in <code>.env</code>, or use the one-time setup token from the server log. Only a hash of the token is stored, and it stops working once used.</p>
+            </div>
+            <div class="note">
+              <h3>Try it straight away</h3>
+              <p>The Start page loads a sample cohort, or a tutorial cohort with its study configuration, so you can follow the tutorial without your own data.</p>
+            </div>
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- Documentation -->
+    <section class="section" id="docs" aria-labelledby="docs-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Documentation</p>
+          <h2 id="docs-title">A handbook for researchers, a guide for developers</h2>
+          <p class="lead">The chapters live in the repository, and the application shows them offline under Help › Handbook.</p>
+        </div>
+        <div class="docs-grid">
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/00_Researcher_Handbook.md">
+            <span class="doc-num">00</span><h3>Researcher handbook</h3><p>The workflow step by step, the analysis population and how to read each result.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/14_Full_Tutorial.md">
+            <span class="doc-num">14</span><h3>Full tutorial</h3><p>From a raw file to a reproducible report, on the tutorial cohort.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/02_Data_Validation.md">
+            <span class="doc-num">02</span><h3>Data validation</h3><p>Quality score, anomaly rules, inclusion criteria, outliers and the participant flow.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/03_Data_Enrichment.md">
+            <span class="doc-num">03</span><h3>Data enrichment</h3><p>Merges, derived variables, single and multiple imputation, transformations.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/05_Epidemiology.md">
+            <span class="doc-num">05</span><h3>Epidemiology and testing</h3><p>Group comparisons, effect sizes, 2×2 tables, survival, regression and pooling.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/08_Reproduction.md">
+            <span class="doc-num">08</span><h3>Reproduction</h3><p>Traces, verified replay, the Word report and the study dossier.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/04_Visualization.md">
+            <span class="doc-num">04</span><h3>Visualisation</h3><p>Interactive figures and their export for publications.</p>
+          </a>
+          <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/10_Developer_Guide.md">
+            <span class="doc-num">10</span><h3>Developer guide</h3><p>Architecture, layering, tests and how to contribute.</p>
+          </a>
+        </div>
+        <p class="docs-more">
+          <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/tree/main/documentation">All chapters <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/CHANGELOG.md">Changelog <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </p>
+      </div>
+    </section>
+
+    <!-- Citation -->
+    <section class="section section-tint" id="cite" aria-labelledby="cite-title">
+      <div class="container narrow">
+        <div class="section-head">
+          <p class="eyebrow">Cite</p>
+          <h2 id="cite-title">Citing CohortStudio</h2>
+          <p class="lead">If CohortStudio supports a publication, please cite the version you used.</p>
+        </div>
+        <div class="cite-card">
+          <p class="apa"><span class="cite-label">APA</span>El Mernissi, K. (2026). <em>CohortStudio: Clinical cohort data, from raw file to reproducible evidence</em> (Version 2.3.0) [Computer software]. https://github.com/KarimELMERNISSI/Cohort-Studio</p>
+          <div class="bibtex">
+            <div class="bibtex-head"><span class="cite-label">BibTeX</span><button class="copy" type="button" data-copy="code-bibtex"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button></div>
+<pre><code id="code-bibtex">@software{elmernissi2026cohortstudio,
+  author  = {El Mernissi, Karim},
+  title   = {CohortStudio: Clinical cohort data, from raw file to reproducible evidence},
+  year    = {2026},
+  version = {2.3.0},
+  url     = {https://github.com/KarimELMERNISSI/Cohort-Studio},
+  license = {Apache-2.0}
+}</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="cta" aria-labelledby="cta-title">
+      <div class="container cta-inner">
+        <img class="cta-icon" src="assets/brand/icon-256.webp" width="256" height="256" alt="">
+        <div class="cta-copy">
+          <h2 id="cta-title">Try it on the tutorial cohort</h2>
+          <p>A randomised heart-failure cohort from four sites, 1,206 rows and 38 variables, with planted data-entry errors, patients to exclude, documented missing data, two raters, paired measurements and survival data. The tutorial walks through every step.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-mint btn-lg" href="#install">Install</a>
+          <a class="btn btn-outline-light btn-lg" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/14_Full_Tutorial.md">Open the tutorial</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <img src="assets/brand/wordmark-dark.png" width="738" height="160" alt="CohortStudio">
+        <p>Clinical cohort data, from raw file to reproducible evidence. Open source under the Apache 2.0 licence.</p>
+      </div>
+      <nav class="footer-col" aria-label="Product">
+        <h2>Product</h2>
+        <a href="#workflow">Workflow</a>
+        <a href="#features">Features</a>
+        <a href="#methods">Methods</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#install">Install</a>
+      </nav>
+      <nav class="footer-col" aria-label="Documentation">
+        <h2>Documentation</h2>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/00_Researcher_Handbook.md">Researcher handbook</a>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/14_Full_Tutorial.md">Full tutorial</a>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/10_Developer_Guide.md">Developer guide</a>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/CHANGELOG.md">Changelog</a>
+      </nav>
+      <nav class="footer-col" aria-label="Project">
+        <h2>Project</h2>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio">GitHub repository</a>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/issues">Issues</a>
+        <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/LICENSE">Apache 2.0 licence</a>
+        <a href="#cite">Cite</a>
+      </nav>
     </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer-top">
-        <div class="footer-brand">
-          <div class="brand">
-            <img src="assets/logo.png" alt="CohortStudio Logo" class="brand-logo">
-            <span class="brand-text">CohortStudio</span>
-          </div>
-          <p>
-            An open-source, enterprise-grade clinical research and epidemiological data platform built on Python 3.14, DuckDB, and Streamlit.
-          </p>
-        </div>
-
-        <div class="footer-links-group">
-          <div class="footer-col">
-            <h4>Platform</h4>
-            <ul>
-              <li><a href="#exploration">Exploration Suite</a></li>
-              <li><a href="#decision-tree">Decision Tree &amp; Matrix</a></li>
-              <li><a href="#visualization">Visualisation &amp; Export</a></li>
-              <li><a href="#rag-evaluation">RAGAS Evaluation</a></li>
-              <li><a href="#reproducibility">Reproducibility</a></li>
-              <li><a href="#use-cases">Clinical Use Cases</a></li>
-              <li><a href="#architecture">Architecture</a></li>
-              <li><a href="#citation">Citation (BibTeX)</a></li>
-            </ul>
-          </div>
-
-          <div class="footer-col">
-            <h4>Documentation</h4>
-            <ul>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/00_Researcher_Handbook.md" target="_blank" rel="noopener noreferrer">Researcher Handbook</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/05_Epidemiology.md" target="_blank" rel="noopener noreferrer">Epidemiology Guide</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/10_Developer_Guide.md" target="_blank" rel="noopener noreferrer">Developer Guide</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/Tutorials.md" target="_blank" rel="noopener noreferrer">Tutorials</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/12_IAM_Architecture_and_BetterAuth_Evaluation.md" target="_blank" rel="noopener noreferrer">IAM &amp; Better Auth</a></li>
-            </ul>
-          </div>
-
-          <div class="footer-col">
-            <h4>Community &amp; Code</h4>
-            <ul>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a></li>
-              <li><a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache 2.0 License</a></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div class="footer-bottom">
-        <div>
-          &copy; 2026 Karim El Mernissi. Released under the Apache 2.0 License.
-        </div>
-        <div>
-          Authored for clinical epidemiologists, biostatisticians, and health data scientists worldwide.
-        </div>
-      </div>
+    <div class="container footer-bottom">
+      <p>© 2026 Karim El Mernissi</p>
+      <p>This page sets no cookies and loads nothing from third parties.</p>
     </div>
   </footer>
 
-  <script src="app.js"></script>
+  <dialog class="lightbox" aria-label="Enlarged screenshot">
+    <button class="lightbox-close" type="button" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+    <img alt="">
+  </dialog>
 </body>
 </html>

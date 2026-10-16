@@ -6,6 +6,31 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation site redesigned (`docs/`)
+
+- The site at karimelmernissi.github.io/Cohort-Studio now uses the application's logo and wordmarks
+  (`assets/brand`) and its colours, in place of the former illustration.
+- The content describes what the application does today, with screenshots of the real application on the
+  tutorial cohort:
+  - the analysis population and its participant flow, data quality, multiple imputation, the analysis plan, the
+    pooled survival and Cox models, and the study dossier;
+  - the methods with their references and the R parity figures;
+  - the optional AI, the architecture, the installation and the citation (version 2.3.0).
+- Removed:
+  - the decision tree, which contradicted the Welch-first defaults;
+  - the invented use cases;
+  - the version 0.2.0 badge and citation;
+  - Google Fonts.
+- The page now loads nothing from third parties and sets no cookies.
+- `tests/test_docs_site.py` checks the page:
+  - No regulatory or marketing claims: 21 CFR Part 11, compliant, immutable, certified, or "signed" outside "not
+    an electronically signed record".
+  - Nothing is loaded from other sites, and every local file exists.
+  - Every image has a text alternative and its real size.
+  - The citation names the current version.
+- `dev_scripts/site_screenshots.py` (Playwright) and `dev_scripts/make_site_assets.py` regenerate the
+  screenshots, the WebP page images, the icons and the social preview.
+
 ### Packaging, deployment and CI (follow-up programme M4, awaiting the owner's review)
 
 - **Optional dependency groups** (`pyproject.toml`). The statistics engine, the data pipeline and the analysis
