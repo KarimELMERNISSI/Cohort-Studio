@@ -6,6 +6,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: the site shows the plots and the tour
+
+- A new feature row, "Describe and plot", presents the data description of Explore and the figures of
+  Visualize. Its image shows four figures from the tutorial cohort (`docs/assets/shots/plots.webp`, built by
+  `dev_scripts/make_site_assets.py` from the screenshot library).
+- The Workflow section ends with the animated tour of the README. Visitors who ask for reduced motion see its
+  first screen instead.
+- The tour now lives in `docs/assets/shots`, the folder GitHub Pages publishes, and the README shows it from
+  there, so it is stored once.
+- The facts strip now says "more than 800 automated tests".
+
 ### Documentation: a README header with an animated tour, the workflow and a plot gallery
 
 - The README opens with the CohortStudio wordmark, light or dark to follow the GitHub theme. Below it come the

@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 from matplotlib import font_manager
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -46,6 +46,8 @@ SHOTS: dict[str, tuple[str, tuple[int, int, int, int] | None, int]] = {
     "mi-setup": ("mi_setup", (338, 216, 1376, 864), 1200),
     "comparison": ("comparison", (346, 144, 1382, 792), 1200),
 }
+# the Visualize figures (plot_<name>) of shots/plots.webp, in reading order
+MOSAIC = ("box", "clustermap", "corr", "scatter")
 
 
 def screenshot(source: Path, name: str) -> Image.Image:
@@ -101,6 +103,35 @@ def shots(source: Path) -> dict[str, tuple[int, int]]:
         image.save(out / f"{name}.webp", "WEBP", quality=82, method=6)
         sizes[name] = (width, height)
     return sizes
+
+
+def _figure(image: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """A figure without its empty margins, centred on a tile of its own background colour."""
+    background = image.getpixel((4, 4))
+    difference = ImageChops.difference(image, Image.new("RGB", image.size, background)).convert("L")
+    image = image.crop(difference.point(lambda v: 255 if v > 12 else 0).getbbox())
+    scale = min((size[0] - 64) / image.width, (size[1] - 64) / image.height)
+    image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+    tile = Image.new("RGB", size, background)
+    tile.paste(image, ((size[0] - image.width) // 2, (size[1] - image.height) // 2))
+    return tile
+
+
+def plots_mosaic(source: Path) -> tuple[int, int]:
+    """Four Visualize figures in a 2x2 grid (shots/plots.webp), for the Describe and plot feature."""
+    width, gap = 1600, 20
+    tile_w = (width - 3 * gap) // 2
+    tile_h = round(tile_w / 1.5)
+    height = 2 * tile_h + 3 * gap
+    canvas = Image.new("RGB", (width, height), (243, 246, 247))
+    draw = ImageDraw.Draw(canvas)
+    for i, name in enumerate(MOSAIC):
+        tile = _rounded(_figure(screenshot(source, f"plot_{name}"), (tile_w, tile_h)), 12)
+        x, y = gap + (i % 2) * (tile_w + gap), gap + (i // 2) * (tile_h + gap)
+        canvas.paste(tile, (x, y), tile)
+        draw.rounded_rectangle((x, y, x + tile_w - 1, y + tile_h - 1), 12, outline=(222, 231, 234), width=2)
+    canvas.save(OUT / "shots" / "plots.webp", "WEBP", quality=86, method=6)
+    return width, height
 
 
 def _rounded(image: Image.Image, radius: int) -> Image.Image:
@@ -167,6 +198,7 @@ def main() -> None:
     source = Path(sys.argv[1]) if len(sys.argv) == 2 else LIBRARY
     brand()
     sizes = shots(source)
+    sizes["plots"] = plots_mosaic(source)
     og_image(source)
     for name, (w, h) in sizes.items():
         size_kb = (OUT / "shots" / f"{name}.webp").stat().st_size / 1024

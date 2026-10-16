@@ -163,7 +163,7 @@
         <div class="fact">
           <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-flask"/></svg></span>
           <h3>Tested on every push</h3>
-          <p>About 780 automated tests, type checks and per-package coverage floors run in CI.</p>
+          <p>More than 800 automated tests, type checks and per-package coverage floors run in CI.</p>
         </div>
         <div class="fact">
           <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-code"/></svg></span>
@@ -219,6 +219,14 @@
             <p>Replay and check the trace, then export the Word report and the study dossier.</p>
           </li>
         </ol>
+        <figure class="tour">
+          <picture>
+            <source media="(prefers-reduced-motion: reduce)" srcset="assets/shots/tour-still.webp">
+            <img src="assets/shots/tour.webp" width="1600" height="1120" loading="lazy" decoding="async"
+                 alt="The tutorial cohort along this path, in nine screens of the application: the Start page and its workflow map, the quality score, the analysis population and its participant flow, descriptive statistics, a box plot with p-values between groups, the diagnostics of a multiple imputation, survival curves and a Cox model pooled over ten imputed datasets, and the Word study dossier.">
+          </picture>
+          <figcaption>The tutorial cohort along this path, in nine screens of the application</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -268,6 +276,27 @@
             <button class="zoom" type="button" aria-label="Enlarge the screenshot of the quality dashboard">
               <img src="assets/shots/quality.webp" width="1600" height="1074" loading="lazy" decoding="async"
                    alt="Validate, Data quality dashboard: a global quality score of 97.3 out of 100 shown as a ring, and a scorecard for completeness, statistical validity, clinical validity, consistency, uniformity and uniqueness.">
+              <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
+            </button>
+          </figure>
+        </article>
+
+        <article class="feature" id="plots">
+          <div class="feature-text">
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg>Describe and plot</p>
+            <h3>Describe the data, then plot it the way your study needs</h3>
+            <p>Explore sorts the columns by type and describes them: fill rate, quartiles and normality tests for the measurements, the most frequent values for the categories, and the correlations as a matrix or a network. Visualize then draws 14 kinds of figure on the same analysis population.</p>
+            <ul class="checks">
+              <li>Box and violin plots with the p-value of each pair of groups, from Welch's t-test or Mann–Whitney, with a Bonferroni or Benjamini–Hochberg correction</li>
+              <li>Clustermaps that tag each variable by its p-value between groups, and correlation matrices clustered with their dendrograms</li>
+              <li>Themes and palettes, colour-blind-safe ones included; each figure downloads as SVG, as interactive HTML or with the rows behind it</li>
+            </ul>
+            <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/04_Visualization.md">Visualisation guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <figure class="feature-media">
+            <button class="zoom" type="button" aria-label="Enlarge the four figures">
+              <img src="assets/shots/plots.webp" width="1600" height="1086" loading="lazy" decoding="async"
+                   alt="Four figures drawn on the tutorial cohort: box plots of LVEF by NYHA class with the Bonferroni-adjusted p-value of each pair; a clustermap of twelve standardised variables with the NYHA class on top and the variables tagged by their Kruskal–Wallis p-value; a Spearman correlation matrix clustered with dendrograms; systolic blood pressure at six months against baseline, with a regression line per arm and box plots in the margins.">
               <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
             </button>
           </figure>

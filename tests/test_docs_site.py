@@ -47,6 +47,8 @@ class _Page(HTMLParser):
             self.images.append(a)
         if tag in ("img", "script", "source", "iframe", "audio", "video") and a.get("src"):
             self.loads.append((tag, a["src"] or ""))
+        if tag == "source" and a.get("srcset"):  # e.g. the still of the tour, for reduced motion
+            self.loads += [(tag, c.split()[0]) for c in (a["srcset"] or "").split(",") if c.strip()]
         if tag == "link" and a.get("href") and a.get("rel") != "canonical":
             self.loads.append((tag, a["href"] or ""))
         if tag == "a" and a.get("href"):
@@ -148,14 +150,15 @@ def _readme_images() -> list[str]:
 
 def test_the_readme_images_exist() -> None:
     images = _readme_images()
-    assert {"assets/readme/tour.webp", "assets/readme/describe.webp", "assets/readme/workflow.webp"} <= set(images)
+    # the tour is shared with the site, so it lives in docs/ (what GitHub Pages publishes)
+    assert {"docs/assets/shots/tour.webp", "assets/readme/describe.webp", "assets/readme/workflow.webp"} <= set(images)
     missing = [path for path in images if not (ROOT / path).is_file()]
     assert not missing, missing
 
 
-@pytest.mark.parametrize("name", ["tour", "describe"])
+@pytest.mark.parametrize("name", ["docs/assets/shots/tour.webp", "assets/readme/describe.webp"])
 def test_the_readme_animations_loop_and_stay_light(name: str) -> None:
-    path = ROOT / "assets" / "readme" / f"{name}.webp"
+    path = ROOT / name
     with Image.open(path) as image:
         assert image.format == "WEBP" and image.n_frames > 10 and image.info.get("loop") == 0
     assert path.stat().st_size < 2_000_000

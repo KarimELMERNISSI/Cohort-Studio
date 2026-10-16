@@ -14,6 +14,8 @@ tour.webp, describe.webp
     fades in. Each frame of the sweep changes only a band of the window and WebP stores only what changed, which
     keeps the files well under the 2 MB of the large-file hook. Frames are drawn at twice the output size and then
     reduced, which smooths every edge. The animations loop; GitHub shows animated WebP in every current browser.
+    The site shows the tour too, so it is written to docs/assets/shots (what GitHub Pages publishes) with
+    tour-still.webp, its first screen for visitors who ask for reduced motion; the README shows it from there.
 workflow.webp
     The workflow map of the Start page, at the end of the tutorial walk-through.
 plots/<name>.webp
@@ -33,6 +35,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 LIBRARY = ROOT / "assets" / "screenshots"
 OUT = ROOT / "assets" / "readme"
+SITE_SHOTS = ROOT / "docs" / "assets" / "shots"  # the tour, shared with the site
 
 Step = tuple[str, str, str]  # (screenshot, URL path, caption)
 TOUR: list[Step] = [  # in the order of a study
@@ -246,7 +249,8 @@ def animate(steps: list[Step], source: Path) -> tuple[list[Image.Image], list[in
     return frames, durations
 
 
-def save_animation(steps: list[Step], source: Path, path: Path) -> None:
+def save_animation(steps: list[Step], source: Path, path: Path) -> Image.Image:
+    """Write the animation and return its first frame."""
     frames, durations = animate(steps, source)
     frames[0].save(  # kmax=0: no forced key frames, so each frame stores only what changed
         path,
@@ -261,6 +265,7 @@ def save_animation(steps: list[Step], source: Path, path: Path) -> None:
         kmax=0,
     )
     print(f"{path.relative_to(ROOT)}: {len(frames)} frames, {path.stat().st_size / 1e6:.2f} MB")
+    return frames[0]
 
 
 def plot(image: Image.Image) -> Image.Image:
@@ -280,7 +285,9 @@ def main() -> None:
         raise SystemExit("usage: python dev_scripts/make_readme_assets.py [screenshots-dir]")
     source = Path(sys.argv[1]) if len(sys.argv) == 2 else LIBRARY
     (OUT / "plots").mkdir(parents=True, exist_ok=True)
-    save_animation(TOUR, source, OUT / "tour.webp")
+    still = save_animation(TOUR, source, SITE_SHOTS / "tour.webp")
+    still.save(path := SITE_SHOTS / "tour-still.webp", "WEBP", quality=86, method=6)
+    print(f"{path.relative_to(ROOT)}: {path.stat().st_size / 1e3:.0f} kB")
     save_animation(DESCRIBE, source, OUT / "describe.webp")
 
     card = screenshot(source, "workflow")

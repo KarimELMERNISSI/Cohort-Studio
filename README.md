@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme/tour.webp" width="100%" alt="CohortStudio on the tutorial cohort, in nine steps: the workflow of the Start page; the data quality score; the analysis population with its participant flow; descriptive statistics; a box plot with p-values between groups; the diagnostics of a multiple imputation; survival curves pooled across 10 imputed datasets; a Cox model pooled with Rubin's rules; the Word study dossier.">
+  <img src="docs/assets/shots/tour.webp" width="100%" alt="CohortStudio on the tutorial cohort, in nine steps: the workflow of the Start page; the data quality score; the analysis population with its participant flow; descriptive statistics; a box plot with p-values between groups; the diagnostics of a multiple imputation; survival curves pooled across 10 imputed datasets; a Cox model pooled with Rubin's rules; the Word study dossier.">
 </p>
 
 <div align="center">

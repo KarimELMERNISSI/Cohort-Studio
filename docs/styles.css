@@ -315,6 +315,10 @@ code {
 .step-num { position: absolute; top: 18px; right: 18px; color: #A7BEC5; font: 600 13px var(--mono); }
 .step h3 { margin-top: 18px; font-size: 17px; }
 .step p { margin-top: 8px; color: var(--muted); font-size: 14.2px; line-height: 1.55; }
+.tour { max-width: 1040px; margin: 56px auto 0; }
+/* the radius of the animation's own rounded corners (36 px on 1600 x 1120), so the shadow follows them */
+.tour img { width: 100%; border-radius: 2.25% / 3.2143%; box-shadow: var(--shadow-md); }
+.tour figcaption { margin-top: 16px; color: var(--muted); font-size: 14.5px; text-align: center; }
 
 /* features */
 .feature {
