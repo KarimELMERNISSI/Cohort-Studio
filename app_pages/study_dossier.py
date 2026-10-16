@@ -46,8 +46,9 @@ def imputations_of(value: Any) -> int | None:
     """m when the result pools multiply imputed datasets (biostats.mi.analyze.MIResult), else None."""
     if hasattr(value, "m_total") and isinstance(getattr(value, "m", None), int):
         return int(value.m)
-    if isinstance(value, dict):  # the pooled group comparison keeps one pooled result per variable
-        for pooled in (value.get("results") or {}).values():
+    results = value.get("results") if isinstance(value, dict) else None
+    if isinstance(results, dict):  # the pooled group comparison keeps one pooled result per variable
+        for pooled in results.values():  # (the observed comparison keeps a list of rows: not pooled)
             m = imputations_of(getattr(pooled, "result", None))
             if m is not None:
                 return m

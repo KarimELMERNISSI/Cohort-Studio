@@ -50,6 +50,30 @@ def _script() -> None:
         welch = compare_groups(groups_from_frame(df, "arm", "sbp_6m"), kind="welch")
         remember("paired", welch, config=("arm", "sbp_6m"), n_analysed=welch.n_total)
         add_to_report("paired")
+        rows = [  # the observed group comparison of Analyze keeps a list of rows, not pooled results
+            {
+                "Variable": "age",
+                "Test Used": "Welch's t-test",
+                "P-Value": 0.59,
+                "Estimate": 0.34,
+                "Estimate CI": "-0.91 to 1.59",
+            },
+            {
+                "Variable": "weight_kg",
+                "Test Used": "Welch's t-test",
+                "P-Value": 0.46,
+                "Estimate": 0.84,
+                "Estimate CI": "-1.37 to 3.04",
+            },
+        ]
+        remember(
+            "univariate",
+            {"results": rows, "group": "arm", "correction": "Holm (recommended)"},
+            config=("arm", ("age", "weight_kg")),
+            n_analysed=len(df),
+            columns=["arm", "age", "weight_kg"],
+        )
+        add_to_report("univariate")
     elif action == "narrow":
         state.activate_family("study_inclusion", False)
     elif action == "mi":
@@ -138,6 +162,20 @@ def test_the_word_dossier_documents_the_flow_and_the_results(data_root: Path) ->
     assert "von Elm E" in text  # STROBE, for the participant flow
     assert "No multiple imputation was used" in text
     assert "does not certify compliance" in text
+    assert (
+        "Group comparison" in headings
+    )  # the observed comparison (a list of rows) is documented too
+
+
+def test_only_pooled_results_count_imputations() -> None:
+    from app_pages.study_dossier import imputations_of
+
+    assert (
+        imputations_of({"results": [{"Variable": "age", "P-Value": 0.5}], "group": "arm"}) is None
+    )
+    assert imputations_of({"results": {}, "group": "arm"}) is None
+    assert imputations_of({"group": "arm"}) is None
+    assert imputations_of(None) is None
 
 
 def test_results_of_another_population_are_left_out_unless_kept_marked(data_root: Path) -> None:

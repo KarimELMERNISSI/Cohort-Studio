@@ -43,6 +43,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
   review.
 
+### Fixed: the study dossier failed with a group comparison in it (Reproduce > Study dossier)
+
+- With a group comparison of Analyze > Hypothesis tests & epidemiology added to the dossier, the page and the Word
+  download stopped with `AttributeError: 'list' object has no attribute 'values'`. Counting the imputations of a
+  result assumed every comparison was pooled, while the comparison on observed data keeps a list of rows.
+- The dossier tests now include an observed group comparison.
+
 ### Fixed: statistics of a new variable dominated by entry errors (Enrich > Create New Variables)
 
 - The preview statistics of a new variable used every row with the mean and SD only. A few entry errors made
