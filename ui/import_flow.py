@@ -16,7 +16,7 @@ from core.state import DEFAULT_NA_TOKENS, ParseOptions, dataset_base_name
 from ingest.loaders import (
     DELIMITER_CANDIDATES,
     DELIMITER_LABELS,
-    SUPPORTED_EXTENSIONS,
+    UPLOAD_TYPES,
     LoadResult,
     excel_sheet_names,
     file_kind,
@@ -240,7 +240,7 @@ def render_import_flow(state: AppState) -> None:
     section("1. Choose a file")
     uploaded = st.file_uploader(
         "Dataset file",
-        type=[ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS],
+        type=UPLOAD_TYPES,
         key="import_uploader",
         help="CSV / TSV / TXT (any delimiter and encoding), Excel (one or several sheets) or Parquet. Max 500 MB.",
     )

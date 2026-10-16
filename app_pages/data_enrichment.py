@@ -25,6 +25,7 @@ from enrich.formulas import (
     validate_variable_name,
 )
 from enrich.imputation_service import impute_rows
+from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
 from ui.components.staging import render_draft_banner
@@ -158,7 +159,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
     if upload_method == "Upload File":
         uploaded_file = st.file_uploader(
             "Drag and drop your enrichment dataset here",
-            type=['csv', 'xlsx'],
+            type=UPLOAD_TYPES,
             key='enrichment_data_uploader'
         )
         if uploaded_file is not None:

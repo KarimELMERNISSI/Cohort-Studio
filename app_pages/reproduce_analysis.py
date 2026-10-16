@@ -7,6 +7,7 @@ import streamlit as st
 
 from core.lineage import verify_trace
 from core.workspace import safe_filename
+from ingest.loaders import UPLOAD_TYPES
 from manage.reproduction_manager import run_trace
 
 # Import necessary modules for reproduction logic
@@ -352,7 +353,7 @@ def app():
                         
                         with cols[1]:
                             # File Uploader
-                            uploaded_missing = st.file_uploader("Upload", type=['csv', 'xlsx', 'parquet'], key=f"pre_upload_{item['path']}")
+                            uploaded_missing = st.file_uploader("Upload", type=UPLOAD_TYPES, key=f"pre_upload_{item['path']}")
                             if uploaded_missing:
                                 save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_missing.name))
                                 with open(save_path, "wb") as f:
@@ -556,7 +557,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             manual_source = st.text_input("Enter path to source dataset:", value=os.path.basename(str(source_dataset)),
                                           key=f"manual_source_path_{session_id}", help="A path inside your workspace.")
         with col_upload:
-            uploaded_source = st.file_uploader("Or upload source file:", type=['csv', 'xlsx', 'parquet'],
+            uploaded_source = st.file_uploader("Or upload source file:", type=UPLOAD_TYPES,
                                                key=f"upload_source_{session_id}", help="Stored in your workspace uploads folder.")
         if uploaded_source:
             save_path = os.path.join(_uploads_dir(), safe_filename(uploaded_source.name))
@@ -588,7 +589,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             manual = st.text_input(f"Enter path for the file of step {step_index + 1}:", value=os.path.basename(missing_path),
                                    key=f"manual_enrich_path_{key_suffix}", help="A path inside your workspace.")
         with col_u:
-            uploaded = st.file_uploader(f"Or upload it (step {step_index + 1}):", type=['csv', 'xlsx', 'parquet'],
+            uploaded = st.file_uploader(f"Or upload it (step {step_index + 1}):", type=UPLOAD_TYPES,
                                         key=f"upload_enrich_{key_suffix}", help="Stored in your workspace uploads folder.")
         resolved = None
         if uploaded:

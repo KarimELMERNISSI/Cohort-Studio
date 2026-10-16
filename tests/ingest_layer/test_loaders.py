@@ -113,17 +113,19 @@ def test_parquet_and_path_loading(tmp_path: Path) -> None:
         file_kind("report.docx")
 
 
-def test_a_legacy_xls_file_without_xlrd_is_refused_with_what_to_do(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import ingest.loaders as loaders
-
-    monkeypatch.setattr(loaders, "_xls_reader_installed", lambda: False)
-    with pytest.raises(ValueError, match=r"save it as \.xlsx"):
-        file_kind("old_export.xls")
-    assert file_kind("export.xlsx") == "excel"
-    monkeypatch.setattr(loaders, "_xls_reader_installed", lambda: True)
-    assert file_kind("old_export.xls") == "excel"
+def test_a_legacy_xls_workbook_is_read_like_xlsx() -> None:
+    """Legacy Excel (.xls, BIFF8) through xlrd: sheets, numbers, decimals and accented text."""
+    data = (Path(__file__).with_name("fixtures") / "legacy_cohort.xls").read_bytes()
+    assert file_kind("legacy_cohort.xls") == "excel"
+    assert excel_sheet_names(data) == ["baseline", "follow_up"]
+    baseline = read_table(data, "legacy_cohort.xls").df
+    assert list(baseline.columns) == ["id", "age", "weight_kg", "site"]
+    assert baseline["weight_kg"].tolist() == [72.5, 80.25, 65.0]
+    assert baseline["site"].iloc[2] == "Ettelbrück"
+    merged = read_table(
+        data, "legacy_cohort.xls", ParseOptions(sheets=("baseline", "follow_up"), merge_key="id")
+    ).df
+    assert len(merged) == 3 and "sbp_6m" in merged.columns
 
 
 def test_sample_cohort_loads_with_documented_properties() -> None:

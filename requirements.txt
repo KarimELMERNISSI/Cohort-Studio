@@ -419,6 +419,8 @@ websockets==16.1.1
     #   streamlit
 wrapt==2.5.0
     # via formulaic
+xlrd==2.0.2
+    # via cohortstudio
 xxhash==4.0.1
     # via langsmith
 zstandard==0.25.0

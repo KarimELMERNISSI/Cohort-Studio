@@ -11,7 +11,7 @@ Data enters the application through **Data > Import** (a three-step flow: choose
 | Format | Extension |
 | --- | --- |
 | Delimited text (CSV, TSV) | `.csv`, `.tsv`, `.txt` |
-| Excel | `.xlsx`, `.xlsm`; `.xls` only when the `xlrd` package is installed (it is not installed by default: save such files as `.xlsx`) |
+| Excel | `.xlsx`, `.xlsm` and legacy `.xls` workbooks |
 | Parquet | `.parquet` |
 
 After loading, the dataset is displayed as an interactive preview with shape information (rows × columns) and data types per column.

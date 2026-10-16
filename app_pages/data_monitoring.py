@@ -16,6 +16,7 @@ from app_pages.data_quality_dashboard import render_dashboard
 from core.fingerprint import ids_to_ranges
 from core.population import catalogue, criterion_id
 from enrich import custom_metrics_and_filters as ecm
+from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import no_dataset
 from ui.components.population import activate_family, render_population_panel
@@ -868,7 +869,7 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
     elif selection_method == "Upload File":
         uploaded_file = st.file_uploader(
             f"Upload {label}",
-            type=['csv', 'xlsx', 'parquet'],
+            type=UPLOAD_TYPES,
             key=f"{tmp}_data_uploader"
         )
         if uploaded_file is not None:

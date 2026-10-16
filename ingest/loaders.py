@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import csv
 import functools
-import importlib.util
 import io
 import logging
 import os
@@ -28,6 +27,7 @@ CSV_EXTENSIONS = {".csv", ".tsv", ".txt"}
 EXCEL_EXTENSIONS = {".xlsx", ".xls", ".xlsm"}
 PARQUET_EXTENSIONS = {".parquet"}
 SUPPORTED_EXTENSIONS = sorted(CSV_EXTENSIONS | EXCEL_EXTENSIONS | PARQUET_EXTENSIONS)
+UPLOAD_TYPES = [ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS]  # for st.file_uploader(type=...)
 DELIMITER_CANDIDATES = (",", ";", "\t", "|")
 DELIMITER_LABELS = {",": "comma ( , )", ";": "semicolon ( ; )", "\t": "tab", "|": "pipe ( | )"}
 
@@ -67,22 +67,12 @@ class LoadResult:
     report: ParseReport
 
 
-def _xls_reader_installed() -> bool:
-    """Legacy ``.xls`` workbooks are read by xlrd, which is not a dependency of the application."""
-    return importlib.util.find_spec("xlrd") is not None
-
-
 def file_kind(filename: str) -> str:
     """``csv`` | ``excel`` | ``parquet`` from the file extension; raises for anything else."""
     ext = os.path.splitext(filename or "")[1].lower()
     if ext in CSV_EXTENSIONS:
         return "csv"
-    if ext in EXCEL_EXTENSIONS:
-        if ext == ".xls" and not _xls_reader_installed():
-            raise ValueError(
-                "Legacy Excel files (.xls) need the xlrd package, which is not installed. Open the file in Excel "
-                "or LibreOffice, save it as .xlsx and import it again."
-            )
+    if ext in EXCEL_EXTENSIONS:  # .xlsx and .xlsm through openpyxl, legacy .xls through xlrd
         return "excel"
     if ext in PARQUET_EXTENSIONS:
         return "parquet"
@@ -317,6 +307,7 @@ __all__ = [
     "DELIMITER_CANDIDATES",
     "DELIMITER_LABELS",
     "SUPPORTED_EXTENSIONS",
+    "UPLOAD_TYPES",
     "LoadResult",
     "ParseReport",
     "detect_decimal",

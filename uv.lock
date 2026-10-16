@@ -365,6 +365,7 @@ dependencies = [
     { name = "streamlit" },
     { name = "tabulate" },
     { name = "tqdm" },
+    { name = "xlrd" },
 ]
 
 [package.optional-dependencies]
@@ -456,6 +457,7 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tqdm", specifier = ">=4.70.0" },
     { name = "umap-learn", marker = "extra == 'ml'", specifier = ">=0.5.12" },
+    { name = "xlrd", specifier = ">=2.0.1" },
     { name = "yfiles-graphs-for-streamlit", marker = "extra == 'graph-yfiles'", specifier = ">=2.0,<3" },
 ]
 provides-extras = ["ai", "ml", "all", "graph-yfiles", "dev", "survival"]
@@ -3026,6 +3028,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/2a/1d/374cec175b6087e1067a780374d81d74ca966e1e5e39e666402eaee19a65/wrapt-2.5.0-cp315-cp315t-win_amd64.whl", hash = "sha256:1d4da5f0e9a719471502b0db80d5c97503aeca796b7aeb9ab8f47403b2be76e6", size = 109671, upload-time = "2026-09-27T01:41:35.553Z" },
     { url = "https://files.pythonhosted.org/packages/c7/93/fc9e477a1771bec52d7677eee5e8404afe662a47efe1859405a18fff206c/wrapt-2.5.0-cp315-cp315t-win_arm64.whl", hash = "sha256:78b7bdaa8b27b7f7607c66bdb6ab15c1dcbd9e9a1556a253a347dad511f615d1", size = 105969, upload-time = "2026-09-27T01:41:36.973Z" },
     { url = "https://files.pythonhosted.org/packages/87/7d/5ed859fad4b5eddd598a846150aaab2703730ed4886c5c5e03b0df0cfdd5/wrapt-2.5.0-py3-none-any.whl", hash = "sha256:107eea1a511e98a3a5033b0c2cb403fbb37f05dee6ac1fb85c0460d311ec278c", size = 81586, upload-time = "2026-09-27T01:41:55.479Z" },
+]
+
+[[package]]
+name = "xlrd"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/5a/377161c2d3538d1990d7af382c79f3b2372e880b65de21b01b1a2b78691e/xlrd-2.0.2.tar.gz", hash = "sha256:08b5e25de58f21ce71dc7db3b3b8106c1fa776f3024c54e45b45b374e89234c9", size = 100167, upload-time = "2025-06-14T08:46:39.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/62/c8d562e7766786ba6587d09c5a8ba9f718ed3fa8af7f4553e8f91c36f302/xlrd-2.0.2-py2.py3-none-any.whl", hash = "sha256:ea762c3d29f4cca48d82df517b6d89fbce4db3107f9d78713e48cd321d5c9aa9", size = 96555, upload-time = "2025-06-14T08:46:37.766Z" },
 ]
 
 [[package]]

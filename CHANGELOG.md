@@ -74,8 +74,9 @@ Found while correcting the documentation:
 
 - **Validate > Data quality dashboard**: the MAR check of one variable used Student's t-test under "Force
   Parametric". It now uses Welch's t-test, like the dependency scan and the rest of the application.
-- **Import**: a legacy Excel file (`.xls`) was accepted, then failed with a message about a missing package
-  (`xlrd`, not a dependency). It is now refused at once, with what to do (save it as `.xlsx`).
+- **Import**: legacy Excel files (`.xls`) were accepted, then failed on a missing package. They are now read like
+  `.xlsx`: `xlrd` is a dependency. The other uploads (Enrich, the comparison on Validate, the missing files of
+  a replay) accept the same file types as Import.
 - **Visualize**: the test choices for the significance brackets name what runs, pairwise Welch t-tests or pairwise
   Mann-Whitney U tests. The former labels named ANOVA and Kruskal-Wallis, which never ran there.
 - **Explore > Statistics & correlations**: the "Optimization Settings" of the benchmark are removed. Nothing used
