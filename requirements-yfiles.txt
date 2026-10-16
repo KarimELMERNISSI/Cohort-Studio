@@ -74,7 +74,7 @@ formulaic==1.2.2
     # via
     #   lifelines
     #   statsmodels
-google-auth==2.61.0
+google-auth==2.62.0
     # via google-genai
 google-genai==2.29.0
     # via cohortstudio
