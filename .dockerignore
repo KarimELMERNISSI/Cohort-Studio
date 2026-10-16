@@ -30,6 +30,8 @@ dev_scripts/
 environments/
 tests/
 docs/
+assets/readme/
+assets/screenshots/
 documentation/legacy/
 scratch*/
 *.log

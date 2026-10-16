@@ -9,9 +9,13 @@ then, with Playwright from a temporary environment (Microsoft Edge or Chromium i
 
     CMP_SITE_BASE=http://localhost:8769 uv run --no-project --python 3.14 --with playwright         python dev_scripts/site_screenshots.py <out-dir> [shot names...]
 
-and build the page images with dev_scripts/make_site_assets.py <out-dir>. The 1440x900 viewport is captured
-at 2x; the script ticks the clinical-anomaly and study-inclusion criteria, runs a multiple imputation (m = 10),
-the pooled survival analysis and Cox model, the group comparison, and adds two results to the study dossier.
+and build the page images with dev_scripts/make_site_assets.py <out-dir> and the README images with
+dev_scripts/make_readme_assets.py <out-dir>; dev_scripts/keep_screenshots.py <out-dir> adds them to the
+screenshot library (assets/screenshots). The 1440x900 viewport is captured at 2x; the script ticks the
+clinical-anomaly and study-inclusion criteria, captures the Explore statistics and correlations, draws six
+Visualize figures (each also captured on its own, as plot_<name>.png), runs a multiple imputation (m = 10), the
+pooled survival analysis and Cox model, the group comparison, adds two results to the study dossier, and ends on
+the Start page, whose workflow map (workflow.png) then shows the steps done.
 """
 
 import os
@@ -60,6 +64,84 @@ def choose(page: Page, label: str, option: str) -> None:
     settle(page, 900)
 
 
+def choose_checked(page: Page, label: str, option: str) -> None:
+    """choose(), then check that the selectbox holds the option: a rerun can swallow a selection."""
+    for _ in range(3):
+        choose(page, label, option)
+        if page.get_by_label(label, exact=True).first.input_value() == option:  # the combobox input holds it
+            return
+    raise RuntimeError(f"{label!r} did not take {option!r}")
+
+
+def pick(page: Page, label: str, options: list[str]) -> None:
+    """Replace the selection of a multiselect."""
+    page.get_by_label(label, exact=True).first.click()
+    for _ in range(40):  # Backspace removes the last chip
+        page.keyboard.press("Backspace")
+    page.keyboard.press("Escape")
+    settle(page, 900)
+    for option in options:
+        choose(page, label, option)
+
+
+def set_checkbox(page: Page, text: str, value: bool) -> None:
+    box = page.locator('[data-testid="stCheckbox"]').filter(has_text=re.compile(rf"^{re.escape(text)}$")).last
+    for _ in range(3):
+        if box.get_by_role("checkbox").is_checked() == value:
+            return
+        box.locator("label").first.click()
+        settle(page, 900)
+    raise RuntimeError(f"checkbox {text!r} did not become {value}")
+
+
+def style(page: Page, theme: str, palette: str | None = None) -> None:
+    """Theme and colour scheme of the Visualize page (sidebar, Visual Settings)."""
+    sidebar = page.locator('[data-testid="stSidebar"]')
+    if not sidebar.get_by_label("Theme", exact=True).first.is_visible():
+        sidebar.get_by_text("Visual Settings").first.click()
+        settle(page, 800)
+    choose_checked(page, "Theme", theme)
+    if palette:
+        choose_checked(page, "Color Scheme", palette)
+
+
+def figure(page: Page, name: str) -> None:
+    """The last visible Plotly chart of the page on its own, as plot_<name>.png."""
+    if ONLY and f"plot_{name}" not in ONLY:
+        return
+    chart = page.locator('[data-testid="stPlotlyChart"]:visible').last
+    chart.locator(".main-svg").first.wait_for(timeout=120000)
+    page.wait_for_timeout(1500)
+    chart.scroll_into_view_if_needed()
+    page.mouse.move(5, 5)  # no hover label and no mode bar
+    page.wait_for_timeout(600)
+    chart.screenshot(path=str(OUT / f"plot_{name}.png"), animations="disabled", timeout=120000)
+    log.append(f"plot_{name}")
+
+
+def start_page_top(page: Page) -> None:
+    """The Start page scrolled to the top, where the workflow map is."""
+    link = page.locator('[data-testid="stTopNavLink"]').filter(has_text="Start")
+    if not link.count():
+        link = page.get_by_role("link", name="Start")
+    link.first.click()
+    settle(page, 2500)
+    page.mouse.move(900, 450)
+    page.mouse.wheel(0, -8000)
+    page.wait_for_timeout(800)
+
+
+def workflow(page: Page, name: str) -> None:
+    """The workflow map of the Start page on its own (its bordered card), as <name>.png."""
+    if ONLY and name not in ONLY:
+        return
+    card = page.locator('[data-testid="stLayoutWrapper"]').filter(has=page.locator("div.wf")).last
+    page.mouse.move(5, 880)  # off the map: no box is highlighted
+    page.wait_for_timeout(600)
+    card.screenshot(path=str(OUT / f"{name}.png"), animations="disabled", timeout=120000)
+    log.append(name)
+
+
 def scroll_to(page: Page, text: str, offset: int = -90) -> None:
     """Put the first element with this text at the top of the view, then scroll by offset (negative = up)."""
     target = page.get_by_text(text, exact=False).first
@@ -88,7 +170,12 @@ with sync_playwright() as p:
     settle(page)
     page.get_by_role("button", name="Load the tutorial cohort").click()
     settle(page, 2000)
+    page.wait_for_timeout(4500)  # the "loaded" toast goes away
+    page.mouse.move(900, 450)
+    page.mouse.wheel(0, -8000)
+    page.wait_for_timeout(800)
     shot(page, "start")
+    workflow(page, "workflow_start")
 
     sidebar = page.locator('[data-testid="stSidebar"]')
     sidebar.get_by_text(re.compile(r"Population: all 1,206 rows")).first.click()
@@ -109,6 +196,98 @@ with sync_playwright() as p:
     settle(page, 2500)
     scroll_to(page, "928 of 1,206 rows", offset=-140)
     shot(page, "population")
+
+    # Explore > Statistics & correlations: column types, descriptive statistics, correlations
+    go(page, "Explore", "Statistics & correlations")
+    settle(page, 3000)
+    scroll_to(page, "Columns Information", offset=-110)
+    shot(page, "explore_types")
+    scroll_to(page, "Quantitative Data Statistics", offset=-100)
+    settle(page, 1500)
+    shot(page, "explore_stats")
+    scroll_to(page, "Qualitative Data Statistics", offset=-100)
+    shot(page, "explore_qual")
+    scroll_to(page, "Correlation Network Graph", offset=-60)
+    settle(page, 2500)
+    shot(page, "explore_graph")
+    figure(page, "network")
+    tab = page.get_by_role("tab", name="Correlation Matrix")
+    tab.evaluate("e => e.scrollIntoView({block: 'center'})")  # not under the sticky top bar
+    page.wait_for_timeout(500)
+    tab.click()
+    settle(page, 2500)
+    tab.evaluate("e => e.scrollIntoView({block: 'start'})")
+    page.mouse.move(900, 450)
+    page.mouse.wheel(0, -80)
+    page.wait_for_timeout(900)
+    shot(page, "explore_matrix")
+    figure(page, "explore_matrix")
+
+    # Explore > Visualize: six figures, each with its own theme and palette
+    go(page, "Explore", "Visualize")
+    choose_checked(page, "Plot Type", "Box Plot")
+    pick(page, "Select Numeric Variables", ["lvef_pct"])
+    choose_checked(page, "Group by", "nyha_class")
+    set_checkbox(page, "Show Statistical Significance", True)
+    choose_checked(page, "Multiple Testing Correction", "Bonferroni")
+    style(page, "plotly_white", "Safe - Colorblind-friendly color palette")
+    figure(page, "box")
+    page.locator('[data-testid="stPlotlyChart"]').last.evaluate("e => e.scrollIntoView({block: 'start'})")
+    page.mouse.move(900, 450)
+    page.mouse.wheel(0, -75)
+    page.wait_for_timeout(800)
+    shot(page, "visualize")
+
+    choose_checked(page, "Plot Type", "Violin Plot")
+    pick(page, "Select Numeric Variables", ["hba1c_pct", "potassium_mmol_l"])
+    choose_checked(page, "Group by", "diabetes")
+    set_checkbox(page, "Show Statistical Significance", True)
+    style(page, "seaborn", "Set2 - Alternative qualitative color palette")
+    figure(page, "violin")
+
+    choose_checked(page, "Plot Category", "Relationships")
+    choose_checked(page, "Plot Type", "Scatter Plot")
+    choose_checked(page, "X Variable", "sbp_baseline")
+    choose_checked(page, "Y Variable", "sbp_6m")
+    choose_checked(page, "Group by (optional)", "arm")
+    choose_checked(page, "Plot Mode", "Regression (Linear)")
+    choose_checked(page, "Marginal Distribution (Joint Plot)", "Box")
+    style(page, "ggplot2", "T10 - 10 distinct colors for smaller datasets")
+    figure(page, "scatter")
+
+    choose_checked(page, "Plot Type", "Correlation Matrix")
+    style(page, "plotly_white")
+    pick(page, "Select Columns for Correlation", [
+        "sbp_baseline", "sbp_ambulatory", "sbp_6m", "dbp_baseline", "lvef_pct", "lvef_reader2_pct",
+        "nt_probnp_pg_ml", "weight_kg", "height_cm", "age", "creatinine_umol_l", "fu_days", "n_hospital_visits",
+    ])
+    choose_checked(page, "Method", "spearman")
+    for box in ("Cluster Rows", "Cluster Cols", "Show Row Dendrogram", "Show Col Dendrogram"):
+        set_checkbox(page, box, True)
+    figure(page, "corr")
+
+    choose_checked(page, "Plot Type", "Clustermap")
+    pick(page, "Select Features (Numeric Values)", [
+        "age", "lvef_pct", "nt_probnp_pg_ml", "sbp_baseline", "dbp_baseline", "heart_rate", "creatinine_umol_l",
+        "potassium_mmol_l", "hba1c_pct", "ldl_mmol_l", "troponin_ng_l", "weight_kg",
+    ])
+    choose_checked(page, "Group Samples by (Optional Color)", "nyha_class")  # no sample id: it has duplicates
+    if not page.get_by_label("Group Features by", exact=True).first.is_visible():
+        page.get_by_text("Advanced Options").last.click()
+        settle(page, 900)
+    set_checkbox(page, "Show Sample Labels", False)
+    set_checkbox(page, "Show Column Dendrogram", True)
+    set_checkbox(page, "Show Row Dendrogram", True)
+    choose_checked(page, "Group Features by", "P-value (Sample Group)")
+    page.get_by_role("button", name="Generate Clustermap").click()
+    settle(page, 6000)
+    figure(page, "clustermap")
+
+    choose_checked(page, "Plot Category", "Categorical")
+    choose_checked(page, "Plot Type", "Sunburst Chart")
+    pick(page, "Select Hierarchy (in order)", ["arm", "nyha_class", "smoking_status"])
+    style(page, "plotly_white", "Pastel1 - Soft pastel color palette")
+    figure(page, "sunburst")
 
     go(page, "Data", "Enrich")
     page.get_by_role("tab", name="Handle Missing Data").click(force=True)
@@ -172,6 +351,11 @@ with sync_playwright() as p:
     go(page, "Reproduce", "Versions & traces")
     settle(page, 2500)
     shot(page, "traces")
+
+    # the Start page again: the workflow map now shows the steps done
+    start_page_top(page)
+    shot(page, "start_workflow")
+    workflow(page, "workflow")
     browser.close()
 
 print("captured:", ", ".join(log))

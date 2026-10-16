@@ -1,9 +1,10 @@
 """
 Build the images of the documentation site (docs/assets/) from app screenshots and the brand assets.
 
-    uv run python dev_scripts/make_site_assets.py <screenshots-dir>
+    uv run python dev_scripts/make_site_assets.py [screenshots-dir]
 
-The screenshots come from dev_scripts/site_screenshots.py: the real application on the tutorial cohort, a
+The screenshots come from the library, assets/screenshots (see dev_scripts/keep_screenshots.py), or from the
+directory of a capture run of dev_scripts/site_screenshots.py: the real application on the tutorial cohort, a
 1440x900 viewport captured at 2x. Crop boxes below are in CSS pixels of that viewport.
 
 Outputs (docs/assets/):
@@ -28,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 from ui.theme import APP_TAGLINE, BRAND  # noqa: E402
 
 LOGO = ROOT / "assets" / "karim-app-logo.png"
+LIBRARY = ROOT / "assets" / "screenshots"
 BRAND_DIR = ROOT / "assets" / "brand"
 OUT = ROOT / "docs" / "assets"
 VIEWPORT_WIDTH = 1440
@@ -44,6 +46,14 @@ SHOTS: dict[str, tuple[str, tuple[int, int, int, int] | None, int]] = {
     "mi-setup": ("mi_setup", (338, 216, 1376, 864), 1200),
     "comparison": ("comparison", (346, 144, 1382, 792), 1200),
 }
+
+
+def screenshot(source: Path, name: str) -> Image.Image:
+    """A screenshot by name: the PNG of a capture run or the WebP of the library."""
+    for suffix in (".png", ".webp"):
+        if (path := source / f"{name}{suffix}").exists():
+            return Image.open(path).convert("RGB")
+    raise FileNotFoundError(f"no screenshot {name!r} in {source}")
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont:
@@ -82,7 +92,7 @@ def shots(source: Path) -> dict[str, tuple[int, int]]:
     out.mkdir(parents=True, exist_ok=True)
     sizes: dict[str, tuple[int, int]] = {}
     for name, (shot, box, width) in SHOTS.items():
-        image = Image.open(source / f"{shot}.png").convert("RGB")
+        image = screenshot(source, shot)
         scale = image.width / VIEWPORT_WIDTH
         if box is not None:
             image = image.crop(tuple(round(v * scale) for v in box))
@@ -116,7 +126,7 @@ def og_image(source: Path) -> None:
         )
     canvas = canvas.convert("RGBA")
 
-    shot = Image.open(source / "survival.png").convert("RGB")
+    shot = screenshot(source, "survival")
     shot = shot.resize((760, round(shot.height * 760 / shot.width)), Image.LANCZOS)
     shot = _rounded(shot, 18)
     shadow = Image.new("RGBA", (shot.width + 80, shot.height + 80), (0, 0, 0, 0))
@@ -152,9 +162,9 @@ def og_image(source: Path) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: python dev_scripts/make_site_assets.py <screenshots-dir>")
-    source = Path(sys.argv[1])
+    if len(sys.argv) > 2:
+        raise SystemExit("usage: python dev_scripts/make_site_assets.py [screenshots-dir]")
+    source = Path(sys.argv[1]) if len(sys.argv) == 2 else LIBRARY
     brand()
     sizes = shots(source)
     og_image(source)
