@@ -8,10 +8,11 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Build and Run
-docker-compose up --build -d
+# Build and Run (Docker Compose v2)
+docker compose up --build -d
 
 echo ""
 echo "Application started! Access it at http://localhost:8501"
-echo "To view logs, run: docker-compose logs -f"
-echo "To stop, run: docker-compose down"
+echo "First start: run 'docker compose logs cohortstudio' to read the one-time setup token for the administrator."
+echo "To view logs, run: docker compose logs -f"
+echo "To stop, run: docker compose down"

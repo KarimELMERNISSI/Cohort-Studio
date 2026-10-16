@@ -16,7 +16,8 @@ services:
       - ./config:/app/config
     env_file:
       # Bootstrap administrator (CMP_ADMIN_USERNAME / CMP_ADMIN_PASSWORD or CMP_ADMIN_PASSWORD_FILE),
-      # AI provider keys and other settings: see .env.example
+      # AI provider keys and other settings: see .env.example. Without CMP_ADMIN_PASSWORD, the first start writes a
+      # one-time setup token to the log (`docker compose logs cohortstudio`) to create the administrator.
       - path: .env
         required: false
     environment:
@@ -31,7 +32,7 @@ services:
 
   # Optional Qdrant server (uncomment, then set CMP_VECTOR_STORE / CMP_QDRANT_URL above)
   # qdrant:
-  #   image: qdrant/qdrant:latest   # pin to the release matching qdrant-client in uv.lock (1.19)
+  #   image: qdrant/qdrant:v1.19.2   # the server release matching qdrant-client in uv.lock (1.19)
   #   container_name: cohortstudio_qdrant
   #   volumes:
   #     - ./data/qdrant:/qdrant/storage

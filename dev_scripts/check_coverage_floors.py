@@ -15,7 +15,18 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-FLOORS: dict[str, float] = {"biostats": 90.0, "core": 90.0, "graph": 91.0, "ingest": 87.0, "ui": 75.0}
+# Measured 2026-10-16 (follow-up programme M4): biostats 94.5, core 94.2, graph 93.7, ingest 89.8, ui 83.6, explore 76.9,
+# manage 64.2, enrich 58.6 (66 overall).
+FLOORS: dict[str, float] = {
+    "biostats": 92.0,
+    "core": 92.0,
+    "graph": 91.0,
+    "ingest": 87.0,
+    "ui": 81.0,
+    "explore": 74.0,
+    "manage": 61.0,
+    "enrich": 56.0,
+}
 
 
 def package_coverage(xml_path: Path) -> dict[str, tuple[int, int]]:

@@ -26,6 +26,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     `docker compose logs cohortstudio` from the start.
   - A page load never replaces a pending token. `python manage_users.py setup-token` issues a new one, for a lost
     log.
+- **CI** (`.github/workflows`):
+  - A job without the optional groups runs the whole suite, with the AI tests skipped.
+  - A job builds the Docker image, starts a fresh container, waits for its health check, finds the first-run setup
+    token in its log and issues a new one from the command line inside the container.
+  - A weekly workflow runs the statistical simulation suites (`pytest -m slow`).
+  - The integration workflow is pinned like CI (uv 0.10.9, Python 3.14), installs every optional group and gets
+    `ANTHROPIC_API_KEY`.
+  - Coverage floors are raised to the measured values minus about 2 points: 63 % overall; per package, biostats and
+    core 92, graph 91, ingest 87, ui 81, explore 74, manage 61, enrich 56.
+- **Docker**:
+  - `run_docker.bat` mounts `./data` and `./config`, reads `.env` and shows the log with the setup token.
+  - The start scripts use Docker Compose v2.
+  - The optional Qdrant server is pinned to `qdrant/qdrant:v1.19.2`, the client's release.
 
 ### Fixed: statistics of a new variable dominated by entry errors (Enrich > Create New Variables)
 

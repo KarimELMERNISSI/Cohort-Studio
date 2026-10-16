@@ -50,7 +50,7 @@ jobs:
         shell: bash  # with pipefail: the step fails when pytest fails, not when tee succeeds
         env:
           COLUMNS: "240"  # the short summary keeps the start of each failure message
-        run: uv run pytest -m "not integration and not slow" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=55 2>&1 | tee pytest.log
+        run: uv run pytest -m "not integration and not slow" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=63 2>&1 | tee pytest.log
 
       # The failed tests and the coverage verdict as one annotation: shown on the run page and readable through
       # the public API (downloading the job log needs admin rights on the repository)
@@ -83,3 +83,83 @@ jobs:
           name: coverage-xml
           path: coverage.xml
           if-no-files-found: ignore
+
+  # The statistics engine, the data pipeline and every page without the optional groups (ai, ml, survival): what a
+  # site that installs no AI or machine-learning stack runs. The AI tests are skipped there (follow-up programme M4).
+  minimal:
+    name: Without the optional dependency groups
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CMP_IAM_PROVIDER: local
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python 3.14
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.9"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install the core dependencies only (and the test tools)
+        run: uv sync --frozen --extra dev
+
+      - name: No optional group is installed
+        run: |
+          uv run python -c "import sys, utils.optional as o; found = {e: o.extra_installed(e) for e in o.EXTRAS}; print(found); sys.exit(any(found.values()))"
+
+      - name: Tests (offline; the AI tests are skipped)
+        shell: bash
+        env:
+          COLUMNS: "240"
+        run: uv run pytest -m "not integration and not slow" -q -rs 2>&1 | tee pytest.log
+
+      - name: Failed tests
+        if: failure()
+        shell: bash
+        run: |
+          grep -E '^(FAILED|ERROR) [^ ]+\.py' pytest.log | head -60 > failures.txt || true
+          if [ -s failures.txt ]; then
+            echo "::error title=pytest (minimal install)::$(sed -e 's/%/%25/g' -e 's/\r//g' failures.txt | awk 'BEGIN{ORS="%0A"} {print}')"
+          fi
+
+  # The production image: built from the Dockerfile, started fresh (no administrator configured), answering its
+  # health check, with the first-run setup token in its log (follow-up programme M4).
+  docker:
+    name: Docker image (build, fresh start, health, first-run setup)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t cohortstudio:ci .
+
+      - name: Start a fresh container
+        run: docker run -d --name cohortstudio -p 8501:8501 cohortstudio:ci
+
+      - name: The server answers its health check
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8501/_stcore/health; then echo " (attempt ${attempt})"; exit 0; fi
+            sleep 3
+          done
+          exit 1
+
+      - name: The first-run setup token is in the container log
+        run: |
+          docker logs cohortstudio 2>&1 | grep -q "one-time setup token:"
+
+      - name: A new setup token from the command line in the container
+        run: |
+          docker exec cohortstudio python manage_users.py setup-token | grep -q "One-time setup token:"
+
+      - name: Container log
+        if: always()
+        run: |
+          docker logs cohortstudio 2>&1 | sed -E 's/(setup token: )[^ ]+/\1***/' | tail -80

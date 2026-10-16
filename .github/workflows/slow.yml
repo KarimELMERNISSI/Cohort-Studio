@@ -1,0 +1,32 @@
+name: Statistical simulations (weekly)
+
+# Suites marked `slow` (minutes): the bias and the 95% coverage of the multiple imputation under MAR, over
+# hundreds of simulated datasets. They are left out of every push; this workflow runs them every week and on demand.
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Mondays, 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  slow:
+    name: Simulation suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv and Python 3.14
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.9"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install Python and dependencies (locked)
+        run: uv sync --frozen --extra dev --extra all
+
+      - name: Simulation suites
+        run: uv run pytest -m slow -q

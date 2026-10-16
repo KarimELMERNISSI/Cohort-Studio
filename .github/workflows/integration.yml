@@ -16,18 +16,22 @@ jobs:
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install uv
+      # Pinned like ci.yml: an unpinned uv picks the newest Python allowed (3.15), without wheels for the lock
+      - name: Install uv and Python 3.14
         uses: astral-sh/setup-uv@v6
         with:
+          version: "0.10.9"
+          python-version: "3.14"
           enable-cache: true
 
-      - name: Install Python and dependencies (locked)
-        run: uv sync --frozen --extra dev
+      - name: Install Python and dependencies (locked; the AI connectors are in the optional groups)
+        run: uv sync --frozen --extra dev --extra all
 
       - name: Integration tests
         run: uv run pytest -m integration -q
