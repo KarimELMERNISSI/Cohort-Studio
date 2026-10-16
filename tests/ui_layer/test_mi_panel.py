@@ -82,6 +82,9 @@ def test_parallel_run_from_the_app_matches_the_sequential_one(app: AppTest) -> N
     app.toggle(key="mi_parallel").set_value(True)
     app.button(key="mi_run").click().run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
+    assert "_mi" in app.session_state, [
+        e.value for e in app.error
+    ]  # the panel shows why the run failed
     parallel = app.session_state["_mi"].mi.fingerprint()
     app.toggle(key="mi_parallel").set_value(False)
     app.button(key="mi_run").click().run()

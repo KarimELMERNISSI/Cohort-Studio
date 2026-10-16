@@ -18,6 +18,7 @@ predictors (White & Royston 2009).
 
 from __future__ import annotations
 
+import pickle
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -319,15 +320,20 @@ def impute(
 
     ``workers`` > 1 runs the chains in that many processes; the result is identical (one stream per chain). The
     processes are started from a separate interpreter (:mod:`biostats.mi.parallel`), so that they never re-run
-    the Streamlit page script that is ``__main__`` in the application.
+    the Streamlit page script that is ``__main__`` in the application. If that run fails (the system refuses
+    the processes, the interpreter stops), the chains run here instead, with a warning: the result is the same.
     """
     import os
 
     from biostats.mi.parallel import IN_SUBPROCESS, run_in_subprocess
 
     _check(df, spec)
+    fallback: str | None = None
     if workers > 1 and spec.m > 1 and not os.environ.get(IN_SUBPROCESS):
-        return run_in_subprocess(df, spec, workers, progress)
+        try:
+            return run_in_subprocess(df, spec, workers, progress)
+        except (RuntimeError, OSError, EOFError, pickle.UnpicklingError) as exc:
+            fallback = f"the parallel run failed ({exc}); the chains ran in one process instead (the result is the same)"
     started = time.perf_counter()
     methods, predictors, warnings = _resolve(df, spec)
     strata: list[tuple[int, Any, np.ndarray]] = []
@@ -422,7 +428,7 @@ def impute(
         trace=trace,
         rhat={name: _rhat(values["mean"]) for name, values in trace.items()},
         dropped={t: sorted(cols) for t, cols in dropped.items() if cols},
-        warnings=warnings,
+        warnings=[*warnings, *([fallback] if fallback else [])],
         elapsed=time.perf_counter() - started,
     )
 

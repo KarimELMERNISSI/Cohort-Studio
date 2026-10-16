@@ -251,3 +251,19 @@ def test_parallel_chains_give_the_same_imputations() -> None:
         np.array_equal(sequential.trace[k]["mean"], parallel.trace[k]["mean"], equal_nan=True)
         for k in sequential.trace
     )
+
+
+def test_a_failed_parallel_run_falls_back_to_one_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    import biostats.mi.parallel as parallel
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("the parallel imputation failed: exit code 3")
+
+    monkeypatch.setattr(parallel, "run_in_subprocess", refuse)
+    _, df = _cohort(n=200)
+    spec = SPEC.model_copy(update={"m": 3, "maxit": 2})
+    fallback = impute(df, spec, workers=2)
+    sequential = impute(df, spec)
+    assert fallback.mi.fingerprint() == sequential.mi.fingerprint()
+    assert any("the parallel run failed" in w and "exit code 3" in w for w in fallback.warnings)
+    assert not any("parallel" in w for w in sequential.warnings)
