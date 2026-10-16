@@ -6,6 +6,9 @@ and native PDF loader functionality across Gemini, Ollama, OpenAI, and Mistral.
 """
 
 
+import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
 from langchain_core.messages import HumanMessage
 
 from manage.rag import (

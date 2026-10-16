@@ -25,6 +25,7 @@ from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
 from utils.multipage import load_dataframe
+from utils.optional import available_methods
 from utils.session_scope import get_current_scope
 
 #############################################################################################
@@ -1283,7 +1284,7 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
     # Projection Method Selector
     projection_method = st.selectbox(
         "Select Projection Method",
-        ["PCA", "FAMD", "t-SNE", "UMAP"],
+        available_methods(["PCA", "FAMD", "t-SNE", "UMAP"])[0],
         index=0,
         help="PCA: Linear (fast, numeric only)\n"
              "FAMD: Factor Analysis for Mixed Data (numeric + categorical)\n"

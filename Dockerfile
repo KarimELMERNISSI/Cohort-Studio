@@ -21,13 +21,14 @@ WORKDIR /app
 # yworks.com at render time and reports anonymised usage data; see documentation/developer/Graph_Rendering.md).
 ARG WITH_YFILES=0
 
-# Dependencies first so the layer is cached across source changes.
+# Dependencies first so the layer is cached across source changes. The image installs every optional group
+# (`all`: AI engine, machine-learning methods, survival diagnostics).
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$WITH_YFILES" = "1" ]; then \
-        uv sync --frozen --no-install-project --extra survival --extra graph-yfiles; \
+        uv sync --frozen --no-install-project --extra all --extra graph-yfiles; \
     else \
-        uv sync --frozen --no-install-project --extra survival; \
+        uv sync --frozen --no-install-project --extra all; \
     fi
 
 COPY . .

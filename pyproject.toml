@@ -23,27 +23,12 @@ dependencies = [
     "scikit-learn>=1.9.0",
     "scipy>=1.18.0",
     "statsmodels>=0.15.0",
-    "lightgbm>=4.7.0",
-    "umap-learn>=0.5.12",
-    "prince>=0.21.0",
     "networkx>=3.4",
 
     # Visualization
     "plotly>=7.1.0",
     "matplotlib>=3.11.0",
     "seaborn>=0.13.2",
-
-    # AI, RAG & LLMs
-    "google-genai>=2.29.0",
-    "langchain>=1.4.0",
-    "langchain-core>=1.6.0",
-    "langchain-community>=0.4.0",
-    "langchain-text-splitters>=1.1.0",
-    "pypdf>=6.19.0",
-    "anthropic>=1.0",  # Claude connector (chat; documents embedded by another provider)
-    # Vector databases (selectable in Settings > AI engine): LanceDB embedded by default, Qdrant embedded or server
-    "lancedb>=0.25",
-    "qdrant-client>=1.15",
 
     # Security & Utilities
     "bcrypt>=5.0.0",
@@ -58,6 +43,28 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Optional groups (follow-up programme M4): the statistics engine, the data pipeline and the analysis pages need
+# none of them. `uv sync --extra all` (Docker, requirements.txt) installs everything.
+# AI features: variable map, document library and chat, AI suggestions (LLM connectors and vector databases).
+ai = [
+    "google-genai>=2.29.0",
+    "langchain-core>=1.6.0",
+    "langchain-text-splitters>=1.1.0",
+    "pypdf>=6.19.0",
+    "anthropic>=1.0",  # Claude connector (chat; documents embedded by another provider)
+    # Vector databases (selectable in Settings > AI engine): LanceDB embedded by default, Qdrant embedded or server
+    "lancedb>=0.25",
+    "qdrant-client>=1.15",
+]
+# Machine-learning methods of Enrich and Explore: MissForest imputation (LightGBM), UMAP, FAMD (prince).
+ml = [
+    "lightgbm>=4.7.0",
+    "umap-learn>=0.5.12",
+    "prince>=0.21.0",
+]
+all = [
+    "cohortstudio[ai,ml,survival]",
+]
 # Proprietary interactive graph engine (yWorks free license: loads its runtime from yworks.com at
 # render time and reports anonymised usage data). Opt in with `uv sync --extra graph-yfiles` and
 # CMP_GRAPH_RENDERER=yfiles; the default Plotly/NetworkX engine works offline.

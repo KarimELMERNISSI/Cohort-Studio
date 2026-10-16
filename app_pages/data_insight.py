@@ -59,6 +59,7 @@ from utils.clustering_utils import (
     run_tsne,
     run_umap,
 )
+from utils.optional import available_methods
 
 # ==========================================
 # ==========================================
@@ -990,7 +991,7 @@ def app():
                         
                         dim_method = st.selectbox(
                             "Dimensionality Reduction",
-                            ["PCA", "FAMD", "t-SNE", "UMAP"],
+                            available_methods(["PCA", "FAMD", "t-SNE", "UMAP"])[0],
                             help="Method to project data to 2D for visualization."
                         )
                         

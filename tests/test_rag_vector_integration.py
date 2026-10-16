@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
 from langchain_core.documents import Document
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 

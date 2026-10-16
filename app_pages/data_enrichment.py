@@ -34,6 +34,7 @@ from utils.data_paths import get_traces_dir
 from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
+from utils.optional import available_methods, method_available, missing_methods_message
 from utils.session_scope import get_current_scope
 
 
@@ -1545,9 +1546,12 @@ def merge_transformed_columns(main_data, transformed_data, handle_duplicates="re
 
 
 def compute_transformations(dataframe):
-    # Local imports: heavy ML libraries are only needed in this section (these names were undefined before).
-    import prince
-    import umap
+    # Local imports: heavy ML libraries are only needed in this section. UMAP and prince (FAMD) are in the optional
+    # 'ml' extra: when missing, their methods are not offered (utils/optional.py).
+    import importlib
+
+    prince = importlib.import_module("prince") if method_available("FAMD") else None
+    umap = importlib.import_module("umap") if method_available("UMAP") else None
     from sklearn.manifold import TSNE
     from sklearn.preprocessing import (
         LabelEncoder,
@@ -1601,11 +1605,14 @@ def compute_transformations(dataframe):
             "FAMD": ":grey_question: Factor Analysis of Mixed Data (FAMD) is designed for datasets containing both categorical and numerical variables, reducing dimensions while preserving mixed-data relationships."
         }
         
+        reduction_methods, reduction_missing = available_methods(["PCA", "t-SNE", "UMAP", "FAMD"])
         transformation = st.selectbox(
             "Choose a dimensional reduction method:",
-            options=["PCA", "t-SNE", "UMAP", "FAMD"],
+            options=reduction_methods,
             help="Select the dimensional reduction method."
         )
+        if reduction_missing:
+            st.caption(missing_methods_message(reduction_missing))
         
         # Display explanation for the selected transformation method
         st.info(transformation_explanations[transformation])
@@ -2409,7 +2416,7 @@ def app():
             with col1:
                 numerical_imputation_method = st.selectbox(
                     "Numerical Imputation Method",
-                    ["Mean", "Median", "KNN", "MICE", "MissForest"],
+                    available_methods(["Mean", "Median", "KNN", "MICE", "MissForest"])[0],
                     format_func=lambda m: {
                         "KNN": "K-nearest neighbours",
                         "MICE": "Chained equations (IterativeImputer, single imputation)",
@@ -2422,13 +2429,15 @@ def app():
             with col2:
                 categorical_imputation_method = st.selectbox(
                     "Categorical Imputation Method",
-                    ["Most_Frequent", "MissForest"],
+                    available_methods(["Most_Frequent", "MissForest"])[0],
                     format_func=lambda m: {
                         "Most_Frequent": "Most frequent value",
                         "MissForest": "Tree-based iterative (missForest algorithm with LightGBM)",
                     }.get(m, m),
                 )
             
+            if not method_available("MissForest"):
+                st.caption(missing_methods_message(["MissForest"]))
             if categorical_imputation_method == numerical_imputation_method:
                 st.info(f"{categorical_imputation_method} has been chosen for both numerical and categorical columns, a unified approach will be used.")
             

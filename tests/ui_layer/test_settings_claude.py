@@ -9,6 +9,8 @@ from streamlit.testing.v1 import AppTest
 import utils.data_paths as dp
 from ui import nav
 
+pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = str(ROOT / "main.py")
 

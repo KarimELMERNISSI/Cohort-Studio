@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 

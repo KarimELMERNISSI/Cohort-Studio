@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 
 import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate

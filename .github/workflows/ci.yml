@@ -34,8 +34,8 @@ jobs:
       - name: Check that uv.lock matches pyproject.toml
         run: uv --version && uv lock --check
 
-      - name: Install Python and dependencies (locked; dev tools and the optional yFiles extra for its offline tests)
-        run: uv sync --frozen --extra dev --extra graph-yfiles --extra survival
+      - name: Install Python and dependencies (locked; dev tools, every optional group, and yFiles for its offline tests)
+        run: uv sync --frozen --extra dev --extra all --extra graph-yfiles
 
       - name: Lint (ruff, project configuration)
         run: uv run ruff check --output-format github .

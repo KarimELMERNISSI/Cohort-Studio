@@ -147,6 +147,11 @@ def no_dataset() -> None:
 
 
 def no_ai(feature: str = "This feature") -> None:
+    from utils.optional import extra_installed, missing_message
+
+    if not extra_installed("ai"):
+        empty_state("AI features not installed", missing_message(feature, "ai"))
+        return
     empty_state(
         "AI engine not initialised",
         f"{feature} needs the AI engine. Choose a provider (local Ollama by default) and initialise it in Settings.",

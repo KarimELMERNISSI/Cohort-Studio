@@ -2,10 +2,10 @@
 
 import streamlit as st
 
-from app_pages.rag_sidebar import render_ai_settings
 from ui.components import confirm, page_header
 from ui.shell import clear_workspace_statistics
 from ui.state import get_state
+from utils.optional import extra_installed, missing_message
 
 state = get_state()
 page_header("Settings", "AI engine and data-sharing consent, graph engine, import defaults and your workspace.")
@@ -16,7 +16,13 @@ tab_ai, tab_graph, tab_import, tab_workspace = st.tabs(
 )
 
 with tab_ai:
-    render_ai_settings()
+    if extra_installed("ai"):
+        from app_pages.rag_sidebar import render_ai_settings
+
+        render_ai_settings()
+    else:  # the AI connectors and vector databases are an optional install (follow-up programme M4)
+        st.info(missing_message("The AI engine (variable map, document library, AI suggestions)", "ai"),
+                icon=":material/extension:")
 
 with tab_graph, st.container(border=True, width=760):
     from graph.ui import renderer_selector

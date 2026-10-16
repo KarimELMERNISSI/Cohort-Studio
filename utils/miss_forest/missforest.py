@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from lightgbm import LGBMClassifier, LGBMRegressor
 from sklearn.base import BaseEstimator
 from tqdm import tqdm
 
@@ -18,9 +17,22 @@ from utils.miss_forest._validate import (
     _validate_single_datatype_features,
 )
 
-# Deterministic learners (audit S16): seeded and single-threaded histogram construction
-lgbm_clf = LGBMClassifier(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True)
-lgbm_rgr = LGBMRegressor(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True)
+
+def default_learners() -> tuple[Any, Any]:
+    """
+    Deterministic LightGBM learners (audit S16): seeded, single-threaded histogram construction. LightGBM is in the
+    optional `ml` extra (follow-up programme M4), so it is imported only when MissForest is used.
+    """
+    try:
+        from lightgbm import LGBMClassifier, LGBMRegressor
+    except ImportError as exc:
+        raise ImportError(
+            "MissForest needs LightGBM, in the optional 'ml' extra: install it with `uv sync --extra ml`."
+        ) from exc
+    return (
+        LGBMClassifier(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True),
+        LGBMRegressor(verbosity=-1, random_state=RANDOM_STATE, deterministic=True, force_row_wise=True),
+    )
 
 
 class MissForest:
@@ -70,8 +82,8 @@ class MissForest:
         Calls class methods `fit` and `transform` on `x`.
     """
 
-    def __init__(self, clf: Any | BaseEstimator = lgbm_clf,
-                 rgr: Any | BaseEstimator = lgbm_rgr,
+    def __init__(self, clf: Any | BaseEstimator | None = None,
+                 rgr: Any | BaseEstimator | None = None,
                  initial_guess: str = "median", max_iter: int = 5,
                  early_stopping=True, progress_bar=None) -> None:
         """
@@ -99,6 +111,11 @@ class MissForest:
             - If argument `max_iter` is not an int.
             - If argument `early_stopping` is not a bool.
         """
+        if clf is None or rgr is None:
+            default_clf, default_rgr = default_learners()
+            clf = default_clf if clf is None else clf
+            rgr = default_rgr if rgr is None else rgr
+
         if not _is_estimator(clf):
             raise ValueError("Argument `clf` only accept estimators that has "
                              "class methods `fit` and `predict`.")

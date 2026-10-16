@@ -1,6 +1,5 @@
 ######################################## PACKAGES ########################################
 import pandas as pd
-from lightgbm import LGBMClassifier, LGBMRegressor  #used for MissForest
 from sklearn.base import TransformerMixin
 from sklearn.compose import ColumnTransformer  # split some of our processing to specific columns
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
@@ -40,6 +39,12 @@ class MissForestTransformer(TransformerMixin):
         
         self.current_progress = 0  # To track progress updates
         self.total_steps = 10
+        try:  # LightGBM is in the optional 'ml' extra (follow-up programme M4)
+            from lightgbm import LGBMClassifier, LGBMRegressor
+        except ImportError as exc:
+            raise ImportError(
+                "MissForest needs LightGBM, in the optional 'ml' extra: install it with `uv sync --extra ml`."
+            ) from exc
         self.imputer = MissForest(
             clf=LGBMClassifier(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),
             rgr=LGBMRegressor(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),

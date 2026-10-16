@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NO_STREAMLIT = [
     "core", "biostats", "ingest", "graph/model.py", "graph/palette.py", "graph/builders", "explore/correlation_strength.py", "explore/quality_score.py",
     "manage/iam", "manage/vectorstores", "manage/db_manager.py", "manage/transformation_manager.py", "manage/reproduction_manager.py",
-    "manage/flow_figure.py", "manage/dossier.py", "manage/report_tables.py",
+    "manage/flow_figure.py", "manage/dossier.py", "manage/report_tables.py", "utils/optional.py",
     "utils/analysis_utils.py", "utils/path_utils.py", "utils/statistics_utils.py", "utils/visualization_utils.py",
     "utils/multipage.py", "utils/data_paths.py", "enrich/transformation_logic.py",
     "enrich/custom_metrics_and_filters.py", "enrich/formulas.py", "enrich/imputation_service.py",
@@ -84,3 +84,31 @@ def test_lazy_page_imports_in_services_are_bounded() -> None:
                 if name.split(".")[0] == "app_pages" and name not in top:
                     lazy.append(f"{file.relative_to(ROOT)} -> {name}")
     assert len(lazy) <= LAZY_PAGE_IMPORT_CEILING, lazy
+
+
+# The engine (domain, statistics, import) runs without the web, plotting, AI or vector-database stacks: an install
+# of the core dependencies only, or a library use in a notebook, must import it (follow-up programme M4).
+ENGINE = ("core", "biostats", "ingest")
+NOT_IN_ENGINE = (
+    "streamlit",
+    "plotly",
+    "langchain_core",
+    "langchain_text_splitters",
+    "lancedb",
+    "qdrant_client",
+    "anthropic",
+    "google",
+    "openai",
+    "mistralai",
+)
+
+
+@pytest.mark.parametrize("package", ENGINE)
+def test_the_engine_needs_no_ui_plotting_or_ai_library(package: str) -> None:
+    offenders = []
+    for file in _py_files(package):
+        tree = ast.parse(file.read_text(encoding="utf-8"))
+        for name in _imports(tree, top_level_only=False):
+            if name.split(".")[0] in NOT_IN_ENGINE:
+                offenders.append(f"{file.relative_to(ROOT)} -> {name}")
+    assert not offenders, offenders

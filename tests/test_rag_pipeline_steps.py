@@ -13,6 +13,9 @@ Covers:
 import json
 from unittest.mock import MagicMock
 
+import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
 from manage.rag.schemas import ProviderConfig, ProviderType, RAGConfig
 from manage.rag_computed_vars import parse_formula_vars
 from manage.rag_documents import DocumentsMixin

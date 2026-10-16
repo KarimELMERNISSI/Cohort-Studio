@@ -71,6 +71,7 @@ def test_drop_strategy_removes_only_passthrough_columns(cohort: pd.DataFrame) ->
 
 
 def test_missforest_for_both_groups(cohort: pd.DataFrame) -> None:
+    pytest.importorskip("lightgbm", reason="MissForest is in the optional 'ml' extra")
     small = cohort.head(120).copy()
     out, _ = _impute(small, "MissForest", "MissForest")
     assert set(out.columns) == set(small.columns)
