@@ -279,7 +279,7 @@ pynndescent==0.6.0
     # via umap-learn
 pyparsing==3.3.3
     # via matplotlib
-pypdf==6.19.0
+pypdf==6.20.1
     # via cohortstudio
 python-dateutil==2.9.0.post0
     # via
