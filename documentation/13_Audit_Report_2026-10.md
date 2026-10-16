@@ -100,7 +100,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 ## Owner actions required (cannot be done from the repository)
 
 1. Revoke the Google API key that was committed in `fdd29cb`; create a restricted replacement and keep it only in untracked `.env`. **Done 2026-10-15**: the key is revoked and replaced.
-2. Purge the key from history (`git filter-repo --replace-text`), force-push, ask collaborators to re-clone, and enable GitHub secret scanning with push protection. Treat the old key as compromised regardless. **Purge done 2026-10-14**: the history was rewritten with `git filter-repo --sensitive-data-removal`, the code moved to `Cohort-Studio` and the former repository was deleted, so its commits, including `fdd29cb`, no longer exist on GitHub. Push protection remains to be enabled.
+2. Purge the key from history (`git filter-repo --replace-text`), force-push, ask collaborators to re-clone, and enable GitHub secret scanning with push protection. Treat the old key as compromised regardless. **Purge done 2026-10-14**: the history was rewritten with `git filter-repo --sensitive-data-removal`, the code moved to `Cohort-Studio` and the former repository was deleted, so its commits, including `fdd29cb`, no longer exist on GitHub. Secret scanning with push protection is enabled on the new repository.
 3. Rotate the admin password that was tracked in `.streamlit/secrets.toml`.
 
 ## Item status
