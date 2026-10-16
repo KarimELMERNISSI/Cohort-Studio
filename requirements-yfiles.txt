@@ -371,7 +371,7 @@ tqdm==4.70.1
     #   cohortstudio
     #   lancedb
     #   umap-learn
-truststore==0.10.4 ; sys_platform != 'emscripten'
+truststore==0.10.5 ; sys_platform != 'emscripten'
     # via
     #   httpcore2
     #   httpx2
