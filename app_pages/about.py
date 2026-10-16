@@ -5,8 +5,10 @@ import streamlit as st
 FEATURES = (
     (":material/fact_check:", "Data quality & monitoring", (
         "**Global quality score** across completeness, consistency, statistical validity, uniformity, clinical validity and uniqueness.",
-        "**Drill-down** on every flag: outlier detection (robust Z, IQR, Isolation Forest), integrity checks, version comparison.",
-        "**Clinical anomalies and inclusion criteria** as declarative, traced rules.",
+        "**Drill-down** on every flag: outlier detection (z-score, IQR, quantiles, Isolation Forest, local outlier "
+        "factor, DBSCAN), integrity checks, version comparison.",
+        "**Clinical anomalies and inclusion criteria** as declared rules that you tick to define the analysis "
+        "population, with its participant flow.",
     )),
     (":material/auto_fix_high:", "Data enrichment", (
         "**Merge and harmonise** external datasets into one cohort.",
@@ -17,7 +19,7 @@ FEATURES = (
     (":material/analytics:", "Descriptive analytics", (
         "**Univariate statistics** by variable type with normality diagnostics.",
         "**Mixed-type associations** with confidence intervals and an interactive correlation network.",
-        "**Distributions, group comparisons, ROC and Bland-Altman** plots ready for publication.",
+        "**Distributions, group comparisons, ROC and Bland-Altman** plots, exported as SVG or interactive HTML.",
     )),
     (":material/science:", "Epidemiology & inference", (
         "**Welch-first group comparisons** with effect sizes, confidence intervals and every pairwise contrast.",
@@ -30,17 +32,18 @@ FEATURES = (
         "**Local first**: Ollama by default; cloud providers only after explicit consent.",
     )),
     (":material/history:", "Reproducibility & reporting", (
-        "**Versioned datasets** and a trace of every transformation, replayable step by step.",
-        "**Word reports** of the full transformation history.",
-        "**Exports**: high-resolution figures and formatted Excel tables.",
+        "**Versioned datasets** and a hash-chained trace of every transformation, replayed and checked step by step.",
+        "**Word documents**: the report of the transformation history, and the study dossier with the participant "
+        "flow and the results you add to it.",
+        "**Exports**: SVG and interactive HTML figures, Excel tables, imputed data for R and Stata.",
     )),
 )
 
 
 def app():
     st.markdown(
-        "A unified environment for clinical cohort research: from raw ingestion to publication-ready analysis, "
-        "with every step validated, traced and reproducible."
+        "One environment for clinical cohort research, from the raw file to the analysis and its report: every "
+        "change of the data is traced, and the trace can be replayed and checked."
     )
 
     for start in range(0, len(FEATURES), 3):
@@ -59,8 +62,8 @@ def app():
   time (an internet connection is required) and anonymised, non-textual information about the structure of the graphs you
   create is reported to yWorks. yWorks may change or discontinue the component. Choose the offline engine in Settings
   (or set `CMP_GRAPH_RENDERER=plotly` / `CMP_OFFLINE=1`) to avoid any outbound connection.
-- **AI providers**: Ollama runs on your server; Google Gemini, OpenAI and Mistral are cloud services that only receive data
-  after an explicit confirmation in Settings.
+- **AI providers**: Ollama runs on your server; Google Gemini, OpenAI, Mistral and Anthropic Claude are cloud services
+  that only receive data after an explicit confirmation in Settings.
 - Full dependency licences: `documentation/developer/License_Dependencies.md`.
 """)
 

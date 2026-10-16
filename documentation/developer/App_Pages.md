@@ -2,7 +2,7 @@
 
 ## about.py
 
-_No module description._
+_About page body: what the platform does, third-party notices and contact._
 
 **Imports**:
 `streamlit`
@@ -22,7 +22,7 @@ No description available.
 _About page._
 
 **Imports**:
-`app_pages.about.app`
+`app_pages.about.app`, `ui.components.page_header`
 
 ---
 
@@ -31,7 +31,7 @@ _About page._
 _AI quality page (administrators): RAG evaluation and embedding health._
 
 **Imports**:
-`app_pages.rag_monitoring.render_rag_monitoring`
+`app_pages.rag_monitoring.render_rag_monitoring`, `ui.components.page_header`
 
 ---
 
@@ -40,7 +40,7 @@ _AI quality page (administrators): RAG evaluation and embedding health._
 _Analysis configuration widgets of the Analyze page (moved out of utils so the engine side stays UI-free)._
 
 **Imports**:
-`streamlit`, `biostats.multiplicity.UI_OPTIONS`
+`streamlit`, `biostats.multiplicity.UI_OPTIONS`, `ui.guidance.analysis.HELP`
 
 ### def `render_analysis_configuration` (analysis_config.py)
 
@@ -58,7 +58,7 @@ Returns a dictionary with the selected configuration.
 _Diagnostic accuracy and method agreement tab of the Analyze page (audit S10)._
 
 **Imports**:
-`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.agreement.bland_altman`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.section`, `ui.components.status_chip`
+`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.agreement.bland_altman`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.section`, `ui.components.status_chip`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`
 
 ### def `_ci_text` (analysis_diagnostic.py)
 
@@ -94,12 +94,337 @@ No description available.
 
 ---
 
+## analysis_extras.py
+
+_Paired tests, incidence rates, stratified tables, standardised ratios and reliability (audit S11)._
+
+**Imports**:
+`__future__.annotations`, `pandas`, `streamlit`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+
+### def `_ci` (analysis_extras.py)
+
+- **Arguments**: `ci`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_not_pooled` (analysis_extras.py)
+
+- **Arguments**: `analysis: str`
+
+- **Returns**: `None`
+
+The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable).
+
+### def `_show_test` (analysis_extras.py)
+
+- **Arguments**: `res, key: str`
+
+- **Returns**: `None`
+
+A stored test result: the pooled test with its notes and complete-case comparison, or the observed one.
+
+### def `run_paired_and_rates` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+Paired and one-sample tests (pooled over the imputed datasets ``mi`` when given), McNemar, rates,
+Mantel-Haenszel and standardised ratios.
+
+### def `run_reliability` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## analysis_guidance_ui.py
+
+_Rendering of the guidance of Analyze > Hypothesis tests & epidemiology (rules in ``ui.guidance.analysis``).
+
+Everything here is shown only while the page's Guidance switch is on, so experienced users can keep
+the page compact._
+
+**Imports**:
+`__future__.annotations`, `pandas`, `streamlit`, `ui.components.page_link`, `ui.components.status_chip`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.TAB_GUIDE`, `ui.guidance.analysis.TEST_NOTES`, `ui.guidance.analysis.AnalysisPlan`, `ui.guidance.analysis.AncovaCheck`
+
+### def `guidance_toggle` (analysis_guidance_ui.py)
+
+- **Arguments**: ``
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `guidance_on` (analysis_guidance_ui.py)
+
+- **Arguments**: ``
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `render_orientation` (analysis_guidance_ui.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Which tab answers which question, and a way to the test chooser.
+
+### def `_advice` (analysis_guidance_ui.py)
+
+- **Arguments**: `level: str, text: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `render_plan` (analysis_guidance_ui.py)
+
+- **Arguments**: `plan: AnalysisPlan`
+
+- **Returns**: `None`
+
+What Run will do, checked against the data, before anything is computed.
+
+### def `render_ancova_check` (analysis_guidance_ui.py)
+
+- **Arguments**: `check: AncovaCheck`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `render_test_note` (analysis_guidance_ui.py)
+
+- **Arguments**: `test: str`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## analysis_pooled.py
+
+_Analyze page with multiply imputed data (follow-up programme M2): group comparisons and ANCOVA run on the m
+imputed datasets of the analysis population and pooled with Rubin's rules (biostats.mi.analyze_mi).
+
+Group comparison, per variable:
+- numeric, two groups: Welch t-test, the mean difference pooled (Barnard-Rubin df);
+
+- numeric, three or more groups: a linear model on the groups, the group means pooled and the group effect
+  tested by D1 (pooled Wald F; equal variances, as in a one-way ANOVA);
+
+- two categories, two groups: odds ratio and risk ratio (log scale) and risk difference pooled, the
+  chi-square by D2;
+
+- other categorical variables: the chi-square test of independence by D2.
+Rank tests and Fisher's exact test have no pooling rule: the page gives the reason and the alternative._
+
+**Imports**:
+`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+
+### class `Pooled` (analysis_pooled.py)
+
+One variable compared across the groups: the kind of analysis, the pooled result and its orientation.
+
+### def `_levels` (analysis_pooled.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_in_groups` (analysis_pooled.py)
+
+- **Arguments**: `data: pd.DataFrame, group: str, levels: list[str]`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `_columns` (analysis_pooled.py)
+
+- **Arguments**: `mi, analyzer`
+
+- **Returns**: `tuple[ComplexType]`
+
+Numeric and categorical columns of the imputed data, and the grouping candidates.
+
+### def `compare_pooled` (analysis_pooled.py)
+
+- **Arguments**: `mi, group: str, levels: list[str], target: str`
+
+- **Returns**: `Pooled`
+
+Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
+
+### def `_summary_row` (analysis_pooled.py)
+
+- **Arguments**: `target: str, item: Pooled, group: str`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_show_summary` (analysis_pooled.py)
+
+- **Arguments**: `results: dict[ComplexType], errors: dict[ComplexType], group: str, correction: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_twobytwo_frame` (analysis_pooled.py)
+
+- **Arguments**: `res`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `_show_complete_twobytwo` (analysis_pooled.py)
+
+- **Arguments**: `cc`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_means` (analysis_pooled.py)
+
+- **Arguments**: `means: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_detail` (analysis_pooled.py)
+
+- **Arguments**: `target: str, item: Pooled, group: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `run_pooled_comparison` (analysis_pooled.py)
+
+- **Arguments**: `mi, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `run_pooled_ancova` (analysis_pooled.py)
+
+- **Arguments**: `mi, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## analysis_survival.py
+
+_Survival & regression page body: Kaplan-Meier, log-rank, Cox, logistic and count regression (audit S11).
+
+With multiply imputed data (``mi``), every analysis is run on the m imputed datasets and pooled
+(biostats.mi.analyze_mi): Kaplan-Meier curves on the cloglog scale with the median read from the pooled
+curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
+
+**Imports**:
+`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.TestResult`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+
+### def `_group_candidates` (analysis_survival.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer, max_levels: int`
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_km_figure` (analysis_survival.py)
+
+- **Arguments**: `curves`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_pooled_km_figure` (analysis_survival.py)
+
+- **Arguments**: `curves: dict[ComplexType]`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_median_text` (analysis_survival.py)
+
+- **Arguments**: `median: ComplexType`
+
+- **Returns**: `str`
+
+The median survival time, or 'not reached' when the curve stays above 0.5.
+
+### def `_table` (analysis_survival.py)
+
+- **Arguments**: `df: pd.DataFrame, formats: dict`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_default_index` (analysis_survival.py)
+
+- **Arguments**: `options: list[str], hints: tuple[ComplexType]`
+
+- **Returns**: `int`
+
+Index of the first option whose name contains a hint (e.g. 'time', 'died'), else 0.
+
+### def `_show_survival` (analysis_survival.py)
+
+- **Arguments**: `res`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_pooled_survival` (analysis_survival.py)
+
+- **Arguments**: `res`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `run_survival` (analysis_survival.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
 ## analyze.py
 
 _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scores._
 
 **Imports**:
-`app_pages.epidemiology.app`, `ui.components.page_header`
+`app_pages.epidemiology.app`, `ui.components.page_header`, `ui.components.mi_mode.mi_banner`, `ui.components.population.population_banner`, `ui.state.get_state`
 
 ---
 
@@ -108,7 +433,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.data_imputation`, `enrich.external_data`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `core.expressions.evaluate_tree`, `core.expressions.safe_format`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `ui.components.no_dataset`, `utils.export_utils.to_excel`
+`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.expressions.safe_format`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -143,7 +468,10 @@ Returns the loaded DataFrame, or None if the user hasn't made a selection yet.
 
 - **Returns**: `ComplexType`
 
-Handle the upload or path input for the main dataset.
+The main dataset of the enrichment: the session dataset with the Enrich draft applied.
+
+Datasets are loaded from Data > Import or the sidebar (AppState.set_dataset), so every load starts a
+trace; this page no longer reads files of its own.
 
 ### def `handle_enrichment_data_upload` (data_enrichment.py)
 
@@ -317,121 +645,6 @@ Callback to update formula when a suggestion is clicked.
 Displays column suggestions as buttons. Clicking a button replaces the last token
 in the formula input with the selected column name.
 
-### def `validate_variable_name` (data_enrichment.py)
-
-- **Arguments**: `name, existing_columns`
-
-- **Returns**: `None`
-
-Validates the variable name and returns (is_valid, error_message).
-
-### def `is_number` (data_enrichment.py)
-
-- **Arguments**: `token`
-
-- **Returns**: `None`
-
-Check if a string token represents a valid number.
-
-**Parameters**:
-
-token : str
-    The token to check.
-
-**Returns**:
-
-bool
-    True if the token can be converted to a float, False otherwise.
-
-### def `validate_and_extract_columns_ast` (data_enrichment.py)
-
-- **Arguments**: `formula: str, dataset_columns: list`
-
-- **Returns**: `tuple[ComplexType]`
-
-Parses formula using Python AST to safely extract variables and constants
-regardless of spacing.
-
-### def `normalize_formula` (data_enrichment.py)
-
-- **Arguments**: `formula: str, column_mapping: dict`
-
-- **Returns**: `str`
-
-Replace column names in the formula with normalized names (e.g., var_1, var_2).
-
-**Parameters**:
-
-formula : str
-    The computation formula to be normalized.
-column_mapping : dict
-    A mapping of original column names to normalized names.
-
-**Returns**:
-
-str
-    The formula with normalized column names.
-
-### def `extract_constant_value` (data_enrichment.py)
-
-- **Arguments**: `constant_token: str`
-
-- **Returns**: `str`
-
-Extract the value from a constant token like constant(val1) -> val1
-
-### def `create_variables_dict` (data_enrichment.py)
-
-- **Arguments**: `dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]`
-
-- **Returns**: `dict[ComplexType]`
-
-Create a dictionary mapping variable names to their corresponding Series
-for both regular columns and constants.
-
-**Parameters**:
-
-dataset : pd.DataFrame
-    The input dataset
-identified_columns : List[str]
-    List of valid column names used in the formula
-constant_tokens : List[str]
-    List of constant tokens found in the formula
-
-**Returns**:
-
-Dict[str, pd.Series]:
-    Dictionary mapping variable names to their Series
-
-### def `evaluate_formula_safely` (data_enrichment.py)
-
-- **Arguments**: `formula: str, variable_name: str, dataset: pd.DataFrame, return_series: bool`
-
-- **Returns**: `tuple[ComplexType]`
-
-Safely evaluate a computation formula to create a new variable in the dataset.
-
-**Parameters**:
-
-formula : str
-    The computation formula entered by the user.
-variable_name : str
-    The name of the new variable to create.
-dataset : pd.DataFrame
-    The dataset containing columns to use in the formula.
-return_series : bool, optional
-    If True, returns the computed Series instead of a success message, and does not modify the dataset.
-
-**Returns**:
-
-tuple[bool, Any, pd.DataFrame]
-    A tuple containing:
-    - A boolean indicating success or failure.
-
-    - A success message OR the computed Series (if return_series=True), OR an error message.
-
-    - The modified DataFrame (or the original DataFrame on failure).
-
 ### def `generate_stats` (data_enrichment.py)
 
 - **Arguments**: `temp_main_data, variable_name`
@@ -439,6 +652,16 @@ tuple[bool, Any, pd.DataFrame]
 - **Returns**: `None`
 
 No description available.
+
+### def `render_new_variable_statistics` (data_enrichment.py)
+
+- **Arguments**: `temp_data, var_name, used_cols`
+
+- **Returns**: `None`
+
+Statistics of a new variable on the analysis population, robust (median, quartiles) and classical (mean, SD),
+and the values far outside the others with their source values: a few entry errors (a height in metres, a
+weight of 0) can move the mean and the SD far from what the median shows.
 
 ### def `define_new_variables` (data_enrichment.py)
 
@@ -475,56 +698,6 @@ Returns:
 
 No description available.
 
-### def `debug_print` (data_enrichment.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-No description available.
-
-### def `match_null_mask_to_encoded_columns` (data_enrichment.py)
-
-- **Arguments**: `initial_null_mask, output_cols, original_cols`
-
-- **Returns**: `None`
-
-Align initial null mask with output columns, including deducing one-hot encoded versions of categorical variables.
-Ensures the mask matches the order of output_cols.
-
-Parameters:
-    initial_null_mask (pd.DataFrame): Original null mask for input data.
-    output_cols (list): Ordered list of columns after imputation and encoding.
-    original_cols (list): List of original columns from the input data.
-
-Returns:
-    pd.DataFrame: Aligned null mask matching the column order in output_cols.
-
-### def `apply_imputer` (data_enrichment.py)
-
-- **Arguments**: `data, numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, remainder_columns, remainder_strategy, remainder_threshold, progress_placeholder, debug`
-
-- **Returns**: `None`
-
-Applies an imputer to a pandas DataFrame, with options for numerical and categorical imputations,
-and handling of remainder columns. Also tracks imputed values.
-
-Parameters:
-    data (pd.DataFrame): The input data for imputation.
-    numerical_imputation_method (str): Method for imputing numerical columns ('mean', 'median', 'knn', etc.).
-    categorical_imputation_method (str): Method for imputing categorical columns ('most_frequent', 'missforest', etc.).
-    cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
-    num_scaler (bool): Whether to scale numerical columns.
-    remainder_columns (list or str): Columns to pass through without transformation ('auto' for automatic detection).
-    remainder_strategy (str): Strategy for handling remainder columns ('passthrough', 'drop', etc.).
-    remainder_threshold (float): Threshold for automatic remainder column detection.
-    progress_placeholder (object): Placeholder for showing progress in Streamlit.
-    debug (bool): Flag to enable debug print statements.
-
-Returns:
-    pd.DataFrame: The imputed DataFrame with updated column names.
-    pd.DataFrame: A mask DataFrame indicating which values were imputed.
-
 ### def `save_snapshot` (data_enrichment.py)
 
 - **Arguments**: `df, step_name, base_dir`
@@ -548,7 +721,7 @@ Used to give context to the RAG model for unit conversion logic.
 
 - **Returns**: `None`
 
-Main application function for the Data Enrichment page.
+Main application function of the Enrich page (Data > Enrich).
 
 Handles:
 1. External Data Upload and Enrichment
@@ -563,7 +736,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `ui.components.no_dataset`
+`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `ui.components.no_dataset`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
 
 ### def `get_user_taxonomy_dir` (data_insight.py)
 
@@ -608,7 +781,7 @@ Robust loading function:
 
 - **Returns**: `None`
 
-Main application function for the Data Insight (Knowledge Graph) page.
+Main application function of the Variable map page (Knowledge > Variable map).
 
 Handles:
 1. Loading and saving taxonomy versions.
@@ -623,7 +796,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `enrich.custom_metrics_and_filters`, `manage.db_manager.DBManager`, `manage.transformation_manager.TransformationManager`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.multipage.load_dataframe`, `utils.session_scope.get_current_scope`, `ui.components.confirm`, `ui.components.no_dataset`, `utils.export_utils.to_excel`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.criterion_id`, `enrich.custom_metrics_and_filters`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -910,14 +1083,6 @@ Display 2D visualization of outliers using PCA, FAMD, t-SNE, or UMAP.
 
 Display outlier values in a dialog
 
-### def `display_results_with_outliers` (data_monitoring.py)
-
-- **Arguments**: `filtered_df: pd.DataFrame, st`
-
-- **Returns**: `None`
-
-Display the results of the enrichment process.
-
 ### def `ensure_family_exists` (data_monitoring.py)
 
 - **Arguments**: `config: dict[ComplexType], family_name: str`
@@ -1004,6 +1169,38 @@ Returns:
 
 - The names of the columns related to the masks family
 
+### def `_clip_bounds` (data_monitoring.py)
+
+- **Arguments**: `df: pd.DataFrame, columns, method: str, params: dict`
+
+- **Returns**: `dict`
+
+The bounds a clipping uses, per column (recorded in the trace and replayed).
+
+### def `_exclude_outliers` (data_monitoring.py)
+
+- **Arguments**: `detection: dict`
+
+- **Returns**: `None`
+
+Callback: the flagged rows become an exclusion criterion (row ids frozen now), ticked at once.
+
+### def `_clip_outliers` (data_monitoring.py)
+
+- **Arguments**: `detection: dict`
+
+- **Returns**: `None`
+
+Callback: clip the values to the method's bounds in the dataset, as one traced, replayable step.
+
+### def `render_outlier_actions` (data_monitoring.py)
+
+- **Arguments**: `detection: ComplexType`
+
+- **Returns**: `None`
+
+What to do with the detected outliers: exclude them from the population, or clip the values.
+
 ### def `display_results` (data_monitoring.py)
 
 - **Arguments**: `df: pd.DataFrame, bool_column: str, title: str, key_base: str, st`
@@ -1069,6 +1266,16 @@ No description available.
 
 Display the results of the enrichment process.
 
+### def `render_date_conversion` (data_monitoring.py)
+
+- **Arguments**: `state, df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+Text columns that look like dates: preview the parsing, convert them as one traced step on request.
+
+Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
+
 ### def `process_dataset` (data_monitoring.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -1099,7 +1306,23 @@ Handles:
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `explore.data_quality_auditor.DataQualityAuditor`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `explore.data_quality_auditor.DataQualityAuditor`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`
+
+### def `_selected_dimension` (data_quality_dashboard.py)
+
+- **Arguments**: `event`
+
+- **Returns**: `ComplexType`
+
+Dimension of the bar clicked in the "points lost" chart, if any.
+
+### def `_score_breakdown` (data_quality_dashboard.py)
+
+- **Arguments**: `quality, details, checks, weights`
+
+- **Returns**: `None`
+
+Where the score loses points (click a bar to see the columns or rules) and the score across checks.
 
 ### def `render_dashboard` (data_quality_dashboard.py)
 
@@ -1116,7 +1339,7 @@ Renders the Data Quality Dashboard.
 _No module description._
 
 **Imports**:
-`json`, `streamlit`, `graph.builders.document.build_document_graph`, `graph.builders.document.filter_by_documents`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `datetime`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `core.workspace.safe_filename`, `ui.components.no_dataset`
+`datetime`, `json`, `streamlit`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `core.workspace.safe_filename`, `graph.builders.document.build_document_graph`, `graph.builders.document.filter_by_documents`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `ui.components.no_dataset`
 
 ### def `_graph_dir` (document_insight.py)
 
@@ -1165,7 +1388,16 @@ No description available.
 _Documents page: literature knowledge graph and document chat._
 
 **Imports**:
-`app_pages.document_insight.app`, `ui.components.page_header`
+`streamlit`, `app_pages.document_insight.app`, `ui.components.page_header`, `utils.optional.extra_installed`, `utils.optional.missing_message`
+
+---
+
+## dossier.py
+
+_Study dossier page: the participant flow, the results added to the report and the Word dossier._
+
+**Imports**:
+`app_pages.study_dossier.app`, `ui.components.page_header`
 
 ---
 
@@ -1178,12 +1410,94 @@ _Enrich page: external data merge, computed variables, imputation, transformatio
 
 ---
 
+## enrichment_mi.py
+
+_Multiple imputation on the Enrich page (follow-up programme M2): a guided panel in five steps.
+
+1. Population and missingness: what will be imputed, on which rows, how many imputations.
+2. Imputation model: the variables (the outcome of the planned analyses always in) and a method each.
+3. Settings: m, iterations, seed, strata, the auxiliary of a Cox analysis, parallel processes.
+4. Run and diagnose: chain traces, R-hat, observed against imputed values.
+5. Use, save, export: status against the analysis population, versions, mice and Stata files, methods text.
+
+The imputation never changes the dataset: it is kept beside it (``AppState.set_mi``), recorded in the trace
+and re-computed by the replay. The panel runs as a fragment so its widgets do not rerun the whole page._
+
+**Imports**:
+`__future__.annotations`, `os`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.RANDOM_STATE`, `biostats.mi.report.default_model_columns`, `biostats.mi.report.incomplete_share`, `biostats.mi.report.methods_paragraph`, `biostats.mi.report.missingness_summary`, `biostats.mi.spec.ImputationSpec`, `biostats.mi.spec.default_method`, `biostats.mi.spec.is_numeric`, `biostats.mi.spec.suggest_m`, `core.session.PopulationError`, `ui.components.error_card`, `ui.components.help_popover`, `ui.state.get_state`
+
+### def `_status_badge` (enrichment_mi.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `render_multiple_imputation` (enrichment_mi.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_trace_figure` (enrichment_mi.py)
+
+- **Arguments**: `trace: dict, name: str`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_distribution_figure` (enrichment_mi.py)
+
+- **Arguments**: `observed: pd.Series, imputed: pd.Series, numeric: bool`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_diagnostics` (enrichment_mi.py)
+
+- **Arguments**: `stored`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_use` (enrichment_mi.py)
+
+- **Arguments**: `state, stored`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
 ## epidemiology.py
 
 _No module description._
 
 **Imports**:
-`re`, `matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `statsmodels.api`, `statsmodels.formula.api`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `utils.analysis_utils`, `utils.visualization_utils`, `utils.data_analyzer.DataAnalyzer`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `biostats.multiplicity.adjust`, `ui.components.no_dataset`, `ui.components.result_card`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`
+
+### def `_effect_ok` (epidemiology.py)
+
+- **Arguments**: `effect_size`
+
+- **Returns**: `bool`
+
+A planning effect must be positive: with no difference to detect, no sample is large enough.
+
+### def `_expected_means_inputs` (epidemiology.py)
+
+- **Arguments**: `prefix: str`
+
+- **Returns**: `None`
+
+Expected means of two groups and the common SD; returns (mean1, mean2, sd).
 
 ### def `_render_twobytwo_controls` (epidemiology.py)
 
@@ -1203,7 +1517,7 @@ Labelled 2x2 table, measures of association (comparison vs reference) and guidan
 
 ### def `app` (epidemiology.py)
 
-- **Arguments**: ``
+- **Arguments**: `mi`
 
 - **Returns**: `None`
 
@@ -1216,9 +1530,20 @@ Handles:
 4. Z-Score Calculation (Reference Standardization).
 5. Educational Content display.
 
+With multiply imputed data (``mi``, see ui.components.mi_mode) the group comparison and the ANCOVA are
+pooled over the imputed datasets (app_pages.analysis_pooled).
+
+### def `_observed_agreement_note` (epidemiology.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Diagnostic accuracy and agreement with imputed data selected: what is analysed, and why it is not pooled.
+
 ### def `run_univariate_analysis` (epidemiology.py)
 
-- **Arguments**: `df, analyzer`
+- **Arguments**: `df, analyzer, transformed`
 
 - **Returns**: `None`
 
@@ -1232,13 +1557,13 @@ No description available.
 
 No description available.
 
-### def `perform_ancova` (epidemiology.py)
+### def `show_ancova` (epidemiology.py)
 
-- **Arguments**: `df, target, group, covariates`
+- **Arguments**: `df, res, target, group, covariates`
 
 - **Returns**: `None`
 
-No description available.
+ANCOVA results (biostats.linear): Type II table, interpretation, adjusted means, coefficients, diagnostics.
 
 ### def `visualize_result` (epidemiology.py)
 
@@ -1279,7 +1604,7 @@ No description available.
 _Explore page: descriptive statistics, column renaming, correlations, performance benchmark._
 
 **Imports**:
-`app_pages.home.app`, `ui.components.page_header`
+`app_pages.home.app`, `ui.components.page_header`, `ui.components.population.population_banner`
 
 ---
 
@@ -1313,7 +1638,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`io.BytesIO`, `json`, `time`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`, `ui.components.confirm`, `ui.components.no_dataset`, `hashlib`
+`json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
 
 ### class `RenameColumnsComponent` (home.py)
 
@@ -1516,19 +1841,18 @@ Render export buttons.
 
 ## rag_sidebar.py
 
-_RAG and AI Configuration Sidebar Component.
+_AI engine configuration (Settings page).
 
-Provides a unified, provider-agnostic interface for configuring:
-- AI Providers: Google Gemini, Ollama (Local Open Source), OpenAI, Mistral AI
-
-- Model selection and dynamic model discovery
-
-- Local and cloud embedding models
-
-- Document retrieval parameters and clinical adherence calibration_
+Provider-agnostic controls for the AI providers (local Ollama by default; Google Gemini, OpenAI, Mistral
+and Anthropic Claude as cloud providers that require an explicit data-sharing consent; Claude has no
+embedding model, so another provider embeds the documents), model and embedding
+selection, the document library, retrieval parameters and engine initialisation. Laid out as cards:
+provider and models, data sharing and document library on the left; retrieval, the vector database
+(LanceDB or Qdrant, see ``manage.vectorstores``) and the engine on the right. Widget keys are stable
+because other pages read them from the session._
 
 **Imports**:
-`os`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `utils.session_scope.get_current_scope`
+`os`, `shutil`, `pathlib.Path`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.vectorstores.ENGINE_SUMMARIES`, `manage.vectorstores.ENGINE_TITLES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.resolve_engine`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.components.confirm`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -1565,13 +1889,85 @@ Session-scoped API key entry.
 The server-side key is never shown or pre-filled and nothing is written to ``os.environ``
 (audit E6). Leaving the field empty falls back to the server-configured key, if any.
 
-### def `_render_cloud_consent` (rag_sidebar.py)
+### def `_ensure_manager` (rag_sidebar.py)
 
-- **Arguments**: `selected_provider: str, display_names: dict`
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_provider_card` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `dict`
+
+Provider, connection and model choice; returns the engine configuration.
+
+### def `_claude_embedding_block` (rag_sidebar.py)
+
+- **Arguments**: `cfg: dict`
+
+- **Returns**: `tuple[ComplexType]`
+
+Claude has no embedding model: choose the provider that embeds the documents (local Ollama by default).
+
+### def `_consent_card` (rag_sidebar.py)
+
+- **Arguments**: `provider: str`
 
 - **Returns**: `bool`
 
 Explicit, session-scoped confirmation before any data can be sent to a cloud provider (audit E6).
+
+### def `_library_card` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `ComplexType`
+
+Upload PDFs into the user's document library and choose the ones to index.
+
+### def `_retrieval_card` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `tuple[ComplexType]`
+
+No description available.
+
+### def `_machine` (rag_sidebar.py)
+
+- **Arguments**: `storage: str`
+
+- **Returns**: `MachineProfile`
+
+CPU, memory and free disk, probed at most every five minutes.
+
+### def `_vectors_dir` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `Path`
+
+No description available.
+
+### def `_vector_card` (rag_sidebar.py)
+
+- **Arguments**: `selected_files: ComplexType`
+
+- **Returns**: `dict`
+
+Choice of the vector database for this machine and library; returns the engine settings.
+
+### def `_engine_card` (rag_sidebar.py)
+
+- **Arguments**: `cfg: dict, consent: bool, adherence: float, temperature: float, selected_files: ComplexType, vector: dict`
+
+- **Returns**: `None`
+
+No description available.
 
 ### def `render_ai_settings` (rag_sidebar.py)
 
@@ -1579,15 +1975,7 @@ Explicit, session-scoped confirmation before any data can be sent to a cloud pro
 
 - **Returns**: `None`
 
-AI provider, keys, consent, document library and retrieval parameters (Settings page).
-
-### def `render_rag_sidebar` (rag_sidebar.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Legacy wrapper: the same controls inside a sidebar expander (the Settings page is the primary home).
+AI provider, keys, consent, document library, retrieval parameters and engine (Settings page).
 
 ---
 
@@ -1605,7 +1993,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `manage.trace_documenter.TraceDocumenter`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `core.workspace.safe_filename`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.session_scope.get_current_scope`, `manage.reproduction_manager.run_trace`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_paths.get_data_root`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `utils.session_scope.get_current_scope`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 
@@ -1639,6 +2027,14 @@ No description available.
 
 A manually entered path must exist inside the user's workspace (audit E4).
 
+### def `render_trace_integrity` (reproduce_analysis.py)
+
+- **Arguments**: `trace: dict`
+
+- **Returns**: `None`
+
+The hash chain of the trace (schema 2): verified, not verifiable (older traces) or broken.
+
 ### def `app` (reproduce_analysis.py)
 
 - **Arguments**: ``
@@ -1659,19 +2055,27 @@ Reproduces the analysis up to the target step index.
 
 ## settings.py
 
-_Settings page: AI provider and consent, graph engine, import defaults, workspace maintenance._
+_Settings page: AI engine and consent, graph engine, import defaults, workspace maintenance._
 
 **Imports**:
-`streamlit`, `app_pages.rag_sidebar.render_ai_settings`, `ui.components.confirm`, `ui.components.page_header`, `ui.components.section`, `ui.shell.clear_workspace_statistics`, `ui.state.get_state`
+`streamlit`, `ui.components.confirm`, `ui.components.page_header`, `ui.shell.clear_workspace_statistics`, `ui.state.get_state`, `utils.optional.extra_installed`, `utils.optional.missing_message`
 
 ---
 
 ## start.py
 
-_Start page: the three-step workflow, saved versions, the sample cohort and the AI status._
+_Start page: welcome banner, dataset figures, the three-step workflow, saved versions, sample cohort, AI status._
 
 **Imports**:
-`streamlit`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.section`, `ui.components.status_chip`, `ui.state.SAMPLE_DICTIONARY_PATH`, `ui.state.get_state`
+`streamlit`, `core.progress.DONE`, `core.progress.STALE`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.switch_to`, `ui.components.workflow_map.workflow_map`, `ui.progress.current_progress`, `ui.state.SAMPLE_DICTIONARY_PATH`, `ui.state.TUTORIAL_COHORT_PATH`, `ui.state.TUTORIAL_CONFIG_PATH`, `ui.state.TUTORIAL_DICTIONARY_PATH`, `ui.state.TUTORIAL_FOLLOWUP_PATH`, `ui.state.get_state`, `ui.workflow.BRANCHES`
+
+### def `progress_chip` (start.py)
+
+- **Arguments**: `step: str`
+
+- **Returns**: `None`
+
+The step's status for the current data, as on the map.
 
 ---
 
@@ -1709,6 +2113,155 @@ Display detailed algorithm explanations.
 
 ---
 
+## study_dossier.py
+
+_Reproduce > Study dossier (follow-up programme M3): the participant flow of the analysis population with the
+analyses added to the report, the list of those results (current, or computed on other data or another
+population), and the Word study dossier that documents them._
+
+**Imports**:
+`__future__.annotations`, `platform`, `tomllib`, `importlib.metadata.PackageNotFoundError`, `importlib.metadata.version`, `pathlib.Path`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.attrition.describe_definition`, `core.lineage.verify_trace`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`
+
+### def `imputations_of` (study_dossier.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `ComplexType`
+
+m when the result pools multiply imputed datasets (biostats.mi.analyze.MIResult), else None.
+
+### def `analysis_counts` (study_dossier.py)
+
+- **Arguments**: `items: list[ReportItem]`
+
+- **Returns**: `list[AnalysisCount]`
+
+What each result of the report analysed, for the boxes under the population.
+
+### def `_stale_text` (study_dossier.py)
+
+- **Arguments**: `status: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_app_version` (study_dossier.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_versions` (study_dossier.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_provenance_rows` (study_dossier.py)
+
+- **Arguments**: `state, trace: dict`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+No description available.
+
+### def `_criteria_table` (study_dossier.py)
+
+- **Arguments**: `population`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `_data_steps` (study_dossier.py)
+
+- **Arguments**: `trace: dict`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+No description available.
+
+### def `_missing_table` (study_dossier.py)
+
+- **Arguments**: `frame: pd.DataFrame`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `_mi_section` (study_dossier.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `session_parts` (study_dossier.py)
+
+- **Arguments**: `state, items: list[ReportItem]`
+
+- **Returns**: `dict[ComplexType]`
+
+What the dossier needs from the session, read during the page run: the download builds the document later,
+outside the run, where the session is not available (finish_input and build_dossier are pure).
+
+### def `finish_input` (study_dossier.py)
+
+- **Arguments**: `parts: dict[ComplexType]`
+
+- **Returns**: `None`
+
+The DossierInput from the session parts: result tables, figures and references (no session needed).
+
+### def `dossier_input` (study_dossier.py)
+
+- **Arguments**: `state, items: list[ReportItem]`
+
+- **Returns**: `None`
+
+Everything the Word dossier needs (manage.dossier.DossierInput), read from the session now.
+
+### def `app` (study_dossier.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_word_bytes` (study_dossier.py)
+
+- **Arguments**: `parts: dict[ComplexType]`
+
+- **Returns**: `bytes`
+
+No description available.
+
+### def `build_dossier_bytes` (study_dossier.py)
+
+- **Arguments**: `state, items: list[ReportItem]`
+
+- **Returns**: `bytes`
+
+No description available.
+
+---
+
+## survival.py
+
+_Survival & regression page: Kaplan-Meier, log-rank, Cox, logistic and count regression._
+
+**Imports**:
+`streamlit`, `app_pages.analysis_survival.run_survival`, `ui.components.no_dataset`, `ui.components.page_header`, `ui.components.mi_mode.mi_banner`, `ui.components.population.population_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`
+
+---
+
 ## transformation_logic.py
 
 _Compatibility shim: the transformation logic lives in :mod:`enrich.transformation_logic` (no UI code)._
@@ -1729,7 +2282,7 @@ _Users page (administrators)._
 
 ## users_management.py
 
-_Users Management Page - Admin Only
+_Users page (Admin > Users), for administrators only
 
 This page allows administrators to:
 - View all registered users with their status
@@ -1749,7 +2302,7 @@ This page allows administrators to:
 
 - **Returns**: `None`
 
-Render the Users Management page.
+Render the Users page.
 
 ---
 
@@ -1767,7 +2320,7 @@ _Validate page: data quality dashboard, anomalies, inclusion criteria, outliers,
 _Variable map page: taxonomy of variables, formulas, clustering and the knowledge graph._
 
 **Imports**:
-`app_pages.data_insight.app`, `ui.components.page_header`
+`streamlit`, `app_pages.data_insight.app`, `ui.components.page_header`, `utils.optional.extra_installed`, `utils.optional.missing_message`
 
 ---
 
@@ -1776,7 +2329,7 @@ _Variable map page: taxonomy of variables, formulas, clustering and the knowledg
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `manage.db_manager.DBManager`, `utils.data_analyzer.DataAnalyzer`, `ui.components.no_dataset`
+`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `utils.data_analyzer.DataAnalyzer`
 
 ### def `app` (visualization.py)
 
@@ -1790,10 +2343,10 @@ No description available.
 
 ## visualize.py
 
-_Visualize page: distributions, group comparisons, time series, ROC, Bland-Altman._
+_Visualize page: distributions, categorical charts, time series, relationships (correlations, clustermap, ROC)._
 
 **Imports**:
-`app_pages.visualization.app`, `ui.components.page_header`
+`app_pages.visualization.app`, `ui.components.page_header`, `ui.components.population.population_banner`
 
 ---
 

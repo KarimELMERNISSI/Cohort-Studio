@@ -134,7 +134,7 @@ Severity: **H** = wrong results / security / crash, **M** = misleading or fragil
 | U5 destructive actions | closed (cache reset, cached statistics, apply filter); reindex confirmation pending | P4, P6 |
 | U6 design | partially closed (theme tokens, components, interpretation quadrants); 30 `unsafe_allow_html` blocks remain, mostly the educational HTML tables | P4, P6; P7/P8 clean-up |
 | U4, U7 feedback and guidance | closed (result cards, test chooser, glossary, handbook, Run button on the Analyze page, no artificial sleeps); `long_op` adoption on the legacy pages pending | P5, P6 |
-| U8 copy | open | P6 |
+| U8 copy | partially closed (2026-10-16): README, handbook chapters, About page and the in-app wording found by the documentation audit | P6; documentation pass after M4 |
 
 ## Follow-up programme (2026-10-14)
 
@@ -153,3 +153,10 @@ order, with a review after each milestone.
 
 Owner decisions on the review: Python stays at 3.14; no repository split; staleness is handled with
 fingerprints and stamped results, not a workflow-orchestration framework.
+
+**Documentation claims (2026-10-16).** After M4, a read-only comparison of the README, the handbook chapters and
+the About page with the code found stale and unsupported statements. They concerned storage, transformations,
+export formats, replay modes, page names, account providers and marketing wording. They are corrected, together
+with the in-app texts and two behaviours the comparison uncovered: a Student's t in the MAR check, and legacy Excel
+files. `tests/test_docs_site.py` keeps the regulatory and marketing claims out of the site, the README and the
+chapters. The documentation site was redesigned at the same time, with screenshots of the application.

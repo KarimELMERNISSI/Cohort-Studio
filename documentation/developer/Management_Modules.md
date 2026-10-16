@@ -381,6 +381,62 @@ degrade performance with repeated synchronous network requests.
 
 ---
 
+## claude.py
+
+_Anthropic Claude Provider Connector.
+
+Chat connector for Claude models through the official ``anthropic`` SDK (Messages API). Anthropic has no
+embedding API: when Claude answers, documents are embedded by another provider chosen in Settings (local
+Ollama by default, so the document library never leaves the server for indexing). See
+``ConnectorFactory.create_connectors(embedding_provider=...)``.
+
+Claude models choose their own sampling: the temperature setting of the app is not sent._
+
+**Imports**:
+`__future__.annotations`, `logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+
+### class `ClaudeChatConnector` (claude.py)
+
+Chat connector for Anthropic Claude models (cloud; requires an API key and the data-sharing consent).
+
+**Methods:**
+
+- **__init__**(`self, config: ProviderConfig`) -> `None`
+  > No description available.
+
+- **_llm_type**(`self`) -> `str`
+  > No description available.
+
+- **get_available_models**(`self`) -> `list[str]`
+  > No description available.
+
+- **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
+  > No description available.
+
+- **_error**(`message: str`) -> `ChatResult`
+  > No description available.
+
+### def `_text` (claude.py)
+
+- **Arguments**: `content: Any`
+
+- **Returns**: `str`
+
+LangChain message content (string or list of parts) as plain text.
+
+### def `to_anthropic_messages` (claude.py)
+
+- **Arguments**: `messages: list[BaseMessage]`
+
+- **Returns**: `tuple[ComplexType]`
+
+LangChain messages -> (system prompt, Messages API turns).
+
+System messages are joined into the ``system`` parameter. The turns alternate user / assistant and start
+with a user turn, as the API requires: consecutive turns of the same role are merged.
+
+---
+
 ## db_manager.py
 
 _No module description._
@@ -437,7 +493,7 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
   > Persists a pandas DataFrame to a Parquet file via DuckDB (Low level).
 
 - **save_dataset**(`self, df: pd.DataFrame, base_name: str, username: ComplexType`) -> `tuple[ComplexType]`
-  > Persists a pandas DataFrame to a Parquet file with automatic versioning.
+  > Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept).
 
 - **load_dataframe**(`self, name: str, folder: ComplexType`) -> `tuple[ComplexType]`
   > Loads a Parquet file into a pandas DataFrame via DuckDB (Low level).
@@ -456,6 +512,15 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
   >
   > tuple
   >     (DataFrame, message) - The loaded DataFrame and a success/error message
+
+- **lineage_path**(`self, file_name: str`) -> `str`
+  > No description available.
+
+- **save_lineage**(`self, file_name: str, lineage: dict[ComplexType]`) -> `None`
+  > The lineage sidecar of a saved version (where it comes from: trace, fingerprint, population).
+
+- **load_lineage**(`self, file_name: str`) -> `ComplexType`
+  > No description available.
 
 - **get_available_tables**(`self`) -> `list[str]`
   > List available parquet files in the current directory.
@@ -483,6 +548,15 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 - **Returns**: `str`
 
 Escape a string for use inside a single-quoted DuckDB literal (COPY ... TO does not bind parameters).
+
+### def `write_parquet` (db_manager.py)
+
+- **Arguments**: `df: pd.DataFrame, path: str`
+
+- **Returns**: `None`
+
+Write a dataset version: pyarrow keeps the dtypes and the row ids (the ``__row_id`` index); DuckDB
+is the fallback for the rare column pyarrow refuses (the ids then travel as a ``__row_id`` column).
 
 ---
 
@@ -681,6 +755,87 @@ objects with complete metadata (source, filename, page, total_pages).
 
 ---
 
+## dossier.py
+
+_The study dossier (Word): what a methods section and its appendix need, built from the session's records.
+
+Sections:
+
+1. Provenance: the dataset, its source file and hash, the parse options, the data fingerprint, the trace and
+   its integrity, the software versions;
+2. Analysis population and participant flow (STROBE item 13): the flow diagram, the exclusions with the
+   criteria behind them, and the definition of every criterion;
+3. Data handling: the recorded steps that changed the data (merges, derived variables, conversions,
+   clipping, imputations);
+4. Missing data: missing values per variable, values filled by single imputation, and the multiple imputation
+   with its methods paragraph (reporting items of Sterne et al. 2009);
+5. Results: each result added to the dossier with what it was computed on;
+6. References.
+
+The input is plain data (:class:`DossierInput`); the app gathers it (app_pages/study_dossier.py). The dossier
+supports these reporting guidelines; it does not certify compliance, and it is not an electronically signed record._
+
+**Imports**:
+`__future__.annotations`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
+
+### class `DossierResult` (dossier.py)
+
+No description available.
+
+### class `DossierInput` (dossier.py)
+
+No description available.
+
+### def `_small` (dossier.py)
+
+- **Arguments**: `paragraph: Any, text: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_table` (dossier.py)
+
+- **Arguments**: `doc: Any, frame: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_pairs` (dossier.py)
+
+- **Arguments**: `doc: Any, rows: list[tuple[ComplexType]]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_exclusions` (dossier.py)
+
+- **Arguments**: `flow: ParticipantFlow`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `build_dossier` (dossier.py)
+
+- **Arguments**: `inp: DossierInput`
+
+- **Returns**: `BytesIO`
+
+No description available.
+
+### def `exits_text` (dossier.py)
+
+- **Arguments**: `exit_: FlowExit`
+
+- **Returns**: `str`
+
+One exclusion in words, for captions.
+
+---
+
 ## factory.py
 
 _Connector Factory for RAG LLMs and Embeddings.
@@ -689,7 +844,7 @@ Instantiates provider-specific connectors based on ProviderConfig or UI paramete
 providing a single entry point for model-agnostic execution._
 
 **Imports**:
-`logging`, `typing.Any`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `providers.gemini.GeminiChatConnector`, `providers.gemini.GeminiEmbeddingConnector`, `providers.mistral.MistralChatConnector`, `providers.mistral.MistralEmbeddingConnector`, `providers.ollama.OllamaChatConnector`, `providers.ollama.OllamaEmbeddingConnector`, `providers.openai.OpenAIChatConnector`, `providers.openai.OpenAIEmbeddingConnector`, `schemas.ProviderConfig`, `schemas.ProviderType`
+`logging`, `typing.Any`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `providers.claude.ClaudeChatConnector`, `providers.gemini.GeminiChatConnector`, `providers.gemini.GeminiEmbeddingConnector`, `providers.mistral.MistralChatConnector`, `providers.mistral.MistralEmbeddingConnector`, `providers.ollama.OllamaChatConnector`, `providers.ollama.OllamaEmbeddingConnector`, `providers.openai.OpenAIChatConnector`, `providers.openai.OpenAIEmbeddingConnector`, `schemas.ProviderConfig`, `schemas.ProviderType`
 
 ### class `ConnectorFactory` (factory.py)
 
@@ -715,8 +870,12 @@ Factory for creating LLM and Embedding connectors.
   > Returns:
   >     Instance of BaseEmbeddingConnector.
 
-- **create_connectors**(`cls, provider: str, model_name: ComplexType, embedding_model: ComplexType, api_key: ComplexType, base_url: ComplexType, temperature: float`) -> `tuple[ComplexType]`
+- **create_connectors**(`cls, provider: str, model_name: ComplexType, embedding_model: ComplexType, api_key: ComplexType, base_url: ComplexType, temperature: float, embedding_provider: ComplexType, embedding_api_key: ComplexType, embedding_base_url: ComplexType`) -> `tuple[ComplexType]`
   > Convenience factory method constructing both connectors from keyword arguments.
+  >
+  > ``embedding_provider`` lets the documents be embedded by another provider than the one that answers;
+  > it is required in practice for Claude (Anthropic has no embedding API) and defaults to local Ollama
+  > there. ``embedding_api_key`` / ``embedding_base_url`` configure that provider.
 
 ---
 
@@ -835,6 +994,24 @@ Returns:
 
 Raises:
     None
+
+---
+
+## flow_figure.py
+
+_The participant flow as a static picture (PNG) for the Word dossier: the same boxes and geometry as the app's
+diagram (core.attrition.flow_layout), drawn with matplotlib's object API (no pyplot state, safe in a server)._
+
+**Imports**:
+`__future__.annotations`, `io.BytesIO`, `textwrap.wrap`, `matplotlib.figure.Figure`, `matplotlib.patches.FancyBboxPatch`, `core.attrition.ANALYSIS`, `core.attrition.POPULATION`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `core.attrition.flow_layout`
+
+### def `flow_png` (flow_figure.py)
+
+- **Arguments**: `flow: ParticipantFlow`
+
+- **Returns**: `bytes`
+
+No description available.
 
 ---
 
@@ -1036,7 +1213,7 @@ Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
 Better Auth, or Disabled) based on environment configuration or runtime parameters._
 
 **Imports**:
-`logging`, `os`, `typing.Any`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `typing.Any`, `.setup_token`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `IAMManager` (manager.py)
 
@@ -1106,12 +1283,28 @@ Central facade managing IAM operations and provider lifecycle.
 - **update_user_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
   > Update user credentials.
 
+- **_setup_dir**(``) -> `str`
+  > No description available.
+
+- **_has_active_admin**(`self`) -> `bool`
+  > No description available.
+
+- **setup_pending**(`self`) -> `bool`
+  > True when the first administrator must be created with the setup token of the server log.
+
+- **issue_setup_token**(`self`) -> `ComplexType`
+  > A new first-run setup token (the previous one stops working); None when no setup is needed.
+
+- **create_first_admin**(`self, token: str, username: str, password: str`) -> `tuple[ComplexType]`
+  > Create the first administrator with the one-time setup token (follow-up programme M4).
+
 - **ensure_bootstrap_admin**(`self`) -> `tuple[ComplexType]`
   > Create the initial administrator when no active administrator exists.
   >
   > Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
-  > CMP_ADMIN_PASSWORD_FILE. Nothing is created when the IAM provider is disabled, when an
-  > active administrator already exists, or when no bootstrap password is configured.
+  > CMP_ADMIN_PASSWORD_FILE. Without them, a one-time setup token is written to the server log and the
+  > login page creates the first administrator with it (manage/iam/setup_token.py). Nothing happens when
+  > the IAM provider is disabled or when an active administrator already exists.
 
 ### def `get_iam_manager` (manager.py)
 
@@ -1120,6 +1313,86 @@ Central facade managing IAM operations and provider lifecycle.
 - **Returns**: `IAMManager`
 
 Retrieve or initialize the global IAMManager instance.
+
+---
+
+## mi_store.py
+
+_Files of a multiple imputation saved with a dataset version (in the ``mi/`` folder of the datasets).
+
+``<version>.cells.parquet``  the imputed cells: row id, column, imputation number, value (number or text)
+``<version>.rows.parquet``   row id, hash of the model columns at fitting time, stratum (binding)
+``<version>.json``           the binding (spec, methods, population), the engine information, diagnostics
+
+The observed data are the saved version itself; together they rebuild the ``MIData`` and its status
+against the current analysis population. Writes are atomic (temporary file, then replace)._
+
+**Imports**:
+`__future__.annotations`, `json`, `os`, `pathlib.Path`, `typing.Any`, `numpy`, `pandas`, `biostats.mi.binding.MIBinding`, `biostats.mi.binding.StoredMI`, `biostats.mi.data.MIData`
+
+### def `mi_dir` (mi_store.py)
+
+- **Arguments**: `dataset_dir: ComplexType`
+
+- **Returns**: `Path`
+
+No description available.
+
+### def `_paths` (mi_store.py)
+
+- **Arguments**: `dataset_dir: ComplexType, name: str`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_atomic` (mi_store.py)
+
+- **Arguments**: `path: Path, write`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_jsonable` (mi_store.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `Any`
+
+No description available.
+
+### def `save_mi` (mi_store.py)
+
+- **Arguments**: `stored: StoredMI, dataset_dir: ComplexType, name: str`
+
+- **Returns**: `list[Path]`
+
+Write the three files of ``stored`` for the saved version ``name``.
+
+### def `has_mi` (mi_store.py)
+
+- **Arguments**: `dataset_dir: ComplexType, name: str`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `load_mi` (mi_store.py)
+
+- **Arguments**: `dataset_dir: ComplexType, name: str, base: pd.DataFrame`
+
+- **Returns**: `ComplexType`
+
+Rebuild the imputation saved with version ``name`` on its observed data ``base`` (None if absent).
+
+### def `delete_mi` (mi_store.py)
+
+- **Arguments**: `dataset_dir: ComplexType, name: str`
+
+- **Returns**: `None`
+
+No description available.
 
 ---
 
@@ -1735,8 +2008,11 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **_analyze_global_context**(`self, texts, dataset_columns`) -> `None`
   > Analyzes a sample of the documents and dataset columns to determine the global context.
 
-- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url, vector_engine, qdrant_url, qdrant_api_key`) -> `None`
+- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url, vector_engine, qdrant_url, qdrant_api_key, embedding_provider, embedding_api_key, embedding_base_url`) -> `None`
   > Initialize the RAG system with documents, embeddings, the vector database and the LLM.
+  >
+  > ``embedding_provider`` embeds the documents when it differs from the answering ``provider``; Claude
+  > (``anthropic``) has no embedding API and uses local Ollama unless another provider is given.
   >
   > ``vector_engine`` is "lancedb" or "qdrant" (None: the server default ``CMP_VECTOR_STORE``, else
   > the engine recommended for this machine); ``qdrant_url`` selects a Qdrant server instead of
@@ -1901,6 +2177,142 @@ Methods:
 
 ---
 
+## report_tables.py
+
+_The results of the study dossier as report blocks: tables, lines of text, references and, for survival
+analyses, a Kaplan-Meier figure. One function, :func:`result_blocks`, reads every type of result the analysis
+pages store (biostats results, pooled results over imputed datasets, the dictionaries of a few pages) and
+returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
+
+**Imports**:
+`__future__.annotations`, `math`, `dataclasses.dataclass`, `dataclasses.field`, `io.BytesIO`, `typing.Any`, `pandas`
+
+### class `ResultBlocks` (report_tables.py)
+
+No description available.
+
+### def `_num` (report_tables.py)
+
+- **Arguments**: `value: Any, digits: int`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_p` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_peq` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+'p = 0.251' or 'p < 0.001', for sentences.
+
+### def `_ci` (report_tables.py)
+
+- **Arguments**: `ci: Any`
+
+- **Returns**: `str`
+
+'low to high' from a CI object, a pair or a mapping.
+
+### def `_test_line` (report_tables.py)
+
+- **Arguments**: `test: Any`
+
+- **Returns**: `str`
+
+One line for a TestResult: estimate with CI, statistic, df, p and n.
+
+### def `_test_blocks` (report_tables.py)
+
+- **Arguments**: `test: Any`
+
+- **Returns**: `ResultBlocks`
+
+No description available.
+
+### def `_model_table` (report_tables.py)
+
+- **Arguments**: `table: pd.DataFrame`
+
+- **Returns**: `tuple[ComplexType]`
+
+Term, ratio (or coefficient) with its 95% CI and p, from a model's coefficient table.
+
+### def `km_png` (report_tables.py)
+
+- **Arguments**: `curves: list[tuple[ComplexType]]`
+
+- **Returns**: `bytes`
+
+Kaplan-Meier curves (label, times, survival) as a step plot.
+
+### def `_median` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_survival_blocks` (report_tables.py)
+
+- **Arguments**: `res: Any`
+
+- **Returns**: `ResultBlocks`
+
+No description available.
+
+### def `_pooled_frame` (report_tables.py)
+
+- **Arguments**: `result: Any`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+### def `_pooled_blocks` (report_tables.py)
+
+- **Arguments**: `res: Any`
+
+- **Returns**: `ResultBlocks`
+
+No description available.
+
+### def `_univariate_blocks` (report_tables.py)
+
+- **Arguments**: `value: dict`
+
+- **Returns**: `ResultBlocks`
+
+No description available.
+
+### def `_pooled_comparison_blocks` (report_tables.py)
+
+- **Arguments**: `value: dict`
+
+- **Returns**: `ResultBlocks`
+
+No description available.
+
+### def `result_blocks` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `ResultBlocks`
+
+The report blocks of one stored result (unknown types give a short text).
+
+---
+
 ## reproduction_manager.py
 
 _Reproduction engine: replays a transformation trace headlessly (no Streamlit).
@@ -1908,14 +2320,29 @@ _Reproduction engine: replays a transformation trace headlessly (no Streamlit).
 One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
 source dataset (or a pre-loaded frame) up to an optional step index, resolving file paths through
 the user's workspace and the ``path_overrides`` chosen in the UI. :func:`execute_trace_pipeline`
-keeps the historical ``(df, error)`` signature._
+keeps the historical ``(df, error)`` signature.
+
+Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
+replay checks each replayed step against it and reports the first *divergence*; steps that cannot be
+recomputed (an adopted multiple imputation, a table replaced outside the app) are listed as not
+replayable, and their recorded snapshot is used when there is one. A replay is *reproducible* when every
+step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.state.ParseOptions`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.path_utils.resolve_path`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.session.SINGLE_IMPUTATION_STEPS`, `core.session.filled_cells`, `core.session.merge_cells`, `core.session.restrict_cells`, `core.state.ParseOptions`, `enrich.formulas.evaluate_formula_safely`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
 
 ### class `ReplayResult` (reproduction_manager.py)
 
 No description available.
+
+**Methods:**
+
+- **reproducible**(`self`) -> `bool`
+  > Every step replayed, and every recorded fingerprint matched.
+
+### class `_NotReplayable` (reproduction_manager.py)
+
+A step the engine cannot recompute; carries the frame to continue from.
 
 ### def `_resolve` (reproduction_manager.py)
 
@@ -1941,13 +2368,141 @@ Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are Duc
 
 The source dataset of a trace: the recorded artifact (newer traces) or the original path/name.
 
+### def `_population_rows` (reproduction_manager.py)
+
+- **Arguments**: `df: pd.DataFrame, block: dict[ComplexType], index: int, warnings: list[str]`
+
+- **Returns**: `pd.Index`
+
+Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were).
+
+### def `_snapshot` (reproduction_manager.py)
+
+- **Arguments**: `step: dict[ComplexType], overrides: ComplexType`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_enrichment` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_imputation` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_targeted_imputation` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_variable_transformation` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_variable_computation` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_data_type_conversion` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_missing_value_handling` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_rename_columns` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_apply_filter` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_population_definition` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_mi_impute` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings, result`
+
+- **Returns**: `None`
+
+Re-run a multiple imputation on its population and check the imputed cells against the recorded hash.
+
+### def `_freeze_population` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_outlier_clipping` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, overrides, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
 ### def `_apply_step` (reproduction_manager.py)
 
-- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, overrides: ComplexType, warnings: list[str]`
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, overrides: ComplexType, warnings: list[str], result: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
-Apply one recorded step; returns (df, missing_path).
+Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo.
+
+### def `apply_steps` (reproduction_manager.py)
+
+- **Arguments**: `df: pd.DataFrame, steps: list[dict[ComplexType]]`
+
+- **Returns**: `ReplayResult`
+
+Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints.
 
 ### def `run_trace` (reproduction_manager.py)
 
@@ -2022,7 +2577,7 @@ Supported LLM and Embedding providers.
 Configuration specification for a specific LLM and Embedding provider.
 
 Attributes:
-    provider: Provider identifier (gemini, ollama, openai, mistral, custom).
+    provider: Provider identifier (gemini, ollama, openai, mistral, anthropic, custom).
     model_name: Name of the chat/completion model (e.g., 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.8-flash', 'llama3.2', 'gpt-4o-mini').
     embedding_model: Name of the embedding model (e.g., 'models/gemini-embedding-2', 'models/text-embedding-005', 'nomic-embed-text').
     api_key: Optional API key for commercial cloud endpoints.
@@ -2153,12 +2708,77 @@ Open the engine's index in ``base_dir/<engine>`` (Qdrant on a server when a URL 
 
 ---
 
+## setup_token.py
+
+_First-run administrator (follow-up programme M4).
+
+A fresh installation (a new Docker container) has no administrator. When no bootstrap password is configured
+(``CMP_ADMIN_PASSWORD`` / ``CMP_ADMIN_PASSWORD_FILE``), the server issues a one-time setup token and writes it to
+its log; the login page then offers to create the first administrator with it. Whoever can read the server log
+operates the server, which is the trust this relies on (as Jupyter's token does).
+
+Only a SHA-256 hash of the token is stored, in the data root. The token is valid until it is used or until an
+administrator exists; a restart without an administrator issues a new one._
+
+**Imports**:
+`__future__.annotations`, `contextlib`, `hashlib`, `hmac`, `json`, `os`, `secrets`, `datetime.UTC`, `datetime.datetime`, `pathlib.Path`
+
+### def `_path` (setup_token.py)
+
+- **Arguments**: `directory: ComplexType`
+
+- **Returns**: `Path`
+
+No description available.
+
+### def `_digest` (setup_token.py)
+
+- **Arguments**: `token: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `issue` (setup_token.py)
+
+- **Arguments**: `directory: ComplexType`
+
+- **Returns**: `str`
+
+A new token (the previous one, if any, stops working); only its hash is written.
+
+### def `pending` (setup_token.py)
+
+- **Arguments**: `directory: ComplexType`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `check` (setup_token.py)
+
+- **Arguments**: `directory: ComplexType, token: str`
+
+- **Returns**: `bool`
+
+True when ``token`` is the current setup token (constant-time comparison).
+
+### def `clear` (setup_token.py)
+
+- **Arguments**: `directory: ComplexType`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
 ## trace_documenter.py
 
 _No module description._
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 
@@ -2182,6 +2802,9 @@ No description available.
 - **_add_step**(`self, doc, index, step`) -> `None`
   > No description available.
 
+- **_add_mi_methods**(`self, doc, params`) -> `None`
+  > The methods paragraph of a multiple imputation, written from its recorded specification.
+
 - **_render_params**(`self, doc, params, indent`) -> `None`
   > No description available.
 
@@ -2201,7 +2824,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`
+`contextlib`, `json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.lineage.TRACE_SCHEMA`, `core.lineage.genesis_hash`, `core.lineage.seal_step`, `core.lineage.verify_trace`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`
 
 ### class `TransformationManager` (transformation_manager.py)
 
@@ -2220,7 +2843,7 @@ No description available.
   >      Defaults to DATA_ROOT/traces via data_paths utility.
 
 - **initialize_session**(`self, dataset_name: str, username: ComplexType`) -> `None`
-  > Initializes a new session trace.
+  > Initializes a new session trace (``parent`` links it to the trace of a saved version it starts from).
 
 - **get_trace_path**(`self`) -> `ComplexType`
   > Generates the trace file path based on the session ID.
@@ -2245,6 +2868,15 @@ No description available.
   >      Path to numerical statistics file.
   > corr_matrix_path : str, optional
   >      Path to correlation matrix file.
+  > data : dict, optional
+  >      What the step did to the table (rows/columns in and out, fingerprints): core.lineage.Change.
+  > population : dict, optional
+  >      The analysis population the step used (criteria, counts, rows kept).
+  > replayable : bool, optional
+  >      False when the replay engine cannot redo the step.
+  > recorded_at : str, optional
+  >      When the change was made, if it was applied later (an Enrich draft); the step then also records
+  >      ``applied_at``.
 
 - **_make_serializable**(`self, obj`) -> `None`
   > Recursively converts objects to JSON-serializable formats.
@@ -2252,8 +2884,14 @@ No description available.
 - **get_trace**(`self`) -> `None`
   > Returns the current transformation trace.
 
+- **verify**(`self`) -> `None`
+  > Integrity of the hash chain (core.lineage.TraceVerification).
+
 - **save_trace**(`self, filepath`) -> `None`
-  > Saves the trace to a JSON file.
+  > Saves the trace to a JSON file (UTF-8, atomic replace).
+  >
+  > A relative ``filepath`` is reduced to its file name and placed in ``trace_dir``, so a trace never
+  > lands outside the user's workspace (for example in the process working directory).
 
 - **load_trace**(`self, filepath`) -> `None`
   > Loads a trace from a JSON file.

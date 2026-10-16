@@ -23,7 +23,7 @@ Merge additional data sources into your main dataset.
 
 ### Workflow
 
-1. **Upload Main Dataset** — Load from the current session, a file upload, or a saved version.
+1. **Main Dataset** — The current dataset, with the changes of the Enrich draft (load another dataset from Data > Import or the sidebar).
 2. **Upload Enrichment Dataset** — Provide the supplementary data to merge.
 3. **Select Columns** — Choose which columns to retain from each dataset.
 4. **Configure Merge** — Select the join key(s) and merge type (inner, left, right, outer).
@@ -122,7 +122,7 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 | **DBSCAN** | Density-based clustering. Set epsilon and min_samples. |
 | **Gaussian Mixture** | Probabilistic clustering. Set number of components. |
 
-> **Note**: Input variables are automatically standardised (Z-score). Rows with any missing values in selected columns are excluded (complete case analysis).
+> **Note**: Input variables are automatically standardised (Z-score). Dimensionality reduction and clustering need complete data: if a selected column has a missing value, Enrich stops and asks you to impute it first (Handle Missing Data).
 
 #### Encoding
 
@@ -136,14 +136,14 @@ Engineer new features via transformations, dimensionality reduction, encoding, s
 
 | Method | Description |
 | --- | --- |
-| **Standard (Z-Score)** | Mean = 0, Std = 1. |
-| **Min-Max** | Scaled to [0, 1]. |
-| **Robust** | Median-centred, IQR-scaled. Resistant to outliers. |
-| **Max-Abs** | Scaled by maximum absolute value. |
+| **Z-Score Standardization** | Mean = 0, Std = 1. |
+| **Min-Max Normalization** | Scaled to [0, 1]. |
+| **Natural Logarithm Transformation** | log(x + 1). |
 
-#### Statistical Transformations
+#### Statistics
 
-Log, Square Root, Box-Cox, Yeo-Johnson, Rank, Quantile, and more.
+Mean, Median, Summation, Minimum Value, Maximum Value or Standard Deviation of a selected column, stored as a new
+column that repeats the value on every row.
 
 ### Naming Convention
 
@@ -164,11 +164,9 @@ Suggestions include the variable name, formula, reasoning, and expected units.
 
 ## Dataset Versioning & Persistence
 
-The sidebar provides:
-
-- **Dataset History** — Load any previously saved dataset version.
-- **Automatic Snapshots** — Each transformation saves a Parquet snapshot for reproducibility.
-- **Reproduce Analysis** — Upload or select a trace file to regenerate reports or replay transformations.
+- **Saved versions** — The sidebar dataset card: **Save** stores the current dataset as a new version, **Change** loads a saved one.
+- **Automatic Snapshots** — Each merge, transformation and imputation saves a Parquet snapshot in your workspace; the Fast replay mode uses them.
+- **Reproduce Analysis** — On Reproduce > Versions & traces, upload or select a trace file to replay it or download its Word report.
 
 ---
 

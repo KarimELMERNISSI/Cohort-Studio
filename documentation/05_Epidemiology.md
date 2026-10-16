@@ -39,7 +39,7 @@ The application guides test selection based on the analysis configuration:
 | --- | --- |
 | **Outcome Variable** | Continuous or categorical. |
 | **Comparison Variable** | Binary, multi-group, or continuous. |
-| **Parametric / Non-Parametric** | Chosen based on normality testing or user preference. |
+| **Parametric / Non-Parametric** | Welch's test by default (Welch's t-test for two groups, Welch ANOVA for more). A rank test (Mann-Whitney U, Kruskal-Wallis) when you force the non-parametric route, or when the groups are very small (n < 15) and strongly skewed. Normality and equal variances are reported as diagnostics; they do not choose the test. |
 
 ### Available Statistical Tests
 
@@ -47,9 +47,11 @@ The application guides test selection based on the analysis configuration:
 
 | Test | When Used |
 | --- | --- |
-| **Student's t-test** | Two-group comparison of means (parametric). |
+| **Welch's t-test** | Two-group comparison of means (the default; does not assume equal variances). |
+| **Student's t-test** | Two-group comparison of means assuming equal variances (chosen by hand in the detailed view). |
 | **Mann-Whitney U** | Two-group comparison (non-parametric). |
-| **One-way ANOVA** | Multi-group comparison of means (parametric). |
+| **Welch ANOVA** | Multi-group comparison of means (the default; does not assume equal variances). |
+| **One-way ANOVA** | Multi-group comparison of means assuming equal variances (chosen by hand in the detailed view). |
 | **Kruskal-Wallis** | Multi-group comparison (non-parametric). |
 | **Chi-squared** | Categorical vs categorical association. |
 | **Fisher's Exact** | Categorical association with small samples. |
@@ -60,8 +62,10 @@ The application guides test selection based on the analysis configuration:
 
 | Method | Description |
 | --- | --- |
+| **Games-Howell** | Post-hoc pairwise comparison after Welch ANOVA (the default route). |
 | **Tukey HSD** | Post-hoc pairwise comparison after ANOVA. |
-| **Dunn's Test** | Post-hoc after Kruskal-Wallis. |
+| **Dunn's Test** | Post-hoc after Kruskal-Wallis (tie-corrected, Holm-adjusted). |
+| **Holm** | Family-wise error rate correction; the default (*Holm (recommended)*). |
 | **Bonferroni** | Conservative multiple testing correction. |
 | **FDR (Benjamini-Hochberg)** | False discovery rate correction. |
 
@@ -69,7 +73,8 @@ The application guides test selection based on the analysis configuration:
 
 | Measure | Applies To |
 | --- | --- |
-| **Cohen's d** | Two-group mean differences. |
+| **Hedges' g** | Two-group mean differences (Welch or Student t-test). |
+| **Rank-biserial r** | Mann-Whitney U. |
 | **Eta-squared (η²)** | ANOVA / multi-group comparisons. |
 | **Cramér's V** | Chi-squared / categorical associations. |
 
@@ -133,14 +138,15 @@ Convert raw variable values into Z-scores relative to a reference population or 
 | **Manual reference values** | Mean and SD entered per variable (published population norms). |
 
 ### Output
-- New column(s) appended with the Z-score transformation.
-- Distribution plot of Z-scores for visual inspection.
+- A summary per variable: the reference mean and SD, the mean, SD and range of the Z-scores, and the number and share of values with |Z| > 2.
+- Plots: mean Z-scores by group (forest plot), a heatmap across samples and an individual profile.
+- **Download Z-Score Data** (the data with one `<variable>_Z` column per variable) and **Download Summary Table** (Excel). The Z-scores are not added to the dataset.
 
 ---
 
 ## Methodological Guidance
-- Use the **Test Recommendation Helper** to identify the most appropriate test based on your variable types and sample characteristics.
-- Always check **normality** (Shapiro-Wilk) before choosing parametric tests.
+- Use the **Which test?** page (Analyze > Which test?) to identify the most appropriate test: four questions give the recommended analysis, the effect size to report and where to run it.
+- **Normality** tests (Shapiro-Wilk) are reported as diagnostics, not used to choose the test: Welch's tests are the default, and a rank test suits very small, strongly skewed groups.
 - For multiple comparisons, always apply a correction method to control false positives.
 - Power analysis should be performed **before** data collection when possible (a priori).
 
@@ -168,7 +174,7 @@ Categorical covariates are one-hot coded with their first (alphabetical) level a
 | Incidence rates | exact Poisson intervals, rate ratio with a score interval and exact conditional test |
 | Mantel-Haenszel | pooled OR (Robins-Breslow-Greenland interval) and RR (Greenland-Robins), Breslow-Day homogeneity, crude vs adjusted comparison |
 | Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
-| Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales |
+| Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales (on the *Diagnostic accuracy & agreement* tab) |
 
 ## Analyses with multiply imputed data
 

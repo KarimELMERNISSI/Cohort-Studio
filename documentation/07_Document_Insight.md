@@ -1,12 +1,15 @@
-# Documents Insight
+# Documents
 
-The **Documents Insight** page enables you to analyse research PDFs using AI — generate structured summaries, chat with documents via retrieval-augmented Q&A, build knowledge graphs from extracted concepts, and check how well your dataset variables are covered in the literature.
+The **Documents** page (Knowledge > Documents) enables you to analyse research PDFs using AI — generate structured summaries, chat with documents via retrieval-augmented Q&A, build knowledge graphs from extracted concepts, and check how well your dataset variables are covered in the literature.
 
 ---
 
 ## Document Selection
 
-Upload one or more PDF files. Documents are split into chunks, embedded and indexed into your vector database for retrieval.
+Add one or more PDF files in Settings > AI engine > **Document library** (*Add literature (PDF)*), then click
+**Initialise / reindex**. Documents are split into chunks, embedded and indexed into your vector database for
+retrieval. On the Documents page, choose the documents in the sidebar (*Choose Document(s)*) and click
+**Generate Graph**; the tabs described below appear once a graph is generated or loaded (*Load Saved Analysis*).
 - Supported format: `.pdf`
 - Documents are stored per-user for data isolation.
 - Previously uploaded documents can be reused across sessions.
@@ -48,9 +51,11 @@ Generate structured summaries from each uploaded paper.
 | **Objective** | The paper's stated research goal or hypothesis. |
 | **Methods** | Study design, population, and analytical methods used. |
 | **Key Findings** | Main results, effect sizes, and statistical significance. |
-| **Variables** | Clinical and biological variables discussed in the paper. |
+| **Clinical Significance** | Clinical or scientific implications of the paper. |
+| **Top Concepts** | The three to five most important concepts of the paper. |
 
-Summaries are generated via RAG and displayed in a dedicated tab for quick review.
+Summaries are generated with the knowledge graph (**Generate Graph**), with the inferred title and study type, and
+displayed in the *Document Summary* tab for quick review.
 
 ---
 
@@ -79,9 +84,9 @@ Ask questions about the uploaded documents using retrieval-augmented Q&A.
 
 ### How It Works
 
-1. Relevant document chunks are retrieved from the vector store based on your question.
-2. The LLM generates an answer grounded in the retrieved context.
-3. Source citations (document name and page) are displayed with each answer.
+1. Relevant document chunks are retrieved from the vector store based on your question, from the visible documents only.
+2. The LLM generates an answer grounded in the retrieved context; when the answer is not in the documents, it says so.
+3. Each retrieved chunk is labelled with its source file, so the answer can name it; page numbers are not added to chat answers. For page-level citations, use the node details of the Knowledge Graph tab.
 
 ### Use Cases
 
@@ -112,6 +117,6 @@ This helps identify:
 ---
 
 ## Practical Guidance
-- Upload all relevant papers **before** generating the taxonomy on the Data Insight page — the RAG system uses them for better variable classification.
+- Add and index all relevant papers **before** generating the taxonomy on the Variable map page (Knowledge > Variable map) — the RAG system uses them for better variable classification.
 - Use the **Chat** feature for quick literature queries instead of manually searching PDFs.
 - The **Coverage Analysis** is especially useful when preparing study protocols or grant applications.

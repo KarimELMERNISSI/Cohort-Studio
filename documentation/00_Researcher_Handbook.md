@@ -43,7 +43,7 @@ The diagram on the Start page, and the step cards under it, show where you are w
 This is the enrichment loop in practice: after you derive or impute a variable, Validate and Explore & analyse turn
 amber and Validate becomes the suggested next step; check the quality, run the analyses again, then save a new version.
 Hover a box to read its status in a sentence. Loading another dataset starts a new trace, and the diagram starts
-afresh. Renaming columns does not count as a change to the data.
+afresh.
 
 ## Workflow Phases
 
@@ -101,7 +101,7 @@ See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clust
 | --- | --- |
 | 4.1 | Explore **distributions** (histograms, box plots, violin plots). |
 | 4.2 | Investigate **relationships** (scatter plots, correlation matrices). |
-| 4.3 | Generate **medical plots** (Bland-Altman, ROC, Kaplan-Meier). |
+| 4.3 | Draw **ROC curves** (AUC, Youden threshold). Bland-Altman and Kaplan-Meier plots are on Analyze (phase 5). |
 | 4.4 | Use **integrated statistical tests** for quick significance checks. |
 | 4.5 | **Export** publication-ready figures. |
 
@@ -109,15 +109,18 @@ See: [04_Visualization.md](04_Visualization.md)
 
 ### Phase 5 — Statistical Analysis
 
-**Page**: Analyze > Hypothesis tests & epidemiology
+**Pages**: Analyze > Which test?, Analyze > Hypothesis tests & epidemiology, Analyze > Survival & regression
 
 | Step | Action |
 | --- | --- |
-| 5.1 | Select and run **hypothesis tests** (auto-recommended). |
-| 5.2 | Interpret **effect sizes** and confidence intervals. |
-| 5.3 | Run **multivariate analysis** (ANCOVA) with covariates. |
-| 5.4 | Perform **power & sample size** calculations. |
-| 5.5 | Compute **Z-scores** for standardised comparisons. |
+| 5.1 | Answer the four questions of **Which test?** to get the recommended analysis and where to run it. |
+| 5.2 | Select and run **hypothesis tests** (auto-recommended). |
+| 5.3 | Interpret **effect sizes** and confidence intervals. |
+| 5.4 | Run **multivariate analysis** (ANCOVA) with covariates. |
+| 5.5 | Assess **diagnostic accuracy and agreement** (sensitivity, specificity, likelihood ratios, Bland-Altman, kappa, ICC). |
+| 5.6 | Perform **power & sample size** calculations. |
+| 5.7 | Compute **Z-scores** for standardised comparisons. |
+| 5.8 | Fit **survival and regression models** on Survival & regression (Kaplan-Meier, log-rank, Cox, logistic, Poisson / negative binomial). |
 
 See: [05_Epidemiology.md](05_Epidemiology.md)
 
@@ -137,14 +140,15 @@ See: [06_Data_Insight.md](06_Data_Insight.md), [07_Document_Insight.md](07_Docum
 
 ### Phase 7 — Reproducibility & Reporting
 
-**Page**: Reproduce > Versions & traces
+**Pages**: Reproduce > Versions & traces, Reproduce > Study dossier
 
 | Step | Action |
 | --- | --- |
 | 7.1 | Review **trace history** of your analysis sessions. |
 | 7.2 | **Replay** a trace to reproduce results (Fast or Full mode). |
 | 7.3 | **Generate reports** (`.docx`) from trace files. |
-| 7.4 | **Share** traces and reports with collaborators. |
+| 7.4 | **Share** the reports with collaborators. Traces are saved automatically in your workspace (`traces` folder); the app has no trace download, but a trace file can be uploaded on Versions & traces to replay it. |
+| 7.5 | Build the **study dossier**: add results with **Add to the study dossier** on the analysis pages, then download the Word dossier (participant flow, data handling, missing data, results, references). |
 
 See: [08_Reproduction.md](08_Reproduction.md)
 
@@ -173,9 +177,9 @@ See: [10_Developer_Guide.md](10_Developer_Guide.md)
 
 | Step | Action |
 | --- | --- |
-| B.1 | Monitor **embedding health** and document chunking statistics. |
-| B.2 | Review **retrieval quality** metrics (precision, recall). |
-| B.3 | Run **manual evaluations** of the RAG system's answers. |
+| B.1 | Review the **quality scores** an LLM judge gives the AI answers: context relevance, faithfulness and answer relevance (0–10), the JSON success rate and a 7-day trend. |
+| B.2 | Keep a **test suite** of queries and their expected concepts (Embedding Health tab). |
+| B.3 | Run **manual evaluations** (one query or the test suite) and download the results as JSON. |
 
 ---
 
@@ -185,4 +189,4 @@ See: [10_Developer_Guide.md](10_Developer_Guide.md)
 2. **Use AI suggestions as starting points** — Always review and validate AI-generated outputs.
 3. **Upload literature early** — Research papers improve taxonomy quality and variable suggestions.
 4. **Check quality at every phase** — Return to the Data Quality dashboard after imputation, outlier handling, or enrichment.
-5. **Export traces before closing** — Traces are your audit trail; download them for long-term archiving.
+5. **Archive the traces with the reports** — Traces are your audit trail. They are saved automatically in your workspace (`traces` folder); keep them with the Word report and the study dossier for long-term archiving.

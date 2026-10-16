@@ -17,33 +17,34 @@ Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, M
 
 ### Statistical Diagnosis
 
-- **Little's MCAR Test**: A statistical test to determine if data is Missing Completely At Random (MCAR).
-  - *p > 0.05*: Likely MCAR (random).
-  - *p < 0.05*: Likely MAR or MNAR (systematic).
+- **Little's MCAR Test**: A chi-square test of whether the selected numeric variables are consistent with Missing Completely At Random (MCAR).
+  - *p ≥ 0.05*: No evidence against MCAR. This does not prove MCAR (the test has little power in small samples), and the test cannot distinguish MAR from MNAR.
+  - *p < 0.05*: Evidence against MCAR: the mechanism is MAR or MNAR (the test cannot tell them apart).
 - **MAR Indicator**: Checks if missingness in one variable is correlated with values in another, helping identify Missing At Random (MAR) dependencies.
 
 ---
 
 ## Clinical Anomalies
 
-The system checks your dataset for values that are clinically impossible or suspect based on rules defined in `config/config.json`.
+The system checks your dataset for values that are clinically impossible or suspect, using the anomaly rules of your
+study configuration. Declare the rules on the **Handle Clinical Anomalies** tab, or load a configuration file (JSON)
+from the sidebar (**Action** > *Load Existing Config*); **Download Configuration File** saves it for a later session.
 
 ### How It Works
 
-1. **Rule Evaluation** — Each variable is checked against configured ranges (e.g. `Age < 0` or `BMI > 100`).
+1. **Rule Evaluation** — Each rule is checked on every row: a plausible range on one column (for example potassium
+   outside 2.5–7.0) or an expression (for example `df['BMI'] > 100`). See *Mask Types* below.
 2. **Anomaly Flagging** — Rows with anomalies are flagged, with the violated rule displayed per variable.
 3. **Impact Score** — Anomalies contribute to the overall Data Quality Score.
 
-### Anomaly Types
+### Anomaly Rules
 
-| Type | Description |
-| --- | --- |
-| **Impossible** | Values that cannot exist clinically (e.g. negative age). |
-| **Suspect** | Values that are plausible but warrant manual review. |
+Every anomaly rule belongs to the *clinical_anomalies* family (operator `any`): a row is flagged when at least one
+rule fires. The rules have no severity classes (such as impossible or suspect).
 
 ---
 
-## Yes Inclusion Criteria
+## Inclusion Criteria
 
 Define inclusion and exclusion criteria, then tick the ones that define your **analysis population**. Criteria are
 **filters**: ticking or unticking them changes which rows the analyses use, never the dataset itself. Criteria are
@@ -51,21 +52,30 @@ organised into **mask families** — groups of related conditions combined with 
 
 ### Key Concepts
 
-- **Mask Family**: A named group of conditions (e.g. "Adult Patients").
-- **Mask**: An individual condition within a family (numeric threshold or expression).
-- **Family Operator**: How masks within a family combine — `AND` (all must pass) or `OR` (any may pass).
+- **Mask Family**: A group of conditions. The page fills three families: *clinical_anomalies* (Handle Clinical
+  Anomalies tab), *study_inclusion* (Handle Inclusion Criteria tab) and *outliers* (Handle Outliers tab); a loaded
+  configuration file can add others.
+- **Mask**: An individual condition within a family (numeric range or expression).
+- **Family Operator**: How masks within a family combine — `all` (inclusion: a row must meet every ticked criterion)
+  or `any` (exclusion: a row is excluded when a ticked rule fires).
 
 ### Mask Types
 
 | Type | Example |
 | --- | --- |
-| **Numeric** | `Age >= 18 AND Age <= 90` |
-| **Expression** | `Gender == 'Female'` |
+| **Numeric** | Tick *Is Numeric*; mask name `Age` (the exact column name), lower bound 18, upper bound 90, strategy *include* |
+| **Expression** | `df['Sex'] == 'Female'` or `(df['SBP'] > 140) & (df['DBP'] > 90)` |
+
+A numeric mask applies to the column named like the mask. With both bounds, the strategy *include* selects the
+values inside the range and *exclude* the values outside it: for an inclusion criterion, use *include* with the
+eligible range (age 18–85); for an anomaly rule, use *exclude* with the plausible range (potassium 2.5–7.0 flags 9.8).
+With a single bound, the values at or beyond it are selected (lower bound 18: age ≥ 18). An expression is a Python
+condition on `df`; combine conditions with `&` (and) or `|` (or), each in brackets.
 
 ### Workflow
 
-1. Create a mask family and name it.
-2. Add individual masks (numeric or expression).
+1. Open the tab of the family: **Handle Clinical Anomalies** or **Handle Inclusion Criteria**.
+2. Add individual masks (numeric or expression), by hand or with the *AI Assistant* (AI engine required).
 3. Run the check to see the flagged and retained rows.
 4. Click **Exclude these anomalies from the analysis population** or **Restrict the analysis population to these
    criteria**: the family is ticked in the sidebar (*Population*). You can also tick or untick single criteria there.
@@ -112,9 +122,9 @@ Detect and manage outliers using six methods spanning statistical and machine le
 | Strategy | Available For | Description |
 | --- | --- | --- |
 | **None** | All methods | Detect only — no modification. |
-| **Remove** | All methods | Delete rows identified as outliers. |
-| **Clip** | Z-Score, IQR, Quantile | Cap values at the detection threshold. |
-| **Tag** | All methods | Append tag/score columns to mark outliers. |
+| **Remove** | All methods | The impact analysis shows the statistics without the flagged rows; the action excludes those rows from the analysis population (no row is deleted). |
+| **Clip** | Z-Score, IQR, Quantile | The impact analysis shows the values capped at the detection bounds; the action clips them in the dataset. |
+| **Tag** | All methods | Flags the rows without changing the statistics; the action is the same as for Remove. |
 
 ### Impact Analysis
 

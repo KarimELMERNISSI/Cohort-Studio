@@ -85,6 +85,43 @@ Found while correcting the documentation:
 - Two more messages, on Start and Enrich, sent users to the sidebar or "the Home page" to set up the AI engine.
   They now point to Settings > AI engine. Module docstrings use the current page names.
 
+### Fixed: documentation claims that no longer matched the application
+
+A read-only comparison of the README, the handbook chapters and the About page with the code found claims that
+were stale or never true. They are corrected:
+
+- **Storage**:
+  - Each version is a complete Parquet file written with pyarrow. DuckDB holds the accounts and the statistics
+    cache. There is no "zero-copy" versioning and no DuckDB query acceleration.
+  - ChromaDB is gone; the document index is LanceDB or Qdrant.
+- **Statistics**:
+  - Holm is the default correction, and normality checks are diagnostics.
+  - ANCOVA has one outcome.
+  - Significance brackets use pairwise Welch t or Mann-Whitney tests.
+  - Enrich offers min-max, z-score and log(x+1) scaling and three encodings. The elbow and silhouette chart only
+    helps choose K.
+- **AI**: column-name suggestions come from the language model and are not checked against UMLS, LOINC or SNOMED
+  CT. Claude is among the cloud providers that need a consent.
+- **Replay**: Fast replay loads the recorded snapshots; Full replay recomputes from the source file.
+- **Accounts**:
+  - Providers implement `BaseIAMProvider`: local, Better Auth sidecar or disabled.
+  - The roles are administrator and researcher.
+  - There is no Keycloak or LDAP adapter.
+- **Handbook chapters**:
+  - page and button names;
+  - features that do not exist;
+  - the Fast and Full replay descriptions;
+  - the transformation lists;
+  - the MCAR wording ("no evidence against MCAR").
+- **README**:
+  - The marketing wording is gone (enterprise-grade, production-ready, zero-lock-in).
+  - The unsourced comparison with commercial EDC systems is replaced by a factual summary.
+  - The architecture diagram is redrawn (Mermaid).
+  - The chapter index lists the existing chapters.
+- `.env.example` documents `CMP_GRAPH_NO_FALLBACK`, `CMP_RANDOM_SEED` and `CMP_STRICT_STATE`.
+- `tests/test_docs_site.py` also checks the README and the chapters for the regulatory and marketing claims removed
+  in M0.
+
 ### Fixed: PCA without the `ml` group, offline HTML figures, page names in two messages
 
 - PCA on Enrich runs with `prince`, from the `ml` group, yet it was offered without that group and then failed. It is

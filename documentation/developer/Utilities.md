@@ -858,18 +858,19 @@ Returns:
 
 ### def `fig_to_html_str` (export_utils.py)
 
-- **Arguments**: `fig: Any, include_plotlyjs: str`
+- **Arguments**: `fig: Any, include_plotlyjs: ComplexType`
 
 - **Returns**: `str`
 
-Exports a Plotly figure object into a standalone interactive HTML string.
+Exports a Plotly figure object into an interactive HTML page.
 
 Args:
     fig: Plotly Graph Object figure.
-    include_plotlyjs: Strategy for including Plotly JavaScript library ('cdn' or True).
+    include_plotlyjs: True embeds Plotly.js (a self-contained file of about 4.5 MB that opens offline);
+        'cdn' links it from the internet (a small file that needs a connection to open).
 
 Returns:
-    str: Standalone HTML markup containing the interactive figure.
+    str: HTML markup containing the interactive figure.
 
 ### def `fig_to_json_str` (export_utils.py)
 
@@ -1063,7 +1064,7 @@ Configure the root logger from ``CMP_LOG_LEVEL`` (default INFO). Safe to call re
 _No module description._
 
 **Imports**:
-`warnings`, `collections.abc.Iterable`, `copy.deepcopy`, `typing.Any`, `numpy`, `pandas`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `sklearn.base.BaseEstimator`, `tqdm.tqdm`, `biostats._types.RANDOM_STATE`, `utils.miss_forest._errors.NotFittedError`, `utils.miss_forest._label_encoding._label_encoding`, `utils.miss_forest._label_encoding._rev_label_encoding`, `utils.miss_forest._metrics.nrmse`, `utils.miss_forest._metrics.pfc`, `utils.miss_forest._validate._is_estimator`, `utils.miss_forest._validate._validate_single_datatype_features`
+`warnings`, `collections.abc.Iterable`, `copy.deepcopy`, `typing.Any`, `numpy`, `pandas`, `sklearn.base.BaseEstimator`, `tqdm.tqdm`, `biostats._types.RANDOM_STATE`, `utils.miss_forest._errors.NotFittedError`, `utils.miss_forest._label_encoding._label_encoding`, `utils.miss_forest._label_encoding._rev_label_encoding`, `utils.miss_forest._metrics.nrmse`, `utils.miss_forest._metrics.pfc`, `utils.miss_forest._validate._is_estimator`, `utils.miss_forest._validate._validate_single_datatype_features`
 
 ### class `MissForest` (missforest.py)
 
@@ -1335,6 +1336,15 @@ fit_transform(self, x: pd.DataFrame, categorical: Iterable[Any] = None)
   > pd.DataFrame of shape (n_samples, n_features)
   >     Imputed dataset (features only).
 
+### def `default_learners` (missforest.py)
+
+- **Arguments**: ``
+
+- **Returns**: `tuple[ComplexType]`
+
+Deterministic LightGBM learners (audit S16): seeded, single-threaded histogram construction. LightGBM is in the
+optional `ml` extra (follow-up programme M4), so it is imported only when MissForest is used.
+
 ---
 
 ## multipage.py
@@ -1393,6 +1403,72 @@ One sheet, or several merged on ``merge_key`` (outer join) or stacked when no ke
 - **Returns**: `str`
 
 MD5 of the upload's content.
+
+---
+
+## optional.py
+
+_Optional dependency groups (the extras of pyproject.toml, follow-up programme M4): which are installed, and what to
+tell the user when a feature needs one that is not.
+
+- ``ai``: LLM connectors, document library and vector databases (variable map, documents, AI suggestions);
+
+- ``ml``: MissForest imputation (LightGBM), UMAP and FAMD (prince);
+
+- ``survival``: the proportional-hazards test and the concordance of the Cox model (lifelines).
+
+The statistics engine, the data pipeline and the analysis pages need none of them._
+
+**Imports**:
+`__future__.annotations`, `importlib.util`, `functools.cache`
+
+### def `available` (optional.py)
+
+- **Arguments**: `module: str`
+
+- **Returns**: `bool`
+
+True when ``module`` can be imported (checked without importing it).
+
+### def `extra_installed` (optional.py)
+
+- **Arguments**: `extra: str`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `method_available` (optional.py)
+
+- **Arguments**: `method: str`
+
+- **Returns**: `bool`
+
+False for a method whose optional library is missing (MissForest, UMAP, FAMD).
+
+### def `available_methods` (optional.py)
+
+- **Arguments**: `methods: list[str]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The methods that can run here, and those left out because their optional library is missing.
+
+### def `missing_message` (optional.py)
+
+- **Arguments**: `feature: str, extra: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `missing_methods_message` (optional.py)
+
+- **Arguments**: `methods: list[str]`
+
+- **Returns**: `str`
+
+No description available.
 
 ---
 

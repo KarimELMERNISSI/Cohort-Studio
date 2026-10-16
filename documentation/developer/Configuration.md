@@ -2,23 +2,22 @@
 
 ## Overview
 
-The `config/` directory contains JSON files that define various settings for the application, such as variables, labels, units, and application-specific parameters.
+CohortStudio has two kinds of configuration:
 
-## Files
+1. **The study configuration** (JSON): the clinical anomaly rules, inclusion criteria and outlier criteria of a study. It lives in the session (`st.session_state.config`).
+2. **Environment settings**: storage, accounts, AI providers, vector database, graph engine and logging, read from environment variables (template: `.env.example`).
 
-- **config.json**: The main configuration file used by the application in production.
-- **config-cardiateam-2025.json**: A specific configuration version for the Cardiateam 2025 cohort.
-- **config copy.json**: Logic backup or template.
+The format of the study configuration and of its rules is described in `documentation/10_Developer_Guide.md` (section *Configuration*).
 
-## Structure
+## Study configuration
 
-The configuration files typically contain:
+- **Start**: every session starts from `utils.config_loader.create_empty_config()` (empty `mask_families`, default outlier thresholds, folder names under the data root).
+- **Load**: on **Data > Validate**, choose *Load Existing Config* in the sidebar and upload a JSON file; it is merged into the session configuration without overwriting existing keys.
+- **Save**: **Download Configuration File**, in the results of the anomaly and inclusion checks on **Data > Validate**, downloads the session configuration as `config.json`.
+- **Example**: `assets/tutorial/tutorial_config.json` (8 anomaly rules, 4 inclusion criteria), loaded with the tutorial cohort from the Start page.
 
-1. **Application Settings**: Global flags and paths.
-2. **Variable Definitions**: Metadata for variables used in the app (e.g., standard names, types).
-3. **UI Labels**: Strings used in the frontend to allow easy text updates.
-4. **Enrichment Rules**: Definitions for how certain variables should be calculated or enriched.
+The `config/` folder may hold local copies of study configurations. Its JSON files are git-ignored, and the application does not read them.
 
-## Usage
+## Environment settings
 
-Configuration is loaded via `utils.config_loader.py`. The application reads these files at startup to initialize the global state.
+`.env.example` lists the variables with their defaults. `documentation/10_Developer_Guide.md` describes the AI keys, the vector database and the accounts.

@@ -94,9 +94,10 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 
 ### Implementation
 - Passwords are hashed with **bcrypt** before storage.
-- User records are stored in the DuckDB database (`db_manager.py`).
+- User records are stored in `users.duckdb` (shared data folder) by the local IAM provider (`manage/iam/providers/local_duckdb.py`), opened through `db_manager.py`.
 - The `is_active` field controls login eligibility.
-- Administrators are created from `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD(_FILE)` on first start or with `python manage_users.py create-admin <name>`; the role (not the username) grants access to the **Users Management** page.
+- Administrators are created from `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD(_FILE)` on first start or with `python manage_users.py create-admin <name>`; the role (not the username) grants access to the **Admin > Users** page.
+- **First-run setup token** — Without a bootstrap password, the first start (or `python manage_users.py bootstrap`, which the Docker image runs before the server) writes a one-time setup token to the server log, and the login page creates the first administrator with it. `python manage_users.py setup-token` issues a new token (the previous one stops working). Only a SHA-256 hash is stored (`setup_token.json` in the data root, `manage/iam/setup_token.py`); the token is cleared once an administrator exists.
 
 ### Data Isolation
 
@@ -111,20 +112,28 @@ Per-user isolation is enforced by `core/workspace.py`:
 
 ## Pydantic Response Schemas
 
-All structured LLM responses are validated against Pydantic models defined in `manage/rag_schemas.py`:
+`manage/rag_schemas.py` defines Pydantic models for structured LLM responses:
 
 | Schema | Purpose |
 | --- | --- |
-| `TaxonomyNode` | Node in the taxonomy graph (variable, concept, formula, category). |
-| `TaxonomyEdge` | Relationship between two taxonomy nodes. |
-| `ComputedVariable` | AI-suggested variable with name, formula, and reasoning. |
-| `ImputationFormula` | AI-suggested imputation formula for a target variable. |
-| `DocumentSummary` | Structured summary extracted from a research paper. |
+| `TheoreticalConcept`, `TheoreticalConceptList` | A medical concept or score with its standard formula and required inputs. |
+| `ComputedVariableSuggestion`, `SuggestionResponse` | AI-suggested computed variables mapped to dataset columns. |
+| `ProxyVariable` | A proxy for a missing variable. |
+| `AlternativeFormula` | An alternative formula that avoids a missing variable. |
+| `ExpandedTerm` | The full standard name of an abbreviated term. |
+| `FormulaCorrection` | A corrected formula and the changes made. |
+| `MarkdownFormulas` | LaTeX versions of formulas. |
+
+Only the proxy-variable and alternative-formula suggestions are validated against their schema
+(`validate_and_parse()` in `manage/rag_computed_vars.py`). The other responses (taxonomy, documents, suggestions)
+are parsed as plain JSON with `parse_json_safe()` or `json.loads()` (for example in `manage/rag_taxonomy.py`),
+without schema validation.
 
 ### Why Schemas Matter
 
 - **Type safety** — Catch malformed LLM output before it reaches the UI.
-- **Retry logic** — If parsing fails, `utils/llm_utils.py` attempts JSON repair and re-prompts the LLM.
+- **Repair** — If parsing fails, `utils/llm_utils.py` repairs common JSON errors. Re-prompting the LLM with the error
+  is implemented in `StructuredOutputHelper.invoke_with_schema()`, which no feature calls yet.
 - **Consistency** — Downstream code can rely on well-typed objects instead of raw dictionaries.
 
 ---
@@ -136,8 +145,8 @@ Robust JSON parsing pipeline for LLM responses:
 1. **Markdown Extraction** — Strips ```json fences from the response.
 2. **Bracket Balancing** — Fixes unmatched `[`, `{`, `]`, `}`.
 3. **Trailing Comma Removal** — Cleans common JSON syntax errors.
-4. **Pydantic Validation** — Validates the parsed object against the expected schema.
-5. **LLM Self-Repair** — If all else fails, sends the malformed output back to the LLM with an error message and asks for a corrected version.
+4. **Pydantic Validation** — Validates the parsed object against the expected schema (`validate_and_parse()`, where a schema is used).
+5. **LLM Self-Repair** — `StructuredOutputHelper` can send the malformed output back to the LLM with an error message and ask for a corrected version; no feature uses it yet.
 
 ---
 
@@ -177,7 +186,7 @@ Classifies DataFrame columns into semantic types:
 Manages the recording of analysis steps:
 
 - `initialize_session(dataset_name, username)` — Starts a new trace session.
-- `add_step(function, params, description, output_dataset_path)` — Records a transformation step.
+- `add_step(function_name, params, description, output_dataset_path=None, ..., *, data=None, population=None, replayable=None)` — Records a transformation step. Pages do not call it directly: changes of the data go through `AppState` and `DataSession`, which record the step.
 - `get_available_datasets_from_traces()` — Lists datasets referenced in past traces.
 
 ### TraceDocumenter
@@ -187,21 +196,24 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 - Step-by-step table with function, parameters, and description.
 - Downloadable via Streamlit's file download button.
 
-### ReproductionManager
+### Replay (`manage/reproduction_manager.py`)
 
-Handles trace replay with path resolution for cross-platform compatibility.
+`run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
+recorded fingerprint. Recorded paths are resolved inside the user's workspace (`utils/path_utils.resolve_path`).
 
 ---
 
 ## RAG Quality Monitor
 
-The `rag_monitoring.py` page provides a dashboard for monitoring RAG system health:
+The `rag_monitoring.py` module renders the **Admin > AI quality** page. Scores come from an LLM acting as judge
+(`manage/rag_evaluator.py`), on a 0-10 scale:
 
-| Metric | Description |
+| Tab | Description |
 | --- | --- |
-| **Embedding Statistics** | Document count, chunk count, and embedding dimensions. |
-| **Retrieval Quality** | Relevance scores for test queries. |
-| **Evaluation Results** | Structured evaluation of RAG responses against expected outputs. |
+| **Quality Overview** | Average context relevance, faithfulness and answer relevance, JSON success rate, a 7-day trend, scores per function, and a warning when the hallucination rate exceeds 10%. |
+| **Evaluation Details** | The recent evaluations with their scores, the judge's reasoning and detected hallucinations. |
+| **Embedding Health** | The retrieval test suite (queries and expected concepts) and a form to add test cases. It shows no embedding statistics; what the index holds (chunks, documents, embedding model and dimensions) is shown in Settings > AI engine > *Vector database*. |
+| **Run Evaluation** | Evaluate one query against a chosen function, or run the test suite (a test passes with an overall score of at least 5 and at least half of the expected concepts in the answer); export the results as JSON. Without an initialised AI engine, only a demo evaluation with fixed scores is available. |
 
 This is primarily a developer and admin tool for diagnosing RAG performance issues.
 
@@ -232,18 +244,29 @@ Each rule is a key of its family (the rule name) with one of two shapes:
   *exclude* values outside it, so use *exclude* with the plausible range for anomalies and *include* with the
   eligible range for inclusion. NaN never matches. Avoid leaving `strategy` empty when both bounds are set.
 
-Extra keys in a rule (for example `description`) are kept but not used. Do not add keys at family level
-other than `operator`: they would be read as rules. A rule that fails to evaluate (unknown column, syntax
-error) is logged and ignored. There is no exclusion family: write exclusions as inclusion rules
-(`df['creatinine_umol_l'] <= 265`).
+Extra keys in a rule are kept; `description` is shown as the help text of the criterion in the sidebar. Do not
+add keys at family level other than `operator`: they would be read as rules.
+
+Ticked criteria define the analysis population (`core/population.py`). A family with the `any` operator is an
+exclusion family (`clinical_anomalies`, and `outliers`, which the Handle Outliers tab fills with frozen row ids):
+a row is excluded when a ticked rule fires. A family with `all` is an inclusion family (`study_inclusion`): a row
+is excluded when it fails a ticked criterion. A family with a threshold operator is one exclusion rule, "at least
+k of these rules". A ticked criterion that cannot be evaluated (unknown column, syntax error) stops the analyses:
+`core/criteria.py` raises `CriterionError`, the population is not `ok`, and the pages show the error until the
+criterion is unticked or corrected. Only the **Run Anomaly Detection** and **Run Inclusion Criteria Check**
+buttons of the Validate tabs (the result columns above) still use the older helpers of
+`enrich/custom_metrics_and_filters.py`, which log such a rule and skip it.
 
 `assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion
 criteria). `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay
 machine-specific).
 
-### `.streamlit/secrets.toml`
+### API keys
 
-Stores the `GOOGLE_API_KEY` for local development (not committed to version control).
+Cloud providers read their key from the environment (`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `MISTRAL_API_KEY`,
+`ANTHROPIC_API_KEY`), for example from a git-ignored `.env` file (template: `.env.example`), loaded with
+`python-dotenv`. A key typed in Settings > AI engine is kept for the session only. `st.secrets` is not read;
+`.streamlit/secrets.toml` stays git-ignored.
 
 ---
 
@@ -251,6 +274,9 @@ Stores the `GOOGLE_API_KEY` for local development (not committed to version cont
 
 1. Follow the existing Mixin pattern when adding new RAG capabilities.
 2. Validate all LLM responses with Pydantic schemas.
-3. Use `TransformationManager.add_step()` to log any data-modifying operation.
+3. Change the data only through `AppState` (`ui/state.py`), which writes through `DataSession` (`core/session.py`):
+   `commit_change()` for a change of the dataset, `stage()` for the Enrich draft (traced when applied), `note()` for a
+   trace step that does not change the data. Each change becomes one trace step; with `CMP_STRICT_STATE=1` (the test
+   suite), an in-place change of the session data raises `UntracedMutationError`.
 4. Add utility functions to the appropriate `utils/` module, not inline in app pages.
 5. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).

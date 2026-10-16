@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-As clinical cohort analysis transitions from exploratory academic scripts to multi-institutional hospital registries and regulatory submissions (FDA 21 CFR Part 11, HIPAA, GDPR), robust Identity and Access Management (IAM) becomes indispensable.
+When several researchers share one CohortStudio server, the application must know who is signed in: accounts separate the researchers' workspaces, and administrators approve new accounts. This is the role of Identity and Access Management (IAM).
 
 This document evaluates modern authentication frameworks—specifically **Better Auth**—and describes the modular, provider-agnostic IAM architecture implemented within **CohortStudio**.
 
@@ -46,26 +46,27 @@ However, Better Auth is designed to expose a clean RESTful HTTP API (`/api/auth/
 ### 3.1 The Streamlit Performance Challenge
 Streamlit re-executes the Python script from top to bottom on every user interaction (widget selection, slider drag, tab switch). 
 
-If session verification requires a synchronous HTTP round-trip on every script run:
-- A typical local/LAN REST round-trip takes **15 to 45 ms**.
-- A cloud-hosted auth round-trip takes **60 to 150 ms**.
-- **Impact**: UI responsiveness degrades noticeably, creating micro-stutters during cohort exploration.
+If session verification required a synchronous HTTP round-trip on every script run:
+- Each rerun would wait for the network: roughly tens of milliseconds on a local network, more for a cloud-hosted service (estimates, not measured).
+- **Impact**: the interface would respond more slowly during cohort exploration.
 
 ### 3.2 CohortStudio's Solution: In-Memory TTL Session Caching
-To eliminate latency while retaining remote IAM security, `BetterAuthIAMProvider` implements an **in-memory Time-to-Live (TTL) cache**:
-1. When a user logs in or a session token is validated, the authenticated `UserProfile` is cached in memory with an expiration timestamp (`CMP_IAM_CACHE_TTL`, default 300 seconds).
-2. During subsequent Streamlit reruns, token validation executes in **$< 0.05$ ms** via local dictionary lookup.
+To avoid repeated network calls, `BetterAuthIAMProvider` implements an **in-memory Time-to-Live (TTL) cache**:
+1. When a user logs in or a session token is validated, the successful result (with its `UserProfile`) is cached in memory with an expiration timestamp (`CMP_IAM_CACHE_TTL`, default 300 seconds).
+2. A repeated check of the same credentials or token within the TTL is answered from the cache, without a network call. The login page itself keeps the signed-in user in the Streamlit session state and does not re-check the session on every rerun.
 3. HTTP connection reuse is preserved via persistent keep-alive pooling (`requests.Session()`).
-4. If the remote auth server encounters temporary downtime, the cache provides graceful resilience without crashing the researcher's session.
+4. If the remote auth server is briefly unavailable, results already in the cache are still returned until they expire.
 
-### 3.3 Latency Benchmark Comparison
+### 3.3 Comparison of the Modes
 
-| Authentication Mode | Verification Time (First Call) | Verification Time (Rerun Cycles) | Network Dependency | Air-Gapped Hospital Support |
-| :--- | :---: | :---: | :---: | :---: |
-| **Local DuckDB + bcrypt** (Default) | ~0.25 ms | ~0.05 ms | None (Zero network) | Yes (100% Offline) |
-| **Better Auth (Uncached)** | ~28.0 ms | ~28.0 ms | Required per rerun | No (Requires sidecar) |
-| **Better Auth (CohortStudio TTL Cached)** | ~28.0 ms | **< 0.05 ms** | Cached for 300s | Yes (If sidecar is local) |
-| **Disabled IAM** (`bypass`) | 0.00 ms | 0.00 ms | None | Yes |
+No latency benchmark has been run; the table compares what each mode depends on.
+
+| Authentication Mode | Network Dependency | Isolated Network (No Internet) |
+| :--- | :---: | :---: |
+| **Local DuckDB + bcrypt** (Default) | None | Yes |
+| **Better Auth (Uncached)** | A call to the sidecar per check | Only if the sidecar runs on the same network |
+| **Better Auth (CohortStudio TTL Cached)** | A call to the sidecar per check, then cached for `CMP_IAM_CACHE_TTL` seconds | Only if the sidecar runs on the same network |
+| **Disabled IAM** (`disabled`) | None | Yes |
 
 ---
 
@@ -76,9 +77,11 @@ The IAM subsystem is located in `manage/iam/` and adheres to strict separation o
 ```
 manage/iam/
 |-- __init__.py           # Unified exports (models, providers, manager)
+|-- authz.py              # Role checks and credential rules (admin role, username pattern, password length)
 |-- base.py               # BaseIAMProvider abstract interface
-|-- manager.py            # IAMManager facade & global factory
+|-- manager.py            # IAMManager facade & global factory, administrator bootstrap
 |-- schemas.py            # Pydantic schemas (UserProfile, UserRole, AuthResult)
+|-- setup_token.py        # One-time setup token for the first administrator (only its hash is stored)
 `-- providers/
     |-- __init__.py
     |-- local_duckdb.py   # Local embedded DuckDB + bcrypt (Default)
@@ -109,8 +112,9 @@ Every provider implements the following contract:
 
 2. **`BetterAuthIAMProvider`**:
    - Delegates authentication to an external or sidecar Better Auth instance.
-   - Provides enterprise SSO (LDAP, Active Directory, Okta, SAML) integration.
-   - In-memory TTL caching prevents UI lag during Streamlit reactivity cycles.
+   - Signs users in with a username (or e-mail) and password, checks session tokens, and calls `/admin/users/...` endpoints for account administration, which the sidecar must provide.
+   - Single sign-on (OAuth, OIDC, SAML, LDAP or Active Directory) is not implemented in CohortStudio; a Better Auth sidecar could add it in future, with changes to this adapter and to the login page.
+   - In-memory TTL caching avoids a network call for checks repeated within the TTL.
 
 3. **`DisabledIAMProvider`**:
    - Bypasses authentication entirely (`is_enabled == False`).
@@ -149,7 +153,11 @@ uv run streamlit run main.py
 
 ## 6. Docker Compose Deployment Recipe (Better Auth Sidecar)
 
-For enterprise hospital environments requiring Better Auth alongside CohortStudio:
+This recipe runs CohortStudio with a Better Auth sidecar. The `better-auth` service needs a Node.js application that
+configures Better Auth and provides the endpoints the adapter calls (`/sign-in/username`, `/sign-in/email`,
+`/sign-up/email`, `/get-session`, `/admin/users/...`). That application is not part of this repository: the
+`node:20-alpine` service below has nothing to run until it is mounted into `/app` or built into an image. Replace
+the placeholder secrets and passwords.
 
 ```yaml
 version: '3.8'
@@ -201,7 +209,7 @@ volumes:
 
 ## 7. Conclusion
 
-By separating Identity and Access Management into an abstract provider hierarchy, CohortStudio achieves:
-- **Zero Lock-In**: Seamlessly operates in air-gapped hospital environments using local DuckDB, connects to enterprise Better Auth servers, or disables auth for automated pipelines.
-- **High Performance**: In-memory TTL session caching guarantees zero UI latency during interactive cohort exploration.
-- **Backward Compatibility**: Fully compatible with existing data isolation directories, user traces, and administrative workflows.
+Identity and Access Management sits behind one provider interface, so CohortStudio can:
+- **Choose the provider by configuration**: local DuckDB accounts (no network needed), a Better Auth sidecar (whose application is not part of this repository), or no sign-in for single-user workstations and automated pipelines.
+- **Limit network calls**: with Better Auth, the TTL cache answers repeated checks within the TTL without a network call; no latency has been measured.
+- **Keep the workspaces**: the per-user workspaces and traces are keyed by username, whatever the provider.

@@ -13,35 +13,39 @@ Step-by-step guides for common workflows in CohortStudio.
 
 1. **Log in** to your account (or sign up and wait for admin activation).
 2. Go to **Data > Import** (or load the sample cohort from the Start page).
-3. Click **Upload Dataset** and select your file (CSV, Excel, or Parquet).
-4. Review the **Dataset Statistics** panel to check shape, types, and missing values.
-5. Open the **Column Renaming** section:
-- For AI-assisted renaming, click **Generate AI Suggestions** and review the proposed names.
-- For manual renaming, edit names directly in the mapping table.
+3. Under **1. Choose a file**, select your file (CSV, Excel, or Parquet). Under **2. Check how the file is read**, check the rows, columns, malformed lines and column types. Under **3. Name and load**, click **Load dataset** (it is also saved as a version in your workspace by default).
+4. Go to **Explore > Statistics & correlations** and review the **Dataset Statistics** tab to check shape, types, and missing values.
+5. Open the **Columns Renaming** tab:
+- For AI-assisted renaming, open **AI Renaming Suggestions (RAG)**, click **Generate Suggestions**, and click **Apply** next to each proposed name you accept.
+- For manual renaming, edit names directly in the column list.
 6. Click **Apply Renaming** to update the column names.
-7. In the sidebar dataset card, click **Save version** to create your first version.
+7. In the sidebar dataset card, click **Save** to save a new version.
 
 ---
 
 ## Tutorial 2: Data Quality Check & Cleaning
 
-**Goal**: Identify and handle anomalies, outliers, and incomplete records.
+**Goal**: Identify anomalies, outliers, and incomplete records, and define the analysis population.
+
+Inclusion and exclusion criteria are filters: ticking them in the sidebar defines the analysis population and
+deletes no row.
 
 1. Go to **Data > Validate**.
-2. Review the **Data Quality Score** at the top of the page.
-3. In the **Clinical Anomalies** tab:
-- Review flagged values.
-- Decide whether to correct, remove, or retain them.
-4. In the **Inclusion Criteria** tab:
-- Create a mask family (e.g. "Adult Patients").
-- Add masks (e.g. `Age >= 18`).
-- Apply the family to filter your cohort.
-5. In the **Outlier Detection** tab:
-- Select a detection method (e.g. IQR).
+2. In the **Data Quality Dashboard** tab, review the **Global Quality Score**.
+3. In the **Handle Clinical Anomalies** tab:
+- Add anomaly criteria under **New Anomaly Criterion** (e.g. a plausible range for a column).
+- Click **Run Anomaly Detection** and review the flagged rows.
+- Click **Exclude these anomalies from the analysis population** to tick the anomaly rules in the sidebar.
+4. In the **Handle Inclusion Criteria** tab:
+- Add criteria under **New Inclusion Criterion** (e.g. `df['age'] >= 18`).
+- Click **Run Inclusion Criteria Check** and review the rows that meet them.
+- Click **Restrict the analysis population to these criteria** to tick them in the sidebar.
+5. In the **Handle Outliers** tab:
+- Select a detection method (e.g. iqr).
 - Choose columns to analyse.
-- Select a handling strategy (e.g. Tag).
-- Review the outlier summary and visualisation.
-6. Save the cleaned dataset as a new version.
+- Select a handling strategy (e.g. tag).
+- Review the outlier summary and visualisation, then click **Exclude these N outlier rows from the analysis population** (with the *clip* strategy, the button clips the values in the dataset instead).
+6. Review the **Analysis population** tab (participant flow, excluded rows and their reasons), then click **Save** in the sidebar dataset card: the version keeps every row and the ticked criteria. To remove the excluded rows from the data, use **Keep only these rows** on that tab.
 
 ---
 
@@ -50,17 +54,18 @@ Step-by-step guides for common workflows in CohortStudio.
 **Goal**: Fill missing values using targeted formulas and global strategies.
 
 1. Go to **Data > Enrich** → **Handle Missing Data** tab.
-2. **Targeted Imputation**:
+2. **Targeted Imputation** (*Targeted Imputation (Custom Formula)* tab):
 - Select a column with missing values.
-- Click **Generate Formula Suggestions** to get AI-powered formulas.
-- Review suggestions and click **Use Formula** on the best option.
+- Under **AI Imputation Suggestions (RAG)** (with an initialised AI engine), click **Generate Formula Suggestions** to get AI-powered formulas.
+- Review suggestions and click **Use Formula #N** on the best option.
 - Click **Apply Targeted Imputation**.
-3. **Global Imputation**:
+3. **Global Imputation** (*Global Imputation (single imputation)* tab):
 - Review the missing data overview.
-- Select a numerical method (e.g. KNN) and a categorical method (e.g. Most Frequent).
-- Click **Apply Global Imputation**.
-- Review the imputation mask to see which values were filled.
-4. Save the imputed dataset.
+- Select a numerical method (e.g. K-nearest neighbours) and a categorical method (e.g. Most frequent value).
+- Click **Apply Imputer**.
+- Review the preview: the imputed values are highlighted.
+- Single imputation makes p-values and confidence intervals too narrow; for inference, prefer complete-case analysis with a sensitivity check, or the **Multiple imputation (for inference)** tab.
+4. The imputations go into the Enrich draft: click **Apply to the dataset** in the *Enrich draft* panel, then **Save** in the sidebar dataset card.
 
 ---
 
@@ -74,7 +79,7 @@ Step-by-step guides for common workflows in CohortStudio.
 - Choose "One-Hot Encoding" and select categorical columns.
 - Set a naming pattern and click **Apply Transformation**.
 3. **Dimensionality Reduction**:
-- Select "Dimensionality Reduction" → "PCA".
+- Select "Dimensionality Reduction" → "PCA" (PCA needs the optional `ml` dependencies).
 - Choose numerical columns and set the number of components.
 - Click **Apply Transformation** to create PCA columns.
 4. **Clustering**:
@@ -82,7 +87,7 @@ Step-by-step guides for common workflows in CohortStudio.
 - Choose the columns to cluster on (e.g. PCA components).
 - Set K (number of clusters).
 - Click **Apply Transformation** to create a cluster label column.
-5. Visualise the clusters using the **Visualisation** page (scatter plot coloured by cluster label).
+5. Click **Apply to the dataset** in the *Enrich draft* panel, then visualise the clusters on **Explore > Visualize** (scatter plot grouped by the cluster label).
 
 ---
 
@@ -90,18 +95,18 @@ Step-by-step guides for common workflows in CohortStudio.
 
 **Goal**: Build a structured taxonomy from your dataset variables.
 
-1. Go to **Knowledge > Variable map**.
-2. Click **Generate New Taxonomy** (or load an existing version).
-3. Optionally upload research PDFs for richer context.
+1. Optionally add research PDFs in Settings > AI engine > *Document library* for richer context, and click **Initialise / reindex** (generation needs an initialised AI engine).
+2. Go to **Knowledge > Variable map**.
+3. Click **Generate Taxonomy** (or load a saved version from the sidebar).
 4. Wait for the AI to analyse your variables and generate the graph.
 5. Explore the interactive graph:
-- Click nodes to view details.
-- Use the search bar to find specific variables.
+- Select nodes to view their details below the graph.
+- Use **Search Variables** in the sidebar to find specific variables.
 6. **Refine** the taxonomy:
-- Use **Repair** to fix structural issues.
-- Use **Enrich** to add AI descriptions to nodes.
-- Use **Add Missing Concepts** to fill in implied clinical indices.
-7. **Save** the taxonomy as a named version.
+- Use **Enrich Taxonomy** (sidebar, *Graph Actions*) to find related external variables and formulas, then review them in the **Overview** tab and click **Merge Selected**.
+- Use **Refine Existing Variable (AI)** (**Refinement** tab) to correct definitions with your feedback.
+- Use **Add Missing Concept Node (AI)** (**Refinement** tab) to add implied clinical indices such as HOMA-IR.
+7. Click **Save New (vN)** in the sidebar to save the taxonomy as the next numbered version.
 
 ---
 
@@ -109,18 +114,18 @@ Step-by-step guides for common workflows in CohortStudio.
 
 **Goal**: Extract insights from uploaded PDFs and check dataset coverage.
 
-1. Go to **Knowledge > Documents**.
-2. **Upload PDFs** of relevant research papers.
-3. In the **Summariser** tab:
-- View structured summaries (objective, methods, findings, variables) for each paper.
+1. Add PDFs of relevant research papers in Settings > AI engine > *Document library* and click **Initialise / reindex**.
+2. Go to **Knowledge > Documents**, choose the documents in the sidebar and click **Generate Graph**.
+3. In the **Document Summary** tab:
+- View structured summaries (objective, methods, key findings, clinical significance, top concepts) for each paper.
 4. In the **Knowledge Graph** tab:
 - Explore extracted concepts and their relationships across papers.
-- Filter by document to focus on specific papers.
-5. In the **Chat** tab:
+- Filter by document (*Filter Visible Documents* in the sidebar) to focus on specific papers.
+5. In the **Chat with Document** tab:
 - Ask questions like *"What variables are associated with cardiovascular risk?"*
-- Review answers with source citations.
-6. In the **Coverage** tab:
-- Check which of your dataset columns are discussed in the literature.
+- Review the answers: they are based on the visible documents only.
+6. In the **Dataset Coverage** tab:
+- Click **Check Coverage** to see which of your dataset columns are discussed in the literature.
 - Identify gaps and opportunities.
 
 ---
@@ -141,9 +146,9 @@ Step-by-step guides for common workflows in CohortStudio.
 - Enter the expected effect size and desired power.
 - View the required sample size.
 - Inspect the power curve.
-5. **Z-Score Standardisation**:
-- Select a variable and provide reference values (or use sample-based).
-- The Z-score column is appended to your dataset.
+5. **Z-Score Standardisation** (*Z-Score & Reference* tab):
+- Select variables and a reference (a control group, the whole cohort, or reference values you enter), then click **Calculate Z-Scores**.
+- Download the data with the Z-score columns (**Download Z-Score Data**); the dataset itself is not changed.
 
 ---
 
@@ -152,15 +157,15 @@ Step-by-step guides for common workflows in CohortStudio.
 **Goal**: Generate polished visualisations with statistical annotations.
 
 1. Go to **Explore > Visualize**.
-2. Select a chart type (e.g. Box Plot).
-3. Choose the outcome variable and a grouping variable.
-4. The system automatically applies the appropriate statistical test and overlays significance.
+2. In the sidebar, select a plot category and a plot type (e.g. Box Plot).
+3. Choose the numeric variables and a grouping variable (*Group by*).
+4. To add significance annotations, tick **Show Statistical Significance** (vertical box or violin plots with a grouping variable). The test is chosen automatically unless you force a parametric or non-parametric test; choose a multiple-testing correction if needed.
 5. Customise:
-- Set a title, axis labels, and colour palette.
-- Adjust font sizes for publication requirements.
+- Under **Customize Plot**, set the title, its font size, the grid and the figure size.
+- Choose the theme and colour scheme under **Visual Settings** in the sidebar.
 6. **Export**:
-- Click the camera icon in the Plotly toolbar for PNG/SVG.
-- Use the HTML export for interactive sharing.
+- Click the camera icon in the Plotly toolbar for an SVG image.
+- Under **Figure Export & Publication Options**, click **Interactive HTML (.html)** for an interactive file that opens offline.
 
 ---
 
@@ -169,13 +174,13 @@ Step-by-step guides for common workflows in CohortStudio.
 **Goal**: Replay a past analysis session and generate a report.
 
 1. Go to **Reproduce > Versions & traces**.
-2. Browse available traces in the history panel.
-3. Select a trace to inspect its steps.
+2. Choose a trace under **Select Analysis Session** (or upload one with **Upload Trace File (.json)**).
+3. Inspect its steps and its integrity status.
 4. Choose a replay mode:
-   - **Fast Replay** — Re-applies parameters only (requires original dataset).
-   - **Full Replay** — Uses embedded snapshots (works independently).
-5. Click **Replay** and monitor progress step by step.
-6. Click **Download Report** to generate a `.docx` summary of the session.
+   - **Fast (Use Snapshots)** — Loads the snapshot saved with the step (works without the original dataset).
+   - **Full Replay (From Source)** — Recomputes the steps from the source file and checks each one against its recorded fingerprint.
+5. Click **Reproduce to Step N** on the step to reach, and monitor progress.
+6. Click **Download Transformation Report (.docx)** to generate a Word summary of the session.
 
 ---
 
@@ -192,9 +197,11 @@ Step-by-step guides for common workflows in CohortStudio.
 4. **Deactivate a User**:
 - Click **Deactivate** to temporarily revoke access.
 5. **Reset Password**:
-- Click **Reset Password** to generate a temporary password for the user.
+- Under **Reset User Password**, select the user, type the new password twice (at least 12 characters by default) and click **Reset Password**. Give the new password to the user.
 6. **Delete User**:
-- Click **Delete** to permanently remove the account and their trace history.
+- Click **Delete**, then **Yes, Delete**. Only the account is removed: the user's workspace (datasets, traces, documents) stays on the server.
+
+Administrator accounts cannot be deactivated or deleted from this page.
 
 ---
 
@@ -203,13 +210,13 @@ Step-by-step guides for common workflows in CohortStudio.
 **Goal**: Check the health and performance of the AI documentation assistant.
 
 1. Go to **Admin > AI quality**.
-2. **Overview**:
-- Check the "Knowledge Base Health" for total documents and chunks.
-- Ensure "Embedding Dimension" matches your model (e.g. 1536 for OpenAI).
+2. **Quality Overview**:
+- Check the average context relevance, faithfulness and answer relevance (0-10, scored by the AI engine acting as judge) and the JSON success rate.
+- A warning appears when the hallucination rate exceeds 10%.
 3. **Evaluation**:
-- Go to the **Run Evaluation** tab.
-- Enter a test question (e.g. "How is BMI calculated?").
-- The system retrieves context and generates an answer.
-- Rate the answer's **Accuracy** and **Faithfulness**.
+- Go to the **Run Evaluation** tab (the AI engine must be initialised in Settings > AI engine).
+- Under *Quick Evaluation*, select the function to test, enter a test question (e.g. "How is BMI calculated?") and click **Run Evaluation**.
+- The system retrieves context, generates an answer and scores it automatically.
+- Add test cases in the **Embedding Health** tab and run them with **Run Test Suite**.
 4. **Review Metrics**:
-- Check the aggregate scores to see if the RAG system needs re-indexing or prompt tuning.
+- Check the scores in **Quality Overview** and **Evaluation Details** to see if the RAG system needs re-indexing or prompt tuning. What the index holds (chunks, documents, embedding model) is shown in Settings > AI engine > *Vector database*.

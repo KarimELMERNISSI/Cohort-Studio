@@ -1,7 +1,8 @@
 # Graph Rendering Architecture
 
-The application draws three kinds of graphs: the **correlation network** (Main View), the
-**clinical knowledge graph** (Data Insight) and the **document knowledge graph** (Documents Insight).
+The application draws three kinds of graphs: the **correlation network** (Explore > Statistics & correlations),
+the **clinical knowledge graph** (Knowledge > Variable map) and the **document knowledge graph** (Knowledge >
+Documents).
 Since October 2026 they share one renderer-agnostic layer, the `graph` package, so the drawing
 library can be swapped without touching analytics code or pages.
 

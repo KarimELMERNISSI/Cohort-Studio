@@ -1,6 +1,8 @@
-# Data Insight — Taxonomy (Knowledge Graph)
+# Variable map — Taxonomy (Knowledge Graph)
 
-The **Data Insight** page generates, visualises, and refines a **Taxonomy** (knowledge graph) from your dataset's variables. The Taxonomy captures how variables relate to clinical domains, computed formulas, and broader scientific concepts — powered by RAG and the Gemini LLM.
+The **Variable map** page (Knowledge > Variable map) generates, visualises, and refines a **Taxonomy** (knowledge graph) from your dataset's variables. The Taxonomy captures how variables relate to clinical domains, computed formulas, and broader scientific concepts. It is built with retrieval-augmented generation (RAG) by the AI engine chosen in Settings > AI engine (local Ollama by default; cloud providers need an API key and your consent).
+
+Once a taxonomy is open, the page has six tabs: **Knowledge Graph**, **Overview** (counts, the variable table and the enrichment proposals), **Variable Details**, **Formulas Details**, **Population Clustering** and **Refinement**. The sidebar holds the saved versions, the *Graph Actions*, the variable and formula searches, the category filter and the JSON export.
 
 ---
 
@@ -15,7 +17,7 @@ A Taxonomy is a structured graph where:
 | **Concept** | An external-derived clinical or scientific concept. | BMI, HOMA-IR |
 | **Formula** | A computable relationship between variables. | `BMI = Weight / Height²` |
 
-Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from`.
+Edges link a variable to its category, the input variables of a formula to the formula, the formula to the variable it yields, and related variables to each other.
 
 ---
 
@@ -23,36 +25,34 @@ Edges represent relationships such as `belongs_to`, `used_in`, and `derived_from
 
 ### Steps
 
-1. **Load or Create** — Start a new taxonomy from the current dataset, or load a previously saved version.
-2. **AI Generation** — The RAG system analyses column names, data types, value distributions, and uploaded documentation to infer categories, relationships, and computed formulas.
+1. **Load or Create** — Load a saved version (choose it in the sidebar, then **Load**), or generate a new taxonomy from the current dataset with **Generate Taxonomy** (shown while no taxonomy is open) or **New Taxonomy** (sidebar, *Graph Actions*). Generation needs a loaded dataset and an initialised AI engine.
+2. **AI Generation** — The AI engine analyses the column names (with simple summaries of their values when you start from **Generate Taxonomy**) and passages retrieved from your indexed documents, to infer standard names, categories, clinical usage and formulas.
 3. **Review** — Inspect the generated graph in the interactive visualisation (offline Plotly engine by default; yFiles optional).
-4. **Iterate** — Refine, enrich, or repair the taxonomy as needed.
+4. **Iterate** — Enrich or refine the taxonomy as needed, then save it as a version.
 
 ### Generation Options
 
 | Parameter | Description |
 | --- | --- |
-| **Context Documents** | Optional PDFs to give the LLM domain knowledge for better classification. |
-| **Existing Taxonomy** | Optionally provide a prior version as a starting point. |
+| **Context Documents** | Optional PDFs to give the AI domain knowledge for better classification. Add them in Settings > AI engine > *Document library* and click **Initialise / reindex**; passages relevant to your columns are retrieved during generation. |
+
+A new generation does not start from an earlier taxonomy. To build on a saved version, load it and use the refinement tools below.
 
 ---
 
 ## Taxonomy Refinement
 
-After initial generation, several tools are available to improve the taxonomy:
-
-### Repair
-
-- **Fix Malformed JSON** — Automatically repairs structural issues (orphan nodes, missing edges, cycles).
-- **Validate Structure** — Checks that all nodes have required fields and edges reference existing nodes.
+After initial generation, several tools are available to improve the taxonomy. They need an initialised AI engine.
 
 ### Enrich
 
-- **AI Node Enrichment** — Select any node and request an AI-generated description and metadata. The RAG system provides context-aware definitions.
-- **Add Missing Concept Nodes** — The AI scans the taxonomy for concepts implied by the variables but not yet present (e.g. computed indices like HOMA-IR). Newly added concepts are automatically assigned to the most appropriate existing category.
+- **Enrich Taxonomy** (sidebar, *Graph Actions*) — The AI looks for related external variables and formulas, up to the chosen *Neighborhood Distance* (1 to 3). The proposals appear in the **Overview** tab under *Enrichment Proposals*: tick **Keep?** for the variables to add, then click **Merge Selected**, or **Discard All**.
+- **Refine Existing Variable (AI)** (**Refinement** tab) — Select variables, write feedback on their definitions, and click **Refine Selected Variables**: the AI updates them.
+- **Add Missing Concept Node (AI)** (**Refinement** tab) — Name a concept or score (e.g. HOMA-IR), optionally restrict the AI to some variables (*Involved Variables*) and choose a *Target Category* (*Auto (AI)* lets the AI choose), click **Generate Concept Suggestions**, then **Add to Graph** for each suggestion you keep. The concept is added with its formula and linked to its input variables.
 
-### Manual Editing
-- Add, rename, or delete nodes and edges directly in the UI.
+### Link repair on load
+
+Loading a version with **Load** in the sidebar re-links each variable to the saved formulas that use or produce it. There is no separate structure check, JSON repair or manual editor for nodes and edges: change the taxonomy with the tools above.
 
 ---
 
@@ -60,11 +60,11 @@ After initial generation, several tools are available to improve the taxonomy:
 
 | Action | Description |
 | --- | --- |
-| **Save** | Persist the current taxonomy as a named JSON version. |
-| **Load** | Restore a previously saved version. |
-| **Compare** | View differences between the current taxonomy and a saved version. |
+| **Save New (vN)** | Saves the current taxonomy and its formulas as the next numbered version (v1, v2, ...). |
+| **Overwrite** | Replaces the loaded version with the current taxonomy and formulas. |
+| **Load** | Restores a saved version chosen in the sidebar list. |
 
-Versions are stored per-user and per-dataset for isolation.
+Versions are stored in your workspace, per user; they are not tied to a dataset. There is no comparison between versions.
 
 ---
 
@@ -87,13 +87,12 @@ offline; the proprietary yFiles engine can be enabled as an optional extra.
 
 | Format | Description |
 | --- | --- |
-| **JSON** | Full taxonomy structure for programmatic use. |
-| **CSV** | Flat table of nodes and their attributes. |
-| **Interactive Graph** | JSON of the rendered graph (nodes, edges, legend); standalone HTML export with the Plotly engine. |
+| **JSON** | **Export JSON** in the sidebar: the taxonomy (variables and their metadata) as `variable_taxonomy.json`. The formulas are saved with each version, not in this file. |
+| **Interactive Graph** | **Download graph (JSON)** under the graph: the nodes, edges and legend of the rendered graph. **Download graph (HTML)**: a standalone page, with the Plotly engine. |
+| **Cluster profiles (CSV)** | **Download Profiles** in **Population Clustering** > *Cluster Profiles*. |
 
 ---
 
 ## Practical Guidance
-- Upload relevant research papers **before** generating the taxonomy — the RAG system uses them to produce more accurate classifications.
-- Use the **Repair** function after any manual edits to ensure structural integrity.
+- Index relevant research papers **before** generating the taxonomy (Settings > AI engine > *Document library*, then **Initialise / reindex**) — the AI uses them to produce more accurate classifications.
 - Save a version before and after major refinements to allow easy rollback.

@@ -6,10 +6,10 @@ Population clustering helps identify natural subgroups within your cohort based 
 
 ## Preprocessing
 
-Before clustering, the pipeline applies two automatic preprocessing steps:
+Before clustering, the pipeline applies one automatic preprocessing step and one check:
 
 1. **Standardisation** — All numerical variables are Z-score standardised to ensure equal weight in distance calculations.
-2. **Complete Case Analysis** — Rows with any missing values in the selected columns are excluded. Impute missing data first if needed (see `03_Data_Enrichment.md`).
+2. **Complete data** — If any selected column has a missing value, Enrich stops and asks you to impute it first (see `03_Data_Enrichment.md`).
 
 ---
 
@@ -80,7 +80,7 @@ After clustering, a new column is appended to the dataset with the cluster label
 
 | Pitfall | Recommendation |
 | --- | --- |
-| **Missing values** | Impute before clustering — the algorithm will exclude incomplete rows. |
+| **Missing values** | Impute before clustering — Enrich does not cluster columns that have missing values. |
 | **Unstandardised data** | The pipeline standardises automatically, but verify that extreme outliers are handled first. |
 | **Too many variables** | Consider dimensionality reduction (PCA/FAMD) to reduce noise. |
 | **Choosing K arbitrarily** | Use quantitative metrics (silhouette, inertia) alongside domain knowledge. |

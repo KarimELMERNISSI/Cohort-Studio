@@ -150,7 +150,7 @@ Returns:
 _No module description._
 
 **Imports**:
-`pandas`, `lightgbm.LGBMClassifier`, `lightgbm.LGBMRegressor`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `utils.data_analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`, `biostats._types.RANDOM_STATE`
+`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `utils.data_analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
 
 ### class `MissForestTransformer` (data_imputation.py)
 
@@ -221,14 +221,22 @@ No description available.
   > X_imputed : pd.DataFrame
   >     Dataframe with imputed values.
 
+### def `_is_text` (data_imputation.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `bool`
+
+Text-like column: object, pandas string ('str' in pandas 3) or categorical dtype.
+
 ### def `detect_remainder_columns` (data_imputation.py)
 
-- **Arguments**: `data, threshold`
+- **Arguments**: `data, threshold, date_like_columns`
 
 - **Returns**: `None`
 
-Detects columns to be included in the remainder based on distinct value criteria for object or categorical types
-or if they are date-related columns.
+Columns that should not be imputed or encoded: dates (true date/time dtypes and text columns
+recognised as dates) and high-cardinality text columns such as identifiers.
 
 Parameters:
 - data: pd.DataFrame
@@ -237,6 +245,9 @@ Parameters:
 - threshold: float, default=0.8
     The proportion of distinct values to non-null values to qualify as a remainder column.
     If the value is greater than 1, it defines the exact number of distinct values used as the threshold.
+
+- date_like_columns: iterable of str, optional
+    Text columns already recognised as dates (e.g. ``DataAnalyzer.date_cols``).
 
 Returns:
 - list: Names of columns to be included in the remainder, preserving the order in the input DataFrame.
@@ -273,19 +284,27 @@ Returns:
 
 ### def `reorder_data_columns` (data_imputation.py)
 
-- **Arguments**: `data, remainder_columns`
+- **Arguments**: `data, numerical_columns, categorical_columns`
 
 - **Returns**: `None`
 
-Reorder columns in a DataFrame by placing numerical, categorical, and remainder columns in a specific order.
+Numerical columns first, then categorical ones, then every other column in its original order.
+No column is ever dropped (true/false, date and text columns used to disappear here).
 
-Parameters:
-- data: The DataFrame to reorder.
+### def `partition_columns` (data_imputation.py)
 
-- remainder_columns: List of columns to keep at the end of the DataFrame.
+- **Arguments**: `data, remainder_columns, analyzer`
 
-Returns:
-- data: The reordered DataFrame.
+- **Returns**: `None`
+
+Assign every column to exactly one group: (numerical, categorical, passthrough).
+
+- categorical: text and categorical columns, true/false columns, binary and low-cardinality numeric columns;
+
+- numerical: the other numeric columns;
+
+- passthrough: everything else (requested remainder columns, dates, identifiers, any other dtype), kept in
+  the input order, which is the order in which a ColumnTransformer appends its remainder.
 
 ### def `get_imputer` (data_imputation.py)
 
@@ -322,74 +341,6 @@ Returns:
 
 - A list of all output columns in the final transformed DataFrame.
 
-### def `get_imputer_in_progress` (data_imputation.py)
-
-- **Arguments**: `numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, data, remainder_columns, remainder_strategy, remainder_threshold, total_steps, progress_placeholder, debug`
-
-- **Returns**: `None`
-
-Returns the appropriate imputer based on the specified imputation methods for numerical and categorical columns.
-
-Parameters:
-- numerical_imputation_method (str): Imputation method for numerical columns ('mean', 'median', 'knn', 'missforest').
-
-- categorical_imputation_method (str): Imputation method for categorical columns ('most_frequent', 'missforest').
-
-- cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
-
-- num_scaler (bool): Whether to scale numerical columns.
-
-- data (pandas.DataFrame): Input DataFrame used to identify categorical and numerical columns.
-
-- remainder_columns: list, default=None: Columns to pass through without transformation (e.g., ID columns), will be excluded from imputation, applying remainder strategy.
-    NB : If it is set to 'auto', it will automatically guess the remainder columns based on your input data.
-
-- remainder_threshold (float): Default (0.8), from 0 to 1, filter out non-numeric columns having a ratio distinct modalities / non empty rows higher than the fixed threshold if ramainder columns is set to 'auto'
-
-- remainder_strategy (str): 'passthrough' (keep as it is) or 'drop' (remove from the final dataset)
-
-- progress_placeholder: Streamlit empty container for showing the progress bar, default=None.
-
-- debug (bool): Whether to print debug information.
-
-Returns:
-- A ColumnTransformer object or a MissForestTransformer if using MissForest for both.
-
-- A list of all output columns in the final transformed DataFrame.
-
-### def `get_imputer_classic` (data_imputation.py)
-
-- **Arguments**: `numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, data, remainder_columns, remainder_strategy, remainder_threshold, debug`
-
-- **Returns**: `None`
-
-Returns the appropriate imputer based on the specified imputation methods for numerical and categorical columns.
-
-Parameters:
-- numerical_imputation_method (str): Imputation method for numerical columns ('mean', 'median', 'knn', 'missforest').
-
-- categorical_imputation_method (str): Imputation method for categorical columns ('most_frequent', 'missforest').
-
-- cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
-
-- num_scaler (bool): Whether to scale numerical columns.
-
-- data (pandas.DataFrame): Input DataFrame used to identify categorical and numerical columns.
-
-- remainder_columns: list, default=None: Columns to pass through without transformation (e.g., ID columns), will be excluded from imputation, applying remainder strategy.
-    NB : If it is set to 'auto', it will automatically guess the remainder columns based on your input data.
-
-- remainder_threshold (float): Default (0.8), from 0 to 1, filter out non-numeric columns having a ratio distinct modalities / non empty rows higher than the fixed threshold if ramainder columns is set to 'auto'
-
-- remainder_strategy (str): 'passthrough' (keep as it is) or 'drop' (remove from the final dataset)
-
-- debug (bool): Whether to print debug information.
-
-Returns:
-- A ColumnTransformer object or a MissForestTransformer if using MissForest for both.
-
-- A list of all output columns in the final transformed DataFrame.
-
 ---
 
 ## external_data.py
@@ -397,9 +348,22 @@ Returns:
 _No module description._
 
 **Imports**:
-`logging`, `os`, `pandas`, `manage.file_handling`
+`logging`, `os`, `pandas`, `manage.file_handling`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`
 
 ### def `add_data` (external_data.py)
+
+- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution`
+
+- **Returns**: `None`
+
+Enrich the dataset by either merging on common identifiers (columns) or appending rows.
+
+Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
+right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
+``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
+Same parameters and result as :func:`_merge`.
+
+### def `_merge` (external_data.py)
 
 - **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution`
 
@@ -453,12 +417,248 @@ Returns:
 
 ---
 
+## formulas.py
+
+_Formulas for derived variables and targeted imputation (moved from the Enrich page, no Streamlit).
+
+``evaluate_formula_safely`` validates a formula against the dataset's columns, rewrites date subtractions to
+give days, and evaluates it through the whitelisted evaluator (``core.expressions``). The replay engine uses
+it as well, so a derived variable is recomputed exactly as it was created._
+
+**Imports**:
+`ast`, `datetime`, `logging`, `re`, `typing.Any`, `numpy`, `pandas`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`
+
+### def `validate_variable_name` (formulas.py)
+
+- **Arguments**: `name, existing_columns`
+
+- **Returns**: `None`
+
+Validates the variable name and returns (is_valid, error_message).
+
+### def `is_number` (formulas.py)
+
+- **Arguments**: `token`
+
+- **Returns**: `None`
+
+Check if a string token represents a valid number.
+
+**Parameters**:
+
+token : str
+    The token to check.
+
+**Returns**:
+
+bool
+    True if the token can be converted to a float, False otherwise.
+
+### def `validate_and_extract_columns_ast` (formulas.py)
+
+- **Arguments**: `formula: str, dataset_columns: list`
+
+- **Returns**: `tuple[ComplexType]`
+
+Parses formula using Python AST to safely extract variables and constants
+regardless of spacing.
+
+### def `normalize_formula` (formulas.py)
+
+- **Arguments**: `formula: str, column_mapping: dict`
+
+- **Returns**: `str`
+
+Replace column names in the formula with normalized names (e.g., var_1, var_2).
+
+**Parameters**:
+
+formula : str
+    The computation formula to be normalized.
+column_mapping : dict
+    A mapping of original column names to normalized names.
+
+**Returns**:
+
+str
+    The formula with normalized column names.
+
+### def `extract_constant_value` (formulas.py)
+
+- **Arguments**: `constant_token: str`
+
+- **Returns**: `str`
+
+Extract the value from a constant token like constant(val1) -> val1
+
+### def `create_variables_dict` (formulas.py)
+
+- **Arguments**: `dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]`
+
+- **Returns**: `dict[ComplexType]`
+
+Create a dictionary mapping variable names to their corresponding Series
+for both regular columns and constants.
+
+**Parameters**:
+
+dataset : pd.DataFrame
+    The input dataset
+identified_columns : List[str]
+    List of valid column names used in the formula
+constant_tokens : List[str]
+    List of constant tokens found in the formula
+
+**Returns**:
+
+Dict[str, pd.Series]:
+    Dictionary mapping variable names to their Series
+
+### def `evaluate_formula_safely` (formulas.py)
+
+- **Arguments**: `formula: str, variable_name: str, dataset: pd.DataFrame, return_series: bool`
+
+- **Returns**: `tuple[ComplexType]`
+
+Safely evaluate a computation formula to create a new variable in the dataset.
+
+**Parameters**:
+
+formula : str
+    The computation formula entered by the user.
+variable_name : str
+    The name of the new variable to create.
+dataset : pd.DataFrame
+    The dataset containing columns to use in the formula.
+return_series : bool, optional
+    If True, returns the computed Series instead of a success message, and does not modify the dataset.
+
+**Returns**:
+
+tuple[bool, Any, pd.DataFrame]
+    A tuple containing:
+    - A boolean indicating success or failure.
+
+    - A success message OR the computed Series (if return_series=True), OR an error message.
+
+    - The modified DataFrame (or the original DataFrame on failure).
+
+### def `numeric_summary` (formulas.py)
+
+- **Arguments**: `values: pd.Series`
+
+- **Returns**: `pd.DataFrame`
+
+Classical and robust statistics of a numeric variable: N, missing, mean, SD, median, quartiles, min and max.
+
+The median and the quartiles are not moved by a few extreme values (entry errors), the mean and the SD are;
+infinite values (a division by zero) are counted apart and left out of the other statistics.
+
+### def `far_outside` (formulas.py)
+
+- **Arguments**: `values: pd.Series, k: float`
+
+- **Returns**: `tuple[ComplexType]`
+
+Rows whose value lies beyond Tukey's far-out fences, Q1 - k IQR and Q3 + k IQR (k = 3), with the fences:
+values that are probably entry errors (a height in metres among centimetres, a weight of 0) rather than
+the tail of the distribution. Infinite values are always included.
+
+---
+
+## imputation_service.py
+
+_Single imputation of the session data (moved from the Enrich page, no Streamlit).
+
+``apply_imputer`` fills every missing value of a table (mean, median, KNN, chained equations, missForest);
+``impute_rows`` fills only the rows of the analysis population with an imputer fitted on those rows, so
+excluded patients neither inform nor receive imputed values; ``fill_with_formula`` is the targeted
+imputation of one column. The replay engine calls the same functions._
+
+**Imports**:
+`logging`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.data_imputation`, `enrich.formulas.evaluate_formula_safely`
+
+### class `ImputationOutcome` (imputation_service.py)
+
+No description available.
+
+### def `debug_print` (imputation_service.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `match_null_mask_to_encoded_columns` (imputation_service.py)
+
+- **Arguments**: `initial_null_mask, output_cols, original_cols`
+
+- **Returns**: `None`
+
+Align initial null mask with output columns, including deducing one-hot encoded versions of categorical variables.
+Ensures the mask matches the order of output_cols.
+
+Parameters:
+    initial_null_mask (pd.DataFrame): Original null mask for input data.
+    output_cols (list): Ordered list of columns after imputation and encoding.
+    original_cols (list): List of original columns from the input data.
+
+Returns:
+    pd.DataFrame: Aligned null mask matching the column order in output_cols.
+
+### def `apply_imputer` (imputation_service.py)
+
+- **Arguments**: `data, numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, remainder_columns, remainder_strategy, remainder_threshold, progress_placeholder, debug`
+
+- **Returns**: `None`
+
+Applies an imputer to a pandas DataFrame, with options for numerical and categorical imputations,
+and handling of remainder columns. Also tracks imputed values.
+
+Parameters:
+    data (pd.DataFrame): The input data for imputation.
+    numerical_imputation_method (str): Method for imputing numerical columns ('mean', 'median', 'knn', etc.).
+    categorical_imputation_method (str): Method for imputing categorical columns ('most_frequent', 'missforest', etc.).
+    cat_encoder (bool): Whether to apply one-hot encoding to categorical columns.
+    num_scaler (bool): Whether to scale numerical columns.
+    remainder_columns (list or str): Columns to pass through without transformation ('auto' for automatic detection).
+    remainder_strategy (str): Strategy for handling remainder columns ('passthrough', 'drop', etc.).
+    remainder_threshold (float): Threshold for automatic remainder column detection.
+    progress_placeholder (object): Placeholder for showing progress in Streamlit.
+    debug (bool): Flag to enable debug print statements.
+
+Returns:
+    pd.DataFrame: The imputed DataFrame with updated column names.
+    pd.DataFrame: A mask DataFrame indicating which values were imputed.
+
+### def `impute_rows` (imputation_service.py)
+
+- **Arguments**: `frame: pd.DataFrame, rows: Any`
+
+- **Returns**: `ImputationOutcome`
+
+Impute the missing values of ``rows`` (row ids; every row when None) with an imputer fitted on them.
+
+Rows outside ``rows`` are returned untouched. One-hot encoding, scaling and dropping remainder columns
+change the columns of the table; they are refused when only part of the rows is imputed.
+
+### def `fill_with_formula` (imputation_service.py)
+
+- **Arguments**: `frame: pd.DataFrame, target: str, formula: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled).
+
+---
+
 ## transformation_logic.py
 
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `core.expressions.safe_format`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`
+`numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `core.expressions.safe_format`
 
 ### def `apply_variable_transformation` (transformation_logic.py)
 

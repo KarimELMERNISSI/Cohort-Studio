@@ -26,8 +26,9 @@ A **trace** is a JSON file that captures every transformation applied during a s
 ### Integrity
 
 The page checks the hash chain of every trace and shows it next to its name: *integrity verified*, *integrity not
-verifiable* (traces recorded before the chain existed), or *modified after recording*. The chain makes a trace
-tamper-evident; it is not an electronic signature.
+verifiable* (traces recorded before the chain existed), *modified after recording* (a step was changed, removed or
+reordered), or *gap in the data chain* (a step starts from data that the previous step did not produce). The chain
+makes a trace tamper-evident; it is not an electronic signature.
 
 ### Saved versions
 
@@ -36,9 +37,12 @@ it came from (session and head hash), the ticked criteria and the population. Lo
 trace to that parent, restores the ticked criteria, and warns when the file was modified outside CohortStudio.
 
 ### Viewing Traces
-- Browse available traces from past sessions.
-- Select a specific trace to inspect its steps, parameters, and outputs.
-- Download the raw JSON trace file for external archiving.
+- Browse available traces from past sessions (**Select Analysis Session**; each entry shows its number of steps
+  and its integrity).
+- Select a specific trace to inspect its steps: description, function, time and saved snapshot. The parameters of
+  each step are in the Word report.
+- Open a trace file from elsewhere with **Upload Trace File (.json)**. The page has no download of the trace JSON:
+  the trace files stay in the traces folder of your workspace, and the Word report documents them.
 
 ---
 
@@ -50,8 +54,8 @@ Replay a trace to reproduce the exact sequence of transformations.
 
 | Mode | Description |
 | --- | --- |
-| **Fast (snapshots)** | Loads the snapshot saved with the step. Works even if the original dataset is no longer available. |
-| **Full replay** | Recomputes every step from the source file and the recorded parameters, and checks each step against the fingerprint recorded for it. |
+| **Fast (Use Snapshots)** | Loads the snapshot saved with the step. Works even if the original dataset is no longer available. |
+| **Full Replay (From Source)** | Recomputes every step from the source file and the recorded parameters, and checks each step against the fingerprint recorded for it. |
 
 A full replay says when the replayed table is exactly the one that was recorded, reports the first step where it
 differs, and lists the steps it cannot recompute (the single imputation adopted from the former
@@ -63,14 +67,20 @@ the trace it was replayed from.
 
 ### Path Resolution
 
-Traces include file paths to dataset snapshots. The replay engine handles **cross-platform portability**:
-- Relative paths are resolved against the project root.
-- Absolute paths are adapted to the current system.
-- Missing files are reported with clear error messages.
+Traces include file paths to the source file and to dataset snapshots. Paths are resolved **inside your
+workspace** only:
+- A recorded path is used when it points inside your workspace; a relative path is read from your workspace folder.
+- Otherwise the file is looked up by name in your workspace's uploads, trace artifacts, snapshots and datasets
+  folders, so a trace recorded on another system (for example Windows paths read in Docker) finds its files once
+  they are in your workspace.
+- A missing source or merged file is listed under **Missing Resources**: upload it, pick it from an artifact
+  folder, or enter a path inside your workspace. Paths outside your workspace are refused.
 
 ### Step-by-Step Execution
-- Steps are replayed sequentially with progress indication.
-- Each step shows: function name, parameters, description, and result.
+- Each step of the list shows its description, function name, time and saved snapshot; **Reproduce to Step N**
+  replays the trace up to that step.
+- Steps are replayed sequentially with progress indication. In Fast mode, when the snapshot of the chosen step
+  cannot be loaded, the trace is replayed from the source up to that step instead.
 - On error, the replay pauses and reports which step failed and why.
 
 ---
@@ -91,7 +101,7 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 ### How to Generate
 
 1. Select a trace from the history or upload a trace JSON file.
-2. Click **Download Report**.
+2. Click **Download Transformation Report (.docx)**.
 3. A `.docx` file is generated and downloaded immediately.
 
 ---
@@ -125,6 +135,7 @@ not certify compliance with a guideline, and it is not an electronically signed 
 ## Practical Guidance
 
 - **Save traces regularly** — they are your audit trail for data provenance.
-- Use **Full Replay** when sharing analyses with collaborators who may not have the original dataset.
+- Use **Full Replay** to check that the recorded steps recompute the same data from the source file. When the
+  source file is not available, use **Fast** replay: it loads the snapshot saved with each step.
 - Generated `.docx` reports are useful as **supplementary material** in publications. They document the recorded
   steps; they are not electronically signed records.

@@ -107,3 +107,29 @@ def test_the_citation_names_the_current_version(html: str) -> None:
     assert f"Version {version}" in html
     assert f"version = {{{version}}}" in html
     assert "assets/logo.png" not in html  # the old logo; the brand assets come from assets/brand
+
+
+# The README and the handbook chapters: the regulatory and marketing claims removed in M0 must not come back.
+# The audit report quotes them on purpose, and documentation/legacy keeps old texts.
+DOCUMENT_CLAIMS = [
+    r"21\s*CFR",
+    r"Part\s*11",
+    r"\bcompliant\b",
+    r"\bimmutable\b",
+    r"\bHIPAA\b",
+    r"enterprise-grade",
+    r"production-ready",
+    r"zero-copy",
+]
+
+
+def _documents() -> list[Path]:
+    chapters = sorted((ROOT / "documentation").glob("*.md"))
+    return [ROOT / "README.md", *[p for p in chapters if not p.name.startswith("13_Audit_Report")]]
+
+
+@pytest.mark.parametrize("path", _documents(), ids=lambda p: p.name)
+def test_the_documentation_makes_no_regulatory_or_marketing_claims(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    found = [p for p in DOCUMENT_CLAIMS if re.search(p, text, flags=re.IGNORECASE)]
+    assert not found, found

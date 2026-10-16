@@ -10,8 +10,8 @@ Data enters the application through **Data > Import** (a three-step flow: choose
 
 | Format | Extension |
 | --- | --- |
-| CSV | `.csv` |
-| Excel | `.xlsx` |
+| Delimited text (CSV, TSV) | `.csv`, `.tsv`, `.txt` |
+| Excel | `.xlsx`, `.xlsm`; `.xls` only when the `xlrd` package is installed (it is not installed by default: save such files as `.xlsx`) |
 | Parquet | `.parquet` |
 
 After loading, the dataset is displayed as an interactive preview with shape information (rows × columns) and data types per column.
@@ -40,21 +40,22 @@ Rename columns for clarity and consistency. Two approaches are available:
 
 ### Manual Renaming
 - Edit column names directly in a mapping table.
-- Duplicate names are automatically detected and prevented.
+- New names are not checked for duplicates: give each column a unique name.
+- **Apply Renaming** renames the columns as one step of the trace; it counts as a change to the data.
 
 ### AI-Assisted Renaming (RAG)
-- The RAG system suggests standardised names based on medical terminologies (UMLS, SNOMED, LOINC).
+- The AI engine suggests clearer, standardised names. The suggestions come from the language model; they are not checked against a terminology (UMLS, SNOMED CT or LOINC are not loaded).
 - Suggestions can be reviewed, accepted, or modified before applying.
-- Requires the RAG system to be initialised (Gemini API key configured).
+- Requires the AI engine (Settings > AI engine). The default is a local Ollama model, which needs no API key; the cloud providers need an API key and your consent to send data.
 
 ---
 
 ## Performance Benchmark
 
 Compare query performance between **Pandas** and **DuckDB** on your dataset.
-- Runs a standard set of operations (filtering, grouping, aggregation).
-- Displays execution times side by side.
-- Helps decide whether to use DuckDB for large datasets.
+- Runs four operations: numerical statistics, the top values of categorical columns, a grouped aggregation and the correlation matrix.
+- Displays execution times side by side, with a check that both engines agree.
+- The result is for information only: the application computes its statistics with pandas.
 
 ---
 
@@ -78,7 +79,7 @@ Each account works in its own workspace folder (`<DATA_ROOT>/users/<username>/`)
 ## Dataset Management
 
 ### Versioning
-- Datasets are versioned using **DuckDB** and **Parquet snapshots**.
+- Each saved version is a complete **Parquet** file (`<name>_v1.parquet`, `<name>_v2.parquet`, ...) in the `datasets` folder of your workspace (shown on Settings > Workspace); column types and row identifiers are kept.
 - Each save creates a new version; previous versions remain accessible.
 - Load any saved version from the sidebar dataset card (**Change**) or from the Start page.
 
@@ -88,11 +89,10 @@ Each account works in its own workspace folder (`<DATA_ROOT>/users/<username>/`)
 | --- | --- |
 | **Save** | Persist the current dataset as a new version. |
 | **Load** | Restore a previously saved version. |
-| **Delete** | Remove a saved version (with confirmation). |
-| **Export** | Download the current dataset as CSV, Excel, or Parquet. |
+
+Saved versions cannot be deleted or downloaded from the app. To download the rows of the analysis population, use **Filtered Cohort CSV** or **Filtered Cohort Excel** under a figure on Explore > Visualize (*Figure Export & Publication Options*).
 
 ---
 
 ## Practical Guidance
 - Use **AI-Assisted Renaming** early in your workflow — standardised column names improve the quality of taxonomy generation and AI suggestions downstream.
-- Run the **Performance Benchmark** on large datasets (>100k rows) to determine if DuckDB offers meaningful speedups for your data.

@@ -18,7 +18,7 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
  2. Plot Generation & Statistical Overlay (Pairwise Tests, FDR/Bonferroni, ROC AUC, Clustermaps)
               │
               ▼
- 3. High-Fidelity Rendering & Fast Export (SVG, 300 DPI PNG, Interactive HTML, JSON, Excel)
+ 3. High-Fidelity Rendering & Fast Export (SVG, Interactive HTML, JSON, CSV, Excel)
 ```
 
 ---
@@ -26,37 +26,35 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
 ## 2. Complete Clinical Plot Library
 
 ### A. Distribution & Modality
-* **Histogram with Multiple Representations**: Switch seamlessly between discrete frequency bins, Frequency Polygons (line connecting bin centers), and Smooth Kernel Density Estimation (KDE) probability density curves across patient strata.
-* **Box Plot (Box-and-Whisker)**: Displays five-number summaries (minimum, $Q_1$, median, $Q_3$, maximum) with customizable horizontal or vertical orientation. Automatically annotates pairwise statistical significance brackets between groups.
+* **Histogram with Multiple Representations**: Switch between discrete frequency bins, Frequency Polygons (line connecting bin centers), and Smooth Kernel Density Estimation (KDE) probability density curves across patient strata.
+* **Box Plot (Box-and-Whisker)**: Displays five-number summaries (minimum, $Q_1$, median, $Q_3$, maximum) with customizable horizontal or vertical orientation. Can annotate pairwise statistical significance brackets between groups (section 3).
 * **Violin Plot**: Hybrids box plots with kernel density estimation to reveal bimodal or multimodal sub-distributions, skewed biomarker levels, and group variance disparities.
 
 ### B. High-Dimensional & Relational Exploration
-* **Exclusive Hierarchical Clustermap**: 
+* **Hierarchical Clustermap**:
   - Generates interactive dual row and column dendrograms reorganized by Euclidean or correlation distances.
   - Supports log and Z-score transformations.
   - Incorporates sample group color tracks and feature category annotations.
-  - **Minimal Conflict Diagnostics**: An exclusive diagnostic algorithm that automatically analyzes high-dimensional missingness and identifies the minimal conflicting subsets of variables lacking shared patient observations.
+  - **Minimal Conflict Diagnostics**: A diagnostic of the missing values that identifies the minimal conflicting subsets of variables lacking shared patient observations.
 * **Correlation Matrix Heatmap**:
   - Pairwise Pearson, Spearman rank, or Kendall tau correlation coefficients.
   - Hierarchical clustering reordering to group co-regulated clinical markers.
-  - Automatic masking of statistically non-significant correlation pairs ($p \ge 0.05$).
+  - Lower, upper or full triangle (when rows and columns are not clustered). Only the coefficients are shown: no $p$-values, and no pair is hidden for being non-significant.
 * **Scatter Plot with Linear Regression**:
-  - Two-dimensional Cartesian relationships with color/size stratification.
+  - Two-dimensional Cartesian relationships with color stratification.
   - Automated linear regression fit ($y = \beta_0 + \beta_1 x$) displaying slope, intercept, Pearson $r$, coefficient of determination ($R^2$), and regression $p$-value.
 
 ### C. Diagnostic & Medical Specialty Charts
 * **Receiver Operating Characteristic (ROC) Curve**:
-  - Calculates Area Under the Curve (AUC) for binary diagnostic endpoints.
+  - Calculates Area Under the Curve (AUC) for binary diagnostic endpoints, with its DeLong 95% confidence interval in the legend.
   - Computes optimal Youden's $J$ statistic threshold ($J = \text{Sensitivity} + \text{Specificity} - 1$).
-  - Reports sensitivity, specificity, positive likelihood ratio ($LR+$), and negative likelihood ratio ($LR-$) at the optimal decision boundary.
-* **Bland-Altman Agreement Plot**:
-  - Compares two clinical measurement instruments or assays on identical patients.
-  - Plots mean measurement against pairwise difference ($A - B$).
-  - Draws mean bias reference line and $\pm 1.96 \text{ SD}$ Limits of Agreement (LoA) with 95% confidence intervals.
-* **Quantile-Quantile (Q-Q) Plot**:
-  - Evaluates empirical distribution quantiles against theoretical standard normal quantiles to validate parametric assumptions before linear modeling.
-* **Nullity & Sparsity Matrix**:
-  - Displays patient-by-variable missingness flags to identify systematic data dropouts across clinical visits.
+  - Reports the sensitivity and specificity at that threshold (*Statistical Insights*).
+
+Other diagnostic charts are on other pages:
+
+* **Likelihood ratios** ($LR+$, $LR-$) and the **Bland-Altman agreement plot**: Analyze > Hypothesis tests & epidemiology, *Diagnostic accuracy & agreement* tab (chapter 5).
+* **Q-Q plots** of residuals: the detailed view and the ANCOVA diagnostics of Analyze > Hypothesis tests & epidemiology.
+* **Nullity matrix** (missingness pattern): Data > Validate, *Completeness (Missing)* tab of the quality dashboard (chapter 2).
 
 ### D. Categorical Trajectories & Hierarchies
 * **Sankey Flow Diagram**: Maps patient progression across sequential trial stages, treatment switches, or adverse event states, with arrow thickness proportional to patient counts.
@@ -66,13 +64,15 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
 
 ## 3. Integrated Statistical Testing & Significance Brackets
 
-CohortStudio bridges visualization and formal inferential statistics by embedding hypothesis tests directly onto box and violin charts:
+Box and violin plots can show pairwise significance brackets: tick **Show Statistical Significance** (vertical orientation, with a grouping variable). Every pair of groups is compared with the same engine as the Analyze page:
 
-| Scenario | Parametric Route | Non-Parametric Route | Automated Significance Brackets |
-| :--- | :--- | :--- | :--- |
-| **Two Groups** | Student's Independent $t$-test | Mann-Whitney $U$ test | Annotated bracket with adjusted $p$-value |
-| **Three or More Groups** | One-Way ANOVA + Tukey HSD | Kruskal-Wallis + Dunn's test | Pairwise comparison brackets |
-| **Multiple Testing Correction** | Bonferroni single-step | Benjamini-Hochberg (FDR) | Adjusted $p < 0.05$ marked with significance stars |
+| Test Selection Strategy | Pairwise test |
+| :--- | :--- |
+| **Auto-Detect** (default) | Welch's $t$-test |
+| **Force Parametric (T-test/ANOVA)** | Welch's $t$-test |
+| **Force Non-Parametric (Mann-Whitney/Kruskal)** | Mann-Whitney $U$ test |
+
+No omnibus test (ANOVA, Kruskal-Wallis) is run on this page. **Multiple Testing Correction**: None (default), Bonferroni or Benjamini-Hochberg (FDR), over all the pairs of the plot. A bracket is drawn for each pair with an adjusted $p < 0.05$; the *Statistical Results* table under the plot lists every pair with its statistic, its $p$-value (raw and, with a correction, adjusted) and an effect size.
 
 Significance formatting follows standard biomedical conventions:
 * `***` : $p_{\text{adj}} < 0.001$
@@ -85,8 +85,8 @@ Significance formatting follows standard biomedical conventions:
 ## 4. Visual Themes & Color Customization
 
 ### Themes
-* **`plotly_dark`**: High-contrast dark mode optimized for modern researcher dashboards.
-* **`plotly_white`**: Clean, minimalist white canvas ideal for formal print publications and regulatory reports.
+* **`plotly_dark`**: High-contrast dark theme for screens.
+* **`plotly_white`**: White background, suited to print publications and reports.
 * **`seaborn`**: Soft blue-gray background with muted gridlines conforming to classical Python data science styling.
 * **`ggplot2`**: Gray canvas with white gridlines following R publication standards.
 
@@ -97,25 +97,21 @@ Significance formatting follows standard biomedical conventions:
 
 ---
 
-## 5. Fast, Effortless Multi-Format Export Engine
+## 5. Multi-Format Export
 
-CohortStudio eliminates the friction of capturing publication-ready graphics by providing both automated browser vector downloads and explicit one-click file exports.
+The camera icon of the plot toolbar downloads the figure; the other formats are under *Figure Export & Publication Options* below the plot.
 
 ### Export Modalities
 
-1. **Publication Vector Graphics (SVG)**:
-   - Configured through the Plotly modebar camera icon.
-   - Generates infinite-resolution Scalable Vector Graphics (SVG) without pixelation, ideal for Adobe Illustrator, LaTeX, and high-DPI journals (Nature, NEJM, The Lancet).
-2. **High-Resolution Raster (300+ DPI PNG)**:
-   - Scaled at $3\times$ resolution ($3600 \times 2400 \text{ px}$) directly from client-side canvas rasterization with zero server round-trip latency.
-3. **Standalone Interactive HTML (`.html`)**:
-   - Single-click download via `fig_to_html_str(fig, include_plotlyjs="cdn")`.
-   - Generates a self-contained HTML document that preserves interactive hover tooltips, zoom, pan, and trace toggling.
-   - Ideal for sharing findings with collaborators, principal investigators, or medical monitors without requiring Python or CohortStudio installed.
-4. **Machine-Readable Plotly JSON (`.json`)**:
-   - Exports complete JSON figure specification for programmatic storage, dashboard integration, or automated report compilation.
-5. **Filtered Cohort Data Slice (`.csv` & `.xlsx`)**:
-   - Download the exact underlying cohort subset and cross-tabulated summary statistics (Count, Mean, Std Dev, Min, 25th, Median, 75th, Max, Skewness, Kurtosis) for auditability.
+1. **Vector Graphics (SVG)**:
+   - The camera icon of the Plotly toolbar downloads the figure as SVG: vector graphics without pixelation, for vector editors, LaTeX and journal submissions. There is no PNG export.
+2. **Interactive HTML (`.html`)**:
+   - A self-contained file with Plotly.js embedded (a few megabytes) that keeps hover tooltips, zoom, pan and trace toggling.
+   - It opens offline in a web browser, without Python or CohortStudio.
+3. **Plotly JSON (`.json`)**:
+   - The complete figure specification, for programmatic storage or reuse.
+4. **Filtered Cohort Data (`.csv` & `.xlsx`)**:
+   - The rows behind the figure: the analysis population, after the *Outliers Handler*. The summary statistics shown under *Statistical Insights* are not part of these files.
 
 ---
 
@@ -128,31 +124,28 @@ import pandas as pd
 import utils.visualization_utils as vu
 import utils.export_utils as eu
 
-# 1. Load active clinical cohort
+# 1. Load the cohort
 df = pd.read_csv("cohort_baseline.csv")
 
-# 2. Generate publication-grade Box Plot with automated significance brackets
+# 2. Pairwise Welch t-tests with a Benjamini-Hochberg correction, the groups in the order
+#    the box plot uses (first appearance); returns (i, j, adjusted p) for the significant pairs
+groups = df["treatment_arm"].dropna().unique()
+values = [df.loc[df["treatment_arm"] == g, "systolic_bp"].dropna().to_numpy() for g in groups]
+pairs = vu.compute_significant_pairs(values, test_type="Auto-Detect",
+                                     correction_method="Benjamini-Hochberg (FDR)")
+
+# 3. Box plot with a bracket for each significant pair
 fig = vu.create_boxplot_with_significance_streamlit(
-    df=df,
-    x_col="treatment_arm",
-    y_col="systolic_bp",
-    test_type="Auto-Detect",
-    correction_method="Benjamini-Hochberg (FDR)",
-    alpha=0.05,
-    palette="Set1",
+    df, group_col="treatment_arm", value_col="systolic_bp", significant_pairs=pairs,
+    title="Systolic blood pressure by arm", y_label="Systolic BP (mmHg)",
 )
 
-# 3. Export standalone interactive HTML for clinical study report
-html_content = eu.fig_to_html_str(fig)
+# 4. Interactive HTML that opens offline (Plotly.js embedded)
 with open("systolic_bp_by_arm.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
+    f.write(eu.fig_to_html_str(fig, include_plotlyjs=True))
 
-# 4. Generate high-resolution modebar configuration for web apps
-config = eu.get_publication_plot_config(
-    filename="systolic_bp_publication",
-    format_type="svg",
-    width=1200,
-    height=800,
-    scale=3
-)
+# 5. Toolbar configuration for st.plotly_chart: the camera icon downloads an SVG
+config = eu.get_publication_plot_config(filename="systolic_bp_by_arm", format_type="svg")
 ```
+
+`vu.compute_pairwise_stats(values, labels, ...)` returns the full table of pairs (statistic, raw and adjusted $p$-values, estimate and effect size).

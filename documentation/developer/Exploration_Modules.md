@@ -349,4 +349,83 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 - **generate_advice**(`self`) -> `None`
   > Generates actionable advice based on metrics.
 
+### def `_details` (data_quality_auditor.py)
+
+- **Arguments**: `rows: list[tuple[ComplexType]]`
+
+- **Returns**: `pd.DataFrame`
+
+No description available.
+
+---
+
+## quality_score.py
+
+_The global data-quality score as a weighted mean of the audit dimensions, with its decomposition.
+
+Pure Python (no Streamlit, no plotting): the dashboard draws the decomposition, the tests check it.
+Each dimension scores 0-100; its weight decides its share of the global score; the points a
+dimension "loses" are ``(100 - score) * share``, so the global score is ``100 - sum(lost)``._
+
+**Imports**:
+`__future__.annotations`, `collections.abc.Mapping`, `dataclasses.dataclass`
+
+### class `DimensionScore` (quality_score.py)
+
+No description available.
+
+**Methods:**
+
+- **earned**(`self`) -> `float`
+  > Points this dimension contributes to the global score.
+
+- **lost**(`self`) -> `float`
+  > Points of the global score this dimension costs.
+
+### class `QualityScore` (quality_score.py)
+
+No description available.
+
+**Methods:**
+
+- **by_loss**(`self`) -> `list[DimensionScore]`
+  > Dimensions from the most to the least costly (ties in display order).
+
+- **lost**(`self`) -> `float`
+  > No description available.
+
+### def `ordered` (quality_score.py)
+
+- **Arguments**: `names`
+
+- **Returns**: `list[str]`
+
+Known dimensions first, in display order, then any other metric.
+
+### def `weighted_score` (quality_score.py)
+
+- **Arguments**: `metrics: Mapping[ComplexType], weights: ComplexType`
+
+- **Returns**: `QualityScore`
+
+Weighted mean of the available dimensions (a ``None`` metric, e.g. clinical validity without rules, is left out).
+
+With every weight at zero the global score is 0, as before.
+
+### def `band` (quality_score.py)
+
+- **Arguments**: `score: float`
+
+- **Returns**: `str`
+
+``excellent`` (>= 90), ``good`` (>= 80), ``fair`` (>= 50) or ``poor``.
+
+### def `interpretation` (quality_score.py)
+
+- **Arguments**: `score: float`
+
+- **Returns**: `str`
+
+No description available.
+
 ---
