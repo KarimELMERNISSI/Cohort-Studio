@@ -309,7 +309,15 @@ chained by hashes, so a later modification would show. It lists every step, in o
    and checks that it finds the same cells, and the Word report gives its methods paragraph.
 
 Replay a step: the engine recomputes the data and checks it against the fingerprint recorded for every step, and
-says when the replayed table is exactly the one you analysed. Download the **Word report**: it documents the whole
+says when the replayed table is exactly the one you analysed.
+
+Then build the study dossier. Under the Cox model of step 6 (and any other result you want to report), click
+**Add to the study dossier**. Open **Reproduce > Study dossier**: the participant flow goes from the 1,206
+records of `tutorial_cohort.csv` to 1,190 after the clinical anomalies (16 excluded) and 928 after the inclusion
+criteria (262 not meeting them), with a box per analysis below. Click the *Not meeting: study inclusion* box to
+see how many patients each criterion excluded first. **Download the Word dossier**: it has the provenance, the
+flow figure, the criteria, the missing data and the multiple imputation with its methods paragraph, your
+results and the references. Download the **Word report**: it documents the whole
 pipeline with what each step did to the table. On **Start**, every core step is now ticked.
 
 ---

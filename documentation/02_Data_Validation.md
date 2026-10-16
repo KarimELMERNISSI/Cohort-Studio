@@ -80,9 +80,12 @@ organised into **mask families** — groups of related conditions combined with 
   value never fires a rule: it does not flag an anomaly and does not meet an inclusion criterion.
 - A ticked criterion that cannot be evaluated (a typo in a column name, a text column in a numeric rule) stops the
   analyses with an explanation instead of silently keeping or dropping rows.
-- The **Analysis population** tab shows the participant flow: rows in, excluded and out for each family, what each
-  criterion excludes (on the whole table, at its step, and as the first reason), and the excluded rows with their
-  reasons. These are the numbers of a STROBE participant-flow diagram (item 13).
+- The **Analysis population** tab draws the participant flow (STROBE item 13): the records read in the file,
+  the rows removed by recorded steps, the rows excluded by each family of criteria and the analysis population.
+  Click a box, or choose it in the menu under the diagram, to see the criteria behind an exclusion, the rows
+  each excluded first and their definitions. Below, the tables give the rows in, excluded and out for each
+  family, what each criterion excludes (on the whole table, at its step, and as the first reason), and the
+  excluded rows with their reasons.
 - **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is
   the one action that removes rows: it asks for confirmation, it is one step of the trace, saved versions are not
   changed, and the criteria are then unticked.

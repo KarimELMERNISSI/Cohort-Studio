@@ -96,6 +96,32 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
 ---
 
+## Study dossier
+
+**Reproduce > Study dossier** documents the analyses of the current dataset in one Word document.
+
+1. On the analysis pages, click **Add to the study dossier** under a result. Each set of settings is a separate
+   item, kept with what it was computed on (data, revision, population, N analysed).
+2. The Study dossier page draws the participant flow with a box for each analysis of the dossier (N analysed, or
+   the imputed datasets pooled) and lists the results. A result computed on data that changed since, or on
+   another population, is marked stale.
+3. **Download the Word dossier**. Its sections:
+
+| Section | Contents |
+| --- | --- |
+| 1. Provenance | Dataset, source file and hash, parse options, data fingerprint, trace and integrity, software versions |
+| 2. Analysis population | Participant flow figure (STROBE item 13), exclusions with the criteria behind them, definition of every criterion |
+| 3. Data handling | The recorded steps that changed the data, with their formulas |
+| 4. Missing data | Missing values per variable, values filled by single imputation, the multiple imputation (settings, methods, status, methods paragraph) |
+| 5. Results | Each result with its settings, what it was computed on, its tables and, for survival, the Kaplan-Meier figure |
+| 6. References | The methods used, STROBE and, with multiple imputation, the pooling references |
+
+Stale results are left out and listed; tick the option to keep them, marked as not current. The dossier supports
+the reporting of the participant flow (STROBE item 13) and of multiple imputation (Sterne et al. 2009); it does
+not certify compliance with a guideline, and it is not an electronically signed record.
+
+---
+
 ## Practical Guidance
 
 - **Save traces regularly** — they are your audit trail for data provenance.

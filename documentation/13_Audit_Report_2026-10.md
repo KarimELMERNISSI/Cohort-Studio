@@ -148,7 +148,7 @@ order, with a review after each milestone.
 | M0 | Truth and safety net: false regulatory and reproducibility claims removed (21 CFR Part 11, "signed", "immutable", STROBE/CONSORT "compliant", 100 % coverage), MI advice corrected, result caches cleared on a dataset swap, Validate filter reaches Enrich, traces written inside the user workspace, wheel contents fixed, per-package coverage floors in CI | done |
 | M1 | One analysis population and one source of truth: inclusion and exclusion criteria become a shared, reversible selection (only an explicit, traced "freeze" deletes rows); single mutation path; data and population fingerprints; results stamped with the data they were computed on; hash-chained (tamper-evident) trace v2 with attrition counts | done |
 | M2 | Multiple imputation end to end: chained-equations engine (PMM, logistic, polytomous), pooled analyses with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 multi-parameter tests, scale transformations), parity tests against R `mice` | done (2026-10-15), awaiting the owner's review |
-| M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | planned |
+| M3 | Participant flow (STROBE item 13) and study dossier (Word) built from the trace | done (2026-10-16), awaiting the owner's review |
 | M4 | Packaging and deployment: optional dependency groups, engine-only CI job, Docker image built in CI, first-run administrator | planned |
 
 Owner decisions on the review: Python stays at 3.14; no repository split; staleness is handled with

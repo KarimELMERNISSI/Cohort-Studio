@@ -17,7 +17,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   (`far_outside`). Without ticked criteria it suggests excluding entry errors with the clinical-anomaly criteria.
   The tutorial's BMI then reads mean 28.6, SD 5.1, range 17.0 to 45.7.
 
-### Participant flow and study dossier (follow-up programme M3, in progress)
+### Fixed: a failed parallel imputation no longer stops the multiple imputation
+
+- When the separate process that runs the chains in parallel fails, the chains now run in one process, with a
+  warning. This happened intermittently under load in a full test run. The result is the same, since each chain
+  has its own random stream.
+
+### Participant flow and study dossier (follow-up programme M3, awaiting the owner's review)
 
 - **Participant flow model** (`core/attrition.py`, STROBE item 13). The flow runs from the records read in the
   file (malformed lines skipped) through the rows removed or added by recorded steps and the rows excluded by
@@ -52,6 +58,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     marked as not current.
   - The dossier says it supports STROBE item 13 and the Sterne et al. (2009) items, without claiming compliance.
 - The Word trace report summarises long nested parameters (row-id ranges) instead of printing them whole.
+- Documentation: the README, handbook chapters 2 (the flow diagram) and 8 (the Study dossier page), the tutorial
+  (step 8 builds the dossier), the documentation site and the audit report (M3 done, pending the owner's review).
 
 ### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
