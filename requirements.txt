@@ -184,7 +184,7 @@ numba==0.68.0
     # via
     #   pynndescent
     #   umap-learn
-numpy==2.5.3
+numpy==2.5.4
     # via
     #   autograd
     #   cohortstudio
