@@ -16,7 +16,7 @@ import utils.data_paths as dp
 def _script() -> None:
     import streamlit as st
 
-    from app_pages.study_dossier import build_dossier_bytes
+    from app_pages.study_dossier import build_dossier_bytes, session_parts
     from biostats.inference import compare_groups, groups_from_frame
     from biostats.survival import compare_survival, cox_regression
     from ui.results import add_to_report, remember, report_items
@@ -80,6 +80,7 @@ def _script() -> None:
         )
         add_to_report("cox_mi")
     items = report_items()
+    ss["parts"] = session_parts(state, items, include_stale=False)
     ss["dossier"] = build_dossier_bytes(
         state, items, include_stale=False, title="Tutorial dossier", author="tester"
     )
@@ -166,3 +167,16 @@ def test_a_multiple_imputation_and_a_pooled_result_are_documented(data_root: Pat
     assert "Pooled over 3 imputed datasets with Rubin's rules" in text
     assert "Status against the current population: fresh" in text
     assert "Rubin DB (1987)" in text and "Sterne JAC" in text
+
+
+def test_the_download_builds_the_dossier_without_the_session(data_root: Path) -> None:
+    """The download button builds the document after the script run, where the session is not available."""
+    from app_pages.study_dossier import _word_bytes
+
+    at = AppTest.from_function(_script, default_timeout=300)
+    at.session_state["username"] = "dossier_download"
+    _run(at, "setup")
+    data = _word_bytes(at.session_state["parts"], title="Built later", author="")  # outside the run
+    text, headings, _, n_pictures = _text(data)
+    assert text.startswith("Built later") and "Cox proportional-hazards model" in headings
+    assert n_pictures == 2

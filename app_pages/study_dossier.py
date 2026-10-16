@@ -207,12 +207,11 @@ def _mi_section(state) -> dict[str, Any] | None:
     }
 
 
-def dossier_input(state, items: list[ReportItem], *, include_stale: bool, title: str, author: str):
-    """Everything the Word dossier needs, from the session (manage.dossier.DossierInput)."""
-    from manage.dossier import METHOD_REFERENCES, DossierInput, DossierResult
-    from manage.flow_figure import flow_png
-    from manage.report_tables import result_blocks
-
+def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dict[str, Any]:
+    """
+    What the dossier needs from the session, read during the page run: the download builds the document later,
+    outside the run, where the session is not available (finish_input and build_dossier are pure).
+    """
     population = state.population
     try:
         trace = state.transformation_manager.get_trace() or {}
@@ -225,11 +224,30 @@ def dossier_input(state, items: list[ReportItem], *, include_stale: bool, title:
             kept.append((item, status))
         else:
             omitted.append(f"{item.title} ({_stale_text(status)})")
-    flow = current_flow(state, analysis_counts([item for item, status in kept if status == CURRENT]))
+    return {
+        "flow": current_flow(state, analysis_counts([item for item, status in kept if status == CURRENT])),
+        "kept": kept,
+        "omitted": omitted,
+        "population_label": population.label if population else "n/a",
+        "provenance": _provenance_rows(state, trace),
+        "criteria": _criteria_table(population) if population is not None and population.criteria else None,
+        "data_steps": _data_steps(trace),
+        "missing": _missing_table(state.analysis_frame()),
+        "single_imputed": state.single_imputed_counts(),
+        "mi": _mi_section(state),
+    }
+
+
+def finish_input(parts: dict[str, Any], *, title: str, author: str):
+    """The DossierInput from the session parts: result tables, figures and references (no session needed)."""
+    from manage.dossier import METHOD_REFERENCES, DossierInput, DossierResult
+    from manage.flow_figure import flow_png
+    from manage.report_tables import result_blocks
+
     results = []
     references: list[str] = [METHOD_REFERENCES["strobe"]]
-    pooled = state.mi is not None
-    for item, status in kept:
+    pooled = parts["mi"] is not None
+    for item, status in parts["kept"]:
         blocks = result_blocks(item.value)
         references.extend(blocks.references)
         pooled = pooled or imputations_of(item.value) is not None
@@ -244,24 +262,31 @@ def dossier_input(state, items: list[ReportItem], *, include_stale: bool, title:
             )
         )
     if pooled:
-        references += [METHOD_REFERENCES[k] for k in ("rubin1987", "barnard1999", "vanbuuren2018", "white2011", "sterne2009")]
-    frame = state.analysis_frame()
+        references += [
+            METHOD_REFERENCES[k] for k in ("rubin1987", "barnard1999", "vanbuuren2018", "white2011", "sterne2009")
+        ]
+    flow = parts["flow"]
     return DossierInput(
         title=title,
         author=author,
         flow=flow,
-        population_label=population.label if population else "n/a",
-        provenance=_provenance_rows(state, trace),
+        population_label=parts["population_label"],
+        provenance=parts["provenance"],
         flow_png=flow_png(flow) if flow is not None else None,
-        criteria=_criteria_table(population) if population is not None and population.criteria else None,
-        data_steps=_data_steps(trace),
-        missing=_missing_table(frame),
-        single_imputed=state.single_imputed_counts(),
-        mi=_mi_section(state),
+        criteria=parts["criteria"],
+        data_steps=parts["data_steps"],
+        missing=parts["missing"],
+        single_imputed=parts["single_imputed"],
+        mi=parts["mi"],
         results=results,
         references=references,
-        omitted=omitted,
+        omitted=parts["omitted"],
     )
+
+
+def dossier_input(state, items: list[ReportItem], *, include_stale: bool, title: str, author: str):
+    """Everything the Word dossier needs (manage.dossier.DossierInput), read from the session now."""
+    return finish_input(session_parts(state, items, include_stale=include_stale), title=title, author=author)
 
 
 def app() -> None:
@@ -323,9 +348,11 @@ def app() -> None:
         "Include the results computed on other data or another population, marked as not current",
         key="dossier_stale",
     )
+    # read from the session now: the download builds the document after the run, without the session
+    parts = session_parts(state, items, include_stale=include_stale)
     st.download_button(
         "Download the Word dossier",
-        data=lambda: build_dossier_bytes(state, items, include_stale=include_stale, title=title, author=author),
+        data=lambda: _word_bytes(parts, title=title, author=author),
         file_name=f"{(ref.name if ref else 'study')}_dossier.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         icon=":material/download:",
@@ -339,12 +366,14 @@ def app() -> None:
     )
 
 
-def build_dossier_bytes(state, items: list[ReportItem], *, include_stale: bool, title: str, author: str) -> bytes:
+def _word_bytes(parts: dict[str, Any], *, title: str, author: str) -> bytes:
     from manage.dossier import build_dossier
 
-    return build_dossier(
-        dossier_input(state, items, include_stale=include_stale, title=title, author=author)
-    ).getvalue()
+    return build_dossier(finish_input(parts, title=title, author=author)).getvalue()
 
 
-__all__ = ["analysis_counts", "app", "build_dossier_bytes", "dossier_input", "imputations_of"]
+def build_dossier_bytes(state, items: list[ReportItem], *, include_stale: bool, title: str, author: str) -> bytes:
+    return _word_bytes(session_parts(state, items, include_stale=include_stale), title=title, author=author)
+
+
+__all__ = ["analysis_counts", "app", "build_dossier_bytes", "dossier_input", "finish_input", "imputations_of", "session_parts"]

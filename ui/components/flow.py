@@ -74,7 +74,11 @@ def flow_figure(flow: ParticipantFlow) -> go.Figure:
             layer="below",
         )
         fig.add_annotation(
-            x=x, y=y, text=_text(item.label, item.n), showarrow=False, font={"size": 11}
+            x=x,
+            y=y,
+            text=_text(item.label, item.n),
+            showarrow=False,
+            font={"size": 11, "color": "#1b2733"},
         )
 
     def arrow(x0: float, y0: float, x1: float, y1: float) -> None:
