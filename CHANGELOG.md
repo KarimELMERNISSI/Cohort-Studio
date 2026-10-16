@@ -6,6 +6,29 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: a README header with an animated tour, the workflow and a plot gallery
+
+- The README opens with the CohortStudio wordmark, light or dark to follow the GitHub theme. Below it come the
+  tagline, links to the main sections, and an animated tour of nine screens on the tutorial cohort, from the Start
+  page workflow to the Word study dossier.
+- The overview shows the workflow map of the Start page.
+- A new section, "Describe and Visualise the Data", has two parts:
+  - a short animation of the data description on Explore: column types, descriptive statistics and correlations;
+  - six Visualize figures: a box plot with p-values between groups, a clustermap that tags each variable by its
+    p-value, violin plots, a clustered correlation matrix, a scatter plot with regression lines, and a sunburst.
+- The screenshots are kept in a library, `assets/screenshots`, as lossless WebP, so the README and site images
+  rebuild without running the application. `dev_scripts/keep_screenshots.py` adds a capture run to the library.
+- Scripts:
+  - `dev_scripts/site_screenshots.py` now also captures Explore, the Visualize figures and the workflow map.
+  - `dev_scripts/make_readme_assets.py` builds the README images.
+- The animations are animated WebP. Between two screens only a band of the window changes, which keeps each file
+  under 2 MB, the limit of the large-file hook.
+- Tests check that:
+  - the README images exist;
+  - the animations loop and stay under 2 MB;
+  - the library holds every screenshot the builders use.
+- The Docker image leaves out the README images and the screenshot library.
+
 ### Fix: the colour scale of the Visualize correlation matrix
 
 - On Explore > Visualize, the correlation matrix fitted its colour scale to the values shown. With a diverging

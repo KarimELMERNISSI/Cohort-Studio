@@ -3,6 +3,7 @@ images sized, the current version in the citation."""
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import tomllib
 from html.parser import HTMLParser
@@ -133,3 +134,44 @@ def test_the_documentation_makes_no_regulatory_or_marketing_claims(path: Path) -
     text = path.read_text(encoding="utf-8")
     found = [p for p in DOCUMENT_CLAIMS if re.search(p, text, flags=re.IGNORECASE)]
     assert not found, found
+
+
+# The README images: every one exists, the animations loop and stay light (the large-file hook allows 2 MB), and
+# the screenshot library holds every screenshot the image builders use, so that they rebuild without the app.
+RAW = "https://raw.githubusercontent.com/KarimELMERNISSI/Cohort-Studio/main/"
+
+
+def _readme_images() -> list[str]:
+    found = re.findall(r'(?:src|srcset)="([^"]+)"', (ROOT / "README.md").read_text(encoding="utf-8"))
+    return [url.removeprefix(RAW) for url in found if url.startswith(RAW) or "://" not in url]
+
+
+def test_the_readme_images_exist() -> None:
+    images = _readme_images()
+    assert {"assets/readme/tour.webp", "assets/readme/describe.webp", "assets/readme/workflow.webp"} <= set(images)
+    missing = [path for path in images if not (ROOT / path).is_file()]
+    assert not missing, missing
+
+
+@pytest.mark.parametrize("name", ["tour", "describe"])
+def test_the_readme_animations_loop_and_stay_light(name: str) -> None:
+    path = ROOT / "assets" / "readme" / f"{name}.webp"
+    with Image.open(path) as image:
+        assert image.format == "WEBP" and image.n_frames > 10 and image.info.get("loop") == 0
+    assert path.stat().st_size < 2_000_000
+
+
+def _builder(name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "dev_scripts" / f"{name}.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_screenshot_library_holds_what_the_image_builders_use() -> None:
+    readme, site = _builder("make_readme_assets"), _builder("make_site_assets")
+    needed = {shot for shot, _, _ in readme.TOUR + readme.DESCRIBE} | {"workflow", "survival"}
+    needed |= {f"plot_{shot}" for shot in readme.PLOTS.values()} | {shot for shot, _, _ in site.SHOTS.values()}
+    library = {path.stem for path in (ROOT / "assets" / "screenshots").glob("*.webp")}
+    assert needed <= library, sorted(needed - library)

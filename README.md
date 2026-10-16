@@ -1,17 +1,40 @@
-# CohortStudio
+<h1 align="center">
+  <a href="https://karimelmernissi.github.io/Cohort-Studio/"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KarimELMERNISSI/Cohort-Studio/main/assets/brand/wordmark_dark.png">
+    <img src="assets/brand/wordmark_light.png" alt="CohortStudio" width="380">
+  </picture></a>
+</h1>
 
-[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+<h3 align="center">Clinical cohort data, from raw file to reproducible evidence.</h3>
+
+<p align="center">
+  An open-source, local-first application for observational cohort studies.
+</p>
+
+<p align="center">
+  <a href="#at-a-glance">Features</a> •
+  <a href="#describe-and-visualise-the-data">Plots</a> •
+  <a href="#installation--quick-start">Quickstart</a> •
+  <a href="documentation/14_Full_Tutorial.md">Tutorial</a> •
+  <a href="#complete-documentation-index">Documentation</a> •
+  <a href="https://karimelmernissi.github.io/Cohort-Studio/">Website</a>
+</p>
+
+<p align="center">
+  <img src="assets/readme/tour.webp" width="100%" alt="CohortStudio on the tutorial cohort, in nine steps: the workflow of the Start page; the data quality score; the analysis population with its participant flow; descriptive statistics; a box plot with p-values between groups; the diagnostics of a multiple imputation; survival curves pooled across 10 imputed datasets; a Cox model pooled with Rubin's rules; the Word study dossier.">
+</p>
+
+<div align="center">
+
 [![CI](https://github.com/KarimELMERNISSI/Cohort-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/KarimELMERNISSI/Cohort-Studio/actions/workflows/ci.yml)
-[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65%2B-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![DuckDB Version](https://img.shields.io/badge/DuckDB-1.5%2B-fff?logo=duckdb&logoColor=black)](https://duckdb.org/)
+[![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9.svg)](https://karimelmernissi.github.io/Cohort-Studio/)
 
-> **Clinical cohort data, from raw file to reproducible evidence.**
-> An open-source, local-first application for observational cohort studies: data quality, a toggleable analysis
-> population with its participant flow, multiple imputation pooled with Rubin's rules, guided statistics and survival
-> models, and a Word study dossier that states what every result was computed on.
+</div>
 
 ---
 
@@ -20,6 +43,12 @@
 **CohortStudio** is built for clinical researchers, biostatisticians and health data scientists who work with observational cohorts, registry databases and clinical trial datasets.
 
 Cohort analyses are often spread across ad-hoc Python or R scripts, unversioned spreadsheets and tools that do not record how the data were changed. CohortStudio brings the steps together in one local-first application built on **Python 3.14+** and **Streamlit 1.65+**: every change of the data is recorded in a replayable trace, every analysis runs on the same declared population, and every result states the data, the population and the N it was computed on.
+
+<p align="center">
+  <img src="assets/readme/workflow.webp" width="100%" alt="The workflow map of the Start page: load data, validate, explore and analyse, report and reproduce, with the optional paths to enrich the cohort, learn from your documents and map your variables; ticks mark the steps done on the tutorial cohort.">
+</p>
+
+The Start page draws this workflow: three core steps from a raw file to results, and optional paths that branch off when they help. A tick marks each step done on the current data, and a step to run again after the data changed is flagged.
 
 ### Core Architecture Pillars
 
@@ -46,6 +75,33 @@ Cohort analyses are often spread across ad-hoc Python or R scripts, unversioned 
 | **Knowledge graphs**     | Offline Plotly/NetworkX engine by default; the proprietary yFiles engine is optional                         |
 | **Deployment**           | Local (uv or pip), Docker or Docker Compose; offline with the default graph engine and a local LLM          |
 | **Licence**              | Apache 2.0                                                                                                  |
+
+---
+
+## Describe and Visualise the Data
+
+**Explore > Statistics & correlations** sorts the columns by type and describes them on the analysis population, optionally by group: fill rate, quartiles and normality tests for the quantitative variables, the most frequent values for the qualitative ones, and the correlations between them as a matrix or a network. Every table downloads to Excel.
+
+<p align="center">
+  <img src="assets/readme/describe.webp" width="100%" alt="Explore, Statistics and correlations, on the tutorial cohort in three steps: the columns sorted by type; the descriptive statistics of the quantitative variables with fill rates and normality tests; the correlation matrix.">
+</p>
+
+**Explore > Visualize** draws 14 plot types in four families: distributions (histogram, box, violin), categorical charts (bar, pie, sunburst, icicle, treemap), time series, and relationships (scatter, correlation matrix, clustermap, Sankey, ROC curve). Box and violin plots can mark the pairwise differences between groups with their p-values (Welch t or Mann-Whitney, with a Bonferroni or Benjamini-Hochberg correction), and the clustermap can tag each variable by its p-value between groups of samples. Each figure takes a theme and a palette, colour-blind-safe ones included; it downloads as an SVG image from the chart's toolbar, as an interactive HTML file that opens offline, or with the rows behind it (CSV or Excel). These figures come from the tutorial cohort:
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="assets/readme/plots/box.webp" alt="Box plots of left ventricular ejection fraction for NYHA classes II, III and IV, with brackets giving the Bonferroni-adjusted p-value of each pair."><br><sub><b>Box plot</b> with Bonferroni-adjusted p-values between NYHA classes</sub></td>
+    <td width="50%" align="center"><img src="assets/readme/plots/clustermap.webp" alt="Clustermap of 12 standardised variables over the patients of the analysis population, clustered both ways, with a colour bar for the NYHA class and a strip marking the variables whose Kruskal-Wallis p-value is below 0.05."><br><sub><b>Clustermap</b>: z-scores clustered both ways, NYHA class on top, each variable tagged by its Kruskal-Wallis p-value</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="assets/readme/plots/violin.webp" alt="Violin plots of HbA1c and potassium for patients with and without diabetes, each with the p-value of the difference."><br><sub><b>Violin plots</b> of HbA1c and potassium by diabetes, seaborn theme</sub></td>
+    <td width="50%" align="center"><img src="assets/readme/plots/correlation.webp" alt="Spearman correlation matrix of 13 variables, clustered, with dendrograms: the blood pressures, the two LVEF readings and weight with height form blocks."><br><sub><b>Correlation matrix</b> (Spearman), clustered, with dendrograms</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="assets/readme/plots/scatter.webp" alt="Systolic blood pressure at 6 months against baseline, one colour and one regression line per arm, with box plots of each variable in the margins."><br><sub><b>Scatter plot</b> with a regression line per arm and box plots in the margins, ggplot2 theme</sub></td>
+    <td width="50%" align="center"><img src="assets/readme/plots/sunburst.webp" alt="Sunburst of the patients by arm, then NYHA class, then smoking status."><br><sub><b>Sunburst</b> of arm, NYHA class and smoking status</sub></td>
+  </tr>
+</table>
 
 ---
 
