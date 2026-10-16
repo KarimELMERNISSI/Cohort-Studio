@@ -6,6 +6,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: statistics of a new variable dominated by entry errors (Enrich > Create New Variables)
+
+- The preview statistics of a new variable used every row with the mean and SD only. A few entry errors made
+  them meaningless: on the tutorial cohort, BMI had mean 660 and maximum 276,715 because three heights are
+  entered in metres.
+- The preview now uses the analysis population. It adds the median, quartiles, missing and infinite values
+  (`enrich.formulas.numeric_summary`).
+- It lists the values beyond 3 interquartile ranges from the quartiles, with their source values
+  (`far_outside`). Without ticked criteria it suggests excluding entry errors with the clinical-anomaly criteria.
+  The tutorial's BMI then reads mean 28.6, SD 5.1, range 17.0 to 45.7.
+
 ### Participant flow and study dossier (follow-up programme M3, in progress)
 
 - **Participant flow model** (`core/attrition.py`, STROBE item 13). The flow runs from the records read in the

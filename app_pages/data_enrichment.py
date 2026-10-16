@@ -15,9 +15,12 @@ from rapidfuzz import fuzz
 import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.expressions import safe_format
+from core.population import catalogue
 from enrich.formulas import (
     evaluate_formula_safely,
     extract_constant_value,
+    far_outside,
+    numeric_summary,
     validate_and_extract_columns_ast,
     validate_variable_name,
 )
@@ -976,6 +979,46 @@ def generate_stats(temp_main_data, variable_name):
     return stats_df
   
 
+def render_new_variable_statistics(temp_data, var_name, used_cols):
+    """
+    Statistics of a new variable on the analysis population, robust (median, quartiles) and classical (mean, SD),
+    and the values far outside the others with their source values: a few entry errors (a height in metres, a
+    weight of 0) can move the mean and the SD far from what the median shows.
+    """
+    state = get_state()
+    population = state.population
+    rows, scope = temp_data.index, f"all {len(temp_data):,} rows"
+    if population is not None and population.ok and population.criteria:
+        rows = temp_data.index.intersection(population.included)
+        scope = f"the analysis population ({population.label})"
+    values = temp_data.loc[rows, var_name]
+    st.write(f"Statistics for new variable :blue[{var_name}] on {scope}:")
+    if not pd.api.types.is_numeric_dtype(values):
+        st.dataframe(generate_stats(temp_data.loc[rows], var_name), width='stretch', hide_index=True)
+        return
+    st.dataframe(numeric_summary(values), width='stretch', hide_index=True)
+    extreme, low, high = far_outside(values)
+    if not len(extreme):
+        return
+    numbers = pd.to_numeric(values, errors="coerce")
+    st.warning(
+        f"{len(extreme):,} value(s) of {var_name} lie far outside the others (beyond 3 interquartile ranges from the "
+        f"quartiles: below {low:.4g} or above {high:.4g}). They move the mean and the SD; the median and the quartiles "
+        "show the typical values. Check their source values below: entry errors (for example a height in metres or "
+        "a weight of 0) are best excluded with a clinical-anomaly criterion (Validate).",
+        icon=":material/warning:",
+    )
+    distance = (numbers.loc[extreme] - numbers.median()).abs().sort_values(ascending=False)
+    shown = temp_data.loc[distance.index[:10], [*used_cols, var_name]]
+    st.dataframe(shown.style.format(precision=2), width='stretch')
+    unticked = [c for c in catalogue(state.config) if c.id not in set(state.ticked)]
+    if unticked and not (population is not None and population.criteria):
+        st.caption(
+            "No inclusion or exclusion criterion is ticked: these statistics use every row. Tick the clinical "
+            "anomaly criteria in the sidebar to leave entry errors out of the analyses."
+        )
+
+
 def define_new_variables(main_data):
     """
     Enhanced version of define_new_variables with improved preview and validation.
@@ -1423,9 +1466,6 @@ def define_new_variables(main_data):
             preview_columns = used_cols + [var_name]
             preview_df = temp_data[preview_columns].head()
             
-            # Add statistics for the new variable
-            stats_df = generate_stats(temp_data, var_name)
-        
             # Display preview with source columns
             st.write("First rows with source columns:")
             styled_preview = (preview_df.style
@@ -1436,10 +1476,9 @@ def define_new_variables(main_data):
                                 {'selector': 'td', 'props': [('padding', '8px')]}
                             ]))
             st.dataframe(styled_preview, width='stretch', hide_index=True)
-            
-            # Display statistics
-            st.write(f"Statistics for new variable :blue[{var_name}]:")
-            st.dataframe(stats_df, width='stretch', hide_index=True)
+
+            # Statistics on the rows the analyses use (the variable itself is computed for every row)
+            render_new_variable_statistics(temp_data, var_name, used_cols)
             
             # Add Variable Button
             if st.button("Confirm & Add Variable to Dataset", type="primary"):

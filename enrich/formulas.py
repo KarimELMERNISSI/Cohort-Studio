@@ -355,3 +355,49 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
             f"Error evaluating formula: {e!s}\n"
             f"Make sure your formula uses valid column names and operators (+, -, *, /, etc.)."
         ), dataset
+
+
+def numeric_summary(values: pd.Series) -> pd.DataFrame:
+    """
+    Classical and robust statistics of a numeric variable: N, missing, mean, SD, median, quartiles, min and max.
+
+    The median and the quartiles are not moved by a few extreme values (entry errors), the mean and the SD are;
+    infinite values (a division by zero) are counted apart and left out of the other statistics.
+    """
+    numbers = pd.to_numeric(values, errors="coerce").astype(float)
+    infinite = np.isinf(numbers)
+    finite = numbers[~infinite].dropna()
+    rows: list[tuple[str, str]] = [
+        ("N (values)", f"{len(finite):,}"),
+        ("Missing", f"{int(numbers.isna().sum()):,}"),
+    ]
+    if infinite.any():
+        rows.append(("Infinite (division by zero)", f"{int(infinite.sum()):,}"))
+    if len(finite):
+        q1, median, q3 = finite.quantile([0.25, 0.5, 0.75])
+        rows += [
+            ("Mean", f"{finite.mean():.4g}"),
+            ("SD", f"{finite.std():.4g}" if len(finite) > 1 else "n/a"),
+            ("Median", f"{median:.4g}"),
+            ("Quartiles (Q1 to Q3)", f"{q1:.4g} to {q3:.4g}"),
+            ("Min", f"{finite.min():.4g}"),
+            ("Max", f"{finite.max():.4g}"),
+        ]
+    return pd.DataFrame(rows, columns=["Statistic", "Value"])
+
+
+def far_outside(values: pd.Series, k: float = 3.0) -> tuple[pd.Index, float | None, float | None]:
+    """
+    Rows whose value lies beyond Tukey's far-out fences, Q1 - k IQR and Q3 + k IQR (k = 3), with the fences:
+    values that are probably entry errors (a height in metres among centimetres, a weight of 0) rather than
+    the tail of the distribution. Infinite values are always included.
+    """
+    numbers = pd.to_numeric(values, errors="coerce").astype(float)
+    finite = numbers[np.isfinite(numbers)]
+    if len(finite) < 4:
+        return pd.Index([]), None, None
+    q1, q3 = finite.quantile([0.25, 0.75])
+    iqr = q3 - q1
+    low, high = q1 - k * iqr, q3 + k * iqr
+    outside = np.isinf(numbers) | (numbers < low) | (numbers > high)
+    return numbers.index[outside.to_numpy()], float(low), float(high)
