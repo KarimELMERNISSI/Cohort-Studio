@@ -291,7 +291,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         ):
             return False, (
                 "Cloud providers require explicit confirmation that data may leave this server. "
-                "Tick the confirmation in the RAG & AI Configuration panel first."
+                "Confirm the data-sharing notice in Settings > AI engine first."
             )
         if provider_clean in CLOUD_PROVIDERS and not effective_key:
             return False, f"{provider_clean.capitalize()} API Key is required."

@@ -120,6 +120,13 @@ class TestExportUtils:
         assert "cdn.plot.ly" in html_str or "plotly.js" in html_str
         assert "Clinical Biomarker Trend" in html_str
 
+    def test_fig_to_html_str_can_embed_plotly_for_offline_use(self, sample_figure: go.Figure) -> None:
+        """The Visualize download embeds Plotly.js: the file opens without an internet connection."""
+        html_str = fig_to_html_str(sample_figure, include_plotlyjs=True)
+        assert "Clinical Biomarker Trend" in html_str
+        assert 'src="https://cdn.plot.ly' not in html_str
+        assert len(html_str) > 1_000_000  # the library itself is in the file
+
     def test_fig_to_html_str_handles_invalid_object(self) -> None:
         """Invalid figure object fails gracefully returning comment string."""
         html_str = fig_to_html_str("not_a_figure")

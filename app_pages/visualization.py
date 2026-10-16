@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -1287,13 +1289,14 @@ def app():
                     st.caption("Download publication-quality figures, standalone interactive graphics, or underlying cohort data slices.")
                     exp_col1, exp_col2, exp_col3, exp_col4 = st.columns(4)
                     with exp_col1:
-                        html_data = eu.fig_to_html_str(fig)
                         st.download_button(
                             label="Interactive HTML (.html)",
-                            data=html_data,
+                            # built on click, with Plotly.js embedded (about 4.5 MB) so that the file opens offline
+                            data=functools.partial(eu.fig_to_html_str, fig, include_plotlyjs=True),
                             file_name=f"{plot_filename}.html",
                             mime="text/html",
-                            help="Self-contained interactive figure with full zoom, hover, and pan capabilities.",
+                            help="Self-contained interactive figure (zoom, hover, pan) that opens without an internet connection.",
+                            on_click="ignore",
                             key="btn_dl_fig_html"
                         )
                     with exp_col2:

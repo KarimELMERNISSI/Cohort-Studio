@@ -68,6 +68,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
   review.
 
+### Fixed: PCA without the `ml` group, offline HTML figures, page names in two messages
+
+- PCA on Enrich runs with `prince`, from the `ml` group, yet it was offered without that group and then failed. It is
+  now offered only when `prince` is installed, like FAMD.
+- The interactive HTML download of Visualize was described as self-contained but loaded Plotly.js from the internet.
+  It now embeds Plotly.js, so the file opens offline (about 4.5 MB). The file is built only when the button is
+  clicked, no longer at every rerun of the page.
+- Two messages named pages that no longer exist ("RAG & AI Configuration", "Data Insight"). They now point to
+  Settings > AI engine.
+
 ### Fixed: the study dossier failed with a group comparison in it (Reproduce > Study dossier)
 
 - With a group comparison of Analyze > Hypothesis tests & epidemiology added to the dossier, the page and the Word

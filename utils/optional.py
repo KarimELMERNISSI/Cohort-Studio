@@ -24,6 +24,7 @@ EXTRAS: dict[str, tuple[str, ...]] = {
 METHOD_MODULES: dict[str, tuple[str, str]] = {
     "MissForest": ("lightgbm", "ml"),
     "UMAP": ("umap", "ml"),
+    "PCA": ("prince", "ml"),  # Enrich runs PCA with prince, for its explained-variance and contribution tables
     "FAMD": ("prince", "ml"),
 }
 

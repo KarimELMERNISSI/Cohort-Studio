@@ -60,16 +60,17 @@ def to_csv_bytes(df: pd.DataFrame, index: bool = False) -> bytes:
     return df.to_csv(index=index).encode("utf-8")
 
 
-def fig_to_html_str(fig: Any, include_plotlyjs: str = "cdn") -> str:
+def fig_to_html_str(fig: Any, include_plotlyjs: str | bool = "cdn") -> str:
     """
-    Exports a Plotly figure object into a standalone interactive HTML string.
-    
+    Exports a Plotly figure object into an interactive HTML page.
+
     Args:
         fig: Plotly Graph Object figure.
-        include_plotlyjs: Strategy for including Plotly JavaScript library ('cdn' or True).
-        
+        include_plotlyjs: True embeds Plotly.js (a self-contained file of about 4.5 MB that opens offline);
+            'cdn' links it from the internet (a small file that needs a connection to open).
+
     Returns:
-        str: Standalone HTML markup containing the interactive figure.
+        str: HTML markup containing the interactive figure.
     """
     try:
         return fig.to_html(include_plotlyjs=include_plotlyjs, full_html=True)

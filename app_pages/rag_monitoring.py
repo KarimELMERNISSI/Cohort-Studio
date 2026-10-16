@@ -314,7 +314,7 @@ def render_run_evaluation(evaluator):
         rag_available = rag.initialized
     
     if not rag_available:
-        st.warning("RAG system not initialized. Please initialize it first from the Data Insight page.")
+        st.warning("The AI engine is not initialised. Initialise it in Settings > AI engine first.")
         
         # Demo mode option
         st.info("You can run a demo evaluation without the full RAG system to test the monitoring pipeline.")
