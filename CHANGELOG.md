@@ -18,8 +18,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Packages installed only on other platforms (the browser) are left out.
 - The copyleft licences among the shipped packages are named. They are three weak, file-level MPL-2.0 licences:
   `certifi`, `orjson` and `tqdm`. The analysis of the proprietary yFiles engine is kept.
-- `tests/test_license_inventory.py` fails when the lock file lists a package or a version that the inventory
-  does not.
+- `tests/test_license_inventory.py` fails when the lock file lists a package that the inventory does not, so a
+  new dependency gets its licence reviewed. A version bump alone, such as a Dependabot update, does not make it
+  fail.
 
 ### Fixed: the Enrich draft banner was at the bottom of the page (Data > Enrich)
 

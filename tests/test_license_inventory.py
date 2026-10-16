@@ -19,14 +19,12 @@ def _inventory():
     return module
 
 
-def test_the_licence_inventory_lists_every_locked_package_and_version() -> None:
+def test_the_licence_inventory_lists_every_locked_package() -> None:
+    """A new dependency must have its licence reviewed; a version bump (Dependabot) need not."""
     groups = _inventory().package_groups()
     text = DOCUMENT.read_text(encoding="utf-8")
     missing = [
-        f"{name} {version}"
-        for packages in groups.values()
-        for name, version in packages
-        if f"| {name} | {version} |" not in text
+        name for packages in groups.values() for name, _ in packages if f"| {name} | " not in text
     ]
     assert not missing, (
         f"{len(missing)} package(s) not in the inventory, e.g. {missing[:5]}: "
