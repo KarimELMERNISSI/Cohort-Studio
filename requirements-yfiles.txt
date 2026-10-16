@@ -171,7 +171,7 @@ matplotlib==3.11.2
     #   cohortstudio
     #   lifelines
     #   seaborn
-narwhals==2.26.0
+narwhals==2.27.1
     # via
     #   altair
     #   formulaic
