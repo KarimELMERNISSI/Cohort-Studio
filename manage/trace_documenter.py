@@ -212,7 +212,9 @@ class TraceDocumenter:
                 else:
                     key_cell[1].text = ", ".join([str(x) for x in v])
             elif isinstance(v, dict):
-                 key_cell[1].text = json.dumps(v, indent=2)
+                text = json.dumps(v, indent=2, default=str)
+                # nested row-id ranges can be long: the trace keeps them, the report summarises them
+                key_cell[1].text = text if len(text) <= 1500 else f"{text[:1500]}\n... ({len(text):,} characters in the trace)"
             else:
                 key_cell[1].text = str(v)
 

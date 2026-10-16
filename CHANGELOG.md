@@ -24,6 +24,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     imputed datasets pooled), and lists the results.
   - A result computed on other data or another population is marked stale.
   - The observed group comparison is now kept in the result store too, so that it can be added.
+- **Word study dossier** (`manage/dossier.py`, `manage/report_tables.py`), downloaded from Reproduce > Study
+  dossier. Its sections:
+  1. Provenance: dataset, source file and hash, parse options, data fingerprint, trace with its integrity,
+     software versions.
+  2. Analysis population: the participant flow figure, the exclusions with the criteria behind them, and every
+     criterion's definition.
+  3. Data handling: the recorded steps that changed the data, with their formulas.
+  4. Missing data: missing values per variable, values filled by single imputation, and the multiple imputation
+     with its settings, methods per variable, status and methods paragraph.
+  5. Results: each result with its settings, what it was computed on, its tables and, for survival analyses, the
+     Kaplan-Meier figure.
+  6. References: those of the methods used, plus STROBE and, with multiple imputation, Rubin, Barnard-Rubin,
+     van Buuren, White and Sterne.
+  - Results computed on other data or another population are left out and listed. They can be kept instead,
+    marked as not current.
+  - The dossier says it supports STROBE item 13 and the Sterne et al. (2009) items, without claiming compliance.
+- The Word trace report summarises long nested parameters (row-id ranges) instead of printing them whole.
 
 ### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
