@@ -6,7 +6,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
-### Packaging, deployment and CI (follow-up programme M4, in progress)
+### Packaging, deployment and CI (follow-up programme M4, awaiting the owner's review)
 
 - **Optional dependency groups** (`pyproject.toml`). The statistics engine, the data pipeline and the analysis
   pages need none of them; `uv sync --extra all` installs everything (the Docker image, `requirements.txt`).
@@ -39,6 +39,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - `run_docker.bat` mounts `./data` and `./config`, reads `.env` and shows the log with the setup token.
   - The start scripts use Docker Compose v2.
   - The optional Qdrant server is pinned to `qdrant/qdrant:v1.19.2`, the client's release.
+- Documentation: the README and the site describe the optional groups, Docker Compose with the setup token and
+  the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
+  review.
 
 ### Fixed: statistics of a new variable dominated by entry errors (Enrich > Create New Variables)
 

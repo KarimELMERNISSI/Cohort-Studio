@@ -91,7 +91,7 @@
             <div class="terminal-dot"></div>
           </div>
           <span class="terminal-title">bash &middot; quickstart with uv</span>
-          <button class="copy-btn" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git && cd Cohort-Studio && uv sync && uv run streamlit run main.py">
+          <button class="copy-btn" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git && cd Cohort-Studio && uv sync --extra all && uv run streamlit run main.py">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -102,7 +102,7 @@
         <div class="terminal-content">
           <div>
             <span class="terminal-prompt">$</span>
-            <span>git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git &amp;&amp; uv sync</span>
+            <span>git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git &amp;&amp; uv sync --extra all</span>
           </div>
         </div>
       </div>
@@ -1598,7 +1598,7 @@ report = TraceDocumenter(trace_data).generate_report()  <span class="token-cm">#
           <div id="deploy-uv" class="deploy-snippet active">
             <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
 cd Cohort-Studio
-uv sync
+uv sync --extra all
 uv run streamlit run main.py">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               Copy
@@ -1607,8 +1607,9 @@ uv run streamlit run main.py">
 git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
 cd Cohort-Studio
 
-<span class="token-cm"># 2. Sync virtual environment and lockfile</span>
-uv sync
+<span class="token-cm"># 2. Sync the locked environment (every optional group: AI engine, ML methods, survival</span>
+<span class="token-cm">#    diagnostics; plain `uv sync` installs the core application only)</span>
+uv sync --extra all
 
 <span class="token-cm"># 3. Launch the platform</span>
 uv run streamlit run main.py</code></pre>
@@ -1641,7 +1642,8 @@ streamlit run main.py</code></pre>
           <!-- Snippet: docker -->
           <div id="deploy-docker" class="deploy-snippet">
             <button class="copy-btn" style="position: absolute; top: 16px; right: 16px;" data-clipboard-text="docker build -t cohortstudio .
-docker run -d -p 8501:8501 -v $(pwd)/data:/app/data --name cohortstudio cohortstudio">
+docker run -d -p 8501:8501 -v $(pwd)/data:/app/data --name cohortstudio cohortstudio
+docker logs cohortstudio">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
               Copy
             </button>
@@ -1652,8 +1654,11 @@ docker build -t cohortstudio .
 docker run -d \
   -p 8501:8501 \
   -v $(pwd)/data:/app/data \
-  --name cohort-platform \
-  cohortstudio</code></pre>
+  --name cohortstudio \
+  cohortstudio
+
+<span class="token-cm"># First start: the one-time setup token for the administrator</span>
+docker logs cohortstudio</code></pre>
           </div>
 
           <!-- Snippet: compose -->
@@ -1665,7 +1670,7 @@ docker run -d \
             <pre><code><span class="token-cm"># Start services in detached mode</span>
 docker compose up -d
 
-<span class="token-cm"># Monitor running container logs</span>
+<span class="token-cm"># First start: the one-time setup token for the administrator; then the running logs</span>
 docker compose logs -f</code></pre>
           </div>
         </div>

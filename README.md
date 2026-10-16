@@ -165,12 +165,20 @@ Traditional cohort data workflows often oscillate between fragmented ad-hoc Pyth
 git clone https://github.com/KarimELMERNISSI/Cohort-Studio.git
 cd Cohort-Studio
 
-# Sync virtual environment and dependencies
+# Sync the virtual environment: the core application (statistics, data pipeline, analysis pages)
 uv sync
+# ...plus the optional groups you use, or all of them:
+#   ai        LLM connectors, document library and chat, vector databases (LanceDB, Qdrant)
+#   ml        MissForest imputation (LightGBM), UMAP, FAMD
+#   survival  proportional-hazards test and concordance of the Cox model (lifelines)
+uv sync --extra all
 
 # Run the application
 uv run streamlit run main.py
 ```
+
+Without an optional group the application still runs: the methods that need it are not offered, and the page says
+which group to install.
 
 ### Option B: Standard Python Virtual Environment
 
@@ -186,7 +194,7 @@ python -m venv .venv
 # On Linux/macOS:
 source .venv/bin/activate
 
-# Install dependencies
+# Install dependencies (requirements.txt holds every optional group)
 pip install -r requirements.txt
 
 # Run the application
@@ -196,23 +204,23 @@ streamlit run main.py
 ### Option C: Containerized Deployment (Docker)
 
 ```bash
-# Build the production image
-docker build -t cohortstudio:latest .
+# Build and start (Docker Compose v2); data, accounts and traces live in ./data
+docker compose up -d --build
 
-# Run container with mounted local volume
-docker run -d \
-  -p 8501:8501 \
-  -v ${PWD}/data:/app/data \
-  -e GOOGLE_API_KEY="your-gemini-key" \
-  --name cohort-platform \
-  cohortstudio:latest
+# First start: the log shows a one-time setup token; the login page asks for it to create the administrator
+docker compose logs cohortstudio
 ```
 
-Using Docker Compose:
+Without Compose:
 
 ```bash
-docker compose up -d
+docker build -t cohortstudio:latest .
+docker run -d -p 8501:8501 -v ${PWD}/data:/app/data --env-file .env --name cohortstudio cohortstudio:latest
+docker logs cohortstudio   # the one-time setup token
 ```
+
+The image installs every optional group. CI builds it on every push, starts a fresh container and checks its health
+endpoint and the first-run setup.
 
 ---
 
@@ -242,6 +250,7 @@ ANTHROPIC_API_KEY=
 
 - Accounts created from the sign-in page are **pending** until an administrator activates them. The username `admin` receives no special treatment.
 - Bootstrap the first administrator with `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD` (or `CMP_ADMIN_PASSWORD_FILE`), or run `python manage_users.py create-admin <username>` (the password is prompted, never passed as an argument).
+- Without them, the first start writes a **one-time setup token** to the server log, and the login page creates the administrator with it. Only a hash of the token is stored; it stops working once used. `python manage_users.py setup-token` issues a new one.
 - `python manage_users.py list | activate | deactivate | reset-password <username>` covers day-to-day administration.
 
 ---
@@ -251,8 +260,8 @@ ANTHROPIC_API_KEY=
 The automated suite covers the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, DuckDB persistence, transformation lineage and replay, the graph connector, the RAG connectors, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite with a coverage floor on every push:
 
 ```bash
-# Install the development tools (pytest, ruff, pyright) once
-uv sync --extra dev --extra survival
+# Install the development tools (pytest, ruff, pyright) and every optional group once
+uv sync --extra dev --extra all
 
 # Run the complete test suite
 uv run pytest -v
@@ -262,10 +271,13 @@ uv run pytest --cov=. --cov-report=term-missing
 ```
 
 ```text
-551 passed, 1 deselected (live-provider integration test) in about 5 minutes
-Line coverage about 58 % of the non-test code (CI floor 55 %), with per-package floors in CI:
-biostats and core at least 90 %, graph 91 %, ingest 87 %, ui 75 %; ruff and pyright (scoped) clean
+776 passed, 2 deselected (live-provider integration test, slow simulations) in about 6 minutes
+Line coverage about 66 % of the non-test code (CI floor 63 %), with per-package floors in CI:
+biostats and core 92 %, graph 91 %, ingest 87 %, ui 81 %, explore 74 %, manage 61 %, enrich 56 %
 ```
+
+CI also runs the suite in an environment without the optional groups (the AI tests are skipped), builds the Docker
+image and checks a fresh container, and runs the statistical simulation suites (`pytest -m slow`) every week.
 
 | Test Module                                                                                                      | Coverage Scope                                                                                                                                                                                                                          | Status     |
 | :--------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------- |
