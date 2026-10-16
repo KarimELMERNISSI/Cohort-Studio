@@ -199,3 +199,39 @@ def test_imputed_values_from_another_population_are_flagged_on_analysis_pages(
     assert not at.exception, [str(e.value) for e in at.exception]
     flagged = any("fitted on other rows" in w.value for w in at.warning)
     assert flagged is untick
+
+
+def _enrich_page_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        state.set_dataset(
+            pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
+        )
+        frame = state.working_frame()
+        state.stage(
+            frame.assign(b=frame["a"] * 2),
+            "variable_computation",
+            {"variable_name": "b", "formula": "a * 2"},
+            "Computed new variable: b",
+        )
+    from app_pages.data_enrichment import app
+
+    app()
+
+
+def test_the_draft_banner_is_at_the_top_of_the_enrich_page(data_root: Path) -> None:
+    """It used to be rendered after the tabs, so it appeared at the bottom of the page, under every tab."""
+    at = AppTest.from_function(_enrich_page_script, default_timeout=180)
+    at.session_state["username"] = "draft_top"
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    first, second = list(at.main.children.values())[:2]
+    assert "draft_apply" in [b.key for b in first.button]  # Apply to the dataset, above the tabs
+    assert second.type == "tab_container"

@@ -2160,14 +2160,16 @@ def app():
 
     # Trace replay and reports live on the Reproduce page (single replay engine, audit E10).
 
+    # The Enrich draft banner sits above the tabs. It is filled at the end of the run, so that it also lists the
+    # changes staged by this run (rendered after the tabs, it used to appear at the bottom of the page).
+    draft_slot = st.container()
+
     # Main navigation tabs
     main_tab, impute_tab, define_var_tab = st.tabs([
     "Import External Data",
     "Handle Missing Data",
     "Create New Variables"
     ])
-
-    render_draft_banner()
     # 1. Add External Data
     with main_tab:
         with st.expander("Upload External Data", expanded=True):
@@ -2209,7 +2211,8 @@ def app():
                     enrichment_file_path=input_file
                 )
                 if enriched_df is not None:
-                    st.success("Enrichment added to the Enrich draft.")
+                    st.success("Enrichment added to the Enrich draft: apply the draft (top of the page) to use it in the "
+                               "analyses.")
             else:
                 st.warning("Please upload both datasets first.")
 
@@ -2583,3 +2586,6 @@ def app():
                 #         st.success("Dataset saved and ready for further analysis!")
             else:
                 no_dataset()
+
+    with draft_slot:
+        render_draft_banner()

@@ -6,6 +6,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: the Enrich draft banner was at the bottom of the page (Data > Enrich)
+
+- The banner with **Apply to the dataset** was drawn after the tabs, so it appeared under all their content,
+  while the messages said to apply the draft "at the top of the page".
+- It is now above the tabs. It is filled at the end of each run, so it also lists the change just added.
+
 ### Fixed: a saved Variable map version needed two loads to show its formulas (Knowledge > Variable map)
 
 - **Load vN** on the page without a taxonomy read only the taxonomy file. The formulas, the links between the
@@ -17,6 +23,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 ### Legacy Excel workbooks (`.xls`)
 
 - `xlrd` joins the core dependencies: `.xls` files import like `.xlsx` (sheets, merges, decimals, accented text).
+  They used to be accepted, then fail on the missing package.
 - Every upload of the application (Import, Enrich, the comparison on Validate, the missing files of a replay)
   accepts the same file types.
 
@@ -82,15 +89,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
   review.
 
-### Fixed: wording in the application, a legacy Excel error and a Student's t in the MAR check
+### Fixed: wording in the application and a Student's t in the MAR check
 
 Found while correcting the documentation:
 
 - **Validate > Data quality dashboard**: the MAR check of one variable used Student's t-test under "Force
   Parametric". It now uses Welch's t-test, like the dependency scan and the rest of the application.
-- **Import**: legacy Excel files (`.xls`) were accepted, then failed on a missing package. They are now read like
-  `.xlsx`: `xlrd` is a dependency. The other uploads (Enrich, the comparison on Validate, the missing files of
-  a replay) accept the same file types as Import.
 - **Visualize**: the test choices for the significance brackets name what runs, pairwise Welch t-tests or pairwise
   Mann-Whitney U tests. The former labels named ANOVA and Kruskal-Wallis, which never ran there.
 - **Explore > Statistics & correlations**: the "Optimization Settings" of the benchmark are removed. Nothing used
