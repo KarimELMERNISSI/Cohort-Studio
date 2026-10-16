@@ -157,7 +157,7 @@ class RenameColumnsComponent:
                                 except Exception as e:
                                     st.error(f"Error parsing suggestions: {e}")
             else:
-                st.info("RAG System not initialized. Please configure it in the sidebar.")
+                st.info("The AI engine is not initialised. Initialise it in Settings > AI engine.")
 
         # Variable Taxonomy Section
         # Apply AI suggestions if available
@@ -753,21 +753,7 @@ def run_benchmark(df, analyzer):
         else:
             st.info("Pandas is faster or comparable for Correlation Matrix on this dataset.")
             
-        st.divider()
-        st.subheader("Optimization Settings")
-        st.write("Select the preferred engine for future calculations based on the benchmark results:")
-        
-        col_opt1, col_opt2 = st.columns(2)
-        with col_opt1:
-            st.session_state['pref_stats_engine'] = st.radio("Engine for Basic Statistics", ["Pandas", "DuckDB"], index=1 if time_dd_stats < time_pd_stats else 0, horizontal=True)
-            st.session_state['pref_corr_engine'] = st.radio("Engine for Correlation Matrix", ["Pandas", "DuckDB"], index=1 if time_dd_corr < time_pd_corr else 0, horizontal=True)
-        
-        with col_opt2:
-            st.session_state['pref_cat_engine'] = st.radio("Engine for Categorical Stats", ["Pandas", "DuckDB"], index=1 if time_dd_cat < time_pd_cat else 0, horizontal=True)
-            if analyzer.categorical_cols and analyzer.numeric_cols:
-                st.session_state['pref_group_engine'] = st.radio("Engine for Grouped Stats", ["Pandas", "DuckDB"], index=1 if time_dd_group < time_pd_group else 0, horizontal=True)
-        
-        st.success("Preferences saved for this session.")
+        st.caption("For information: the statistics of the application are computed with pandas.")
 
 
 def app():

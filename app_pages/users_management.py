@@ -1,5 +1,5 @@
 """
-Users Management Page - Admin Only
+Users page (Admin > Users), for administrators only
 
 This page allows administrators to:
 - View all registered users with their status
@@ -15,7 +15,7 @@ from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role
 
 
 def app():
-    """Render the Users Management page."""
+    """Render the Users page."""
     
     # Double-check admin access (should already be filtered in main.py)
     username = st.session_state.get('username')

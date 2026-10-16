@@ -1,4 +1,4 @@
-"""Visualize page: distributions, group comparisons, time series, ROC, Bland-Altman."""
+"""Visualize page: distributions, categorical charts, time series, relationships (correlations, clustermap, ROC)."""
 
 from app_pages.visualization import app
 from ui.components import page_header

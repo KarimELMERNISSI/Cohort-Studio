@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import functools
+import importlib.util
 import io
 import logging
 import os
@@ -66,12 +67,22 @@ class LoadResult:
     report: ParseReport
 
 
+def _xls_reader_installed() -> bool:
+    """Legacy ``.xls`` workbooks are read by xlrd, which is not a dependency of the application."""
+    return importlib.util.find_spec("xlrd") is not None
+
+
 def file_kind(filename: str) -> str:
     """``csv`` | ``excel`` | ``parquet`` from the file extension; raises for anything else."""
     ext = os.path.splitext(filename or "")[1].lower()
     if ext in CSV_EXTENSIONS:
         return "csv"
     if ext in EXCEL_EXTENSIONS:
+        if ext == ".xls" and not _xls_reader_installed():
+            raise ValueError(
+                "Legacy Excel files (.xls) need the xlrd package, which is not installed. Open the file in Excel "
+                "or LibreOffice, save it as .xlsx and import it again."
+            )
         return "excel"
     if ext in PARQUET_EXTENSIONS:
         return "parquet"

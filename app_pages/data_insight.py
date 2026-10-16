@@ -147,7 +147,7 @@ def load_and_repair_taxonomy(target_path, rag_manager=None):
 
 def app():
     """
-    Main application function for the Data Insight (Knowledge Graph) page.
+    Main application function of the Variable map page (Knowledge > Variable map).
 
     Handles:
     1. Loading and saving taxonomy versions.

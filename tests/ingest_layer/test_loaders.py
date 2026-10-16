@@ -113,6 +113,19 @@ def test_parquet_and_path_loading(tmp_path: Path) -> None:
         file_kind("report.docx")
 
 
+def test_a_legacy_xls_file_without_xlrd_is_refused_with_what_to_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ingest.loaders as loaders
+
+    monkeypatch.setattr(loaders, "_xls_reader_installed", lambda: False)
+    with pytest.raises(ValueError, match=r"save it as \.xlsx"):
+        file_kind("old_export.xls")
+    assert file_kind("export.xlsx") == "excel"
+    monkeypatch.setattr(loaders, "_xls_reader_installed", lambda: True)
+    assert file_kind("old_export.xls") == "excel"
+
+
 def test_sample_cohort_loads_with_documented_properties() -> None:
     path = Path(__file__).resolve().parents[2] / "assets" / "sample_cohort.csv"
     result = read_path(str(path), ParseOptions(dayfirst=True))

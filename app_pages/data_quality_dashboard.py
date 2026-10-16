@@ -536,7 +536,7 @@ def render_dashboard(df, config):
                                 # Determine manual test
                                 manual_test = "Auto-Detect"
                                 if test_pref == "Force Parametric":
-                                    manual_test = "Student's t-test" if pred in numeric_cols else "Chi-Square"
+                                    manual_test = "Welch's t-test" if pred in numeric_cols else "Chi-Square"
                                 elif test_pref == "Force Non-Parametric":
                                     manual_test = "Mann-Whitney U" if pred in numeric_cols else "Chi-Square"
                                     

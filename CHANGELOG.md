@@ -68,6 +68,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the CI jobs, with the current test and coverage numbers. The audit report marks M4 done, pending the owner's
   review.
 
+### Fixed: wording in the application, a legacy Excel error and a Student's t in the MAR check
+
+Found while correcting the documentation:
+
+- **Validate > Data quality dashboard**: the MAR check of one variable used Student's t-test under "Force
+  Parametric". It now uses Welch's t-test, like the dependency scan and the rest of the application.
+- **Import**: a legacy Excel file (`.xls`) was accepted, then failed with a message about a missing package
+  (`xlrd`, not a dependency). It is now refused at once, with what to do (save it as `.xlsx`).
+- **Visualize**: the test choices for the significance brackets name what runs, pairwise Welch t-tests or pairwise
+  Mann-Whitney U tests. The former labels named ANOVA and Kruskal-Wallis, which never ran there.
+- **Explore > Statistics & correlations**: the "Optimization Settings" of the benchmark are removed. Nothing used
+  them, and their "Preferences saved" message was misleading. The benchmark itself stays, for information.
+- **Enrich > Clustering**: the methods note says that the selected columns must be complete. It used to say that
+  incomplete rows were excluded, while the page stops on a missing value.
+- Two more messages, on Start and Enrich, sent users to the sidebar or "the Home page" to set up the AI engine.
+  They now point to Settings > AI engine. Module docstrings use the current page names.
+
 ### Fixed: PCA without the `ml` group, offline HTML figures, page names in two messages
 
 - PCA on Enrich runs with `prince`, from the `ml` group, yet it was offered without that group and then failed. It is

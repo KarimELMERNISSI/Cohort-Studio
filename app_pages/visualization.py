@@ -355,7 +355,7 @@ def app():
                         with col_test:
                             test_type = st.selectbox(
                                 "Test Selection Strategy",
-                                ["Auto-Detect", "Force Parametric (T-test/ANOVA)", "Force Non-Parametric (Mann-Whitney/Kruskal)"],
+                                ["Auto-Detect", "Force Parametric (pairwise Welch t-tests)", "Force Non-Parametric (pairwise Mann-Whitney U)"],
                                 key="box_test_type"
                             )
                         with col_corr:
@@ -480,7 +480,7 @@ def app():
                         with col_test:
                             test_type = st.selectbox(
                                 "Test Selection Strategy",
-                                ["Auto-Detect", "Force Parametric (T-test/ANOVA)", "Force Non-Parametric (Mann-Whitney/Kruskal)"],
+                                ["Auto-Detect", "Force Parametric (pairwise Welch t-tests)", "Force Non-Parametric (pairwise Mann-Whitney U)"],
                                 key="violin_test_type"
                             )
                         with col_corr:

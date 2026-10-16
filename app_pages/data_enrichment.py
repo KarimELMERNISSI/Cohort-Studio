@@ -1339,7 +1339,7 @@ def define_new_variables(main_data):
                 st.markdown("---")
 
         else:
-            st.info("RAG System not initialized. Please configure it in the Home page sidebar.")
+            st.info("The AI engine is not initialised. Initialise it in Settings > AI engine.")
     
     # Get column names
     column_names = main_data.columns.tolist()
@@ -1867,7 +1867,7 @@ def compute_transformations(dataframe):
         st.info("""
         **Methodological Note:**
         - **Standardization**: Input variables will be automatically standardized (Z-score) to ensure equal weight in distance calculations.
-        - **Missing Values**: Rows with ANY missing values in selected columns will be excluded from the analysis (Complete Case Analysis). Ensure you have imputed missing data beforehand if needed.
+        - **Missing Values**: The selected columns must be complete: clustering stops when one of them has a missing value. Impute the missing values first, or choose complete columns.
         """)
 
     # Apply Transformation Button
@@ -2134,7 +2134,7 @@ def extract_column_stats(df, columns):
 # TBD: Rework the cat of missingforest based on set(binary + cat)
 def app():
     """
-    Main application function for the Data Enrichment page.
+    Main application function of the Enrich page (Data > Enrich).
     
     Handles:
     1. External Data Upload and Enrichment
