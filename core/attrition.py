@@ -82,6 +82,7 @@ class AnalysisCount:
     n_analysed: int | None = None
     not_used: str = "missing values"
     imputations: int | None = None  # m when the analysis pooled multiply imputed datasets
+    note: str = ""  # e.g. the variables and options of the analysis
 
 
 @dataclass(frozen=True)
@@ -311,6 +312,8 @@ def participant_flow(
                 if dropped > 0
                 else ("every row of the population",)
             )
+        if a.note:
+            detail = (a.note, *detail)
         analysis_boxes.append(FlowBox(f"analysis:{j}", a.label, int(n), ANALYSIS, details=detail))
 
     return ParticipantFlow(tuple(main), tuple(exits), tuple(analysis_boxes), tuple(notes))

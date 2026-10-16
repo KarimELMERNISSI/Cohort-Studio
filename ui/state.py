@@ -106,6 +106,7 @@ DERIVED_KEYS: tuple[str, ...] = (
     "clustering_results",
     "doc_coverage_results",
     "_results",  # the result store (ui/results.py): stamped results go stale on change, cleared on a swap
+    "_report",  # the results added to the study dossier (ui/results.py), stale like the store
     "_mi",  # the multiple imputation (biostats.mi.binding.StoredMI); its status follows the rows
 )
 # Kept when the same dataset changes (they follow the trace, or describe the check rather than the data).
@@ -124,6 +125,7 @@ KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
         "inclusion_data_applied",
         "outliers_data_applied",
         "_results",
+        "_report",
         "_mi",
     }
 )

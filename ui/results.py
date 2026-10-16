@@ -6,13 +6,15 @@ data fingerprint, the analysis population, a hash of the analysis settings, the 
 the number of rows analysed. :func:`recall` returns the result only when all of them still hold: after a
 change of the data, of the ticked criteria or of the settings, the old numbers are not shown as current;
 a notice says why and the analysis is run again. :func:`provenance` prints the stamp under the result,
-with a caveat when values filled by a single imputation were analysed (``columns``).
+with a caveat when values filled by a single imputation were analysed (``columns``), and a button that adds
+the result to the study dossier (follow-up programme M3): :func:`report_items` lists them.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +23,7 @@ from typing import Any
 import streamlit as st
 
 RESULTS_KEY = "_results"
+REPORT_KEY = "_report"  # the results added to the study dossier
 CURRENT, STALE_DATA, STALE_POPULATION, STALE_CONFIG, MISSING = (
     "current",
     "stale_data",
@@ -69,6 +72,44 @@ class ResultStamp:
 class StoredResult:
     value: Any
     stamp: ResultStamp
+    config: Any = None  # the settings, kept to describe the result in the study dossier
+
+
+@dataclass(frozen=True)
+class ReportItem:
+    """A result added to the study dossier, with the stamp of what it was computed on."""
+
+    id: str
+    key: str
+    title: str
+    settings: str
+    value: Any
+    stamp: ResultStamp
+    added_at: str
+
+
+RESULT_TITLES: dict[str, str] = {
+    "survival": "Kaplan-Meier survival and log-rank test",
+    "survival_mi": "Kaplan-Meier survival and log-rank test, pooled",
+    "cox": "Cox proportional-hazards model",
+    "cox_mi": "Cox proportional-hazards model, pooled",
+    "logistic": "Logistic regression",
+    "logistic_mi": "Logistic regression, pooled",
+    "count": "Count regression",
+    "count_mi": "Count regression, pooled",
+    "univariate": "Group comparison",
+    "univariate_mi": "Group comparison, pooled",
+    "ancova": "ANCOVA",
+    "ancova_mi": "ANCOVA, pooled",
+    "paired": "Paired test",
+    "paired_mi": "Paired t-test, pooled",
+    "one_sample": "One-sample test",
+    "one_sample_mi": "One-sample t-test, pooled",
+    "mcnemar": "McNemar's test",
+    "mantel_haenszel": "Mantel-Haenszel stratified analysis",
+    "diagnostic": "Diagnostic accuracy",
+    "bland_altman": "Bland-Altman agreement",
+}
 
 
 def config_hash(config: Any) -> str:
@@ -124,7 +165,7 @@ def remember(
             state.single_imputed_counts([c for c in columns if c]).items() if columns else ()
         ),
     )
-    _store()[key] = StoredResult(value, stamp)
+    _store()[key] = StoredResult(value, stamp, config)
     return stamp
 
 
@@ -187,12 +228,111 @@ def single_imputation_warning(counts: Mapping[str, int]) -> None:
     )
 
 
-def provenance(key: str) -> None:
-    """Caption with what the stored result was computed on (and the single-imputation caveat)."""
+_TOKEN = re.compile(
+    r"^[0-9a-f]{32}:"
+)  # the identity of an imputation in a pooled result's settings
+
+
+def describe_settings(config: Any) -> str:
+    """The settings of an analysis in words: its variables and options, without internal tokens."""
+    words: list[str] = []
+
+    def walk(value: Any) -> None:
+        if isinstance(value, list | tuple):
+            for v in value:
+                walk(v)
+        elif isinstance(value, str):
+            if value and value != "(none)" and not _TOKEN.match(value):
+                words.append(value)
+        elif isinstance(value, int | float) and not isinstance(value, bool):
+            words.append(f"{value:g}")
+
+    walk(config)
+    return ", ".join(dict.fromkeys(words))
+
+
+def _report() -> dict[str, ReportItem]:
+    basket = st.session_state.get(REPORT_KEY)
+    if not isinstance(basket, dict):
+        basket = {}
+        st.session_state[REPORT_KEY] = basket
+    return basket
+
+
+def _item_id(key: str, stored: StoredResult) -> str:
+    return f"{key}:{stored.stamp.config_hash}"
+
+
+def add_to_report(key: str) -> None:
+    """Put the stored result ``key`` in the study dossier (callback of the Add to report button)."""
     stored = _store().get(key)
-    if stored is not None:
-        single_imputation_warning(dict(stored.stamp.single_imputed))
-        st.caption(f":material/fingerprint: {stored.stamp.caption}")
+    if stored is None:
+        return
+    item_id = _item_id(key, stored)
+    _report()[item_id] = ReportItem(
+        id=item_id,
+        key=key,
+        title=RESULT_TITLES.get(key, key.replace("_", " ").capitalize()),
+        settings=describe_settings(stored.config),
+        value=stored.value,
+        stamp=stored.stamp,
+        added_at=datetime.now().isoformat(timespec="seconds"),
+    )
+
+
+def remove_from_report(item_id: str) -> None:
+    _report().pop(item_id, None)
+
+
+def report_items() -> list[ReportItem]:
+    """The results added to the study dossier, in the order they were added."""
+    return list(_report().values())
+
+
+def report_status(item: ReportItem) -> str:
+    """CURRENT, or STALE_DATA / STALE_POPULATION when the data or the population changed since it was computed."""
+    from ui.state import get_state
+
+    identity = get_state().identity()
+    if identity is None:
+        return MISSING
+    if item.stamp.data_fp != identity.data_fp:
+        return STALE_DATA
+    if item.stamp.population_fp != identity.population_fp:
+        return STALE_POPULATION
+    return CURRENT
+
+
+def provenance(key: str) -> None:
+    """Caption with what the stored result was computed on (and the single-imputation caveat), and the button
+    that adds it to the study dossier."""
+    stored = _store().get(key)
+    if stored is None:
+        return
+    single_imputation_warning(dict(stored.stamp.single_imputed))
+    st.caption(f":material/fingerprint: {stored.stamp.caption}")
+    item_id = _item_id(key, stored)
+    if item_id in _report():
+        st.button(
+            "In the study dossier (remove)",
+            key=f"report_remove::{key}",
+            icon=":material/check_circle:",
+            type="tertiary",
+            on_click=remove_from_report,
+            args=(item_id,),
+            help="Reproduce > Study dossier lists the results of the report.",
+        )
+    else:
+        st.button(
+            "Add to the study dossier",
+            key=f"report_add::{key}",
+            icon=":material/note_add:",
+            type="tertiary",
+            on_click=add_to_report,
+            args=(key,),
+            help="Adds this result, with what it was computed on, to the Word study dossier (Reproduce > Study "
+            "dossier).",
+        )
 
 
 def stamp_of(key: str) -> ResultStamp | None:
@@ -203,16 +343,25 @@ def stamp_of(key: str) -> ResultStamp | None:
 __all__ = [
     "CURRENT",
     "MISSING",
+    "REPORT_KEY",
     "RESULTS_KEY",
+    "RESULT_TITLES",
     "STALE_CONFIG",
     "STALE_DATA",
     "STALE_POPULATION",
+    "ReportItem",
     "ResultStamp",
     "StoredResult",
+    "add_to_report",
     "config_hash",
+    "describe_settings",
     "provenance",
     "recall",
     "remember",
+    "remove_from_report",
+    "report_items",
+    "report_status",
+    "single_imputation_warning",
     "stamp_of",
     "status",
 ]

@@ -48,8 +48,7 @@ from ui.guidance.analysis import (
     sample_size_sentence,
 )
 from ui.progress import mark_step
-from ui.results import provenance, recall, remember, single_imputation_warning
-from ui.state import get_state
+from ui.results import CURRENT, provenance, recall, remember, status
 from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel
 
@@ -401,6 +400,11 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         mark_step("analyse", f"group comparison of {len(target_cols)} variable(s) by {group_col}")
     else:
         results = cached["results"]
+    # kept in the result store too, stamped, so that it can go into the study dossier
+    stored_config = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method)
+    if status("univariate", config=stored_config) != CURRENT:
+        remember("univariate", {"results": results, "group": group_col, "correction": correction_method},
+                 config=stored_config, n_analysed=len(df_analysis_filtered), columns=[group_col, *target_cols])
 
     # Display Results Table
     results_df = pd.DataFrame(results)
@@ -428,7 +432,6 @@ def run_univariate_analysis(df, analyzer, transformed=False):
 
     # Formatting for display
     st.subheader("Summary Results")
-    single_imputation_warning(get_state().single_imputed_counts([group_col, *target_cols]))
     
     # Improve readability of columns for display and download
     if not results_df.empty:
@@ -492,6 +495,8 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         width="stretch"
     )
     
+    provenance("univariate")
+
     # ============ NEW: Epidemiological Interpretation Summary ============
     st.subheader("Results Interpretation")
     

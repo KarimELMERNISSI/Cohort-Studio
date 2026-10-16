@@ -17,6 +17,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Participant flow diagram** on Validate > Analysis population (`ui/components/flow.py`). Clicking a box, or
   choosing it in the menu below, shows its details: the criteria with the rows each excluded first, and their
   definitions. The same diagram is drawn as a picture for the Word dossier (`manage/flow_figure.py`).
+- **Results go into a study dossier** (`ui/results.py`, Reproduce > Study dossier):
+  - Every stored result has an **Add to the study dossier** button under it. Each set of settings is a separate
+    item, kept with the stamp of what it was computed on.
+  - The new page shows the participant flow with a box for each analysis in the dossier (N analysed, or the
+    imputed datasets pooled), and lists the results.
+  - A result computed on other data or another population is marked stale.
+  - The observed group comparison is now kept in the result store too, so that it can be added.
 
 ### Multiple imputation end-to-end (follow-up programme M2, awaiting the owner's review)
 
