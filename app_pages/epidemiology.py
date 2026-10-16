@@ -61,6 +61,15 @@ def _effect_ok(effect_size) -> bool:
     return True
 
 
+
+def _prefilled_number_input(label, default, *, key, help, **kwargs):
+    """A number input that the results above may prefill through the session state ("Load Parameters into
+    Calculator", the group sizes of the dataset). Streamlit warns when a widget gets both a default value and a
+    session-state value, so the default is passed only while the key is unset."""
+    if key in st.session_state:
+        return st.number_input(label, key=key, help=help, **kwargs)
+    return st.number_input(label, value=default, key=key, help=help, **kwargs)
+
 def _expected_means_inputs(prefix: str):
     """Expected means of two groups and the common SD; returns (mean1, mean2, sd)."""
     c_m1, c_m2, c_sd = st.columns(3)
@@ -2418,8 +2427,8 @@ def run_power_analysis(df, analyzer):
                 "Effect size input", ["Cohen's d", "Expected means and SD"], key="es_mode_ttest", help=HELP["es_mode"]
             )
             if es_mode == "Cohen's d":
-                effect_size = st.number_input(
-                    "Effect Size (Cohen's d)", value=float(default_effect_size), step=0.001, format="%.3f",
+                effect_size = _prefilled_number_input(
+                    "Effect Size (Cohen's d)", float(default_effect_size), step=0.001, format="%.3f",
                     key="es_ttest", help=HELP["es_d"],
                 )
                 effect_label = f"a difference of d = {effect_size:.2f}"
@@ -2429,7 +2438,7 @@ def run_power_analysis(df, analyzer):
                 st.caption(f"Cohen's d = |{mean1:g} - {mean2:g}| / {sd_expected:g} = **{effect_size:.3f}**")
                 effect_label = f"a difference of {abs(mean1 - mean2):g} units (d = {effect_size:.2f})"
         
-        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, help=HELP["ratio"], key="ratio_ttest")
+        ratio = _prefilled_number_input("Ratio of Sample Sizes (n2/n1)", float(default_ratio), step=0.1, help=HELP["ratio"], key="ratio_ttest")
         
         analysis = TTestIndPower()
         
@@ -2458,7 +2467,7 @@ def run_power_analysis(df, analyzer):
                 st.pyplot(fig)
                 
         else: # Calculate Power
-            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_ttest", help=HELP["n1"])
+            nobs1 = _prefilled_number_input("Sample Size (Group 1)", int(default_nobs1), step=1, key="n1_ttest", help=HELP["n1"])
             if st.button("Calculate Power") and _effect_ok(effect_size):
                 power_val = analysis.solve_power(effect_size=effect_size, nobs1=nobs1, alpha=alpha, ratio=ratio)
                 st.success(power_sentence(effect_label, power_val, sample=f"{int(nobs1)} in group 1 and {int(round(nobs1 * ratio))} in group 2"))
@@ -2504,7 +2513,7 @@ def run_power_analysis(df, analyzer):
             effect_size = abs(p_xy - 0.5)  # distance from "no effect", for the input check
             effect_label = f"P(X < Y) = {p_xy:.2f}"
 
-        ratio = st.number_input("Ratio of Sample Sizes (n2/n1)", value=float(default_ratio), step=0.1, key="ratio_mwu", help=HELP["ratio"])
+        ratio = _prefilled_number_input("Ratio of Sample Sizes (n2/n1)", float(default_ratio), step=0.1, key="ratio_mwu", help=HELP["ratio"])
         
         if calc_mode == "Calculate Required Sample Size":
             power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
@@ -2521,7 +2530,7 @@ def run_power_analysis(df, analyzer):
                     n1 = N_total * c
                     st.success(sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[n1, N_total - n1]))
         else:
-            nobs1 = st.number_input("Sample Size (Group 1)", value=int(default_nobs1), step=1, key="n1_mwu", help=HELP["n1"])
+            nobs1 = _prefilled_number_input("Sample Size (Group 1)", int(default_nobs1), step=1, key="n1_mwu", help=HELP["n1"])
             if st.button("Calculate Power") and _effect_ok(effect_size):
                 c = 1 / (1 + ratio)
                 N_total = nobs1 * (1 + ratio)
@@ -2553,8 +2562,8 @@ def run_power_analysis(df, analyzer):
                     st.error(str(exc))
                     planned_means, effect_size = None, 0.0
             else:
-                effect_size_input = st.number_input(
-                    f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f",
+                effect_size_input = _prefilled_number_input(
+                    f"Effect Size ({es_type})", float(default_effect_size), step=0.001, format="%.3f",
                     key="es_anova", help=HELP["es_anova"],
                 )
                 if es_type == "Eta Squared":
@@ -2565,8 +2574,8 @@ def run_power_analysis(df, analyzer):
             k_groups = len(planned_means)
             st.caption(f"Number of groups: {k_groups} (from the expected means)")
         else:
-            k_groups = st.number_input(
-                "Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_anova", help=HELP["k_groups"]
+            k_groups = _prefilled_number_input(
+                "Number of Groups", int(default_k_groups), step=1, min_value=2, key="k_anova", help=HELP["k_groups"]
             )
         effect_label = f"an effect of f = {effect_size:.2f}"
 
@@ -2580,7 +2589,7 @@ def run_power_analysis(df, analyzer):
                 st.caption(res.method)
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
-            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_anova", help=HELP["n_per_group"])
+            nobs_per_group = _prefilled_number_input("Sample Size (per group)", def_per_group, step=1, key="n_per_group_anova", help=HELP["n_per_group"])
             if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = anova_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha)
                 st.success(
@@ -2610,8 +2619,8 @@ def run_power_analysis(df, analyzer):
                     st.error(str(exc))
                     planned_means, effect_size = None, 0.0
             else:
-                effect_size_input = st.number_input(
-                    f"Effect Size ({es_type})", value=float(default_effect_size), step=0.001, format="%.3f",
+                effect_size_input = _prefilled_number_input(
+                    f"Effect Size ({es_type})", float(default_effect_size), step=0.001, format="%.3f",
                     key="es_kw", help=HELP["es_anova"],
                 )
                 if es_type == "Epsilon Squared":
@@ -2622,8 +2631,8 @@ def run_power_analysis(df, analyzer):
             k_groups = len(planned_means)
             st.caption(f"Number of groups: {k_groups} (from the expected means)")
         else:
-            k_groups = st.number_input(
-                "Number of Groups", value=int(default_k_groups), step=1, min_value=2, key="k_kw", help=HELP["k_groups"]
+            k_groups = _prefilled_number_input(
+                "Number of Groups", int(default_k_groups), step=1, min_value=2, key="k_kw", help=HELP["k_groups"]
             )
         effect_label = f"an effect of f = {effect_size:.2f}"
         dist_assumption = st.radio(
@@ -2644,7 +2653,7 @@ def run_power_analysis(df, analyzer):
                 st.caption(f"{res.method}. {res.note}")
         else:
             def_per_group = int(default_n_total / default_k_groups) if default_n_total else 20
-            nobs_per_group = st.number_input("Sample Size (per group)", value=def_per_group, step=1, key="n_per_group_kw", help=HELP["n_per_group"])
+            nobs_per_group = _prefilled_number_input("Sample Size (per group)", def_per_group, step=1, key="n_per_group_kw", help=HELP["n_per_group"])
             if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = kruskal_power(effect_size, nobs_per_group, int(k_groups), alpha=alpha, are=are)
                 st.success(
@@ -2711,7 +2720,7 @@ def run_power_analysis(df, analyzer):
                 st.caption(f"Degrees of freedom: {int(df_chi2)}")
                 st.caption(res.method)
         else:
-            nobs = st.number_input("Total Sample Size", value=int(default_n_total), step=1, key="n_total_chi2", help=HELP["n_total"])
+            nobs = _prefilled_number_input("Total Sample Size", int(default_n_total), step=1, key="n_total_chi2", help=HELP["n_total"])
             if st.button("Calculate Power") and _effect_ok(effect_size):
                 res = chi2_independence_power(effect_size, nobs, int(df_chi2), alpha=alpha)
                 st.success(power_sentence(effect_label, res.power, sample=f"{int(nobs)} participants in total"))

@@ -6,6 +6,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: a Streamlit warning on Analyze > Power & Sample Size
+
+- A group comparison and **Load Parameters into Calculator** prefill twelve inputs of the power calculator
+  (effect size, group sizes, ratio, number of groups) through the session state. The inputs also passed a default
+  value, so Streamlit logged a warning about a widget with both.
+- The default is now passed only while an input is unset. The prefilled values are the same, and the help text is
+  required by the helper.
+
 ### Dependency updates (2026-10-16)
 
 - Updated in `uv.lock`:
