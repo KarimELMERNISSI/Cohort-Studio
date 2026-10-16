@@ -7,6 +7,8 @@ Examples:
     python manage_users.py deactivate dr_lee
     python manage_users.py reset-password dr_lee
     python manage_users.py list
+    python manage_users.py setup-token     # a new one-time token to create the first administrator
+    python manage_users.py bootstrap       # at start-up: administrator from CMP_ADMIN_*, or a setup token
 
 Passwords are read from the CMP_ADMIN_PASSWORD environment variable when set, otherwise prompted
 interactively. They are never accepted on the command line, so they do not end up in shell history.
@@ -86,6 +88,23 @@ def cmd_list(_: argparse.Namespace) -> None:
         print(f"{user.username:<24} {str(user.role):<12} {str(user.is_active):<8} {user.created_at or ''}")
 
 
+def cmd_setup_token(_: argparse.Namespace) -> None:
+    token = get_iam_manager().issue_setup_token()
+    if token is None:
+        _fail("no first-run setup is needed: an active administrator exists, or accounts are disabled.")
+    print(f"One-time setup token: {token}")
+    print("Open CohortStudio and create the first administrator with it; any previous token no longer works.")
+
+
+def cmd_bootstrap(_: argparse.Namespace) -> None:
+    """Run before the server (Docker entry point): the administrator from CMP_ADMIN_*, or a setup token in the log."""
+    from utils.logging_config import configure_logging
+
+    configure_logging()
+    _, message = get_iam_manager().ensure_bootstrap_admin()
+    print(f"Administrator bootstrap: {message}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage CohortStudio user accounts.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -108,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("list", help="list accounts")
     p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("setup-token", help="issue a new one-time token to create the first administrator")
+    p.set_defaults(func=cmd_setup_token)
+
+    p = sub.add_parser("bootstrap", help="create the administrator from CMP_ADMIN_* or issue a setup token")
+    p.set_defaults(func=cmd_bootstrap)
     return parser
 
 

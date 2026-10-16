@@ -50,4 +50,6 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
     CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-ENTRYPOINT ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# The administrator bootstrap runs before the server: the account from CMP_ADMIN_* when set, otherwise a one-time
+# setup token written to the container log (`docker compose logs cohortstudio`) to create it on the login page.
+ENTRYPOINT ["sh", "-c", "python manage_users.py bootstrap; exec streamlit run main.py --server.port=8501 --server.address=0.0.0.0"]

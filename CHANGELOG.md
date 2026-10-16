@@ -6,6 +6,27 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Packaging, deployment and CI (follow-up programme M4, in progress)
+
+- **Optional dependency groups** (`pyproject.toml`). The statistics engine, the data pipeline and the analysis
+  pages need none of them; `uv sync --extra all` installs everything (the Docker image, `requirements.txt`).
+  - `ai`: LLM connectors, document library and vector databases.
+  - `ml`: MissForest (LightGBM), UMAP, FAMD (prince).
+  - `survival`: the proportional-hazards test and concordance (lifelines).
+  - `all`: the three above.
+  - Without an extra, its methods are not offered, with the install command (`utils/optional.py`). The AI pages
+    and Settings say that the AI engine is not installed, and LightGBM is imported only when MissForest runs.
+  - The unused `langchain` and `langchain-community` packages are removed, with LangGraph, SQLAlchemy and about
+    15 packages they pulled in.
+  - Verified in an environment without any extra: the whole suite passes, with the AI tests skipped.
+- **First-run administrator** (`manage/iam/setup_token.py`). A fresh installation without `CMP_ADMIN_PASSWORD`
+  writes a one-time setup token to the server log. The login page then creates the first administrator with it.
+  Only a hash of the token is stored, and it stops working once used or when an administrator exists.
+  - The Docker image runs the bootstrap before the server (`python manage_users.py bootstrap`), so the token is in
+    `docker compose logs cohortstudio` from the start.
+  - A page load never replaces a pending token. `python manage_users.py setup-token` issues a new one, for a lost
+    log.
+
 ### Fixed: statistics of a new variable dominated by entry errors (Enrich > Create New Variables)
 
 - The preview statistics of a new variable used every row with the mean and SD only. A few entry errors made

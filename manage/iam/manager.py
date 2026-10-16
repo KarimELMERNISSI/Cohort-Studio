@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Any
 
+from . import setup_token
 from .base import BaseIAMProvider
 from .providers.better_auth import BetterAuthIAMProvider
 from .providers.disabled import DisabledIAMProvider
@@ -181,13 +182,50 @@ class IAMManager:
         """Update user credentials."""
         return self._provider.update_password(username, new_password)
 
+    @staticmethod
+    def _setup_dir() -> str:
+        from utils.data_paths import get_data_root
+
+        return get_data_root()
+
+    def _has_active_admin(self) -> bool:
+        return any(str(u.role) == UserRole.ADMIN.value and u.is_active for u in self._provider.list_users())
+
+    def setup_pending(self) -> bool:
+        """True when the first administrator must be created with the setup token of the server log."""
+        if not self._provider.is_enabled or not setup_token.pending(self._setup_dir()):
+            return False
+        try:
+            return not self._has_active_admin()
+        except Exception:
+            return False
+
+    def issue_setup_token(self) -> str | None:
+        """A new first-run setup token (the previous one stops working); None when no setup is needed."""
+        if not self._provider.is_enabled or self._has_active_admin():
+            return None
+        return setup_token.issue(self._setup_dir())
+
+    def create_first_admin(self, token: str, username: str, password: str) -> tuple[bool, str]:
+        """Create the first administrator with the one-time setup token (follow-up programme M4)."""
+        if not self.setup_pending():
+            return False, "No first-run setup is pending: an administrator exists, or no setup token was issued."
+        if not setup_token.check(self._setup_dir(), token):
+            return False, "The setup token is not valid. Copy it from the server log (the most recent one)."
+        ok, msg = self._provider.create_user(username, password, role=UserRole.ADMIN, auto_activate=True)
+        if ok:
+            setup_token.clear(self._setup_dir())
+            logger.info("First administrator '%s' created with the setup token.", username)
+        return ok, msg
+
     def ensure_bootstrap_admin(self) -> tuple[bool, str]:
         """
         Create the initial administrator when no active administrator exists.
 
         Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
-        CMP_ADMIN_PASSWORD_FILE. Nothing is created when the IAM provider is disabled, when an
-        active administrator already exists, or when no bootstrap password is configured.
+        CMP_ADMIN_PASSWORD_FILE. Without them, a one-time setup token is written to the server log and the
+        login page creates the first administrator with it (manage/iam/setup_token.py). Nothing happens when
+        the IAM provider is disabled or when an active administrator already exists.
         """
         if not self._provider.is_enabled:
             return False, "IAM disabled; no bootstrap needed"
@@ -197,6 +235,7 @@ class IAMManager:
             logger.warning("Admin bootstrap skipped, could not list users: %s", exc)
             return False, f"Could not list users: {exc}"
         if any(str(u.role) == UserRole.ADMIN.value and u.is_active for u in users):
+            setup_token.clear(self._setup_dir())  # a token left from before the administrator existed
             return False, "An active administrator already exists"
 
         username = os.getenv("CMP_ADMIN_USERNAME", "admin").strip()
@@ -206,11 +245,20 @@ class IAMManager:
             with open(password_file, encoding="utf-8") as handle:
                 password = handle.read().strip()
         if not password:
+            if setup_token.pending(self._setup_dir()):  # keep the token already in the log (server start-up)
+                logger.warning(
+                    "No administrator account exists. A first-run setup token is pending: it was written to the "
+                    "server log when it was issued. `python manage_users.py setup-token` issues a new one."
+                )
+                return False, "Setup token pending"
+            token = setup_token.issue(self._setup_dir())
             logger.warning(
-                "No active administrator exists. Set CMP_ADMIN_PASSWORD (or CMP_ADMIN_PASSWORD_FILE) "
-                "or run `python manage_users.py create-admin <username>`."
+                "No administrator account exists. Create the first administrator on the login page with this "
+                "one-time setup token: %s (or set CMP_ADMIN_PASSWORD, or run "
+                "`python manage_users.py create-admin <username>`).",
+                token,
             )
-            return False, "No bootstrap credentials configured"
+            return False, "Setup token issued"
         if self._provider.get_user(username) is not None:
             logger.warning(
                 "Bootstrap account '%s' exists but is not an active administrator; "

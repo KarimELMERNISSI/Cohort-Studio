@@ -22,7 +22,55 @@ def logout() -> None:
     st.rerun()
 
 
+def _first_admin_card(iam) -> None:
+    """First run: create the administrator with the one-time setup token written to the server log."""
+    with st.container(border=True, key="cmp-login"):
+        with st.container(key="cmp-hero", horizontal_alignment="center"):
+            st.image(LOGO, width=84, alt=f"{APP_NAME} logo")
+            st.title(APP_NAME, anchor=False, text_alignment="center")
+            st.markdown("**First run: create the administrator**", text_alignment="center")
+        st.info(
+            "No administrator account exists yet. The server wrote a one-time setup token to its log: for Docker, "
+            "`docker compose logs cohortstudio`; otherwise the terminal that started the application. Enter it "
+            "with the administrator's username and password.",
+            icon=":material/key:",
+        )
+        with st.form("first_admin_form", border=False):
+            token = st.text_input("Setup token", type="password", icon=":material/key:")
+            username = st.text_input(
+                "Administrator username",
+                help="3-32 characters: letters, digits, '.', '_' or '-'",
+                icon=":material/person:",
+            )
+            password = st.text_input(
+                "Password",
+                type="password",
+                help=f"At least {MIN_PASSWORD_LENGTH} characters",
+                icon=":material/lock:",
+            )
+            confirm = st.text_input("Confirm password", type="password", icon=":material/lock:")
+            if st.form_submit_button("Create the administrator", type="primary", width="stretch"):
+                problem = validate_new_credentials(username, password, confirm)
+                if problem:
+                    st.error(problem, icon=":material/error:")
+                else:
+                    ok, message = iam.create_first_admin(token, username.strip(), password)
+                    if ok:
+                        st.session_state["_first_admin_created"] = username.strip()
+                        st.rerun()
+                    st.error(message, icon=":material/error:")
+
+
 def _login_card(iam) -> None:
+    if iam.setup_pending():
+        _first_admin_card(iam)
+        return
+    created = st.session_state.pop("_first_admin_created", None)
+    if created:
+        st.success(
+            f"Administrator '{created}' created. Sign in to continue.",
+            icon=":material/check_circle:",
+        )
     with st.container(border=True, key="cmp-login"):
         with st.container(key="cmp-hero", horizontal_alignment="center"):
             st.image(LOGO, width=84, alt=f"{APP_NAME} logo")
