@@ -3,10 +3,15 @@ updates:
   # Python dependencies: uv.lock is the source of truth (CI and the Docker image install from it). Dependabot
   # updates it; after a merge, the "Sync requirements" workflow regenerates requirements.txt and
   # requirements-yfiles.txt from it, so the pip installation gets the same versions.
+  # Direct dependencies only: for an indirect one, Dependabot's uv support edits the requirements files without
+  # updating uv.lock, so CI never installs the proposed version (seen on 2026-10-16, including versions that
+  # conflict with other packages). Indirect updates come with `uv lock --upgrade-package <name>`, tested locally.
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
+    allow:
+      - dependency-type: "direct"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"

@@ -65,9 +65,9 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lxml | 6.1.3 | BSD-3-Clause |
 | markupsafe | 3.0.4 | BSD-3-Clause |
 | matplotlib | 3.11.2 | PSF |
-| narwhals | 2.26.0 | MIT |
+| narwhals | 2.27.1 | MIT |
 | networkx | 3.7 | BSD-3-Clause |
-| numpy | 2.5.3 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
+| numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | openpyxl | 3.1.5 | MIT |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | pandas | 3.0.6 | BSD |
@@ -76,8 +76,8 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pyarrow | 25.0.1 | Apache-2.0 |
-| pydantic | 2.13.5 | MIT |
-| pydantic-core | 2.46.5 | MIT |
+| pydantic | 2.14.1 | MIT |
+| pydantic-core | 2.50.1 | MIT |
 | pydantic-settings | 2.15.0 | MIT |
 | pydeck | 0.9.3 | Apache License 2.0 |
 | pyparsing | 3.3.3 | MIT |
@@ -94,7 +94,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | scipy | 1.18.1 | BSD |
 | seaborn | 0.13.2 | BSD |
 | six | 1.17.0 | MIT |
-| starlette | 1.7.0 | BSD-3-Clause |
+| starlette | 1.8.0 | BSD-3-Clause |
 | statsmodels | 0.15.0 | BSD-3-Clause |
 | streamlit | 1.65.0 | Apache-2.0 |
 | tabulate | 0.10.0 | MIT |
@@ -133,20 +133,20 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | hyperframe | 6.1.0 | MIT |
 | jiter | 0.17.0 | MIT |
 | jsonpatch | 1.33 | BSD |
-| jsonpointer | 3.2.0 | BSD |
+| jsonpointer | 3.2.1 | BSD |
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
 | lancedb | 0.40.0 | Apache |
-| langchain-core | 1.6.7 | MIT |
+| langchain-core | 1.6.10 | MIT |
 | langchain-protocol | 0.0.19 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
-| langsmith | 0.14.4 | MIT |
+| langsmith | 0.14.8 | MIT |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.4 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.1 | BSD-3-Clause |
-| pypdf | 6.19.0 | BSD-3-Clause |
+| pypdf | 6.20.1 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.19.1 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |

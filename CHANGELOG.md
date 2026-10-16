@@ -6,6 +6,28 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Dependency updates (2026-10-16)
+
+- Updated in `uv.lock`:
+  - numpy 2.5.4;
+  - pydantic 2.14.1 with pydantic-core 2.50.1;
+  - starlette 1.8.0;
+  - pypdf 6.20.1;
+  - langchain-core 1.6.10 and langsmith 0.14.8;
+  - narwhals 2.27.1 and jsonpointer 3.2.1.
+- Checks: the whole suite passes, a browser walk-through of the tutorial ran, and the pooled Cox model of the
+  tutorial gives the same numbers.
+- Not updated:
+  - uuid-utils 1.0, because langchain-core requires a version below 1.0;
+  - portalocker 4, because every qdrant-client requires a version below 4.0.
+
+  Dependabot had proposed both in the requirements files only, where they would have broken pip installations.
+- Dependabot now proposes updates of direct dependencies only. For an indirect dependency, its `uv` support edits
+  the requirements files without touching `uv.lock`, so CI never installed the proposed version. Indirect updates
+  are made with `uv lock --upgrade-package` and tested.
+- The requirements workflow also runs when the requirements files alone change on `main`, and brings them back to
+  `uv.lock`.
+
 ### Dependency updates through `uv.lock`
 
 - Dependabot updated only `requirements.txt` and `requirements-yfiles.txt` (its `pip` ecosystem). Those files are

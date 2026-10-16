@@ -2,12 +2,13 @@ name: Sync requirements
 
 # requirements.txt and requirements-yfiles.txt are exported from uv.lock (pip installation, Option B of the
 # README). When uv.lock changes on main, for example after a Dependabot pull request, this workflow exports them
-# again and commits them if they differ. Run it by hand to resynchronise them at any time.
+# again and commits them if they differ. A change of the requirements files alone (which uv.lock does not
+# follow) is brought back to uv.lock in the same way. Run it by hand to resynchronise them at any time.
 
 on:
   push:
     branches: [ "main" ]
-    paths: [ "uv.lock" ]
+    paths: [ "uv.lock", "requirements.txt", "requirements-yfiles.txt" ]
   workflow_dispatch:
 
 permissions:
