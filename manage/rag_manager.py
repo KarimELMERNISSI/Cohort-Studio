@@ -32,6 +32,7 @@ from utils.llm_utils import (
     clean_json_response,
     parse_json_safe,
 )
+from utils.logging_config import redact_secrets
 
 from .rag_computed_vars import ComputedVarsMixin
 from .rag_documents import DocumentsMixin
@@ -389,9 +390,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                         progress=_embedding_progress,
                     )
             except VectorStoreError as e:
-                return False, str(e)
-            except Exception as e:
-                return False, f"Vector database error ({engine.value}): {e}"
+                return False, redact_secrets(str(e))
+            except Exception as e:  # a provider's error can quote the key it refused
+                return False, redact_secrets(f"Vector database error ({engine.value}): {e}")
             self.vector_store = index
             self.vector_engine = engine.value
 
@@ -409,7 +410,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             )
 
         except Exception as e:
-            return False, f"Error initializing RAG: {e!s}"
+            return False, redact_secrets(f"Error initializing RAG: {e!s}")
 
 
     def update_adherence_score(self, adherence_score):

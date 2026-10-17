@@ -111,6 +111,19 @@ def test_rag_runs_on_both_vector_databases(manager, engine: str) -> None:
     assert not ok and "built with ollama:nomic-embed-text:latest" in message
 
 
+def test_a_refused_key_is_not_shown(manager, monkeypatch: pytest.MonkeyPatch) -> None:
+    # the shape of a Google key, built here so that no secret scanner sees one
+    key = "AIza" + "Sy0abcDEF_ghi-JKL" * 2 + "m"
+
+    def refuse(texts):
+        raise RuntimeError(f"403 PERMISSION_DENIED. Consumer 'api_key:{key}' has been suspended.")
+
+    monkeypatch.setattr(manager.embeddings_used, "embed_documents", refuse)
+    monkeypatch.setattr("manage.vectorstores.document_index.time.sleep", lambda seconds: None)
+    ok, message = _init(manager, "lancedb", reuse=False)
+    assert not ok and "has been suspended" in message and key not in message
+
+
 @pytest.mark.parametrize("engine", ["lancedb", "qdrant"])
 def test_an_index_is_rebuilt_when_the_library_changes(
     manager, engine: str, monkeypatch: pytest.MonkeyPatch

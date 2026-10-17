@@ -6,6 +6,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Security: API keys no longer appear in the log or in the AI engine's errors
+
+- A provider can quote the key it refuses: Google answers a suspended key with "Consumer 'api_key:...' has been
+  suspended". The providers logged that answer as it was, and Settings > AI engine showed it when the
+  initialisation failed.
+- Every log record, its traceback included, is now written without keys, and so is the initialisation error. A key
+  is recognised by its shape (Google, OpenAI, Anthropic), as the value of an `api_key`, `x-api-key` or
+  `Authorization` field, or as the value of a configured `*API_KEY`, `*_SECRET` or `*_PASSWORD` variable, which
+  covers keys without a recognisable shape (Mistral). The one-time setup token of the first start stays in the log.
+- Tests cover the redaction, the log handlers and the initialisation error; a browser check confirmed both with a
+  refused key.
+
 ### Fixed: "Your documents" was ticked on the Start page workflow although no document could be used
 
 - The documents path of the workflow map counted as done whenever the workspace's library held an indexed PDF or a
