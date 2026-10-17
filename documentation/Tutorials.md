@@ -51,11 +51,12 @@ deletes no row.
 
 ## Tutorial 3: Imputing Missing Data
 
-**Goal**: Fill missing values using targeted formulas and global strategies.
+**Goal**: Fill missing values, first deriving what other variables determine (targeted formulas), then imputing the rest.
 
 1. Go to **Data > Enrich** → **Handle Missing Data** tab.
 2. **Targeted Imputation** (*Targeted Imputation (Custom Formula)* tab):
 - Select a column with missing values.
+- Type the formula that determines it from other columns (e.g. `bmi * (height_cm / 100) ** 2` for a missing weight), or:
 - Under **AI Imputation Suggestions (RAG)** (with an initialised AI engine), click **Generate Formula Suggestions** to get AI-powered formulas.
 - Review suggestions and click **Use Formula #N** on the best option.
 - Click **Apply Targeted Imputation**.

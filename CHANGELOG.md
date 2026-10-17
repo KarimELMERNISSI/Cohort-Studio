@@ -6,6 +6,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: missing values, derived first and then imputed
+
+- The documentation now presents the imputation tools as one sequence:
+  1. derive by formula what other variables determine (targeted imputation);
+  2. impute the rest, by single imputation for exploration (KNN, missForest, chained equations, mean or median) or by
+     multiple imputation for inference.
+- Deriving first leaves the imputation models fewer cells to estimate and more information to estimate them from.
+- Chapter 03:
+  - opens *Handle Missing Data* with a table, *which approach for which missing value*;
+  - describes targeted imputation precisely: it fills the missing cells only, fits nothing, and fills every row
+    whose inputs are known;
+  - says how the filled cells are flagged, and when keeping them for the multiple imputation is right;
+  - corrects two claims: the AI imputation suggestions use the related columns, not the documents; and the editor's
+    example (a BMI computation) did not fill a missing variable.
+- Site: the imputation feature, now labelled *Imputation*, shows the three steps.
+- The README, the handbook and the short tutorial follow the same order.
+
 ---
 
 ## [2.4.0] - 2026-10-17

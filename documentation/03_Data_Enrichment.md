@@ -10,10 +10,11 @@ the top of the page lists them; **Apply to the dataset** makes each one a step o
 
 A draft can only be applied over the data it was built on. If the data change while it is open (a rename on
 Explore, a date conversion on Validate), the banner offers to **redo** the changes on the current data from their
-recorded settings, or to discard the draft. An imputation is fitted on, and fills, the rows of the **analysis
-population** only (the ticked inclusion and exclusion criteria); if the population changes before the draft is
-applied, the banner offers to refit it on the new population. When an applied imputation was fitted on other rows
-than the current population, the analysis pages say so.
+recorded settings, or to discard the draft. A statistical imputation is fitted on, and fills, the rows of the
+**analysis population** only (the ticked inclusion and exclusion criteria); if the population changes before the draft
+is applied, the banner offers to refit it on the new population. When an applied imputation was fitted on other rows
+than the current population, the analysis pages say so. A targeted formula (below) fits nothing: it uses only the
+values of each row, and fills every row whose inputs are known.
 
 ---
 
@@ -33,23 +34,41 @@ Merge additional data sources into your main dataset.
 
 ## Handle Missing Data
 
-Two complementary approaches are available for imputation.
+Work in this order:
+
+| The missing value | Approach | Tab |
+| --- | --- | --- |
+| is determined by other variables: a weight from the BMI and the height, a total from its parts, a unit conversion | **Derive it** with a formula. When the formula is exact, nothing is estimated. | Targeted Imputation |
+| is only needed to draw, reduce or cluster the data | **Single imputation**: mean or median, KNN, chained equations, missForest | Global Imputation |
+| enters an estimate, a test or a model | **Multiple imputation**, pooled with Rubin's rules | Multiple imputation (for inference) |
+
+Derive first: the derived values are then observed data for the imputation models, which have fewer cells to estimate
+and more information to estimate them from.
 
 ### Targeted Imputation
 
-Manually fix specific columns using formulas or AI-assisted suggestions.
+Fill the missing values of one variable from the variables that determine it. Choose the variable, write the formula
+in the same language as **Create New Variables** (a missing weight: `bmi * (height_cm / 100) ** 2`), or take an AI
+suggestion, then click **Apply Targeted Imputation**. The formula fills the missing cells only and keeps the observed
+values. It fits nothing: it uses the values of each row, so every row whose inputs are known is filled, including the
+rows outside the analysis population. The step is traced, and a replay fills the same cells again.
+
+The filled cells are remembered like any single imputation: the results that use them say so, and the
+multiple-imputation panel lists them and treats them as observed. That is right when the formula is exact; when it
+only approximates the variable, impute the data as they were before (reload a version saved before the step, or
+replay the trace up to the step before it).
 
 | Feature | Description |
 | --- | --- |
-| **Formula Editor** | Write expressions using column names and arithmetic operators (e.g. `Weight / (Height**2)`). |
-| **AI Suggestions (RAG)** | The system proposes computed formulas based on related columns and uploaded documentation. |
+| **Formula Editor** | Column names, arithmetic, conditions and the usual functions, as in **Create New Variables**. |
+| **AI Imputation Suggestions (RAG)** | With the AI engine on, proposes formulas for the variable from the related columns, each with its reasoning; **Use Formula #N** puts one in the editor. |
 
 #### AI Suggestion Modes
 
 | Mode | Description |
 | --- | --- |
 | **Free Thinking (Auto)** | Scans all available columns to suggest formulas automatically. |
-| **Guided (with Hints)** | User provides a clue (e.g. "unit conversion") and selects context columns for more focused suggestions. |
+| **Guided (with Hints)** | User provides a clue (e.g. "unit conversion") and selects context columns; their statistics help the model match units and ranges. |
 
 ### Global Imputation
 
@@ -207,7 +226,7 @@ All new columns follow a configurable naming pattern (e.g. `{method_applied}_{in
 ---
 
 ## Practical Guidance
+- Derive before you impute: fill with **Targeted Imputation** what other variables determine (e.g. a missing weight from the BMI and the height), then run **Global** or **Multiple** imputation on what is left.
 - Run **Global Imputation** before **Dimensionality Reduction** or **Clustering** — these methods require complete data.
 - Compute indices and scores (BMI, eGFR) under **Variable Computation**. With the AI engine on, start from **AI Variable Suggestions** and read the preview statistics before you confirm.
-- Use **Targeted Imputation** with AI suggestions to fill a column from related ones (e.g. a missing weight from the BMI and the height).
 - Check the **imputation mask** after global imputation to verify which values were filled.

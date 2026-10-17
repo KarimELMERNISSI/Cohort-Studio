@@ -309,13 +309,13 @@
 
         <article class="feature" id="imputation">
           <div class="feature-text">
-            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-layers"/></svg>Multiple imputation</p>
+            <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-layers"/></svg>Imputation</p>
             <h3>Missing data handled for inference, not hidden</h3>
             <p>A chained-equations engine modelled on R's <code>mice</code>: predictive mean matching, Bayesian normal, logistic and polytomous regression, and random-forest donors. It is fitted on the analysis population, and the outcome of the planned analyses always stays in the imputation model.</p>
             <ul class="checks">
-              <li>A five-step panel: missingness, model, settings, diagnostics, then use, save and export</li>
-              <li>Chain traces, R-hat and observed-against-imputed distributions</li>
-              <li>Exports for R (<code>mice</code> long) and Stata (flong), and a methods paragraph following Sterne et al. (2009)</li>
+              <li>First, the values other variables determine are derived, not guessed: a formula fills a missing weight from the BMI and the height, typed or suggested by the AI engine, leaving fewer cells to impute</li>
+              <li>For figures and clustering, a quick single imputation (KNN, missForest, chained equations, mean or median), flagged in every result that uses it</li>
+              <li>Diagnostics (chain traces, R-hat, observed against imputed values), exports for R and Stata, and a methods paragraph following Sterne et al. (2009)</li>
             </ul>
             <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/03_Data_Enrichment.md">Enrichment and imputation guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>

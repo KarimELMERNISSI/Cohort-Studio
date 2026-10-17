@@ -85,7 +85,7 @@ See: [02_Data_Validation.md](02_Data_Validation.md)
 | Step | Action |
 | --- | --- |
 | 3.1 | **Import external data** and merge with your main dataset. |
-| 3.2 | **Impute missing values** (targeted formulas or global strategies). |
+| 3.2 | **Impute missing values**: first derive what other variables determine (targeted formulas), then impute the rest (single imputation for exploration, multiple imputation for inference). |
 | 3.3 | **Compute new variables from formulas** on the column names: the editor offers the matching columns and previews the result before you add it. |
 | 3.4 | Start from the **AI variable suggestions** (AI engine): indices and scores proposed from your columns, each with its source, to review in the editor. |
 | 3.5 | **Transform variables** (encoding, scaling) and apply **dimensionality reduction** (PCA, FAMD, t-SNE, UMAP). |
