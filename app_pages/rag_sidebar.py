@@ -55,8 +55,9 @@ CLOUD_CATALOG = {
     "gemini": {
         "env": "GOOGLE_API_KEY",
         "label": "Google GenAI API key",
-        "chat": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest",
-                 "gemini-pro-latest", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+        # newest first: Google no longer serves gemini-2.5-flash to new keys (October 2026)
+        "chat": ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-pro-latest", "gemini-2.5-flash",
+                 "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
         "embed": ["models/gemini-embedding-2", "models/text-embedding-005", "models/text-embedding-004", "models/gemini-embedding-001"],
     },
     "openai": {

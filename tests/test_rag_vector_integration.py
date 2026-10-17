@@ -15,6 +15,9 @@ import utils.data_paths as dp
 from manage.vectorstores.qdrant_index import release_clients
 from tests.test_vectorstores import WordHashEmbeddings
 
+# the fixture replaces it; one test needs it back
+ANALYSE_CONTEXT = rm.RAGManager._analyze_global_context
+
 TEXTS = {
     "bmi.pdf": [
         "Body mass index is weight divided by height squared",
@@ -109,6 +112,28 @@ def test_rag_runs_on_both_vector_databases(manager, engine: str) -> None:
 
     ok, message = _init(manager, engine, reuse=True, embedding="mxbai-embed-large:latest")
     assert not ok and "built with ollama:nomic-embed-text:latest" in message
+
+
+def test_a_chat_model_that_cannot_answer_stops_the_initialisation(
+    manager, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ok, message = _init(manager, "lancedb", reuse=False)
+    assert ok and manager.initialized, message
+
+    gone = "API Error (Gemini): 404 NOT_FOUND. This model is no longer available to new users."
+    monkeypatch.setattr(rm.RAGManager, "_analyze_global_context", ANALYSE_CONTEXT)
+    monkeypatch.setattr(
+        rm.ConnectorFactory,
+        "create_connectors",
+        classmethod(
+            lambda cls, **kw: (FakeListChatModel(responses=[gone]), manager.embeddings_used)
+        ),
+    )
+    ok, message = _init(manager, "lancedb", reuse=True)
+    assert (
+        not ok and "llama3.2:latest did not answer" in message and "no longer available" in message
+    )
+    assert not manager.initialized  # the engine was rebuilt with the model that cannot answer
 
 
 def test_a_refused_key_is_not_shown(manager, monkeypatch: pytest.MonkeyPatch) -> None:

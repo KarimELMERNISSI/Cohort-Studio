@@ -11,9 +11,25 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from utils.logging_config import redact_secrets
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=BaseModel)
+
+# A chat connector answers a failure with the error as its message, so that chains keep running
+# (manage/rag/providers); these are the prefixes it writes.
+PROVIDER_ERROR_PREFIXES = ("Error: ", "Error from ", "API Error (")
+
+
+class ProviderError(RuntimeError):
+    """The language model answered with an error instead of a completion (a missing model, a refused key...)."""
+
+
+def provider_error(text: Any) -> str | None:
+    """The error a connector answered with instead of a completion, without API keys; None for a completion."""
+    text = str(text or "").strip()
+    return redact_secrets(text) if text.startswith(PROVIDER_ERROR_PREFIXES) else None
 
 
 def clean_json_response(text: str) -> str:

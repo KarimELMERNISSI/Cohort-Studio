@@ -30,7 +30,7 @@ class TestRAGSchemas:
     def test_provider_config_defaults(self):
         cfg = ProviderConfig()
         assert cfg.provider == ProviderType.GEMINI
-        assert cfg.model_name == "gemini-2.5-flash"
+        assert cfg.model_name == "gemini-3.8-flash"
         assert cfg.embedding_model == "models/gemini-embedding-2"
         assert cfg.temperature == 0.3
         assert cfg.max_retries == 3

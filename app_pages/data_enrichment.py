@@ -1158,8 +1158,14 @@ def define_new_variables(main_data):
                             else:
                                 st.session_state['ai_variable_suggestions'] = response_data.get('suggestions', [])
                                 st.session_state['ai_domain_analysis'] = response_data.get('domain_analysis', None)
-                                
-                            st.success("Suggestions received!")
+
+                            if st.session_state['ai_variable_suggestions']:
+                                st.success("Suggestions received!")
+                            else:
+                                st.info(
+                                    "No suggestion fits the columns of this dataset. Try another concept or "
+                                    "strategy, or tick *Include suggestions with missing variables*."
+                                )
                         except Exception as e:
                             st.error(f"Error parsing suggestions: {e}")
                             st.write(suggestions_text) # Fallback

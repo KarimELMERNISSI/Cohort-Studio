@@ -12,6 +12,8 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from utils.logging_config import redact_secrets
+
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
 
@@ -97,7 +99,7 @@ class OpenAIChatConnector(BaseLLMConnector):
         except Exception as e:
             err = f"OpenAI API Error: {e!s}"
             logger.error(err)
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {err}"))])
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
 
 class OpenAIEmbeddingConnector(BaseEmbeddingConnector):

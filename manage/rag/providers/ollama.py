@@ -14,6 +14,8 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from utils.logging_config import redact_secrets
+
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 
 logger = logging.getLogger(__name__)
@@ -100,7 +102,7 @@ class OllamaChatConnector(BaseLLMConnector):
                     err_msg = f"Ollama HTTP {response.status_code}: {response.text}"
                     logger.error(err_msg)
                     return ChatResult(generations=[ChatGeneration(
-                        message=AIMessage(content=f"Error from Ollama: {err_msg}")
+                        message=AIMessage(content=f"Error from Ollama: {redact_secrets(err_msg)}")
                     )])
 
                 result = response.json()
@@ -113,16 +115,16 @@ class OllamaChatConnector(BaseLLMConnector):
                 "Ensure Ollama is installed and running locally ('ollama serve')."
             )
             logger.warning(err)
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {err}"))])
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
         except httpx.TimeoutException:
             err = f"Timeout Error: Ollama did not respond within {self.config.timeout_seconds} seconds."
             logger.error(err)
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {err}"))])
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
         except Exception as e:
             logger.error(f"Ollama execution error: {e}")
-            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {e!s}"))])
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(str(e))}"))])
 
 
 class OllamaEmbeddingConnector(BaseEmbeddingConnector):

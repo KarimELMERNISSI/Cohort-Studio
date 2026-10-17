@@ -18,6 +18,8 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from utils.logging_config import redact_secrets
+
 from ..base import BaseLLMConnector
 from ..schemas import ProviderConfig
 
@@ -159,7 +161,7 @@ class ClaudeChatConnector(BaseLLMConnector):
     @staticmethod
     def _error(message: str) -> ChatResult:
         return ChatResult(
-            generations=[ChatGeneration(message=AIMessage(content=f"Error: {message}"))]
+            generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(message)}"))]
         )
 
 

@@ -18,6 +18,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - Tests cover the redaction, the log handlers and the initialisation error; a browser check confirmed both with a
   refused key.
 
+### Fixed: a chat model that could not answer was reported as a success
+
+- Google no longer serves gemini-2.5-flash, the default Gemini chat model, to new API keys. Every call failed,
+  yet the AI engine said it was initialised, and AI Variable Suggestions showed "Suggestions received!" over an
+  empty list. The connectors answer a failure with the error as their message, and the suggestion pipeline read
+  it as an answer without suggestions.
+- The default Gemini chat model is now gemini-3.8-flash, as Google recommends; the 2.5 models stay in the list
+  for older keys.
+- An error answer is now recognised (`utils.llm_utils.provider_error`). The initialisation stops with "The chat
+  model ... did not answer: ...", the suggestions show the error, and a failed answer is no longer cached. When
+  the model answers but no suggestion fits, the page says so instead of "Suggestions received!".
+- A failed initialisation leaves the AI engine off; it used to stay marked active with replaced connectors.
+- The connectors' error answers no longer quote an API key either (the chat shows them).
+
 ### Fixed: "Your documents" was ticked on the Start page workflow although no document could be used
 
 - The documents path of the workflow map counted as done whenever the workspace's library held an indexed PDF or a

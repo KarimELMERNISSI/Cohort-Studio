@@ -14,6 +14,8 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from utils.logging_config import redact_secrets
+
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
 
@@ -51,12 +53,12 @@ class GeminiChatConnector(BaseLLMConnector):
     def get_available_models(self) -> list[str]:
         """Query Gemini API for available text models."""
         fallback = [
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
             "gemini-3.8-flash",
             "gemini-3.5-flash",
             "gemini-flash-latest",
             "gemini-pro-latest",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
             "gemini-2.0-flash",
             "gemini-1.5-flash",
             "gemini-1.5-pro",
@@ -137,7 +139,7 @@ class GeminiChatConnector(BaseLLMConnector):
                 if attempt == max_retries - 1:
                     logger.error(f"Gemini API failure after {max_retries} attempts: {error_str}")
                     return ChatResult(generations=[ChatGeneration(
-                        message=AIMessage(content=f"API Error (Gemini): {error_str}")
+                        message=AIMessage(content=f"API Error (Gemini): {redact_secrets(error_str)}")
                     )])
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
                 logger.info(f"Gemini API retry {attempt+1}/{max_retries} in {delay:.2f}s: {error_str}")

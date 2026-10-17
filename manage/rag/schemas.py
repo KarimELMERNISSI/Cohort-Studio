@@ -40,7 +40,7 @@ class ProviderConfig(BaseModel):
         description="The AI provider backend to use."
     )
     model_name: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.8-flash",
         description="Model identifier for text generation."
     )
     embedding_model: str = Field(

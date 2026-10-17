@@ -10,7 +10,7 @@ import json
 import logging
 import re
 
-from utils.llm_utils import parse_json_safe, validate_and_parse
+from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
 
 # Import Pydantic schemas for structured output
 from .rag_schemas import (
@@ -72,7 +72,7 @@ class ComputedVarsMixin:
     
     Methods:
         - _expand_search_hint
-        - suggest_computed_variables
+        - suggest_computed_variables (and _suggest_variables, the pipeline it guards)
         - _get_theoretical_formulas
         - _map_formulas_to_data
         - suggest_computed_variables_with_validation
@@ -86,17 +86,23 @@ class ComputedVarsMixin:
         prompt = expand_search_hint(search_hint=search_hint)
         try:
             expanded = self.llm.invoke(prompt).content.strip().strip('"').strip("'")
-            if len(expanded) < 60:
-                return expanded
-            return search_hint
         except Exception:
             return search_hint
+        if failure := provider_error(expanded):
+            raise ProviderError(failure)
+        return expanded if len(expanded) < 60 else search_hint
 
     def suggest_computed_variables(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, existing_categories=None, progress_callback=None):
         """Suggests computed variables based on dataset columns and medical knowledge."""
         if not self.initialized:
             return None, "RAG system not initialized."
-        
+        try:
+            return self._suggest_variables(columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback), None
+        except ProviderError as e:  # the model answered with an error: say so, not "no suggestion"
+            return None, f"The AI engine did not answer: {e}"
+
+    def _suggest_variables(self, columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback):
+        """The suggestions as JSON; raises ProviderError when the model answers with an error."""
         original_hint = search_hint
         if search_hint:
             if progress_callback: progress_callback(5, "Analyzing search term...")
@@ -126,8 +132,8 @@ class ComputedVarsMixin:
 
         if progress_callback: progress_callback(50, "Mapping formulas to dataset...")
         final_suggestions_json = self._map_formulas_to_data(theoretical_concepts, columns, allow_missing_variables, num_suggestions, use_taxonomy, existing_categories)
-        
-        return final_suggestions_json, None
+
+        return final_suggestions_json
 
     def _get_theoretical_formulas(self, search_hint, suggestion_mode, context_text, count, available_columns=None, use_taxonomy=True):
         """Step 1: Identify WHAT to calculate (Standard Medical Knowledge)."""
@@ -170,6 +176,8 @@ class ComputedVarsMixin:
         )
         try:
             response = self.llm.invoke(prompt)
+            if failure := provider_error(response.content):
+                raise ProviderError(failure)  # not cached: the caller stores concepts only
             # Use robust JSON parsing
             concepts = parse_json_safe(response.content, default=[])
             if not isinstance(concepts, list):
@@ -177,6 +185,8 @@ class ComputedVarsMixin:
                 concepts = concepts.get('concepts', []) if isinstance(concepts, dict) else []
             logger.debug(f"Parsed {len(concepts)} theoretical concepts")
             return concepts
+        except ProviderError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to get theoretical formulas: {e}")
             return []
@@ -216,6 +226,8 @@ class ComputedVarsMixin:
         )
         try:
             response = self.llm.invoke(prompt)
+            if failure := provider_error(response.content):
+                raise ProviderError(failure)
             cleaned = self._clean_json_response(response.content)
             
             # Validate basic structure before returning
@@ -225,6 +237,8 @@ class ComputedVarsMixin:
             
             logger.debug(f"Mapped {len(parsed.get('suggestions', []))} formulas to data")
             return json.dumps(parsed)
+        except ProviderError:
+            raise
         except Exception as e:
             logger.warning(f"Failed to map formulas to data: {e}")
             return json.dumps({"suggestions": [], "error": str(e)})

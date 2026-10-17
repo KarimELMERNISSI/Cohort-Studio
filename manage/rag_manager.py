@@ -28,9 +28,11 @@ from prompts import (
 
 # Import LLM utilities for reliable parsing
 from utils.llm_utils import (
+    ProviderError,
     StructuredOutputHelper,
     clean_json_response,
     parse_json_safe,
+    provider_error,
 )
 from utils.logging_config import redact_secrets
 
@@ -231,8 +233,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         
         try:
             response = self.llm.invoke(prompt)
+            if failure := provider_error(response.content):
+                raise ProviderError(failure)
             content = self._clean_json_response(response.content)
             return json.loads(content)
+        except ProviderError:
+            raise
         except Exception:
             return {
                 "domain": "General Medical", 
@@ -246,7 +252,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
     def initialize_system(
         self,
-        model_name="gemini-2.5-flash",
+        model_name="gemini-3.8-flash",
         adherence_score=0.5,
         temperature=0.3,
         dataset_columns=None,
@@ -301,6 +307,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return False, f"{embed_provider.capitalize()} API Key is required for the embeddings."
 
         try:
+            self.initialized = False  # the engine is rebuilt from here: off until this initialisation succeeds
             # 1. Load Documents using native PDFDocumentLoader
             if progress_callback: progress_callback(10, "Loading documents...")
             if not os.path.exists(self.documents_dir):
@@ -398,7 +405,10 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
             # 4. Analyze Global Context
             if progress_callback: progress_callback(95, "Setting up LLM chains...")
-            self.global_context = self._analyze_global_context(texts, dataset_columns)
+            try:
+                self.global_context = self._analyze_global_context(texts, dataset_columns)
+            except ProviderError as e:  # the documents are indexed, but the chat model cannot answer
+                return False, f"The chat model {model_name} did not answer: {e}"
 
             # 5. Initialize Roles and QA Chain
             self._update_internal_state(adherence_score)
