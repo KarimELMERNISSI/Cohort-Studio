@@ -174,6 +174,12 @@ The data and statistics engine is plain Python: it imports no Streamlit, and `co
 - **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant (selectable for your machine).
 - **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
 
+Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area formulae indexed (Redlarski et al., *Sci Rep* 2016), the engine proposes formulas mapped onto the height and weight columns, each citing the review. **Apply to Editor** puts one in the formula editor, which computes and previews it before anything is added:
+
+<p align="center">
+  <img src="docs/assets/shots/ai-variables.webp" width="100%" alt="Data, Enrich on the tutorial cohort, in three screens: the AI engine asked for the formulas of body surface area (BSA); a suggestion, the Du Bois formula mapped onto the height and weight columns, with the review it comes from; its preview, with statistics on 1,206 rows and five values, computed from entry errors, flagged as far from the others.">
+</p>
+
 ### 6. Pipeline Reproducibility & Audit Trail
 
 - **Trace Engine**: Logs timestamped steps with function names, serialized parameters, and output snapshot paths.

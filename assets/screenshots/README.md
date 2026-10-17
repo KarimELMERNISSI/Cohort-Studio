@@ -19,6 +19,7 @@ captured at 2x and stored as lossless WebP. They are the source of the images of
 | `dossier`, `dossier_results` | Reproduce > Study dossier: the participant flow and the results added to it |
 | `traces` | Reproduce > Versions & traces |
 | `start_workflow`, `workflow` | The Start page at the end, and its workflow map with the steps done |
+| `ai_search`, `ai_card`, `ai_suggestion`, `ai_preview` | Data > Enrich, AI Variable Suggestions for *BSA* on all 1,206 rows: the request, a suggestion citing its document (and the card on its own), and its preview with the values made from entry errors flagged |
 
 To capture them again:
 
@@ -27,3 +28,9 @@ To capture them again:
 2. Capture: `CMP_SITE_BASE=http://localhost:8769 uv run --no-project --python 3.14 --with playwright python dev_scripts/site_screenshots.py <out-dir>`
 3. Keep them here: `uv run python dev_scripts/keep_screenshots.py <out-dir>`
 4. Build the images: `uv run python dev_scripts/make_readme_assets.py` and `uv run python dev_scripts/make_site_assets.py`
+
+The `ai_*` screenshots need the AI engine: a provider key in `.env` and a review of the body-surface-area formulae in
+the library of the throwaway data folder (Redlarski, Palkowski & Krawczuk, *Sci Rep* 2016, doi:10.1038/srep27966,
+CC BY 4.0, saved as `<tmp>/users/local_researcher/documents/redlarski-2016-bsa-formulae.pdf`). Capture them with
+`dev_scripts/ai_screenshots.py` instead of step 2. It prints every suggestion with its formula: check each one
+against its published reference before keeping the screenshots.

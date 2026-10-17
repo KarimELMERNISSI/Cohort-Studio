@@ -18,6 +18,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - Tests cover the redaction, the log handlers and the initialisation error; a browser check confirmed both with a
   refused key.
 
+### Documentation: the variables the AI engine suggests, shown
+
+- A short animation, on the site (AI section) and in the README (*AI Assistant*), follows a request on the
+  tutorial cohort with a review of the body-surface-area formulae indexed (Redlarski et al., *Sci Rep* 2016,
+  CC BY 4.0). It shows the request for *BSA*; a suggestion, the Du Bois formula mapped onto `height_cm` and
+  `weight_kg`, citing the review; and its preview, where the five values made from entry errors stand out.
+- Data Enrichment (chapter 03) shows the suggestion card in a worked example. A test checks that every image of the
+  documentation exists.
+- `dev_scripts/ai_screenshots.py` captures the screens; it needs a provider key and the review in the library. The
+  screenshot library keeps them, and `dev_scripts/make_readme_assets.py` builds the images. The five formulas the
+  engine proposed were each checked against their published reference.
+
 ### Fixed: a chat model that could not answer was reported as a success
 
 - Google no longer serves gemini-2.5-flash, the default Gemini chat model, to new API keys. Every call failed,

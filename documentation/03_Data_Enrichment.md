@@ -169,6 +169,15 @@ input, **Find Proxy** and **Find Alternative Formula** look for a substitute amo
 copies the name and the formula into the editor, where you check, compute and preview them like a formula of your own;
 nothing is added to the dataset until you confirm it.
 
+For example, on the tutorial cohort with a review of the body-surface-area formulae in the library (Redlarski,
+Palkowski and Krawczuk, *Sci Rep* 2016, CC BY 4.0), *BSA* with *Go To Target* proposes the Du Bois, Mosteller,
+Haycock, Gehan and George, and Mattar formulas, each mapped onto `height_cm` and `weight_kg` and marked *Document*:
+
+![A suggestion for BSA on the tutorial cohort: the Du Bois formula, mapped onto height_cm and weight_kg, in mathematical notation and as computed, with the review it comes from](../assets/readme/ai-suggestion.webp)
+
+Its preview computes it on every row: the 5 values made from entry errors (three heights typed in metres, weights of
+0 and 350 kg) lie far outside the others and are listed with their source values.
+
 The suggestions come from the language model and your documents. They are not checked against a terminology or a
 formulary. A *Document* suggestion names the file and pages to compare it with. A *Model Knowledge* formula is
 recalled by the language model and can be wrong in a way the preview does not show: compare its constants and

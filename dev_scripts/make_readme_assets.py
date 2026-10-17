@@ -16,6 +16,10 @@ tour.webp, describe.webp
     reduced, which smooths every edge. The animations loop; GitHub shows animated WebP in every current browser.
     The site shows the tour too, so it is written to docs/assets/shots (what GitHub Pages publishes) with
     tour-still.webp, its first screen for visitors who ask for reduced motion; the README shows it from there.
+ai-variables.webp (docs/assets/shots, with ai-variables-still.webp), ai-suggestion.webp
+    The variables the AI engine suggests for a concept, from dev_scripts/ai_screenshots.py: the animation shows
+    the request, a suggestion with the document it cites, and its preview; the documentation shows the
+    suggestion card on its own.
 workflow.webp
     The workflow map of the Start page, at the end of the tutorial walk-through.
 plots/<name>.webp
@@ -58,6 +62,12 @@ DESCRIBE: list[Step] = [
     ("explore_stats", "explore", "Descriptive statistics with fill rates and normality tests"),
     ("explore_matrix", "explore", "Correlations as a matrix, or as a network"),
 ]
+AI_VARIABLES: list[Step] = [  # Data > Enrich > Create New Variables, a review of the BSA formulae indexed
+    ("ai_search", "enrich", "Ask for a concept: formulas mapped onto your columns"),
+    ("ai_card", "enrich", "Each formula cites the document it comes from"),
+    ("ai_preview", "enrich", "Previewed before it is added: entry errors stand out"),
+]
+CARD_WIDTH = 1400  # the suggestion card of the documentation
 # output name -> screenshot (plot_<name>)
 PLOTS = {
     "box": "box",
@@ -289,6 +299,13 @@ def main() -> None:
     still.save(path := SITE_SHOTS / "tour-still.webp", "WEBP", quality=86, method=6)
     print(f"{path.relative_to(ROOT)}: {path.stat().st_size / 1e3:.0f} kB")
     save_animation(DESCRIBE, source, OUT / "describe.webp")
+    still = save_animation(AI_VARIABLES, source, SITE_SHOTS / "ai-variables.webp")
+    still.save(path := SITE_SHOTS / "ai-variables-still.webp", "WEBP", quality=86, method=6)
+    print(f"{path.relative_to(ROOT)}: {path.stat().st_size / 1e3:.0f} kB")
+    card = screenshot(source, "ai_suggestion")
+    card = card.resize((CARD_WIDTH, round(card.height * CARD_WIDTH / card.width)), Image.LANCZOS)
+    card.save(path := OUT / "ai-suggestion.webp", "WEBP", quality=90, method=6)
+    print(f"{path.relative_to(ROOT)}: {path.stat().st_size / 1e3:.0f} kB")
 
     card = screenshot(source, "workflow")
     card = card.resize(

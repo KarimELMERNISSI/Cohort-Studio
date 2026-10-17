@@ -138,6 +138,14 @@ def test_the_documentation_makes_no_regulatory_or_marketing_claims(path: Path) -
     assert not found, found
 
 
+@pytest.mark.parametrize("path", _documents(), ids=lambda p: p.name)
+def test_the_documentation_images_exist(path: Path) -> None:
+    images = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", path.read_text(encoding="utf-8"))
+    local = [image for image in images if "://" not in image]
+    missing = [image for image in local if not (path.parent / image).resolve().is_file()]
+    assert not missing, missing
+
+
 # The README images: every one exists, the animations loop and stay light (the large-file hook allows 2 MB), and
 # the screenshot library holds every screenshot the image builders use, so that they rebuild without the app.
 RAW = "https://raw.githubusercontent.com/KarimELMERNISSI/Cohort-Studio/main/"
@@ -174,7 +182,14 @@ def test_the_readme_images_exist() -> None:
     assert not missing, missing
 
 
-@pytest.mark.parametrize("name", ["docs/assets/shots/tour.webp", "assets/readme/describe.webp"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "docs/assets/shots/tour.webp",
+        "assets/readme/describe.webp",
+        "docs/assets/shots/ai-variables.webp",
+    ],
+)
 def test_the_readme_animations_loop_and_stay_light(name: str) -> None:
     path = ROOT / name
     with Image.open(path) as image:
@@ -192,7 +207,8 @@ def _builder(name: str):
 
 def test_the_screenshot_library_holds_what_the_image_builders_use() -> None:
     readme, site = _builder("make_readme_assets"), _builder("make_site_assets")
-    needed = {shot for shot, _, _ in readme.TOUR + readme.DESCRIBE} | {"workflow", "survival"}
+    needed = {shot for shot, _, _ in readme.TOUR + readme.DESCRIBE + readme.AI_VARIABLES}
+    needed |= {"workflow", "survival", "ai_suggestion"}
     needed |= {f"plot_{shot}" for shot in readme.PLOTS.values()} | {shot for shot, _, _ in site.SHOTS.values()}
     library = {path.stem for path in (ROOT / "assets" / "screenshots").glob("*.webp")}
     assert needed <= library, sorted(needed - library)
