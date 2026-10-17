@@ -374,7 +374,7 @@ If you use CohortStudio in academic or clinical research, please cite:
   author  = {El Mernissi, Karim},
   title   = {CohortStudio: Clinical cohort data, from raw file to reproducible evidence},
   year    = {2026},
-  version = {2.3.0},
+  version = {2.4.0},
   url     = {https://github.com/KarimELMERNISSI/Cohort-Studio},
   license = {Apache-2.0}
 }

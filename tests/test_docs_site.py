@@ -148,6 +148,15 @@ def _readme_images() -> list[str]:
     return [url.removeprefix(RAW) for url in found if url.startswith(RAW) or "://" not in url]
 
 
+def test_the_citation_file_names_the_current_version() -> None:
+    # CITATION.cff gives GitHub's "Cite this repository"; it must follow the version of the package
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    assert re.search(rf'^version: "{re.escape(version)}"$', citation, flags=re.MULTILINE)
+    assert re.search(r'^date-released: "\d{4}-\d{2}-\d{2}"$', citation, flags=re.MULTILINE)
+    assert f"version = {{{version}}}" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
 def test_the_readme_links_point_to_existing_files() -> None:
     # the claims of the README link to the tests and workflows that check them: those links must not rot
     text = (ROOT / "README.md").read_text(encoding="utf-8")

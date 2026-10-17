@@ -6,14 +6,37 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+---
+
+## [2.4.0] - 2026-10-17
+
+The follow-up programme after an external architecture review (M0 to M4), the rename to CohortStudio, and a pass over
+the documentation and the site.
+
+**Highlights**
+
+- **One analysis population** (M1): inclusion and exclusion criteria are filters ticked in the sidebar and used by
+  every page; each result states the data and the population it was computed on; the trace is hash-chained and its
+  replay verified.
+- **Multiple imputation end to end** (M2): a chained-equations engine fitted on the analysis population, Rubin's
+  rules with the D1 and D2 tests, pooled survival and regression models, checked against R `mice` and `mitml`.
+- **Participant flow and study dossier** (M3): the participant flow (STROBE item 13), and a Word dossier of the
+  results with their provenance.
+- **Packaging and deployment** (M4): optional dependency groups, a Docker image checked in CI, and a first
+  administrator created from a one-time setup token.
+- **Connectors**: Anthropic Claude, and LanceDB or Qdrant for the document library.
+- **Documentation**: a redesigned site, a README with an animated tour and a plot gallery, each claim linked to the
+  test that checks it, and a `CITATION.cff` for GitHub's *Cite this repository*.
+- **Behaviour changes**: filters no longer delete rows, Enrich changes reach the analyses when the draft is applied,
+  and dates are no longer parsed silently (see *One analysis population, one source of truth* below).
+
 ### Documentation: each claim links to the test that checks it
 
 - README, *Verification & Test Suite*:
   - A table, *What is checked, and where*, links each strong claim to its test or workflow: the parity with R
     `mice` and `mitml`, the weekly bias and coverage simulation, the hash-chained trace, the pipeline integrity, the
     layering, the workspaces and the sandbox, and the coverage floors.
-  - It replaces the table of test modules, whose *PASSED* column could not go stale but said nothing the CI badge
-    does not.
+  - It replaces the table of test modules, whose static *PASSED* column said nothing the CI badge does not.
   - The test count no longer drifts ("more than 800" instead of "776 passed").
   - "Multi-user isolation" is now "Per-user workspaces": the workspaces separate accounts in the application; they
     are not an operating-system sandbox.
@@ -681,6 +704,8 @@ were stale or never true. They are corrected:
 - **About** — Six feature cards instead of coloured alert boxes; the LinkedIn badge no longer loads an external image.
 - **Analysis page** — Analysis type and transformation controls moved from the sidebar onto the page; legacy duplicate page titles demoted to section headings.
 - **Tests** — Theme tokens, WCAG AA contrast of the theme colours, brand assets and an offline-only stylesheet are checked.
+
+---
 
 ## [2.3.0] - 2026-10-13
 
