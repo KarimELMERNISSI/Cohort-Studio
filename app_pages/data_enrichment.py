@@ -1329,7 +1329,11 @@ def define_new_variables(main_data):
                                 
                             elif source_type == "Model Knowledge":
                                 st.info(f"**Model Knowledge:** {explanation}", icon="")
-                                
+                                st.caption(
+                                    "Recalled by the language model, not taken from your documents: compare its "
+                                    "constants and exponents with the published reference before you use it."
+                                )
+
                             else:
                                 st.info(explanation or citation)
 

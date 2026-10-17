@@ -170,7 +170,11 @@ copies the name and the formula into the editor, where you check, compute and pr
 nothing is added to the dataset until you confirm it.
 
 The suggestions come from the language model and your documents. They are not checked against a terminology or a
-formulary: check the formula and its units in the preview before you use the variable.
+formulary. A *Document* suggestion names the file and pages to compare it with. A *Model Knowledge* formula is
+recalled by the language model and can be wrong in a way the preview does not show: compare its constants and
+exponents with the published reference before you use the variable. In one run, the Gehan and George
+body-surface-area formula came back with the exponents of weight and height swapped, about 9 % too high for an
+adult. The preview catches errors of units and of entry, such as a height typed in metres.
 
 ### Transformation Types
 
