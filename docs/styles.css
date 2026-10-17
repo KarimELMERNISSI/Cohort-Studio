@@ -277,6 +277,8 @@ code {
 .fact h3 { font-size: 16.5px; }
 .fact p { margin-top: 6px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
 .fact code { font-size: 0.82em; }
+.fact { display: flex; flex-direction: column; align-items: flex-start; }
+.fact .fact-link { margin-top: auto; padding-top: 12px; font-size: 13.5px; }  /* the links line up under the texts */
 
 /* ---------------------------------------------------------------- sections */
 
@@ -657,6 +659,7 @@ cite::after { content: ")"; }
   .facts-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .fact { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; }
   .fact-icon { grid-row: span 2; margin-bottom: 0; }
+  .fact-link { grid-column: 2; justify-self: start; }
   .steps, .methods-grid, .docs-grid, .more-shots { grid-template-columns: minmax(0, 1fr); }
   .parity { padding: 26px 20px; }
   .parity-stats { grid-template-columns: minmax(0, 1fr); }

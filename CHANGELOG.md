@@ -6,6 +6,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: each claim links to the test that checks it
+
+- README, *Verification & Test Suite*:
+  - A table, *What is checked, and where*, links each strong claim to its test or workflow: the parity with R
+    `mice` and `mitml`, the weekly bias and coverage simulation, the hash-chained trace, the pipeline integrity, the
+    layering, the workspaces and the sandbox, and the coverage floors.
+  - It replaces the table of test modules, whose *PASSED* column could not go stale but said nothing the CI badge
+    does not.
+  - The test count no longer drifts ("more than 800" instead of "776 passed").
+  - "Multi-user isolation" is now "Per-user workspaces": the workspaces separate accounts in the application; they
+    are not an operating-system sandbox.
+- Site: each fact of the facts strip links to its proof: the parity tests, the trace code, the CI runs, the licence.
+- A test checks that every relative link of the README points to an existing file.
+
 ### Documentation: creating variables from formulas, and the variables the AI engine suggests
 
 - The documentation never described two features of Data > Enrich > Create New Variables:

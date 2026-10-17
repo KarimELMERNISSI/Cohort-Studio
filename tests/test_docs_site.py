@@ -148,6 +148,15 @@ def _readme_images() -> list[str]:
     return [url.removeprefix(RAW) for url in found if url.startswith(RAW) or "://" not in url]
 
 
+def test_the_readme_links_point_to_existing_files() -> None:
+    # the claims of the README link to the tests and workflows that check them: those links must not rot
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    local = r"((?!https?:|mailto:|#)[^)\s\"]+)"
+    targets = re.findall(rf"\]\({local}\)", text) + re.findall(rf'href="{local}"', text)
+    missing = [target for target in targets if not (ROOT / target.split("#")[0]).exists()]
+    assert targets and not missing, missing
+
+
 def test_the_readme_images_exist() -> None:
     images = _readme_images()
     # the tour is shared with the site, so it lives in docs/ (what GitHub Pages publishes)
