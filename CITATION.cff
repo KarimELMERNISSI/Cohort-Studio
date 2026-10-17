@@ -11,6 +11,7 @@ authors:
     given-names: "Karim"
 version: "2.4.1"
 date-released: "2026-10-17"
+doi: "10.5281/zenodo.23436094"  # the concept DOI: it resolves to the latest version archived on Zenodo
 license: Apache-2.0
 repository-code: "https://github.com/KarimELMERNISSI/Cohort-Studio"
 url: "https://karimelmernissi.github.io/Cohort-Studio/"

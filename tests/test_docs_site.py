@@ -165,6 +165,18 @@ def test_the_citation_file_names_the_current_version() -> None:
     assert f"version = {{{version}}}" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
+def test_the_doi_is_the_same_everywhere() -> None:
+    # the concept DOI of the Zenodo archive (it resolves to the latest version): one value in every citation
+    citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    found = re.search(r'^doi: "(10\.5281/zenodo\.\d+)"', citation, flags=re.MULTILINE)
+    assert found, "CITATION.cff names no Zenodo DOI"
+    doi = found.group(1)
+    readme, page = (ROOT / "README.md").read_text(encoding="utf-8"), PAGE.read_text(encoding="utf-8")
+    for text in (readme, page):
+        assert f"doi     = {{{doi}}}" in text and f"https://doi.org/{doi}" in text
+    assert set(re.findall(r"10\.5281/zenodo\.\d+", readme + page)) == {doi}
+
+
 def test_the_readme_links_point_to_existing_files() -> None:
     # the claims of the README link to the tests and workflows that check them: those links must not rot
     text = (ROOT / "README.md").read_text(encoding="utf-8")

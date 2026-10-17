@@ -6,6 +6,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: a DOI to cite
+
+- Releases are archived on Zenodo from 2.4.1 on. The concept DOI
+  [10.5281/zenodo.23436094](https://doi.org/10.5281/zenodo.23436094) resolves to the latest version; each version
+  also has its own (2.4.1: 10.5281/zenodo.23436095).
+- The DOI is in `CITATION.cff` (GitHub's *Cite this repository*), the README (a badge and the BibTeX entry) and the
+  site's APA and BibTeX citations. A test keeps it the same everywhere.
+
 ## [2.4.1] - 2026-10-17
 
 Security work, fixes found by code scanning and in use, and one addition to imputation. The first release archived

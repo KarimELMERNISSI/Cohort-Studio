@@ -33,6 +33,7 @@
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9.svg)](https://karimelmernissi.github.io/Cohort-Studio/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23436094.svg)](https://doi.org/10.5281/zenodo.23436094)
 
 </div>
 
@@ -373,7 +374,9 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 
 Distributed under the **Apache License, Version 2.0**. See [`LICENSE`](LICENSE) for full legal text.
 
-If you use CohortStudio in academic or clinical research, please cite:
+If you use CohortStudio in academic or clinical research, please cite it. Each release is archived on Zenodo: the
+DOI [10.5281/zenodo.23436094](https://doi.org/10.5281/zenodo.23436094) resolves to the latest version, and the Zenodo
+record lists the DOI of each version.
 
 ```bibtex
 @software{elmernissi2026cohortstudio,
@@ -381,6 +384,7 @@ If you use CohortStudio in academic or clinical research, please cite:
   title   = {CohortStudio: Clinical cohort data, from raw file to reproducible evidence},
   year    = {2026},
   version = {2.4.1},
+  doi     = {10.5281/zenodo.23436094},
   url     = {https://github.com/KarimELMERNISSI/Cohort-Studio},
   license = {Apache-2.0}
 }
