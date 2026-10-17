@@ -102,16 +102,16 @@ class TraceDocumenter:
     def _add_step(self, doc, index, step):
         # Step Header
         category = self._get_readable_function_name(step.get("function", "Unknown"))
-        head = doc.add_heading(f"Step {index}: {category}", level=2)
-        
+        doc.add_heading(f"Step {index}: {category}", level=2)
+
         # Metadata line
         ts = step.get("timestamp", "")
         if ts:
             try:
                 # Cleaning ISO format if needed
                 ts = ts.replace("T", " ").split(".")[0]
-            except:
-                pass
+            except Exception:
+                pass  # not an ISO string: the timestamp is shown as it is
         
         p_meta = doc.add_paragraph()
         run = p_meta.add_run(f"Executed at: {ts}")

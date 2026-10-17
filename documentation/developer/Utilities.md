@@ -917,7 +917,11 @@ Provides robust JSON parsing, schema validation, and structured LLM invocation
 with retry and repair capabilities._
 
 **Imports**:
-`json`, `logging`, `re`, `typing.Any`, `typing.TypeVar`, `pydantic.BaseModel`, `pydantic.ValidationError`
+`json`, `logging`, `re`, `typing.Any`, `typing.TypeVar`, `pydantic.BaseModel`, `pydantic.ValidationError`, `utils.logging_config.redact_secrets`
+
+### class `ProviderError` (llm_utils.py)
+
+The language model answered with an error instead of a completion (a missing model, a refused key...).
 
 ### class `StructuredOutputHelper` (llm_utils.py)
 
@@ -952,6 +956,14 @@ Usage:
   >
   > Returns:
   >     Tuple of (parsed_json, error_message)
+
+### def `provider_error` (llm_utils.py)
+
+- **Arguments**: `text: Any`
+
+- **Returns**: `ComplexType`
+
+The error a connector answered with instead of a completion, without API keys; None for a completion.
 
 ### def `clean_json_response` (llm_utils.py)
 
@@ -1044,10 +1056,40 @@ Returns:
 
 ## logging_config.py
 
-_Central logging configuration. Call ``configure_logging()`` once from the application entry point._
+_Central logging configuration. Call ``configure_logging()`` once from the application entry point.
+
+Every record is written without API keys (:func:`redact_secrets`): a provider's error can quote the key it refused,
+as Google does for a suspended key ("Consumer 'api_key:...' has been suspended")._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`
+`__future__.annotations`, `logging`, `os`, `re`
+
+### class `RedactSecrets` (logging_config.py)
+
+Rewrites each record without API keys, its traceback included.
+
+**Methods:**
+
+- **filter**(`self, record: logging.LogRecord`) -> `bool`
+  > No description available.
+
+### def `redact_secrets` (logging_config.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `str`
+
+The text without API keys: the values of the configured secrets (variables named ``*API_KEY``,
+``*_SECRET`` or ``*_PASSWORD``), Google, OpenAI and Anthropic keys, and the value of an ``api_key: ...``,
+``x-api-key: ...`` or ``Authorization: ...`` field.
+
+### def `single_line` (logging_config.py)
+
+- **Arguments**: `value: object`
+
+- **Returns**: `str`
+
+``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry.
 
 ### def `configure_logging` (logging_config.py)
 
@@ -1477,7 +1519,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`logging`, `os`
+`logging`, `os`, `utils.logging_config.single_line`
 
 ### def `normalize_path` (path_utils.py)
 

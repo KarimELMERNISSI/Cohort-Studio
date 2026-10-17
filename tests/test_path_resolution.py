@@ -33,9 +33,9 @@ class TestPathResolution(unittest.TestCase):
         # The resolution should find data/test_data.csv
         resolved = resolve_path(fake_windows_path)
         
-        # Normalize paths for comparison
+        # The same file (the lookup returns it resolved, inside the search directory)
         expected = os.path.join("data", "test_data.csv")
-        self.assertEqual(os.path.normpath(resolved), os.path.normpath(expected))
+        self.assertEqual(os.path.realpath(resolved), os.path.realpath(expected))
         
         # Clean up
         os.remove("data/test_data.csv")

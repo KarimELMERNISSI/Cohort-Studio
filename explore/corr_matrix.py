@@ -355,8 +355,8 @@ def add_correlation_strength_table(writer, method, sheet_name='Correlation Stren
         for cell in col:
             try:
                 max_length = max(max_length, len(str(cell.value)))  # Cast to string for length calculation
-            except:
-                pass
+            except Exception:
+                pass  # a value that cannot be printed only leaves the column width as it is
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust
         worksheet.column_dimensions[column].width = adjusted_width
 
@@ -590,8 +590,8 @@ def _write_corr_to_sheet(
         for cell in col:
             try:
                 max_length = max(max_length, len(str(cell.value)))  # Cast to string for length calculation
-            except:
-                pass
+            except Exception:
+                pass  # a value that cannot be printed only leaves the column width as it is
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust
         worksheet.column_dimensions[column].width = adjusted_width
 

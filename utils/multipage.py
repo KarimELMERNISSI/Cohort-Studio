@@ -64,7 +64,7 @@ def load_dataframe(uploaded_file: Any) -> pd.DataFrame | dict | None:
     try:
         uploaded_file.seek(0)
     except Exception:
-        pass
+        pass  # not seekable: the bytes are already read
     try:
         kind = file_kind(name)
     except ValueError as exc:

@@ -165,7 +165,6 @@ def _logistic_fit(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Weighted logistic regression by Newton-Raphson; coefficients and unscaled covariance (X'WX)^-1."""
     beta = np.zeros(x.shape[1])
-    hessian = np.eye(x.shape[1])
     for _ in range(maxit):
         mu = _expit(x @ beta)
         grad = x.T @ (w * (y - mu))

@@ -140,7 +140,7 @@ class DBManager:
                 match = re.search(rf"{base_name}_v(\d+)\.parquet", f)
                 if match:
                     versions.append(int(match.group(1)))
-            except:
+            except Exception:
                 continue
         return max(versions) + 1 if versions else 1
 
@@ -290,8 +290,8 @@ class DBManager:
                 try:
                     os.remove(f)
                     count += 1
-                except:
-                    pass
+                except OSError:
+                    pass  # a file in use or already gone is left out of the count
             return True, f"Cleared {count} cached statistics files."
         except Exception as e:
             return False, f"Failed to clean cache: {e}"

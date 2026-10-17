@@ -14,7 +14,6 @@ from ui.components import page_link, status_chip
 from ui.guidance.analysis import HELP, TAB_GUIDE, TEST_NOTES, AnalysisPlan, AncovaCheck
 
 GUIDANCE_KEY = "epi_guidance"
-_CHIP = {"ok": "ok", "info": "info", "caution": "caution", "violated": "violated"}
 _ICON = {"ok": ":material/check_circle:", "info": ":material/info:", "caution": ":material/warning:",
          "violated": ":material/error:"}
 

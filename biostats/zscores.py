@@ -54,6 +54,8 @@ def reference_zscores(
     out = df.copy()
     stats: dict[str, ReferenceStats] = {}
 
+    # the reference rows: all, unless a control group is chosen
+    mask = pd.Series(True, index=df.index)
     if method == "control":
         if ref_col is None or ref_value is None:
             raise ValueError(

@@ -6,6 +6,44 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Security and fixes: the code-scanning alerts resolved
+
+CodeQL (the `security-extended` and `security-and-quality` suites of `.github/workflows/codeql.yml`) reported 195
+results on 2.4.0. Every security alert is resolved in the code, not dismissed, and the analysis was run again to
+confirm it.
+
+- **Paths chosen by the user** (20 alerts). `core.workspace.resolve_within`, which keeps a typed or recorded path
+  inside the user's workspace, is now written in the form code scanning recognises (`os.path.realpath`, then a
+  prefix check that stops at a separator); a test covers a sibling folder sharing the prefix. The page helpers
+  that accept a typed path refuse it when no user is signed in, instead of using it as typed. A trace is
+  user-supplied JSON: the existence of its recorded paths is now checked inside the workspace only, and a recorded
+  file name is looked up inside each search folder, never above it.
+- **Log entries** (17 alerts). A file path, formula or user name written to the log is kept on one line
+  (`utils.logging_config.single_line`), so typed text cannot forge another log entry.
+- **Regular expressions** (2 alerts). The parser of the anomaly expressions no longer backtracks on long input;
+  its output is unchanged on the expressions tested.
+- **Bugs found on the way**:
+  - a nested loop on Enrich reused the index of the suggestion cards, whose button keys could then collide;
+  - external data enrichment returned nothing when no enrichment was requested, and its caller then failed;
+  - "Session outdated" on Enrich dropped the dataset for the rest of the run;
+  - the Gemini connector returned nothing when no attempt was allowed;
+  - dead code removed: an outlier summary that read an undefined column and a mask-family form that called a
+    helper with a missing argument, both unreachable, and a commented-out copy of an old page.
+- Variables assigned in only some branches now start with a value or close their branches with an `else`, so no
+  path can reach them unset.
+- Code-quality notes: a bare `except:` is now `except Exception:` (or narrower), so an interruption is no longer
+  swallowed; each remaining silent `except` says why it is safe. Three silent failures in statistics code could
+  hide a missing result and are now logged: the AUC of a logistic regression, a predictor left out of the MAR
+  check, and a p-value left out of the MCAR heuristic. No computed value changes. Unused code and commented-out
+  code are removed, and the generated developer documentation is regenerated.
+- 6 of the 195 results remain, all false positives to dismiss:
+  - `biostats.mi.analyze.analyze_mi` passes the imputation index only to the functions that take it (2);
+  - `biostats.mi.engine` and `biostats.mi.parallel` import each other inside functions, for the subprocess entry
+    point (2);
+  - the `_CONFIGURED` flag of `utils.logging_config` is read through a `global` statement;
+  - `enable_iterative_imputer` is the import scikit-learn requires before `IterativeImputer`.
+- CodeQL Action v4 (v3 is deprecated in December 2026).
+
 ### Security: API keys no longer appear in the log or in the AI engine's errors
 
 - A provider can quote the key it refuses: Google answers a suspended key with "Consumer 'api_key:...' has been

@@ -594,6 +594,7 @@ def run_benchmark(df, analyzer):
             selects.append(f"QUANTILE_CONT({_q(col)}, 0.50)")
             selects.append(f"QUANTILE_CONT({_q(col)}, 0.75)")
 
+        res = None
         if selects:
             query = f"SELECT {', '.join(selects)} FROM df_bench"
             res = con.execute(query).fetchone()
@@ -771,20 +772,6 @@ def app():
 
     # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
-    # Implicitly load latest dataset if none is loaded
-    # if st.session_state.get("data") is None:
-    #     datasets = st.session_state.db_manager.get_available_datasets()
-    #     if datasets:
-    #         latest_dataset = datasets[0]
-    #         df_loaded, msg = st.session_state.db_manager.load_dataset(latest_dataset)
-    #         if df_loaded is not None:
-    #             st.session_state['data'] = df_loaded
-    #             st.session_state['working_df'] = df_loaded.copy()
-    #             st.session_state['current_dataset_name'] = latest_dataset
-    #             st.toast(f"Auto-loaded latest dataset: {latest_dataset}")
-    #         else:
-    #             st.warning("Failed to auto-load latest dataset.")
-
     # Load or select dataset (assuming df is already loaded into session state) 
     df = st.session_state.get('data', None)
 
@@ -844,8 +831,7 @@ def app():
                         "Cached statistics in your workspace and the in-memory cache will be recomputed on the next visit. "
                         "Datasets and traces are not affected.", _reset_statistics_cache, confirm_label="Reset")
         #df = st.session_state.get('data', None)
-        if "max_top_modalities" not in locals():
-            max_top_modalities = 3
+        max_top_modalities = 3  # the number_input below can change it
         if df is not None:
             
             st.subheader("Dataset Preview")

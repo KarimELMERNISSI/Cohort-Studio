@@ -392,7 +392,7 @@ class RAGEvaluator:
             if json_match:
                 return json.loads(json_match.group())
         except json.JSONDecodeError:
-            pass
+            pass  # not JSON: the score is read from the text below
         
         # Fallback: extract score from text
         import re

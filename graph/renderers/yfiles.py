@@ -23,7 +23,6 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import inspect
-import logging
 from collections.abc import Callable
 from typing import Any, NamedTuple
 
@@ -37,8 +36,6 @@ from graph.model import (
     RenderOptions,
     SelectionResult,
 )
-
-logger = logging.getLogger(__name__)
 
 LICENSE_NOTE = (
     "yFiles Graphs for Streamlit (yWorks GmbH, free license): the graph runtime is loaded from "

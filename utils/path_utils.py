@@ -1,6 +1,8 @@
 import logging
 import os
 
+from utils.logging_config import single_line
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +44,7 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
             if candidate.exists():
                 return str(candidate)
         except ValueError:
-            pass
+            pass  # outside the workspace: only the file name is searched for below
     elif os.path.exists(original_path):
         return original_path
 
@@ -58,10 +60,17 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
 
             search_dirs = [get_data_root(), get_uploads_dir(), get_traces_dir()]
 
+    if filename in ("", ".", ".."):
+        return None
+    from core.workspace import resolve_within
+
     for directory in search_dirs:
-        candidate_path = os.path.join(directory, filename)
-        if os.path.exists(candidate_path):
-            logger.info("Path resolution found %s for %s", candidate_path, original_path)
+        try:  # the recorded name, looked up in each search directory, never outside it
+            candidate_path = str(resolve_within(directory, filename))
+        except ValueError:
+            continue
+        if os.path.isfile(candidate_path):
+            logger.info("Path resolution found %s for %s", single_line(candidate_path), single_line(original_path))
             return candidate_path
-            
+
     return None

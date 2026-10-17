@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
@@ -12,6 +13,8 @@ from scipy import stats
 
 from biostats.design import design_matrix
 from biostats.references import REFERENCES
+
+logger = logging.getLogger(__name__)
 
 REFERENCES.setdefault(
     "hosmer2013",
@@ -124,8 +127,8 @@ def logistic_regression(
             alpha=alpha,
         )
         auc, auc_ci = d["auc"], (d["ci"].lower, d["ci"].upper)
-    except Exception:
-        pass
+    except Exception as exc:  # the AUC is reported as missing, the model itself stands
+        logger.warning("logistic regression: AUC of the fitted probabilities unavailable: %s", exc)
     events = int(y.sum())
     params, vcov = _coefficients(res, x)
     if events < 10 * (x.shape[1] - 1) or (len(y) - events) < 10 * (x.shape[1] - 1):

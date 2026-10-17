@@ -10,7 +10,6 @@ straight lines.
 
 from __future__ import annotations
 
-import logging
 import math
 from typing import Any, NamedTuple
 
@@ -24,8 +23,6 @@ from graph.model import (
     RenderOptions,
     SelectionResult,
 )
-
-logger = logging.getLogger(__name__)
 
 SYMBOL_MAP: dict[NodeShape, str] = {
     NodeShape.ELLIPSE: "circle",

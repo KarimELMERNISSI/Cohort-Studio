@@ -290,7 +290,7 @@ def cox_regression(
                 + " (Grambsch-Therneau p < 0.05)"
             )
     except _Skipped:
-        pass
+        pass  # diagnostics=False: no proportional-hazards test or concordance, as asked
     except ImportError:
         warnings.append(
             "install the 'survival' extra (lifelines) for the proportional-hazards test and the concordance index"

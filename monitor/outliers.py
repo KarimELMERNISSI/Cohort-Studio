@@ -218,6 +218,7 @@ def find_lof_outliers(data, n_neighbors=25, contamination='auto',
         )
         df_transformed = imputer.fit_transform(data)
         df_transformed = pd.DataFrame(df_transformed, columns=output_cols)
+        preprocessing = imputer
 
     else:
         debug_print("No missing values. Using encoding and scaling only.", debug=debug)
@@ -230,12 +231,13 @@ def find_lof_outliers(data, n_neighbors=25, contamination='auto',
         )
         df_transformed = preprocessor.fit_transform(data)
         df_transformed = pd.DataFrame(df_transformed, columns=list(preprocessor.get_feature_names_out()))
+        preprocessing = preprocessor
 
     debug_print(f"Transformed data shape: {df_transformed.shape}", debug=debug)
 
     # Define the full pipeline with preprocessing and Local Outlier Factor
     full_pipeline = Pipeline([
-        ('data_preprocessing', imputer if missing_values else preprocessor),
+        ('data_preprocessing', preprocessing),
         ('clf', LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination, novelty=False))
     ])
 

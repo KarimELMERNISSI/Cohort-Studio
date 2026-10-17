@@ -5,6 +5,8 @@ import os  # for path etc
 import pandas as pd  # for Dataframes manipulation
 from detect_delimiter import detect
 
+from utils.logging_config import single_line
+
 ######################################## LOAD DATAFRAME FROM FILES ########################################
 
 def create_folders(config):
@@ -123,7 +125,7 @@ def load_csv_with_separator(file_path, encoding, num_lines=30):
         df = pd.read_csv(file_path, sep=most_represented_separator, encoding=encoding)
         return df
     except Exception as e:
-        logging.error(f"Error loading CSV file '{file_path}': {e!s}")
+        logging.error(f"Error loading CSV file '{single_line(file_path)}': {e!s}")
         return None
 
 
@@ -153,40 +155,40 @@ def load_dataframe(file_path, encoding='utf-8'):
         try:
             df = load_csv_with_separator(file_path, encoding, num_lines=30)
         except Exception as e:
-            logging.error(f"Error reading CSV file '{file_path}': {e!s}")
+            logging.error(f"Error reading CSV file '{single_line(file_path)}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")
             return df
         else:
-            logging.error(f"Error loading CSV file '{file_path}': DataFrame is None")
+            logging.error(f"Error loading CSV file '{single_line(file_path)}': DataFrame is None")
             return None
     elif file_extension in ['.xls', '.xlsx']:
         try:
             df = pd.read_excel(file_path, engine='openpyxl')
         except Exception as e:
-            logging.error(f"Error reading Excel file '{file_path}': {e!s}")
+            logging.error(f"Error reading Excel file '{single_line(file_path)}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")
             return df
         else:
-            logging.error(f"Error loading Excel file '{file_path}': DataFrame is None")
+            logging.error(f"Error loading Excel file '{single_line(file_path)}': DataFrame is None")
             return None
     elif file_extension == '.parquet':
         try:
             df = pd.read_parquet(file_path)
         except Exception as e:
-            logging.error(f"Error reading Parquet file '{file_path}': {e!s}")
+            logging.error(f"Error reading Parquet file '{single_line(file_path)}': {e!s}")
             return None
         if df is not None:
             print("DataFrame loaded successfully.")
             return df
         else:
-            logging.error(f"Error loading Parquet file '{file_path}': DataFrame is None")
+            logging.error(f"Error loading Parquet file '{single_line(file_path)}': DataFrame is None")
             return None
     else:
-        logging.error(f"Unsupported file format: {file_extension}")
+        logging.error(f"Unsupported file format: {single_line(file_extension)}")
         return None
 
 ######################################## FUNCTIONS FOR SAVING FILES ########################################

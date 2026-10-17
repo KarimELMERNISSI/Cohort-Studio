@@ -34,6 +34,7 @@ from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
 from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
+from utils.logging_config import single_line
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 from utils.optional import available_methods, method_available, missing_methods_message
 from utils.session_scope import get_current_scope
@@ -42,8 +43,8 @@ from utils.session_scope import get_current_scope
 def _workspace_path(path_text: str) -> str:
     """Only files inside the signed-in user's workspace may be referenced by path (audit E4)."""
     scope = get_current_scope()
-    if scope is None:
-        return path_text
+    if scope is None:  # pages are behind sign-in: without a user there is no workspace to read from
+        raise ValueError("Sign in to reference a file of your workspace by its path.")
     return str(scope.resolve_within(path_text))
 
 
@@ -67,7 +68,6 @@ def _handle_multisheet_inline(uploaded_file, key_prefix: str) -> pd.DataFrame | 
     """
     # Check if we already loaded data for this prefix — return it immediately
     cache_key = f"{key_prefix}_loaded_df"
-    cache_path_key = f"{key_prefix}_loaded_path"
     if cache_key in st.session_state and st.session_state[cache_key] is not None:
         st.success(f"Multi-sheet data loaded ({st.session_state[cache_key].shape[0]} rows × {st.session_state[cache_key].shape[1]} columns)")
         return st.session_state[cache_key]
@@ -744,7 +744,7 @@ def tokenize_formula(formula: str) -> list[str]:
               .split(sep=" ; ")
               )
     tokens = [token.strip() for token in tokens]
-    logger.debug("formula tokens: %s", tokens)
+    logger.debug("formula tokens: %s", single_line(tokens))
     
     # Replace placeholders with the original quoted tokens
     for idx, token in enumerate(quoted_tokens):
@@ -1137,7 +1137,7 @@ def define_new_variables(main_data):
 
                 except TypeError:
                     st.error("Session outdated. Please refresh the page (F5) to apply the latest updates.")
-                    return
+                    return main_data
 
                 if error:
                     st.error(f"Error: {error}")
@@ -1217,8 +1217,8 @@ def define_new_variables(main_data):
                                 quoted_vars = {}
                                 # Find ""Variable Name"" pattern
                                 quoted_matches = re.findall(r'""([^"]+)""', temp_formula)
-                                for i, match in enumerate(quoted_matches):
-                                    placeholder = f"__quoted_var_{i}__"
+                                for k, match in enumerate(quoted_matches):  # not i: it keys this card's buttons
+                                    placeholder = f"__quoted_var_{k}__"
                                     quoted_vars[placeholder] = match
                                     temp_formula = temp_formula.replace(f'""{match}""', placeholder)
 
@@ -1768,6 +1768,7 @@ def compute_transformations(dataframe):
                         "Useful for understanding how much information is retained after reduction."
                 )
 
+        styled_df = None  # the contributions table, built in column 3 when it is shown
         with col3:
             if show_explained_variance and transformation in ["PCA", "FAMD"]:
                 
@@ -1840,8 +1841,6 @@ def compute_transformations(dataframe):
                 ax.grid(True)
                 st.pyplot(fig)
 
-                # Define styled_df for display
-                styled_df = None
                 if column_correlations is not None:
                     # Adapt styling for contributions (0-1) vs correlations (-1 to 1)
                     if transformation == "FAMD":
@@ -1885,7 +1884,7 @@ def compute_transformations(dataframe):
     if st.button("Apply Transformation", disabled=not (naming_pattern and columns)):
         if not columns:
             st.warning("Please select at least one column to proceed.")
-            return
+            return None
 
         new_columns = {}
 
@@ -1895,7 +1894,7 @@ def compute_transformations(dataframe):
                  st.error("**Input columns contain missing values (NaNs).**\n\n"
                           "Dimensionality reduction (PCA, t-SNE, etc.) and Clustering require complete data to function correctly.\n\n"
                           "**Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
-                 return
+                 return None
 
         try:
             if transformation_type == "Dimensionality Reduction":
@@ -1956,7 +1955,7 @@ def compute_transformations(dataframe):
                 
                 if len(prep_data) < 2:
                     st.error("Not enough valid data points for clustering.")
-                    return
+                    return None
                 
                 # Run Clustering
                 if transformation == "K-Means":
@@ -2073,11 +2072,12 @@ def compute_transformations(dataframe):
                 return result_df
             else:
                 st.warning("No transformations were applied.")
+                return None
 
         except Exception as e:
             st.error(f"Error applying transformation: {e!s}")
             return None
-        
+    return None
 
 
 
@@ -2182,6 +2182,7 @@ def app():
     ])
     # 1. Add External Data
     with main_tab:
+        filtered_main_data = filtered_enrichment_data = None  # set once each file is chosen
         with st.expander("Upload External Data", expanded=True):
             col1, col2 = st.columns(2)
 
@@ -2228,7 +2229,7 @@ def app():
 
 
         with st.expander("Results", expanded=False):
-            if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None and 'filtered_main_data' in locals():
+            if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None and filtered_main_data is not None:
                 display_external_data_results(st.session_state['enriched_df'], filtered_main_data)
             else:
                 st.warning("No enrichment results available. Please complete the enrichment process first.")
@@ -2237,7 +2238,6 @@ def app():
     # 2. Handle Missing Values
     with impute_tab:
         if st.session_state.get('enriched_df') is None:
-            _NO_DATA = "No dataset loaded. Upload a dataset from the sidebar or load a saved version first."
             no_dataset()
             with define_var_tab:
                 no_dataset()
@@ -2589,25 +2589,6 @@ def app():
         with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None and main_data is not None:
                 display_new_variables_results(main_data, main_data=st.session_state['working_df']) #st.session_state['enriched_df'] st.session_state['data']
-                
-                # st.dataframe(st.session_state['enriched_df'].head(), width='stretch')
-                
-                # col1, col2 = st.columns(2)
-                
-                # with col1:
-                #     st.download_button(
-                #         label="Download Dataset with New Variables",
-                #         data=to_excel(st.session_state['enriched_df']),
-                #         file_name="Dataset_with_New_Variables.xlsx",
-                #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                #         width='stretch'
-                #     )
-                # with col2:
-                #     # Save to session state
-                #     if st.button("Use This Dataset for Further Analysis ", width='stretch'):
-                #         st.session_state.data = st.session_state['enriched_df']
-                #         st.session_state.working_df = st.session_state['enriched_df']
-                #         st.success("Dataset saved and ready for further analysis!")
             else:
                 no_dataset()
 

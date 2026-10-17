@@ -43,7 +43,7 @@ with tab_workspace, st.container(border=True, width=760):
     try:
         st.code(str(state.db_manager.dataset_dir), language=None)
     except Exception:
-        pass
+        pass  # the folder path is informative only: the page works without it
     st.caption("Datasets, statistics caches, traces, uploads, taxonomies, knowledge graphs, documents and the vector store "
                "are private to your account.")
 

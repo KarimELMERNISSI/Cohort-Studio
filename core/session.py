@@ -46,7 +46,8 @@ class TraceSink(Protocol):
         population: Mapping[str, Any] | None = None,
         replayable: bool | None = None,
         recorded_at: str | None = None,
-    ) -> Any: ...
+    ) -> Any:
+        """Record one step of the trace (implemented by manage.transformation_manager)."""
 
 
 class StaleBaseError(RuntimeError):

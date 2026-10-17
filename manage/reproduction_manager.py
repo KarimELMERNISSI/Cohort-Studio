@@ -103,7 +103,8 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
     parse_options = None
     if steps and steps[0].get("function") == "initial_load":
         params = steps[0].get("params", {}) or {}
-        if (not source or not os.path.exists(str(source))) and params.get("source_path"):
+        # a trace is user-supplied JSON: its paths are looked up in the workspace only (_resolve), never as typed
+        if (not source or _resolve(str(source), path_overrides) is None) and params.get("source_path"):
             source = params["source_path"]
         if params.get("parse_options"):
             parse_options = ParseOptions.from_dict(params["parse_options"])

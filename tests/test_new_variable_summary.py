@@ -27,7 +27,7 @@ def test_entry_errors_are_found_and_do_not_hide_the_typical_values() -> None:
     extreme, low, high = far_outside(df["bmi"])
     # the three entry errors, and possibly a genuine extreme the user is asked to check (a BMI above 50)
     assert {3, 7, 9} <= set(extreme) and len(extreme) <= 4
-    assert low is not None and high is not None and low < 24 < 30 < high
+    assert low is not None and high is not None and low < 24 and high > 30
 
 
 def test_a_clean_variable_has_no_far_out_values() -> None:

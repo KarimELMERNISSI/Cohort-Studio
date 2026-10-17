@@ -246,7 +246,7 @@ def result_card(result: Any, *, title: str | None = None) -> None:
         with chip:
             sig = result.significant
             if sig is None:
-                status_chip("not computed", "na" if False else "neutral")
+                status_chip("not computed", "neutral")
             else:
                 status_chip("p < alpha" if sig else "p >= alpha", "info" if sig else "neutral")
         cols = st.columns(3)

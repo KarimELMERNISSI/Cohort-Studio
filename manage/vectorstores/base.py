@@ -131,14 +131,16 @@ class BaseVectorIndex(ABC):
         """Drop any previous index and create an empty one for vectors of ``dim`` dimensions."""
 
     @abstractmethod
-    def add(self, rows: list[ChunkRow]) -> None: ...
+    def add(self, rows: list[ChunkRow]) -> None:
+        """Store ``rows`` (their vectors, text and metadata) in the index."""
 
     @abstractmethod
     def query(self, vector: list[float], k: int, sources: list[str] | None = None) -> list[Hit]:
         """The ``k`` nearest chunks (cosine), with their vectors, optionally only from ``sources``."""
 
     @abstractmethod
-    def count(self) -> int: ...
+    def count(self) -> int:
+        """The number of chunks the index holds."""
 
     def optimize(self) -> None:
         """Build an approximate-search index when the engine benefits from it (large collections)."""

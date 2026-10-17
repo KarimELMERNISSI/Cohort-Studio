@@ -167,7 +167,7 @@ class DataQualityAuditor:
                     elif method == "Local Outlier Factor":
                         model = LocalOutlierFactor(contamination='auto')
                         predictions = model.fit_predict(scaled_data)
-                    elif method == "DBSCAN":
+                    else:  # DBSCAN, the last method of this branch
                         eps = params.get("eps", 0.5)
                         min_samples = params.get("min_samples", 5)
                         model = DBSCAN(eps=eps, min_samples=min_samples)
@@ -223,8 +223,8 @@ class DataQualityAuditor:
                 inconsistent_cols += 1
                 detail_rows.append((str(col), "numbers stored as text", int(len(values)), None))
                 continue
-            except:
-                pass
+            except Exception:
+                pass  # not numbers: the date check comes next
 
             # Check if it looks like a date
             try:
@@ -232,8 +232,8 @@ class DataQualityAuditor:
                 inconsistent_cols += 1
                 detail_rows.append((str(col), "dates stored as text", int(len(values)), None))
                 continue
-            except:
-                pass
+            except Exception:
+                pass  # not dates either: the column holds text, as its type says
         self.details["Consistency"] = _details(detail_rows)
 
         # Score: 100 - (percentage of potentially mis-typed columns)
@@ -428,8 +428,8 @@ class DataQualityAuditor:
                         "Mean_Observed": vals_observed.mean(),
                         "Difference": vals_missing.mean() - vals_observed.mean()
                     })
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("MAR check: t-test of %s by missingness of %s skipped: %s", col, target_col, exc)
                 
         return sorted(dependencies, key=lambda x: x['p_value'])
 
@@ -464,7 +464,8 @@ class DataQualityAuditor:
                     try:
                         _, p_val = stats.ttest_ind(vals_missing, vals_observed, equal_var=False)
                         p_values.append(p_val)
-                    except: pass
+                    except Exception as exc:
+                        logger.debug("MCAR check: t-test of %s by missingness of %s skipped: %s", col, target_col, exc)
         
         if not p_values:
              return {"p_value": 1.0, "interpretation": "Insufficient data to test MCAR", "is_mcar": True}

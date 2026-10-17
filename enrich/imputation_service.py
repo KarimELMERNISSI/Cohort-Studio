@@ -156,11 +156,6 @@ def apply_imputer(data, numerical_imputation_method='mean', categorical_imputati
         return data, initial_null_mask
 
 
-# Options that change the columns of the table: with only part of the rows imputed they would leave the
-# other rows in another encoding or scale, so they are reserved for imputations of every row.
-_COLUMN_CHANGING = ("cat_encoder", "num_scaler")
-
-
 @dataclass(frozen=True)
 class ImputationOutcome:
     frame: pd.DataFrame  # the whole table: imputed rows filled, the others untouched
@@ -189,6 +184,7 @@ def impute_rows(
     """
     index = frame.index if rows is None else pd.Index(rows)
     partial = len(index) != len(frame)
+    # with only part of the rows imputed, the other rows would be left in another encoding or scale
     if partial and (cat_encoder or num_scaler or remainder_strategy == "drop"):
         raise ValueError(
             "One-hot encoding, scaling and dropping remainder columns change the columns of the table: "

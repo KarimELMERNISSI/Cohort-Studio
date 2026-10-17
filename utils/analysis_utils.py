@@ -29,8 +29,7 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     """
     # Prepare data
     clean_df = df[[group_col, target]].dropna()
-    groups_data = [clean_df[clean_df[group_col] == g][target] for g in clean_df[group_col].unique()]
-    
+
     is_numeric = target in numeric_cols
     is_categorical = target in categorical_cols or target in binary_cols
     
@@ -38,6 +37,7 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     p_value = np.nan
     statistic = np.nan
     assumption_notes = []
+    epi_2x2_data = None  # the 2x2 measures, for a binary outcome only
     reasoning = []
 
     # Effect Size Calculation
@@ -98,7 +98,6 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         else:
             use_test = manual_test
 
-        epi_2x2_data = None
         if contingency_table.shape == (2, 2):
             from biostats.contingency import TwoByTwo, analyze_twobytwo
             try:
@@ -147,7 +146,7 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         "Assumptions": "; ".join(assumption_notes),
         "Sample Info": sample_info
     }
-    if 'epi_2x2_data' in locals() and epi_2x2_data:
+    if epi_2x2_data:
         ret_dict["epi_2x2"] = epi_2x2_data
     return ret_dict
 

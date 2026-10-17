@@ -74,6 +74,20 @@ def test_resolve_within_blocks_escapes(root: Path) -> None:
         alice.dir("nope")
 
 
+def test_a_sibling_directory_sharing_the_prefix_is_outside(tmp_path: Path) -> None:
+    # a prefix check must stop at a separator: alice2 is not inside alice
+    (tmp_path / "alice").mkdir()
+    (tmp_path / "alice2").mkdir()
+    with pytest.raises(ValueError):
+        resolve_within(tmp_path / "alice", tmp_path / "alice2" / "secret.csv")
+    with pytest.raises(ValueError):
+        resolve_within(tmp_path / "alice", "../alice2/secret.csv")
+    assert resolve_within(tmp_path / "alice", ".") == (tmp_path / "alice").resolve()
+    assert (
+        resolve_within(tmp_path / "alice", "a/../b.csv") == (tmp_path / "alice" / "b.csv").resolve()
+    )
+
+
 def test_only_a_pdf_of_the_library_can_be_removed(root: Path) -> None:
     library = UserScope.for_user("alice").documents_dir()
     (library / "paper.pdf").write_bytes(b"%PDF-1.4")

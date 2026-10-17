@@ -198,7 +198,7 @@ def render(groups: dict[str, list[tuple[str, str]]]) -> str:
         lines.append("- No copyleft licence among the shipped packages.")
     lines += [
         "- One optional component is proprietary and needs an internet connection: the yFiles graph engine "
-        "(group `graph-yfiles`, not installed by default). See below.",
+        + "(group `graph-yfiles`, not installed by default). See below.",
         "",
         YFILES,
     ]

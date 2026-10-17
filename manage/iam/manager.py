@@ -10,6 +10,8 @@ import logging
 import os
 from typing import Any
 
+from utils.logging_config import single_line
+
 from . import setup_token
 from .base import BaseIAMProvider
 from .providers.better_auth import BetterAuthIAMProvider
@@ -215,7 +217,7 @@ class IAMManager:
         ok, msg = self._provider.create_user(username, password, role=UserRole.ADMIN, auto_activate=True)
         if ok:
             setup_token.clear(self._setup_dir())
-            logger.info("First administrator '%s' created with the setup token.", username)
+            logger.info("First administrator '%s' created with the setup token.", single_line(username))
         return ok, msg
 
     def ensure_bootstrap_admin(self) -> tuple[bool, str]:

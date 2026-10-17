@@ -387,8 +387,8 @@ def app():
                             unique_categories = df[x_col].dropna().unique()
                             try:
                                 unique_categories = sorted(unique_categories)
-                            except:
-                                pass
+                            except TypeError:
+                                pass  # mixed types cannot be sorted: keep the order of appearance
 
                             for j, category in enumerate(unique_categories):
                                 show_legend = i == 0
@@ -512,8 +512,8 @@ def app():
                             unique_categories = df[x_col].dropna().unique()
                             try:
                                 unique_categories = sorted(unique_categories)
-                            except:
-                                pass
+                            except TypeError:
+                                pass  # mixed types cannot be sorted: keep the order of appearance
 
                             for j, category in enumerate(unique_categories):
                                 show_legend = i == 0
@@ -643,7 +643,7 @@ def app():
                                     trace.contours.coloring = 'fill'
                                     trace.showscale = False
                                 except Exception:
-                                    pass
+                                    pass  # the gradient is cosmetic: the contour keeps its default fill
                 elif scatter_mode == "Density Heatmap (2D Hist)":
                     fig = px.density_heatmap(
                         df, x=x_col, y=y_col,

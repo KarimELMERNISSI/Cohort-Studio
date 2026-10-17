@@ -863,7 +863,6 @@ def app():
             else:
                 st.markdown(f"**Found {len(filtered_forms)} formulas**")
                 # Create readable labels
-                f_opts = [f[0] for f in filtered_forms]
                 f_labels = [f"{f[1].get('name', 'Unknown')} ({f[0]})" for f in filtered_forms]
                 
                 sel_f_idx = st.radio("Select Formula", range(len(filtered_forms)), format_func=lambda x: f_labels[x], label_visibility="collapsed")

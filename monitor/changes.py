@@ -59,29 +59,6 @@ def highlight_modifications_tuples(row, dataset, common_id_only_in_df1, common_i
     return styles
 
 
-# def keep_modifications(row, common_id_only_in_df1, common_id_only_in_df2, common_id='visit_id'):
-#     """
-#     Filter out rows where 'modification' column is False and where visit_id is not in visit_id_only_in_df1 or visit_id_only_in_df2.
-#     """
-#     keep_row = False
-    
-#     # Keep rows where 'modification' column is True
-#     if row['modification']:
-#         keep_row = True
-    
-#     # Keep rows where visit_id is only in df1
-#     if common_id_only_in_df1 is not None:
-#         if row[common_id] in common_id_only_in_df1:
-#             keep_row = True
-    
-#     # Keep rows where visit_id is only in df2
-#     if common_id_only_in_df2 is not None:        
-#         if row[common_id] in common_id_only_in_df2:
-#             keep_row = True
-    
-#     return keep_row
-
-
 def keep_modifications(row, common_id_only_in_df1, common_id_only_in_df2, common_id=('subject_id', 'visit_id')):
     """
     Filter out rows where 'modification' column is False and where common_id (tuple) is not in 

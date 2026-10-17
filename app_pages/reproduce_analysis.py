@@ -14,7 +14,7 @@ from manage.reproduction_manager import run_trace
 from manage.trace_documenter import TraceDocumenter
 from ui.progress import current_trace_session, mark_step
 from ui.state import get_state
-from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
+from utils.data_paths import get_traces_dir, get_uploads_dir
 from utils.path_utils import normalize_path, resolve_path
 from utils.session_scope import get_current_scope
 
@@ -42,10 +42,8 @@ def _resolve_user_path(text: str | None) -> str | None:
         return None
     fixed = text.replace("\\", "/")
     scope = get_current_scope()
-    if scope is None:
-        for candidate in (fixed, os.path.join(get_data_root(), fixed)):
-            if os.path.exists(candidate):
-                return candidate
+    if scope is None:  # pages are behind sign-in: without a user there is no workspace to read from
+        st.error("Sign in to reference a file of your workspace by its path.")
         return None
     bases = [scope.root, *scope.search_dirs()]
     for base in bases:
@@ -543,10 +541,11 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     # 2. Full replay through the single engine (manage.reproduction_manager, audit E10)
     overrides = dict(st.session_state.get('resolved_paths', {}))
     source_dataset = trace_data.get('source_dataset')
-    if (not source_dataset or not os.path.exists(str(source_dataset))) and steps:
+    # a trace is user-supplied JSON: its paths are looked up in the workspace only (resolve_path), never as typed
+    if (not source_dataset or resolve_path(str(source_dataset)) is None) and steps:
         first_step = steps[0]
         candidate_path = (first_step.get('params') or {}).get('source_path') if first_step.get('function') == 'initial_load' else None
-        if candidate_path and os.path.exists(candidate_path):
+        if candidate_path and resolve_path(candidate_path):
             source_dataset = candidate_path
     resolved_source = resolve_path(source_dataset) if source_dataset else None
     if source_dataset and not resolved_source:

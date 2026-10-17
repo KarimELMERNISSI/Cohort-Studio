@@ -295,11 +295,11 @@ class TaxonomyMixin:
                         updated_taxonomy[target_key]['related_formula_ids'] = list(set(current_formulas + new_formulas))
                         
             except json.JSONDecodeError:
-                pass
-            
+                pass  # the answer is not JSON: no formula links are added
+
         except Exception:
-            pass
-            
+            pass  # optional step: the taxonomy is returned without formula links
+
         return updated_taxonomy
 
     def _contextualize_variables(self, taxonomy, columns_info):
@@ -330,7 +330,7 @@ class TaxonomyMixin:
                 if var in updated_taxonomy:
                     updated_taxonomy[var]['clinical_usage'] = data.get('clinical_usage', "")
         except Exception:
-            pass
+            pass  # optional step: the taxonomy is returned without clinical usage
             
         return updated_taxonomy
 
@@ -385,9 +385,9 @@ class TaxonomyMixin:
                         current_links = updated_taxonomy[mapped_out].get('related_formula_ids', [])
                         if f_id not in current_links:
                             updated_taxonomy[mapped_out]['related_formula_ids'] = current_links + [f_id]
-                            
+
         except Exception:
-            pass
+            pass  # optional step: formula inputs outside the dataset stay unresolved
             
         return updated_taxonomy
 

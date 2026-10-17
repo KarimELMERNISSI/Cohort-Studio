@@ -123,7 +123,6 @@ def render_quality_overview(evaluator):
         if metrics_by_date:
             dates = sorted(metrics_by_date.keys())
             scores = [metrics_by_date[d]["avg_score"] for d in dates]
-            counts = [metrics_by_date[d]["count"] for d in dates]
             
             fig = go.Figure()
             fig.add_trace(go.Scatter(

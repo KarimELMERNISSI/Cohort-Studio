@@ -15,6 +15,7 @@ import bcrypt
 import duckdb
 
 import utils.data_paths as dp
+from utils.logging_config import single_line
 
 from ..base import BaseIAMProvider
 from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
@@ -81,17 +82,17 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             try:
                 con.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT FALSE")
             except Exception:
-                pass
+                pass  # the column already exists
 
             try:
                 con.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
             except Exception:
-                pass
+                pass  # the column already exists
 
             try:
                 con.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'researcher'")
             except Exception:
-                pass
+                pass  # the column already exists
 
             for migration in (
                 "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0",
@@ -100,7 +101,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 try:
                     con.execute(migration)
                 except Exception:
-                    pass
+                    pass  # the column already exists
 
         except Exception as e:
             logger.error(f"Error initializing local user database: {e}")
@@ -223,7 +224,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 return True, "User created and activated successfully"
             return True, "Account created! Please wait for admin approval to access the app."
         except Exception as e:
-            logger.error(f"Error creating user {username}: {e}")
+            logger.error("Error creating user %s: %s", single_line(username), e)
             return False, f"Error creating user: {e}"
         finally:
             con.close()

@@ -94,7 +94,7 @@ class DocumentsMixin:
                 try:
                     client.files.delete(name=uploaded_file.name)
                 except Exception:
-                    pass
+                    pass  # best-effort clean-up: the provider expires uploaded files on its own
 
                 json_str = response.text
             else:

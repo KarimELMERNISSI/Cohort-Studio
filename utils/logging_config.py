@@ -36,6 +36,11 @@ def redact_secrets(text: str) -> str:
     return _KEY_FIELD.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", text)
 
 
+def single_line(value: object) -> str:
+    """``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry."""
+    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+
+
 class RedactSecrets(logging.Filter):
     """Rewrites each record without API keys, its traceback included."""
 

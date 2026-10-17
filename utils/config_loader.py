@@ -67,12 +67,15 @@ def transform_expression(expression, df_name='df'):
     # 1. Quoted variable names allowing spaces and special characters within quotes.
     # 2. Unquoted variable names (including single letters) that start with a letter or underscore, 
     #    and may include spaces or digits, forming multi-word names.
-    variable_pattern = r"(['\"])(.*?)\1|\b([a-zA-Z_]\w*(?:\s+\w+)*)\b"
-    
+    # A quoted name is a run of anything but its own quote, so a long expression cannot make the pattern
+    # backtrack (polynomial ReDoS); the same holds for the name inside df['...'] below.
+    variable_pattern = r"\"([^\"]*)\"|'([^']*)'|\b([a-zA-Z_]\w*(?:\s+\w+)*)\b"
+
     def replace_variable(match):
-        # Handle quoted variables (group 2)
-        if match.group(1):  # Quoted match
-            return f"{df_name}[\"{match.group(2)}\"]"
+        # Handle quoted variables (group 1 or 2)
+        quoted = match.group(1) if match.group(1) is not None else match.group(2)
+        if quoted is not None:
+            return f"{df_name}[\"{quoted}\"]"
         # Handle unquoted variables (group 3)
         elif match.group(3):  # Unquoted variable (can be a single letter or multi-word)
             return f"{df_name}['{match.group(3).strip()}']"
@@ -80,8 +83,8 @@ def transform_expression(expression, df_name='df'):
 
     # Substitute the matches in the expression for variables
     transformed_expression = re.sub(variable_pattern, replace_variable, expression.strip())
-    
+
     # Insert multiplication symbol * between a number and df[] if no operator exists
-    transformed_expression = re.sub(r"(\d)\s*(df\['[^\]]+'\])", r"\1 * \2", transformed_expression)
+    transformed_expression = re.sub(r"(\d)\s*(df\['[^'\]]+'\])", r"\1 * \2", transformed_expression)
     
     return transformed_expression

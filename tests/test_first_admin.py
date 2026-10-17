@@ -83,11 +83,10 @@ def test_the_logged_token_is_kept_until_a_new_one_is_asked_for(
 def test_the_command_line_bootstrap_and_setup_token(
     iam: IAMManager, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    import manage.iam as iam_package
     import manage_users
 
     monkeypatch.setattr(manage_users, "get_iam_manager", lambda: iam)
-    monkeypatch.setattr(iam_package, "get_iam_manager", lambda: iam)
+    monkeypatch.setattr("manage.iam.get_iam_manager", lambda: iam)
     manage_users.main(["bootstrap"])
     assert "Administrator bootstrap: Setup token issued" in capsys.readouterr().out
     manage_users.main(["setup-token"])

@@ -86,18 +86,14 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
     # Prepare data
     if sample_col:
         # Handle multiple columns for sample identifier
-        if isinstance(sample_col, list):
-            if not sample_col: # Empty list
-                df_indexed = df.copy()
-                df_indexed.index = df_indexed.index.astype(str)
-            else:
-                # Check for duplicates in the combination of columns
-                if df[sample_col].duplicated().any():
-                    return None, f"Sample columns '{sample_col}' contain duplicates. Clustermap requires unique samples."
-                
-                # Create a combined index for display
-                df_indexed = df.copy()
-                df_indexed.index = df[sample_col].astype(str).agg('_'.join, axis=1)
+        if isinstance(sample_col, list):  # non-empty here (an empty list is falsy: the else below)
+            # Check for duplicates in the combination of columns
+            if df[sample_col].duplicated().any():
+                return None, f"Sample columns '{sample_col}' contain duplicates. Clustermap requires unique samples."
+
+            # Create a combined index for display
+            df_indexed = df.copy()
+            df_indexed.index = df[sample_col].astype(str).agg('_'.join, axis=1)
         else:
             # Single column
             if df[sample_col].duplicated().any():
@@ -823,7 +819,7 @@ def resample_data(df, x_col, y_col, color_col, time_granularity, agg):
                 freq = 'D'
             elif time_granularity == "Month":
                 freq = '30D'
-            elif time_granularity == "Year":
+            else:  # Year, the last of the four granularities the page offers
                 freq = '365D'
         else:
             if time_granularity == "Hour":
@@ -832,7 +828,7 @@ def resample_data(df, x_col, y_col, color_col, time_granularity, agg):
                 freq = 'D'
             elif time_granularity == "Month":
                 freq = 'ME'
-            elif time_granularity == "Year":
+            else:  # Year, the last of the four granularities the page offers
                 freq = 'YE'
 
         def custom_agg(series):
@@ -854,8 +850,6 @@ def create_qq_plot(data, title="Q-Q Plot"):
     """
     Generates a Q-Q plot using Plotly to check for normality.
     """
-    # Standardize data
-    z_scores = stats.zscore(data)
     # Get theoretical quantiles
     (osm, osr), (slope, intercept, r) = stats.probplot(data, dist="norm")
     
@@ -1203,8 +1197,7 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
     # Settings
     w_row_dendro = 0.11 if (show_dendrograms and cluster_rows) else 0.0
     w_missing = 0.025
-    w_gap = 0.0
-    
+
     h_col_dendro = 0.12 if (show_dendrograms and cluster_cols) else 0.0
     
     # 1. Horizontal Domains (X-Axis)

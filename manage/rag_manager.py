@@ -9,7 +9,6 @@ This is the main RAGManager class that composes functionality from mixin classes
 The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code.
 """
-import ast
 import json
 import os
 import re
@@ -63,7 +62,7 @@ def _env_api_key(provider: str | None) -> str | None:
 # Try importing RAG dependencies
 try:
     from langchain_core.output_parsers import StrOutputParser
-    from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+    from langchain_core.prompts import ChatPromptTemplate
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     from manage.rag import (
@@ -484,11 +483,6 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             ("human", "{input}"),
         ])
 
-        document_prompt = PromptTemplate(
-            input_variables=["page_content", "source", "page"],
-            template="Document: {source} | Page: {page}\nContent: {page_content}\n----------------"
-        )
-
         retriever = self.vector_store.as_retriever(
             search_type="mmr", 
             search_kwargs={"k": 8, "fetch_k": 20}
@@ -519,13 +513,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         """
         if not self.initialized:
             return {}, {}, "RAG system not initialized."
-            
-        # Get existing variables for context
-        existing_keys = set(current_taxonomy.keys())
-        
-        # Get format info from columns
-        columns_str = ", ".join([c.get("name", str(c)) if isinstance(c, dict) else str(c) for c in columns_info])
-        
+
         # Build variable context
         vars_desc_list = []
         for k, v in current_taxonomy.items():
@@ -663,8 +651,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                                     # If no error and looks like a date, suggest dayfirst=True just in case
                                     if any(re.match(r'\d{2}[-/]\d{2}[-/]\d{4}', v) for v in head_vals):
                                          date_hints.append(f"Column '{col}' might be Day-First. Use dayfirst=True.")
-                                except:
-                                    pass
+                                except Exception:
+                                    pass  # not a date: no hint for this column
                     
                     if date_hints:
                         sample_str += "\n\nDate Parsing Hints:\n" + "\n".join(date_hints)
@@ -672,7 +660,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 # If it's a list/dict
                 elif isinstance(sample_data, (list, dict)):
                     sample_str = str(sample_data)
-            except:
+            except Exception:
                 sample_str = str(sample_data)
 
         prompt = anomaly_criteria_prompt(description, columns_info, sample_str, mode)
@@ -682,21 +670,6 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             cleaned = self._clean_json_response(response.content)
             data = json.loads(cleaned)
             criteria_list = data.get("criteria", [])
-            
-            # Helper to extract variables from expression
-            def extract_variables(expression):
-                try:
-                    tree = ast.parse(expression, mode='eval')
-                    names = set()
-                    for node in ast.walk(tree):
-                        if isinstance(node, ast.Name):
-                            names.add(node.id)
-                        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                            # Heuristic for df['Col'] where 'Col' is a string constant
-                            names.add(node.value)
-                    return names
-                except:
-                    return set()
 
             # Enhanced validation: Check for missing variables
             # Simple heuristic: Look for strings inside brackets ['...'] as potential column names

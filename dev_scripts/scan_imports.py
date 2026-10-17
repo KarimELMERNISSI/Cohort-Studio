@@ -37,8 +37,8 @@ for dirpath, _, fnames in os.walk(root):
                             mod = m.group(1)
                             if mod not in STDLIB and mod not in LOCAL and not mod.startswith('_'):
                                 imports.add(mod)
-            except:
-                pass
+            except OSError:
+                pass  # an unreadable file is skipped: the scan is a rough inventory
 
 for i in sorted(imports):
     print(i)

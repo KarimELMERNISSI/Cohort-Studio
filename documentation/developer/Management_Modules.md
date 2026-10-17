@@ -225,7 +225,7 @@ source documents. Each engine translates that into its own storage and filter la
 Streamlit here (service layer)._
 
 **Imports**:
-`__future__.annotations`, `json`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.asdict`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `enum.StrEnum`, `pathlib.Path`, `typing.Any`, `typing.ClassVar`
+`__future__.annotations`, `json`, `abc.ABC`, `abc.abstractmethod`, `collections.abc.Iterable`, `dataclasses.asdict`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `enum.StrEnum`, `pathlib.Path`, `typing.Any`, `typing.ClassVar`
 
 ### class `VectorEngine` (base.py)
 
@@ -288,13 +288,13 @@ Storage of chunks in one engine. Implementations: :mod:`.lancedb_index`, :mod:`.
   > Drop any previous index and create an empty one for vectors of ``dim`` dimensions.
 
 - **add**(`self, rows: list[ChunkRow]`) -> `None`
-  > No description available.
+  > Store ``rows`` (their vectors, text and metadata) in the index.
 
 - **query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
   > The ``k`` nearest chunks (cosine), with their vectors, optionally only from ``sources``.
 
 - **count**(`self`) -> `int`
-  > No description available.
+  > The number of chunks the index holds.
 
 - **optimize**(`self`) -> `None`
   > Build an approximate-search index when the engine benefits from it (large collections).
@@ -307,6 +307,15 @@ Storage of chunks in one engine. Implementations: :mod:`.lancedb_index`, :mod:`.
 
 - **write_manifest**(`self, manifest: IndexManifest`) -> `None`
   > No description available.
+
+### def `index_matches` (base.py)
+
+- **Arguments**: `manifest: ComplexType, documents: Iterable[str]`
+
+- **Returns**: `bool`
+
+Whether an index was built from exactly these documents: after a document is added to or removed from the
+library, the index must be rebuilt rather than reused.
 
 ---
 
@@ -393,7 +402,7 @@ Ollama by default, so the document library never leaves the server for indexing)
 Claude models choose their own sampling: the temperature setting of the app is not sent._
 
 **Imports**:
-`__future__.annotations`, `logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`__future__.annotations`, `logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `ClaudeChatConnector` (claude.py)
 
@@ -626,7 +635,7 @@ engine. Filtering by document is expressed as a list of sources; the legacy Chro
 (``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `logging`, `time`, `collections.abc.Callable`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `langchain_core.callbacks.CallbackManagerForRetrieverRun`, `langchain_core.documents.Document`, `langchain_core.embeddings.Embeddings`, `langchain_core.retrievers.BaseRetriever`, `langchain_core.vectorstores.utils.maximal_marginal_relevance`, `pydantic.ConfigDict`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorStoreError`
+`__future__.annotations`, `hashlib`, `time`, `collections.abc.Callable`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `langchain_core.callbacks.CallbackManagerForRetrieverRun`, `langchain_core.documents.Document`, `langchain_core.embeddings.Embeddings`, `langchain_core.retrievers.BaseRetriever`, `langchain_core.vectorstores.utils.maximal_marginal_relevance`, `pydantic.ConfigDict`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorStoreError`
 
 ### class `DocumentIndex` (document_index.py)
 
@@ -884,7 +893,7 @@ Factory for creating LLM and Embedding connectors.
 _No module description._
 
 **Imports**:
-`logging`, `os`, `pandas`, `detect_delimiter.detect`
+`logging`, `os`, `pandas`, `detect_delimiter.detect`, `utils.logging_config.single_line`
 
 ### def `create_folders` (file_handling.py)
 
@@ -1023,7 +1032,7 @@ Utilizes the modern `google-genai` SDK (v2.x) with retry logic,
 temperature controls, and embedding integration._
 
 **Imports**:
-`logging`, `random`, `time`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`logging`, `random`, `time`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `GeminiChatConnector` (gemini.py)
 
@@ -1144,7 +1153,7 @@ and bcrypt password hashing. Designed for single-node deployments, air-gapped
 clinical environments, and full backward compatibility._
 
 **Imports**:
-`logging`, `os`, `datetime.datetime`, `datetime.timedelta`, `typing.Any`, `typing.cast`, `bcrypt`, `duckdb`, `utils.data_paths`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `datetime.datetime`, `datetime.timedelta`, `typing.Any`, `typing.cast`, `bcrypt`, `duckdb`, `utils.data_paths`, `utils.logging_config.single_line`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `LocalDuckDBIAMProvider` (local_duckdb.py)
 
@@ -1213,7 +1222,7 @@ Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
 Better Auth, or Disabled) based on environment configuration or runtime parameters._
 
 **Imports**:
-`logging`, `os`, `typing.Any`, `.setup_token`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `typing.Any`, `utils.logging_config.single_line`, `.setup_token`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `IAMManager` (manager.py)
 
@@ -1404,7 +1413,7 @@ Integrates European sovereign models (Mistral Small, Mistral Large, Codestral)
 and Mistral Embeddings via Mistral OpenAI-compatible API._
 
 **Imports**:
-`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `MistralChatConnector` (mistral.py)
 
@@ -1453,7 +1462,7 @@ open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
 (Nomic Embed Text, BGE-M3, etc.) via Ollama REST API._
 
 **Imports**:
-`logging`, `typing.Any`, `httpx`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`
+`logging`, `typing.Any`, `httpx`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`
 
 ### class `OllamaChatConnector` (ollama.py)
 
@@ -1507,7 +1516,7 @@ Integrates OpenAI chat completion models (GPT-4o, GPT-4o-mini) and embeddings
 (text-embedding-3-small, text-embedding-3-large) using official OpenAI client._
 
 **Imports**:
-`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `OpenAIChatConnector` (openai.py)
 
@@ -1642,7 +1651,7 @@ Contains all computed variable suggestion and validation methods.
 This is part of the RAGManager class composition pattern._
 
 **Imports**:
-`ast`, `hashlib`, `json`, `logging`, `re`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.validate_and_parse`, `rag_schemas.AlternativeFormula`, `rag_schemas.ProxyVariable`
+`ast`, `hashlib`, `json`, `logging`, `re`, `utils.llm_utils.ProviderError`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.llm_utils.validate_and_parse`, `rag_schemas.AlternativeFormula`, `rag_schemas.ProxyVariable`
 
 ### class `ComputedVarsMixin` (rag_computed_vars.py)
 
@@ -1651,7 +1660,7 @@ Mixin class containing computed variable functionality for RAGManager.
 Methods:
     - _expand_search_hint
 
-    - suggest_computed_variables
+    - suggest_computed_variables (and _suggest_variables, the pipeline it guards)
 
     - _get_theoretical_formulas
 
@@ -1670,6 +1679,9 @@ Methods:
 
 - **suggest_computed_variables**(`self, columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback`) -> `None`
   > Suggests computed variables based on dataset columns and medical knowledge.
+
+- **_suggest_variables**(`self, columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback`) -> `None`
+  > The suggestions as JSON; raises ProviderError when the model answers with an error.
 
 - **_get_theoretical_formulas**(`self, search_hint, suggestion_mode, context_text, count, available_columns, use_taxonomy`) -> `None`
   > Step 1: Identify WHAT to calculate (Standard Medical Knowledge).
@@ -1924,7 +1936,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`ast`, `json`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -2329,7 +2341,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.session.SINGLE_IMPUTATION_STEPS`, `core.session.filled_cells`, `core.session.merge_cells`, `core.session.restrict_cells`, `core.state.ParseOptions`, `enrich.formulas.evaluate_formula_safely`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `enrich.formulas.evaluate_formula_safely`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
 
 ### class `ReplayResult` (reproduction_manager.py)
 

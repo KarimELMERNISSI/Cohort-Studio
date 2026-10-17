@@ -18,7 +18,6 @@ def app():
     """Render the Users page."""
     
     # Double-check admin access (should already be filtered in main.py)
-    username = st.session_state.get('username')
     if not is_admin_role(st.session_state.get('user_role')):
         st.error("Access Denied. Admin privileges required.")
         st.stop()

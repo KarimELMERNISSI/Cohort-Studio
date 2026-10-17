@@ -62,7 +62,6 @@ STATUS_COLORS = {
 }
 
 PLOTLY_TEMPLATE_NAME = "cmp"
-_registered = False
 
 
 def config_theme(config_path: Path | None = None) -> dict:
@@ -82,11 +81,10 @@ def brand_asset(name: str) -> str:
 
 def plotly_template():
     """Register (once) and return the application's Plotly template."""
-    global _registered
     import plotly.graph_objects as go
     import plotly.io as pio
 
-    if not _registered:
+    if PLOTLY_TEMPLATE_NAME not in pio.templates:  # the registry is the state: once per process
         base = pio.templates["plotly_white"]
         template = go.layout.Template(base)
         layout = template.layout
@@ -97,7 +95,6 @@ def plotly_template():
         layout.legend = {"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0}  # type: ignore[union-attr]
         pio.templates[PLOTLY_TEMPLATE_NAME] = template
         pio.templates.default = PLOTLY_TEMPLATE_NAME
-        _registered = True
     return pio.templates[PLOTLY_TEMPLATE_NAME]
 
 

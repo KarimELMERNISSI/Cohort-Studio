@@ -21,7 +21,6 @@ from graph.model import GraphSpec, RenderOptions, SelectionResult
 logger = logging.getLogger(__name__)
 
 RENDERER_OVERRIDE_KEY = "graph_renderer_override"
-_NOTICE_FLAG = "_graph_license_notice_shown"
 
 
 def current_theme() -> str:

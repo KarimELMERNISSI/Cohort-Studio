@@ -12,6 +12,7 @@ session state.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,17 +65,19 @@ def safe_filename(name: str | None, default: str = "file") -> str:
 
 
 def resolve_within(base: Path, candidate: str | Path) -> Path:
-    """Resolve ``candidate`` (absolute or relative to ``base``) and require it to stay inside ``base``."""
-    base = Path(base).resolve()
-    path = Path(candidate)
-    if not path.is_absolute():
-        path = base / path
-    path = path.resolve()
-    try:
-        path.relative_to(base)
-    except ValueError as exc:
-        raise ValueError(f"'{candidate}' is outside the allowed directory {base}.") from exc
-    return path
+    """Resolve ``candidate`` (absolute or relative to ``base``) and require it to stay inside ``base``.
+
+    Written as normalise-then-check-the-prefix (``os.path.realpath``, then ``startswith``), the form that code
+    scanning (CodeQL) recognises as confining a path chosen by the user.
+    """
+    root = os.path.realpath(base)
+    path = os.path.realpath(os.path.join(root, candidate))  # an absolute candidate replaces root
+    if path == root:
+        return Path(root)
+    inside = root if root.endswith(os.sep) else root + os.sep  # a drive root already ends with one
+    if not path.startswith(inside):
+        raise ValueError(f"'{candidate}' is outside the allowed directory {root}.")
+    return Path(path)
 
 
 def remove_pdf(folder: str | Path, name: str) -> bool:

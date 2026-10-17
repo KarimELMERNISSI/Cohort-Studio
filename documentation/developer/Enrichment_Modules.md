@@ -426,7 +426,7 @@ give days, and evaluates it through the whitelisted evaluator (``core.expression
 it as well, so a derived variable is recomputed exactly as it was created._
 
 **Imports**:
-`ast`, `datetime`, `logging`, `re`, `typing.Any`, `numpy`, `pandas`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`
+`ast`, `datetime`, `logging`, `re`, `typing.Any`, `numpy`, `pandas`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.logging_config.single_line`
 
 ### def `validate_variable_name` (formulas.py)
 

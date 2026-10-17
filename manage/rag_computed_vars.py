@@ -103,7 +103,6 @@ class ComputedVarsMixin:
 
     def _suggest_variables(self, columns, search_hint, num_suggestions, suggestion_mode, allow_missing_variables, use_taxonomy, existing_categories, progress_callback):
         """The suggestions as JSON; raises ProviderError when the model answers with an error."""
-        original_hint = search_hint
         if search_hint:
             if progress_callback: progress_callback(5, "Analyzing search term...")
             search_hint = self._expand_search_hint(search_hint)

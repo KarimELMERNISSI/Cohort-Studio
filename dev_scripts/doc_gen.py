@@ -25,10 +25,8 @@ def parse_function(node):
     for arg in node.args.args:
         annotation = get_annotation(arg.annotation)
         args.append(f"{arg.arg}: {annotation}" if annotation else arg.arg)
-    
-    defaults = [None] * (len(node.args.args) - len(node.args.defaults)) + node.args.defaults
-    # Merging defaults could be done but for summary simple args listing is often enough.
-    
+    # default values are not listed: for a summary the argument names are enough
+
     returns = get_annotation(node.returns)
     docstring = ast.get_docstring(node)
     

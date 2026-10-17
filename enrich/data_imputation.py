@@ -4,7 +4,7 @@ from sklearn.base import TransformerMixin
 from sklearn.compose import ColumnTransformer  # split some of our processing to specific columns
 from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import (  # to use basic (median, mean, most_frequent, constant, etc.) and knn imputers
-    IterativeImputer,  # Now import IterativeImputer
+    IterativeImputer,  # importable only after the side-effect import of enable_iterative_imputer above
     KNNImputer,
     SimpleImputer,
 )

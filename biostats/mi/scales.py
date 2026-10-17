@@ -51,9 +51,7 @@ def _expit(x: float) -> float:
 
 
 SCALES: dict[str, Scale] = {
-    "identity": Scale(
-        "identity", lambda x: float(x), lambda x: float(x), lambda x: 1.0, -np.inf, np.inf
-    ),
+    "identity": Scale("identity", float, float, lambda x: 1.0, -np.inf, np.inf),
     "log": Scale(
         "log",
         lambda x: float(np.log(x)),

@@ -11,7 +11,6 @@ engine. Filtering by document is expressed as a list of sources; the legacy Chro
 from __future__ import annotations
 
 import hashlib
-import logging
 import time
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -25,8 +24,6 @@ from langchain_core.vectorstores.utils import maximal_marginal_relevance
 from pydantic import ConfigDict
 
 from .base import BaseVectorIndex, ChunkRow, Hit, IndexManifest, VectorStoreError
-
-logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int], None]  # (chunks done, chunks total)
 

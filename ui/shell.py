@@ -152,7 +152,7 @@ def clear_workspace_statistics(state: AppState) -> int:
             os.remove(path)
             removed += 1
         except OSError:
-            pass
+            pass  # a file in use or already gone is left out of the count; the cache is rebuilt on demand
     return removed
 
 

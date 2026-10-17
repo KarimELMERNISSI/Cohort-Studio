@@ -568,7 +568,7 @@ def render_dashboard(df, config):
                                     p_values = res_df["P-Value"].fillna(1.0).values
                                     if correction == "Bonferroni":
                                         reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='bonferroni')
-                                    elif correction == "Benjamini-Hochberg (FDR)":
+                                    else:  # Benjamini-Hochberg (FDR), the last correction offered
                                         reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='fdr_bh')
                                     
                                     res_df["P-Value (Adj)"] = pvals_corrected
@@ -682,7 +682,7 @@ def render_dashboard(df, config):
                                     p_values = scan_results["P-Value"].fillna(1.0).values
                                     if scan_correction == "Bonferroni":
                                         reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='bonferroni')
-                                    elif scan_correction == "Benjamini-Hochberg (FDR)":
+                                    else:  # Benjamini-Hochberg (FDR), the last correction offered
                                         reject, pvals_corrected, _, _ = smt.multipletests(p_values, method='fdr_bh')
                                     
                                     scan_results["P-Value (Adj)"] = pvals_corrected
@@ -726,11 +726,6 @@ def render_dashboard(df, config):
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
         if len(numeric_cols) > 0:
-            # Callback to trigger rerun when method/params change
-            def on_method_change():
-                """Callback when method or params change - updates session state."""
-                # Session state is already updated by widget, rerun happens automatically
-            
             # --- Method Selection UI ---
             col1, col2 = st.columns(2)
             with col1:
@@ -775,8 +770,7 @@ def render_dashboard(df, config):
                     st.info("Multivariate methods analyze patterns across all selected columns.")
                     params = {}
             
-            # Check if params changed - if so, trigger rerun to update scorecard
-            old_params = st.session_state.get('validity_outlier_params', {})
+            # Store the parameters in session state for the scorecard recalculation
             st.session_state['validity_outlier_params'] = params
             
             # Show guidance about score synchronization
@@ -796,9 +790,7 @@ def render_dashboard(df, config):
             # --- Run Detection ---
             outlier_summary = []
             outlier_mask_dict = {}
-            total_outliers = 0
-            total_values = 0
-            
+
             if detection_method in ["iqr", "zscore", "quantile"]:
                 # Univariate methods - per column
                 for col in selected_cols:
@@ -820,8 +812,6 @@ def render_dashboard(df, config):
                         mask = (data < lower_bound) | (data > upper_bound)
                     
                     outliers = mask.sum()
-                    total_outliers += outliers
-                    total_values += len(data)
                     outlier_mask_dict[col] = mask
                     
                     if outliers > 0:
@@ -856,14 +846,12 @@ def render_dashboard(df, config):
                                 model = LocalOutlierFactor(contamination='auto')
                                 predictions = model.fit_predict(scaled_data)
                                 mask = predictions == -1
-                            elif detection_method == "DBSCAN":
+                            else:  # DBSCAN, the last of the three methods
                                 model = DBSCAN(eps=0.5, min_samples=5)
                                 predictions = model.fit_predict(scaled_data)
                                 mask = predictions == -1  # Noise points
                             
                             outliers = mask.sum()
-                            total_outliers = outliers
-                            total_values = len(ml_data)
                             outlier_mask_dict['overall'] = pd.Series(mask, index=ml_data.index)
                             
                             outlier_summary.append({
@@ -1236,13 +1224,15 @@ def render_dashboard(df, config):
                     pd.to_numeric(df[col].dropna())
                     potential_issues.append(f"Column **'{col}'** is type 'Object' but looks Numeric.")
                     continue
-                except: pass
+                except Exception:
+                    pass  # not numeric: try a date next
                 # Check if date
                 try:
                     pd.to_datetime(df[col].dropna())
                     potential_issues.append(f"Column **'{col}'** is type 'Object' but looks like a Date.")
                     continue
-                except: pass
+                except Exception:
+                    pass  # not a date either: the column is genuinely text
             
             if potential_issues:
                 for issue in potential_issues:

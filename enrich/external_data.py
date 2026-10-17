@@ -8,77 +8,6 @@ from core.fingerprint import ROW_ID, extend_row_ids
 
 logger = logging.getLogger(__name__)
 
-# def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
-#     """
-#     Enrich the dataset based on a common row identifier or multiple identifiers.
-#     This is a part of the process of augmenting the main dataset with external data.
-
-#     Parameters:
-#         df (DataFrame): The dataset to augment.
-#         additional_df (DataFrame): Information about the additional data including input files, folder paths, and common row identifier(s).
-#         additional_cols (list, optional): List of columns to include from the additional data. If None, all columns are included.
-#         strategy (str, optional): Merge strategy. Defaults to 'left'.
-#         conflict_resolution (str, optional): Choice of how to handle column name conflicts. Can be 'replace', 'add', or 'ignore'. Defaults to 'add' if None.
-
-#     Returns:
-#         DataFrame: The dataset df enriched with data from the additional data file. Returns the original df if an error occurs.
-#     """
-#     try:
-#         # Set default conflict_resolution if None and convert to lowercase for case-insensitive handling
-#         if conflict_resolution is None:
-#             conflict_resolution = 'add'
-#         conflict_resolution = conflict_resolution.lower()
-
-#         # Convert strategy to lowercase for case-insensitive handling
-#         strategy = strategy.lower()
-        
-#         # Validate merge strategy
-#         valid_strategies = {'left', 'right', 'outer', 'inner', 'cross'}
-#         if strategy not in valid_strategies:
-#             raise ValueError(f"Invalid merge strategy: {strategy}. Expected one of {valid_strategies}")
-
-#         # Ensure additional_df is not empty
-#         if additional_df.empty:
-#             logging.warning("Additional DataFrame is empty. Returning the original DataFrame.")
-#             return df
-
-#         # Filter columns if additional_cols is provided
-#         if additional_cols is not None:
-#             cols_to_keep = set(additional_cols).union(set(right_id_names))
-#             additional_df = additional_df[list(cols_to_keep)]
-
-#         # Determine suffixes based on conflict_resolution
-#         if conflict_resolution == 'replace':
-#             suffixes = ('', '_drop')
-#         elif conflict_resolution == 'ignore':
-#             suffixes = ('_drop', '')
-#         else:  # conflict_resolution == 'add'
-#             suffixes = ('', '_add')
-        
-#         # Debug information
-#         print("MAIN DF:\n", df.head())
-#         print("ADD DF:\n", additional_df.head())
-#         print(left_id_names, right_id_names)
-
-#         # Merge the dataframes
-#         augmented_df = pd.merge(left=df, right=additional_df, left_on=left_id_names, right_on=right_id_names, suffixes=suffixes, how=strategy)
-        
-#         # Drop unnecessary columns based on conflict_resolution
-#         if conflict_resolution in {'replace', 'ignore'}:
-#             augmented_df = augmented_df.drop([col for col in augmented_df.columns if col.endswith('_drop')], axis=1)
-
-#         return augmented_df
-    
-#     except KeyError as e:
-#         logging.error(f"Key error: {e}")
-#         return df
-#     except ValueError as e:
-#         logging.error(f"Value error: {e}")
-#         return df
-#     except Exception as e:
-#         logging.error(f"An unexpected error occurred during data enrichment: {str(e)}")
-#         return df
-
 
 def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
     """
@@ -313,6 +242,7 @@ def process_data_enrichment(df, additional_data_info):
 
         else:
             print("No enrichment request")
+            return df  # unchanged: the caller goes on with it
     except FileNotFoundError:
         logging.error(f"File not found: {input_file}")
         return df

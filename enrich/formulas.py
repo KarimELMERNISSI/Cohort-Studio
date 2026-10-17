@@ -18,6 +18,7 @@ import pandas as pd
 from core.expressions import evaluate_tree
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
+from utils.logging_config import single_line
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +68,7 @@ def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tup
     regardless of spacing.
     """
     formula = formula.strip()
-    valid_columns = []
     used_columns = []
-    error_message = None
 
     try:
         # Handle quoted variables for AST parsing
@@ -107,54 +106,6 @@ def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tup
 
     except SyntaxError as e:
         return False, f"Syntax Error: {e}", [], []
-    
-    
-# def validate_and_extract_columns(formula: str, dataset_columns: List[str]) -> Tuple[bool, str, List[str], List[str]]:
-#     """
-#     Extract and validate column names from a formula string.
-    
-#     Parameters:
-#     -----------
-#     formula : str
-#         The computation formula.
-#     dataset_columns : List[str] or pd.Index
-#         List of valid column names from the dataset.
-        
-#     Returns:
-#     --------
-#     tuple:
-#         - is_valid (bool): True if the formula is valid, False otherwise.
-#         - error_message (str): Error message if validation fails, None if valid.
-#         - used_columns (List[str]): List of valid column names used in the formula.
-#     """
-
-#     # Ensure consistent formatting of dataset columns
-#     dataset_columns = sorted(dataset_columns, key=len, reverse=True)  # Sort by length to avoid partial matches
-#     valid_columns = []
-#     constant_tokens = []
-
-#     try:
-#         # Tokenize the formula while treating quoted variables as single tokens
-#         tokens = tokenize_formula(formula)
-
-#         # Check for column usage and extract valid columns from the formula
-#         for column in dataset_columns:
-#             if column in tokens:
-#                 valid_columns.append(column)
-#                 # Remove all occurrences of the column (.remove just act one the 1st occ)
-#                 tokens = [token for token in tokens if token != column]
-        
-#         constant_tokens = [token for token in tokens if (token.startswith('constant(') and token.endswith(')') )]
-#         # Handle constant values with simple string checks
-#         tokens = [token for token in tokens if not ((token.startswith('constant(') and token.endswith(')')) or is_number(token))]
-
-#         # Validate the formula syntax by trying to evaluate it
-#         if len(tokens)>0:
-#             raise ValueError(f"Invalid column reference detected in the formula: {tokens}")
-#         # Return success if valid, with used columns
-#         return True, None, valid_columns, constant_tokens
-#     except Exception as e:
-#         return False, str(e), valid_columns, constant_tokens
 
 
 # Replace column names in the formula with their corresponding normalized names
@@ -174,7 +125,7 @@ def normalize_formula(formula: str, column_mapping: dict) -> str:
     str
         The formula with normalized column names.
     """
-    logger.debug("original formula: %s", formula)
+    logger.debug("original formula: %s", single_line(formula))
     
     # Sort mapping by length of column name descending to prevent substring replacement issues
     # column_mapping values are Series, so we access .name
@@ -187,7 +138,7 @@ def normalize_formula(formula: str, column_mapping: dict) -> str:
         formula = formula.replace(f'""{col_name}""', f'{normalized}')
         formula = formula.replace(col_name, normalized)  # in case the column name is without quotes
         
-    logger.debug("normalized formula: %s", formula)
+    logger.debug("normalized formula: %s", single_line(formula))
     return formula
 
 
@@ -305,7 +256,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
 
     local_vars = create_variables_dict(dataset, identified_columns, constants)
     
-    logger.debug("evaluate_formula: %d variables available; formula=%s", len(local_vars), formula)
+    logger.debug("evaluate_formula: %d variables available; formula=%s", len(local_vars), single_line(formula))
     normalized_formula = normalize_formula(formula, local_vars)
     
     local_vars['__safe_sub__'] = safe_sub # Inject helper AFTER normalization to avoid attribute error
@@ -318,7 +269,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
         ast.fix_missing_locations(tree)
         
         # Whitelisted evaluation (no builtins, restricted np/pd facades): see core.expressions
-        logger.debug("Normalized formula: %s", normalized_formula)
+        logger.debug("Normalized formula: %s", single_line(normalized_formula))
         result = evaluate_tree(tree, dataset, extra_locals=local_vars)
         
         # Convert numpy array to Series if needed

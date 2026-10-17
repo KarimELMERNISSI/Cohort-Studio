@@ -2153,7 +2153,7 @@ def run_power_analysis(df, analyzer):
                     try:
                         es_val = float(res.get('Effect Size', 0.5))
                         if np.isnan(es_val): es_val = 0.5
-                    except:
+                    except (TypeError, ValueError):
                         es_val = 0.5
                     
                     es_val = abs(es_val) # Power analysis uses absolute effect size
@@ -2388,8 +2388,8 @@ def run_power_analysis(df, analyzer):
         if 'power_test_type' in st.session_state:
             try:
                 test_type_idx = ["T-Test (Independent)", "Mann-Whitney U (Non-parametric)", "ANOVA (One-way)", "Kruskal-Wallis (Non-parametric)", "Chi-Square"].index(st.session_state['power_test_type'])
-            except:
-                pass
+            except ValueError:
+                pass  # an imported test the calculator does not offer: keep the first test
                 
         test_type = st.selectbox(
             "Statistical Test", 

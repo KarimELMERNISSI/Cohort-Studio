@@ -54,7 +54,7 @@ def release_clients() -> None:
             try:
                 client.close()
             except Exception:
-                pass
+                pass  # best-effort clean-up: the client is dropped either way
         _CLIENTS.clear()
 
 

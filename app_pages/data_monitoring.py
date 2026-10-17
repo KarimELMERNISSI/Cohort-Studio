@@ -226,156 +226,6 @@ class OutlierHandler:
         )
         return outliers_tag, outliers_scores, additional_info
 
-
-    
-    # def handle_outliers(self, columns, method='zscore', handling_strategy='remove', **kwargs):
-    #     """
-    #     Handle outliers in specified columns using the chosen method and strategy
-        
-    #     Parameters:
-    #     -----------
-    #     columns : list
-    #         List of column names to handle outliers in
-    #     method : str
-    #         'zscore', 'iqr', or 'quantile'
-    #     handling_strategy : str
-    #         'remove', 'clip, tag'
-    #     kwargs : dict
-    #         Additional parameters for the chosen method
-    #     """
-    #     self.df = self.original_df.copy()  # Reset to original data
-    #     #self.df = self.df.copy()
-
-    #     if method == 'Isolation Forest':
-    #         is_outlier, outlier_score, _ = self.detect_isolation_forest_outliers(data= self.df, remainder_threshold=0.4, **kwargs)
-    #     elif method == 'Local Outlier Factor':
-    #         is_outlier, outlier_score, _ = self.detect_lof_outliers(data= self.df, remainder_threshold=0.4, **kwargs)
-    #     else:
-    #         if handling_strategy == "tag":
-    #             # Initialize the method-specific tag and list columns
-    #             self.df[f"{method}_list"] = ""  # Empty string to hold the list of columns with outliers
-    #             self.df[f"{method}_tag"] = False  # Boolean column for tagging rows with outliers
-
-    #         for column in columns:
-    #             if self.df[column].dtype not in ['int64', 'float64']:
-    #                 continue
-
-    #             # Detect outliers using the specified method
-    #             if method == 'zscore':
-    #                 threshold = kwargs.get('threshold', 3)
-    #                 is_outlier = self.detect_outliers_zscore(column, threshold)
-    #             elif method == 'iqr':
-    #                 multiplier = kwargs.get('multiplier', 1.5)
-    #                 is_outlier = self.detect_outliers_iqr(column, multiplier)
-    #             elif method == 'quantile':
-    #                 lower = kwargs.get('lower', 0.01)
-    #                 upper = kwargs.get('upper', 0.99)
-    #                 is_outlier = self.detect_outliers_quantile(column, lower, upper)
-            
-    #     # Handle outliers using the specified strategy
-    #     if handling_strategy == 'remove':
-    #         self.df = self.df[~is_outlier]
-
-    #     elif handling_strategy == 'tag' and method not in ['Isolation Forest','Local Outlier Factor']:
-    #         # Update the method_list column to include this column name for rows with outliers
-    #         self.df.loc[is_outlier, f"{method}_list"] = (self.df.loc[is_outlier, f"{method}_list"] + ", " + column).str.strip(", ")
-    #         # Update the method_tag column to mark rows with any outlier detected
-    #         self.df[f"{method}_tag"] = self.df[f"{method}_tag"] | is_outlier
-
-    #     elif handling_strategy == 'tag' and method in ['Isolation Forest','Local Outlier Factor']:
-    #         print("Condition met. Creating outlier columns.")
-    #         # Check if is_outlier and outlier_score are defined correctly
-    #         print(f"is_outlier: {is_outlier}, outlier_score: {outlier_score}")
-    #         # Add columns to the DataFrame
-    #         self.df[f"{method}_tag"] = is_outlier
-    #         self.df[f"{method}_score"] = outlier_score
-
-    #     elif handling_strategy == 'clip':
-    #         if method == 'zscore':
-    #             z_scores = stats.zscore(self.df[column])
-    #             self.df.loc[is_outlier, column] = self.df[column].mean() + threshold * self.df[column].std() * np.sign(z_scores[is_outlier])
-
-    #         elif method == 'iqr':
-    #             Q1 = self.df[column].quantile(0.25)
-    #             Q3 = self.df[column].quantile(0.75)
-    #             IQR = Q3 - Q1
-    #             lower_bound = Q1 - multiplier * IQR
-    #             upper_bound = Q3 + multiplier * IQR
-    #             self.df.loc[is_outlier, column] = self.df[column].clip(lower_bound, upper_bound)
-
-    #         elif method == 'quantile':
-    #             lower_bound = self.df[column].quantile(lower)
-    #             upper_bound = self.df[column].quantile(upper)
-    #             self.df.loc[is_outlier, column] = self.df[column].clip(lower_bound, upper_bound)
-        
-    #     return self.df
-    
-    # def handle_outliers(self, columns, method='zscore', handling_strategy='remove', **kwargs):
-    #     """
-    #     Handle outliers in specified columns using the chosen method and strategy
-        
-    #     Parameters:
-    #     -----------
-    #     columns : list
-    #         List of column names to handle outliers in
-    #     method : str
-    #         'zscore', 'iqr', 'quantile', 'Isolation Forest', or 'Local Outlier Factor'
-    #     handling_strategy : str
-    #         'remove', 'clip', or 'tag'
-    #     kwargs : dict
-    #         Additional parameters for the chosen method
-    #     """
-    #     self.df = self.df.copy()  # Work on the existing DataFrame to retain prior modifications
-        
-    #     # Initialize tag columns for 'tag' strategy if necessary
-    #     if handling_strategy == "tag" and method not in ['Isolation Forest', 'Local Outlier Factor']:
-    #         if f"{method}_list" not in self.df.columns:
-    #             self.df[f"{method}_list"] = ""  # Hold the list of columns with outliers
-    #         if f"{method}_tag" not in self.df.columns:
-    #             self.df[f"{method}_tag"] = False  # Mark rows with any outliers
-
-    #     for column in columns:
-    #         if self.df[column].dtype not in ['int64', 'float64']:
-    #             continue  # Skip non-numeric columns
-            
-    #         # Detect outliers
-    #         if method == 'zscore':
-    #             threshold = kwargs.get('threshold', 3)
-    #             is_outlier = self.detect_outliers_zscore(column, threshold)
-    #         elif method == 'iqr':
-    #             multiplier = kwargs.get('multiplier', 1.5)
-    #             is_outlier = self.detect_outliers_iqr(column, multiplier)
-    #         elif method == 'quantile':
-    #             lower = kwargs.get('lower', 0.01)
-    #             upper = kwargs.get('upper', 0.99)
-    #             is_outlier = self.detect_outliers_quantile(column, lower, upper)
-    #         elif method == 'Isolation Forest':
-    #             is_outlier, outlier_score, _ = self.detect_isolation_forest_outliers(data=self.df, **kwargs)
-    #             self.df[f"{method}_score"] = outlier_score
-    #         elif method == 'Local Outlier Factor':
-    #             is_outlier, outlier_score, _ = self.detect_lof_outliers(data=self.df, **kwargs)
-    #             self.df[f"{method}_score"] = outlier_score
-    #         else:
-    #             raise ValueError(f"Unsupported method: {method}")
-            
-    #         # Handle outliers based on the specified strategy
-    #         if handling_strategy == 'remove':
-    #             self.df = self.df[~is_outlier]
-    #         elif handling_strategy == 'clip':
-    #             if method in ['zscore', 'iqr', 'quantile']:
-    #                 self.clip_outliers(column, is_outlier, method, **kwargs)
-    #         elif handling_strategy == 'tag':
-    #             if method not in ['Isolation Forest', 'Local Outlier Factor']:
-    #                 self.df.loc[is_outlier, f"{method}_list"] = (
-    #                     self.df.loc[is_outlier, f"{method}_list"] + ", " + column
-    #                 ).str.strip(", ")
-    #                 self.df[f"{method}_tag"] |= is_outlier
-    #             else:
-    #                 self.df[f"{method}_tag"] = is_outlier
-
-    #     return self.df
-
-
     def handle_outliers(self, columns, method='zscore', handling_strategy='none', **kwargs):
         """
         Handle outliers in the DataFrame and generate an outlier matrix.
@@ -427,7 +277,7 @@ class OutlierHandler:
                 is_outlier, outlier_score, _ = self.detect_lof_outliers(data=data, **kwargs)
             elif method == 'Isolation Forest':
                 is_outlier, outlier_score, _ = self.detect_isolation_forest_outliers(data=data, **kwargs)
-            elif method == 'DBSCAN':
+            else:  # DBSCAN, the last dataset-wide method
                 is_outlier, outlier_score, _ = self.detect_dbscan_outliers(data=data, **kwargs)
 
             # Add the dataset-wide outliers to the matrix
@@ -552,243 +402,6 @@ class OutlierHandler:
             return self.masks
 
 
-    def get_outlier_summary(self, columns, method='zscore', **kwargs):
-        """
-        Get a summary of outliers for each column or the dataset as a whole.
-        
-        Parameters:
-            columns (list): List of columns to analyze for outliers.
-            method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-            **kwargs: Additional parameters for specific outlier detection methods.
-        
-        Returns:
-            dict: Summary of outliers for each column or the dataset.
-        """
-        summary = {}
-
-        # Check for valid methods
-        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest', 'DBSCAN']
-        if method not in valid_methods:
-            raise ValueError(f"Invalid method '{method}'. Choose from {valid_methods}.")
-
-        # Column-wise methods
-        if method in ['zscore', 'iqr', 'quantile']:
-            for column in columns:
-                # Ensure the column is numeric
-                if not pd.api.types.is_numeric_dtype(self.original_df[column]):
-                    continue
-
-                # Exclude NaN values to ensure robust calculations
-                valid_data = self.original_df[column].dropna()
-
-                # Skip columns that are empty after dropping NaNs
-                if valid_data.empty:
-                    continue
-
-                # Detect outliers based on the selected method
-                if method == 'zscore':
-                    threshold = kwargs.get('threshold', 3)
-                    is_outlier = self.detect_outliers_zscore(column, threshold) & self.original_df[column].notna()
-                elif method == 'iqr':
-                    multiplier = kwargs.get('multiplier', 1.5)
-                    is_outlier = self.detect_outliers_iqr(column, multiplier) & self.original_df[column].notna()
-                elif method == 'quantile':
-                    lower = kwargs.get('lower', 0.01)
-                    upper = kwargs.get('upper', 0.99)
-                    is_outlier = self.detect_outliers_quantile(column, lower, upper) & self.original_df[column].notna()
-
-                # Calculate outlier statistics
-                n_outliers = is_outlier.sum()  # Total number of outliers
-                total_valid_values = self.original_df[column].notna().sum()
-                pct_outliers = (n_outliers / total_valid_values) * 100 if total_valid_values > 0 else 0
-
-                # Update summary for the column
-                summary[column] = {
-                    'total_outliers': int(n_outliers),
-                    'percentage_outliers': round(pct_outliers, 2),
-                    'original_range': (
-                        self.original_df[column].min(skipna=True),
-                        self.original_df[column].max(skipna=True)
-                    ),
-                    'outlier_values': self.original_df.loc[is_outlier, column].tolist()
-                }
-
-        # Dataset-wide methods
-        elif method in ['Local Outlier Factor', 'Isolation Forest', 'DBSCAN']:
-            data = self.df[columns]#.dropna()
-            # data = self.df[columns].select_dtypes(include=['int64', 'float64']).dropna()
-            #if data.empty:
-            #    raise ValueError("No numeric data available for outlier detection.")
-            
-            if method == 'Local Outlier Factor':
-                is_outlier, scores, _ = self.detect_lof_outliers(data=data, **kwargs)
-            elif method == 'Isolation Forest':
-                is_outlier, scores, _ = self.detect_isolation_forest_outliers(data=data, **kwargs)
-            elif method == 'DBSCAN':
-                is_outlier, scores, _ = self.detect_dbscan_outliers(data=data, **kwargs)
-
-            # Calculate overall statistics
-            #n_outliers = sum(is_outlier)
-            #pct_outliers = (n_outliers / len(data)) * 100
-            # Calculate outlier statistics
-            n_outliers = is_outlier.sum()  # Total number of outliers
-            total_valid_values = self.original_df[column].notna().sum()
-            pct_outliers = (n_outliers / total_valid_values) * 100 if total_valid_values > 0 else 0
-
-            # Update summary for the dataset
-            summary['overall'] = {
-                'total_outliers': n_outliers,
-                'percentage_outliers': pct_outliers,
-                'outlier_scores': scores.tolist()
-            }
-
-        return summary
-
-
-
-##### USE OUTLIERHANDLER ####
-
-# def add_outlier_handling_ui_off(df, numeric_cols):
-#     """Add outlier handling UI components"""
-#     # Initialize outlier handler
-#     #config = st.session_state.config
-#     outlier_handler = OutlierHandler(df, st.session_state.config)
-    
-#     # Outlier detection method
-#     col1, col2 = st.columns(2)
-#     with col1:
-#         detection_method = st.selectbox(
-#             "Outlier Detection Method",
-#             ["zscore", "iqr", "quantile", "Local Outlier Factor", "Isolation Forest"],
-#             help="Z-score: Uses standard deviations from mean\n"
-#                  "IQR: Uses interquartile range\n"
-#                  "Quantile: Uses percentile thresholds"
-#         )
-        
-#     with col2:
-#         handling_strategy = st.selectbox(
-#             "Handling Strategy",
-#             ["None", "remove", "clip", "tag"],
-#             help="Remove: Exclude outliers\n"
-#                  "Clip: Cap at threshold values\n"
-#                  "Tag: Tag outliers for later identification"
-#         )
-    
-#     # Method-specific parameters
-#     if detection_method == "zscore":
-#         threshold = st.slider("Z-score threshold", 1.0, 5.0, 3.0, 0.1)
-#         params = {"threshold": threshold}
-#     elif detection_method == "iqr":
-#         multiplier = st.slider("IQR multiplier", 0.5, 3.0, 1.5, 0.1)
-#         params = {"multiplier": multiplier}
-#     elif detection_method == "quantile":
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             lower = st.number_input("Lower percentile", 0.0, 0.5, 0.01, 0.01)
-#         with col2:
-#             upper = st.number_input("Upper percentile", 0.5, 1.0, 0.99, 0.01)
-#         params = {"lower": lower, "upper": upper}
-#     elif detection_method == "Isolation Forest":
-#         params = {'n_estimators': 100, 'max_samples': 'auto', 'numerical_imputation_method':'knn', 'categorical_imputation_method':'most_frequent'}
-#     elif detection_method == "Local Outlier Factor":
-#         params = {'n_neighbors': 20, 'contamination': 'auto', 'numerical_imputation_method':'knn', 'categorical_imputation_method':'most_frequent'}
-
-#     if detection_method in ["quantile","zscore","iqr"]:
-#         # Select columns for outlier handling
-#         selected_cols = st.multiselect(
-#             "Select columns for outlier handling",
-#             numeric_cols,
-#             default=numeric_cols[:1] if numeric_cols else []
-#         )
-#         if not selected_cols:
-#             st.warning("Please select at least one column")
-#             return df
-#     else:
-#         analyzer = DataAnalyzer(df)
-#         selected_cols = st.multiselect(
-#             "Select columns for outlier handling",
-#             df.columns.to_list(),
-#             default = list(set(analyzer.categorical_cols+analyzer.binary_cols+analyzer.low_cardinality_numeric_cols+analyzer.numeric_cols)) #df.columns.to_list()[:1] 
-#         )
-    
-#     # Get outlier summary
-#     summary = outlier_handler.get_outlier_summary(selected_cols, detection_method, **params)
-
-#     # Get outlier masks
-#     outlier_masks = outlier_handler.get_outliers_masks()
-#     if outlier_masks:
-#         st.subheader("Outlier Masks:")
-#         st.json(outlier_masks)
-#     # Display summary
-#     st.subheader("Outlier Summary:")
-#     for col, stats in summary.items():
-#         st.write(f"---\n**{col}**:")
-#         st.write(f"- Total outliers: {stats['total_outliers']}")
-#         st.write(f"- Percentage of outliers: {stats['percentage_outliers']:.2f}%")
-#         if detection_method in ["zscore","iqr","quantile"]:
-#             st.write(f"- Original range: ({stats['original_range'][0]:.2f}, {stats['original_range'][1]:.2f})")
-    
-#     # Handle outliers if strategy is not 'none'
-#     if handling_strategy != "None" and detection_method not in ('Isolation Forest', 'Local Outlier Factor'):
-#         df_processed = outlier_handler.handle_outliers(
-#             selected_cols,
-#             method=detection_method,
-#             handling_strategy=handling_strategy,
-#             **params
-#         )
-#     elif handling_strategy != "None" and detection_method in ('Isolation Forest', 'Local Outlier Factor'):
-#         df_processed = outlier_handler.handle_outliers(
-#             df.columns.tolist(),
-#             method=detection_method,
-#             handling_strategy=handling_strategy,
-#             **params
-#         )
-#         st.dataframe(df_processed)
-#     else:
-#         return df
-        
-#     # Show before/after statistics
-#     if handling_strategy != "None" and detection_method not in ('Isolation Forest', 'Local Outlier Factor'):
-#         st.write("\n**Before/After Statistics:**")
-#         for col in selected_cols:
-#             st.write(f"\n**{col}:**")
-#             col1, col2 = st.columns(2)
-
-#             if df[col].dtype in ['float64', 'int64']:  # Handle numerical columns
-#                 with col1:
-#                     st.write("Before:")
-#                     st.write(f"- Mean: {df[col].mean():.2f}")
-#                     st.write(f"- Std: {df[col].std():.2f}")
-#                     st.write(f"- Range: ({df[col].min():.2f}, {df[col].max():.2f})")
-#                 with col2:
-#                     st.write("After:")
-#                     st.write(f"- Mean: {df_processed[col].mean():.2f}")
-#                     st.write(f"- Std: {df_processed[col].std():.2f}")
-#                     st.write(f"- Range: ({df_processed[col].min():.2f}, {df_processed[col].max():.2f})")
-#             else:  # Handle non-numerical columns
-#                 unique_before = df[col].nunique()
-#                 top_before = df[col].value_counts().idxmax()
-#                 freq_before = df[col].value_counts().max()
-
-#                 unique_after = df_processed[col].nunique()
-#                 top_after = df_processed[col].value_counts().idxmax()
-#                 freq_after = df_processed[col].value_counts().max()
-
-#                 with col1:
-#                     st.write("Before:")
-#                     st.write(f"- Unique Values: {unique_before}")
-#                     st.write(f"- Most Frequent: {top_before} ({freq_before} occurrences)")
-#                 with col2:
-#                     st.write("After:")
-#                     st.write(f"- Unique Values: {unique_after}")
-#                     st.write(f"- Most Frequent: {top_after} ({freq_after} occurrences)")
-        
-#     # Add a button to view outlier values
-#     if detection_method not in ('Isolation Forest', 'Local Outlier Factor'):
-#         if st.button("View Outlier Values"):
-#             outlier_values_dialog(summary)
-        
-#     return df_processed
 
 ######################################## handle data for comparisons
 
@@ -889,8 +502,11 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         
         if file_path_input:
             scope = get_current_scope()
+            if scope is None:  # pages are behind sign-in: without a user there is no workspace to read from
+                st.error("Sign in to reference a file of your workspace by its path.")
+                return None, None
             try:  # manual paths must stay inside the user's workspace (audit E4)
-                resolved_path = str(scope.resolve_within(file_path_input)) if scope else file_path_input
+                resolved_path = str(scope.resolve_within(file_path_input))
             except ValueError as exc:
                 st.error(str(exc))
                 return None, None
@@ -1552,64 +1168,6 @@ def handle_expression_mask_input(st_container, base_key: str):
     return {"numeric": False, "expression": expression}
 
 
-def handle_family_operator(st_container, base_key: str):
-    """Handle family operator selection and its parameters."""
-    operator = st_container.selectbox(
-        "Operator for Mask Family",
-        ["any", "all", "threshold"],
-        key=f"{base_key}_operator",
-        help=(
-            "Define how the masks in this family should be evaluated:\n"
-            "- `any`: At least one mask is satisfied.\n"
-            "- `all`: All masks must be satisfied.\n"
-            "- `threshold`: A minimum count of masks must be satisfied."
-        )
-    )
-    
-    threshold = None
-    if operator == "threshold":
-        threshold = st_container.number_input(
-            "Threshold (minimum number of masks to satisfy)",
-            min_value=1,
-            step=1,
-            help="Specify the minimum number of masks that must be satisfied.",
-            key=f"{base_key}_threshold_input"
-        )
-    return {"operator": operator, "threshold": threshold}
-
-
-def add_mask_family(config: dict[str, Any], st_container):
-    st_container.subheader("Add New Mask Family")
-
-    # Family Selection
-    family_name = st_container.text_input("Family Name", placeholder="Enter family name")
-    if not family_name:
-        st_container.warning("Please provide a family name.")
-        return
-    ensure_family_exists(config, family_name)
-
-    # Operator Selection
-    family_operator = handle_family_operator(st_container)
-    config["mask_families"][family_name]["operator"] = family_operator
-
-    # Mask Addition
-    mask_name = st_container.text_input("Mask Name", placeholder="Enter mask name")
-    if not validate_mask_name(config, family_name, mask_name, st_container):
-        return
-
-    is_numeric = st_container.checkbox("Is Numeric")
-    if is_numeric:
-        mask_details = handle_numeric_mask_input(st_container)
-    else:
-        mask_details = handle_expression_mask_input(st_container)
-
-    if mask_details and st_container.button("Add Mask"):
-        config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"Mask '{mask_name}' added to family '{family_name}'.")
-    
-    st_container.json(config["mask_families"][family_name])
-
-
 # Define a recursive function to display the JSON as collapsible sections
 def display_mask_family(config):
     """
@@ -2043,7 +1601,6 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                 st.write("---")
                 st.write("### AI Suggestions")
                 
-                start_idx = 0
                 # Pagination or simple list
                 suggestions = st.session_state[f"ai_suggestions_{family_name}"]
                 
@@ -2401,6 +1958,7 @@ def app():
 
     with tab1:
         anomaly_family = "clinical_anomalies"
+        detect = False  # set when the family is checked below
         with st.expander("New Anomaly Criterion", expanded=True):
             add_domain_expert_based_anomaly_mask(st.session_state.config, st)
 
@@ -2434,12 +1992,13 @@ def app():
             else:
                 st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
-        if 'anom_cols' in locals() and detect:
+        if detect:
             with st.expander("Results", expanded=True):
                 display_results_with_anomaly(df=df,anomaly_col=f"{anomaly_family}_any", st=st)
             
     with tab2:
         inclusion_family = "study_inclusion"
+        check_inc = False  # set when the family is checked below
         with st.expander("New Inclusion Criterion", expanded=True):
             add_study_inclusion_mask(st.session_state.config, st)
         
@@ -2468,7 +2027,7 @@ def app():
             else:
                 st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
-        if 'inc_cols' in locals() and check_inc:
+        if check_inc:
             with st.expander("Results", expanded=True):
                 display_results_with_inclusion(df=df,inclusion_col=f"{inclusion_family}_all", st=st)
 
@@ -2481,10 +2040,9 @@ def app():
             with st.expander("Outliers Handler"):
                 df = add_outlier_handling_ui(df, analyzer.numeric_cols)
             render_outlier_actions(df.attrs.get("outlier_detection"))
-    #    st.json(st.session_state.config["mask_families"])
-    #    add_mask_family(st.session_state.config, st)
 
     with tab4:
+        run_comp, row_ids, column_to_check = False, [], []  # set once both files and the ids are chosen
         # 1. Add External Data
         with st.expander("Upload the data files to compare", expanded=True):
             col1, col2 = st.columns(2)
@@ -2537,7 +2095,7 @@ def app():
 
 
         with st.expander("Results", expanded=True):
-            if 'run_comp' in locals() and run_comp:
+            if run_comp:
                 #st.write(f"column_to_check size: {len(column_to_check)}")
                 result_comp = mc.process_comparison_st(comparison_name='comp1',
                                                     df1=data_c1,

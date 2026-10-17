@@ -44,7 +44,7 @@ def sanitize_dataframe_for_arrow(df: pd.DataFrame | None) -> pd.DataFrame | None
                 try:
                     clean_df[col] = pd.to_numeric(series, errors="raise")
                 except (ValueError, TypeError):
-                    pass
+                    pass  # not all numbers: the column keeps its values, checked against pyarrow below
 
     # Fail-safe validation against pyarrow
     try:

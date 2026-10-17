@@ -5,7 +5,6 @@ import logging
 
 import pytest
 
-import utils.logging_config as logging_config
 from utils.logging_config import REDACTED, RedactSecrets, configure_logging, redact_secrets
 
 # the shapes of a Google and an OpenAI key, built here so that no secret scanner sees one
@@ -62,7 +61,7 @@ def test_the_log_shows_neither_the_key_nor_its_traceback() -> None:
 def test_configure_logging_filters_every_root_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     root = logging.getLogger()
     handler = logging.StreamHandler(io.StringIO())
-    monkeypatch.setattr(logging_config, "_CONFIGURED", False)
+    monkeypatch.setattr("utils.logging_config._CONFIGURED", False)
     monkeypatch.setattr(root, "handlers", [handler])
     monkeypatch.setattr(root, "level", root.level)
     configure_logging()

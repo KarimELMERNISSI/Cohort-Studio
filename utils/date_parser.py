@@ -41,8 +41,8 @@ def smart_parse_dates(series):
             res_serial = pd.to_datetime(numeric_series, unit='D', origin='1899-12-30', errors='coerce')
             if (res_serial.dt.year > 1900).sum() > 0.1 * len(series):
                 return res_serial, ["Excel Serial Detected"]
-    except:
-        pass
+    except Exception:
+        pass  # not Excel serials: the string formats are analysed next
 
     # -------------------------------------------------------------
     # 2. STRICT STRING STRUCTURE ANALYSIS
@@ -86,10 +86,7 @@ def smart_parse_dates(series):
         elif p2_max > 31: year_idx = 2
         elif p1_max > 31: year_idx = 1
         
-        # --- IDENTIFY DAY / MONTH ---
-        day_idx = -1
-        month_idx = -1
-        
+        # --- IDENTIFY DAY / MONTH (every branch below sets both) ---
         if year_idx != -1:
             # We found the year. Now distinguish Day vs Month in remaining cols.
             rem = [i for i in [0,1,2] if i != year_idx]

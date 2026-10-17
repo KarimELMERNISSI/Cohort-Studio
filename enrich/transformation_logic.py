@@ -44,11 +44,6 @@ def apply_variable_transformation(dataframe, params):
     new_columns = {}
 
     if transformation_type in ["Dimensionality Reduction", "Dimensional Reduction-Based"]:
-        # Standardize data
-        if transformation in ["t-SNE", "UMAP"]:
-            scaler = StandardScaler()
-            scaled_data = scaler.fit_transform(dataframe[columns])
-
         if transformation == "PCA":
             import prince
             model = prince.PCA(
@@ -65,12 +60,12 @@ def apply_variable_transformation(dataframe, params):
             from sklearn.manifold import TSNE
             model = TSNE(n_components=n_components, perplexity=perplexity,
                         learning_rate=learning_rate, random_state=42)
-            transformed_data = model.fit_transform(scaled_data)
+            transformed_data = model.fit_transform(StandardScaler().fit_transform(dataframe[columns]))  # standardised
         elif transformation == "UMAP":
             import umap
             model = umap.UMAP(n_components=n_components, n_neighbors=n_neighbors,
                             min_dist=min_dist, random_state=42)
-            transformed_data = model.fit_transform(scaled_data)
+            transformed_data = model.fit_transform(StandardScaler().fit_transform(dataframe[columns]))  # standardised
         else:  # FAMD
             import prince
             model = prince.FAMD(n_components=n_components, random_state=42)

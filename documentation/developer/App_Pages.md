@@ -433,7 +433,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.expressions.safe_format`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
+`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.expressions.safe_format`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -796,7 +796,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.criterion_id`, `enrich.custom_metrics_and_filters`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.criterion_id`, `enrich.custom_metrics_and_filters`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -954,17 +954,6 @@ Helper class to detect and handle outliers using various methods
   > dict or None
   >     Dictionary of outlier masks if available, else None.
 
-- **get_outlier_summary**(`self, columns, method`) -> `None`
-  > Get a summary of outliers for each column or the dataset as a whole.
-  >
-  > Parameters:
-  >     columns (list): List of columns to analyze for outliers.
-  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  >     **kwargs: Additional parameters for specific outlier detection methods.
-  >
-  > Returns:
-  >     dict: Summary of outliers for each column or the dataset.
-
 ### def `export_comparison_results` (data_monitoring.py)
 
 - **Arguments**: `df1, df2, comparison_result_filtered, rows_only_in_df1, rows_only_in_df2, modified_common_ids, common_id, key_base`
@@ -1114,22 +1103,6 @@ Collect numeric mask inputs from the user.
 - **Returns**: `None`
 
 Collect expression mask inputs from the user.
-
-### def `handle_family_operator` (data_monitoring.py)
-
-- **Arguments**: `st_container, base_key: str`
-
-- **Returns**: `None`
-
-Handle family operator selection and its parameters.
-
-### def `add_mask_family` (data_monitoring.py)
-
-- **Arguments**: `config: dict[ComplexType], st_container`
-
-- **Returns**: `None`
-
-No description available.
 
 ### def `display_mask_family` (data_monitoring.py)
 
@@ -1490,6 +1463,16 @@ _No module description._
 - **Returns**: `bool`
 
 A planning effect must be positive: with no difference to detect, no sample is large enough.
+
+### def `_prefilled_number_input` (epidemiology.py)
+
+- **Arguments**: `label, default`
+
+- **Returns**: `None`
+
+A number input that the results above may prefill through the session state ("Load Parameters into
+Calculator", the group sizes of the dataset). Streamlit warns when a widget gets both a default value and a
+session-state value, so the default is passed only while the key is unset.
 
 ### def `_expected_means_inputs` (epidemiology.py)
 
@@ -1852,7 +1835,7 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `shutil`, `pathlib.Path`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.vectorstores.ENGINE_SUMMARIES`, `manage.vectorstores.ENGINE_TITLES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.resolve_engine`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.components.confirm`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`
+`os`, `shutil`, `pathlib.Path`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.vectorstores.ENGINE_SUMMARIES`, `manage.vectorstores.ENGINE_TITLES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.resolve_engine`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.components.confirm`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -1927,7 +1910,8 @@ Explicit, session-scoped confirmation before any data can be sent to a cloud pro
 
 - **Returns**: `ComplexType`
 
-Upload PDFs into the user's document library and choose the ones to index.
+Upload PDFs into the user's document library, choose the ones to index and remove the others (the
+index is rebuilt from the remaining documents at the next initialisation: ``manage.vectorstores.index_matches``).
 
 ### def `_retrieval_card` (rag_sidebar.py)
 
@@ -1993,7 +1977,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_paths.get_data_root`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `utils.session_scope.get_current_scope`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `utils.session_scope.get_current_scope`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 
@@ -2267,7 +2251,7 @@ _Survival & regression page: Kaplan-Meier, log-rank, Cox, logistic and count reg
 _Compatibility shim: the transformation logic lives in :mod:`enrich.transformation_logic` (no UI code)._
 
 **Imports**:
-`enrich.transformation_logic.*`, `enrich.transformation_logic.apply_variable_transformation`
+`enrich.transformation_logic.apply_variable_transformation`
 
 ---
 

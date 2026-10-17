@@ -125,6 +125,7 @@ class GeminiChatConnector(BaseLLMConnector):
         max_retries = self.config.max_retries
         base_delay = 2.0
 
+        error_str = "no attempt was made (max_retries is 0)"
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
@@ -137,13 +138,14 @@ class GeminiChatConnector(BaseLLMConnector):
             except Exception as e:
                 error_str = str(e)
                 if attempt == max_retries - 1:
-                    logger.error(f"Gemini API failure after {max_retries} attempts: {error_str}")
-                    return ChatResult(generations=[ChatGeneration(
-                        message=AIMessage(content=f"API Error (Gemini): {redact_secrets(error_str)}")
-                    )])
+                    break
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
                 logger.info(f"Gemini API retry {attempt+1}/{max_retries} in {delay:.2f}s: {error_str}")
                 time.sleep(delay)
+        logger.error(f"Gemini API failure after {max_retries} attempts: {error_str}")
+        return ChatResult(generations=[ChatGeneration(
+            message=AIMessage(content=f"API Error (Gemini): {redact_secrets(error_str)}")
+        )])
 
 
 class GeminiEmbeddingConnector(BaseEmbeddingConnector):
