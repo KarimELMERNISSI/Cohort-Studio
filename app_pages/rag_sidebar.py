@@ -17,7 +17,7 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
-from core.workspace import safe_filename
+from core.workspace import remove_pdf, safe_filename
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.vectorstores import (
     ENGINE_SUMMARIES,
@@ -250,7 +250,8 @@ def _consent_card(provider: str) -> bool:
 
 
 def _library_card() -> list[str] | None:
-    """Upload PDFs into the user's document library and choose the ones to index."""
+    """Upload PDFs into the user's document library, choose the ones to index and remove the others (the
+    index is rebuilt from the remaining documents at the next initialisation: ``manage.vectorstores.index_matches``)."""
     with st.container(border=True):
         st.subheader("Document library", icon=":material/library_books:", anchor=False)
         uploaded_files = st.file_uploader(
@@ -271,13 +272,34 @@ def _library_card() -> list[str] | None:
         if not all_files:
             st.caption("No PDF in your library yet. Indexed papers power the Documents page and the AI suggestions.")
             return None
-        return st.multiselect(
+        key = "rag_selected_files_multiselect"
+        selected = st.session_state.setdefault(key, all_files)
+        if any(f not in all_files for f in selected):
+            st.session_state[key] = [f for f in selected if f in all_files]  # a removed document leaves the choice
+        chosen = st.multiselect(
             f"Documents to index ({len(all_files)} in your library)",
             options=all_files,
-            default=all_files,
-            key="rag_selected_files_multiselect",
+            key=key,
             help="Only the selected documents are embedded when the engine is initialised.",
         )
+        with st.expander("Remove a document"):
+            for name in all_files:
+                with st.container(horizontal=True, vertical_alignment="center"):
+                    st.markdown(f":material/picture_as_pdf: {name}", width="stretch")
+                    if st.button(
+                        "Remove",
+                        key=f"rag_remove_document_{name}",
+                        icon=":material/delete:",
+                        help="Deletes this PDF from your library.",
+                    ):
+                        confirm(
+                            f"Remove {name}?",
+                            "Deletes the PDF from your library. The AI engine keeps its current index until it is "
+                            "initialised again; the index is then rebuilt from the remaining documents.",
+                            lambda name=name: remove_pdf(docs_dir, name),
+                            confirm_label="Remove",
+                        )
+        return chosen
 
 
 def _retrieval_card() -> tuple[float, float]:
@@ -442,8 +464,9 @@ def _engine_card(
             "Reuse the existing index",
             value=True,
             key="rag_use_existing_db",
-            help="Uses the index already built with the selected vector database and embedding model (faster). "
-            "Turn it off after adding documents or changing the embedding model.",
+            help="Uses the index already built with the selected vector database and embedding model (faster), when "
+            "it holds the selected documents: after a document is added or removed, the index is rebuilt. Turn it "
+            "off after changing the embedding model.",
         )
         if not consent:
             st.caption("Confirm the data-sharing notice to enable initialisation.")

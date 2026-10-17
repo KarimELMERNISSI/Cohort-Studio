@@ -1,4 +1,5 @@
-"""RAGManager end to end on both vector databases: build, chat on one document, reuse, embedding guard."""
+"""RAGManager end to end on both vector databases: build, chat on one document, reuse, rebuild after a change of
+the library, embedding guard."""
 
 import os
 from pathlib import Path
@@ -108,3 +109,25 @@ def test_rag_runs_on_both_vector_databases(manager, engine: str) -> None:
 
     ok, message = _init(manager, engine, reuse=True, embedding="mxbai-embed-large:latest")
     assert not ok and "built with ollama:nomic-embed-text:latest" in message
+
+
+@pytest.mark.parametrize("engine", ["lancedb", "qdrant"])
+def test_an_index_is_rebuilt_when_the_library_changes(
+    manager, engine: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ok, message = _init(manager, engine, reuse=False)
+    assert ok, message
+
+    monkeypatch.setitem(TEXTS, "anaemia.pdf", ["Haemoglobin below 13 g/dL defines anaemia in men"])
+    calls = manager.embeddings_used.calls
+    ok, message = _init(manager, engine, reuse=True)  # a document added: rebuilt, not reused
+    assert ok, message
+    assert manager.embeddings_used.calls > calls
+    assert manager.vector_store.count() == 5
+    assert manager.vector_store.manifest.documents == ("anaemia.pdf", "bmi.pdf", "kidney.pdf")
+
+    monkeypatch.delitem(TEXTS, "bmi.pdf")
+    ok, message = _init(manager, engine, reuse=True)  # a document removed: rebuilt without it
+    assert ok, message
+    assert manager.vector_store.count() == 3
+    assert manager.vector_store.manifest.documents == ("anaemia.pdf", "kidney.pdf")

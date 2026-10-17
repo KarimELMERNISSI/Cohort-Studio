@@ -13,6 +13,8 @@ retrieval. On the Documents page, choose the documents in the sidebar (*Choose D
 - Supported format: `.pdf`
 - Documents are stored per-user for data isolation.
 - Previously uploaded documents can be reused across sessions.
+- **Remove a document** (under the list of documents) deletes a PDF from your library, after a confirmation. The
+  AI engine keeps its current index until it is initialised again.
 
 ### Choosing the AI provider
 
@@ -34,8 +36,9 @@ Settings > AI engine > **Vector database** offers two engines; the app recommend
 | **Qdrant**, embedded | Your library is small to medium (up to about 20 000 chunks) and you prefer Qdrant; every vector is held in memory. |
 | **Qdrant**, server | Several people use the app or the library is very large. Enter the server URL (and API key if secured); each user gets their own collection. |
 
-Changing the engine or the embedding model needs a new index: turn off *Reuse the existing index* and click
-**Initialise / reindex**. The card shows what the current index holds (chunks, documents, embedding model, date).
+With *Reuse the existing index* on, the index is reused only when it holds the documents selected: after a
+document is added or removed, **Initialise / reindex** rebuilds it. Changing the engine or the embedding model needs a
+new index too: turn off *Reuse the existing index* and click **Initialise / reindex**. The card shows what the current index holds (chunks, documents, embedding model, date).
 Indexes from earlier versions (ChromaDB) are no longer used; your PDFs are kept and the index is rebuilt from them.
 
 ---

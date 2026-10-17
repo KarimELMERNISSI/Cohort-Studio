@@ -74,6 +74,7 @@ try:
         VectorEngine,
         VectorStoreError,
         VectorStoreSettings,
+        index_matches,
         open_index,
         probe_machine,
         recommend,
@@ -362,11 +363,17 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     qdrant_api_key=api_key,
                 )
                 index = DocumentIndex(backend, embeddings)
-                if use_existing_db and backend.exists() and index.count() > 0:
+                # the documents of this initialisation; an index built from other ones (a document added to or
+                # removed from the library, another selection) is rebuilt instead of reused
+                library = sorted({os.path.basename(str(t.metadata.get("source", ""))) for t in texts})
+                existing = use_existing_db and backend.exists() and index.count() > 0
+                if existing and index_matches(index.manifest, library):
                     if progress_callback: progress_callback(60, f"Loading the existing {engine.value} index...")
                     index.check_compatible(embedding_label)
                 else:
-                    if progress_callback: progress_callback(60, f"Building the {engine.value} index...")
+                    if progress_callback:
+                        changed = "The documents changed since the index was built: rebuilding" if existing else "Building"
+                        progress_callback(60, f"{changed} the {engine.value} index...")
                     cloud = embed_provider in CLOUD_PROVIDERS  # cloud embedding APIs rate-limit bursts
 
                     def _embedding_progress(done, total):
@@ -376,7 +383,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     index.build(
                         texts,
                         embedding_label=embedding_label,
-                        documents=sorted({os.path.basename(str(t.metadata.get("source", ""))) for t in texts}),
+                        documents=library,
                         batch_size=8 if cloud else 16,
                         pause=0.5 if cloud else 0.0,  # cloud embedding APIs rate-limit bursts
                         progress=_embedding_progress,

@@ -7,7 +7,15 @@ server via ``CMP_QDRANT_URL``). Adding an engine means one module implementing
 :func:`~manage.vectorstores.selection.open_index`.
 """
 
-from .base import BaseVectorIndex, ChunkRow, Hit, IndexManifest, VectorEngine, VectorStoreError
+from .base import (
+    BaseVectorIndex,
+    ChunkRow,
+    Hit,
+    IndexManifest,
+    VectorEngine,
+    VectorStoreError,
+    index_matches,
+)
 from .document_index import DocumentIndex, IndexRetriever
 from .selection import (
     AUTO,
@@ -42,6 +50,7 @@ __all__ = [
     "VectorStoreSettings",
     "estimate_chunks",
     "estimate_index_mb",
+    "index_matches",
     "open_index",
     "probe_machine",
     "qdrant_embedded_warnings",

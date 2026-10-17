@@ -6,6 +6,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Fixed: "Your documents" was ticked on the Start page workflow although no document could be used
+
+- The documents path of the workflow map counted as done whenever the workspace's library held an indexed PDF or a
+  saved knowledge graph. That held for every dataset and even with the AI engine off, and for good, since a document
+  could not be removed from the library.
+- It is now done when the AI engine is on and the library holds documents that are indexed and still there. Without
+  the engine, the box shows *AI off*. The hover names the documents.
+- Settings > AI engine > Document library: **Remove a document** deletes a PDF from the library, after a
+  confirmation (never a file outside it).
+- With *Reuse the existing index* on, the index is reused only when it holds the documents being indexed, and is
+  rebuilt after a document is added or removed. Before, an added document was not indexed until the option was
+  turned off.
+- Tests cover the workspace evidence, the removal, and the reuse or rebuild of the index on LanceDB and Qdrant; a
+  browser check covers the map and the removal.
+
 ### Exact imputation by formula (Data > Enrich > Handle Missing Data)
 
 - Targeted imputation has an **Exact formula** option, for formulas that give the true value because other

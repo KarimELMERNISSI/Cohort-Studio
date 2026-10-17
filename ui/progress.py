@@ -8,6 +8,7 @@ trace session, so loading another dataset (a new trace) starts the workflow afre
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -109,30 +110,84 @@ def _non_empty(directory: Path | None) -> bool:
         return False
 
 
-def knowledge_evidence() -> dict[str, tuple[bool, str]]:
-    """What the user's workspace holds for the two knowledge paths (documents, variable map)."""
+def _pdfs(directory: Path | None) -> list[str]:
+    try:
+        if not directory or not directory.exists():
+            return []
+        return sorted(p.name for p in directory.iterdir() if p.suffix.lower() == ".pdf")
+    except OSError:
+        return []
+
+
+def _indexed(vectors_dir: Path | None) -> set[str]:
+    """The documents the vector indexes of the workspace hold, from their manifests (LanceDB or Qdrant)."""
+    found: set[str] = set()
+    try:
+        manifests = (
+            list(vectors_dir.glob("*/manifest.json"))
+            if vectors_dir and vectors_dir.exists()
+            else []
+        )
+    except OSError:
+        return found
+    for path in manifests:
+        try:
+            found.update(
+                str(d) for d in json.loads(path.read_text(encoding="utf-8")).get("documents") or []
+            )
+        except OSError, ValueError, AttributeError:
+            continue
+    return found
+
+
+def _names(names: list[str]) -> str:
+    if len(names) <= 2:
+        return " and ".join(names)
+    if len(names) == 3:
+        return f"{names[0]}, {names[1]} and {names[2]}"
+    return f"{', '.join(names[:3])} and {len(names) - 3} more"
+
+
+def knowledge_evidence(ai_on: bool | None = None) -> dict[str, tuple[bool, str]]:
+    """
+    What the user's workspace holds for the two knowledge paths (documents, variable map).
+
+    The documents path is done when the AI engine is on (``ai_on``; None: read from the session) and the library
+    holds indexed documents: without the engine, the documents serve nothing.
+    """
     scope = get_current_scope()
     if scope is None:
         return {
             "docs": (False, "Sign in to keep a document library."),
             "varmap": (False, "Sign in to keep variable maps."),
         }
-    n_pdfs = _count(scope.documents_dir(), "*.pdf")
+    if ai_on is None:
+        ai_on = bool(getattr(st.session_state.get("rag_manager"), "initialized", False))
+    pdfs = _pdfs(scope.documents_dir())
+    indexed = sorted(set(pdfs) & _indexed(scope.vectors_dir()))  # indexed and still in the library
     n_graphs = _count(scope.knowledge_graphs_dir(), "*.json")
-    indexed = (
-        _count(scope.vectors_dir(), "*/manifest.json") > 0
-    )  # a LanceDB or Qdrant index was built
     n_maps = _count(scope.taxonomy_dir(), "v*/taxonomy_metadata.json")
 
-    pdfs = f"{n_pdfs} PDF{'s' if n_pdfs != 1 else ''} in your library"
-    if n_graphs:
-        docs = (True, f"{pdfs}, {n_graphs} knowledge graph{'s' if n_graphs != 1 else ''} saved.")
-    elif indexed and n_pdfs:
-        docs = (True, f"{pdfs}, indexed for chat and search.")
-    elif n_pdfs:
-        docs = (False, f"{pdfs}, not indexed yet.")
-    else:
+    if not pdfs:
         docs = (False, "No document in your library yet.")
+    elif not indexed:
+        n = len(pdfs)
+        docs = (
+            False,
+            f"{n} PDF{'s' if n != 1 else ''} in your library, not indexed yet: initialise the AI engine to index "
+            f"{'it' if n == 1 else 'them'}.",
+        )
+    elif not ai_on:
+        docs = (
+            False,
+            f"{_names(indexed)} indexed in your library: initialise the AI engine to use "
+            f"{'it' if len(indexed) == 1 else 'them'}.",
+        )
+    else:
+        graphs = (
+            f"; {n_graphs} knowledge graph{'s' if n_graphs != 1 else ''} saved" if n_graphs else ""
+        )
+        docs = (True, f"{_names(indexed)} indexed for chat and search{graphs}.")
     if n_maps:
         varmap = (True, f"{n_maps} variable map version{'s' if n_maps != 1 else ''} saved.")
     else:

@@ -77,6 +77,17 @@ def resolve_within(base: Path, candidate: str | Path) -> Path:
     return path
 
 
+def remove_pdf(folder: str | Path, name: str) -> bool:
+    """Delete the PDF ``name`` of ``folder`` (a document of the library), never a file outside it; False when
+    there is no such PDF."""
+    base = Path(folder).resolve()
+    path = resolve_within(base, name)
+    if path.parent != base or path.suffix.lower() != ".pdf" or not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
 @dataclass(frozen=True)
 class UserScope:
     """All storage locations of one user."""

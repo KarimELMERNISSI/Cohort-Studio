@@ -36,7 +36,7 @@ The diagram on the Start page, and the step cards under it, show where you are w
 
 | Mark | Meaning | Evidence |
 | --- | --- | --- |
-| Green tick | done on the current data | Load: a dataset is loaded. Validate: the quality dashboard was computed (Data > Validate). Explore & analyse: descriptive statistics (Explore) or a test or model run (Analyze). Report & reproduce: a version saved or the Word report of this session's trace downloaded. Enrich: at least one change applied. Documents and Variable map: a knowledge graph or index, or a variable map, saved in your workspace. |
+| Green tick | done on the current data | Load: a dataset is loaded. Validate: the quality dashboard was computed (Data > Validate). Explore & analyse: descriptive statistics (Explore) or a test or model run (Analyze). Report & reproduce: a version saved or the Word report of this session's trace downloaded. Enrich: at least one change applied. Documents: documents indexed in your library, with the AI engine on (without it, the box shows *AI off*). Variable map: a variable map saved in your workspace. |
 | Amber circular arrow ("run again") | done, but the data changed afterwards | Every change to the data (merge, computed or transformed variable, imputation, renamed column, date conversion, kept population) is a step of the trace. A step done before the latest change is out of date, and so is an analysis made on another analysis population. |
 | Pulsing ring, "suggested next" | the first core step (Validate, Explore & analyse, Report) that is not done on the current data | |
 

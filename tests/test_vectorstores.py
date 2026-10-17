@@ -13,11 +13,13 @@ from langchain_core.embeddings import Embeddings
 
 from manage.vectorstores import (
     DocumentIndex,
+    IndexManifest,
     MachineProfile,
     VectorEngine,
     VectorStoreError,
     VectorStoreSettings,
     estimate_chunks,
+    index_matches,
     open_index,
     qdrant_embedded_warnings,
     recommend,
@@ -184,3 +186,11 @@ def test_engine_resolution_and_settings(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("CMP_VECTOR_STORE", "chroma")
     assert VectorStoreSettings.from_env().engine == "auto"  # unknown engines fall back to auto
     assert user_collection("Dr. Alice-Smith") == "cmp_dr_alice_smith_chunks"
+
+
+def test_an_index_is_reused_only_when_it_holds_the_same_documents() -> None:
+    manifest = IndexManifest(engine="lancedb", embedding="ollama:x", dim=4, chunks=2, documents=("a.pdf", "b.pdf"))
+    assert index_matches(manifest, ["b.pdf", "a.pdf"])
+    assert not index_matches(manifest, ["a.pdf"])  # a document was removed from the library
+    assert not index_matches(manifest, ["a.pdf", "b.pdf", "c.pdf"])  # one was added
+    assert not index_matches(None, ["a.pdf"])  # no index yet

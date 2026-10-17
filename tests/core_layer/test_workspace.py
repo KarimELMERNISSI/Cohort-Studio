@@ -8,6 +8,7 @@ import utils.data_paths as dp
 from core.workspace import (
     UserScope,
     all_user_scopes,
+    remove_pdf,
     resolve_within,
     safe_dirname,
     safe_filename,
@@ -71,3 +72,16 @@ def test_resolve_within_blocks_escapes(root: Path) -> None:
         )
     with pytest.raises(ValueError):
         alice.dir("nope")
+
+
+def test_only_a_pdf_of_the_library_can_be_removed(root: Path) -> None:
+    library = UserScope.for_user("alice").documents_dir()
+    (library / "paper.pdf").write_bytes(b"%PDF-1.4")
+    (library / "notes.txt").write_text("x")
+    (root / "outside.pdf").write_bytes(b"%PDF-1.4")
+    assert remove_pdf(library, "paper.pdf") and not (library / "paper.pdf").exists()
+    assert not remove_pdf(library, "paper.pdf")  # already gone
+    assert not remove_pdf(library, "notes.txt") and (library / "notes.txt").exists()  # not a PDF
+    with pytest.raises(ValueError):
+        remove_pdf(library, "../../../outside.pdf")
+    assert (root / "outside.pdf").exists()

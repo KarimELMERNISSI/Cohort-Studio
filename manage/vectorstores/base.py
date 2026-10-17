@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -95,6 +96,12 @@ class IndexManifest:
             return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
         except OSError, ValueError, TypeError:
             return None
+
+
+def index_matches(manifest: IndexManifest | None, documents: Iterable[str]) -> bool:
+    """Whether an index was built from exactly these documents: after a document is added to or removed from the
+    library, the index must be rebuilt rather than reused."""
+    return manifest is not None and sorted(set(manifest.documents)) == sorted(set(documents))
 
 
 class BaseVectorIndex(ABC):
