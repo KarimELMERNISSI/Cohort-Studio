@@ -6,6 +6,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-17
+
+Security work, fixes found by code scanning and in use, and one addition to imputation. The first release archived
+on Zenodo, which gives it a DOI.
+
+**Highlights**
+
+- **Code scanning**: every CodeQL security alert is fixed in the code (paths typed by the user stay in their
+  workspace, log entries cannot be forged, no regular expression backtracks on long input). API keys no longer
+  appear in the log or in the errors of the AI engine.
+- **AI engine**: a chat model that cannot answer is reported as such instead of "Suggestions received!" over an
+  empty list; the default Gemini model is one Google still serves to new keys.
+- **Exact imputation by formula**: a missing value the other variables determine (a weight from the BMI and the
+  height) is imputed exactly and counts as observed in a later multiple imputation.
+- **Start page**: "Your documents" is ticked only when the library can be used; a document can be removed.
+- **Documentation**: the variables the AI engine suggests for a concept, shown on the site and in the README.
+
 ### Security and fixes: the code-scanning alerts resolved
 
 CodeQL (the `security-extended` and `security-and-quality` suites of `.github/workflows/codeql.yml`) reported 195

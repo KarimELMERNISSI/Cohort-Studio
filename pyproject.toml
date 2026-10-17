@@ -1,6 +1,6 @@
 [project]
 name = "cohortstudio"
-version = "2.4.0"
+version = "2.4.1"
 description = "CohortStudio: clinical cohort data from raw file to reproducible evidence (quality, enrichment, biostatistics, literature knowledge, traced reports)"
 readme = "README.md"
 requires-python = ">=3.14"

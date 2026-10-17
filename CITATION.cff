@@ -9,7 +9,7 @@ abstract: >-
 authors:
   - family-names: "El Mernissi"
     given-names: "Karim"
-version: "2.4.0"
+version: "2.4.1"
 date-released: "2026-10-17"
 license: Apache-2.0
 repository-code: "https://github.com/KarimELMERNISSI/Cohort-Studio"
