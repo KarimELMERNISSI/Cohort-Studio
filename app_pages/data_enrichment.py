@@ -2323,9 +2323,21 @@ def app():
                     "Enter Imputation Formula", 
                     value=st.session_state.get('imputation_formula_input', ''),
                     key="imputation_formula_input",
-                    help="Use standard operators (+, -, *, /) and column names. Example: Weight / (Height**2)"
+                    help="Use standard operators (+, -, *, /) and column names. Example, a missing weight: "
+                         "bmi * (height_cm / 100) ** 2"
                 )
-                
+                exact = st.checkbox(
+                    "Exact formula: the other variables determine the value",
+                    key="imputation_exact",
+                    help=(
+                        "Tick it when the formula gives the true value, e.g. a weight from the BMI and the height, or "
+                        "a total from its parts. The values are then imputed exactly: the analyses and the multiple "
+                        "imputation keep them as observed values, without the single-imputation warning. Leave it "
+                        "unticked for an approximation or a proxy: the values are then flagged like any single "
+                        "imputation."
+                    ),
+                )
+
                 if st.button("Apply Targeted Imputation", type="primary", disabled=not formula_input):
                     try:
                         # compute formula series
@@ -2351,9 +2363,11 @@ def app():
                                     {
                                         "target_variable": target_var,
                                         "formula": formula_input,
-                                        "filled_count": int(filled_count)
+                                        "filled_count": int(filled_count),
+                                        "exact": bool(exact),
                                     },
-                                    f"Imputed {filled_count} values in {target_var} using formula",
+                                    f"Imputed {filled_count} values in {target_var} using "
+                                    f"{'an exact formula' if exact else 'a formula'}",
                                     output_dataset_path=snapshot_path
                                 )
                                 st.rerun()

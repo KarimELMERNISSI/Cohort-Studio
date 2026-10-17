@@ -95,6 +95,14 @@ def render_multiple_imputation() -> None:
                 "imputation: reload a version saved before it, or replay the trace up to the step before it.",
                 icon=":material/warning:",
             )
+        exact = state.exact_imputed_counts(candidates)
+        if exact:
+            st.info(
+                f"{sum(exact.values()):,} values of these variables were imputed earlier by an exact formula "
+                f"({', '.join(f'{c}: {n:,}' for c, n in exact.items())}). The other variables determine them, so "
+                "the multiple imputation keeps them as observed values and has fewer cells to impute.",
+                icon=":material/calculate:",
+            )
         if summary.empty:
             st.success(
                 "No variable of the analysis population has missing values: there is nothing to impute."

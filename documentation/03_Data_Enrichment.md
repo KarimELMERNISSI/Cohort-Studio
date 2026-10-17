@@ -38,25 +38,28 @@ Work in this order:
 
 | The missing value | Approach | Tab |
 | --- | --- | --- |
-| is determined by other variables: a weight from the BMI and the height, a total from its parts, a unit conversion | **Derive it** with a formula. When the formula is exact, nothing is estimated. | Targeted Imputation |
+| is determined by other variables: a weight from the BMI and the height, a total from its parts, a unit conversion | **Exact imputation** by a formula, with *Exact formula* ticked: nothing is estimated | Targeted Imputation |
 | is only needed to draw, reduce or cluster the data | **Single imputation**: mean or median, KNN, chained equations, missForest | Global Imputation |
 | enters an estimate, a test or a model | **Multiple imputation**, pooled with Rubin's rules | Multiple imputation (for inference) |
 
-Derive first: the derived values are then observed data for the imputation models, which have fewer cells to estimate
-and more information to estimate them from.
+Impute exactly first: the values an exact formula fills are then observed data for the statistical imputations, which
+have fewer cells to estimate and more information to estimate them from.
 
 ### Targeted Imputation
 
-Fill the missing values of one variable from the variables that determine it. Choose the variable, write the formula
-in the same language as **Create New Variables** (a missing weight: `bmi * (height_cm / 100) ** 2`), or take an AI
-suggestion, then click **Apply Targeted Imputation**. The formula fills the missing cells only and keeps the observed
-values. It fits nothing: it uses the values of each row, so every row whose inputs are known is filled, including the
-rows outside the analysis population. The step is traced, and a replay fills the same cells again.
+Impute the missing values of one variable from the variables that determine it. Choose the variable, write the
+formula in the same language as **Create New Variables** (a missing weight: `bmi * (height_cm / 100) ** 2`), or take an
+AI suggestion, then click **Apply Targeted Imputation**. The formula fills the missing cells only and keeps the
+observed values. It fits nothing: it uses the values of each row, so every row whose inputs are known is filled,
+including the rows outside the analysis population. The step is traced, and a replay fills the same cells again.
 
-The filled cells are remembered like any single imputation: the results that use them say so, and the
-multiple-imputation panel lists them and treats them as observed. That is right when the formula is exact; when it
-only approximates the variable, impute the data as they were before (reload a version saved before the step, or
-replay the trace up to the step before it).
+Tick **Exact formula** when the other variables determine the value, as for the weight above or a total from its
+parts. The values are then imputed exactly. Nothing is estimated, so the analyses and the multiple imputation keep
+them as observed values, without the single-imputation warning, and the study dossier lists them as imputed by an
+exact formula. Leave it unticked for an approximation or a proxy: the filled cells are then remembered like any single
+imputation, the results that use them say so, and the multiple-imputation panel advises imputing the data as they were
+before the step (reload a version saved before it, or replay the trace up to the step before it). The choice is
+recorded in the trace and kept with saved versions.
 
 | Feature | Description |
 | --- | --- |
@@ -98,7 +101,7 @@ Values filled here are single imputations: fine for exploration, clustering and 
 
 The **Multiple imputation (for inference)** tab creates m completed versions of the analysis population. The analysis pages run each analysis on every version and pool the results with Rubin's rules (chapter 5). The dataset itself is not changed. The panel has five steps.
 
-1. **Population and missingness**: rows, share of incomplete rows, the suggested m (at least the percentage of incomplete rows; White, Royston & Wood 2011) and the missing values of each variable. Values filled earlier by a single imputation are flagged: the multiple imputation would treat them as observed.
+1. **Population and missingness**: rows, share of incomplete rows, the suggested m (at least the percentage of incomplete rows; White, Royston & Wood 2011) and the missing values of each variable. Values filled earlier by a single imputation are flagged: the multiple imputation would treat them as observed. Values imputed by an exact formula are listed apart, without a warning: they count as observed.
 2. **Imputation model**: the variables. Identifiers, dates, free text and categories with more than 20 levels are left out by default. Keep every variable of the planned analyses, the outcome included: leaving it out biases the associations towards zero (Moons et al. 2006). Each incomplete variable gets a method:
 
    | Method | For | How |
@@ -226,7 +229,7 @@ All new columns follow a configurable naming pattern (e.g. `{method_applied}_{in
 ---
 
 ## Practical Guidance
-- Derive before you impute: fill with **Targeted Imputation** what other variables determine (e.g. a missing weight from the BMI and the height), then run **Global** or **Multiple** imputation on what is left.
+- Impute exactly before you impute statistically: fill with **Targeted Imputation** and *Exact formula* what other variables determine (e.g. a missing weight from the BMI and the height), then run **Global** or **Multiple** imputation on what is left.
 - Run **Global Imputation** before **Dimensionality Reduction** or **Clustering** — these methods require complete data.
 - Compute indices and scores (BMI, eGFR) under **Variable Computation**. With the AI engine on, start from **AI Variable Suggestions** and read the preview statistics before you confirm.
 - Check the **imputation mask** after global imputation to verify which values were filled.

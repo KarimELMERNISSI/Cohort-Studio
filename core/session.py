@@ -10,7 +10,10 @@ One object owns every change of the data a researcher analyses (follow-up progra
   filters: they never delete rows (only :meth:`DataSession.freeze_population` does, on request);
 - the *single-imputed cells*: the row ids, per column, of the values a single imputation filled
   (``SINGLE_IMPUTATION_STEPS``). Analyses treat them as observed, so their standard errors are too small;
-  the pages say so (follow-up programme M2, C10).
+  the pages say so (follow-up programme M2, C10);
+- the *exactly imputed cells*: the values a targeted imputation filled with a formula the user marked exact, because
+  the other variables determine them (a weight from the BMI and the height). Nothing was estimated, so they count
+  as observed without a warning; they are kept apart so that the study dossier can say how they were imputed.
 
 Every change of the base is written as one trace step through ``trace`` (the TransformationManager), with
 what it did to the table: rows and columns in and out, and the fingerprints before and after.
@@ -99,6 +102,44 @@ def restrict_cells(cells: Cells, frame: pd.DataFrame) -> Cells:
     return out
 
 
+def is_exact_imputation(function: str, params: Mapping[str, Any] | None) -> bool:
+    """A targeted imputation whose formula the user marked exact: the other variables determine the values."""
+    return function == "targeted_imputation" and bool((params or {}).get("exact"))
+
+
+def sort_filled(
+    function: str,
+    params: Mapping[str, Any] | None,
+    before: pd.DataFrame,
+    after: pd.DataFrame,
+    single: Cells,
+    exact: Cells,
+) -> tuple[Cells, Cells]:
+    """``(single, exact)`` with the cells an imputation step filled added to the right ones (the session and the
+    replay use this one rule)."""
+    if function not in SINGLE_IMPUTATION_STEPS:
+        return single, exact
+    filled = filled_cells(before, after)
+    if is_exact_imputation(function, params):
+        return single, merge_cells(exact, filled)
+    return merge_cells(single, filled), exact
+
+
+def count_cells(
+    cells: Cells, rows: pd.Index, columns: Iterable[str] | None = None
+) -> dict[str, int]:
+    """How many of ``cells`` each column has among ``rows`` (columns with none left out)."""
+    wanted = None if columns is None else {str(c) for c in columns}
+    ids = rows.to_numpy()
+    out: dict[str, int] = {}
+    for col, filled in cells.items():
+        if wanted is None or col in wanted:
+            n = int(np.isin(filled, ids).sum())
+            if n:
+                out[col] = n
+    return out
+
+
 @dataclass(frozen=True)
 class PendingStep:
     """A change kept in the Enrich draft until it is applied."""
@@ -120,6 +161,7 @@ class Draft:
     steps: list[PendingStep] = field(default_factory=list)
     population_fp: str | None = None  # population used by the population-scoped steps
     single_imputed: Cells = field(default_factory=dict)
+    exact_imputed: Cells = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -171,6 +213,7 @@ class DataSession:
         self._analysis: tuple[str, pd.DataFrame] | None = None
         self._recorded_populations: set[str] = set()
         self.single_imputed: Cells = {}
+        self.exact_imputed: Cells = {}
 
     # ------------------------------------------------------------------ state
 
@@ -234,6 +277,7 @@ class DataSession:
         self.draft = None
         self.ticked = ()
         self.single_imputed = {}
+        self.exact_imputed = {}
         self._population = None
         self._analysis = None
         self._recorded_populations.clear()
@@ -245,6 +289,7 @@ class DataSession:
         self.base, self.data_fp, self.revision = None, "", 0
         self.draft = None
         self.single_imputed = {}
+        self.exact_imputed = {}
         self.ticked = ()
         self._population = None
         self._analysis = None
@@ -273,10 +318,12 @@ class DataSession:
         if fp == self.data_fp:
             return None
         change = describe_change(self.base, new, fp_in=self.data_fp, fp_out=fp)
-        cells = self.single_imputed
-        if function in SINGLE_IMPUTATION_STEPS and self.base is not None:
-            cells = merge_cells(cells, filled_cells(self.base, new))
-        self.single_imputed = restrict_cells(cells, new)
+        assert self.base is not None
+        single, exact = sort_filled(
+            function, params, self.base, new, self.single_imputed, self.exact_imputed
+        )
+        self.single_imputed = restrict_cells(single, new)
+        self.exact_imputed = restrict_cells(exact, new)
         self._set_base(new, fp)
         self._record(
             function,
@@ -310,7 +357,10 @@ class DataSession:
         base = self._require_base()
         if self.draft is None:
             self.draft = Draft(
-                base_fp=self.data_fp, frame=base, single_imputed=dict(self.single_imputed)
+                base_fp=self.data_fp,
+                frame=base,
+                single_imputed=dict(self.single_imputed),
+                exact_imputed=dict(self.exact_imputed),
             )
         after = ensure_row_ids(df)
         before = self.draft.frame
@@ -329,10 +379,11 @@ class DataSession:
             output_dataset_path,
             _now(),
         )
-        cells = self.draft.single_imputed
-        if function in SINGLE_IMPUTATION_STEPS:
-            cells = merge_cells(cells, filled_cells(before, after))
-        self.draft.single_imputed = restrict_cells(cells, after)
+        single, exact = sort_filled(
+            function, params, before, after, self.draft.single_imputed, self.draft.exact_imputed
+        )
+        self.draft.single_imputed = restrict_cells(single, after)
+        self.draft.exact_imputed = restrict_cells(exact, after)
         self.draft.frame = after
         self.draft.steps.append(step)
         if block and block.get("fingerprint"):
@@ -382,6 +433,7 @@ class DataSession:
         fp = draft.steps[-1].change.fp_out
         change = describe_change(self.base, draft.frame, fp_in=self.data_fp, fp_out=fp)
         self.single_imputed = restrict_cells(draft.single_imputed, draft.frame)
+        self.exact_imputed = restrict_cells(draft.exact_imputed, draft.frame)
         self._set_base(draft.frame, fp, revisions=len(draft.steps))
         self.draft = None
         return change
@@ -389,28 +441,33 @@ class DataSession:
     def discard_staging(self) -> None:
         self.draft = None
 
-    # ------------------------------------------------------------------ single-imputed cells
+    # ------------------------------------------------------------------ imputed cells
+
+    def _cells_in_base(self, cells: Mapping[str, Any]) -> Cells:
+        base = self._require_base()
+        return restrict_cells(
+            {str(c): np.asarray(ids, dtype=np.int64) for c, ids in cells.items()}, base
+        )
 
     def restore_single_imputed(self, cells: Mapping[str, Any]) -> None:
         """The single-imputed cells of a reloaded version or a replay (row ids per column)."""
-        base = self._require_base()
-        self.single_imputed = restrict_cells(
-            {str(c): np.asarray(ids, dtype=np.int64) for c, ids in cells.items()}, base
-        )
+        self.single_imputed = self._cells_in_base(cells)
+
+    def restore_exact_imputed(self, cells: Mapping[str, Any]) -> None:
+        """The cells imputed by an exact formula, of a reloaded version or a replay (row ids per column)."""
+        self.exact_imputed = self._cells_in_base(cells)
 
     def single_imputed_counts(
         self, rows: pd.Index, columns: Iterable[str] | None = None
     ) -> dict[str, int]:
         """How many single-imputed values each column has among ``rows`` (columns with none left out)."""
-        wanted = None if columns is None else {str(c) for c in columns}
-        ids = rows.to_numpy()
-        out: dict[str, int] = {}
-        for col, filled in self.single_imputed.items():
-            if wanted is None or col in wanted:
-                n = int(np.isin(filled, ids).sum())
-                if n:
-                    out[col] = n
-        return out
+        return count_cells(self.single_imputed, rows, columns)
+
+    def exact_imputed_counts(
+        self, rows: pd.Index, columns: Iterable[str] | None = None
+    ) -> dict[str, int]:
+        """How many values imputed by an exact formula each column has among ``rows``."""
+        return count_cells(self.exact_imputed, rows, columns)
 
     # ------------------------------------------------------------------ population
 

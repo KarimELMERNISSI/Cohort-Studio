@@ -72,6 +72,7 @@ class DossierInput:
     data_steps: list[tuple[str, str]] = field(default_factory=list)  # (step, what it did)
     missing: pd.DataFrame | None = None  # variable, missing, share
     single_imputed: dict[str, int] = field(default_factory=dict)
+    exact_imputed: dict[str, int] = field(default_factory=dict)  # values imputed by an exact formula
     mi: dict[str, Any] | None = None  # methods_paragraph, settings rows, methods rows, status
     results: list[DossierResult] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
@@ -182,6 +183,14 @@ def build_dossier(inp: DossierInput) -> BytesIO:
         _table(doc, inp.missing)
     else:
         doc.add_paragraph("No variable of the analysis population has missing values.")
+    if inp.exact_imputed:
+        total = sum(inp.exact_imputed.values())
+        detail = ", ".join(f"{c}: {n:,}" for c, n in inp.exact_imputed.items())
+        doc.add_paragraph(
+            f"{total:,} values were imputed by an exact formula, the other variables determining them ({detail}); "
+            "the formulas are listed under Data handling. Nothing was estimated, so the analyses treat them as "
+            "observed."
+        )
     if inp.single_imputed:
         total = sum(inp.single_imputed.values())
         detail = ", ".join(f"{c}: {n:,}" for c, n in inp.single_imputed.items())

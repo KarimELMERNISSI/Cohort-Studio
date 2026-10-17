@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from manage.reproduction_manager import execute_trace_pipeline
+from manage.reproduction_manager import apply_steps, execute_trace_pipeline
 
 
 @pytest.fixture
@@ -249,3 +249,19 @@ class TestReplayVerification:
         result = run_trace(tm.get_trace())
         assert result.not_replayable == [1] and not result.reproducible
         assert result.error is None and "cannot be recomputed" in " ".join(result.warnings)
+
+
+def test_the_replay_keeps_values_imputed_by_an_exact_formula_apart() -> None:
+    df = pd.DataFrame({"weight": [70.0, np.nan, np.nan], "bmi": [24.2, 22.0, 30.0], "height": [170.0, 180.0, np.nan]})
+    step = {
+        "function": "targeted_imputation",
+        "params": {"target_variable": "weight", "formula": "bmi * (height / 100) ** 2", "exact": True},
+    }
+    result = apply_steps(df, [step])
+    assert result.error is None
+    assert {c: ids.tolist() for c, ids in result.exact_imputed.items()} == {"weight": [1]}  # row 2 lacks a height
+    assert result.single_imputed == {}
+    del step["params"]["exact"]  # a step recorded before the option: a single imputation, as before
+    result = apply_steps(df, [step])
+    assert {c: ids.tolist() for c, ids in result.single_imputed.items()} == {"weight": [1]}
+    assert result.exact_imputed == {}

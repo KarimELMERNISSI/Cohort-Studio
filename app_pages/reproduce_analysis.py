@@ -615,5 +615,5 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     elif result.not_replayable:
         st.info(f"{len(result.not_replayable)} step(s) could not be recomputed; see the warnings above.")
     get_state().install_replay(result.df, trace_data, upto=target_step_index, mode="full replay",
-                               single_imputed=result.single_imputed)
+                               single_imputed=result.single_imputed, exact_imputed=result.exact_imputed)
     st.success(f"Successfully reproduced state at Step {target_step_index + 1} (full replay, {result.steps_applied} step(s))")

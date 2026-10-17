@@ -313,7 +313,7 @@
             <h3>Missing data handled for inference, not hidden</h3>
             <p>A chained-equations engine modelled on R's <code>mice</code>: predictive mean matching, Bayesian normal, logistic and polytomous regression, and random-forest donors. It is fitted on the analysis population, and the outcome of the planned analyses always stays in the imputation model.</p>
             <ul class="checks">
-              <li>First, the values other variables determine are derived, not guessed: a formula fills a missing weight from the BMI and the height, typed or suggested by the AI engine, leaving fewer cells to impute</li>
+              <li>First, the values other variables determine are imputed exactly, not estimated: a formula fills a missing weight from the BMI and the height, typed or suggested by the AI engine, leaving fewer cells to estimate</li>
               <li>For figures and clustering, a quick single imputation (KNN, missForest, chained equations, mean or median), flagged in every result that uses it</li>
               <li>Diagnostics (chain traces, R-hat, observed against imputed values), exports for R and Stata, and a methods paragraph following Sterne et al. (2009)</li>
             </ul>

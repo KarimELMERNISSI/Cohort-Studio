@@ -14,14 +14,21 @@ import utils.data_paths as dp
 def _script() -> None:
     import streamlit as st
 
-    from enrich.imputation_service import impute_rows
+    from enrich.imputation_service import fill_with_formula, impute_rows
     from ui.results import provenance, remember
     from ui.state import get_state
 
     state = get_state()
     ss = st.session_state
     action = ss.get("action", "impute")
-    if action == "impute":
+    if action == "exact":  # a targeted imputation by a formula the user marked exact
+        state.load_tutorial_cohort()
+        filled, n = fill_with_formula(state.working_frame(), "ldl_mmol_l", "age * 0 + 3")
+        params = {"target_variable": "ldl_mmol_l", "formula": "age * 0 + 3", "exact": True}
+        state.stage(filled, "targeted_imputation", params, "Exact formula")
+        ss["commit"] = state.commit_staging()
+        ss["filled"] = n
+    elif action == "impute":
         state.load_tutorial_cohort()
         outcome = impute_rows(
             state.working_frame(), None, numerical="Median", categorical="Most_Frequent"
@@ -37,7 +44,8 @@ def _script() -> None:
     elif action == "swap":
         state.load_sample_cohort()
     ss["counts"] = state.single_imputed_counts()
-    remember("check", 1, config="c", columns=["hba1c_pct", "age"])
+    ss["exact_counts"] = state.exact_imputed_counts()
+    remember("check", 1, config="c", columns=ss.get("columns", ["hba1c_pct", "age"]))
     provenance("check")
 
 
@@ -74,3 +82,25 @@ def test_single_imputed_values_are_counted_flagged_and_kept_with_versions(data_r
     assert at.session_state["counts"] == {} and not at.warning
     _run(at, "reload")
     assert at.session_state["counts"] == expected  # restored from the lineage sidecar
+
+
+def test_values_imputed_by_an_exact_formula_carry_no_warning_and_are_kept_with_versions(
+    data_root: Path,
+) -> None:
+    at = AppTest.from_function(_script, default_timeout=300)
+    at.session_state["username"] = "exact_user"
+    at.session_state["columns"] = ["ldl_mmol_l"]
+    _run(at, "exact")
+    assert at.session_state["commit"][0], at.session_state["commit"]
+    assert at.session_state["filled"] > 0
+    assert at.session_state["counts"] == {}  # not a single imputation
+    exact = at.session_state["exact_counts"]
+    assert set(exact) == {"ldl_mmol_l"} and 0 < exact["ldl_mmol_l"] <= at.session_state["filled"]
+    assert "single imputation" not in " ".join(w.value for w in at.warning)
+
+    _run(at, "save")
+    assert at.session_state["saved"]
+    _run(at, "swap")
+    assert at.session_state["exact_counts"] == {}
+    _run(at, "reload")
+    assert at.session_state["exact_counts"] == exact  # restored from the lineage sidecar

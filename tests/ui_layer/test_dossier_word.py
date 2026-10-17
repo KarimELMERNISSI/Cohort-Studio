@@ -218,3 +218,19 @@ def test_the_download_builds_the_dossier_without_the_session(data_root: Path) ->
     text, headings, _, n_pictures = _text(data)
     assert text.startswith("Built later") and "Cox proportional-hazards model" in headings
     assert n_pictures == 2
+
+
+def test_values_imputed_by_an_exact_formula_are_documented_apart() -> None:
+    from core.attrition import FlowBox, ParticipantFlow
+    from manage.dossier import DossierInput, build_dossier
+
+    inp = DossierInput(
+        title="Check",
+        flow=ParticipantFlow(main=(FlowBox("a", "Records read", 10, "loaded"),)),
+        population_label="all 10 rows",
+        exact_imputed={"weight_kg": 3},
+        single_imputed={"ldl_mmol_l": 2},
+    )
+    text = "\n".join(p.text for p in Document(build_dossier(inp)).paragraphs)
+    assert "3 values were imputed by an exact formula" in text and "(weight_kg: 3)" in text
+    assert "2 values were filled by single imputation (ldl_mmol_l: 2)" in text

@@ -6,18 +6,38 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
-### Documentation: missing values, derived first and then imputed
+### Exact imputation by formula (Data > Enrich > Handle Missing Data)
+
+- Targeted imputation has an **Exact formula** option, for formulas that give the true value because other
+  variables determine it: a weight from the BMI and the height, or a total from its parts.
+- Such values are imputed exactly and recorded apart from the single-imputed ones. Nothing was estimated, so:
+  - the analyses treat them as observed, without the single-imputation warning;
+  - the multiple-imputation panel keeps them as observed values with a short note, instead of advising to undo
+    them;
+  - the study dossier lists them as imputed by an exact formula, next to its formula under *Data handling*.
+- This lets an exact imputation come before the statistical ones, which then have fewer cells to estimate.
+- Unticked (the default), and for steps recorded before this option, nothing changes: the values are flagged as a
+  single imputation.
+- The choice is recorded in the trace step (`exact`). It is kept with saved versions (the lineage file) and restored
+  by a full replay.
+- Tests cover:
+  - the session's bookkeeping and the replay, including steps recorded before the option;
+  - the dossier paragraph;
+  - an application test: no warning, and the record kept across saving and reloading.
+
+### Documentation: missing values, imputed exactly first, then statistically
 
 - The documentation now presents the imputation tools as one sequence:
-  1. derive by formula what other variables determine (targeted imputation);
-  2. impute the rest, by single imputation for exploration (KNN, missForest, chained equations, mean or median) or by
-     multiple imputation for inference.
-- Deriving first leaves the imputation models fewer cells to estimate and more information to estimate them from.
+  1. impute by an exact formula what other variables determine (targeted imputation);
+  2. impute the rest statistically, by single imputation for exploration (KNN, missForest, chained equations, mean
+     or median) or by multiple imputation for inference.
+- Imputing exactly first leaves the statistical imputations fewer cells to estimate and more information to estimate
+  them from.
 - Chapter 03:
   - opens *Handle Missing Data* with a table, *which approach for which missing value*;
   - describes targeted imputation precisely: it fills the missing cells only, fits nothing, and fills every row
     whose inputs are known;
-  - says how the filled cells are flagged, and when keeping them for the multiple imputation is right;
+  - describes the *Exact formula* option and how the filled cells are flagged;
   - corrects two claims: the AI imputation suggestions use the related columns, not the documents; and the editor's
     example (a BMI computation) did not fill a missing variable.
 - Site: the imputation feature, now labelled *Imputation*, shows the three steps.

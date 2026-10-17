@@ -13,6 +13,7 @@ from core.session import (
     PopulationError,
     StagingError,
     StaleBaseError,
+    is_exact_imputation,
 )
 
 CONFIG = {
@@ -165,6 +166,35 @@ def test_cells_filled_by_a_single_imputation_are_remembered(session: DataSession
     assert session.single_imputed["age"].tolist() == [1]  # row ids not in the data are dropped
     session.install(pd.DataFrame({"age": [1]}))
     assert session.single_imputed == {}
+
+
+def test_values_imputed_by_an_exact_formula_are_kept_apart(session: DataSession) -> None:
+    frame = session.working_frame()
+    exact = frame.assign(
+        bmi=frame["bmi"].where(frame.index != 1, 21.0)
+    )  # row 1, by an exact formula
+    params = {"target_variable": "bmi", "formula": "21"}
+    session.stage(exact, "targeted_imputation", {**params, "exact": True}, "Exact formula")
+    approximate = session.working_frame().assign(bmi=lambda f: f["bmi"].fillna(23.0))  # row 3
+    session.stage(approximate, "targeted_imputation", {**params, "exact": False}, "Approximation")
+    assert session.draft is not None and session.draft.exact_imputed["bmi"].tolist() == [1]
+    session.commit_staging(CONFIG)
+    assert {col: ids.tolist() for col, ids in session.exact_imputed.items()} == {"bmi": [1]}
+    assert {col: ids.tolist() for col, ids in session.single_imputed.items()} == {"bmi": [3]}
+    assert session.exact_imputed_counts(session.base.index) == {"bmi": 1}
+    assert session.exact_imputed_counts(session.base.index, ["age"]) == {}
+    session.restore_exact_imputed({"bmi": [1, 99]})
+    assert session.exact_imputed["bmi"].tolist() == [1]  # row ids not in the data are dropped
+    session.commit(session.base.drop(columns="bmi"), "drop_columns", {}, "Dropped")
+    assert session.exact_imputed == {} and session.single_imputed == {}
+
+
+def test_only_a_targeted_imputation_marked_exact_is_exact() -> None:
+    assert is_exact_imputation("targeted_imputation", {"exact": True})
+    assert not is_exact_imputation(
+        "targeted_imputation", {"formula": "x"}
+    )  # recorded before the option
+    assert not is_exact_imputation("imputation", {"exact": True})
 
 
 def test_freezing_keeps_only_the_population(session: DataSession) -> None:

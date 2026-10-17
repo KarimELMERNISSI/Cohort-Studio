@@ -235,6 +235,7 @@ def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dic
         "data_steps": _data_steps(trace),
         "missing": _missing_table(state.analysis_frame()),
         "single_imputed": state.single_imputed_counts(),
+        "exact_imputed": state.exact_imputed_counts(),
         "mi": _mi_section(state),
     }
 
@@ -278,6 +279,7 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
         data_steps=parts["data_steps"],
         missing=parts["missing"],
         single_imputed=parts["single_imputed"],
+        exact_imputed=parts["exact_imputed"],
         mi=parts["mi"],
         results=results,
         references=references,

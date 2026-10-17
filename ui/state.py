@@ -354,9 +354,10 @@ class AppState:
         upto: int,
         mode: str,
         single_imputed: Mapping[str, Any] | None = None,
+        exact_imputed: Mapping[str, Any] | None = None,
     ) -> DatasetRef:
         """A replayed state becomes the session dataset, linked to the trace it was replayed from (with the
-        cells its single imputations filled, when the replay recomputed them)."""
+        cells its single imputations and its exact formulas filled, when the replay recomputed them)."""
         session_id = str(trace.get("session_id") or "trace")
         parent = {
             "trace_session": session_id,
@@ -373,6 +374,8 @@ class AppState:
         )
         if single_imputed:
             self.session.restore_single_imputed(single_imputed)
+        if exact_imputed:
+            self.session.restore_exact_imputed(exact_imputed)
         return out
 
     def _after_data_change(self) -> None:
@@ -536,6 +539,16 @@ class AppState:
         except PopulationError:
             return {}
         return self.session.single_imputed_counts(rows, columns)
+
+    def exact_imputed_counts(self, columns: Iterable[str] | None = None) -> dict[str, int]:
+        """Values imputed by an exact formula in the analysis population, per column (``columns`` only)."""
+        if not self.session.loaded or not self.session.exact_imputed:
+            return {}
+        try:
+            rows = self.analysis_frame().index
+        except PopulationError:
+            return {}
+        return self.session.exact_imputed_counts(rows, columns)
 
     @property
     def ticked(self) -> tuple[str, ...]:
@@ -831,6 +844,13 @@ class AppState:
                 self.session.restore_single_imputed(
                     {col: ranges_to_ids(ranges) for col, ranges in cells.items()}
                 )
+            exact = (
+                lineage.get("exact_imputed") or {}
+            )  # absent from the lineage files of older versions
+            if exact:
+                self.session.restore_exact_imputed(
+                    {col: ranges_to_ids(ranges) for col, ranges in exact.items()}
+                )
         from manage.mi_store import has_mi, load_mi
 
         if has_mi(self.db_manager.dataset_dir, saved_name):
@@ -900,6 +920,9 @@ class AppState:
             "row_id": "__row_id",
             "single_imputed": {
                 col: ids_to_ranges(ids.tolist()) for col, ids in session.single_imputed.items()
+            },
+            "exact_imputed": {
+                col: ids_to_ranges(ids.tolist()) for col, ids in session.exact_imputed.items()
             },
             "parent_dataset": ref.label if ref else None,
             "trace": {
