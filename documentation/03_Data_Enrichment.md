@@ -1,6 +1,6 @@
 # Data Enrichment
 
-The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to engineering new variables through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system and can be replayed.
+The **Data Enrichment** page handles the complete data preparation pipeline — from importing external data sources and imputing missing values, to creating new variables from formulas (typed with the help of the editor, or suggested by the AI engine from the columns of your dataset) and through transformations, dimensionality reduction, and clustering. All transformations are logged to the trace system and can be replayed.
 
 ## The Enrich draft
 
@@ -101,7 +101,54 @@ The imputation is recorded in the trace (`mi_impute`, with a fingerprint of the 
 
 ## Create New Variables
 
-Engineer new features via transformations, dimensionality reduction, encoding, scaling, or clustering.
+The tab derives variables in two ways: **Apply Common Transformations to Multiple Selected Variables** transforms,
+reduces or clusters several columns at once (see *Transformation Types* below), and **Variable Computation** computes
+one variable from a formula on the existing columns, typed by you or suggested by the AI engine.
+
+### Compute a variable from a formula
+
+Under **Variable Computation**, write the formula with the column names, as in a spreadsheet:
+`weight_kg / (height_cm / 100) ** 2`. The editor guides each step:
+
+| Step | What the editor does |
+| --- | --- |
+| **Name** | Checks the name as you type: it must be new and start with a letter or an underscore. |
+| **Formula** | Under **Column Suggestions**, offers the columns whose names come closest to the word you are typing; click one to put it in place. A name with spaces or symbols goes between doubled double quotes: `""Height (m)""`. |
+| **Check** | Validates the formula and shows the first rows of the columns it uses (missing values in red) and its constants. |
+| **Compute & Preview** | Computes the variable and shows it next to its source columns, with its statistics on the analysis population: N, missing values, median and quartiles, mean and SD. Values more than three interquartile ranges beyond the quartiles are listed with their source values, since an entry error (a height in metres, a weight of 0) moves the mean and the SD. |
+| **Confirm & Add Variable to Dataset** | Adds the variable to the Enrich draft. |
+
+The formula language covers arithmetic, comparisons, conditions (`x if condition else y`, `np.where`), the usual
+mathematical functions (`np.log`, `np.exp`, `np.sqrt`, `np.minimum`, `np.maximum`, `round`) and the text and date
+methods of a column (`sex.str.strip()`, `enrol_date.dt.year`); subtracting two dates gives a number of days. Anything
+else is refused before it runs, whether the formula was typed, loaded from a trace or proposed by the AI engine. The
+formula is recorded in the trace, and a replay computes the variable again from it.
+
+### Variables suggested by the AI engine
+
+With the AI engine on, **AI Variable Suggestions (RAG)**, above the editor, proposes variables built from the columns
+of your dataset:
+
+| Mode | What it looks for |
+| --- | --- |
+| **Specific search** | A concept you name (*BSA*, *eGFR*, *cardiovascular risk*), with a strategy: *Go To Target* finds formulas that compute it, *Go From Target* finds scores that use it as an input, *Around Target* finds proxies and surrogates. |
+| **Exploratory mode** | The standard indices and scores that the columns of the dataset allow (BMI, Charlson, ...). |
+
+The engine draws on the passages of your indexed documents (Knowledge > Documents) and, unless you untick it, on the
+variable map (Knowledge > Variable map) to understand cryptic column names. It maps the inputs of each formula onto
+your columns, writing any unit conversion into the formula, then checks every formula: a formula with a syntax error is
+dropped, and a variable it cannot find in the dataset is matched again to your columns, or the suggestion is dropped.
+Options: the number of suggestions, the variables it may use (with more than 50 columns and no choice, identifiers
+and free-text columns are left out), and whether to keep the formulas that need a variable the dataset lacks.
+
+Each suggestion shows its formula in mathematical notation, a small graph of its inputs (missing ones in red), its
+clinical relevance and its source: *Document* (the file and pages), *Model Knowledge* or *Hybrid*. For a missing
+input, **Find Proxy** and **Find Alternative Formula** look for a substitute among your columns. **Apply to Editor**
+copies the name and the formula into the editor, where you check, compute and preview them like a formula of your own;
+nothing is added to the dataset until you confirm it.
+
+The suggestions come from the language model and your documents. They are not checked against a terminology or a
+formulary: check the formula and its units in the preview before you use the variable.
 
 ### Transformation Types
 
@@ -151,17 +198,6 @@ All new columns follow a configurable naming pattern (e.g. `{method_applied}_{in
 
 ---
 
-## AI Variable Discovery
-
-The RAG system can suggest **computed variables** that are clinically or statistically meaningful based on:
-- Existing column names and data types.
-- Uploaded research documentation.
-- Known medical formulas and indices.
-
-Suggestions include the variable name, formula, reasoning, and expected units.
-
----
-
 ## Dataset Versioning & Persistence
 
 - **Saved versions** — The sidebar dataset card: **Save** stores the current dataset as a new version, **Change** loads a saved one.
@@ -172,5 +208,6 @@ Suggestions include the variable name, formula, reasoning, and expected units.
 
 ## Practical Guidance
 - Run **Global Imputation** before **Dimensionality Reduction** or **Clustering** — these methods require complete data.
-- Use **Targeted Imputation** with AI suggestions for domain-specific formulas (e.g. computing BMI from weight and height).
+- Compute indices and scores (BMI, eGFR) under **Variable Computation**. With the AI engine on, start from **AI Variable Suggestions** and read the preview statistics before you confirm.
+- Use **Targeted Imputation** with AI suggestions to fill a column from related ones (e.g. a missing weight from the BMI and the height).
 - Check the **imputation mask** after global imputation to verify which values were filled.

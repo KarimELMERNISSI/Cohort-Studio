@@ -86,10 +86,10 @@ See: [02_Data_Validation.md](02_Data_Validation.md)
 | --- | --- |
 | 3.1 | **Import external data** and merge with your main dataset. |
 | 3.2 | **Impute missing values** (targeted formulas or global strategies). |
-| 3.3 | **Engineer new variables** (encoding, scaling, computed indices). |
-| 3.4 | Apply **dimensionality reduction** (PCA, FAMD, t-SNE, UMAP). |
-| 3.5 | Run **population clustering** (K-Means, DBSCAN, GMM). |
-| 3.6 | Explore **AI variable suggestions** for computed indices. |
+| 3.3 | **Compute new variables from formulas** on the column names: the editor offers the matching columns and previews the result before you add it. |
+| 3.4 | Start from the **AI variable suggestions** (AI engine): indices and scores proposed from your columns, each with its source, to review in the editor. |
+| 3.5 | **Transform variables** (encoding, scaling) and apply **dimensionality reduction** (PCA, FAMD, t-SNE, UMAP). |
+| 3.6 | Run **population clustering** (K-Means, DBSCAN, GMM). |
 
 See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clustering.md)
 

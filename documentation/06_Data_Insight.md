@@ -98,3 +98,4 @@ offline; the proprietary yFiles engine can be enabled as an optional extra.
 ## Practical Guidance
 - Index relevant research papers **before** generating the taxonomy (Settings > AI engine > *Document library*, then **Initialise / reindex**) — the AI uses them to produce more accurate classifications.
 - Save a version before and after major refinements to allow easy rollback.
+- The taxonomy you generate or load here also serves Data > Enrich: **AI Variable Suggestions** reads it to understand cryptic column names when proposing new variables (option *Use Variable Taxonomy*).

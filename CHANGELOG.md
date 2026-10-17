@@ -6,6 +6,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Documentation: creating variables from formulas, and the variables the AI engine suggests
+
+- The documentation never described two features of Data > Enrich > Create New Variables:
+  - the assisted formula editor: column suggestions as you type, a check of the name and the formula, and a preview
+    with the statistics of the new variable on the analysis population;
+  - the variables the AI engine suggests from the columns of the dataset: a concept search with three strategies,
+    or an exploratory scan for standard indices and scores. Each formula is checked against the columns, cites its
+    source, can look for a proxy for a missing input, and goes to the editor before anything is added.
+- Updated:
+  - chapter 03, which also loses its old "AI Variable Discovery" paragraph and its claim about units;
+  - the README (overview, enrichment and AI assistant);
+  - the handbook steps and both tutorials;
+  - a cross-reference in chapters 06 and 07;
+  - the Enrich step and the Optional AI section of the site.
+
 ### Documentation: the site shows the plots and the tour
 
 - A new feature row, "Describe and plot", presents the data description of Explore and the figures of

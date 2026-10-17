@@ -119,4 +119,5 @@ This helps identify:
 ## Practical Guidance
 - Add and index all relevant papers **before** generating the taxonomy on the Variable map page (Knowledge > Variable map) — the RAG system uses them for better variable classification.
 - Use the **Chat** feature for quick literature queries instead of manually searching PDFs.
+- Indexed documents also ground the **AI Variable Suggestions** of Data > Enrich: a formula taken from one of them is marked *Document*, with its file and pages.
 - The **Coverage Analysis** is especially useful when preparing study protocols or grant applications.

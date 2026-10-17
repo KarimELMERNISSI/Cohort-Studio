@@ -74,20 +74,24 @@ deletes no row.
 **Goal**: Create new variables and identify population subgroups.
 
 1. Go to **Data > Enrich** → **Create New Variables** tab.
-2. **Encoding**:
+2. **Formula** (*Variable Computation*):
+- Enter a name and type the formula with the column names (e.g. `weight_kg / (height_cm / 100) ** 2`); click a column under **Column Suggestions** to complete a name.
+- With the AI engine on, open **AI Variable Suggestions (RAG)**: search for a concept (e.g. *eGFR*) or leave **Specific Search** off to scan the dataset, click **Generate AI Suggestions**, then **Apply to Editor** on the suggestion you keep.
+- Click **Compute & Preview**, read the statistics of the new variable, then **Confirm & Add Variable to Dataset**.
+3. **Encoding**:
 - Select "Encoding" as transformation type.
 - Choose "One-Hot Encoding" and select categorical columns.
 - Set a naming pattern and click **Apply Transformation**.
-3. **Dimensionality Reduction**:
+4. **Dimensionality Reduction**:
 - Select "Dimensionality Reduction" → "PCA" (PCA needs the optional `ml` dependencies).
 - Choose numerical columns and set the number of components.
 - Click **Apply Transformation** to create PCA columns.
-4. **Clustering**:
+5. **Clustering**:
 - Select "Clustering" → "K-Means".
 - Choose the columns to cluster on (e.g. PCA components).
 - Set K (number of clusters).
 - Click **Apply Transformation** to create a cluster label column.
-5. Click **Apply to the dataset** in the *Enrich draft* panel, then visualise the clusters on **Explore > Visualize** (scatter plot grouped by the cluster label).
+6. Click **Apply to the dataset** in the *Enrich draft* panel, then visualise the clusters on **Explore > Visualize** (scatter plot grouped by the cluster label).
 
 ---
 

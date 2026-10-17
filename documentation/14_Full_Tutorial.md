@@ -138,7 +138,9 @@ keep empty cells.
 
 ### 3.2 Derive variables
 
-In **Create New Variables**, add these one at a time. Formulas use column names directly.
+In **Create New Variables > Variable Computation**, add these one at a time. Formulas use column names directly:
+as you type, the editor offers the matching column names, and **Compute & Preview** shows the new variable next to
+its source columns, with its statistics on the analysis population, before **Confirm & Add Variable to Dataset**.
 
 | New variable | Formula |
 | --- | --- |
@@ -146,6 +148,10 @@ In **Create New Variables**, add these one at a time. Formulas use column names 
 | `sex_clean` | `np.where(sex.str.strip().str.lower().str.startswith('f'), 'F', 'M')` |
 | `bmi` | `weight_kg / (height_cm / 100) ** 2` |
 | `egfr` (CKD-EPI 2021) | `142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0)` |
+
+With the AI engine on, you can also start from **AI Variable Suggestions (RAG)** above the editor: search for
+*eGFR*, read the formula and its source, and **Apply to Editor** puts it in the editor, to check against the formula
+above before you compute it.
 
 `site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. eGFR averages about 68 mL/min/1.73 m2. Apply
 the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the data changed,

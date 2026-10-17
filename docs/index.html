@@ -198,7 +198,7 @@
             <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-enrich"/></svg></span>
             <span class="step-num">03</span>
             <h3>Enrich</h3>
-            <p>Merge external data, derive variables with a safe formula language and impute missing values.</p>
+            <p>Merge external data, derive variables from formulas you type or the AI suggests, and impute missing values.</p>
           </li>
           <li class="step">
             <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-explore"/></svg></span>
@@ -496,9 +496,10 @@
         <div>
           <p class="eyebrow">Optional AI</p>
           <h2 id="ai-title">An assistant that stays on your side</h2>
-          <p class="lead">Install the <code>ai</code> group to add a document library you can question, a variable map of your study and AI suggestions. Ollama on your own server is the default. Cloud providers are opt-in and ask for your consent before any data is sent.</p>
+          <p class="lead">Install the <code>ai</code> group to add a document library you can question, a variable map of your study, and suggestions of new variables built from your columns. Ollama on your own server is the default. Cloud providers are opt-in and ask for your consent before any data is sent.</p>
           <ul class="checks">
             <li>The statistics never depend on the assistant</li>
+            <li>Suggested formulas are checked against your columns, cite their source and are previewed before anything is added</li>
             <li>Gemini, OpenAI, Mistral and Claude connectors, selectable in Settings</li>
             <li>Documents indexed in LanceDB (embedded) or Qdrant</li>
             <li>Without the group, the application runs and says which features need it</li>
