@@ -5,14 +5,13 @@ user can override, a 20-row preview and a parse report), then name and load it.
 
 from __future__ import annotations
 
-import hashlib
 import io
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from core.state import DEFAULT_NA_TOKENS, ParseOptions, dataset_base_name
+from core.state import DEFAULT_NA_TOKENS, ParseOptions, dataset_base_name, file_checksum
 from ingest.loaders import (
     DELIMITER_CANDIDATES,
     DELIMITER_LABELS,
@@ -53,7 +52,7 @@ def _new_draft(uploaded: Any) -> dict[str, Any]:
         "kind": kind,
         "options": options,
         "sheet_names": sheet_names,
-        "file_hash": hashlib.md5(data).hexdigest(),
+        "file_hash": file_checksum(data),
         "parsed_for": None,
         "parsed": None,
         "loaded": False,

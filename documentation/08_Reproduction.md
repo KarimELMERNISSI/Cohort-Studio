@@ -23,6 +23,17 @@ A **trace** is a JSON file that captures every transformation applied during a s
 | **Population** (some steps) | The ticked criteria and the counts of the participant flow, for imputations, saved versions and results. |
 | **Hash chain** | Each step carries the hash of the previous one: editing, removing or reordering a step afterwards is detected. |
 
+**What a trace holds about the data and the server.** A trace is meant to be shared with the people who check or
+repeat the work, so it holds no value of the data:
+- **Malformed lines** skipped at import are counted and located by their line numbers; their content is shown on
+  the Import page only.
+- **The source file** is identified by its SHA-256 checksum (`sha256:...`). Traces recorded by earlier versions
+  hold an MD5 checksum, shown as such.
+- **File paths** are written relative to your workspace (`traces/artifacts/.../source.csv`), never as the server's
+  absolute paths, which name your account.
+- **The software** of the session is recorded when the dataset is loaded: the CohortStudio version and commit,
+  Python and the key libraries.
+
 ### Integrity
 
 The page checks the hash chain of every trace and shows it next to its name: *integrity verified*, *integrity not
@@ -69,7 +80,8 @@ the trace it was replayed from.
 
 Traces include file paths to the source file and to dataset snapshots. Paths are resolved **inside your
 workspace** only:
-- A recorded path is used when it points inside your workspace; a relative path is read from your workspace folder.
+- A recorded path is used when it points inside your workspace; a relative path (the form traces now use) is
+  read from your workspace folder.
 - Otherwise the file is looked up by name in your workspace's uploads, trace artifacts, snapshots and datasets
   folders, so a trace recorded on another system (for example Windows paths read in Docker) finds its files once
   they are in your workspace.

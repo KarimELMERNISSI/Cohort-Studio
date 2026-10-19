@@ -33,7 +33,7 @@ Context:
 Available Columns:
 {columns_info}
 
-Sample Data (Use this to infer date formats, value ranges, and categorical values):
+Data Summary (column types, percentiles, frequent values and date-format hints; no row of the data is shown):
 {sample_data}
 
 User Description:
@@ -43,7 +43,7 @@ Instructions:
 1. Parse the user's description to identify specific conditions.
 2. If the user asks for multiple criteria, split them into separate items in the list.
 3. Write a VALID Python boolean expression for each condition (e.g., `(df['age'] > 18) & (df['status'] == 'Active')`).
-    - **Date Logic:** Check the Sample Data. If dates look like 'DD/MM/YYYY', use `format='%d/%m/%Y'`. If ambiguous, use `dayfirst=True` and `errors='coerce'`.
+    - **Date Logic:** Check the Date Parsing Hints of the Data Summary. If dates are 'DD/MM/YYYY', use `format='%d/%m/%Y'`. If ambiguous, use `dayfirst=True` and `errors='coerce'`.
     - **Example:** `(pd.to_datetime(df['visit'], dayfirst=True) - pd.to_datetime(df['dob'], dayfirst=True)) > pd.Timedelta(days=365*18)`
 4. Choose a short, descriptive name for the criteria (snake_case).
 5. Provide a brief explanation.

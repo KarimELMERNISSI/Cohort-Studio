@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -23,6 +24,20 @@ DEFAULT_NA_TOKENS: tuple[str, ...] = (
 )
 
 _SAVED_NAME = re.compile(r"^(?P<base>.+)_v(?P<version>\d+)$")
+
+
+def file_checksum(data: bytes) -> str:
+    """The checksum recorded for a source file: ``sha256:<hex>``. Traces recorded before M5 hold a bare MD5 digest."""
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def checksum_text(value: str | None) -> str:
+    """A recorded checksum in words, with its algorithm: "SHA-256 <hex>", "MD5 <hex>" (older traces) or "n/a"."""
+    if not value:
+        return "n/a"
+    if value.startswith("sha256:"):
+        return f"SHA-256 {value.removeprefix('sha256:')}"
+    return f"MD5 {value}"
 
 
 @dataclass(frozen=True)

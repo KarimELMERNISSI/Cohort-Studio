@@ -17,6 +17,8 @@ from pathlib import Path
 import pandas as pd
 from rapidfuzz import process
 
+from manage.ai_payload import column_profile
+
 # Import prompt functions
 from prompts import (
     anomaly_criteria_prompt,
@@ -621,15 +623,16 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             
         columns_info = ", ".join(columns)
         
-        # Format sample data as string if provided
+        # What the model is told about the data: a summary of each column and date-format hints worked out here,
+        # never a row (manage.ai_payload; the consent notice of Settings lists it)
         sample_str = ""
         if sample_data is not None:
             try:
                 # If it's a dataframe
                 if hasattr(sample_data, "to_markdown"):
-                    sample_str = sample_data.head(3).to_markdown()
-                    
-                    # SMART DATE INFERENCE
+                    sample_str = "Column summaries:\n" + json.dumps(column_profile(sample_data), default=str)
+
+                    # SMART DATE INFERENCE (on this server: only the hints are sent)
                     # Iterate columns to find date-like strings and guess format
                     date_hints = []
                     for col in sample_data.columns:
@@ -657,11 +660,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     if date_hints:
                         sample_str += "\n\nDate Parsing Hints:\n" + "\n".join(date_hints)
                         
-                # If it's a list/dict
-                elif isinstance(sample_data, (list, dict)):
-                    sample_str = str(sample_data)
             except Exception:
-                sample_str = str(sample_data)
+                sample_str = ""  # no summary rather than raw values
 
         prompt = anomaly_criteria_prompt(description, columns_info, sample_str, mode)
         

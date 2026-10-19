@@ -26,6 +26,7 @@ from enrich.formulas import (
 from enrich.imputation_service import impute_rows
 from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
 from ingest.loaders import UPLOAD_TYPES
+from manage.ai_payload import column_profile
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
 from ui.components.staging import render_draft_banner
@@ -330,7 +331,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     # Save snapshot
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
-                        "enrichment_file_path": enrichment_file_path,
+                        "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
@@ -392,7 +393,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 if enriched_df is not None:
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
-                        "enrichment_file_path": enrichment_file_path,
+                        "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
@@ -1940,36 +1941,13 @@ def save_snapshot(df, step_name, base_dir=None):
 # Helper to extract statistics for context columns (Guided Mode)
 def extract_column_stats(df, columns):
     """
-    Extracts summary statistics (Min, Max, Median) and potential units for selected columns.
-    Used to give context to the RAG model for unit conversion logic.
+    What the AI engine is told about the selected columns for its unit hints: their percentiles, or the frequent
+    values that may carry a unit such as "mg/dL" (manage.ai_payload: a summary, never a row or an extreme value).
     """
-    stats = {}
-    for col in columns:
-        if col not in df.columns:
-            continue
-            
-        col_data = df[col].dropna()
-        if col_data.empty:
-            stats[col] = {"status": "empty"}
-            continue
-
-        if pd.api.types.is_numeric_dtype(col_data):
-            stats[col] = {
-                "type": "Numeric",
-                "min": float(col_data.min()),
-                "max": float(col_data.max()),
-                "median": float(col_data.median()),
-                "q1": float(col_data.quantile(0.25)),
-                "q3": float(col_data.quantile(0.75))
-            }
-        else:
-            # For categorical/object, show top values which might contain units like "mg/dL"
-            top_vals = col_data.value_counts().head(5).to_dict()
-            stats[col] = {
-                "type": "Categorical/Object",
-                "top_values": {str(k): v for k, v in top_vals.items()}
-            }
-    return stats
+    return {
+        profile["name"]: {key: value for key, value in profile.items() if key != "name"}
+        for profile in column_profile(df, columns)
+    }
 
 
 # TBD: Rework the cat of missingforest based on set(binary + cat)

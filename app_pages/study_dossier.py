@@ -6,10 +6,6 @@ population), and the Word study dossier that documents them.
 
 from __future__ import annotations
 
-import platform
-import tomllib
-from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -17,6 +13,7 @@ import streamlit as st
 
 from core.attrition import AnalysisCount, describe_definition
 from core.lineage import verify_trace
+from core.state import checksum_text
 from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
 from ui.results import (
@@ -28,8 +25,8 @@ from ui.results import (
     report_status,
 )
 from ui.state import get_state
+from utils.environment import environment_text
 
-ROOT = Path(__file__).resolve().parents[1]
 # steps of the trace that do not change the data (or have their own section)
 NOT_DATA_HANDLING = {
     "initial_load",
@@ -39,7 +36,6 @@ NOT_DATA_HANDLING = {
     "mi_impute",
     "freeze_population",
 }
-LIBRARIES = ("numpy", "pandas", "scipy", "statsmodels", "scikit-learn", "lifelines", "streamlit")
 
 
 def imputations_of(value: Any) -> int | None:
@@ -76,21 +72,8 @@ def _stale_text(status: str) -> str:
     return "computed on another analysis population"
 
 
-def _app_version() -> str:
-    try:
-        return tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError):
-        return "unknown"
-
-
 def _versions() -> str:
-    parts = [f"CohortStudio {_app_version()}", f"Python {platform.python_version()}"]
-    for name in LIBRARIES:
-        try:
-            parts.append(f"{name} {version(name)}")
-        except PackageNotFoundError:
-            continue
-    return ", ".join(parts)
+    return environment_text()
 
 
 def _provenance_rows(state, trace: dict) -> list[tuple[str, str]]:
@@ -104,7 +87,7 @@ def _provenance_rows(state, trace: dict) -> list[tuple[str, str]]:
     rows = [
         ("Dataset", ref.label if ref else "dataset"),
         ("Source file", (ref.source_name if ref else None) or "n/a"),
-        ("Source file hash (MD5)", (ref.file_hash if ref else None) or "n/a"),
+        ("Source file checksum", checksum_text(ref.file_hash if ref else None)),
         ("Parse options", str(ref.parse.to_dict()) if ref and ref.parse else "n/a"),
         ("Data fingerprint", identity.data_fp if identity else "n/a"),
         ("Revision of the data", str(identity.revision) if identity else "n/a"),

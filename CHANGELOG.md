@@ -100,6 +100,26 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction
   analysis (M11).
 
+### Privacy: what leaves the app
+
+- **Traces hold no value of the data and no server path.** A trace is shared with the people who check or repeat
+  the work.
+  - Malformed lines skipped at import were copied into the trace (and its Word report); now only their count and
+    line numbers are recorded, while the Import page still shows them.
+  - Paths are written relative to the user's workspace instead of the server's absolute paths, which named the
+    account.
+  - The source file's checksum is SHA-256 (older traces keep their MD5, shown as such).
+  - The software of the session (CohortStudio version and commit, Python, key libraries) is recorded when a
+    dataset is loaded.
+- **What the AI features send about the data**: one summary per column, never a row.
+  - The column renaming sent the minimum and maximum of every numeric column, which can single out one participant,
+    and the exact first and last dates. The suggested criteria sent the first 3 rows of the table.
+  - Now the renaming, the variable map, the unit hints and the suggested criteria all send the 5th to 95th
+    percentiles, the frequent values shared by at least 5 rows, and the years covered by dates.
+  - The consent card of Settings lists exactly that.
+- **Sharing a study configuration**: a switch leaves out the outlier rules that list row ids, which only mean
+  something for the user's dataset.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

@@ -45,6 +45,7 @@ from graph.builders.taxonomy import (
 )
 from graph.model import LayoutHint, RenderOptions
 from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
+from manage.ai_payload import column_profile
 from ui.components import no_dataset
 
 # Lazy-compatible imports for clustering (module itself is light)
@@ -305,21 +306,8 @@ def app():
                     # Get columns info context
                     columns_info = []
                     if "working_df" in st.session_state:
-                         df = st.session_state["working_df"]
-                         for col in df.columns:
-                            info = {"name": col}
-                            # Basic Stats
-                            if pd.api.types.is_numeric_dtype(df[col]):
-                                col_data = df[col].dropna()
-                                if not col_data.empty:
-                                    info["stats"] = {
-                                        "min": float(col_data.min()),
-                                        "max": float(col_data.max()),
-                                        "mean": float(col_data.mean())
-                                    }
-                            else:
-                                info["top_values"] = {str(k): v for k, v in df[col].value_counts().head(5).to_dict().items()}
-                            columns_info.append(info)
+                        # a summary of each column, never a row (manage.ai_payload)
+                        columns_info = column_profile(st.session_state["working_df"])
                     
                     # Progress Bar
                     prog_bar = st.sidebar.progress(0, text="Enriching taxonomy...")
@@ -437,22 +425,8 @@ def app():
                         def update_progress(percent, text):
                             progress_bar.progress(percent, text=text)
                         
-                        df = st.session_state["working_df"]
-                        columns_info = []
-                        for col in df.columns:
-                            info = {"name": col}
-                            # Simple stats gathering
-                            if pd.api.types.is_numeric_dtype(df[col]):
-                                col_data = df[col].dropna()
-                                if not col_data.empty:
-                                    info["stats"] = {
-                                        "min": float(col_data.min()),
-                                        "max": float(col_data.max()),
-                                        "mean": float(col_data.mean())
-                                    }
-                            else:
-                                info["top_values"] = {str(k): v for k, v in df[col].value_counts().head(5).to_dict().items()}
-                            columns_info.append(info)
+                        # a summary of each column, never a row (manage.ai_payload)
+                        columns_info = column_profile(st.session_state["working_df"])
                         
                         current_renames = st.session_state.get("rename_dict", {})
                         

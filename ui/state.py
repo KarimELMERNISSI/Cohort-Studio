@@ -21,7 +21,6 @@ Pages read the legacy keys ``data`` and ``working_df`` (the analysis population)
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import logging
 import os
 from collections.abc import Iterable, Mapping
@@ -42,8 +41,9 @@ from core.session import (
     StagingError,
     StagingStatus,
 )
-from core.state import DatasetRef, ParseOptions, dataset_base_name
-from utils.data_paths import get_traces_dir
+from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
+from utils.data_paths import get_data_root, get_traces_dir
+from utils.environment import environment
 from utils.session_scope import get_current_scope
 
 logger = logging.getLogger(__name__)
@@ -276,7 +276,7 @@ class AppState:
             artifact = artifact_dir / f"source{ext}"
             artifact.write_bytes(source_bytes)
             source_path = str(artifact)
-            tm.source_dataset = source_path
+            tm.source_dataset = self.recorded_path(source_path)
             tm.save_trace()
 
         ref = replace(
@@ -293,12 +293,13 @@ class AppState:
             df,
             params={
                 "filename": source_name or ref.name,
-                "source_path": source_path,
+                "source_path": self.recorded_path(source_path),
                 "dataset_name": ref.name,
                 "version": ref.version,
                 "origin": ref.origin,
                 "file_hash": ref.file_hash,
                 "parse_options": ref.parse.to_dict() if ref.parse else None,
+                "environment": environment(),  # the software the results that follow are computed with
             },
             description=description or f"Loaded dataset: {ref.label}",
         )
@@ -339,7 +340,7 @@ class AppState:
             expected_fp=expected_fp,
             population=population,
             replayable=replayable,
-            output_dataset_path=output_dataset_path,
+            output_dataset_path=self.recorded_path(output_dataset_path),
         )
         if change is None:
             return False
@@ -414,7 +415,7 @@ class AppState:
             description,
             population=population,
             replayable=replayable,
-            output_dataset_path=output_dataset_path,
+            output_dataset_path=self.recorded_path(output_dataset_path),
         )
         self._install_views()
         return pending is not None
@@ -748,6 +749,23 @@ class AppState:
 
     # ------------------------------------------------------------------ sources
 
+    @staticmethod
+    def recorded_path(path: str | None) -> str | None:
+        """
+        How a file is written in the trace: relative to the user's workspace (or to the data folder outside a
+        session), never as the server's absolute path, which names the account. A trace is shared; the replay
+        resolves the relative path inside the workspace again (utils.path_utils.resolve_path). A path outside both
+        is kept as given.
+        """
+        if not path:
+            return path
+        scope = get_current_scope()
+        base = scope.root if scope is not None else Path(get_data_root())
+        try:
+            return Path(os.path.realpath(path)).relative_to(os.path.realpath(base)).as_posix()
+        except ValueError:
+            return path
+
     def load_parsed(
         self,
         df: pd.DataFrame,
@@ -761,7 +779,7 @@ class AppState:
         ref = DatasetRef(
             name=name or dataset_base_name(filename),
             origin=origin,
-            file_hash=hashlib.md5(data).hexdigest(),
+            file_hash=file_checksum(data),
             source_name=filename,
             parse=options,
         )

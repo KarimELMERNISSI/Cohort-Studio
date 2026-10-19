@@ -40,6 +40,8 @@ class ParseReport:
     n_rows: int = 0
     n_cols: int = 0
     bad_lines: int = 0
+    # where the malformed lines are in the file (the first ones), and what they hold: shown, never recorded
+    bad_line_numbers: list[int] = field(default_factory=list)
     bad_line_examples: list[str] = field(default_factory=list)
     empty_columns: list[str] = field(default_factory=list)
     unnamed_columns: list[str] = field(default_factory=list)
@@ -47,12 +49,14 @@ class ParseReport:
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """The record of the trace: counts, column names and the line numbers of the malformed lines, never the
+        content of a line (a trace is shared; the lines hold participant data)."""
         return {
             "kind": self.kind,
             "n_rows": self.n_rows,
             "n_cols": self.n_cols,
             "bad_lines": self.bad_lines,
-            "bad_line_examples": list(self.bad_line_examples),
+            "bad_line_numbers": list(self.bad_line_numbers),
             "empty_columns": list(self.empty_columns),
             "unnamed_columns": list(self.unnamed_columns),
             "duplicate_columns": list(self.duplicate_columns),
@@ -227,7 +231,32 @@ def _read_csv(
     report.bad_line_examples = [
         options.sep.join(str(f) for f in fields)[:160] for fields in bad[:3]
     ]
+    if bad:
+        report.bad_line_numbers = _bad_line_numbers(data, options)
     return df
+
+
+def _bad_line_numbers(data: bytes, options: ParseOptions, limit: int = 20) -> list[int]:
+    """
+    The line numbers (1 = the file's first line) of the first records holding more fields than the header, the
+    lines the parser skips: what the trace records instead of their content.
+    """
+    if len(options.sep) != 1:
+        return []
+    text = data.decode(options.encoding, errors="replace")
+    reader = csv.reader(io.StringIO(text), delimiter=options.sep)
+    numbers: list[int] = []
+    expected: int | None = None
+    for index, row in enumerate(reader):
+        if index < (options.skiprows or 0) + (options.header or 0) or not row:
+            continue
+        if expected is None:
+            expected = len(row)
+        elif len(row) > expected:
+            numbers.append(reader.line_num)
+            if len(numbers) >= limit:
+                break
+    return numbers
 
 
 def _read_excel(

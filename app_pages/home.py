@@ -14,6 +14,7 @@ from graph.builders.correlation import build_correlation_graph
 from graph.legend import render_legend
 from graph.model import LayoutHint, RenderOptions
 from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
+from manage.ai_payload import column_profile
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
@@ -58,36 +59,9 @@ class RenameColumnsComponent:
             st.session_state["rename_dict"] = {col: col for col in df.columns}
 
     def _get_columns_info(self, columns_to_process=None):
-        """Gather detailed information about columns for RAG context."""
-        columns_info = []
+        """What the AI engine is told about the columns: a summary, never a row (manage.ai_payload)."""
         cols = columns_to_process if columns_to_process else self.original_df.columns
-        for col in cols:
-            info = {"name": col}
-            if col in self.analyzer.categorical_cols or col in self.analyzer.low_cardinality_numeric_cols:
-                # Convert keys to string to ensure JSON serializability
-                top_values = {str(k): v for k, v in self.original_df[col].value_counts().head(5).to_dict().items()}
-                info["type"] = "Categorical"
-                info["top_values"] = top_values
-            elif col in self.analyzer.numeric_cols:
-                col_data = self.original_df[col].dropna()
-                if not col_data.empty:
-                    info["type"] = "Numeric"
-                    info["stats"] = {
-                        "min": float(col_data.min()),
-                        "max": float(col_data.max()),
-                        "median": float(col_data.median()),
-                        "mean": float(col_data.mean())
-                    }
-            elif col in self.analyzer.date_cols:
-                info["type"] = "Date"
-                # Ensure we are working with datetime objects to avoid comparison errors
-                col_data = pd.to_datetime(self.original_df[col], errors='coerce').dropna()
-                if not col_data.empty:
-                    info["range"] = f"{col_data.min()} to {col_data.max()}"
-            else:
-                info["type"] = "Unknown"
-            columns_info.append(info)
-        return columns_info
+        return column_profile(self.original_df, cols, date_columns=self.analyzer.date_cols)
 
     def display(self):
         """Displays the column renaming UI with sorting, searching, type filtering, and a compact layout."""

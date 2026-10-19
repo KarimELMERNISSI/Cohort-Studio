@@ -178,6 +178,32 @@ def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
     return FamilyMasks(operator, k, rules, errors, flag)
 
 
+def without_row_lists(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """
+    A copy of the configuration for sharing: without the rules that list rows (outliers found by a multivariate
+    method, frozen as row ids), which only mean something for this dataset; a family left empty is dropped.
+    """
+    shared = json.loads(json.dumps(dict(config or {}), default=str))
+    families = shared.get("mask_families")
+    if isinstance(families, dict):
+        for family in list(families):
+            members = families[family]
+            if not isinstance(members, dict):
+                continue
+            kept = {
+                name: spec
+                for name, spec in members.items()
+                if name == "operator" or not (isinstance(spec, dict) and "row_ids" in spec)
+            }
+            if any(name != "operator" for name in members) and all(
+                name == "operator" for name in kept
+            ):
+                del families[family]
+            else:
+                families[family] = kept
+    return shared
+
+
 def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
     """
     What makes a study configuration ambiguous or unusable, in words (empty when it is sound): an unknown family
@@ -427,4 +453,5 @@ __all__ = [
     "family_kind",
     "family_masks",
     "family_operator",
+    "without_row_lists",
 ]

@@ -235,9 +235,14 @@ def _consent_card(provider: str) -> bool:
             st.caption("The local provider keeps every prompt, document and dataset excerpt on this server.")
             return True
         st.warning(
-            "Column names and types, up to 3 sample rows, the most frequent values of each column, your anomaly "
-            "criteria, the text of indexed PDFs and your chat messages. Do not enable this for identifiable patient "
-            "data unless your data-protection approval covers it.",
+            "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and "
+            "95th percentiles of numeric columns (never the minimum or the maximum); the most frequent values of "
+            "the other columns with their counts, only values shared by at least 5 rows; the first and last year "
+            "of date columns.\n"
+            "- **No row of your dataset.**\n"
+            "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index, and "
+            "your chat messages.\n\n"
+            "Do not enable this for identifiable patient data unless your data-protection approval covers it.",
             title=f"What leaves this server with {PROVIDER_NAMES[provider]}",
             icon=":material/cloud_upload:",
         )

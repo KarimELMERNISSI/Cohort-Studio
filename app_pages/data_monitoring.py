@@ -12,7 +12,13 @@ import monitor.changes as mc
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from core.fingerprint import ids_to_ranges
-from core.population import catalogue, configuration_problems, criterion_id, family_masks
+from core.population import (
+    catalogue,
+    configuration_problems,
+    criterion_id,
+    family_masks,
+    without_row_lists,
+)
 from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import no_dataset
@@ -1159,9 +1165,16 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
 
     with col3:
         # Save configuration
+        for_sharing = st.toggle(
+            "For sharing: leave out the outlier rows",
+            key=f"{key_base}_config_share",
+            help="The outlier rules found by a multivariate method list the ids of the rows they exclude. Keep them "
+            "to restore the same exclusions on this dataset later; leave them out when the file goes to someone else.",
+        )
+        config = without_row_lists(st.session_state.config) if for_sharing else st.session_state.config
         st.download_button(
             label="Download Configuration File",
-            data=json.dumps(st.session_state.config, indent=4),
+            data=json.dumps(config, indent=4, default=str),
             file_name="config.json",
             mime="application/json",
             key=f"{key_base}_config",
@@ -1225,8 +1238,8 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                 else:
                     with st.spinner("Generating criteria..."):
                         columns = list(st.session_state.data.columns)
-                        # Pass sample data for smart inference
-                        sample_df = st.session_state.data.head(3) if 'data' in st.session_state else None
+                        # the whole table, summarised on this server: no row is sent (manage.ai_payload)
+                        sample_df = st.session_state.data if 'data' in st.session_state else None
                         
                         criteria_list, error = st.session_state.rag_manager.suggest_anomaly_criteria(
                             description, columns, sample_df, mode

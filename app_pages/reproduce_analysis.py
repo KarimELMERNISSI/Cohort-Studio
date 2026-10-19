@@ -479,7 +479,8 @@ def app():
                     
                     # Show available data links (Artifacts)
                     artifacts = []
-                    if step.get('output_dataset_path') and os.path.exists(step.get('output_dataset_path')):
+                    # recorded relative to the workspace since M5: looked up there
+                    if step.get('output_dataset_path') and resolve_path(step.get('output_dataset_path')):
                         artifacts.append(f"Snapshot: `{os.path.basename(step.get('output_dataset_path'))}`")
                     
                     if step.get('stats_cat_path') and os.path.exists(step.get('stats_cat_path')):

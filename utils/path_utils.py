@@ -47,6 +47,16 @@ def resolve_path(original_path: str, search_dirs: list = None) -> str | None:
             pass  # outside the workspace: only the file name is searched for below
     elif os.path.exists(original_path):
         return original_path
+    elif not os.path.isabs(original_path):  # recorded relative to the data folder (AppState.recorded_path)
+        from core.workspace import resolve_within
+        from utils.data_paths import get_data_root
+
+        try:
+            candidate = resolve_within(get_data_root(), original_path)
+        except ValueError:
+            candidate = None
+        if candidate is not None and candidate.exists():
+            return str(candidate)
 
     # 2. Extract filename and search in common directories (a path recorded on Windows keeps its
     #    backslashes, which are not separators on Linux, e.g. in the Docker image)

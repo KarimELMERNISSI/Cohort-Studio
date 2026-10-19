@@ -57,8 +57,12 @@ def test_malformed_lines_are_counted_not_dropped_silently() -> None:
     result = read_table(data, "bad.csv")
     assert len(result.df) == 2
     assert result.report.bad_lines == 1
-    assert result.report.bad_line_examples == ["3,4,5"]
+    assert result.report.bad_line_examples == ["3,4,5"]  # shown on the Import page
     assert any("malformed" in w for w in result.report.warnings)
+    # the trace records where the line is, never what it holds (M5)
+    record = result.report.to_dict()
+    assert record["bad_line_numbers"] == [3] and "bad_line_examples" not in record
+    assert "3,4,5" not in str(record)
 
 
 def test_column_report_flags_unnamed_and_empty_columns() -> None:

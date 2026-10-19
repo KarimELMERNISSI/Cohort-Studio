@@ -25,6 +25,17 @@ appears: the **embedding provider** that indexes your documents. Keep **Ollama**
 library on this server; only the passages retrieved for each question are then sent to Claude. The temperature
 slider does not apply to Claude.
 
+**What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
+criteria) is a summary of each column, never a row:
+- **every column:** its name and type;
+- **numeric columns:** the 5th, 25th, 50th, 75th and 95th percentiles, never the minimum or the maximum, which can
+  single out one participant;
+- **other columns:** their most frequent values with their counts, only values shared by at least 5 rows;
+- **date columns:** the first and the last year.
+
+Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them.
+The consent card of Settings lists the same.
+
 ### Choosing the vector database
 
 Settings > AI engine > **Vector database** offers two engines; the app recommends one for your machine and says why
