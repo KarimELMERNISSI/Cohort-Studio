@@ -147,7 +147,8 @@ class TestPyArrowStatisticsCompatibility:
             "category": ["Group_A" if i % 2 == 0 else "Group_B" for i in range(30)],
         })
         analyzer = DataAnalyzer(df_clinical)
-        num_stats, cat_stats, date_stats = home_get_stats(df_clinical, analyzer)
+        # the computation itself: the cache is per session, so it needs a running app
+        num_stats, cat_stats, date_stats = home_get_stats.__wrapped__(df_clinical, analyzer)
 
         # PyArrow conversion must succeed for all three statistical tables
         t_num = pa.Table.from_pandas(num_stats)

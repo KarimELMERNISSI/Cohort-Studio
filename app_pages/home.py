@@ -287,7 +287,8 @@ def move_columns_to_front(df, columns_to_move):
     # Reorder the DataFrame
     return df[columns_to_move + remaining_columns]
 
-@st.cache_data(ttl=3600, show_spinner="Computing statistics...")
+# Kept per session: the Reset button clears this user's statistics only (it cleared every cache of every user)
+@st.cache_data(ttl=3600, show_spinner="Computing statistics...", scope="session")
 def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
     """
     Creates new DataFrames with statistics for numerical and non-numerical columns.
@@ -508,7 +509,8 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
 
     return numerical_stats, categorical_stats, date_stats
 
-@st.cache_data(show_spinner="Generating Correlation Excel file...")
+# Bounded: each entry is a whole workbook, and the cache is shared by the sessions of the server
+@st.cache_data(show_spinner="Generating Correlation Excel file...", max_entries=8, ttl=3600)
 def _cached_corr_excel_bytes(data, targets, predictors, group_column, method):
     output = BytesIO()
     try:
@@ -797,7 +799,7 @@ def app():
              def _reset_statistics_cache() -> None:
                 if 'db_manager' in st.session_state:
                     st.session_state.db_manager.clear_all_stats()  # this user's workspace only
-                st.cache_data.clear()
+                get_statistics_dataframe.clear()  # this session's statistics only
                 st.toast("Cache cleared.")
 
              if st.button("Reset Cache", help="Force full recomputation of statistics"):
