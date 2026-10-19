@@ -52,8 +52,9 @@ trace to that parent, restores the ticked criteria, and warns when the file was 
   and its integrity).
 - Select a specific trace to inspect its steps: description, function, time and saved snapshot. The parameters of
   each step are in the Word report.
-- Open a trace file from elsewhere with **Upload Trace File (.json)**. The page has no download of the trace JSON:
-  the trace files stay in the traces folder of your workspace, and the Word report documents them.
+- **Download the trace (JSON)** of the selected session, to keep it with the study or replay it on another machine.
+  The file is the trace as recorded, so its integrity check still passes there.
+- Open a trace file from elsewhere with **Upload Trace File (.json)**. Its integrity is checked when it is opened.
 
 ---
 

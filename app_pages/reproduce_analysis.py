@@ -89,6 +89,7 @@ def app():
     trace_data = None
     selected_trace_file = None
     trace_path = None
+    trace_bytes = None  # a workspace trace as recorded: the download must verify (paths are resolved below)
 
     if uploaded_trace:
         try:
@@ -140,8 +141,9 @@ def app():
         
         if selected_trace_file:
             trace_path = os.path.join(trace_dir, selected_trace_file)
-            with open(trace_path, 'r', encoding='utf-8') as f:
-                trace_data = json.load(f)
+            with open(trace_path, 'rb') as f:
+                trace_bytes = f.read()
+            trace_data = json.loads(trace_bytes)
                 
 
 
@@ -431,7 +433,18 @@ def app():
         session_id = trace_data.get('session_id', 'Unknown Session')
         st.markdown(f"**Session:** `{session_id}`")
         st.markdown(f"**Source Dataset:** `{source_dataset}`")
-        
+
+        if trace_bytes is not None:
+            st.download_button(
+                "Download the trace (JSON)",
+                data=trace_bytes,
+                file_name=selected_trace_file,
+                mime="application/json",
+                icon=":material/download:",
+                help="The trace as recorded, to keep with the study or replay elsewhere. Uploaded above, its "
+                "integrity is checked again.",
+            )
+
         # Download Report Button
         try:
             documenter = TraceDocumenter(trace_data)

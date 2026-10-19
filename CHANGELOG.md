@@ -152,6 +152,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Reset Cache on Home clears your statistics only.** It emptied every cache of every user of the server. The
   statistics are now kept per session, and freed when the session ends. The cache of correlation workbooks (Excel)
   keeps at most 8, for an hour.
+- **Versions & traces: Download the trace (JSON).** The selected trace downloads as recorded, so its integrity
+  check passes on another machine. Before, the page offered only the Word report.
 
 ### AI engine: Gemini Flash-Lite
 
