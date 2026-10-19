@@ -28,6 +28,8 @@ from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
 from core.population import criteria_from_trace, evaluate_population
 from core.session import restrict_cells, sort_filled
 from core.state import ParseOptions
+from core.steps import DOCUMENT, SNAPSHOT
+from core.steps import ids as step_ids
 from enrich.formulas import evaluate_formula_safely
 from enrich.imputation_service import fill_with_formula, impute_rows
 from enrich.transformation_logic import apply_variable_transformation
@@ -37,10 +39,10 @@ from utils.path_utils import resolve_path
 
 logger = logging.getLogger(__name__)
 
-# Steps that only document state (no data mutation to replay)
-SKIPPED_STEPS = {"initial_load", "parse_report", "save_version"}
+# Steps that only document state (no data mutation to replay); core/steps.py declares each kind's replay
+SKIPPED_STEPS = step_ids(replay=DOCUMENT)
 # Steps the engine cannot recompute: their snapshot is used when one was recorded
-NOT_REPLAYABLE = {"multiple_imputation", "external_write"}
+NOT_REPLAYABLE = step_ids(replay=SNAPSHOT)
 
 
 @dataclass

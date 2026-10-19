@@ -20,21 +20,15 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-# Trace steps that change the values, rows or columns of the session dataset.
-DATA_CHANGES: frozenset[str] = frozenset(
-    {
-        "enrichment",
-        "variable_computation",
-        "variable_transformation",
-        "targeted_imputation",
-        "imputation",
-        "multiple_imputation",
-        "apply_filter",
-    }
-)
+from core.steps import ENRICH, LOAD, REPORT
+from core.steps import STEPS as STEP_KINDS
+from core.steps import ids as step_ids
+
+# Trace steps that change the values, rows or columns of the session dataset (core/steps.py declares them).
+DATA_CHANGES: frozenset[str] = step_ids(changes_data=True)
 # The subset that belongs to the Enrich path (filtering belongs to validation).
-ENRICH_CHANGES: frozenset[str] = DATA_CHANGES - {"apply_filter"}
-SAVE_STEPS: frozenset[str] = frozenset({"save_version"})
+ENRICH_CHANGES: frozenset[str] = step_ids(category=ENRICH, changes_data=True)
+SAVE_STEPS: frozenset[str] = step_ids(category=REPORT)
 
 STEPS: tuple[str, ...] = ("load", "validate", "enrich", "analyse", "report", "docs", "varmap")
 CORE_PATH: tuple[str, ...] = ("load", "validate", "analyse", "report")
@@ -83,14 +77,14 @@ def _function(step: Mapping[str, Any]) -> str:
 def changes_data(step: Mapping[str, Any]) -> bool:
     """Whether a trace step changed the data. Steps recorded since trace schema 2 say it with their data
     fingerprints (a rename, a date conversion or a freeze counts; a step that changed nothing does not);
-    older steps are judged by their name."""
-    name = _function(step)
-    if name == "initial_load":
+    older steps are judged by their kind. Loading is where the data starts, not a change."""
+    kind = STEP_KINDS.find(_function(step))
+    if kind is not None and kind.category == LOAD:
         return False
     data = step.get("data")
     if isinstance(data, Mapping) and data.get("fp_out"):
         return data.get("fp_in") != data.get("fp_out")
-    return name in DATA_CHANGES
+    return kind is not None and kind.changes_data
 
 
 def data_revision(steps: Iterable[Mapping[str, Any]]) -> int:

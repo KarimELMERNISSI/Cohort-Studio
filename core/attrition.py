@@ -23,6 +23,7 @@ from typing import Any
 
 from core.criteria import CriterionError, rule_kind
 from core.population import EXCLUSION, PopulationResult
+from core.steps import flow_name
 
 SOURCE, LOADED, DATA, STAGE, POPULATION, ANALYSIS = (
     "source",
@@ -32,13 +33,6 @@ SOURCE, LOADED, DATA, STAGE, POPULATION, ANALYSIS = (
     "population",
     "analysis",
 )
-
-STEP_NAMES = {
-    "freeze_population": "population kept as the dataset",
-    "enrichment": "merge",
-    "apply_filter": "filter",
-    "imputation": "imputation",
-}
 
 
 @dataclass(frozen=True)
@@ -240,7 +234,7 @@ def participant_flow(
                 FlowExit(
                     f"step{i}:removed",
                     current.id,
-                    f"Removed: {STEP_NAMES.get(function, function.replace('_', ' '))}",
+                    f"Removed: {flow_name(function)}",
                     removed,
                     reasons=reasons if sum(n for _, n in reasons) == removed else (),
                     details=details,
@@ -249,7 +243,7 @@ def participant_flow(
         main.append(
             FlowBox(
                 f"step{i}",
-                f"After the {STEP_NAMES.get(function, function.replace('_', ' '))}",
+                f"After the {flow_name(function)}",
                 rows_out,
                 DATA,
                 details=(description, *((f"{added:,} rows added",) if added else ())),

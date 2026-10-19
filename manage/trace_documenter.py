@@ -8,6 +8,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 from core.lineage import verify_trace
+from core.steps import step_title
 
 
 class TraceDocumenter:
@@ -225,23 +226,7 @@ class TraceDocumenter:
         row.cells[1].text = str(value)
 
     def _get_readable_function_name(self, func_name):
-        mapping = {
-            "initial_load": "Dataset Loading",
-            "enrichment": "Data Enrichment",
-            "imputation": "Missing Value Imputation",
-            "variable_transformation": "Variable Transformation",
-            "variable_computation": "New Variable Computation",
-            "outlier_handling": "Outlier Detection & Handling",
-            "data_type_conversion": "Data Type Conversion",
-            "missing_value_handling": "Manual Missing Value Handling",
-            "apply_filter": "Filter Applied to the Dataset",
-            "population_definition": "Analysis Population",
-            "freeze_population": "Analysis Population Kept as the Dataset",
-            "mi_impute": "Multiple Imputation",
-            "targeted_imputation": "Targeted Imputation (Formula)",
-            "multiple_imputation": "Multiple Imputation (Diagnostic, One Dataset Adopted)",
-        }
-        return mapping.get(func_name, func_name.replace("_", " ").title())
+        return step_title(func_name)  # the title each kind of step declares (core/steps.py)
 
     def _add_footer(self, doc):
         p = doc.add_paragraph()

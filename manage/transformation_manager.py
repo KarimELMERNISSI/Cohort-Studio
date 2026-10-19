@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from core.lineage import TRACE_SCHEMA, genesis_hash, seal_step, verify_trace
+from core.steps import STEPS
 from core.workspace import UserScope
 from utils.data_paths import get_traces_dir
 from utils.session_scope import get_current_scope
@@ -105,6 +106,11 @@ class TransformationManager:
         """
         if self.read_only:
             raise RuntimeError("This trace was loaded for review and cannot be extended.")
+        if function_name not in STEPS:
+            # every kind of step is declared in core/steps.py, so that the replay and the report know it
+            if os.environ.get("CMP_STRICT_STATE", "").strip() == "1":  # the test suite
+                STEPS.get(function_name)  # raises UnknownIdError, which lists the registered steps
+            logger.warning("Trace step %r is not registered in core/steps.py", function_name)
         # Convert params to serializable format if necessary
         serializable_params = self._make_serializable(params)
         now = datetime.now().isoformat()

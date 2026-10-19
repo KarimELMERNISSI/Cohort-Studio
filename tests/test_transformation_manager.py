@@ -60,7 +60,7 @@ class TestTransformationManager:
         }
 
         isolated_transformation_manager.add_step(
-            function_name="filter_outliers",
+            function_name="outlier_clipping",
             params=complex_params,
             description="Filtered BMI outliers beyond 3 SD",
             output_dataset_path="/data/cleaned_step1.parquet"
@@ -68,7 +68,7 @@ class TestTransformationManager:
 
         assert len(isolated_transformation_manager.history) == 1
         step = isolated_transformation_manager.history[0]
-        assert step["function"] == "filter_outliers"
+        assert step["function"] == "outlier_clipping"
         assert step["description"] == "Filtered BMI outliers beyond 3 SD"
         assert step["output_dataset_path"] == "/data/cleaned_step1.parquet"
 
@@ -81,7 +81,7 @@ class TestTransformationManager:
         """Trace files can be saved and restored with full fidelity."""
         isolated_transformation_manager.initialize_session("study_x.csv")
         isolated_transformation_manager.add_step(
-            function_name="impute_missing",
+            function_name="imputation",
             params={"strategy": "median"},
             description="Imputed missing values",
             output_dataset_path="/data/imputed.parquet"
@@ -98,7 +98,7 @@ class TestTransformationManager:
         assert new_manager.session_id == session_id
         assert new_manager.source_dataset == "study_x.csv"
         assert len(new_manager.history) == 1
-        assert new_manager.history[0]["function"] == "impute_missing"
+        assert new_manager.history[0]["function"] == "imputation"
 
     def test_load_nonexistent_trace_fails_gracefully(self, isolated_transformation_manager: TransformationManager) -> None:
         """Loading a missing trace file returns (False, error) without raising an uncaught exception."""
@@ -112,7 +112,7 @@ class TestTransformationManager:
         mgr1 = TransformationManager(trace_dir=isolated_transformation_manager.trace_dir)
         mgr1.initialize_session("cardio.csv", username="dr_who")
         mgr1.add_step(
-            function_name="normalize",
+            function_name="variable_transformation",
             params={"method": "zscore"},
             description="Normalized features",
             output_dataset_path="/data/cardio_norm.parquet"
@@ -122,7 +122,7 @@ class TestTransformationManager:
         mgr2 = TransformationManager(trace_dir=isolated_transformation_manager.trace_dir)
         mgr2.initialize_session("neuro.csv", username="dr_watson")
         mgr2.add_step(
-            function_name="binning",
+            function_name="variable_transformation",
             params={"bins": 5},
             description="Binned age categories",
             output_dataset_path="/data/neuro_binned.parquet"

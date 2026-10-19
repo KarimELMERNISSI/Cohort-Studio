@@ -203,6 +203,32 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 `run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
 recorded fingerprint. Recorded paths are resolved inside the user's workspace (`utils/path_utils.resolve_path`).
 
+### Kinds of trace step (`core/steps.py`)
+
+Every kind of step is registered once, in the `STEPS` catalogue (built on `core/registry.py`). Each kind declares:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | the name stored in traces: never renamed |
+| `title` | the heading of the step in the trace report |
+| `category` | the part of the workflow whose page records it (`load`, `validate`, `enrich`, `population`, `analyse`, `report`, `other`) |
+| `replay` | `recompute` (redone from its parameters), `snapshot` (the recorded table is used) or `document` (nothing to redo) |
+| `changes_data` | whether it changes the values or the rows (renaming or retyping columns does not); a step with fingerprints is judged by them |
+| `flow` | the noun of its box in the participant flow ("After the merge") |
+| `fills` | `fitted` or `formula` for a step that fills missing values with one value each |
+
+The replay, the trace report, the workflow progress, the participant flow, the study dossier and the imputation
+bookkeeping read the catalogue.
+
+To add a kind of step:
+1. Register a `StepKind` in `core/steps.py`.
+2. If the replay recomputes it, add its handler to `_HANDLED` in `manage/reproduction_manager.py`.
+3. Never rename an id; register a kind that nothing records any more with `legacy=True`, so old traces still read.
+
+`TransformationManager.add_step` logs a step recorded under an unregistered name. With `CMP_STRICT_STATE=1` (the test
+suite) it raises `UnknownIdError` instead. `tests/core_layer/test_steps.py` checks that every step the application
+writes is registered, that the report titles every kind, and that the replay handles every recomputed kind.
+
 ---
 
 ## RAG Quality Monitor

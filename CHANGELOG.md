@@ -155,6 +155,24 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Versions & traces: Download the trace (JSON).** The selected trace downloads as recorded, so its integrity
   check passes on another machine. Before, the page offered only the Word report.
 
+### Internal structure: one catalogue of trace steps
+
+- **`core/steps.py` registers every kind of trace step once**, on the new shared kit `core/registry.py`. Each kind
+  declares:
+  - its title in the trace report;
+  - the part of the workflow that records it;
+  - how the replay treats it;
+  - whether it changes the data.
+
+  Before, seven files kept their own lists of step names: the replay, the trace report, the workflow progress, the
+  participant flow, the study dossier and the imputation bookkeeping. They now all read the catalogue.
+- **The trace report titles every step.** Five appeared as their name in words: renamed columns, clipped outliers,
+  the import's parse report, saved versions, and data replaced by a page.
+- **Old traces still read and replay.** Four kinds that no page records any more are kept as legacy:
+  `apply_filter`, `missing_value_handling`, `multiple_imputation` and `outlier_handling`. A trace holding
+  `outlier_handling` now replays from its snapshot instead of skipping the step as unknown.
+- **A step recorded under an unregistered name is logged**, and the test suite refuses it.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

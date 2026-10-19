@@ -14,6 +14,8 @@ import streamlit as st
 from core.attrition import AnalysisCount, describe_definition
 from core.lineage import verify_trace
 from core.state import checksum_text
+from core.steps import DOCUMENT, LOAD, POPULATION, step_title
+from core.steps import ids as step_ids
 from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
 from ui.results import (
@@ -27,15 +29,11 @@ from ui.results import (
 from ui.state import get_state
 from utils.environment import environment_text
 
-# steps of the trace that do not change the data (or have their own section)
-NOT_DATA_HANDLING = {
-    "initial_load",
-    "parse_report",
-    "population_definition",
-    "save_version",
-    "mi_impute",
-    "freeze_population",
-}
+# steps of the trace with a section of their own (the source, the population, the multiple imputation), or that
+# only document; the data handling lists the others
+NOT_DATA_HANDLING = (
+    step_ids(category=LOAD) | step_ids(category=POPULATION) | step_ids(replay=DOCUMENT) | {"mi_impute"}
+)
 
 
 def imputations_of(value: Any) -> int | None:
@@ -120,9 +118,6 @@ def _criteria_table(population) -> pd.DataFrame:
 
 
 def _data_steps(trace: dict) -> list[tuple[str, str]]:
-    from manage.trace_documenter import TraceDocumenter
-
-    names = TraceDocumenter({})
     out = []
     for step in trace.get("steps") or []:
         function = str(step.get("function") or "")
@@ -136,7 +131,7 @@ def _data_steps(trace: dict) -> list[tuple[str, str]]:
             text += f" (formula: {formula})"
         if data.get("columns_added"):
             text += f"; added: {', '.join(data['columns_added'])}"
-        out.append((names._get_readable_function_name(function), text))
+        out.append((step_title(function), text))
     return out
 
 

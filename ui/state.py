@@ -42,6 +42,8 @@ from core.session import (
     StagingStatus,
 )
 from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
+from core.steps import FITTED
+from core.steps import ids as step_ids
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.session_scope import get_current_scope
@@ -506,11 +508,13 @@ class AppState:
         if population is None or not population.ok:
             return []
         current = population.rows_fingerprint
+        # imputations learnt from the rows (a formula uses each row's own values)
+        fitted = step_ids(fills=FITTED)
         out = []
         for step in self.transformation_manager.history:
             block = step.get("population") if isinstance(step, dict) else None
             if (
-                step.get("function") in ("imputation", "multiple_imputation")
+                step.get("function") in fitted
                 and block
                 and block.get("rows_fp")
                 and block["rows_fp"] != current

@@ -32,6 +32,8 @@ import pandas as pd
 from core.fingerprint import ensure_row_ids, frame_fingerprint
 from core.lineage import Change, describe_change
 from core.population import PopulationResult, active_criteria, catalogue, evaluate_population
+from core.steps import FITTED, FORMULA
+from core.steps import ids as step_ids
 
 
 class TraceSink(Protocol):
@@ -65,7 +67,7 @@ class StagingError(RuntimeError):
 EMPTY, OK, BASE_CHANGED, POPULATION_CHANGED = "empty", "ok", "base_changed", "population_changed"
 
 # steps that fill missing values with one value each (Enrich: global imputation, formula; the former MI panel)
-SINGLE_IMPUTATION_STEPS = frozenset({"imputation", "targeted_imputation", "multiple_imputation"})
+SINGLE_IMPUTATION_STEPS = step_ids(fills=FITTED) | step_ids(fills=FORMULA)
 
 Cells = dict[str, np.ndarray]  # column -> row ids
 
