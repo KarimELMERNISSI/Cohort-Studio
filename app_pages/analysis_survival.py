@@ -13,7 +13,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from biostats._types import TestResult
-from biostats.regression import count_regression, logistic_regression
+from biostats.regression import (
+    APPARENT_AUC,
+    APPARENT_AUC_NOTE,
+    count_regression,
+    logistic_regression,
+)
 from biostats.survival import compare_survival, cox_regression
 from ui.components import error_card, help_popover, result_card, section
 from ui.components.mi_mode import mi_token, show_mi_notes, show_pooled_terms, show_tests
@@ -392,13 +397,15 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
             provenance(key)
         elif res is not None:
             auc_text = (
-                f", AUC = {res.auc:.3f} (95% CI {res.auc_ci[0]:.3f} to {res.auc_ci[1]:.3f})"
+                f", {APPARENT_AUC} = {res.auc:.3f} (95% CI {res.auc_ci[0]:.3f} to {res.auc_ci[1]:.3f})"
                 if res.auc is not None and res.auc_ci
                 else ""
             )
             st.caption(
                 f"n = {res.n}, events = {res.events}, pseudo-R2 = {res.pseudo_r2:.3f}{auc_text}; reference levels: {res.reference_levels}"
             )
+            if res.auc is not None:
+                st.caption(APPARENT_AUC_NOTE)
             _table(res.table, LOGIT_FORMATS)
             for w in res.warnings:
                 st.warning(w)

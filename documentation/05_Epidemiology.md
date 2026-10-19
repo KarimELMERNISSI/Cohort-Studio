@@ -159,7 +159,7 @@ Convert raw variable values into Z-scores relative to a reference population or 
 | Kaplan-Meier | survival curve per group with pointwise 95% Greenwood (log-log) intervals, median survival | Kaplan & Meier 1958 |
 | Log-rank test | chi-square test of equal survival across groups | Mantel 1966 |
 | Cox proportional hazards | hazard ratios with Wald intervals (Efron ties); Grambsch-Therneau proportional-hazards test and concordance when the `survival` extra (lifelines) is installed | Cox 1972 |
-| Logistic regression | adjusted odds ratios with Wald intervals, pseudo-R2, DeLong AUC; warns below 10 events per parameter | Hosmer et al. 2013 |
+| Logistic regression | adjusted odds ratios with Wald intervals, pseudo-R2, the apparent (in-sample) DeLong AUC, which overstates the discrimination in new patients; warns below 10 events per parameter | Hosmer et al. 2013 |
 | Poisson / negative binomial | incidence-rate ratios with an optional person-time offset; over-dispersion check | Cameron & Trivedi 2013 |
 
 Categorical covariates are one-hot coded with their first (alphabetical) level as reference; the page states it.

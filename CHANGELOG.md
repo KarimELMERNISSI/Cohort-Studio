@@ -30,6 +30,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Unknown words:** before, a word that was neither an event nor a censoring word (a misspelling, "relapse")
     silently became censored. It is now refused too.
   - "Death", "deceased" and "survived" are now recognised.
+- **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
+  fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
+  call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction
+  analysis (M11).
 
 ### Documentation: a DOI to cite
 

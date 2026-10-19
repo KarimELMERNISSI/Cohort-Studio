@@ -356,7 +356,7 @@ def result_blocks(value: Any) -> ResultBlocks:
     from biostats.agreement import BlandAltman
     from biostats.linear import AncovaResult, LinearModelResult
     from biostats.rates import StratifiedResult
-    from biostats.regression import RegressionResult
+    from biostats.regression import APPARENT_AUC, APPARENT_AUC_NOTE, RegressionResult
     from biostats.survival import CoxResult, SurvivalComparison
 
     if hasattr(value, "m_total") and hasattr(value, "tests"):
@@ -390,10 +390,12 @@ def result_blocks(value: Any) -> ResultBlocks:
         if value.events is not None:
             line += f", events = {value.events:,}"
         if value.auc is not None:
-            line += f", AUC = {_num(value.auc)}" + (
+            line += f", {APPARENT_AUC} = {_num(value.auc)}" + (
                 f" (95% CI {_ci(value.auc_ci)})" if value.auc_ci else ""
             )
         blocks.lines.append(line)
+        if value.auc is not None:
+            blocks.lines.append(APPARENT_AUC_NOTE)
         blocks.warnings.extend(value.warnings)
         return blocks
     if isinstance(value, AncovaResult | LinearModelResult):

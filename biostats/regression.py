@@ -25,6 +25,15 @@ REFERENCES.setdefault(
     "Cameron AC, Trivedi PK (2013). Regression Analysis of Count Data, 2nd ed. Cambridge UP.",
 )
 
+# The AUC of a logistic model is computed on the data the model was fitted to: it overstates the discrimination to
+# expect in new patients, so it is always shown with this label.
+APPARENT_AUC = "apparent AUC (in-sample)"
+APPARENT_AUC_NOTE = (
+    "The apparent AUC is computed on the data the model was fitted to, so it overstates how well the model would "
+    "discriminate in new patients; that needs internal validation (bootstrap or cross-validation) or an external "
+    "dataset."
+)
+
 
 @dataclass
 class RegressionResult:
@@ -35,7 +44,7 @@ class RegressionResult:
     llf: float
     aic: float
     pseudo_r2: float | None
-    auc: float | None
+    auc: float | None  # logistic only: the apparent (in-sample) AUC, see APPARENT_AUC
     auc_ci: tuple[float, float] | None
     dispersion: float | None
     reference_levels: dict[str, str]
@@ -95,7 +104,8 @@ def logistic_regression(
     levels: Mapping[str, Sequence[str]] | None = None,
 ) -> RegressionResult:
     """
-    Binary logistic regression; odds ratios with Wald CIs, DeLong AUC of the fitted probabilities.
+    Binary logistic regression; odds ratios with Wald CIs, DeLong AUC of the fitted probabilities (apparent: computed
+    on the data the model was fitted to).
 
     ``levels`` fixes the factor levels (the same terms in every imputed dataset).
     """
