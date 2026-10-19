@@ -37,6 +37,13 @@ CONFIGS = {
         "naming_pattern": "Name_{method_applied}_Component",
         "n_components": 2,
     },
+    "famd": {
+        "transformation_type": "Dimensionality Reduction",
+        "transformation": "FAMD",
+        "columns": ["age_years", "weight", "arm", "nyha"],
+        "naming_pattern": "Name_{method_applied}_Component",
+        "n_components": 2,
+    },
     "k_means": {
         "transformation_type": "Clustering",
         "transformation": "K-Means",
@@ -69,6 +76,7 @@ def _cohort(n: int = 40, seed: int = 1) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "age": rng.normal(60, 10, n).round(1),
+            "age_years": rng.integers(40, 80, n),  # an integer column: FAMD takes it as a number
             "weight": rng.normal(75, 12, n).round(1),
             "sbp": rng.normal(130, 15, n).round(0),
             "arm": rng.choice(["control", "drug"], n),
@@ -152,3 +160,18 @@ def test_reduction_and_clustering_need_complete_columns() -> None:
             apply_variable_transformation(df, _params(name))
     with pytest.raises(ValueError, match="at least two columns"):
         apply_variable_transformation(_cohort(), {**_params("pca"), "columns": ["age"]})
+
+
+def test_famd_takes_an_integer_column_as_a_number_and_refuses_a_date() -> None:
+    """prince alone analysed the age in years as one category per value (M5)."""
+    pytest.importorskip("prince", reason="FAMD runs with prince (the 'ml' extra)")
+    from biostats.reduction import fit_famd
+
+    df = _cohort()
+    columns = CONFIGS["famd"]["columns"]
+    new = apply_variable_transformation(df, _params("famd"))
+    expected = fit_famd(df[columns], 2).transform(df[columns])
+    np.testing.assert_allclose(pd.DataFrame(new).to_numpy(), expected.to_numpy())
+    dated = df.assign(visit=pd.date_range("2024-01-01", periods=len(df), freq="D"))
+    with pytest.raises(ValueError, match="a date"):
+        apply_variable_transformation(dated, {**_params("famd"), "columns": ["age", "arm", "visit"]})

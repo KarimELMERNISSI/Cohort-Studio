@@ -15,6 +15,7 @@ from sklearn.preprocessing import (
     StandardScaler,
 )
 
+from biostats.reduction import fit_famd, fit_pca
 from core.expressions import safe_format
 
 RANDOM_STATE = 42  # every stochastic method is seeded, so that a replay reproduces the recorded columns
@@ -84,18 +85,8 @@ def apply_variable_transformation(dataframe, params):
         if len(columns) < 2:
             raise ValueError("Choose at least two columns to reduce.")
         if transformation == "PCA":
-            import prince
-
-            model = prince.PCA(
-                n_components=n_components,
-                rescale_with_mean=True,
-                rescale_with_std=True,
-                copy=True,
-                check_input=True,
-                random_state=RANDOM_STATE,
-                engine="sklearn",
-            )
-            transformed_data = model.fit_transform(dataframe[columns])
+            frame = dataframe[columns]
+            transformed_data = fit_pca(frame, n_components, random_state=RANDOM_STATE).transform(frame)
 
         elif transformation == "t-SNE":
             from sklearn.manifold import TSNE
@@ -114,11 +105,9 @@ def apply_variable_transformation(dataframe, params):
                 n_components=n_components, n_neighbors=n_neighbors, min_dist=min_dist, random_state=RANDOM_STATE
             )
             transformed_data = model.fit_transform(StandardScaler().fit_transform(dataframe[columns]))
-        else:  # FAMD
-            import prince
-
-            model = prince.FAMD(n_components=n_components, random_state=RANDOM_STATE)
-            transformed_data = model.fit_transform(dataframe[columns])
+        else:  # FAMD: numbers quantitative, other columns qualitative, as FactoMineR types them
+            frame = dataframe[columns]
+            transformed_data = fit_famd(frame, n_components, random_state=RANDOM_STATE).transform(frame)
 
         component_names = [
             safe_format(naming_pattern, method_applied=transformation.replace(" ", "_")) + f"_{i + 1}"

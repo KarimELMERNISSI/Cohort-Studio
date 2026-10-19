@@ -99,6 +99,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction
   analysis (M11).
+- **FAMD** (Enrich > Create new variables, Validate's outlier projection, Data insight's clustering).
+  - An integer column, such as the age in years, was analysed as one category per value: prince takes only
+    decimal columns as numbers. Numbers are now quantitative and other columns categories, as in FactoMineR. A
+    FAMD with integer columns gives other components, and a recorded FAMD step replays with the corrected method:
+    the replay reports that its table differs from the recorded one.
+  - Enrich offered every text column, so a date stored as text became one category per day. Dates, text with mostly
+    distinct values (identifiers, free text) and single-value columns are no longer offered; a caption says which
+    columns are left out and why. A date column is refused with what to do.
+  - The explained-variance plot showed percentages on an axis that read as fractions, over the first components
+    only. It now shows the cumulative percentage over every dimension of the data (one per numeric column, and per
+    categorical column its categories minus one), reaching 100%, with "k components explain x% of the variance".
+    On the tutorial cohort, the 11 columns of the example gave "0.79" for 3 components (0.79%, out of 810
+    dimensions); without the date column there are 25 dimensions, and 3 components explain 16.4%.
+  - The contributions table gives each variable's share of a component, rather than each category's.
+- **PCA projection on Validate** (outliers): the columns are standardised, as in Enrich's PCA and Data insight. On
+  raw values, the variable with the largest variance (a weight in grams) made the projection on its own.
 
 ### Privacy: what leaves the app
 

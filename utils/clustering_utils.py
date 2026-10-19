@@ -66,15 +66,19 @@ def run_pca(data: pd.DataFrame, n_components: int = 2) -> tuple[np.ndarray, dict
         (embeddings, info_dict with explained_variance)
     """
     from sklearn.decomposition import PCA
-    
+    from sklearn.preprocessing import StandardScaler
+
+    numeric = data.select_dtypes(include=[np.number])
     pca = PCA(n_components=n_components, random_state=42)
-    embeddings = pca.fit_transform(data.select_dtypes(include=[np.number]))
-    
+    # standardised, as Enrich's PCA: each variable weighs the same whatever its unit (raw values let the one with
+    # the largest variance, a weight in grams, make the projection)
+    embeddings = pca.fit_transform(StandardScaler().fit_transform(numeric))
+
     info = {
         "explained_variance_ratio": pca.explained_variance_ratio_.tolist(),
         "total_variance_explained": sum(pca.explained_variance_ratio_),
         "components": pca.components_,
-        "feature_names": data.select_dtypes(include=[np.number]).columns.tolist()
+        "feature_names": numeric.columns.tolist()
     }
     
     return embeddings, info
@@ -177,79 +181,18 @@ def run_famd(
     n_components: int = 2
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """
-    Run FAMD (Factor Analysis of Mixed Data) for mixed numeric/categorical data.
-    
-    Returns:
-        (embeddings, info_dict)
-    """
-    try:
-        import prince
-    except ImportError:
-        raise ImportError("Prince not installed. Run: pip install prince")
-    
-    famd = prince.FAMD(n_components=n_components, random_state=42)
-    famd = famd.fit(data)
-    embeddings = famd.row_coordinates(data).values
-    
-    # Check for variance attributes (Prince 0.7.x vs older)
-    # The eigenvalues_summary is a dataframe with columns like '% of variance' and '% of variance (cumulative)'
-    if hasattr(famd, 'eigenvalues_summary'):
-        summary_df = famd.eigenvalues_summary
-        # The summary might have more components than requested if it computed more, 
-        # but usually it matches n_components or the potential full rank
-        # We want the cumulative variance of the n_components used.
-        # Check if the dataframe index is integers or strings, usually integers 0, 1, ...
-        # If n_components is 2, we want the value at index 1 (component 1) if strictly cumulative,
-        # or we just sum the individual % of variance. 
-        # According to debug output, we have '% of variance (cumulative)'
-        
-        target_col = '% of variance (cumulative)'
-        if target_col in summary_df.columns:
-            # Get the cumulative variance for the last component we kept
-            # We used n_components. The summary df index might go up to min(n_rows, n_cols).
-            # We only care about the first n_components.
-            
-            # Ensure we only look at the first n_components
-            sliced_summary = summary_df.iloc[:n_components]
-            
-            # The cumulative value at the LAST row of this slice is our total explained variance
-            total_variance_pct = sliced_summary[target_col].iloc[-1]
-            
-            # Convert percentage string ("47%") or float to float 0-1
-            if isinstance(total_variance_pct, str):
-                total_variance_pct = float(total_variance_pct.strip('%'))
-                
-            total_variance = total_variance_pct / 100.0
-            
-            # Sanitize explained_inertia list (convert strings to floats)
-            raw_inertia = sliced_summary['% of variance'].tolist() if '% of variance' in sliced_summary.columns else []
-            explained_inertia = []
-            for x in raw_inertia:
-                if isinstance(x, str):
-                    try:
-                        explained_inertia.append(float(x.strip('%')))
-                    except ValueError:
-                        explained_inertia.append(0.0)
-                else:
-                    explained_inertia.append(float(x))
-        else:
-            # Fallback
-            total_variance = 0.0
-            explained_inertia = []
+    FAMD (factor analysis of mixed data) of ``data``, its columns typed as FactoMineR types them: numbers quantitative,
+    other columns categorical (biostats.reduction; prince alone made an integer column one category per value).
 
-    elif hasattr(famd, 'percentage_of_variance_'):
-        variance_ratio = famd.percentage_of_variance_
-        total_variance = sum(variance_ratio)
-        # Normalize if it's in percentage (0-100) -> 0-1
-        if total_variance > 1.0:
-            total_variance /= 100.0
-        explained_inertia = variance_ratio # Keep as is for info
-    elif hasattr(famd, 'explained_inertia_'):
-        explained_inertia = famd.explained_inertia_
-        total_variance = sum(explained_inertia)
-    else:
-        explained_inertia = []
-        total_variance = 0.0
+    Returns:
+        (embeddings, info_dict): ``explained_inertia`` in % per component, ``total_variance_explained`` a fraction
+    """
+    from biostats.reduction import fit_famd
+
+    famd = fit_famd(data, n_components)
+    embeddings = famd.row_coordinates(data).values
+    explained_inertia = [float(p) for p in famd.percentage_of_variance_]  # prince gives % of the total inertia
+    total_variance = sum(explained_inertia) / 100.0
 
     info = {
         "explained_inertia": explained_inertia,

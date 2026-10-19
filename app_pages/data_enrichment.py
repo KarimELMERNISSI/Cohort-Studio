@@ -12,6 +12,7 @@ import streamlit as st
 from matplotlib import pyplot as plt
 from rapidfuzz import fuzz
 
+import biostats.reduction as rd
 import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.population import catalogue
@@ -1565,12 +1566,8 @@ def compute_transformations(dataframe):
     The transformation form. The columns are computed by enrich.transformation_logic.apply_variable_transformation,
     the function the replay of the trace calls with the same parameters, so the replay gives the same columns.
     """
-    # prince (PCA explained variance, FAMD) and UMAP are in the optional 'ml' extra: when missing, their methods
-    # are not offered (utils/optional.py)
-    import importlib
-
-    prince = importlib.import_module("prince") if method_available("FAMD") else None
-
+    # prince (PCA, FAMD) and UMAP are in the optional 'ml' extra: when missing, their methods are not offered
+    # (utils/optional.py); biostats.reduction imports prince only when it runs
     st.subheader("Transformation and Aggregation")
 
     # the settings below are recorded in the trace only when the form shows them
@@ -1667,12 +1664,22 @@ def compute_transformations(dataframe):
                             default=dataframe[col].unique(),
                             key=f"order_{col}"
                         )
-    elif transformation_type == "Dimensionality Reduction" and transformation == "FAMD":
+    elif transformation_type == "Dimensionality Reduction" and transformation in (rd.PCA, rd.FAMD):
+        # the columns the method can take (biostats.reduction): no dates, identifiers or constant columns
+        usable, excluded = rd.reduction_columns(
+            dataframe, transformation, date_columns=DataAnalyzer(dataframe).date_cols
+        )
         columns = st.multiselect(
             "Choose columns to apply the selected transformation:",
-            options=dataframe.select_dtypes(include=[ np.number, 'object', 'category']).columns,
-            help="Select one or more columns from the dataset."
+            options=usable,
+            help="FAMD takes numbers and categories (numbers as quantitative variables, other columns as "
+                 "categories, as in FactoMineR); PCA takes numbers.",
         )
+        if excluded:
+            st.caption(
+                "Not offered: " + "; ".join(f"**{col}** ({why})" for col, why in excluded.items())
+                + ". Convert a coded category (1, 2, 3) to text to analyse it as categories."
+            )
     else:
         columns = st.multiselect(
             "Choose columns to apply the selected transformation:",
@@ -1761,87 +1768,47 @@ def compute_transformations(dataframe):
         styled_df = None  # the contributions table, built in column 3 when it is shown
         with col3:
             if show_explained_variance and transformation in ["PCA", "FAMD"]:
-                
-                if transformation == "PCA":
-                    #scaler = StandardScaler()
-                    #scaled_data = scaler.fit_transform(dataframe[columns])
-                    #model = PCA()
-                    #result = model.fit_transform(scaled_data)
-                    #variance_ratio = result.explained_variance_ratio_
-
-                    # Initialize the PCA model
-                    model = prince.PCA(
-                        n_components=len(columns),  # Number of principal components to retain
-                        rescale_with_mean=True,     # Center the data by subtracting the mean
-                        rescale_with_std=True,      # Scale the data by dividing by standard deviation
-                        copy=True,                  # Do not modify the original data
-                        check_input=True,           # Ensure input is valid
-                        random_state=RANDOM_STATE,  # the same components as the transformation itself
-                        engine='sklearn'            # Select sklearn computation engine
-                    )
-
-                    # Fit the PCA model to the selected columns & transform the data into the lower-dimensional space
-                    result = model.fit_transform(dataframe[columns])
-
-                    variance_ratio = model.percentage_of_variance_
-                    column_correlations = model.column_correlations
-
-                else:  # FAMD
-                    model = prince.FAMD(
-                        n_components=len(columns),
-                        n_iter=3,
-                        copy=True,
-                        check_input=True,
-                        random_state=42,
-                        engine="sklearn",
-                        handle_unknown="error"
-                    )
-                    result = model.fit_transform(dataframe[columns])
-
-                    # Get eigenvalues (variance explained by each dimension)
-                    eigenvalues = model.eigenvalues_
-
-                    # Compute proportion of variance explained
-                    #total_variance = sum(eigenvalues)
-                    variance_ratio = model.percentage_of_variance_#[eig / total_variance for eig in eigenvalues]
-                    
-                    # Use native column_contributions_ for FAMD
-                    if hasattr(model, 'column_contributions_'):
-                        column_correlations = model.column_contributions_
-                        # Normalize to ensure they represent percentages of contribution (0-1 range)
-                        column_correlations = column_correlations / column_correlations.sum(axis=0)
-                    else:
-                        try:
-                            column_correlations = model.column_correlations(dataframe[columns])
-                        except NotImplementedError:
-                            column_correlations = None
-
-                cumulative_variance = np.cumsum(variance_ratio)
-
-                # Plot Explained Variance
-                fig, ax = plt.subplots(figsize=(8, 6))
-                ax.plot(range(1, len(cumulative_variance) + 1), cumulative_variance, marker="o", linestyle="-", color="b")
-                ax.set_ylim(0, max(cumulative_variance) * 1.1)
-                ax.set_xlim(1, len(cumulative_variance))
-                ax.vlines(n_components, 0, cumulative_variance[n_components - 1], color="red", linestyle="--", linewidth=2)
-                ax.hlines(cumulative_variance[n_components - 1], 0, n_components, color="red", linestyle="--", linewidth=2)
-                ax.text(n_components, cumulative_variance[n_components - 1], f"{cumulative_variance[n_components - 1]:.2f}", ha="center", va="bottom", fontsize=12, color="red")
-                ax.set_title("Explained Variance by Components")
-                ax.set_xlabel("Number of Components")
-                ax.set_ylabel("Cumulative Explained Variance")
-                ax.grid(True)
-                st.pyplot(fig)
-
-                if column_correlations is not None:
-                    # Adapt styling for contributions (0-1) vs correlations (-1 to 1)
+                # every dimension of the data (biostats.reduction), in %: the curve reaches 100%
+                try:
+                    profile = rd.variance_profile(dataframe[columns], transformation, random_state=RANDOM_STATE)
+                except ValueError as exc:
+                    st.warning(str(exc))
+                    profile = None
+                if profile is not None:
+                    cumulative = profile.cumulative
+                    shown = min(n_components, len(cumulative))
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.plot(range(1, len(cumulative) + 1), cumulative, marker="o", linestyle="-", color="b")
+                    ax.set_ylim(0, 105)
+                    ax.set_xlim(0.5, len(cumulative) + 0.5)
+                    ax.vlines(shown, 0, cumulative[shown - 1], color="red", linestyle="--", linewidth=2)
+                    ax.hlines(cumulative[shown - 1], 0, shown, color="red", linestyle="--", linewidth=2)
+                    ax.text(shown, cumulative[shown - 1], f"{cumulative[shown - 1]:.1f}%", ha="center",
+                            va="bottom", fontsize=12, color="red")
+                    ax.set_title("Variance explained by the components")
+                    ax.set_xlabel("Number of components")
+                    ax.set_ylabel("Cumulative variance explained (%)")
+                    ax.grid(True)
+                    st.pyplot(fig)
+                    caption = (f"{shown} component{'s' if shown != 1 else ''} explain {cumulative[shown - 1]:.1f}% "
+                               f"of the variance; the data has {profile.n_dimensions} dimensions")
                     if transformation == "FAMD":
-                         styled_df = (column_correlations.style
-                                .background_gradient(cmap="Blues", vmin=0, vmax=1)
-                                .format("{:.0%}"))
-                    else:
-                        styled_df = (column_correlations.style
-                                .background_gradient(cmap="RdBu", vmin=-1, vmax=1)
-                                .format(precision=2))
+                        caption += " (one per numeric column, and per categorical column its categories minus one)"
+                    if not profile.complete:
+                        caption += f". The curve shows the first {len(cumulative)} components"
+                    st.caption(caption + ".")
+
+                    contributions = profile.contributions
+                    if contributions is not None:
+                        # FAMD: each variable's share of a component (0-1); PCA: correlations (-1 to 1)
+                        if transformation == "FAMD":
+                            styled_df = (contributions.style
+                                         .background_gradient(cmap="Blues", vmin=0, vmax=1)
+                                         .format("{:.0%}"))
+                        else:
+                            styled_df = (contributions.style
+                                         .background_gradient(cmap="RdBu", vmin=-1, vmax=1)
+                                         .format(precision=2))
 
         if transformation in ["PCA", "FAMD"] and show_explained_variance:  
             st.subheader("Contributions to components")

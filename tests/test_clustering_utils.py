@@ -83,6 +83,28 @@ class TestClusteringUtils:
         assert info["total_variance_explained"] > 0.8
         assert len(info["feature_names"]) == 3
 
+    def test_run_pca_standardises_the_columns(self) -> None:
+        """A variable in grams no longer makes the projection on its own (M5): PCA of the standardised columns."""
+        rng = np.random.default_rng(0)
+        data = pd.DataFrame({"weight_g": rng.normal(75_000, 12_000, 200), "age": rng.normal(60, 10, 200)})
+        _, info = run_pca(data, n_components=2)
+        assert info["explained_variance_ratio"][0] < 0.7  # unscaled, the grams took about 100%
+
+    def test_run_famd_types_the_columns_as_the_enrich_famd(self) -> None:
+        """Validate's projection and Data insight use the FAMD of biostats.reduction (an integer is a number)."""
+        pytest.importorskip("prince", reason="FAMD runs with prince (the 'ml' extra)")
+        from biostats.reduction import fit_famd
+        from utils.clustering_utils import run_famd
+
+        rng = np.random.default_rng(1)
+        data = pd.DataFrame(
+            {"age": rng.integers(40, 80, 90), "bmi": rng.normal(25, 4, 90), "arm": rng.choice(["a", "b"], 90)}
+        )
+        embeddings, info = run_famd(data, n_components=2)
+        np.testing.assert_allclose(embeddings, fit_famd(data, 2).row_coordinates(data).to_numpy())
+        assert 0 < info["total_variance_explained"] <= 1
+        assert info["total_variance_explained"] == pytest.approx(sum(info["explained_inertia"]) / 100)
+
     def test_run_tsne(self, synthetic_clustering_df: pd.DataFrame) -> None:
         """t-SNE produces 2D non-linear embeddings."""
         embeddings, info = run_tsne(synthetic_clustering_df, n_components=2, perplexity=10)

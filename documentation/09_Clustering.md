@@ -20,7 +20,7 @@ For high-dimensional data, reducing dimensions before clustering can improve res
 | Method | Best For | Key Parameters |
 | --- | --- | --- |
 | **PCA** | Numerical data; preserving variance. | `n_components` |
-| **FAMD** | Mixed data (numerical + categorical). | `n_components` |
+| **FAMD** | Mixed data: numeric columns as quantitative variables, other columns as categories (as in FactoMineR). | `n_components` |
 | **t-SNE** | 2-D/3-D visualisation of clusters. | `perplexity`, `learning_rate` |
 | **UMAP** | 2-D/3-D visualisation; preserves global structure better than t-SNE. | `n_neighbours`, `min_dist` |
 

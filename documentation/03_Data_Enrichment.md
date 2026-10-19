@@ -199,10 +199,24 @@ adult. The preview catches errors of units and of entry, such as a height typed 
 
 | Method | Description |
 | --- | --- |
-| **PCA** | Principal Component Analysis (via Prince). Handles numerical data. |
-| **FAMD** | Factor Analysis of Mixed Data. Handles both numerical and categorical variables. |
+| **PCA** | Principal Component Analysis (via Prince) of the standardised numeric columns. |
+| **FAMD** | Factor Analysis of Mixed Data: numeric columns as quantitative variables, other columns as categories, as in FactoMineR. |
 | **t-SNE** | Non-linear embedding for 2-D/3-D visualisation. Parameters: perplexity, learning rate. |
 | **UMAP** | Uniform Manifold Approximation. Parameters: n_neighbours, min_dist. |
+
+For PCA and FAMD, the column list leaves out the columns these methods cannot use, and a caption says why:
+- dates (convert one to a number first, e.g. the days since a reference date);
+- text with mostly distinct values (identifiers, free text), which would add one dimension per value;
+- columns holding a single value.
+
+A coded category stored as numbers (1, 2, 3) is analysed as a number: convert it to text to analyse it as
+categories.
+
+**Show Explained Variance** plots the cumulative percentage of the variance against the number of components. The
+curve covers every dimension of the data, so it reaches 100%. A PCA has one dimension per column; a FAMD has one per
+numeric column, and per categorical column its categories minus one. Above 50 dimensions, the curve shows the first
+50 and says so. The table below gives each variable's correlation with a PCA component, or its share of a FAMD
+component.
 
 #### Clustering
 
