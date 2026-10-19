@@ -767,27 +767,6 @@ def get_figure_column_names(fig, df):
 
     return columns
 
-def add_custom_hovertemplate(fig, df, selected_cols=None):
-    """
-    Adds a custom hovertemplate to an existing Plotly figure, showing ``selected_cols`` on hover
-    (the page renders the column picker; this helper stays UI-free).
-    """
-    selected_cols = [c for c in (selected_cols or []) if c in df.columns]
-
-    if len(selected_cols) >= 1:
-        for trace in fig.data:
-            hovertemplate = trace.get('hovertemplate', "") or ""
-            for col in selected_cols: 
-                hovertemplate += f"<br>{col}: %{{customdata[{selected_cols.index(col)}]}}"
-        
-        customdata = df[selected_cols].map(lambda x: 'Not Available' if pd.isna(x) else x)
-
-        fig.update_traces(
-            customdata=customdata.values,
-            hovertemplate=hovertemplate
-        )
-    return fig
-
 def convert_to_datetime_or_timedelta(df, col):
     if pd.api.types.is_datetime64_any_dtype(df[col]):
         df[col] = pd.to_datetime(df[col], errors='coerce')

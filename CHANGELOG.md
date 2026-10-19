@@ -183,6 +183,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Enrich and Compare used to read files given by their path with the `detect-delimiter` package, which found
     colons and tildes but read semicolon files with decimal commas as one column. They now use the import engine,
     and the package is no longer a dependency.
+- **Visualize: Select columns to display on hover works again.**
+  - Choosing a column raised an error since Plotly 7, whose traces no longer have `.get`.
+  - Before that, every trace received the values of the whole table, so with a colour group a point showed another
+    row's values, and bars or boxes showed the first rows' values.
+  - The columns now go to Plotly Express, which matches them to the points of each trace. The choice is offered where
+    each point is one row: scatter plots (points or regression), and line plots without aggregation or interval band.
 
 ### Internal structure: one catalogue of trace steps
 

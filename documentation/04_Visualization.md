@@ -43,6 +43,9 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
 * **Scatter Plot with Linear Regression**:
   - Two-dimensional Cartesian relationships with color stratification.
   - Automated linear regression fit ($y = \beta_0 + \beta_1 x$) displaying slope, intercept, Pearson $r$, coefficient of determination ($R^2$), and regression $p$-value.
+  - **Select columns to display on hover** adds columns to the tooltip of each point (a participant identifier, a
+    site). It is offered where each point is one row: scatter plots (points or regression), and line plots without
+    aggregation or interval band. A bar, a box or a density has no row to show.
 
 ### C. Diagnostic & Medical Specialty Charts
 * **Receiver Operating Characteristic (ROC) Curve**:

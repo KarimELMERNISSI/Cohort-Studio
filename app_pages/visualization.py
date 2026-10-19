@@ -17,6 +17,21 @@ from ui.components import no_dataset
 from utils.data_analyzer import DataAnalyzer
 
 
+def hover_columns_input(df: pd.DataFrame) -> list[str] | None:
+    """
+    Extra columns for the tooltip of each point, passed to Plotly Express (``hover_data``), which matches them to the
+    points of every trace. Offered where each mark is one row (scatter, line without aggregation): on a bar or a
+    box, a row's value has no point to show it.
+    """
+    chosen = st.multiselect(
+        "Select columns to display on hover",
+        options=sorted(df.columns),
+        key="viz_hover_cols",
+        help="Extra columns shown in the tooltip of each point.",
+    )
+    return chosen or None
+
+
 def app():
     # Initialize DB Manager
     if 'db_manager' not in st.session_state:
@@ -596,13 +611,18 @@ def app():
                 
                 marginal_x = marginal_mode.lower() if marginal_mode != "None" else None
                 marginal_y = marginal_mode.lower() if marginal_mode != "None" else None
-                
+
+                hover_cols = None
+                if scatter_mode in ("Points", "Regression (Linear)"):  # one point per row
+                    hover_cols = hover_columns_input(df)
+
                 if scatter_mode == "Points":
                     fig = px.scatter(
                         df, x=x_col, y=y_col,
                         color=None if color_col == "None" else color_col,
                         marginal_x=marginal_x, marginal_y=marginal_y,
                         color_discrete_sequence=selected_color,
+                        hover_data=hover_cols,
                         title=f"Scatter Plot of {y_col} vs {x_col}"
                     )
                 elif scatter_mode == "Regression (Linear)":
@@ -612,6 +632,7 @@ def app():
                         trendline="ols",
                         marginal_x=marginal_x, marginal_y=marginal_y,
                         color_discrete_sequence=selected_color,
+                        hover_data=hover_cols,
                         title=f"Linear Regression: {y_col} vs {x_col}"
                     )
                 elif scatter_mode == "Density Contour (KDE)":
@@ -676,6 +697,9 @@ def app():
 
                 show_ci = st.checkbox("Add Confidence Interval", False)
 
+                # one point per row only without aggregation and without the interval band
+                hover_cols = hover_columns_input(df) if agg == "None" and not show_ci else None
+
                 if color_col != "None":
                     if show_ci:
                         fig = go.Figure()
@@ -686,6 +710,7 @@ def app():
                             y=y_col,
                             color=color_col,
                             color_discrete_sequence=selected_color,
+                            hover_data=hover_cols,
                         )
                 else:
                     if show_ci:
@@ -696,6 +721,7 @@ def app():
                             x=x_col,
                             y=y_col,
                             color_discrete_sequence=selected_color,
+                            hover_data=hover_cols,
                         )
 
                 if show_ci:
@@ -1276,11 +1302,6 @@ def app():
                 elif theme == "ggplot2":
                     fig.update_layout(paper_bgcolor="#ebebeb", plot_bgcolor="#ebebeb", font=dict(color="black", size=14))
 
-                if plot_type not in ["Clustermap", "Correlation Matrix"]:
-                    hover_cols = st.multiselect("Select columns to display on hover", options=sorted(df.columns),
-                                                key="viz_hover_cols", help="Extra columns shown in the tooltip of each point.")
-                    fig = vu.add_custom_hovertemplate(fig, df=df, selected_cols=hover_cols)
-                
                 plot_filename = f"{plot_type.lower().replace(' ', '_')}_export"
                 plot_config = eu.get_publication_plot_config(filename=plot_filename, format_type="svg", scale=3)
                 st.plotly_chart(fig, width='content', config=plot_config)
