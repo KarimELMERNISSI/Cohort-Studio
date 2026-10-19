@@ -164,6 +164,11 @@ Convert raw variable values into Z-scores relative to a reference population or 
 
 Categorical covariates are one-hot coded with their first (alphabetical) level as reference; the page states it.
 
+The event indicator must read 1 (event) or 0 (censored): numbers 0 and 1, booleans, or words such as Yes/No,
+Dead/Alive and Event/Censored. Any other code is refused with a message rather than guessed. A coding of 1 =
+censored and 2 = event (as in R's survival package) must be recoded first, and a competing event needs its own
+analysis.
+
 ## Paired, rates & stratified (Analyze > Hypothesis tests & epidemiology)
 
 | Method | What it gives |

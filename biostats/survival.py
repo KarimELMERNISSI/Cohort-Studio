@@ -42,19 +42,54 @@ REFERENCES.setdefault(
 )
 
 
-EVENT_WORDS = ("1", "1.0", "true", "yes", "y", "event", "died", "dead")
+EVENT_WORDS = ("1", "1.0", "true", "yes", "y", "event", "died", "dead", "death", "deceased")
+CENSORED_WORDS = ("0", "0.0", "false", "no", "n", "censored", "alive", "survived")
+
+
+def _code(value: object) -> str:
+    return str(int(value)) if isinstance(value, float) and value.is_integer() else repr(value)
+
+
+def _refuse(unknown: pd.Series, codes: set[float]) -> ValueError:
+    """The error for event codes other than 0 and 1, with the advice that fits the coding found."""
+    counts = unknown.value_counts()
+    listed = ", ".join(
+        f"{_code(value)} ({n} row{'s' if n > 1 else ''})" for value, n in counts.head(5).items()
+    )
+    advice = (
+        "If 1 means censored and 2 the event (as in R's survival package), recode 1 to 0 and 2 to 1."
+        if codes == {1.0, 2.0}
+        else "A competing event or another outcome needs its own analysis: recode it to 0 or 1 first."
+    )
+    return ValueError(
+        f"the event indicator must be 1 (event) or 0 (censored), but it also holds {listed}. {advice}"
+    )
 
 
 def event_indicator(events: Sequence) -> np.ndarray:
-    """1 = event, 0 = censored; text and booleans read with EVENT_WORDS, missing values stay NaN."""
+    """
+    1 = event, 0 = censored; missing values stay NaN. Text, categories and booleans are read with EVENT_WORDS and
+    CENSORED_WORDS. Any other value is refused rather than guessed: a code of 2 would count an event twice in the
+    Kaplan-Meier estimate, and an unknown word (a competing event, a misspelling) would silently become censored.
+    """
     e = pd.Series(list(events))
-    if e.dtype == object or e.dtype == bool or str(e.dtype).startswith("str"):
-        e = e.map(
-            lambda v: (
-                np.nan if pd.isna(v) else (1.0 if str(v).strip().lower() in EVENT_WORDS else 0.0)
-            )
+    numeric = pd.api.types.is_numeric_dtype(e.dtype) and not pd.api.types.is_bool_dtype(e.dtype)
+    if not numeric:
+        words = e.map(lambda v: np.nan if pd.isna(v) else str(v).strip().lower())
+        known = words.isna() | words.isin(EVENT_WORDS + CENSORED_WORDS)
+        if not known.all():
+            codes = set(pd.to_numeric(words.dropna(), errors="coerce").dropna().tolist())
+            raise _refuse(e[~known], codes)
+        return np.asarray(
+            words.map(lambda w: np.nan if pd.isna(w) else float(w in EVENT_WORDS)), dtype=float
         )
-    return np.asarray(pd.to_numeric(e, errors="coerce"), dtype=float)
+    values = np.asarray(pd.to_numeric(e, errors="coerce"), dtype=float)
+    unknown = ~np.isnan(values) & ~np.isin(values, (0.0, 1.0))
+    if unknown.any():
+        raise _refuse(
+            pd.Series(values[unknown]), set(np.unique(values[~np.isnan(values)]).tolist())
+        )
+    return values
 
 
 def _clean(times: Sequence, events: Sequence) -> tuple[np.ndarray, np.ndarray]:

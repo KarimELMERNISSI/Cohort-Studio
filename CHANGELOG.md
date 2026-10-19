@@ -22,6 +22,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The crude risk ratio is now reported next to the crude odds ratio, and the note reads the risk ratios first.
   - When the risk ratios differ too, the stratum variable "may be a confounder".
   - When only the odds ratios differ, the note says that this need not mean confounding.
+- **Survival: the event indicator.**
+  - **Codes:** only 0 and 1 (or words such as Yes/No and Dead/Alive) are accepted.
+  - **A code of 2:** before, it passed through, and the Kaplan-Meier estimate counted such an event twice. A 1/2
+    coding (R's survival package) is now refused with how to recode it, and a 0/1/2 coding is refused as a
+    competing event.
+  - **Unknown words:** before, a word that was neither an event nor a censoring word (a misspelling, "relapse")
+    silently became censored. It is now refused too.
+  - "Death", "deceased" and "survived" are now recognised.
 
 ### Documentation: a DOI to cite
 
