@@ -120,6 +120,11 @@ class IAMManager:
         """Name of the active provider."""
         return self._provider.provider_name
 
+    @property
+    def provider_type(self) -> IAMProviderType:
+        """The configured provider (CMP_IAM_PROVIDER, or the configuration given)."""
+        return self._config.provider_type
+
     def set_provider(self, provider: BaseIAMProvider) -> None:
         """
         Manually inject a custom or mock IAM provider.

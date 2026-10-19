@@ -169,6 +169,9 @@ Administrative features for managing users and monitoring system health.
 | A.3 | **Deactivate** or **Delete** users as needed. |
 | A.4 | **Reset Passwords** for users who cannot log in. |
 
+The page manages the accounts of the identity provider the server signs users in with (`CMP_IAM_PROVIDER`): the
+local accounts, or Better Auth through its admin API. When sign-in is disabled, there are no accounts to manage.
+
 See: [10_Developer_Guide.md](10_Developer_Guide.md)
 
 ### RAG Quality Monitoring

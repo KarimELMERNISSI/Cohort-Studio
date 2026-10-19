@@ -71,7 +71,7 @@ def test_the_known_names_are_read_without_regard_to_case(monkeypatch: pytest.Mon
     monkeypatch.setenv("CMP_IAM_PROVIDER", " Disabled ")
     assert IAMManager().provider_name == "disabled"
     monkeypatch.setenv("CMP_IAM_PROVIDER", "Better-Auth")
-    assert IAMManager()._config.provider_type == IAMProviderType.BETTER_AUTH
+    assert IAMManager().provider_type == IAMProviderType.BETTER_AUTH
 
 
 def test_a_custom_provider_is_not_built_from_the_configuration() -> None:

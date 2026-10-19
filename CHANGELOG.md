@@ -132,6 +132,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **An unknown identity provider stops start-up.** A misspelt `CMP_IAM_PROVIDER` (for example `ldap` or
   `better_authh`) silently gave local accounts. The app now shows the error and the valid names instead.
   `better-auth` is accepted, and the names are read without regard to case.
+- **Admin > Users manages the accounts of the configured identity provider.** It always managed the local accounts,
+  so under Better Auth its activations, deletions and password resets reached nobody who signs in. The page now names
+  the provider, and says there is nothing to manage when sign-in is disabled.
 
 ### AI engine: Gemini Flash-Lite
 

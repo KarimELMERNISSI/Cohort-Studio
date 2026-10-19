@@ -96,6 +96,8 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 - Passwords are hashed with **bcrypt** before storage.
 - User records are stored in `users.duckdb` (shared data folder) by the local IAM provider (`manage/iam/providers/local_duckdb.py`), opened through `db_manager.py`.
 - The `is_active` field controls login eligibility.
+- The **Admin > Users** page goes through `get_iam_manager()`, so it manages the accounts of the configured provider
+  (local or Better Auth), never the local database in its place.
 - Administrators are created from `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD(_FILE)` on first start or with `python manage_users.py create-admin <name>`; the role (not the username) grants access to the **Admin > Users** page.
 - **First-run setup token** — Without a bootstrap password, the first start (or `python manage_users.py bootstrap`, which the Docker image runs before the server) writes a one-time setup token to the server log, and the login page creates the first administrator with it. `python manage_users.py setup-token` issues a new token (the previous one stops working). Only a SHA-256 hash is stored (`setup_token.json` in the data root, `manage/iam/setup_token.py`); the token is cleared once an administrator exists.
 

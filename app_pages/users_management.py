@@ -10,28 +10,34 @@ This page allows administrators to:
 
 import streamlit as st
 
-from manage.db_manager import DBManager
+from manage.iam import IAMProviderType, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role
+
+PROVIDER_LABELS = {
+    IAMProviderType.LOCAL: "local accounts (this server)",
+    IAMProviderType.BETTER_AUTH: "Better Auth (managed through its admin API)",
+}
 
 
 def app():
     """Render the Users page."""
-    
+
     # Double-check admin access (should already be filtered in main.py)
     if not is_admin_role(st.session_state.get('user_role')):
         st.error("Access Denied. Admin privileges required.")
         st.stop()
-    
+
     st.markdown("Manage user accounts - activate, reset passwords, or delete users.")
-    
-    # Get DB Manager
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = DBManager()
-    db = st.session_state.db_manager
-    
-    # Force re-initialization to ensure migration runs
-    db.init_user_db()
-    
+
+    # The accounts of the identity provider that signs users in (CMP_IAM_PROVIDER): this page managed the local
+    # accounts whatever the provider, so under Better Auth its changes reached nobody who signs in
+    db = get_iam_manager()
+    provider = db.provider_type
+    if provider == IAMProviderType.DISABLED:
+        st.info("Sign-in is disabled on this server (CMP_IAM_PROVIDER=disabled): there are no accounts to manage.")
+        return
+    st.caption(f"Accounts of the identity provider: {PROVIDER_LABELS.get(provider, provider.value)}.")
+
     # Fetch all users with status
     users = db.get_all_users_with_status()
     
