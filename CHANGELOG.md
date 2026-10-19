@@ -142,6 +142,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   choosing either in Settings gave "'openai' package is not installed". The group now installs it, and `httpx`, which
   the Ollama connector uses, is declared rather than arriving through other packages. A test checks that each
   provider's packages belong to the `ai` group.
+- **Settings keeps its choices for the whole session.** Streamlit forgets a choice when its page is not shown:
+  - the day-first default never reached Import, the page that reads it;
+  - a return to Settings showed Ollama, the first model and an empty consent box, and withdrew the consent of the
+    engine that runs.
+
+  The provider, models, typed keys, consent, chosen documents, vector database and import default are now kept. When
+  an engine runs, Settings starts from its provider, model and consent.
 
 ### AI engine: Gemini Flash-Lite
 

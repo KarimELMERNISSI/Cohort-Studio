@@ -38,6 +38,9 @@ from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
 
 # .env is loaded once, at start-up (main.py): the keys are in the environment from the first page on
+# The choices are kept for the whole session: Streamlit drops the value of a widget whose page is not shown, so a
+# revisit showed Ollama, the first model and an empty consent box, and withdrew the running engine's consent
+PERSIST = "session"
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 PROVIDER_NAMES = {
     "ollama": "Ollama (local, open-source)",
@@ -110,7 +113,9 @@ def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | 
     The server-side key is never shown or pre-filled and nothing is written to ``os.environ``
     (audit E6). Leaving the field empty falls back to the server-configured key, if any.
     """
-    typed = st.text_input(label, value="", type="password", help=help_text, key=key, icon=":material/key:")
+    typed = st.text_input(
+        label, value="", type="password", help=help_text, key=key, icon=":material/key:", persist_state=PERSIST
+    )
     if os.getenv(env_var):
         st.caption("A server-side key is configured; leave this empty to use it.")
     st.session_state.rag_manager.api_key = typed or None
@@ -127,13 +132,28 @@ def _ensure_manager() -> None:
         st.session_state.rag_manager = RAGManager(api_key=old_key)
 
 
+def _running() -> dict:
+    """The provider, chat model and consent of the engine that runs (empty when it does not run)."""
+    manager = st.session_state.rag_manager
+    if not getattr(manager, "initialized", False):
+        return {}
+    return {
+        "provider": getattr(manager, "provider", None),
+        "model": getattr(getattr(getattr(manager, "llm", None), "config", None), "model_name", None),
+        "consent": bool(getattr(manager, "cloud_consent", False)),
+    }
+
+
 # ----------------------------------------------------------------------------- cards
 
 def _provider_card() -> dict:
     """Provider, connection and model choice; returns the engine configuration."""
     cfg: dict = {"api_key": None, "base_url": None}
+    running = _running()
     with st.container(border=True):
         st.subheader("Provider and models", icon=":material/smart_toy:", anchor=False)
+        if "rag_provider_select" not in st.session_state and running.get("provider") in PROVIDER_NAMES:
+            st.session_state["rag_provider_select"] = running["provider"]  # the page starts from the running engine
         provider = st.selectbox(
             "AI provider",
             options=list(PROVIDER_NAMES),
@@ -141,6 +161,7 @@ def _provider_card() -> dict:
             index=0,  # local-first default: nothing leaves the server unless a cloud provider is chosen
             key="rag_provider_select",
             help="Ollama runs on this server or your network; the cloud providers need an API key and your consent.",
+            persist_state=PERSIST,
         )
         cfg["provider"] = provider
         if provider == "ollama":
@@ -151,6 +172,7 @@ def _provider_card() -> dict:
                 key="rag_ollama_base_url",
                 help="URL of the local or network Ollama service.",
                 icon=":material/dns:",
+                persist_state=PERSIST,
             )
             chat_options = _discover_ollama_models(cfg["base_url"]) or OLLAMA_CHAT_FALLBACK
             embed_options = OLLAMA_EMBEDDINGS
@@ -178,9 +200,16 @@ def _provider_card() -> dict:
                 chat_help += " The most capable model is listed first; the app's temperature setting does not apply to Claude."
                 embed_options, embed_help = _claude_embedding_block(cfg)
                 embed_key = f"rag_anthropic_{cfg['embedding_provider']}_embed_select"
+        engine_model = running.get("model") if running.get("provider") == provider else None
+        if chat_key not in st.session_state and engine_model in chat_options:
+            st.session_state[chat_key] = engine_model
         col_chat, col_embed = st.columns(2)
-        cfg["model"] = col_chat.selectbox("Chat model", chat_options, index=0, key=chat_key, help=chat_help)
-        cfg["embedding"] = col_embed.selectbox("Embedding model", embed_options, index=0, key=embed_key, help=embed_help)
+        cfg["model"] = col_chat.selectbox(
+            "Chat model", chat_options, index=0, key=chat_key, help=chat_help, persist_state=PERSIST
+        )
+        cfg["embedding"] = col_embed.selectbox(
+            "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST
+        )
     return cfg
 
 
@@ -198,6 +227,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         key="rag_claude_embed_provider",
         help="Who turns your documents into vectors for search. Ollama keeps the documents on this server; a cloud "
         "provider needs its own API key and receives the text of the indexed PDFs.",
+        persist_state=PERSIST,
     )
     cfg["embedding_provider"] = embed_provider
     if embed_provider == "ollama":
@@ -207,6 +237,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
             key="rag_claude_ollama_base_url",
             help="URL of the local or network Ollama service that embeds the documents.",
             icon=":material/dns:",
+            persist_state=PERSIST,
         )
         return OLLAMA_EMBEDDINGS, "Local embedding model (pull it first: 'ollama pull <model>')."
     catalog = CLOUD_CATALOG[embed_provider]
@@ -217,6 +248,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         key=f"rag_claude_{embed_provider}_embed_key",
         icon=":material/key:",
         help=f"Key for {PROVIDER_NAMES[embed_provider]} embeddings. Never stored; empty uses the server key if configured.",
+        persist_state=PERSIST,
     )
     if os.getenv(catalog["env"]):
         st.caption("A server-side key is configured for the embeddings; leave this empty to use it.")
@@ -244,10 +276,14 @@ def _consent_card(provider: str) -> bool:
             title=f"What leaves this server with {PROVIDER_NAMES[provider]}",
             icon=":material/cloud_upload:",
         )
+        running = _running()
+        if "rag_cloud_consent" not in st.session_state and running.get("provider") == provider and running["consent"]:
+            st.session_state["rag_cloud_consent"] = True  # given in this session, for the engine that runs
         consent = st.checkbox(
             "I confirm this data may be sent to the selected cloud provider",
             key="rag_cloud_consent",
             help="Required before any data is sent to a cloud AI provider. Applies to this session only.",
+            persist_state=PERSIST,
         )
         st.session_state.rag_manager.cloud_consent = bool(consent)
         return bool(consent)
@@ -285,6 +321,7 @@ def _library_card() -> list[str] | None:
             options=all_files,
             key=key,
             help="Only the selected documents are embedded when the engine is initialised.",
+            persist_state=PERSIST,
         )
         with st.expander("Remove a document"):
             for name in all_files:
@@ -372,6 +409,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             default=default.value,
             key="rag_vector_engine",
             help="Where the chunks of your documents and their vectors are stored and searched.",
+            persist_state=PERSIST,
         )
         engine = VectorEngine(choice or default.value)
         st.caption(ENGINE_SUMMARIES[engine])
@@ -398,12 +436,14 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                 help="Leave empty for embedded Qdrant in your workspace. A server (Docker, self-hosted or Qdrant Cloud) "
                 "is shared by every session, with one collection per user. Default: CMP_QDRANT_URL.",
                 icon=":material/dns:",
+                persist_state=PERSIST,
             ).strip()
             qdrant_url = server_url or None
             if qdrant_url:
                 qdrant_key = st.text_input(
                     "Qdrant API key", value="", type="password", key="rag_qdrant_api_key", icon=":material/key:",
                     help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY when configured.",
+                    persist_state=PERSIST,
                 ) or settings.qdrant_api_key
                 if st.button("Test the connection", key="rag_qdrant_ping", icon=":material/network_check:"):
                     scope = get_current_scope()
@@ -471,6 +511,7 @@ def _engine_card(
             help="Uses the index already built with the selected vector database and embedding model (faster), when "
             "it holds the selected documents: after a document is added or removed, the index is rebuilt. Turn it "
             "off after changing the embedding model.",
+            persist_state=PERSIST,
         )
         if not consent:
             st.caption("Confirm the data-sharing notice to enable initialisation.")

@@ -34,8 +34,9 @@ with tab_graph, st.container(border=True, width=760):
 
 with tab_import, st.container(border=True, width=760):
     st.subheader("Defaults applied when a file is imported", icon=":material/upload_file:", anchor=False)
+    # kept for the session: Import, the page that reads it, does not show this toggle
     st.toggle("Treat dates as day-first (31/12/2024) by default", key="import_default_dayfirst",
-              help="European date order. You can still change it per file in the import flow.")
+              help="European date order. You can still change it per file in the import flow.", persist_state="session")
     st.caption("Encoding, delimiter and decimal separator are always detected per file and shown for review.")
 
 with tab_workspace, st.container(border=True, width=760):
