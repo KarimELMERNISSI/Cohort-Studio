@@ -5,6 +5,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
+
 from manage.rag.providers.gemini import GEMINI_CHAT_MODELS, GeminiChatConnector, is_chat_model
 from manage.rag.schemas import ProviderConfig, ProviderType
 

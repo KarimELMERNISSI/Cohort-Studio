@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 
 from enrich.transformation_logic import apply_variable_transformation
+from utils.optional import method_available
 
 STATS = "{initial_variable}_{method_applied}"
 CONFIGS = {
@@ -118,6 +119,8 @@ def _replay(tm):
 def test_a_recorded_transformation_replays_to_the_same_table(tmp_path: Path, name: str) -> None:
     from core.fingerprint import frame_fingerprint
 
+    if not method_available(CONFIGS[name]["transformation"]):  # PCA runs with prince (the 'ml' extra)
+        pytest.skip(f"{CONFIGS[name]['transformation']} needs an optional library that is not installed")
     tm, session = _record(tmp_path, [_params(name)])
     result = _replay(tm)
     assert result.error is None and result.reproducible, result.warnings
