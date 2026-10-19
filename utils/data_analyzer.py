@@ -289,7 +289,8 @@ class DataAnalyzer:
                                if all(pd.api.types.is_numeric_dtype(val) for val in self.df[col].unique())]
             },
             "ROC Curve": {
-                "true_class": self.binary_cols + [c for c in cat_vars if self.df[c].nunique() == 2],
+                # a two-level text column is in both lists: each column once
+                "true_class": list(dict.fromkeys(self.binary_cols + [c for c in cat_vars if self.df[c].nunique() == 2])),
                 "score": num_vars
             },
             "Clustermap": {

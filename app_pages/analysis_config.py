@@ -6,6 +6,16 @@ from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
 from ui.guidance.analysis import HELP
 
 
+def grouping_options(df, numeric_cols, categorical_cols, binary_cols, max_levels=20):
+    """
+    "None" and the columns with fewer than ``max_levels`` values, each once and sorted. A two-level text column is
+    both categorical and binary, so the column lists overlap; joined without removing the repeats, it was offered
+    twice.
+    """
+    candidates = dict.fromkeys([*categorical_cols, *binary_cols, *numeric_cols])
+    return ["None", *sorted(col for col in candidates if df[col].nunique() < max_levels)]
+
+
 def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_cols, group_col_options=None, default_group_col="None", target_col_options=None, key_prefix=""):
     """
     Renders the Analysis Configuration expander.
@@ -17,9 +27,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
         with col1:
             # Select Grouping Variable
             if group_col_options is None:
-                potential_groupers = [col for col in categorical_cols + binary_cols + numeric_cols 
-                                      if df[col].nunique() < 20]
-                group_col_options = ["None"] + sorted(potential_groupers)
+                group_col_options = grouping_options(df, numeric_cols, categorical_cols, binary_cols)
             
             group_col = st.selectbox(
                 "Select Grouping Variable (Factor)", 
@@ -90,4 +98,4 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
     }
 
 
-__all__ = ["render_analysis_configuration"]
+__all__ = ["grouping_options", "render_analysis_configuration"]

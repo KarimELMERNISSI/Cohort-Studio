@@ -81,6 +81,8 @@ class TestDataAnalyzer:
         roc_cols = analyzer.get_suitable_columns("ROC Curve")
         assert "true_class" in roc_cols and "score" in roc_cols
         assert "gender" in roc_cols["true_class"] or "hypertension" in roc_cols["true_class"]
+        # a two-level text column is both binary and categorical: offered once
+        assert len(roc_cols["true_class"]) == len(set(roc_cols["true_class"]))
 
     def test_edge_cases_constant_and_empty(self):
         empty_df = pd.DataFrame(columns=["col_a", "col_b"])
