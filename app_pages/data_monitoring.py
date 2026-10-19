@@ -1,16 +1,14 @@
-# pages/data_monitoring.py
+﻿# pages/data_monitoring.py
 import json
 import os
 from io import BytesIO
 from typing import Any
 
-import numpy as np
 import pandas as pd
 import streamlit as st
-from scipy import stats
 
+import biostats.outliers as mo
 import monitor.changes as mc
-import monitor.outliers as mo
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from core.fingerprint import ids_to_ranges
@@ -61,345 +59,42 @@ def export_comparison_results(df1, df2, comparison_result_filtered,
 ############################# OUTLIER HANDLING ###############################################
 
 class OutlierHandler:
-    """Helper class to detect and handle outliers using various methods"""
+    """
+    Applies a handling strategy (remove, clip, tag) to what biostats.outliers.detect_outliers flags: the detector
+    of the quality dashboard and the health score too, so every screen flags the same rows.
+    """
     def __init__(self, df, config):
-        self.df = df.copy()
-        self.original_df = df.copy()
-        self.masks = None  # Initialize to None
-  
-    def detect_outliers_zscore(self, column, threshold=3):
-        """Detect outliers using Z-score method"""
-        return mo.find_outliers_zscore(self.df[column], threshold)
-        
-    def detect_outliers_iqr(self, column, multiplier=1.5):
-        """Detect outliers using IQR method"""
-        return mo.find_outliers_boxplot(self.df[column], multiplier)
-        
-    def detect_outliers_quantile(self, column, lower=0.01, upper=0.99):
-        """Detect outliers using quantile method"""
-        lower_bound = self.df[column].quantile(lower, interpolation='lower')
-        upper_bound = self.df[column].quantile(upper, interpolation='higher')
-        return (self.df[column] < lower_bound) | (self.df[column] > upper_bound)
-    
-    def detect_lof_outliers(self, data, n_neighbors=20, contamination='auto', 
-                            numerical_imputation_method='missforest', 
-                            categorical_imputation_method='missforest', 
-                            remainder_columns='auto', 
-                            remainder_threshold=0.3, 
-                            debug=True):
-        """
-        Detect outliers using Local Outlier Factor (LOF)
-        
-        Parameters:
-        -----------
-        columns : list
-            List of column names to use for outlier detection
-        n_neighbors : int, optional (default=20)
-            Number of neighbors to use for LOF
-        contamination : str or float, optional (default='auto')
-            Expected proportion of outliers in the dataset
-        numerical_imputation_method : str, optional (default='missforest')
-            Method for imputing numerical missing values
-        categorical_imputation_method : str, optional (default='missforest')
-            Method for imputing categorical missing values
-        remainder_columns : str or list, optional (default='auto')
-            Columns to keep if not in the selected columns
-        remainder_threshold : float, optional (default=0.4)
-            Threshold for keeping columns with missing values
-        debug : bool, optional (default=True)
-            Enable debug mode
-        
-        Returns:
-        --------
-        tuple
-            Outlier tags, outlier scores, and additional information
-        """
-        outliers_tag, outliers_scores, additional_info = mo.find_lof_outliers(
-            data,
-            n_neighbors=n_neighbors,
-            contamination=contamination,
-            numerical_imputation_method=numerical_imputation_method,
-            categorical_imputation_method=categorical_imputation_method,
-            remainder_columns=remainder_columns,
-            remainder_threshold=remainder_threshold,
-            debug=debug
-        )
-        
-        return outliers_tag, outliers_scores, additional_info
-
-
-    def detect_isolation_forest_outliers(self, data, n_estimators=100, 
-                                        max_samples='auto', 
-                                        contamination='auto', 
-                                        numerical_imputation_method='missforest', 
-                                        categorical_imputation_method='missforest', 
-                                        remainder_columns='auto', 
-                                        remainder_threshold=0.3, 
-                                        debug=True):
-        """
-        Detect outliers using Isolation Forest method
-        
-        Parameters:
-        -----------
-        columns : list
-            List of column names to use for outlier detection
-        n_estimators : int, optional (default=100)
-            Number of trees in the forest
-        max_samples : str or int, optional (default='auto')
-            Number of samples to draw for each base estimator
-        contamination : str or float, optional (default='auto')
-            Expected proportion of outliers in the dataset
-        numerical_imputation_method : str, optional (default='missforest')
-            Method for imputing numerical missing values
-        categorical_imputation_method : str, optional (default='missforest')
-            Method for imputing categorical missing values
-        remainder_columns : str or list, optional (default='auto')
-            Columns to keep if not in the selected columns
-        remainder_threshold : float, optional (default=0.4)
-            Threshold for keeping columns with missing values
-        debug : bool, optional (default=True)
-            Enable debug mode
-        
-        Returns:
-        --------
-        tuple
-            Outlier tags, outlier scores, and additional information
-        """
-        outliers_tag, outliers_scores, additional_info = mo.find_isolation_forest_outliers(
-            data,
-            n_estimators=n_estimators,
-            max_samples=max_samples,
-            contamination=contamination,
-            numerical_imputation_method=numerical_imputation_method,
-            categorical_imputation_method=categorical_imputation_method,
-            remainder_columns=remainder_columns,
-            remainder_threshold=remainder_threshold,
-            debug=debug
-        )
-        
-        return outliers_tag, outliers_scores, additional_info
-
-
-    def detect_dbscan_outliers(self, data, eps=0.5, min_samples=5, 
-                              numerical_imputation_method='missforest', 
-                              categorical_imputation_method='missforest', 
-                              remainder_columns='auto', 
-                              remainder_threshold=0.3, 
-                              debug=True):
-        """
-        Detect outliers using DBSCAN method
-        
-        Parameters:
-        -----------
-        data : pd.DataFrame
-            Input data
-        eps : float
-            The maximum distance between two samples for one to be considered as in the neighborhood of the other.
-        min_samples : int
-            The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
-        numerical_imputation_method : str
-            Imputation method for numerical columns
-        categorical_imputation_method : str
-            Imputation method for categorical columns
-        remainder_columns : str
-            How to handle remainder columns
-        remainder_threshold : float
-            Threshold for remainder columns
-        debug : bool
-            Enable debug printing
-
-        Returns:
-        --------
-        tuple
-            (outliers_tag, outliers_scores, additional_info)
-        """
-        outliers_tag, outliers_scores, additional_info = mo.find_dbscan_outliers(
-            data,
-            eps=eps,
-            min_samples=min_samples,
-            numerical_imputation_method=numerical_imputation_method,
-            categorical_imputation_method=categorical_imputation_method,
-            remainder_columns=remainder_columns,
-            remainder_threshold=remainder_threshold,
-            debug=debug
-        )
-        return outliers_tag, outliers_scores, additional_info
+        self.df = df
+        self.detection: mo.OutlierDetection | None = None
 
     def handle_outliers(self, columns, method='zscore', handling_strategy='none', **kwargs):
         """
-        Handle outliers in the DataFrame and generate an outlier matrix.
-        
-        Parameters:
-            columns (list): List of columns to analyze for outliers.
-            method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-            handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
-            **kwargs: Additional parameters for specific outlier detection methods.
+        Detect the outliers of ``columns`` and preview the handling strategy.
 
         Returns:
-            DataFrame: Processed DataFrame with outliers handled.
-            DataFrame: Outlier matrix with boolean values indicating outliers.
+            DataFrame: the table with the strategy applied (a preview: the Validate actions record the change).
+            DataFrame: the flags, one column per analysed column (univariate) or "overall" (multivariate).
         """
-        # Ensure valid methods
-        valid_methods = ['zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest', 'DBSCAN']
-        if method not in valid_methods:
-            raise ValueError(f"Invalid method '{method}'. Choose from {valid_methods}.")
+        self.detection = mo.detect_outliers(self.df, columns, method, kwargs)
+        return self._apply_handling_strategy(self.detection, handling_strategy), self.detection.flags
 
-        # Initialize outlier matrix and scores
-        outlier_matrix = pd.DataFrame(index=self.df.index)
-        outlier_score = None
-
-        if method in ['zscore', 'iqr', 'quantile']:
-            for column in columns:
-                # Skip non-numeric columns
-                if self.df[column].dtype not in ['int64', 'float64']:
-                    continue
-
-                # Detect outliers for the column
-                if method == 'zscore':
-                    threshold = kwargs.get('threshold', 3)
-                    is_outlier = self.detect_outliers_zscore(column, threshold)
-                elif method == 'iqr':
-                    multiplier = kwargs.get('multiplier', 1.5)
-                    is_outlier = self.detect_outliers_iqr(column, multiplier)
-                elif method == 'quantile':
-                    lower = kwargs.get('lower', 0.01)
-                    upper = kwargs.get('upper', 0.99)
-                    is_outlier = self.detect_outliers_quantile(column, lower, upper)
-
-                # Add to the outlier matrix
-                outlier_matrix[column] = is_outlier
-
-        elif method in ['Local Outlier Factor', 'Isolation Forest', 'DBSCAN']:
-            # Apply dataset-wide methods
-            data = self.df[columns]
-            if method == 'Local Outlier Factor':
-                is_outlier, outlier_score, _ = self.detect_lof_outliers(data=data, **kwargs)
-            elif method == 'Isolation Forest':
-                is_outlier, outlier_score, _ = self.detect_isolation_forest_outliers(data=data, **kwargs)
-            else:  # DBSCAN, the last dataset-wide method
-                is_outlier, outlier_score, _ = self.detect_dbscan_outliers(data=data, **kwargs)
-
-            # Add the dataset-wide outliers to the matrix
-            outlier_matrix['overall'] = is_outlier
-
-        # Handle outliers in the main DataFrame based on strategy
-        df_processed = self._apply_handling_strategy(columns, outlier_matrix, handling_strategy, method, is_outlier, outlier_score, **kwargs)
-
-        return df_processed, outlier_matrix
-
-
-    def _apply_handling_strategy(self, columns, outlier_matrix, strategy, method, is_outlier=None, outlier_score=None, **kwargs):
-        """
-        Apply a handling strategy to the outliers.
-        
-        Parameters:
-            columns (list): Columns analyzed for outliers.
-            outlier_matrix (DataFrame): Boolean matrix indicating outliers.
-            strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
-            method (str): Outlier detection method.
-            is_outlier (ndarray): Boolean array for dataset-wide methods.
-            outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
-            **kwargs: Additional parameters for handling strategies.
-        
-        Returns:
-            DataFrame: Processed DataFrame with outliers handled.
-        """
+    def _apply_handling_strategy(self, detection, strategy):
+        """The table with ``strategy`` applied to the detected outliers."""
         df_processed = self.df.copy()
-
-        if strategy == 'none':
-            return df_processed
-
+        flags = detection.flags
         if strategy == 'remove':
-            # Remove rows with any outliers
-            outlier_rows = outlier_matrix.any(axis=1)
-            df_processed = df_processed[~outlier_rows]
-
-        elif strategy == 'clip':
-            # Clip outliers to thresholds
-            for col in columns:
-                if col in outlier_matrix:
-                    df_processed[col] = self.clip_outliers(column=col, is_outlier=is_outlier, method=method, **kwargs)
+            df_processed = df_processed[~flags.any(axis=1)]
+        elif strategy == 'clip':  # to the bounds that flag them, as the traced clip does
+            for col, (low, high) in detection.bounds.items():
+                df_processed[col] = df_processed[col].clip(lower=low, upper=high)
+        elif strategy == 'tag' and detection.method in mo.UNIVARIATE_METHODS:
+            tag_col, list_col = f"{detection.method}_tag", f"{detection.method}_list"
+            df_processed[tag_col] = flags.any(axis=1)
+            df_processed[list_col] = flags.apply(lambda row: ", ".join(str(c) for c in row.index if row[c]), axis=1)
         elif strategy == 'tag':
-            if method in ['zscore', 'iqr', 'quantile']:
-                for column in columns:
-                    if column in outlier_matrix:
-                        # Initialize tag and list columns if not already present
-                        tag_col = f"{method}_tag"
-                        list_col = f"{method}_list"
-                        if tag_col not in df_processed:
-                            df_processed[tag_col] = False
-                        if list_col not in df_processed:
-                            df_processed[list_col] = ""
-
-                        # Update the tag and list columns
-                        df_processed.loc[outlier_matrix[column], tag_col] = True
-                        df_processed.loc[outlier_matrix[column], f"{method}_list"] = (df_processed.loc[outlier_matrix[column], f"{method}_list"] + ", " + column).str.strip(", ")
-                        
-
-            elif method in ['Isolation Forest', 'Local Outlier Factor', 'DBSCAN']:
-                # Initialize score and tag columns for dataset-wide methods
-                tag_col = f"{method}_tag"
-                score_col = f"{method}_score"
-
-                # Update the DataFrame with the outlier information
-                df_processed[tag_col] = is_outlier
-                df_processed[score_col] = outlier_score
-
+            df_processed[f"{detection.method}_tag"] = flags["overall"]
+            df_processed[f"{detection.method}_score"] = detection.scores
         return df_processed
-
-
-    def clip_outliers(self, column, is_outlier, method, **kwargs):
-        """
-        Helper function to clip outliers based on the specified method.
-        
-        Parameters:
-            column (str): Column name to process.
-            is_outlier (pd.Series): Boolean mask indicating outliers.
-            method (str): Method for clipping ('zscore', 'iqr', 'quantile').
-            kwargs: Additional parameters for each method.
-            
-        Returns:
-            pd.Series: Updated column with outliers clipped.
-        """
-        df = self.df.copy()
-        if method == 'zscore':
-            threshold = kwargs.get('threshold', 3)
-            z_scores = stats.zscore(df[column], nan_policy='omit')
-            df.loc[is_outlier, column] = (
-                df[column].mean() + threshold * df[column].std() * np.sign(z_scores[is_outlier])
-            )
-        elif method == 'iqr':
-            multiplier = kwargs.get('multiplier', 1.5)
-            Q1 = df[column].quantile(0.25)
-            Q3 = df[column].quantile(0.75)
-            IQR = Q3 - Q1
-            lower_bound = Q1 - multiplier * IQR
-            upper_bound = Q3 + multiplier * IQR
-            df[column] = df[column].clip(lower=lower_bound, upper=upper_bound)
-        elif method == 'quantile':
-            lower = kwargs.get('lower', 0.01)
-            upper = kwargs.get('upper', 0.99)
-            print(f"Column {column}\n----v----v-----\n lower {lower} upper {upper}\n-----v----v----")
-            lower_bound = df[column].quantile(lower)
-            upper_bound = df[column].quantile(upper)
-            print(f"\n----v----v-----\n lower_bound {lower_bound} upper_bound {upper_bound}\n-----v----v----\n")
-            df[column] = df[column].clip(lower=lower_bound, upper=upper_bound)
-        else:
-            raise ValueError("Invalid method. Choose from ['zscore', 'iqr', 'quantile']")
-        return df[column]
-
-
-    def get_outliers_masks(self):
-            """
-            Get the masks of outliers detected so far.
-
-            Returns:
-            --------
-            dict or None
-                Dictionary of outlier masks if available, else None.
-            """
-            return self.masks
-
 
 
 ######################################## handle data for comparisons
@@ -572,14 +267,26 @@ def add_outlier_handling_ui(df, numeric_cols):
         **params
     )
     # What was detected, for the actions of the Validate page (exclude from the population, or clip)
+    detection = outlier_handler.detection
     df_processed.attrs["outlier_detection"] = {
         "method": detection_method,
         "params": {k: (v if isinstance(v, (int, float, str, bool)) else str(v)) for k, v in params.items()},
         "columns": [str(c) for c in selected_cols],
         "strategy": handling_strategy,
-        "flagged": [int(i) for i in outlier_matrix.index[outlier_matrix.any(axis=1)]],
-        "bounds": _clip_bounds(df, selected_cols, detection_method, params) if handling_strategy == "clip" else None,
+        "flagged": [int(i) for i in detection.flagged],
+        # the bounds that flag the outliers clip them: the preview above is the clip that is recorded
+        "bounds": detection.bounds if handling_strategy == "clip" else None,
     }
+    if detection.skipped:
+        st.caption(
+            f"Not analysed (not continuous, or an identifier): {', '.join(detection.skipped)}. A column with two "
+            "values (0/1) has no outliers."
+        )
+    if detection.not_assessed:
+        st.caption(
+            f"{detection.not_assessed:,} row(s) with a missing value in the columns used were not assessed by "
+            f"{detection_method}; impute them first (Enrich > Handle missing data) to include them."
+        )
     #st.dataframe(df_processed)
 
     # Step 5: Generate Outlier Summary from Matrix
@@ -597,32 +304,29 @@ def add_outlier_handling_ui(df, numeric_cols):
 
 
 def configure_method_params(detection_method):
-    """Configure parameters based on the selected outlier detection method."""
+    """Configure parameters based on the selected outlier detection method (defaults: biostats.outliers)."""
+    default = mo.DEFAULT_PARAMS[detection_method]
     if detection_method == "zscore":
-        threshold = st.slider("Z-score threshold", 1.0, 5.0, 3.0, 0.1)
+        threshold = st.slider("Z-score threshold", 1.0, 5.0, default["threshold"], 0.1)
         return {"threshold": threshold}
     elif detection_method == "iqr":
-        multiplier = st.slider("IQR multiplier", 0.5, 3.0, 1.5, 0.1)
+        multiplier = st.slider("IQR multiplier", 0.5, 3.0, default["multiplier"], 0.1)
         return {"multiplier": multiplier}
     elif detection_method == "quantile":
         col1, col2 = st.columns(2)
         with col1:
-            lower = st.number_input("Lower percentile", 0.0, 0.5, 0.01, 0.01)
+            lower = st.number_input("Lower percentile", 0.0, 0.5, default["lower"], 0.01)
         with col2:
-            upper = st.number_input("Upper percentile", 0.5, 1.0, 0.99, 0.01)
+            upper = st.number_input("Upper percentile", 0.5, 1.0, default["upper"], 0.01)
         return {"lower": lower, "upper": upper}
-    elif detection_method == "Isolation Forest":
-        return {'n_estimators': 100, 'max_samples': 'auto'}
-    elif detection_method == "Local Outlier Factor":
-        return {'n_neighbors': 50, 'contamination': 'auto'}
     elif detection_method == "DBSCAN":
         col1, col2 = st.columns(2)
         with col1:
-            eps = st.number_input("Epsilon (eps)", 0.1, 10.0, 0.5, 0.1)
+            eps = st.number_input("Epsilon (eps)", 0.1, 10.0, default["eps"], 0.1)
         with col2:
-            min_samples = st.number_input("Min Samples", 1, 100, 5, 1)
+            min_samples = st.number_input("Min Samples", 1, 100, default["min_samples"], 1)
         return {'eps': eps, 'min_samples': int(min_samples)}
-    return {}
+    return dict(default)  # Isolation Forest, Local Outlier Factor
 
 
 def select_columns_for_outlier_handling(df, numeric_cols, detection_method):
@@ -1348,26 +1052,6 @@ _POPULATION_ACTIONS = {
     "inclusion_data": ("study_inclusion", "Restrict the analysis population to these criteria",
                        "The inclusion criteria are ticked."),
 }
-
-
-def _clip_bounds(df: pd.DataFrame, columns, method: str, params: dict) -> dict:
-    """The bounds a clipping uses, per column (recorded in the trace and replayed)."""
-    bounds = {}
-    for col in columns:
-        series = pd.to_numeric(df[col], errors="coerce")
-        if method == "iqr":
-            m = params.get("multiplier", 1.5)
-            q1, q3 = series.quantile(0.25), series.quantile(0.75)
-            low, high = q1 - m * (q3 - q1), q3 + m * (q3 - q1)
-        elif method == "quantile":
-            low, high = series.quantile(params.get("lower", 0.01)), series.quantile(params.get("upper", 0.99))
-        elif method == "zscore":
-            t = params.get("threshold", 3)
-            low, high = series.mean() - t * series.std(), series.mean() + t * series.std()
-        else:
-            continue
-        bounds[str(col)] = [float(low), float(high)]
-    return bounds
 
 
 def _exclude_outliers(detection: dict) -> None:

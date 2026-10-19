@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.population import family_masks
 
 logger = logging.getLogger(__name__)
@@ -70,128 +71,57 @@ class DataQualityAuditor:
     def compute_validity(self, method: str | None = None, params: dict[str, Any] | None = None) -> float:
         """
         Calculates a validity score based on the absence of outliers in numerical columns.
-        
+
+        The outliers are those of biostats.outliers.detect_outliers, the detector of the Validate page and of the
+        dashboard's outlier tab, with the same parameters, so the score counts what they flag.
+        - Univariate methods ('iqr', the default, 'zscore', 'quantile'): the share of the values of the continuous
+          numeric columns that are outliers.
+        - Multivariate methods ('Local Outlier Factor', 'Isolation Forest', 'DBSCAN'): the share of the rows
+          complete on the numeric columns that are flagged (at least 11 rows are needed).
+
         Parameters:
         -----------
         method : str, optional
-            Detection method: 'iqr' (default), 'zscore', 'quantile', 
+            Detection method: 'iqr' (default), 'zscore', 'quantile',
             'Local Outlier Factor', 'Isolation Forest', 'DBSCAN'
         params : dict, optional
-            Method-specific parameters (e.g., multiplier, threshold, etc.)
+            Method-specific parameters (e.g., multiplier, threshold, etc.); the defaults are those of
+            biostats.outliers.DEFAULT_PARAMS
         """
-        # Default to IQR if no method specified
-        if method is None:
-            method = "iqr"
-        if params is None:
-            params = {"multiplier": 1.5} if method == "iqr" else {}
-        
+        method = method or "iqr"
         logger.debug("compute_validity method=%s, params=%s", method, params)
-        
-        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
-        logger.debug("compute_validity numeric_cols=%s", list(numeric_cols))
+        numeric_cols = list(self.df.select_dtypes(include=[np.number]).columns)
         self.details["Statistical Validity"] = _details([])
-
-        if len(numeric_cols) == 0:
+        if not numeric_cols:
             return 100.0  # No numeric columns to be invalid
 
-        total_outliers = 0
-        total_numeric_values = 0
+        detection = detect_outliers(self.df, numeric_cols, method, params)
         detail_rows: list[tuple[str, str, float | None, float | None]] = []
-
-        # Univariate methods
-        if method in ["iqr", "zscore", "quantile"]:
-            for col in numeric_cols:
-                data = self.df[col].dropna()
-                if len(data) == 0:
-                    continue
-                
-                outliers = 0
-                
-                if method == "iqr":
-                    Q1 = data.quantile(0.25)
-                    Q3 = data.quantile(0.75)
-                    IQR = Q3 - Q1
-                    multiplier = params.get("multiplier", 1.5)
-                    
-                    # Handle edge case: IQR = 0 (constant data)
-                    if IQR == 0:
-                        # No outliers if all values are the same
-                        outliers = 0
-                    else:
-                        lower_bound = Q1 - multiplier * IQR
-                        upper_bound = Q3 + multiplier * IQR
-                        outliers = ((data < lower_bound) | (data > upper_bound)).sum()
-                    
-                elif method == "zscore":
-                    threshold = params.get("threshold", 3.0)
-                    std = data.std()
-                    
-                    # Handle edge case: std = 0 (constant data)
-                    if std == 0:
-                        outliers = 0
-                    else:
-                        z_scores = np.abs((data - data.mean()) / std)
-                        outliers = (z_scores > threshold).sum()
-                    
-                elif method == "quantile":
-                    lower = params.get("lower", 0.01)
-                    upper = params.get("upper", 0.99)
-                    lower_bound = data.quantile(lower)
-                    upper_bound = data.quantile(upper)
-                    outliers = ((data < lower_bound) | (data > upper_bound)).sum()
-                
-                total_outliers += outliers
-                total_numeric_values += len(data)
-                if outliers:
-                    detail_rows.append((str(col), f"outliers ({method})", int(outliers), outliers / len(data)))
-                logger.debug("compute_validity col=%s, outliers=%s, total=%s", col, outliers, total_outliers)
-        
-        # Multivariate ML methods
-        elif method in ["Local Outlier Factor", "Isolation Forest", "DBSCAN"]:
-            try:
-                from sklearn.cluster import DBSCAN
-                from sklearn.ensemble import IsolationForest
-                from sklearn.neighbors import LocalOutlierFactor
-                from sklearn.preprocessing import StandardScaler
-                
-                ml_data = self.df[numeric_cols].dropna()
-                logger.debug("compute_validity ML method, data shape=%s", ml_data.shape)
-                
-                if len(ml_data) > 10:
-                    scaler = StandardScaler()
-                    scaled_data = scaler.fit_transform(ml_data)
-                    
-                    if method == "Isolation Forest":
-                        model = IsolationForest(contamination='auto', random_state=42)
-                        predictions = model.fit_predict(scaled_data)
-                    elif method == "Local Outlier Factor":
-                        model = LocalOutlierFactor(contamination='auto')
-                        predictions = model.fit_predict(scaled_data)
-                    else:  # DBSCAN, the last method of this branch
-                        eps = params.get("eps", 0.5)
-                        min_samples = params.get("min_samples", 5)
-                        model = DBSCAN(eps=eps, min_samples=min_samples)
-                        predictions = model.fit_predict(scaled_data)
-                    
-                    total_outliers = (predictions == -1).sum()
-                    total_numeric_values = len(ml_data)
-                    if total_outliers:
-                        detail_rows.append(
-                            (
-                                "numeric columns together",
-                                f"rows flagged by {method}",
-                                int(total_outliers),
-                                total_outliers / total_numeric_values,
-                            )
-                        )
-                    logger.debug("compute_validity ML outliers=%s", total_outliers)
-                else:
-                    logger.debug("compute_validity not enough data for ML: %s", len(ml_data))
-                    return 100.0  # Not enough data
-            except ImportError as e:
-                logger.warning("compute_validity ImportError: %s, falling back to IQR", e)
-                # Fall back to IQR if sklearn not available
-                return self.compute_validity(method="iqr")
+        if method in UNIVARIATE_METHODS:
+            counts = detection.flags.sum()
+            observed = {col: int(self.df[col].notna().sum()) for col in detection.columns}
+            total_outliers = int(counts.sum())
+            total_numeric_values = sum(observed.values())
+            detail_rows = [
+                (str(col), f"outliers ({method})", int(n), int(n) / observed[col])
+                for col, n in counts.items()
+                if n
+            ]
+        else:
+            total_numeric_values = len(self.df) - detection.not_assessed
+            if total_numeric_values <= 10:
+                logger.debug("compute_validity not enough data for %s: %s rows", method, total_numeric_values)
+                return 100.0  # Not enough data
+            total_outliers = int(detection.flags["overall"].sum())
+            if total_outliers:
+                detail_rows.append(
+                    (
+                        "numeric columns together",
+                        f"rows flagged by {method}",
+                        total_outliers,
+                        total_outliers / total_numeric_values,
+                    )
+                )
 
         self.details["Statistical Validity"] = _details(detail_rows)
         if total_numeric_values == 0:

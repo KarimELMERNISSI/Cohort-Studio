@@ -9,6 +9,7 @@ import streamlit as st
 
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
+from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from explore.data_quality_auditor import DataQualityAuditor
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
@@ -787,82 +788,40 @@ def render_dashboard(df, config):
             else:
                 selected_cols = numeric_cols
             
-            # --- Run Detection ---
+            # --- Run Detection: biostats.outliers, the detector of the Validate page and of the health score ---
             outlier_summary = []
             outlier_mask_dict = {}
 
-            if detection_method in ["iqr", "zscore", "quantile"]:
-                # Univariate methods - per column
-                for col in selected_cols:
-                    data = df[col].dropna()
-                    if len(data) == 0:
-                        continue
-                    
-                    if detection_method == "iqr":
-                        Q1 = data.quantile(0.25)
-                        Q3 = data.quantile(0.75)
-                        IQR = Q3 - Q1
-                        mask = (data < (Q1 - params["multiplier"] * IQR)) | (data > (Q3 + params["multiplier"] * IQR))
-                    elif detection_method == "zscore":
-                        z_scores = np.abs((data - data.mean()) / data.std())
-                        mask = z_scores > params["threshold"]
-                    elif detection_method == "quantile":
-                        lower_bound = data.quantile(params["lower"])
-                        upper_bound = data.quantile(params["upper"])
-                        mask = (data < lower_bound) | (data > upper_bound)
-                    
-                    outliers = mask.sum()
+            if detection_method in UNIVARIATE_METHODS:
+                detection = detect_outliers(df, selected_cols, detection_method, params)
+                for col in detection.columns:
+                    mask = detection.flags[col]
+                    outliers = int(mask.sum())
                     outlier_mask_dict[col] = mask
-                    
                     if outliers > 0:
                         outlier_summary.append({
-                            "Column": col, 
-                            "Outliers": outliers, 
-                            "Percentage": round(outliers/len(data)*100, 2)
+                            "Column": col,
+                            "Outliers": outliers,
+                            "Percentage": round(outliers / int(df[col].notna().sum()) * 100, 2)
                         })
-                
+            elif len(selected_cols) < 2:
+                st.warning("Please select at least 2 columns for multivariate analysis.")
             else:
-                # Multivariate ML methods
-                if len(selected_cols) < 2:
-                    st.warning("Please select at least 2 columns for multivariate analysis.")
+                detection = detect_outliers(df, selected_cols, detection_method, params)
+                assessed = len(df) - detection.not_assessed
+                if assessed > 10:
+                    mask = detection.flags["overall"]
+                    outliers = int(mask.sum())
+                    outlier_mask_dict['overall'] = mask
+                    outlier_summary.append({
+                        "Column": "Overall (Multivariate)",
+                        "Outliers": outliers,
+                        "Percentage": round(outliers / assessed * 100, 2)
+                    })
+                    if detection.not_assessed:
+                        st.caption(f"{detection.not_assessed:,} row(s) with a missing value were not assessed.")
                 else:
-                    try:
-                        from sklearn.cluster import DBSCAN
-                        from sklearn.ensemble import IsolationForest
-                        from sklearn.neighbors import LocalOutlierFactor
-                        from sklearn.preprocessing import StandardScaler
-                        
-                        # Prepare data
-                        ml_data = df[selected_cols].dropna()
-                        if len(ml_data) > 10:
-                            scaler = StandardScaler()
-                            scaled_data = scaler.fit_transform(ml_data)
-                            
-                            if detection_method == "Isolation Forest":
-                                model = IsolationForest(contamination='auto', random_state=42)
-                                predictions = model.fit_predict(scaled_data)
-                                mask = predictions == -1
-                            elif detection_method == "Local Outlier Factor":
-                                model = LocalOutlierFactor(contamination='auto')
-                                predictions = model.fit_predict(scaled_data)
-                                mask = predictions == -1
-                            else:  # DBSCAN, the last of the three methods
-                                model = DBSCAN(eps=0.5, min_samples=5)
-                                predictions = model.fit_predict(scaled_data)
-                                mask = predictions == -1  # Noise points
-                            
-                            outliers = mask.sum()
-                            outlier_mask_dict['overall'] = pd.Series(mask, index=ml_data.index)
-                            
-                            outlier_summary.append({
-                                "Column": "Overall (Multivariate)",
-                                "Outliers": outliers,
-                                "Percentage": round(outliers/len(ml_data)*100, 2)
-                            })
-                        else:
-                            st.warning("Not enough data points for ML-based detection (need > 10).")
-                    except ImportError as e:
-                        st.error(f"Missing dependency: {e}")
+                    st.warning("Not enough complete rows for a multivariate method (more than 10 are needed).")
             
             # --- Display Results ---
             if outlier_summary:

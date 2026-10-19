@@ -71,6 +71,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Now every entry point reads with the import engine, the enrichment step records how the file was read, the
   replay reads it the same way and parses the date keys the same way, and the merged columns keep the file's order.
   The legacy loader (`manage/file_handling.py`) is removed.
+- **Outliers: one detector for Validate, the quality dashboard and the health score.** The three screens had their
+  own detectors and flagged different rows for the same method:
+  - quantile: 370 vs 400 rows on the tutorial cohort;
+  - Isolation Forest: 140 vs 133 (different seeds);
+  - LOF: 30 vs 27 (different numbers of neighbours);
+  - Validate skipped the nullable integer columns.
+
+  Validate's clip preview used the last column's outliers for every column: it showed a maximum NT-proBNP of
+  28,017 where the recorded clip gives 9,055.
+
+  Now all three use `biostats/outliers.py`, with one table of defaults:
+  - the bounds that flag a value are the bounds that clip it, so the preview is the clip that is recorded and
+    replayed;
+  - a 0/1 column is never clipped;
+  - the multivariate methods assess the complete rows only and say how many they left out. Validate used to
+    impute those rows first (with MissForest, from the optional ML extra), so it now flags only among the
+    complete rows.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

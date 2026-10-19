@@ -123,10 +123,20 @@ Detect and manage outliers using six methods spanning statistical and machine le
 | --- | --- | --- | --- |
 | **Z-Score** | Statistical | `threshold` (default 3.0) | Flags values beyond ±N standard deviations from the mean. |
 | **IQR** | Statistical | `multiplier` (default 1.5) | Flags values outside Q1 − k·IQR and Q3 + k·IQR. |
-| **Quantile** | Statistical | `lower` / `upper` percentiles | Flags values below or above specified percentiles. |
-| **Local Outlier Factor** | ML | `n_neighbors`, `contamination` | Density-based, flags points in sparse regions. |
-| **Isolation Forest** | ML | `n_estimators`, `max_samples` | Tree-based, isolates anomalous points via random partitions. |
+| **Quantile** | Statistical | `lower` / `upper` percentiles (default 0.01 / 0.99) | Flags values below or above specified percentiles (linear interpolation). |
+| **Local Outlier Factor** | ML | `n_neighbors` (default 50), `contamination` | Density-based, flags points in sparse regions. |
+| **Isolation Forest** | ML | `n_estimators`, `max_samples` | Tree-based, isolates anomalous points via random partitions (seeded). |
 | **DBSCAN** | ML | `eps`, `min_samples` | Clustering-based, flags noise points not assigned to any cluster. |
+
+**The same rows on every screen.** This tab, the quality dashboard's outlier tab and the Statistical Validity score
+use one detector (`biostats/outliers.py`) with the same defaults, so they flag the same rows for the same method
+and parameters.
+- **Statistical methods** analyse the continuous columns: numeric, nullable integers included, with more than two
+  values. A 0/1 column has no outliers, and the page lists the columns it did not analyse.
+- **ML methods** use the rows that are complete on the chosen columns: numbers standardised, categories one-hot
+  encoded, identifier-like text columns left out. A row with a missing value is not assessed, and the page says
+  how many. Missing values are not imputed first, because imputed values would then decide which rows are
+  flagged: impute them on Enrich if you want those rows assessed.
 
 ### Handling Strategies
 
@@ -134,7 +144,7 @@ Detect and manage outliers using six methods spanning statistical and machine le
 | --- | --- | --- |
 | **None** | All methods | Detect only — no modification. |
 | **Remove** | All methods | The impact analysis shows the statistics without the flagged rows; the action excludes those rows from the analysis population (no row is deleted). |
-| **Clip** | Z-Score, IQR, Quantile | The impact analysis shows the values capped at the detection bounds; the action clips them in the dataset. |
+| **Clip** | Z-Score, IQR, Quantile | The impact analysis shows the values capped at the detection bounds, exactly as the action clips them in the dataset (and as the replay of the trace does). |
 | **Tag** | All methods | Flags the rows without changing the statistics; the action is the same as for Remove. |
 
 ### Impact Analysis
