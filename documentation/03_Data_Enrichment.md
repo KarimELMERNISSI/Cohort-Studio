@@ -31,9 +31,11 @@ Merge additional data sources into your main dataset.
 5. **Review Results** — Inspect the enriched dataset, including column overlap and row counts.
 
 The enrichment file is read like an imported file, whether it is uploaded or given by its path: the delimiter, the
-decimal comma, the encoding and the missing-value tokens ("-", "?", "NA", ...) are detected the same way. The
-step records how the file was read (the sheet chosen, the sheets merged and their key), and the replay reads it
-again the same way. Date keys are matched as dates when the main dataset holds dates. A workbook given by its path
+decimal comma, the encoding and the missing-value tokens ("-", "?", "NA", ...) are detected the same way. For a
+text file, **How the file is read** shows the detected delimiter and decimal separator, and lets you choose others
+(space, or any single character under "other…"). It opens by itself when only one column is found. The step
+records how the file was read (the delimiter, the sheet chosen, the sheets merged and their key), and the replay
+reads it again the same way. Date keys are matched as dates when the main dataset holds dates. A workbook given by its path
 is read from its first sheet; upload it to choose another one.
 
 ---

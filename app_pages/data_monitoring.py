@@ -1,4 +1,4 @@
-﻿# pages/data_monitoring.py
+# pages/data_monitoring.py
 import json
 import os
 from io import BytesIO
@@ -22,6 +22,7 @@ from core.population import (
 from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import no_dataset
+from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
 from ui.state import get_state
 from utils.config_loader import create_empty_config, transform_expression
@@ -187,7 +188,9 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         )
         if uploaded_file is not None:
             try:
-                df = load_dataframe(uploaded_file)
+                # a text file: the delimiter and decimal separator, detected and changeable
+                options = csv_options(uploaded_file.getvalue(), uploaded_file.name, key=f"{tmp}_upload_read")
+                df = load_dataframe(uploaded_file, options)
                 st.success("Dataset successfully loaded.")
                 return df, uploaded_file.name
             except Exception as e:
@@ -212,7 +215,9 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
                 return None, None
             if os.path.exists(resolved_path):
                 try:
-                    df = load_dataframe(resolved_path)
+                    with open(resolved_path, "rb") as handle:
+                        options = csv_options(handle.read(), resolved_path, key=f"{tmp}_path_read")
+                    df = load_dataframe(resolved_path, options)
                     st.success("Dataset successfully loaded.")
                     return df, resolved_path
                 except Exception as e:

@@ -8,6 +8,7 @@ import pytest
 
 from core.state import ParseOptions
 from ingest.loaders import (
+    delimiter_label,
     detect_decimal,
     detect_delimiter,
     detect_encoding,
@@ -15,6 +16,7 @@ from ingest.loaders import (
     file_kind,
     read_path,
     read_table,
+    separator_problem,
     sniff,
 )
 
@@ -50,6 +52,72 @@ def test_delimiter_detection_prefers_consistency_and_decimal_comma_tiebreak() ->
     assert detect_decimal("x;y\n1,5;2\n", ";") == ","
     assert detect_decimal("x;y\n1.5;2\n", ";") == "."
     assert detect_decimal("x,y\n1.5,2\n", ",") == "."
+
+
+@pytest.mark.parametrize("sep", [":", "^", "~", "#", "!", "¦", "\x1f"])
+def test_a_rarer_delimiter_is_detected_when_none_of_the_usual_fits(sep: str) -> None:
+    """Some laboratory, HL7/EDI and older exports; the detect-delimiter package found them on two pages."""
+    text = (
+        sep.join(["id", "visit", "sbp"])
+        + "\n"
+        + "\n".join(sep.join([str(i), f"V{i}", str(120 + i)]) for i in range(1, 6))
+    )
+    assert detect_delimiter(text) == sep
+    result = read_table(text.encode("utf-8"), "lab_export.txt")
+    assert list(result.df.columns) == ["id", "visit", "sbp"] and result.df["sbp"].sum() == 615
+
+
+def test_a_quoted_time_does_not_hide_a_colon_delimiter() -> None:
+    assert detect_delimiter('id:time:sex\n1:"08:30":F\n2:"14:05":M\n') == ":"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("id,visit_time,age\n1,08:30:00,63\n2,14:05:00,71\n", ","),  # times hold colons
+        ("id;time;bmi\n1;08:30;24,5\n2;14:05;31,2\n", ";"),
+        ("id\ttime\tnote\n1\t08:30\tok!\n2\t14:05\tfine!\n", "\t"),
+        ('name,age\n"Smith, J",63\n"Doe, A",71\n', ","),  # commas inside quotes: csv.Sniffer
+        ("visit_time\n08:30\n14:05\n", ","),  # one column: the header holds no colon
+        ("note\n#1 first\n#2 second\n", ","),
+    ],
+)
+def test_files_read_before_are_read_the_same_way(text: str, expected: str) -> None:
+    assert detect_delimiter(text) == expected
+
+
+@pytest.mark.parametrize(
+    "options, problem",
+    [
+        (ParseOptions(sep=""), "Type the character"),
+        (ParseOptions(sep="::"), "one character"),
+        (ParseOptions(sep="x"), "letter or a digit"),
+        (ParseOptions(sep="7"), "letter or a digit"),
+        (ParseOptions(sep='"'), "Double quotes"),
+        (ParseOptions(sep=";", decimal=";"), "decimal separator"),
+        (ParseOptions(sep=" ", thousands=" "), "thousands separator"),
+    ],
+)
+def test_a_delimiter_that_cannot_separate_columns_is_refused(
+    options: ParseOptions, problem: str
+) -> None:
+    assert problem in (separator_problem(options) or "")
+    with pytest.raises(ValueError, match=problem):
+        read_table(b"a,b\n1,2\n", "file.csv", options)
+
+
+@pytest.mark.parametrize("sep", ["*", " ", "$", "\x1f"])
+def test_any_single_character_can_be_chosen(sep: str) -> None:
+    data = f"id{sep}group{sep}value\n1{sep}A{sep}2.5\n2{sep}B{sep}3.5\n".encode()
+    options = ParseOptions(sep=sep)
+    assert separator_problem(options) is None
+    frame = read_table(data, "file.txt", options).df
+    assert list(frame.columns) == ["id", "group", "value"] and frame["value"].sum() == 6.0
+
+
+def test_delimiters_are_named_on_the_page() -> None:
+    assert delimiter_label(";") == "semicolon ( ; )" and delimiter_label(" ") == "space"
+    assert delimiter_label("^") == "caret ( ^ )" and delimiter_label("*") == "'*'"
 
 
 def test_malformed_lines_are_counted_not_dropped_silently() -> None:

@@ -29,7 +29,23 @@ PARQUET_EXTENSIONS = {".parquet"}
 SUPPORTED_EXTENSIONS = sorted(CSV_EXTENSIONS | EXCEL_EXTENSIONS | PARQUET_EXTENSIONS)
 UPLOAD_TYPES = [ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS]  # for st.file_uploader(type=...)
 DELIMITER_CANDIDATES = (",", ";", "\t", "|")
-DELIMITER_LABELS = {",": "comma ( , )", ";": "semicolon ( ; )", "\t": "tab", "|": "pipe ( | )"}
+# Rarer delimiters of some exports (laboratory systems, HL7 and EDI files, older tools): detected only when none of
+# the usual ones fits. Any other single character can be chosen on the Import page.
+OTHER_DELIMITERS = (":", "^", "~", "#", "!", "¦", "\x1f")
+DELIMITER_LABELS = {
+    ",": "comma ( , )",
+    ";": "semicolon ( ; )",
+    "\t": "tab",
+    "|": "pipe ( | )",
+    " ": "space",
+    ":": "colon ( : )",
+    "^": "caret ( ^ )",
+    "~": "tilde ( ~ )",
+    "#": "hash ( # )",
+    "!": "exclamation mark ( ! )",
+    "¦": "broken bar ( ¦ )",
+    "\x1f": "unit separator (ASCII 31)",
+}
 
 
 @dataclass
@@ -122,29 +138,70 @@ def _sample_lines(text: str, limit: int = 20) -> list[str]:
     return lines[:limit]
 
 
+def _constant_counts(lines: list[str], candidates: tuple[str, ...]) -> dict[str, int]:
+    """The candidates found the same number of times (at least once) on every line, with that number."""
+    consistent: dict[str, int] = {}
+    for cand in candidates:
+        counts = [line.count(cand) for line in lines]
+        if min(counts) > 0 and len(set(counts)) == 1:
+            consistent[cand] = counts[0]
+    return consistent
+
+
+def _outside_quotes(line: str) -> str:
+    """The line without its double-quoted fields (a time in quotes holds colons that separate nothing)."""
+    return re.sub(r'"(?:[^"]|"")*"', "", line)
+
+
 def detect_delimiter(text: str) -> str:
     """
     The delimiter whose count is constant across the first 20 non-empty lines (the strongest
-    structural signal). Ties between ',' and ';' prefer ';' when decimal commas are present
-    (French/Luxembourgish exports). Falls back to csv.Sniffer, then to ','.
+    structural signal), among the usual ones (, ; tab |). Ties between ',' and ';' prefer ';' when
+    decimal commas are present (French/Luxembourgish exports). When none of them fits, a rarer one
+    (OTHER_DELIMITERS) with a constant count outside quoted fields; then csv.Sniffer; then ','.
+
+    The rarer delimiters are tried only where ',' used to be the answer by default, so a file read
+    correctly before is read the same way.
     """
     lines = _sample_lines(text)
     if not lines:
         return ","
     decimal_comma = re.search(r"\d,\d", text[:5000]) is not None
-    consistent: dict[str, int] = {}
-    for cand in DELIMITER_CANDIDATES:
-        counts = [line.count(cand) for line in lines]
-        if min(counts) > 0 and len(set(counts)) == 1:
-            consistent[cand] = counts[0]
+    consistent = _constant_counts(lines, DELIMITER_CANDIDATES)
     if consistent:
         if "," in consistent and ";" in consistent and decimal_comma:
             return ";"
         return max(consistent, key=lambda c: consistent[c])
+    rare = _constant_counts([_outside_quotes(line) for line in lines], OTHER_DELIMITERS)
+    if rare:
+        return max(rare, key=lambda c: rare[c])  # on a tie, the first of OTHER_DELIMITERS
     try:
         return csv.Sniffer().sniff(text[:5000], delimiters="".join(DELIMITER_CANDIDATES)).delimiter
     except Exception:
         return ","
+
+
+def delimiter_label(sep: str) -> str:
+    """How the Import page names a delimiter: 'comma ( , )', 'space', or the character itself."""
+    return DELIMITER_LABELS.get(sep) or f"'{sep}'"
+
+
+def separator_problem(options: ParseOptions) -> str | None:
+    """Why the delimiter of ``options`` cannot separate the columns of a text file, or None when it can."""
+    sep = options.sep
+    if not sep:
+        return "Type the character that separates the columns."
+    if len(sep) != 1:
+        return f"The delimiter is one character; {sep!r} has {len(sep)}."
+    if sep.isalnum():
+        return f"{sep!r} is a letter or a digit, which cannot separate columns."
+    if sep in '"\r\n':
+        return "Double quotes enclose text and line breaks end rows: neither can separate columns."
+    if sep == options.decimal:
+        return f"The delimiter and the decimal separator are both {sep!r}: choose different ones."
+    if options.thousands and sep == options.thousands:
+        return f"The delimiter and the thousands separator are both {sep!r}: choose different ones."
+    return None
 
 
 def detect_decimal(text: str, sep: str) -> str:
@@ -207,6 +264,8 @@ def _column_report(df: pd.DataFrame, report: ParseReport) -> None:
 def _read_csv(
     data: bytes, options: ParseOptions, report: ParseReport, nrows: int | None
 ) -> pd.DataFrame:
+    if problem := separator_problem(options):  # a typed delimiter, or a trace edited by hand
+        raise ValueError(problem)
     bad: list[list[str]] = []
 
     def _on_bad_line(fields: list[str]) -> None:
@@ -335,10 +394,12 @@ def read_path(path: str, options: ParseOptions | None = None) -> LoadResult:
 __all__ = [
     "DELIMITER_CANDIDATES",
     "DELIMITER_LABELS",
+    "OTHER_DELIMITERS",
     "SUPPORTED_EXTENSIONS",
     "UPLOAD_TYPES",
     "LoadResult",
     "ParseReport",
+    "delimiter_label",
     "detect_decimal",
     "detect_delimiter",
     "detect_encoding",
@@ -346,5 +407,6 @@ __all__ = [
     "file_kind",
     "read_path",
     "read_table",
+    "separator_problem",
     "sniff",
 ]

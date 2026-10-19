@@ -154,6 +154,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   keeps at most 8, for an hour.
 - **Versions & traces: Download the trace (JSON).** The selected trace downloads as recorded, so its integrity
   check passes on another machine. Before, the page offered only the Word report.
+- **Text files with an unusual delimiter.**
+  - When none of the usual delimiters (comma, semicolon, tab, pipe) fits, the import detects rarer ones from
+    laboratory, HL7 or older exports: colon, caret, tilde, hash, exclamation mark, broken bar, and the ASCII unit
+    separator. Files read correctly before are read the same way.
+  - The Import page offers **space** and **other…** (any single character). Enrich's external file and Validate's
+    Compare get the same choice in **How the file is read**, which opens by itself when only one column is found;
+    before, they had no way to change the delimiter.
+  - A delimiter that cannot work (a letter, a digit, a double quote, or the decimal or thousands separator) is
+    refused with the reason.
+  - The delimiter chosen is recorded with the step, and the replay reads the file the same way.
+  - Enrich and Compare used to read files given by their path with the `detect-delimiter` package, which found
+    colons and tildes but read semicolon files with decimal commas as one column. They now use the import engine,
+    and the package is no longer a dependency.
 
 ### Internal structure: one catalogue of trace steps
 

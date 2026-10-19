@@ -16,6 +16,21 @@ Data enters the application through **Data > Import** (a three-step flow: choose
 
 After loading, the dataset is displayed as an interactive preview with shape information (rows × columns) and data types per column.
 
+### Delimiters
+
+The import flow detects the delimiter of a text file. It finds the usual ones first: comma, semicolon, tab and pipe.
+When none of them fits, it tries rarer delimiters used by some laboratory, HL7 or older exports: colon, caret, tilde,
+hash, exclamation mark, broken bar and the ASCII unit separator. A delimiter is accepted when every line, the header
+included, holds it the same number of times, outside quoted text.
+
+To read the file with another delimiter, choose it under **Delimiter**:
+- **space**, for files written with spaces between the columns;
+- **other…**, then type any single character.
+
+A delimiter cannot be a letter, a digit, a double quote, or the decimal or thousands separator; the page says so
+and waits for another one. When only one column is read, the page suggests checking the delimiter. The options
+chosen are recorded in the trace, and the replay reads the file the same way.
+
 ---
 
 ## Dataset Statistics

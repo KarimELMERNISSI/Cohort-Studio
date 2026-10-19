@@ -57,8 +57,6 @@ cycler==0.12.1
     # via matplotlib
 deprecation==2.1.0
     # via lancedb
-detect-delimiter==0.1.1
-    # via cohortstudio
 distro==1.9.0
     # via
     #   google-genai

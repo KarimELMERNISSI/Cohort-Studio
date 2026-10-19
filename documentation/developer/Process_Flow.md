@@ -32,7 +32,9 @@ The data loading process sets up the trace and the dataset used throughout the a
 
 1. **Choose a file**: the user uploads a file (CSV/TSV/TXT, Excel or Parquet) on **Data > Import**.
 2. **Check how the file is read**: `sniff()` detects the encoding, delimiter and decimal separator, which the user can
-   override; `read_table()` parses the file and reports malformed lines and empty columns.
+   override (`ui/components/csv_options.py`: the usual delimiters, space, or any single character);
+   `separator_problem()` refuses a delimiter that cannot separate columns; `read_table()` parses the file and reports
+   malformed lines and empty columns.
 3. **Name and load**: `AppState.load_parsed()` calls `set_dataset()`:
     * A new trace session is started (`TransformationManager.initialize_session()`).
     * The source file is stored in the user's workspace (`<DATA_ROOT>/users/<username>/traces/artifacts/<session>/`).

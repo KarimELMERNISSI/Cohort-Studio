@@ -8,7 +8,6 @@ has no Streamlit dependency (pages render their own messages).
 from __future__ import annotations
 
 import hashlib
-import io
 import logging
 from typing import Any
 
@@ -17,8 +16,6 @@ import pandas as pd
 from core.state import ParseOptions
 from ingest.loaders import (
     LoadResult,
-    detect_decimal,
-    detect_delimiter,
     excel_sheet_names,
     file_kind,
     read_path,
@@ -37,38 +34,23 @@ def detect_encoding(file_content: bytes, num_lines: int = 100) -> str:
     return _detect_encoding(file_content)
 
 
-def detect_separator(text: str) -> str:
-    """The delimiter whose count is constant across the first lines."""
-    return detect_delimiter(text)
-
-
-def load_csv_with_separator(file_bytes: bytes, encoding: str, num_lines: int = 30) -> pd.DataFrame | None:
-    """CSV bytes -> DataFrame with detected delimiter and decimal separator; ``None`` on failure."""
-    try:
-        text = file_bytes[:200_000].decode(encoding, errors="replace")
-        sep = detect_delimiter(text)
-        return pd.read_csv(io.BytesIO(file_bytes), sep=sep, encoding=encoding, decimal=detect_decimal(text, sep), on_bad_lines="warn")
-    except Exception as exc:
-        logger.error("Error loading CSV: %s", exc)
-        return None
-
-
 def _with_options(result: LoadResult) -> pd.DataFrame:
     """The table, carrying the options it was parsed with (recorded by the step that uses it, for the replay)."""
     result.df.attrs["parse_options"] = result.options.to_dict()
     return result.df
 
 
-def load_dataframe(uploaded_file: Any) -> pd.DataFrame | dict | None:
+def load_dataframe(uploaded_file: Any, options: ParseOptions | None = None) -> pd.DataFrame | dict | None:
     """
-    DataFrame from a Streamlit upload or a file path. A multi-sheet workbook uploaded returns the sentinel
+    DataFrame from a Streamlit upload or a file path, read with ``options`` (the ones the user chose in
+    ``ui.components.csv_options``; detected when omitted). A multi-sheet workbook uploaded returns the sentinel
     ``{"__multi_sheet__": True, "sheet_names": [...]}`` so the caller can ask which sheets to load; a workbook read
     by path gives its first sheet, as the replay does. A file that cannot be read by path raises.
     """
     if uploaded_file is None:
         return None
     if isinstance(uploaded_file, str):
-        return _with_options(read_path(uploaded_file))
+        return _with_options(read_path(uploaded_file, options))
     name = getattr(uploaded_file, "name", "upload.csv")
     data = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
     try:
@@ -85,7 +67,7 @@ def load_dataframe(uploaded_file: Any) -> pd.DataFrame | dict | None:
             sheets = excel_sheet_names(data)
             if len(sheets) > 1:
                 return {"__multi_sheet__": True, "sheet_names": sheets}
-        return _with_options(read_table(data, name))
+        return _with_options(read_table(data, name, options))
     except Exception as exc:
         logger.error("Error loading file %s: %s", name, exc)
         return None
@@ -107,5 +89,4 @@ def get_file_hash(uploaded_file: Any) -> str:
     return hashlib.md5(uploaded_file.getvalue()).hexdigest()
 
 
-__all__ = ["_load_excel_with_selection", "create_empty_config", "detect_encoding", "detect_separator", "get_file_hash",
-           "load_csv_with_separator", "load_dataframe"]
+__all__ = ["_load_excel_with_selection", "create_empty_config", "detect_encoding", "get_file_hash", "load_dataframe"]

@@ -3,6 +3,7 @@
 from ingest.loaders import (
     LoadResult,
     ParseReport,
+    delimiter_label,
     detect_decimal,
     detect_delimiter,
     detect_encoding,
@@ -10,12 +11,14 @@ from ingest.loaders import (
     file_kind,
     read_path,
     read_table,
+    separator_problem,
     sniff,
 )
 
 __all__ = [
     "LoadResult",
     "ParseReport",
+    "delimiter_label",
     "detect_decimal",
     "detect_delimiter",
     "detect_encoding",
@@ -23,5 +26,6 @@ __all__ = [
     "file_kind",
     "read_path",
     "read_table",
+    "separator_problem",
     "sniff",
 ]

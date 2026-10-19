@@ -29,6 +29,7 @@ from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_profile
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
+from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
 from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
@@ -185,7 +186,9 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
                     file_path = saved_path
                     uploaded_file.seek(0) # Reset for loading
 
-                result = load_dataframe(uploaded_file)
+                # a text file: the delimiter and decimal separator, detected and changeable (recorded for the replay)
+                options = csv_options(uploaded_file.getvalue(), uploaded_file.name, key="enrichment_upload_read")
+                result = load_dataframe(uploaded_file, options)
                 
                 # Handle multi-sheet Excel
                 if isinstance(result, dict) and result.get("__multi_sheet__"):
@@ -220,7 +223,10 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
         file_path_input = st.text_input("Enter file path for the enrichment dataset:", value=file_path, key='enrichment_data_path')
         if file_path_input:
             try:
-                df = load_dataframe(_workspace_path(file_path_input))
+                path = _workspace_path(file_path_input)
+                with open(path, "rb") as handle:
+                    options = csv_options(handle.read(), path, key="enrichment_path_read")
+                df = load_dataframe(path, options)
                 st.success("Enrichment dataset successfully loaded from provided path.")
                 return df, file_name
             except Exception as e:

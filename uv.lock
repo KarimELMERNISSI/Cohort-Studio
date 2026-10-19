@@ -341,7 +341,6 @@ source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
     { name = "charset-normalizer" },
-    { name = "detect-delimiter" },
     { name = "duckdb" },
     { name = "matplotlib" },
     { name = "networkx" },
@@ -421,7 +420,6 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "charset-normalizer", specifier = ">=3.5.0" },
     { name = "cohortstudio", extras = ["ai", "ml", "survival"], marker = "extra == 'all'" },
-    { name = "detect-delimiter", specifier = ">=0.1.1" },
     { name = "duckdb", specifier = ">=1.5.0" },
     { name = "google-genai", marker = "extra == 'ai'", specifier = ">=2.29.0" },
     { name = "httpx", marker = "extra == 'ai'", specifier = ">=0.28" },
@@ -685,15 +683,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5a/d3/8ae2869247df154b64c1884d7346d412fed0c49df84db635aab2d1c40e62/deprecation-2.1.0.tar.gz", hash = "sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff", size = 173788, upload-time = "2020-04-20T14:23:38.738Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/c3/253a89ee03fc9b9682f1541728eb66db7db22148cd94f89ab22528cd1e1b/deprecation-2.1.0-py2.py3-none-any.whl", hash = "sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a", size = 11178, upload-time = "2020-04-20T14:23:36.581Z" },
-]
-
-[[package]]
-name = "detect-delimiter"
-version = "0.1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/71/ab/ded22fabeed1ca8cebde72f2ca0a69fdefdf2c565f5dab3e37135771ce70/detect_delimiter-0.1.1.tar.gz", hash = "sha256:dd184bb06a4e1b1b6998cb32977b6f5a39536d8e6508c923b1730a80521e3a29", size = 3100, upload-time = "2018-07-29T04:43:36.796Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/6f/a2f175429daf03493cbb76e63fbb5681202a259ffe47c015457dcb18cf37/detect_delimiter-0.1.1-py3-none-any.whl", hash = "sha256:f5284821c65eb09acd3530ef4352535e37b2929522a5e11a72d571d7aba62a5d", size = 3582, upload-time = "2018-07-29T04:43:35.55Z" },
 ]
 
 [[package]]

@@ -13,16 +13,16 @@ import streamlit as st
 
 from core.state import DEFAULT_NA_TOKENS, ParseOptions, dataset_base_name, file_checksum
 from ingest.loaders import (
-    DELIMITER_CANDIDATES,
-    DELIMITER_LABELS,
     UPLOAD_TYPES,
     LoadResult,
     excel_sheet_names,
     file_kind,
     read_table,
+    separator_problem,
     sniff,
 )
 from ui.components import error_card, page_link, section
+from ui.components.csv_options import delimiter_input
 from ui.state import AppState
 
 ENCODINGS = ("utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-15", "utf-16")
@@ -89,16 +89,8 @@ def _render_options(draft: dict[str, Any]) -> ParseOptions:
             key=f"imp_enc_{draft['file_id']}",
             help="Detected automatically; change it if accents look wrong in the preview.",
         )
-        sep_index = (
-            DELIMITER_CANDIDATES.index(current.sep) if current.sep in DELIMITER_CANDIDATES else 0
-        )
-        fields["sep"] = c2.radio(
-            "Delimiter",
-            DELIMITER_CANDIDATES,
-            index=sep_index,
-            format_func=lambda s: DELIMITER_LABELS[s],
-            key=f"imp_sep_{draft['file_id']}",
-            help="The character between columns.",
+        fields["sep"] = delimiter_input(
+            current.sep, key=f"imp_sep_{draft['file_id']}", container=c2
         )
         fields["decimal"] = c3.radio(
             "Decimal separator",
@@ -262,9 +254,17 @@ def render_import_flow(state: AppState) -> None:
     section("2. Check how the file is read")
     options = _render_options(draft)
     draft["options"] = options
+    if draft["kind"] == "csv" and (problem := separator_problem(options)):
+        st.info(problem, icon=":material/keyboard:")
+        return
     result = _parse(draft, options)
     if result is None:
         return
+    if draft["kind"] == "csv" and result.report.n_cols <= 1:
+        st.warning(
+            "Only one column was read: check the delimiter above ('other…' takes any character).",
+            icon=":material/view_column:",
+        )
     _render_preview(result)
 
     section("3. Name and load")

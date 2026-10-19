@@ -127,6 +127,22 @@ def test_an_enrichment_read_by_path_replays(tmp_path: Path, files: dict[str, Pat
     _replays(tm, session)
 
 
+@pytest.mark.parametrize("sep, chosen", [("^", False), ("*", True)])
+def test_an_enrichment_with_an_unusual_delimiter_replays(tmp_path: Path, sep: str, chosen: bool) -> None:
+    """'^' is detected; '*' is chosen by the user ('How the file is read'): the replay reads the file the same way."""
+    from core.state import ParseOptions
+
+    path = tmp_path / "lab_export.txt"
+    path.write_text(f"id{sep}potassium\n1{sep}4,1\n2{sep}3,9\n3{sep}5,2\n", encoding="utf-8")
+    options = ParseOptions(sep=sep, decimal=",") if chosen else None
+    labs = load_dataframe(str(path), options)
+    assert labs.attrs["parse_options"]["sep"] == sep and labs["potassium"].tolist() == [4.1, 3.9, 5.2]
+    main = pd.DataFrame({"id": [1, 2, 3, 4], "age": [50, 61, 72, 45]})
+    tm, session = _record(tmp_path, main, labs, path, ["id"])
+    assert session.base["potassium"].notna().sum() == 3
+    _replays(tm, session)
+
+
 def test_an_enrichment_from_a_chosen_sheet_replays(tmp_path: Path, files: dict[str, Path]) -> None:
     data = files["workbook"].read_bytes()
     labs = _load_excel_with_selection(data, ["cover", "labs"], ["labs"])

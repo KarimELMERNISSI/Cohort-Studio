@@ -183,6 +183,9 @@ Compare two dataset versions side by side. Data sources include:
 - **Enter File Path** — direct path to a file on disk.
 - **Select from History** — pick a snapshot from past trace sessions.
 
+A text file, uploaded or given by its path, is read with the detected delimiter and decimal separator. **How the
+file is read** lets you choose others, as on the Import page.
+
 The comparison highlights differences in shape, column overlap, and value-level changes.
 
 ---
