@@ -3,10 +3,25 @@ import os
 
 import pandas as pd  # for Dataframes manipulation
 
-import manage.file_handling as mf
 from core.fingerprint import ROW_ID, extend_row_ids
+from ingest.loaders import read_path
+from utils.date_parser import smart_parse_dates
 
 logger = logging.getLogger(__name__)
+
+
+def align_date_keys(main_df, additional_df):
+    """
+    The additional table with its columns parsed as dates where the main table holds dates under the same name,
+    so that date keys match in the merge. The Enrich page and the replay of the step both call it, on the same
+    tables, so they merge the same rows.
+    """
+    aligned = additional_df.copy()
+    aligned.attrs = dict(additional_df.attrs)
+    for col in aligned.columns:
+        if col in main_df.columns and pd.api.types.is_datetime64_any_dtype(main_df[col]):
+            aligned[col], _ = smart_parse_dates(aligned[col])
+    return aligned
 
 
 def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
@@ -157,10 +172,11 @@ def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=Non
                 logging.warning("Additional DataFrame is empty. Returning the original DataFrame.")
                 return df
 
-            # Filter columns if additional_cols is specified
+            # Filter columns if additional_cols is specified, in the additional table's order: the order of a set
+            # of names changes with Python's hash seed, so the merged columns would change order on replay
             if additional_cols is not None:
                 cols_to_keep = set(additional_cols).union(set(right_id_names))
-                additional_df = additional_df[list(cols_to_keep)]
+                additional_df = additional_df[[c for c in additional_df.columns if c in cols_to_keep]]
 
             # Determine suffixes based on conflict_resolution
             if conflict_resolution == 'replace':
@@ -232,7 +248,7 @@ def process_data_enrichment(df, additional_data_info):
                     right_id_names = [right_id_names]
 
             logging.info(f"Processing additional data file: {input_file}")
-            additional_df = mf.load_dataframe(input_file)
+            additional_df = read_path(input_file).df
 
             if not additional_df.empty:
                 enriched_df = add_data(df=df, additional_df=additional_df, left_id_names=left_id_names, right_id_names=right_id_names, additional_cols=additional_cols, strategy=strategy, conflict_resolution=conflict_resolution)

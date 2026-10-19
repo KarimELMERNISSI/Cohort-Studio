@@ -155,9 +155,13 @@ def _enrichment(df, step, index, overrides, warnings):
     resolved = _resolve(enrichment_file_path, overrides)
     if not resolved:
         return df, str(enrichment_file_path)
-    enrichment_df = _read_any(resolved)
+    # read as the page read it (the sheet, merge key, separator and decimal recorded with the step), then the date
+    # keys parsed as the page parsed them
+    recorded = params.get("parse_options")
+    enrichment_df = _read_any(resolved, ParseOptions.from_dict(recorded) if recorded else None)
     if enrichment_df is None:
         raise ValueError(f"could not read enrichment file {resolved}")
+    enrichment_df = eed.align_date_keys(df, enrichment_df)
     identifier = params.get("identifier") or params.get("left_id_names")
     left_ids = [identifier] if isinstance(identifier, str) else list(identifier or [])
     right = params.get("right_id_names") or left_ids

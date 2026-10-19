@@ -30,6 +30,12 @@ Merge additional data sources into your main dataset.
 4. **Configure Merge** — Select the join key(s) and merge type (inner, left, right, outer).
 5. **Review Results** — Inspect the enriched dataset, including column overlap and row counts.
 
+The enrichment file is read like an imported file, whether it is uploaded or given by its path: the delimiter, the
+decimal comma, the encoding and the missing-value tokens ("-", "?", "NA", ...) are detected the same way. The
+step records how the file was read (the sheet chosen, the sheets merged and their key), and the replay reads it
+again the same way. Date keys are matched as dates when the main dataset holds dates. A workbook given by its path
+is read from its first sheet; upload it to choose another one.
+
 ---
 
 ## Handle Missing Data
@@ -230,6 +236,9 @@ column that repeats the value on every row.
 ### Naming Convention
 
 All new columns follow a configurable naming pattern (e.g. `{method_applied}_{initial_variable}`) to maintain traceability.
+A name already in the table gets the first free suffix (`age_Z-Score_Standardization_1`), and the replay of the
+trace gives the same names. The stochastic methods (PCA, t-SNE, UMAP, FAMD, the clustering methods) are seeded, so
+their replay gives the same values.
 
 ---
 

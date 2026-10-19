@@ -4,7 +4,7 @@ import os  # for path etc
 
 import pandas as pd  # for Dataframes manipulation
 
-import manage.file_handling as mf
+from ingest.loaders import read_path
 
 logger = logging.getLogger(__name__)
 
@@ -166,9 +166,9 @@ def process_comparison(comparison_name, comparison_info, config, exclude_cols=No
             os.makedirs(comparison_folder)
 
         logging.info(f"Processing outliers file: {input_file_1}")
-        df1 = mf.load_dataframe(input_file_1)
+        df1 = read_path(input_file_1).df
         logging.info(f"Processing outliers file: {input_file_2}")
-        df2 = mf.load_dataframe(input_file_2)
+        df2 = read_path(input_file_2).df
 
         if exclude_cols is not None:
             cols_to_drop_df1 = [col for col in exclude_cols if col in df1.columns]

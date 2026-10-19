@@ -32,7 +32,6 @@ from ui.components.staging import render_draft_banner
 from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
-from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
 from utils.logging_config import single_line
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
@@ -303,11 +302,9 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             st.warning("No common columns found between datasets!")
             return None
         
-        # Preprocess enrichment data to match date format of the main dataset
-        for col in enrichment_df.columns:
-            if col in main_df.columns and pd.api.types.is_datetime64_any_dtype(main_df[col]):
-                enrichment_df[col], _ = smart_parse_dates(enrichment_df[col])
-        
+        # date keys parsed as in the main dataset (the replay of the step does the same)
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df)
+
         identifier = st.multiselect(
             "Select Common Row Identifier",
             options=common_columns,
@@ -319,8 +316,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 # Ensure right_identifier is a set for compatibility with the subtraction operation
                 identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
 
-                # Compute additional columns
-                additional_columns = list(set(enrichment_df.columns) - identifier_set)
+                # Compute additional columns, in the enrichment table's order (as the replay does)
+                additional_columns = [c for c in enrichment_df.columns if c not in identifier_set]
 
                 enriched_df = eed.add_data(
                     df=main_df, additional_df=enrichment_df, 
@@ -334,6 +331,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": enrichment_file_path,
+                        "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
                         "identifier": identifier,
@@ -351,10 +349,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
     else:
         col1, col2 = st.columns(2)
         
-        # Preprocess enrichment data to match date format of the main dataset
-        for col in enrichment_df.columns:
-            if col in main_df.columns and pd.api.types.is_datetime64_any_dtype(main_df[col]):
-                enrichment_df[col], _ = smart_parse_dates(enrichment_df[col])
+        # date keys parsed as in the main dataset (the replay of the step does the same)
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df)
 
         with col1:
             left_identifier = st.multiselect(
@@ -374,8 +370,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 # Ensure right_identifier is a set for compatibility with the subtraction operation
                 right_identifier_set = {right_identifier} if isinstance(right_identifier, str) else set(right_identifier)
 
-                # Compute additional columns
-                additional_columns = list(set(enrichment_df.columns) - right_identifier_set)
+                # Compute additional columns, in the enrichment table's order (as the replay does)
+                additional_columns = [c for c in enrichment_df.columns if c not in right_identifier_set]
 
                 enriched_df = eed.add_data(
                     df=main_df, additional_df=enrichment_df, 
@@ -397,6 +393,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": enrichment_file_path,
+                        "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
                         "left_id_names": left_identifier,

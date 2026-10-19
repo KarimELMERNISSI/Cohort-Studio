@@ -60,6 +60,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Operators are read without regard to case: `"All"` made an inclusion family an exclusion family.
   - An uploaded configuration with an unknown operator or an ambiguous rule is refused, with the list of its problems.
   - The legacy helpers (`enrich/custom_metrics_and_filters.py`) are removed.
+- **Files read for an enrichment (and for Compare data files) go through the import engine.** A file given by its
+  path went through a legacy loader, which the replay did not use:
+  - a semicolon file with decimal commas came out as one column;
+  - "-" and "?" stayed text on the page, but were missing values on replay;
+  - a chosen sheet replayed as the first sheet;
+  - date keys were parsed on the page only, so the replay skipped the merge;
+  - the merged columns changed order with Python's hash seed.
+
+  Now every entry point reads with the import engine, the enrichment step records how the file was read, the
+  replay reads it the same way and parses the date keys the same way, and the merged columns keep the file's order.
+  The legacy loader (`manage/file_handling.py`) is removed.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

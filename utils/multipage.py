@@ -1,5 +1,7 @@
 """
-Legacy loader entry points used by the pages. Parsing lives in :mod:`ingest.loaders`; this module
+Loader entry points used by the pages. Parsing lives in :mod:`ingest.loaders`, the engine the import and the
+replay use, so a file read here, by upload or by path, gives the table the replay will read again. Each table
+carries the options it was parsed with in ``df.attrs["parse_options"]``, for the step that records it. This module
 has no Streamlit dependency (pages render their own messages).
 """
 
@@ -12,13 +14,14 @@ from typing import Any
 
 import pandas as pd
 
-import manage.file_handling as mf
 from core.state import ParseOptions
 from ingest.loaders import (
+    LoadResult,
     detect_decimal,
     detect_delimiter,
     excel_sheet_names,
     file_kind,
+    read_path,
     read_table,
 )
 from ingest.loaders import detect_encoding as _detect_encoding
@@ -50,15 +53,22 @@ def load_csv_with_separator(file_bytes: bytes, encoding: str, num_lines: int = 3
         return None
 
 
+def _with_options(result: LoadResult) -> pd.DataFrame:
+    """The table, carrying the options it was parsed with (recorded by the step that uses it, for the replay)."""
+    result.df.attrs["parse_options"] = result.options.to_dict()
+    return result.df
+
+
 def load_dataframe(uploaded_file: Any) -> pd.DataFrame | dict | None:
     """
-    DataFrame from a Streamlit upload or a file path. A multi-sheet workbook returns the sentinel
-    ``{"__multi_sheet__": True, "sheet_names": [...]}`` so the caller can ask which sheets to load.
+    DataFrame from a Streamlit upload or a file path. A multi-sheet workbook uploaded returns the sentinel
+    ``{"__multi_sheet__": True, "sheet_names": [...]}`` so the caller can ask which sheets to load; a workbook read
+    by path gives its first sheet, as the replay does. A file that cannot be read by path raises.
     """
     if uploaded_file is None:
         return None
     if isinstance(uploaded_file, str):
-        return mf.load_dataframe(uploaded_file)
+        return _with_options(read_path(uploaded_file))
     name = getattr(uploaded_file, "name", "upload.csv")
     data = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
     try:
@@ -75,7 +85,7 @@ def load_dataframe(uploaded_file: Any) -> pd.DataFrame | dict | None:
             sheets = excel_sheet_names(data)
             if len(sheets) > 1:
                 return {"__multi_sheet__": True, "sheet_names": sheets}
-        return read_table(data, name).df
+        return _with_options(read_table(data, name))
     except Exception as exc:
         logger.error("Error loading file %s: %s", name, exc)
         return None
@@ -86,7 +96,7 @@ def _load_excel_with_selection(file_bytes: bytes, sheet_names: list, selected_sh
     """One sheet, or several merged on ``merge_key`` (outer join) or stacked when no key is given."""
     try:
         options = ParseOptions(sheets=tuple(selected_sheets), merge_key=merge_key)
-        return read_table(file_bytes, "workbook.xlsx", options).df
+        return _with_options(read_table(file_bytes, "workbook.xlsx", options))
     except Exception as exc:
         logger.error("Error loading Excel sheets: %s", exc)
         return None
