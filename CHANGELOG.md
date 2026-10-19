@@ -189,6 +189,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     row's values, and bars or boxes showed the first rows' values.
   - The columns now go to Plotly Express, which matches them to the points of each trace. The choice is offered where
     each point is one row: scatter plots (points or regression), and line plots without aggregation or interval band.
+- **Group comparison pooled over the imputed datasets: Test selection.** *Recommended* keeps the automatic choice.
+  *Choose the method* lets a numeric variable in two groups be compared with Student's t-test (equal variances)
+  instead of Welch's, pooled the same way. A warning says why Welch's is recommended, and the summary and the
+  dossier mark the test as chosen. The page says which analyses have no pooled alternative (three or more groups,
+  categorical variables) and which have no pooling rule (rank tests, Fisher's exact test).
 
 ### Internal structure: one catalogue of trace steps
 

@@ -46,10 +46,18 @@ NOT_POOLED = (
 )
 ANALYSIS_NAMES = {
     "welch": "Welch t-test",
+    "student": "Student t-test (equal variances, chosen)",
     "anova": "Linear model on the groups (D1)",
     "twobytwo": "2x2: odds ratio (Wald on the pooled log OR)",
     "chisq": "Chi-square test of independence (D2)",
 }
+# The pooled analyses a user can choose instead of the recommended one (numeric variable, two groups); the others
+# have a single pooled analysis, and rank tests and Fisher's exact test none (NOT_POOLED)
+TWO_GROUP_TESTS = {"welch": "Welch t-test (recommended)", "student": "Student t-test (equal variances)"}
+STUDENT_WARNING = (
+    "Student's t-test assumes equal variances in the two groups. Welch's t-test does not, and loses little power "
+    "when they are equal (Delacre 2017): it is the recommended test. Report why you chose Student's."
+)
 
 
 @dataclass
@@ -84,28 +92,38 @@ def _columns(mi, analyzer) -> tuple[list[str], list[str], list[str]]:
 
 
 def compare_pooled(
-    mi, group: str, levels: list[str], target: str, *, numeric: bool, haldane: str = "if_zero"
+    mi,
+    group: str,
+    levels: list[str],
+    target: str,
+    *,
+    numeric: bool,
+    haldane: str = "if_zero",
+    two_groups: str = "welch",
 ) -> Pooled:
     """
     Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
 
     ``haldane="always"`` adds 0.5 to every cell of every 2x2 table (a sensitivity analysis): without it, a zero
-    cell in some imputed datasets leaves the odds and risk ratios unpooled.
+    cell in some imputed datasets leaves the odds and risk ratios unpooled. ``two_groups`` is the t-test of a
+    numeric variable in two groups: Welch's (recommended) or Student's (equal variances), both pooled the same way.
     """
+    if two_groups not in TWO_GROUP_TESTS:
+        raise ValueError(f"two_groups is one of {list(TWO_GROUP_TESTS)}, not {two_groups!r}")
     columns = [group, target]
     if numeric and len(levels) == 2:
         reference = detect_reference_level(levels) or levels[0]
         comparison = next(lvl for lvl in levels if lvl != reference)
 
-        def welch(data: pd.DataFrame):
+        def t_test(data: pd.DataFrame):
             data = data.dropna(subset=columns)
             key = data[group].astype(str)
             groups = {lvl: data.loc[key == lvl, target] for lvl in (reference, comparison)}
-            res = compare_groups(groups, kind="welch", reference=reference, effect_sizes=False)
-            # Welch is the pooled analysis by design: the "selected manually" note would only be noise
+            res = compare_groups(groups, kind=two_groups, reference=reference, effect_sizes=False)
+            # the page says which test was chosen, and why Welch is recommended: no note on every dataset
             return res.model_copy(update={"warnings": [w for w in res.warnings if "selected manually" not in w]})
 
-        return Pooled("welch", analyze_mi(welch, mi, columns=columns), reference, comparison)
+        return Pooled(two_groups, analyze_mi(t_test, mi, columns=columns), reference, comparison)
     if numeric:
         return Pooled(
             "anova",
@@ -152,7 +170,7 @@ def compare_pooled(
 def _summary_row(target: str, item: Pooled, group: str) -> dict[str, Any]:
     res = item.result
     row: dict[str, Any] = {"variable": target, "analysis": ANALYSIS_NAMES[item.kind], "estimate_label": ""}
-    if item.kind == "welch":
+    if item.kind in ("welch", "student"):
         test = res.extra["result"]
         row |= {
             "estimate_label": f"mean difference ({item.comparison} - {item.reference})",
@@ -295,7 +313,9 @@ def _show_means(means: pd.DataFrame, *, label: str) -> None:
 
 def _show_detail(target: str, item: Pooled, group: str) -> None:
     res = item.result
-    if item.kind == "welch":
+    if item.kind in ("welch", "student"):
+        if item.kind == "student":
+            st.warning(STUDENT_WARNING, icon=":material/rule:")
         result_card(res.extra["result"])
         show_mi_notes(res, complete_case=result_card)
     elif item.kind == "anova":
@@ -375,11 +395,35 @@ def run_pooled_comparison(mi, analyzer) -> None:
             )
             else "if_zero"
         )
-        st.caption(
-            "Numeric variables: Welch t-test (two groups) or a linear model with a D1 test (three or more groups). "
-            "Categorical variables: odds ratio, risk ratio and risk difference (two groups, two categories) or the "
-            "chi-square test by D2."
+        selection = c1.radio(
+            "Test selection",
+            ["Recommended", "Choose the method"],
+            horizontal=True,
+            key="mi_cmp_selection",
+            help="The analyses offered are those with a pooling rule over the imputed datasets.",
         )
+        two_groups = "welch"
+        if selection == "Choose the method":
+            two_groups = c1.selectbox(
+                "Numeric variable, two groups",
+                list(TWO_GROUP_TESTS),
+                format_func=TWO_GROUP_TESTS.get,
+                key="mi_cmp_two_groups",
+            )
+            if two_groups != "welch":
+                st.warning(STUDENT_WARNING, icon=":material/rule:")
+            st.caption(
+                "The other variables have one pooled analysis: a linear model with a D1 test (numeric, three groups "
+                "or more; Welch's ANOVA has no pooling rule); odds ratio, risk ratio and risk difference (two groups, "
+                "two categories); otherwise the chi-square test by D2. Rank tests and Fisher's exact test have no "
+                "pooling rule (below): run them on the observed data."
+            )
+        else:
+            st.caption(
+                "Numeric variables: Welch t-test (two groups) or a linear model with a D1 test (three or more "
+                "groups). Categorical variables: odds ratio, risk ratio and risk difference (two groups, two "
+                "categories) or the chi-square test by D2."
+            )
     with st.expander("Rank tests and Fisher's exact test are not pooled"):
         for key, label in NOT_POOLED:
             entry = not_poolable(key)
@@ -392,7 +436,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
         st.warning("Select at least two groups.")
         return
 
-    config = (group, tuple(levels), tuple(targets), correction, haldane, mi_token(get_state()))
+    config = (group, tuple(levels), tuple(targets), correction, haldane, two_groups, mi_token(get_state()))
     if st.button("Run pooled analysis", type="primary", key="mi_cmp_run"):
         results: dict[str, Pooled] = {}
         errors: dict[str, str] = {}
@@ -400,7 +444,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
         for i, target in enumerate(targets):
             try:
                 results[target] = compare_pooled(
-                    mi, group, levels, target, numeric=target in numeric, haldane=haldane
+                    mi, group, levels, target, numeric=target in numeric, haldane=haldane, two_groups=two_groups
                 )
             except Exception as exc:
                 errors[target] = f"{type(exc).__name__}: {exc}"

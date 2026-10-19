@@ -129,6 +129,31 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
     app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
 
 
+def test_the_pooled_two_group_test_can_be_chosen_with_a_warning(app: AppTest) -> None:
+    """Recommended (Welch) or chosen: Student's t-test, pooled the same way, with why Welch is recommended."""
+    from manage.report_tables import _pooled_comparison_blocks
+
+    app.session_state["analysis_data_mode"] = "multiple"
+    app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
+    app.switch_page(nav.page_path("analyze")).run()
+    _ok(app)
+    app.selectbox(key="mi_cmp_group").select("arm").run()
+    app.multiselect(key="mi_cmp_targets").set_value(["hba1c_pct"]).run()
+    assert app.radio(key="mi_cmp_selection").value == "Recommended"
+    app.radio(key="mi_cmp_selection").set_value("Choose the method").run()
+    assert app.selectbox(key="mi_cmp_two_groups").value == "welch"
+    app.selectbox(key="mi_cmp_two_groups").select("student").run()
+    assert any("Student's t-test assumes equal variances" in w.value for w in app.warning)
+    app.button(key="mi_cmp_run").click().run()
+    _ok(app)
+    item = _stored(app, "univariate_mi")["results"]["hba1c_pct"]
+    test = item.result.extra["result"]
+    assert item.kind == "student" and "Student" in test.name and test.mi.m == 3
+    _, table = _pooled_comparison_blocks(_stored(app, "univariate_mi")).tables[0]  # the dossier
+    assert table["Analysis"].tolist() == ["Student t-test (equal variances, chosen)"]
+    app.radio(key="mi_cmp_selection").set_value("Recommended").run()
+
+
 def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     app.session_state["analysis_data_mode"] = "multiple"
     app.switch_page(nav.page_path("analyze")).run()

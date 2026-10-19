@@ -309,11 +309,10 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
     rows = []
     for target, item in (value.get("results") or {}).items():
         res = item.result
-        if item.kind == "welch":
+        if item.kind in ("welch", "student"):
             test = res.extra["result"]
-            rows.append(
-                {"Variable": target, "Analysis": "Welch t-test", "Result": _test_line(test)}
-            )
+            analysis = "Welch t-test" if item.kind == "welch" else "Student t-test (equal variances, chosen)"
+            rows.append({"Variable": target, "Analysis": analysis, "Result": _test_line(test)})
             blocks.references.extend(test.references)
         elif item.kind == "anova":
             group = next(iter(res.tests))

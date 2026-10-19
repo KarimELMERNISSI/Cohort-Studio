@@ -194,6 +194,13 @@ with Rubin's rules (van Buuren 2018). The complete-case analysis is shown under 
 | Hypothesis tests > Analysis | Welch t-test (two groups); group means and a D1 test (three or more groups); odds ratio, risk ratio and risk difference (binary variable); chi-square test of independence (D2); ANCOVA (Type II tests by D1, adjusted means, R2 by Harel's method) |
 | Hypothesis tests > Paired, rates & stratified | paired and one-sample t-tests |
 
+**Test selection.** The group comparison pooled over the imputed datasets uses the recommended analysis by
+default. With *Choose the method*, a numeric variable in two groups can be compared with Student's t-test (equal
+variances) instead of Welch's, pooled the same way. The page then warns that Welch's test is recommended: it does
+not assume equal variances and loses little power when they are equal (Delacre 2017). The summary and the study
+dossier mark the test as chosen. The other variables have a single pooled analysis, and rank tests and Fisher's
+exact test have no pooling rule: run them on the observed data.
+
 How to read a pooled table:
 
 - **df**: Barnard-Rubin degrees of freedom. They are small when the imputed datasets disagree.
