@@ -253,6 +253,52 @@ def test_two_by_two_pools_ratios_and_the_chi_square() -> None:
     assert result.tests["chi_square"].method == "D2" and result.complete_case is None
 
 
+def zero_cell_mi() -> MIData:
+    """Arm B has no observed event and two missing outcomes: a zero cell in 2 of the 5 imputed datasets."""
+    base = pd.DataFrame(
+        {"arm": ["A"] * 20 + ["B"] * 20, "y": [1.0] * 6 + [0.0] * 14 + [0.0] * 18 + [np.nan] * 2}
+    )
+    completed = []
+    for fill in ([0, 0], [1, 0], [0, 1], [0, 0], [1, 1]):
+        c = base.copy()
+        c.loc[c["y"].isna(), "y"] = fill
+        completed.append(c)
+    return MIData.from_completed(base, completed, methods={"y": "logreg"})
+
+
+def arm_table(d: pd.DataFrame, haldane: str = "if_zero"):
+    exposed, event = d["arm"] == "B", d["y"] == 1
+    counts = TwoByTwo(
+        a=int((exposed & event).sum()),
+        b=int((exposed & ~event).sum()),
+        c=int((~exposed & event).sum()),
+        d=int((~exposed & ~event).sum()),
+    )
+    return analyze_twobytwo(counts, haldane="always" if haldane == "always" else "if_zero")
+
+
+def test_a_zero_cell_in_some_imputed_datasets_leaves_the_ratios_unpooled() -> None:
+    # the +0.5 correction applied in 2 datasets only: pooling the ratios would mix two estimators (M5)
+    result = analyze_mi(arm_table, zero_cell_mi(), complete_case=False)
+    assert result.table is not None and result.table.names == ["risk_difference"]
+    assert any(
+        w.startswith(
+            "Odds ratio and risk ratio not pooled: a cell is zero in 2 of 5 imputed datasets"
+        )
+        for w in result.warnings
+    )
+    assert not any("because at least one cell is zero" in w for w in result.warnings)
+    assert not_poolable("twobytwo_zero_cell") is not None
+    # the sensitivity analysis adds 0.5 to every cell of every dataset: one estimator, the ratios are pooled
+    sensitivity = analyze_mi(lambda d: arm_table(d, "always"), zero_cell_mi(), complete_case=False)
+    assert sensitivity.table is not None
+    assert {"odds_ratio", "relative_risk", "risk_difference"} == set(sensitivity.table.names)
+    assert any(
+        "Sensitivity analysis" in w and "(in 5 of 5 imputed datasets)" in w
+        for w in sensitivity.warnings
+    )
+
+
 def test_chi_square_independence_matches_scipy_and_names_absent_levels() -> None:
     df = pd.DataFrame({"g": ["a"] * 30 + ["b"] * 30 + ["c"] * 40, "y": ["x", "y", "z", "x"] * 25})
     res = chi_square_independence(df, "g", "y")

@@ -61,6 +61,7 @@ class Pooled:
     reference: str | None = None
     comparison: str | None = None
     event: str | None = None
+    haldane: str = "if_zero"  # 2x2 tables: "always" when 0.5 was added to every cell (a sensitivity analysis)
 
 
 def _levels(series: pd.Series) -> list[str]:
@@ -82,8 +83,15 @@ def _columns(mi, analyzer) -> tuple[list[str], list[str], list[str]]:
     return numeric, categorical, groupers
 
 
-def compare_pooled(mi, group: str, levels: list[str], target: str, *, numeric: bool) -> Pooled:
-    """Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result."""
+def compare_pooled(
+    mi, group: str, levels: list[str], target: str, *, numeric: bool, haldane: str = "if_zero"
+) -> Pooled:
+    """
+    Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
+
+    ``haldane="always"`` adds 0.5 to every cell of every 2x2 table (a sensitivity analysis): without it, a zero
+    cell in some imputed datasets leaves the odds and risk ratios unpooled.
+    """
     columns = [group, target]
     if numeric and len(levels) == 2:
         reference = detect_reference_level(levels) or levels[0]
@@ -118,7 +126,8 @@ def compare_pooled(mi, group: str, levels: list[str], target: str, *, numeric: b
                 lambda data: analyze_twobytwo(
                     TwoByTwo.from_crosstab(
                         _in_groups(data, group, levels), group, target, exposure_ref=reference, event_level=event
-                    )
+                    ),
+                    haldane="always" if haldane == "always" else "if_zero",
                 ),
                 mi,
                 columns=columns,
@@ -126,6 +135,7 @@ def compare_pooled(mi, group: str, levels: list[str], target: str, *, numeric: b
             reference,
             next(lvl for lvl in levels if lvl != reference),
             event,
+            haldane="always" if haldane == "always" else "if_zero",
         )
     return Pooled(
         "chisq",
@@ -160,13 +170,27 @@ def _summary_row(target: str, item: Pooled, group: str) -> dict[str, Any]:
             "p": d1.p_value,
             "fmi": max(t.fmi for t in res.table.terms if t.term != "const"),
         }
-    elif item.kind == "twobytwo":
+    elif item.kind == "twobytwo" and "odds_ratio" in res.table.names:
         term = res.term("odds_ratio")
+        if item.haldane == "always":
+            row["analysis"] = "2x2: odds ratio, 0.5 added to every cell (sensitivity analysis)"
         row |= {
             "estimate_label": f"odds ratio of {item.event} ({item.comparison} vs {item.reference})",
             "estimate": term.natural_estimate,
             "ci_low": term.natural_ci.lower,
             "ci_high": term.natural_ci.upper,
+            "test": f"z = {term.statistic:.2f}, df = {term.df:.1f}",
+            "p": term.p_value,
+            "fmi": term.fmi,
+        }
+    elif item.kind == "twobytwo":  # a zero cell in some imputed datasets: only the risk difference is pooled
+        term = res.term("risk_difference")
+        row |= {
+            "analysis": "2x2: risk difference (odds ratio not pooled: a zero cell)",
+            "estimate_label": f"risk difference of {item.event} ({item.comparison} - {item.reference})",
+            "estimate": term.estimate,
+            "ci_low": term.ci.lower,
+            "ci_high": term.ci.upper,
             "test": f"z = {term.statistic:.2f}, df = {term.df:.1f}",
             "p": term.p_value,
             "fmi": term.fmi,
@@ -215,6 +239,9 @@ def _twobytwo_frame(res) -> pd.DataFrame:
         ("relative_risk", "Risk ratio"),
         ("risk_difference", "Risk difference"),
     ):
+        if name not in frame.index:  # not pooled: the warning below the table says why
+            rows.append({"measure": f"{label}: not pooled (a zero cell)"})
+            continue
         t = frame.loc[name]
         log = t["scale"] == "log"
         rows.append(
@@ -337,6 +364,17 @@ def run_pooled_comparison(mi, analyzer) -> None:
             help="Variables created after the imputation are not in the imputed datasets.",
         )
         correction = c2.selectbox("Multiple testing correction", list(CORRECTION_OPTIONS), key="mi_cmp_correction")
+        haldane = (
+            "always"
+            if c2.checkbox(
+                "Zero cells: add 0.5 to every cell of every 2x2 table (sensitivity analysis)",
+                key="mi_cmp_haldane",
+                help="A zero cell gets the +0.5 correction in its own imputed dataset only, so by default the odds "
+                "and risk ratios are then not pooled (the risk difference is). Adding 0.5 everywhere keeps one "
+                "estimator across the imputed datasets; report it as a sensitivity analysis.",
+            )
+            else "if_zero"
+        )
         st.caption(
             "Numeric variables: Welch t-test (two groups) or a linear model with a D1 test (three or more groups). "
             "Categorical variables: odds ratio, risk ratio and risk difference (two groups, two categories) or the "
@@ -354,14 +392,16 @@ def run_pooled_comparison(mi, analyzer) -> None:
         st.warning("Select at least two groups.")
         return
 
-    config = (group, tuple(levels), tuple(targets), correction, mi_token(get_state()))
+    config = (group, tuple(levels), tuple(targets), correction, haldane, mi_token(get_state()))
     if st.button("Run pooled analysis", type="primary", key="mi_cmp_run"):
         results: dict[str, Pooled] = {}
         errors: dict[str, str] = {}
         bar = st.progress(0.0, text="Pooling")
         for i, target in enumerate(targets):
             try:
-                results[target] = compare_pooled(mi, group, levels, target, numeric=target in numeric)
+                results[target] = compare_pooled(
+                    mi, group, levels, target, numeric=target in numeric, haldane=haldane
+                )
             except Exception as exc:
                 errors[target] = f"{type(exc).__name__}: {exc}"
             bar.progress((i + 1) / len(targets), text=f"Pooling: {target}")

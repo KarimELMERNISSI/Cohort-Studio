@@ -209,6 +209,13 @@ validated pooling rule; z-scores and min-max scaling depend on each imputed data
 and the alternative. McNemar, Mantel-Haenszel, diagnostic accuracy and kappa analyse the observed data in this
 version.
 
+**Zero cells in a 2x2 table.** A zero cell gets the +0.5 (Haldane-Anscombe) correction in its own imputed
+dataset only. When that happens in some imputed datasets but not all, their odds and risk ratios measure
+different things, so they are not pooled: the page pools the risk difference and says why.
+- The option *Zero cells: add 0.5 to every cell of every 2x2 table* applies the correction everywhere, so that the
+  ratios can be pooled.
+- Report that run as a sensitivity analysis; the page and the dossier label it so.
+
 An imputation is used only while it fits the analysis population. After a change of the ticked criteria or
 of the imputed variables, the pages say why the imputed data are not used and analyse the observed data until
 the imputation is run again.

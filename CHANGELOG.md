@@ -30,6 +30,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Unknown words:** before, a word that was neither an event nor a censoring word (a misspelling, "relapse")
     silently became censored. It is now refused too.
   - "Death", "deceased" and "survived" are now recognised.
+- **Multiple imputation: zero cells in a 2x2 table.**
+  - **Before:** the +0.5 (Haldane-Anscombe) correction was decided table by table. When a cell was zero in some
+    imputed datasets only, corrected and uncorrected odds and risk ratios were pooled together.
+  - **Now:** the ratios are then not pooled. The risk difference still is, and a warning says why.
+  - **Sensitivity analysis:** a new option adds 0.5 to every cell of every table, so that the ratios can be pooled.
+    The page and the dossier label that run as a sensitivity analysis.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

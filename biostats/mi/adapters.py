@@ -12,7 +12,7 @@ pooled raise :class:`NotPoolableError` with the reason and the alternative.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -70,6 +70,11 @@ class Adapter:
 
     def extract(self, result: Any) -> Extract:  # pragma: no cover - interface
         raise NotImplementedError
+
+    def prepare(self, extracts: list[Extract]) -> tuple[list[Extract], list[str]]:
+        """A last look at the extracts of all the imputed datasets before pooling: estimates that cannot be
+        combined are dropped, with a warning that says why."""
+        return extracts, []
 
     def tests(
         self, extracts: list[Extract], table: PooledTable | None
@@ -290,8 +295,17 @@ class ChiSquareAdapter(Adapter):
         return super().tests(extracts, table)
 
 
+RATIOS = ["odds_ratio", "relative_risk"]
+
+
 class TwoByTwoAdapter(Adapter):
-    """2x2 table: log odds ratio, log risk ratio and risk difference; D2 for the chi-square."""
+    """
+    2x2 table: log odds ratio, log risk ratio and risk difference; D2 for the chi-square.
+
+    A zero cell gets the +0.5 correction in its own imputed dataset only, so the ratios of the datasets would mix
+    two estimators: they are then not pooled (the risk difference still is), unless every table was corrected
+    (``analyze_twobytwo(..., haldane="always")``, a sensitivity analysis).
+    """
 
     kind = "twobytwo"
 
@@ -316,8 +330,33 @@ class TwoByTwoAdapter(Adapter):
             scales={"odds_ratio": "log", "relative_risk": "log"},
             chisq={"chi_square": (float(result.chi2_statistic), 1.0)},
             warnings=[g for g in result.guidance if "Haldane" in g],
-            extra={"n": result.n_total},
+            extra={
+                "n": result.n_total,
+                "zero_cell": min(result.a, result.b, result.c, result.d) == 0,
+                "haldane": result.haldane_mode,
+            },
         )
+
+    def prepare(self, extracts: list[Extract]) -> tuple[list[Extract], list[str]]:
+        zero = sum(bool(e.extra.get("zero_cell")) for e in extracts)
+        if not zero or all(e.extra.get("haldane") == "always" for e in extracts):
+            return extracts, []
+        entry = not_poolable("twobytwo_zero_cell")
+        assert entry is not None
+        kept = [
+            replace(
+                e,
+                params=e.params.drop(RATIOS),
+                variances=None if e.variances is None else e.variances.drop(RATIOS),
+                scales={},
+                warnings=[w for w in e.warnings if "Haldane" not in w],
+            )
+            for e in extracts
+        ]
+        return kept, [
+            f"Odds ratio and risk ratio not pooled: a cell is zero in {zero} of {len(extracts)} imputed datasets. "
+            f"{entry.reason} {entry.alternative}"
+        ]
 
 
 def _step_values(

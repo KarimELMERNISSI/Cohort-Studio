@@ -325,15 +325,28 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
                     "Result": f"F = {_num(d1.statistic)}, df = {_num(d1.df1, 4)}, {_num(d1.df2, 4)}; {_peq(d1.p_value)}",
                 }
             )
-        elif item.kind == "twobytwo":
+        elif item.kind == "twobytwo" and "odds_ratio" in res.table.names:
             t = res.term("odds_ratio")
+            sensitivity = getattr(item, "haldane", "if_zero") == "always"
             rows.append(
                 {
                     "Variable": target,
-                    "Analysis": "Odds ratio",
+                    "Analysis": "Odds ratio, 0.5 added to every cell (sensitivity analysis)"
+                    if sensitivity
+                    else "Odds ratio",
                     "Result": f"OR = {_num(t.natural_estimate)} (95% CI {_ci(t.natural_ci)}); {_peq(t.p_value)}",
                 }
             )
+        elif item.kind == "twobytwo":  # a zero cell in some imputed datasets: the ratios are not pooled
+            t = res.term("risk_difference")
+            rows.append(
+                {
+                    "Variable": target,
+                    "Analysis": "Risk difference (odds ratio not pooled: a zero cell)",
+                    "Result": f"RD = {_num(t.estimate)} (95% CI {_ci(t.ci)}); {_peq(t.p_value)}",
+                }
+            )
+            blocks.warnings.extend(w for w in res.warnings if w.startswith("Odds ratio and risk ratio not pooled"))
         else:
             d2 = res.tests["chi_square"]
             rows.append(

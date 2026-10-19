@@ -212,6 +212,9 @@ class TwoByTwoResult(BaseModel):
     nonevent_level: str = "No event"
     design: str = "unknown"
     haldane_applied: bool = False
+    # "if_zero": +0.5 to every cell only when a cell is zero; "always": in every table (a sensitivity analysis that
+    # keeps the estimator the same across imputed datasets)
+    haldane_mode: Literal["if_zero", "always"] = "if_zero"
 
     risk_exposed: float
     risk_reference: float
@@ -294,8 +297,15 @@ def analyze_twobytwo(
     alpha: float = 0.05,
     design: Design = "unknown",
     rd_ci: Literal["newcombe", "wald"] = "newcombe",
+    haldane: Literal["if_zero", "always"] = "if_zero",
 ) -> TwoByTwoResult:
-    """Compute all measures of association for an explicitly oriented 2x2 table."""
+    """
+    Compute all measures of association for an explicitly oriented 2x2 table.
+
+    The odds ratio and risk ratio get the Haldane-Anscombe correction (+0.5 to each cell) when a cell is zero, or
+    in every table with ``haldane="always"``: a sensitivity analysis that keeps one estimator across imputed
+    datasets, where zero cells come and go.
+    """
     a, b, c, d = table.a, table.b, table.c, table.d
     n1, n0 = a + b, c + d
     n = table.n_total
@@ -305,9 +315,14 @@ def analyze_twobytwo(
     level = 1.0 - alpha
     guidance: list[str] = []
 
-    haldane = any(cell == 0 for cell in (a, b, c, d))
-    a_, b_, c_, d_ = (x + 0.5 if haldane else float(x) for x in (a, b, c, d))
-    if haldane:
+    corrected = haldane == "always" or any(cell == 0 for cell in (a, b, c, d))
+    a_, b_, c_, d_ = (x + 0.5 if corrected else float(x) for x in (a, b, c, d))
+    if haldane == "always":
+        guidance.append(
+            "Sensitivity analysis: the Haldane-Anscombe correction (+0.5 to each cell) was applied to the odds "
+            "ratio and risk ratio of every table, whether or not a cell is zero."
+        )
+    elif corrected:
         guidance.append(
             "Haldane-Anscombe correction (+0.5 to each cell) was applied to the odds ratio and risk ratio "
             "because at least one cell is zero; interpret those estimates with caution."
@@ -433,7 +448,8 @@ def analyze_twobytwo(
         event_level=table.event_level,
         nonevent_level=table.nonevent_level,
         design=design,
-        haldane_applied=haldane,
+        haldane_applied=corrected,
+        haldane_mode=haldane,
         risk_exposed=p1,
         risk_reference=p0,
         prevalence_event=prevalence,

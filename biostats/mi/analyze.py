@@ -110,7 +110,7 @@ def analyze_mi(
     if len(results) < 2:
         raise ValueError("at least two imputed datasets are needed to pool")
     chosen = adapter or adapter_for(results[0])
-    extracts = [chosen.extract(r) for r in results]
+    extracts, dropped = chosen.prepare([chosen.extract(r) for r in results])
     notes: list[str] = []
     dfcoms = {e.dfcom for e in extracts}
     dfcom = min(dfcoms)
@@ -130,7 +130,9 @@ def analyze_mi(
     tests = chosen.tests(extracts, table)
     extra = chosen.finish(extracts, table, alpha=alpha)
     counts = Counter(w for e in extracts for w in dict.fromkeys(e.warnings))
-    warnings = [f"{w} (in {k} of {len(extracts)} imputed datasets)" for w, k in counts.items()]
+    warnings = [
+        f"{w} (in {k} of {len(extracts)} imputed datasets)" for w, k in counts.items()
+    ] + dropped
     if partial:
         notes.append(
             f"Preview: pooled over {len(results)} of {mi.m} imputed datasets (time budget of {time_budget:g} s); "
