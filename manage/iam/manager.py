@@ -28,6 +28,23 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# The values CMP_IAM_PROVIDER accepts (read without regard to case); anything else stops start-up
+PROVIDER_ALIASES: dict[str, IAMProviderType] = {
+    "local": IAMProviderType.LOCAL,
+    "better_auth": IAMProviderType.BETTER_AUTH,
+    "betterauth": IAMProviderType.BETTER_AUTH,
+    "better-auth": IAMProviderType.BETTER_AUTH,
+    "remote": IAMProviderType.BETTER_AUTH,
+    "disabled": IAMProviderType.DISABLED,
+    "none": IAMProviderType.DISABLED,
+    "off": IAMProviderType.DISABLED,
+    "bypass": IAMProviderType.DISABLED,
+}
+
+
+class IAMConfigurationError(ValueError):
+    """The identity provider is misconfigured: the app must not start with another one in its place."""
+
 
 class IAMManager:
     """
@@ -43,13 +60,17 @@ class IAMManager:
 
     @classmethod
     def _resolve_config_from_env(cls) -> IAMConfig:
-        """Read IAM configuration from process environment variables."""
-        raw_type = os.getenv("CMP_IAM_PROVIDER", "local").lower().strip()
-        provider_type = IAMProviderType.LOCAL
-        if raw_type in ("better_auth", "betterauth", "remote"):
-            provider_type = IAMProviderType.BETTER_AUTH
-        elif raw_type in ("disabled", "none", "off", "bypass"):
-            provider_type = IAMProviderType.DISABLED
+        """
+        Read IAM configuration from process environment variables. An unknown CMP_IAM_PROVIDER raises
+        IAMConfigurationError: a misspelt provider used to give local accounts without a word, so a server meant to
+        sign users in elsewhere ran with its own accounts instead.
+        """
+        raw_type = os.getenv("CMP_IAM_PROVIDER", "local").lower().strip() or "local"
+        provider_type = PROVIDER_ALIASES.get(raw_type)
+        if provider_type is None:
+            raise IAMConfigurationError(
+                f"CMP_IAM_PROVIDER={raw_type!r} is not an identity provider: use local, better_auth or disabled."
+            )
 
         better_auth_url = os.getenv("CMP_BETTER_AUTH_URL", "http://localhost:3000/api/auth")
         better_auth_api_key = os.getenv("CMP_BETTER_AUTH_API_KEY")
@@ -76,8 +97,13 @@ class IAMManager:
             )
         elif p_type == IAMProviderType.DISABLED:
             return DisabledIAMProvider()
-        else:
+        elif p_type == IAMProviderType.LOCAL:
             return LocalDuckDBIAMProvider(db_path=config.duckdb_path)
+        # CUSTOM gave local accounts in its place: a custom provider is installed with IAMManager.set_provider
+        raise IAMConfigurationError(
+            f"the identity provider {p_type.value!r} cannot be built from the configuration; install a custom "
+            "provider with IAMManager.set_provider."
+        )
 
     @property
     def provider(self) -> BaseIAMProvider:

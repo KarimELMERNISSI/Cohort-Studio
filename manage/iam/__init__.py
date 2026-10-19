@@ -6,7 +6,7 @@ supporting Local DuckDB, Better Auth (RESTful remote), and Disabled modes.
 """
 
 from .base import BaseIAMProvider
-from .manager import IAMManager, get_iam_manager
+from .manager import IAMConfigurationError, IAMManager, get_iam_manager
 from .providers.better_auth import BetterAuthIAMProvider
 from .providers.disabled import DisabledIAMProvider
 from .providers.local_duckdb import LocalDuckDBIAMProvider
@@ -24,6 +24,7 @@ __all__ = [
     "LocalDuckDBIAMProvider",
     "BetterAuthIAMProvider",
     "DisabledIAMProvider",
+    "IAMConfigurationError",
     "IAMManager",
     "get_iam_manager",
     "IAMConfig",

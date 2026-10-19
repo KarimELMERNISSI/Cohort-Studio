@@ -15,7 +15,6 @@ import shutil
 from pathlib import Path
 
 import streamlit as st
-from dotenv import load_dotenv
 
 from core.workspace import remove_pdf, safe_filename
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
@@ -38,8 +37,7 @@ from ui.components import confirm
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
 
-load_dotenv()
-
+# .env is loaded once, at start-up (main.py): the keys are in the environment from the first page on
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 PROVIDER_NAMES = {
     "ollama": "Ollama (local, open-source)",

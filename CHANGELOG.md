@@ -120,6 +120,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Sharing a study configuration**: a switch leaves out the outlier rules that list row ids, which only mean
   something for the user's dataset.
 
+### Configuration and identity
+
+- **`.env` is read at start-up.**
+  - Before, it was read only when the Settings page's AI section was first imported. Outside Docker, the identity
+    provider, the first administrator (`CMP_ADMIN_*`), `DATA_ROOT` and the log level ignored it. The AI keys were
+    found only after someone had opened Settings.
+  - `main.py` and `manage_users.py` now load it first. A variable already set in the environment still wins, as
+    with Docker.
+  - A setting written in `.env` now applies outside Docker.
+- **An unknown identity provider stops start-up.** A misspelt `CMP_IAM_PROVIDER` (for example `ldap` or
+  `better_authh`) silently gave local accounts. The app now shows the error and the valid names instead.
+  `better-auth` is accepted, and the names are read without regard to case.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

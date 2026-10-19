@@ -1,7 +1,9 @@
 import os
 
 import pytest
-from dotenv import load_dotenv
+
+# the real loader: tests/conftest.py turns dotenv.load_dotenv into a no-op
+from dotenv.main import load_dotenv
 
 from manage.rag_manager import RAGManager
 

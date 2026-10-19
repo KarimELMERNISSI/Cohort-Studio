@@ -20,9 +20,15 @@ import argparse
 import getpass
 import os
 import sys
+from pathlib import Path
 
-from manage.iam import UserRole, get_iam_manager
-from manage.iam.authz import validate_password, validate_username
+from dotenv import load_dotenv
+
+# .env first, as main.py does: the identity provider and the CMP_ADMIN_* settings are read from the environment
+load_dotenv(Path(__file__).with_name(".env"), override=False)
+
+from manage.iam import UserRole, get_iam_manager  # noqa: E402
+from manage.iam.authz import validate_password, validate_username  # noqa: E402
 
 
 def _fail(message: str) -> None:

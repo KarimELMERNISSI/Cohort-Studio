@@ -1,8 +1,16 @@
 """CohortStudio - entry point: configuration, authentication, navigation and shell."""
 
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# .env first, before any module reads the configuration (identity provider, data folder, logging, AI keys); a
+# variable already set in the environment wins, which is how Docker passes them
+load_dotenv(Path(__file__).with_name(".env"), override=False)
+
 import streamlit as st
 
-from manage.iam import get_iam_manager
+from manage.iam import IAMConfigurationError, get_iam_manager
 from manage.iam.authz import is_admin_role
 from ui import nav, shell
 from ui.auth import LOGO, require_login
@@ -23,7 +31,11 @@ def main() -> None:
     st.set_page_config(page_title=APP_NAME, page_icon=LOGO, layout="wide")
     apply_theme()
     show_logo()
-    _bootstrap_admin_once()
+    try:
+        _bootstrap_admin_once()
+    except IAMConfigurationError as exc:  # never another identity provider in place of the one configured
+        st.error(f"CohortStudio cannot start: {exc}", icon=":material/gpp_bad:")
+        st.stop()
 
     if not require_login():
         st.stop()
