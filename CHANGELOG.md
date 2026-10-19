@@ -100,6 +100,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction
   analysis (M11).
 
+### AI engine: Gemini Flash-Lite
+
+- **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,
+  `gemini-3.5-flash-lite` and `gemini-2.5-flash-lite`.
+- **2.0 Flash, 1.5 Flash and 1.5 Pro are no longer offered**, because Google no longer serves them.
+- **One list:** the Settings page reads the provider's list instead of keeping its own copy.
+- **A typed API key** may still add the other chat models it can use; the image, speech and robotics models are left
+  out.
+
 ### Documentation: a DOI to cite
 
 - Releases are archived on Zenodo from 2.4.1 on. The concept DOI

@@ -30,6 +30,48 @@ except ImportError:
     genai = None
     types = None
 
+# The chat models offered in Settings, the default first: the models that fit the app's uses (question answering,
+# taxonomies, variable suggestions), with the Flash-Lite versions for cheap and fast answers. Checked against the
+# Gemini API's model list on 2026-10-19 (2.0 and 1.5 are no longer served). A key typed in Settings can add the other
+# chat models it may use, after these.
+GEMINI_CHAT_MODELS = (
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-pro-latest",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+)
+# Models the API lists for generateContent that are not chat models: images, speech, robotics, agents...
+NOT_CHAT_MODELS = (
+    "image",
+    "tts",
+    "transcribe",
+    "robotics",
+    "computer-use",
+    "customtools",
+    "embedding",
+    "imagen",
+    "veo",
+    "lyria",
+    "nano-banana",
+    "antigravity",
+    "deep-research",
+)
+
+
+def is_chat_model(name: str, actions: list[str] | None) -> bool:
+    """A Gemini or Gemma model that answers text (generateContent) and is not one of the specialised models."""
+    lowered = name.lower()
+    return (
+        lowered.startswith(("gemini", "gemma"))
+        and (actions is None or "generateContent" in actions)
+        and not any(word in lowered for word in NOT_CHAT_MODELS)
+    )
+
 
 class GeminiChatConnector(BaseLLMConnector):
     """
@@ -51,28 +93,16 @@ class GeminiChatConnector(BaseLLMConnector):
         return self.config.model_name
 
     def get_available_models(self) -> list[str]:
-        """Query Gemini API for available text models."""
-        fallback = [
-            "gemini-3.8-flash",
-            "gemini-3.5-flash",
-            "gemini-flash-latest",
-            "gemini-pro-latest",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-        ]
+        """The chat models the key may use (GEMINI_CHAT_MODELS when the API cannot be asked)."""
+        fallback = list(GEMINI_CHAT_MODELS)
         if not self.client or not GEMINI_AVAILABLE:
             return fallback
         try:
             models = []
             for m in self.client.models.list():
-                name_lower = m.name.lower()
-                if "gemini" in name_lower or "gemma" in name_lower:
-                    if "imagen" not in name_lower and "veo" not in name_lower and "embedding" not in name_lower:
-                        clean_name = m.name.removeprefix("models/")
-                        models.append(clean_name)
+                clean_name = m.name.removeprefix("models/")
+                if is_chat_model(clean_name, getattr(m, "supported_actions", None)):
+                    models.append(clean_name)
             return models or fallback
         except Exception as e:
             logger.warning(f"Could not fetch Gemini models list: {e}")

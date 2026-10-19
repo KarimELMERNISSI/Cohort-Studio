@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 from core.workspace import remove_pdf, safe_filename
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
+from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
 from manage.vectorstores import (
     ENGINE_SUMMARIES,
     ENGINE_TITLES,
@@ -55,9 +56,8 @@ CLOUD_CATALOG = {
     "gemini": {
         "env": "GOOGLE_API_KEY",
         "label": "Google GenAI API key",
-        # newest first: Google no longer serves gemini-2.5-flash to new keys (October 2026)
-        "chat": ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-pro-latest", "gemini-2.5-flash",
-                 "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+        # the provider's list: the models that fit the app's uses, Flash-Lite included (cheap and fast)
+        "chat": list(GEMINI_CHAT_MODELS),
         "embed": ["models/gemini-embedding-2", "models/text-embedding-005", "models/text-embedding-004", "models/gemini-embedding-001"],
     },
     "openai": {
