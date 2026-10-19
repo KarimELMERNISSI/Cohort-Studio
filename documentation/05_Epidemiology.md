@@ -171,7 +171,7 @@ Categorical covariates are one-hot coded with their first (alphabetical) level a
 | Paired t-test / Wilcoxon signed-rank | mean or pseudo-median within-pair difference with 95% CI, Cohen's d_z, matched-pairs rank-biserial r |
 | One-sample t / Wilcoxon / exact binomial | difference from a reference value, Wilson interval for a proportion |
 | McNemar (exact) | paired binary outcomes from the discordant pairs |
-| Incidence rates | exact Poisson intervals, rate ratio with a score interval and exact conditional test |
+| Incidence rates | exact Poisson intervals; rate ratio with the exact conditional interval and test (Clopper-Pearson, as R's `poisson.test`), which agree: the interval excludes 1 exactly when p < 0.05 |
 | Mantel-Haenszel | pooled OR (Robins-Breslow-Greenland interval) and RR (Greenland-Robins), Breslow-Day homogeneity, crude vs adjusted comparison |
 | Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
 | Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales (on the *Diagnostic accuracy & agreement* tab) |

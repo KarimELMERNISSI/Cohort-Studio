@@ -273,7 +273,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                 m3.metric(
                     "Rate ratio",
                     f"{rr.ratio:.3f}",
-                    help=f"exact conditional test p = {rr.p_value:.4g}",
+                    help=f"{rr.test} test p = {rr.p_value:.4g}",
                 )
                 m3.caption(f"95% CI {_ci(rr.ci)} ({rr.ci.method})")
                 st.caption("Method: " + " | ".join(rr.references))

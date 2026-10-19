@@ -6,6 +6,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Statistics: results corrected (follow-up programme M5)
+
+- **Rate ratio** (Analyze > Hypothesis tests > Paired, rates & stratified).
+  - The 95% interval is now the exact conditional (Clopper-Pearson) interval, the one of R's `poisson.test`.
+  - The p-value is the matching exact conditional one (twice the smaller tail), so the interval excludes 1 exactly
+    when p < 0.05.
+  - Before, a score interval was paired with the minimum-likelihood exact test, two methods that can disagree. With
+    no events in one group, the score interval collapsed to a single value.
+  - Example: 15 events in 1,200 person-years against 4 in 1,000 give a rate ratio of 3.1, now with 95% CI 0.996 to
+    12.9 and p = 0.051; before, 1.09 to 8.96 and p = 0.038.
+  - The score interval remains available (`ci_method="score"`), paired with the score test.
+
 ### Documentation: a DOI to cite
 
 - Releases are archived on Zenodo from 2.4.1 on. The concept DOI

@@ -1,8 +1,9 @@
 name: R reference fixtures
 
-# Manual run (Actions > R reference fixtures > Run workflow). Computes the R mice / mitml reference values
-# that tests/biostats_layer/test_mi_r_parity.py compares against, and pushes them to the r-fixtures branch,
-# from which they are copied into main. The commit carries the repository owner's identity.
+# Manual run (Actions > R reference fixtures > Run workflow). Computes the R reference values that the parity
+# tests compare against (mice / mitml: tests/biostats_layer/test_mi_r_parity.py; poisson.test:
+# tests/biostats_layer/test_rates_r_parity.py), and pushes them to the r-fixtures branch, from which they are
+# copied into main. The commit carries the repository owner's identity.
 on:
   workflow_dispatch:
 
@@ -11,7 +12,7 @@ permissions:
 
 jobs:
   fixtures:
-    name: mice / mitml reference values
+    name: mice / mitml and poisson.test reference values
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -28,13 +29,15 @@ jobs:
         run: Rscript -e 'install.packages(c("mice", "mitml", "survival", "jsonlite", "broom"))'
 
       - name: Compute the reference values
-        run: Rscript tests/reference/r/make_mi_fixtures.R tests/reference/fixtures/mi
+        run: |
+          Rscript tests/reference/r/make_mi_fixtures.R tests/reference/fixtures/mi
+          Rscript tests/reference/r/make_rates_fixtures.R tests/reference/fixtures/rates
 
       - name: Push them to the r-fixtures branch
         run: |
           git config user.name "Karim Elmernissi"
           git config user.email "karim.elmernissi.75@gmail.com"
           git checkout -B r-fixtures
-          git add -f tests/reference/fixtures/mi
-          git commit -m "test(mi): R mice/mitml reference values (workflow run ${{ github.run_id }})"
+          git add -f tests/reference/fixtures/mi tests/reference/fixtures/rates
+          git commit -m "test: R reference values, mice/mitml and poisson.test (workflow run ${{ github.run_id }})"
           git push --force origin r-fixtures

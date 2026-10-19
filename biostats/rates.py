@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -33,6 +34,10 @@ REFERENCES.setdefault(
 REFERENCES.setdefault(
     "garwood1936",
     "Garwood F (1936). Fiducial limits for the Poisson distribution. Biometrika 28:437-442.",
+)
+REFERENCES.setdefault(
+    "clopper1934",
+    "Clopper CJ, Pearson ES (1934). The use of confidence or fiducial limits illustrated in the case of the binomial. Biometrika 26:404-413.",
 )
 
 
@@ -71,7 +76,38 @@ class RateRatio:
     ci: CI
     p_value: float
     rate_difference: float
+    test: str = "exact conditional"  # the test of IRR = 1 behind p_value, consistent with ``ci``
     references: list[str] = field(default_factory=list)
+
+
+def _exact_conditional(
+    events_exposed: int,
+    time_exposed: float,
+    events_reference: int,
+    time_reference: float,
+    alpha: float,
+) -> tuple[float, float, float]:
+    """
+    The exact conditional interval of the rate ratio and its two-sided p-value for IRR = 1.
+
+    Given the total number of events, the exposed events are binomial with probability IRR * t1 / (IRR * t1 + t0).
+    The Clopper-Pearson interval of that probability, mapped to the ratio, is the interval of R's ``poisson.test``.
+    The p-value is twice the smaller binomial tail (capped at 1), which excludes 1 exactly when the interval does.
+    R's ``poisson.test`` reports the same interval with a minimum-likelihood p-value instead, which can fall below
+    0.05 while its interval still contains 1.
+    """
+    total = events_exposed + events_reference
+    ci = stats.binomtest(events_exposed, total).proportion_ci(
+        confidence_level=1 - alpha, method="exact"
+    )
+    scale = time_reference / time_exposed
+    upper = ci.high / (1 - ci.high) * scale if ci.high < 1 else float("inf")
+    null = time_exposed / (time_exposed + time_reference)
+    tails = (
+        stats.binom.cdf(events_exposed, total, null),
+        stats.binom.sf(events_exposed - 1, total, null),
+    )
+    return ci.low / (1 - ci.low) * scale, upper, float(min(1.0, 2 * min(tails)))
 
 
 def rate_ratio(
@@ -82,35 +118,50 @@ def rate_ratio(
     *,
     per: float = 1000.0,
     alpha: float = 0.05,
+    ci_method: Literal["exact", "score"] = "exact",
 ) -> RateRatio:
-    """Incidence rate ratio with a Poisson-based CI and exact conditional test."""
+    """
+    Incidence rate ratio with an interval and a test that agree: by default the exact conditional interval with
+    the exact conditional test (see ``_exact_conditional``); ``ci_method="score"`` gives the score interval with
+    the score test, which need events in both groups.
+    """
+    if events_exposed + events_reference == 0:
+        raise ValueError("there are no events in either group, so the rate ratio is undefined")
     exp_ = incidence_rate(events_exposed, time_exposed, per=per, alpha=alpha)
     ref = incidence_rate(events_reference, time_reference, per=per, alpha=alpha)
-    lo, hi = confint_poisson_2indep(
-        events_exposed,
-        time_exposed,
-        events_reference,
-        time_reference,
-        method="score",
-        compare="ratio",
-        alpha=alpha,
-    )
-    test = test_poisson_2indep(
-        events_exposed,
-        time_exposed,
-        events_reference,
-        time_reference,
-        method="exact-cond",
-        compare="ratio",
-    )
+    if ci_method == "exact":
+        lo, hi, p_value = _exact_conditional(
+            int(events_exposed),
+            float(time_exposed),
+            int(events_reference),
+            float(time_reference),
+            alpha,
+        )
+        method, test, cited = (
+            "exact conditional (Clopper-Pearson)",
+            "exact conditional",
+            ["garwood1936", "clopper1934"],
+        )
+    elif ci_method == "score":
+        if min(events_exposed, events_reference) == 0:
+            raise ValueError(
+                "the score interval needs events in both groups; use the exact interval"
+            )
+        counts = (events_exposed, time_exposed, events_reference, time_reference)
+        lo, hi = confint_poisson_2indep(*counts, method="score", compare="ratio", alpha=alpha)
+        p_value = float(test_poisson_2indep(*counts, method="score", compare="ratio").pvalue)
+        method, test, cited = "score", "score", ["garwood1936"]
+    else:
+        raise ValueError(f"unknown interval method {ci_method!r}: use 'exact' or 'score'")
     return RateRatio(
         exposed=exp_,
         reference=ref,
         ratio=exp_.rate / ref.rate if ref.rate > 0 else float("inf"),
-        ci=CI(lower=float(lo), upper=float(hi), level=1 - alpha, method="score"),
-        p_value=float(test.pvalue),
+        ci=CI(lower=float(lo), upper=float(hi), level=1 - alpha, method=method),
+        p_value=float(p_value),
         rate_difference=exp_.rate - ref.rate,
-        references=[REFERENCES["garwood1936"]],
+        test=test,
+        references=[REFERENCES[key] for key in cited],
     )
 
 

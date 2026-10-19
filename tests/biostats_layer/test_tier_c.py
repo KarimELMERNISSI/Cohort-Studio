@@ -137,7 +137,8 @@ def test_incidence_rate_and_ratio_reference_values() -> None:
     ) and rate.ci.upper * 1000 == pytest.approx(20.62, abs=0.01)
     rr = rate_ratio(15, 1200, 4, 1000)
     assert rr.ratio == pytest.approx(3.125)
-    assert rr.ci.lower < 3.125 < rr.ci.upper and rr.p_value < 0.05
+    # the exact conditional interval (0.996 to 12.9) contains 1, and its p-value (0.051) agrees
+    assert rr.ci.lower < 1 < 3.125 < rr.ci.upper and rr.p_value == pytest.approx(0.0511, abs=1e-4)
     with pytest.raises(ValueError):
         incidence_rate(3, 0)
 
