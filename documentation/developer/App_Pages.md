@@ -42,6 +42,16 @@ _Analysis configuration widgets of the Analyze page (moved out of utils so the e
 **Imports**:
 `streamlit`, `biostats.multiplicity.UI_OPTIONS`, `ui.guidance.analysis.HELP`
 
+### def `grouping_options` (analysis_config.py)
+
+- **Arguments**: `df, numeric_cols, categorical_cols, binary_cols, max_levels`
+
+- **Returns**: `None`
+
+"None" and the columns with fewer than ``max_levels`` values, each once and sorted. A two-level text column is
+both categorical and binary, so the column lists overlap; joined without removing the repeats, it was offered
+twice.
+
 ### def `render_analysis_configuration` (analysis_config.py)
 
 - **Arguments**: `df, numeric_cols, categorical_cols, binary_cols, group_col_options, default_group_col, target_col_options, key_prefix`
@@ -268,6 +278,9 @@ Numeric and categorical columns of the imputed data, and the grouping candidates
 
 Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
 
+``haldane="always"`` adds 0.5 to every cell of every 2x2 table (a sensitivity analysis): without it, a zero
+cell in some imputed datasets leaves the odds and risk ratios unpooled.
+
 ### def `_summary_row` (analysis_pooled.py)
 
 - **Arguments**: `target: str, item: Pooled, group: str`
@@ -343,7 +356,7 @@ With multiply imputed data (``mi``), every analysis is run on the m imputed data
 curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
 
 **Imports**:
-`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.TestResult`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.TestResult`, `biostats.regression.APPARENT_AUC`, `biostats.regression.APPARENT_AUC_NOTE`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_group_candidates` (analysis_survival.py)
 
@@ -433,7 +446,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.expressions.safe_format`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
+`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -696,7 +709,8 @@ Returns:
 
 - **Returns**: `None`
 
-No description available.
+The transformation form. The columns are computed by enrich.transformation_logic.apply_variable_transformation,
+the function the replay of the trace calls with the same parameters, so the replay gives the same columns.
 
 ### def `save_snapshot` (data_enrichment.py)
 
@@ -712,8 +726,8 @@ Saves a snapshot of the dataframe in the user's workspace and returns the path.
 
 - **Returns**: `None`
 
-Extracts summary statistics (Min, Max, Median) and potential units for selected columns.
-Used to give context to the RAG model for unit conversion logic.
+What the AI engine is told about the selected columns for its unit hints: their percentiles, or the frequent
+values that may carry a unit such as "mg/dL" (manage.ai_payload: a summary, never a row or an extreme value).
 
 ### def `app` (data_enrichment.py)
 
@@ -736,7 +750,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `ui.components.no_dataset`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
+`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.ai_payload.column_profile`, `ui.components.no_dataset`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
 
 ### def `get_user_taxonomy_dir` (data_insight.py)
 
@@ -796,163 +810,27 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `scipy.stats`, `monitor.changes`, `monitor.outliers`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.criterion_id`, `enrich.custom_metrics_and_filters`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.without_row_lists`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
-Helper class to detect and handle outliers using various methods
+Applies a handling strategy (remove, clip, tag) to what biostats.outliers.detect_outliers flags: the detector
+of the quality dashboard and the health score too, so every screen flags the same rows.
 
 **Methods:**
 
 - **__init__**(`self, df, config`) -> `None`
   > No description available.
 
-- **detect_outliers_zscore**(`self, column, threshold`) -> `None`
-  > Detect outliers using Z-score method
-
-- **detect_outliers_iqr**(`self, column, multiplier`) -> `None`
-  > Detect outliers using IQR method
-
-- **detect_outliers_quantile**(`self, column, lower, upper`) -> `None`
-  > Detect outliers using quantile method
-
-- **detect_lof_outliers**(`self, data, n_neighbors, contamination, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
-  > Detect outliers using Local Outlier Factor (LOF)
-  >
-  >
-  > **Parameters**:
-  >
-  > columns : list
-  >     List of column names to use for outlier detection
-  > n_neighbors : int, optional (default=20)
-  >     Number of neighbors to use for LOF
-  > contamination : str or float, optional (default='auto')
-  >     Expected proportion of outliers in the dataset
-  > numerical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing numerical missing values
-  > categorical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing categorical missing values
-  > remainder_columns : str or list, optional (default='auto')
-  >     Columns to keep if not in the selected columns
-  > remainder_threshold : float, optional (default=0.4)
-  >     Threshold for keeping columns with missing values
-  > debug : bool, optional (default=True)
-  >     Enable debug mode
-  >
-  >
-  > **Returns**:
-  >
-  > tuple
-  >     Outlier tags, outlier scores, and additional information
-
-- **detect_isolation_forest_outliers**(`self, data, n_estimators, max_samples, contamination, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
-  > Detect outliers using Isolation Forest method
-  >
-  >
-  > **Parameters**:
-  >
-  > columns : list
-  >     List of column names to use for outlier detection
-  > n_estimators : int, optional (default=100)
-  >     Number of trees in the forest
-  > max_samples : str or int, optional (default='auto')
-  >     Number of samples to draw for each base estimator
-  > contamination : str or float, optional (default='auto')
-  >     Expected proportion of outliers in the dataset
-  > numerical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing numerical missing values
-  > categorical_imputation_method : str, optional (default='missforest')
-  >     Method for imputing categorical missing values
-  > remainder_columns : str or list, optional (default='auto')
-  >     Columns to keep if not in the selected columns
-  > remainder_threshold : float, optional (default=0.4)
-  >     Threshold for keeping columns with missing values
-  > debug : bool, optional (default=True)
-  >     Enable debug mode
-  >
-  >
-  > **Returns**:
-  >
-  > tuple
-  >     Outlier tags, outlier scores, and additional information
-
-- **detect_dbscan_outliers**(`self, data, eps, min_samples, numerical_imputation_method, categorical_imputation_method, remainder_columns, remainder_threshold, debug`) -> `None`
-  > Detect outliers using DBSCAN method
-  >
-  >
-  > **Parameters**:
-  >
-  > data : pd.DataFrame
-  >     Input data
-  > eps : float
-  >     The maximum distance between two samples for one to be considered as in the neighborhood of the other.
-  > min_samples : int
-  >     The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
-  > numerical_imputation_method : str
-  >     Imputation method for numerical columns
-  > categorical_imputation_method : str
-  >     Imputation method for categorical columns
-  > remainder_columns : str
-  >     How to handle remainder columns
-  > remainder_threshold : float
-  >     Threshold for remainder columns
-  > debug : bool
-  >     Enable debug printing
-  >
-  >
-  > **Returns**:
-  >
-  > tuple
-  >     (outliers_tag, outliers_scores, additional_info)
-
 - **handle_outliers**(`self, columns, method, handling_strategy`) -> `None`
-  > Handle outliers in the DataFrame and generate an outlier matrix.
-  >
-  > Parameters:
-  >     columns (list): List of columns to analyze for outliers.
-  >     method (str): Method to detect outliers ('zscore', 'iqr', 'quantile', 'Local Outlier Factor', 'Isolation Forest').
-  >     handling_strategy (str): Strategy for handling outliers ('none', 'remove', 'clip', 'tag').
-  >     **kwargs: Additional parameters for specific outlier detection methods.
+  > Detect the outliers of ``columns`` and preview the handling strategy.
   >
   > Returns:
-  >     DataFrame: Processed DataFrame with outliers handled.
-  >     DataFrame: Outlier matrix with boolean values indicating outliers.
+  >     DataFrame: the table with the strategy applied (a preview: the Validate actions record the change).
+  >     DataFrame: the flags, one column per analysed column (univariate) or "overall" (multivariate).
 
-- **_apply_handling_strategy**(`self, columns, outlier_matrix, strategy, method, is_outlier, outlier_score`) -> `None`
-  > Apply a handling strategy to the outliers.
-  >
-  > Parameters:
-  >     columns (list): Columns analyzed for outliers.
-  >     outlier_matrix (DataFrame): Boolean matrix indicating outliers.
-  >     strategy (str): Handling strategy ('none', 'remove', 'clip', 'tag').
-  >     method (str): Outlier detection method.
-  >     is_outlier (ndarray): Boolean array for dataset-wide methods.
-  >     outlier_score (ndarray): Array of outlier scores for dataset-wide methods.
-  >     **kwargs: Additional parameters for handling strategies.
-  >
-  > Returns:
-  >     DataFrame: Processed DataFrame with outliers handled.
-
-- **clip_outliers**(`self, column, is_outlier, method`) -> `None`
-  > Helper function to clip outliers based on the specified method.
-  >
-  > Parameters:
-  >     column (str): Column name to process.
-  >     is_outlier (pd.Series): Boolean mask indicating outliers.
-  >     method (str): Method for clipping ('zscore', 'iqr', 'quantile').
-  >     kwargs: Additional parameters for each method.
-  >
-  > Returns:
-  >     pd.Series: Updated column with outliers clipped.
-
-- **get_outliers_masks**(`self`) -> `None`
-  > Get the masks of outliers detected so far.
-  >
-  >
-  > **Returns**:
-  >
-  > dict or None
-  >     Dictionary of outlier masks if available, else None.
+- **_apply_handling_strategy**(`self, detection, strategy`) -> `None`
+  > The table with ``strategy`` applied to the detected outliers.
 
 ### def `export_comparison_results` (data_monitoring.py)
 
@@ -996,7 +874,7 @@ Add outlier handling UI components with improved organization and summary displa
 
 - **Returns**: `None`
 
-Configure parameters based on the selected outlier detection method.
+Configure parameters based on the selected outlier detection method (defaults: biostats.outliers).
 
 ### def `select_columns_for_outlier_handling` (data_monitoring.py)
 
@@ -1142,13 +1020,9 @@ Returns:
 
 - The names of the columns related to the masks family
 
-### def `_clip_bounds` (data_monitoring.py)
-
-- **Arguments**: `df: pd.DataFrame, columns, method: str, params: dict`
-
-- **Returns**: `dict`
-
-The bounds a clipping uses, per column (recorded in the trace and replayed).
+The rules are evaluated as the analysis population evaluates them (core.population.family_masks), so the
+counts here are the counts of the population. A rule that cannot be evaluated is shown with its reason, and
+the family result is then left out: the population refuses such a rule while it is ticked.
 
 ### def `_exclude_outliers` (data_monitoring.py)
 
@@ -1279,7 +1153,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `explore.data_quality_auditor.DataQualityAuditor`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `explore.data_quality_auditor.DataQualityAuditor`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -1621,7 +1495,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
+`json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
 
 ### class `RenameColumnsComponent` (home.py)
 
@@ -1633,7 +1507,7 @@ A Streamlit component for renaming DataFrame columns with sorting, searching, ty
   > No description available.
 
 - **_get_columns_info**(`self, columns_to_process`) -> `None`
-  > Gather detailed information about columns for RAG context.
+  > What the AI engine is told about the columns: a summary, never a row (manage.ai_payload).
 
 - **display**(`self`) -> `None`
   > Displays the column renaming UI with sorting, searching, type filtering, and a compact layout.
@@ -1835,7 +1709,7 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `shutil`, `pathlib.Path`, `streamlit`, `dotenv.load_dotenv`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.vectorstores.ENGINE_SUMMARIES`, `manage.vectorstores.ENGINE_TITLES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.resolve_engine`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.components.confirm`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`
+`os`, `shutil`, `pathlib.Path`, `streamlit`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.gemini.GEMINI_CHAT_MODELS`, `manage.vectorstores.ENGINE_SUMMARIES`, `manage.vectorstores.ENGINE_TITLES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.resolve_engine`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.components.confirm`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -1879,6 +1753,14 @@ The server-side key is never shown or pre-filled and nothing is written to ``os.
 - **Returns**: `None`
 
 No description available.
+
+### def `_running` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `dict`
+
+The provider, chat model and consent of the engine that runs (empty when it does not run).
 
 ### def `_provider_card` (rag_sidebar.py)
 
@@ -2104,7 +1986,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `platform`, `tomllib`, `importlib.metadata.PackageNotFoundError`, `importlib.metadata.version`, `pathlib.Path`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.attrition.describe_definition`, `core.lineage.verify_trace`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`
+`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.attrition.describe_definition`, `core.lineage.verify_trace`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -2125,14 +2007,6 @@ What each result of the report analysed, for the boxes under the population.
 ### def `_stale_text` (study_dossier.py)
 
 - **Arguments**: `status: str`
-
-- **Returns**: `str`
-
-No description available.
-
-### def `_app_version` (study_dossier.py)
-
-- **Arguments**: ``
 
 - **Returns**: `str`
 
@@ -2278,7 +2152,7 @@ This page allows administrators to:
 - Delete user accounts_
 
 **Imports**:
-`streamlit`, `manage.db_manager.DBManager`, `manage.iam.authz.MIN_PASSWORD_LENGTH`, `manage.iam.authz.is_admin_role`
+`streamlit`, `manage.iam.IAMProviderType`, `manage.iam.get_iam_manager`, `manage.iam.authz.MIN_PASSWORD_LENGTH`, `manage.iam.authz.is_admin_role`
 
 ### def `app` (users_management.py)
 

@@ -61,7 +61,7 @@ def _written_step_names() -> dict[str, str]:
     found: dict[str, str] = {}
     for package in _packages():
         for file in sorted((ROOT / package).rglob("*.py")):
-            tree = ast.parse(file.read_text(encoding="utf-8-sig"))  # a few pages start with a BOM
+            tree = ast.parse(file.read_text(encoding="utf-8-sig"))  # a byte-order mark still parses
             for node in ast.walk(tree):
                 names: list[str | None] = []
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):

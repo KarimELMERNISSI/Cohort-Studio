@@ -270,7 +270,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `typing.Any`, `numpy`, `pandas`, `enrich.custom_metrics_and_filters`
+`logging`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.population.family_masks`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -299,6 +299,13 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 - **compute_validity**(`self, method: ComplexType, params: ComplexType`) -> `float`
   > Calculates a validity score based on the absence of outliers in numerical columns.
   >
+  > The outliers are those of biostats.outliers.detect_outliers, the detector of the Validate page and of the
+  > dashboard's outlier tab, with the same parameters, so the score counts what they flag.
+  > - Univariate methods ('iqr', the default, 'zscore', 'quantile'): the share of the values of the continuous
+  >   numeric columns that are outliers.
+  > - Multivariate methods ('Local Outlier Factor', 'Isolation Forest', 'DBSCAN'): the share of the rows
+  >   complete on the numeric columns that are flagged (at least 11 rows are needed).
+  >
   >
   > **Parameters**:
   >
@@ -306,7 +313,8 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   >     Detection method: 'iqr' (default), 'zscore', 'quantile',
   >     'Local Outlier Factor', 'Isolation Forest', 'DBSCAN'
   > params : dict, optional
-  >     Method-specific parameters (e.g., multiplier, threshold, etc.)
+  >     Method-specific parameters (e.g., multiplier, threshold, etc.); the defaults are those of
+  >     biostats.outliers.DEFAULT_PARAMS
 
 - **compute_consistency**(`self`) -> `float`
   > Approximates consistency by checking if text/object columns could be converted to numeric or datetime.
@@ -314,7 +322,9 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 - **compute_clinical_validity**(`self`) -> `ComplexType`
   > Calculates a score based on declared anomaly criteria (if available).
-  > Score = 100 - (% of rows triggering at least one anomaly).
+  > Score = 100 - (% of rows the clinical-anomalies family flags). The rules are read as the analysis
+  > population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
+  > evaluated is listed in the details, and the score uses the rules that can.
   > Returns None if no anomaly rules are defined (shows as N/A in dashboard).
 
 - **compute_uniformity**(`self`) -> `float`

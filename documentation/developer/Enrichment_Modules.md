@@ -1,150 +1,5 @@
 # Enrichment Modules Documentation
 
-## custom_metrics_and_filters.py
-
-_No module description._
-
-**Imports**:
-`logging`, `pandas`, `core.expressions.UnsafeExpressionError`, `core.expressions.evaluate`
-
-### def `create_mask` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, condition, mask_name`
-
-- **Returns**: `None`
-
-Create a mask based on conditions specified in the config file.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to create the mask from.
-    condition (dict): A dictionary containing the conditions for creating the mask.
-    mask_name (str): The name of the mask.
-
-Returns:
-    pd.Series or None: The mask as a boolean Series or None if an error occurs.
-
-### def `create_expression_mask` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, expression`
-
-- **Returns**: `None`
-
-Create a boolean mask based on the evaluation of the given expression using the DataFrame.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to evaluate the expression on.
-    expression (str): The expression to evaluate.
-
-Returns:
-    pd.Series: A boolean Series representing the result of the expression evaluation.
-
-Raises:
-    ValueError: If an error occurs during expression evaluation.
-
-### def `create_numeric_mask` (custom_metrics_and_filters.py)
-
-- **Arguments**: `series, lower_bound, upper_bound, strategy, exclude_na`
-
-- **Returns**: `None`
-
-Create a boolean mask based on numeric conditions applied to a Series.
-
-Parameters:
-    series (pd.Series): The Series to create the mask from.
-    lower_bound (float, optional): The lower bound for the numeric condition. Defaults to None.
-    upper_bound (float, optional): The upper bound for the numeric condition. Defaults to None.
-    strategy (str, optional): The strategy to apply when creating the mask. Can be 'include' if you want to keep the values inside the boundaries as outliers, 'exclude' if you want to keep the values outside the boundaries as outliers, or None if you use only one boundary. Defaults to None.
-    exclude_na (bool, optional): Whether to exclude NaN values from the mask. Defaults to True.
-
-Returns:
-    pd.Series: A boolean Series representing the numeric mask.
-
-Raises:
-    ValueError: If an invalid strategy is provided.
-
-### def `zip_masks` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, config, mask_type`
-
-- **Returns**: `None`
-
-Zip masks created from the configuration with their respective names.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to create masks from.
-    config (dict from json data file): The configuration containing mask definitions.
-    mask_type (str, optional): The type of masks to create from the configuration. If None, it will take all the masks of the config data given in parameter.
-
-Returns:
-    List[Tuple[str, pd.Series]]: A list of tuples containing the mask names and their corresponding boolean Series.
-
-Raises:
-    ValueError: If an error occurs while creating a mask.
-
-### def `tag_masks` (custom_metrics_and_filters.py)
-
-- **Arguments**: `row`
-
-- **Returns**: `None`
-
-Create a comma-separated list of expert tests columns based on specified conditions in a row.
-
-Parameters:
-- row (pd.Series): A row in the DataFrame.
-
-Returns:
-- str: Comma-separated list of columns with expert test outliers.
-
-### def `generate_computed_column` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, config`
-
-- **Returns**: `None`
-
-Generate and append computed columns to a DataFrame based on the provided configuration and the DataFrame itself.
-This is a part of the process of derivating new computed features.
-Parameters:
-    df (pd.DataFrame): The DataFrame to which computed columns will be added.
-    config (Dict[str, Any]): The configuration dictionary containing computed column information.
-
-Returns:
-    None
-
-### def `apply_computation` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, column_name, computation_expr`
-
-- **Returns**: `None`
-
-Apply a computation expression to a DataFrame and create a new column based on the result.
-This is a part of the process of derivating new computed features.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame to which the computation will be applied.
-    column_name (str): The name of the new column to be created.
-    computation_expr (str): The computation expression to be applied.
-
-Returns:
-    None
-
-### def `create_computation` (custom_metrics_and_filters.py)
-
-- **Arguments**: `df, expression`
-
-- **Returns**: `None`
-
-Parse and evaluate a given expression within the context of a DataFrame.
-This is a part of the process of derivating new computed features.
-
-Parameters:
-    df (pd.DataFrame): The DataFrame used as the context for the computation.
-    expression (str): The expression to be parsed and evaluated.
-
-Returns:
-    Any: The result of the evaluated expression.
-
----
-
 ## data_imputation.py
 
 _No module description._
@@ -348,7 +203,17 @@ Returns:
 _No module description._
 
 **Imports**:
-`logging`, `os`, `pandas`, `manage.file_handling`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`
+`logging`, `os`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.loaders.read_path`, `utils.date_parser.smart_parse_dates`
+
+### def `align_date_keys` (external_data.py)
+
+- **Arguments**: `main_df, additional_df`
+
+- **Returns**: `None`
+
+The additional table with its columns parsed as dates where the main table holds dates under the same name,
+so that date keys match in the merge. The Enrich page and the replay of the step both call it, on the same
+tables, so they merge the same rows.
 
 ### def `add_data` (external_data.py)
 
@@ -655,10 +520,21 @@ Fill the missing values of ``target`` with a formula of the other columns; retur
 
 ## transformation_logic.py
 
-_No module description._
+_New variables derived from existing ones: statistics, scaling, dimensionality reduction, clustering and encoding.
+
+``apply_variable_transformation`` is the only implementation: the Enrich page calls it, and the replay of a trace
+calls it again with the parameters the page recorded, so both produce the same columns with the same names._
 
 **Imports**:
 `numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `core.expressions.safe_format`
+
+### def `_unique_names` (transformation_logic.py)
+
+- **Arguments**: `new_columns: dict, existing`
+
+- **Returns**: `dict`
+
+A name already in the table, or already given to another new column, gets the first free suffix _1, _2...
 
 ### def `apply_variable_transformation` (transformation_logic.py)
 
@@ -666,6 +542,9 @@ _No module description._
 
 - **Returns**: `None`
 
-No description available.
+The new columns of one transformation, on ``dataframe``'s index (None when the transformation makes none).
+
+Raises ValueError when the input cannot be transformed: missing values for a dimensionality reduction or a
+clustering (they need complete data), fewer than two columns to reduce, fewer than two rows to cluster.
 
 ---

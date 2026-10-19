@@ -1,5 +1,40 @@
 # Backend Management Logic
 
+## ai_payload.py
+
+_What the AI features may send about a dataset to a cloud provider: a summary of each column, never a row.
+
+The column renaming, the variable taxonomy, the unit hints of Enrich and the suggested criteria of Validate all
+describe the columns with :func:`column_profile`, and the consent notice of Settings lists exactly this:
+- numeric columns: the 5th, 25th, 50th, 75th and 95th percentiles; never the minimum or the maximum, which can
+  single out one participant;
+
+- other columns: their most frequent values with their counts, only values shared by at least ``MIN_COUNT`` rows;
+
+- date columns: the first and the last year._
+
+**Imports**:
+`__future__.annotations`, `collections.abc.Iterable`, `typing.Any`, `pandas`
+
+### def `_frequent_values` (ai_payload.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `column_profile` (ai_payload.py)
+
+- **Arguments**: `df: pd.DataFrame, columns: ComplexType`
+
+- **Returns**: `list[dict[ComplexType]]`
+
+One summary per column (``name``, ``type`` and ``stats``, ``top_values`` or ``range``). ``date_columns`` are read
+as dates even when they hold text (only their years are sent).
+
+---
+
 ## authz.py
 
 _Authorization and credential-policy helpers shared by the UI and the CLI.
@@ -888,124 +923,6 @@ Factory for creating LLM and Embedding connectors.
 
 ---
 
-## file_handling.py
-
-_No module description._
-
-**Imports**:
-`logging`, `os`, `pandas`, `detect_delimiter.detect`, `utils.logging_config.single_line`
-
-### def `create_folders` (file_handling.py)
-
-- **Arguments**: `config`
-
-- **Returns**: `None`
-
-Create folders based on the configuration.
-
-Parameters:
-    config (dict): Configuration dictionary containing folder names.
-
-Returns:
-    None
-
-### def `list_files_in_directory` (file_handling.py)
-
-- **Arguments**: `directory, file_extensions`
-
-- **Returns**: `None`
-
-Lists files with specified extensions in a directory.
-
-Parameters:
-- directory (str): The path to the directory.
-
-- file_extensions (list of str, optional): List of file extensions to filter. Default is None.
-
-Returns:
-- list of str: List of file paths that match the specified extensions.
-
-If no file_extensions are provided, all files in the directory are listed.
-
-### def `detect_encoding` (file_handling.py)
-
-- **Arguments**: `file_path, num_lines`
-
-- **Returns**: `None`
-
-Detects the encoding of a file using charset-normalizer.
-
-Parameters:
-- file_path (str): The path to the file.
-
-- num_lines (int): The number of lines to read from the file for encoding detection. Default is 100.
-
-Returns:
-- str: The detected encoding of the file.
-
-Note:
-The function attempts to detect the encoding of the file by analyzing a portion of its content.
-It reads the specified number of lines and uses the charset-normalizer library to determine the encoding.
-
-### def `load_csv_with_separator` (file_handling.py)
-
-- **Arguments**: `file_path, encoding, num_lines`
-
-- **Returns**: `None`
-
-Load a CSV file with automatic delimiter detection.
-
-- file_path (str): The path to the CSV file.
-
-- encoding (str): The encoding of the file.
-
-- num_lines (int): The number of lines to read for delimiter detection. Default is 10.
-
-Returns:
-- pd.DataFrame: The loaded DataFrame.
-
-### def `load_dataframe` (file_handling.py)
-
-- **Arguments**: `file_path, encoding`
-
-- **Returns**: `None`
-
-Loads a DataFrame from a file.
-
-Parameters:
-- file_path (str): The path to the file to load.
-
-- encoding (str, optional): The encoding of the file. Default is 'utf-8'.
-
-Returns:
-- DataFrame or None: The loaded DataFrame if successful, otherwise None.
-
-This function attempts to load a DataFrame from the specified file. It first detects the file extension
-to determine the file type. For CSV files, it uses a custom function to handle loading with the specified
-encoding. For Excel files, it uses pandas read_excel method. If the file format is unsupported or an error
-occurs during loading, it logs an error message and returns None.
-
-### def `auto_name` (file_handling.py)
-
-- **Arguments**: `input_file_path, config, output_extension, descriptive`
-
-- **Returns**: `None`
-
-Generate an output file path based on the input file path.
-
-Parameters:
-    input_file_path (str): The path to the input file.
-    output_extension (str): The extension of the output file. Default is 'csv'.
-    descriptive (bool): Whether to use a descriptive folder. Default is False.
-
-Returns:
-    str: The output file path.
-
-Raises:
-    None
-
----
-
 ## flow_figure.py
 
 _The participant flow as a static picture (PNG) for the Word dossier: the same boxes and geometry as the app's
@@ -1050,7 +967,7 @@ Chat connector for Google Gemini models via google-genai SDK.
   > No description available.
 
 - **get_available_models**(`self`) -> `list[str]`
-  > Query Gemini API for available text models.
+  > The chat models the key may use (GEMINI_CHAT_MODELS when the API cannot be asked).
 
 - **_generate**(`self, messages: list[BaseMessage], stop: ComplexType, run_manager: ComplexType`) -> `ChatResult`
   > No description available.
@@ -1075,6 +992,14 @@ Embedding connector for Google Gemini models.
 
 - **embed_query**(`self, text: str`) -> `list[float]`
   > No description available.
+
+### def `is_chat_model` (gemini.py)
+
+- **Arguments**: `name: str, actions: ComplexType`
+
+- **Returns**: `bool`
+
+A Gemini or Gemma model that answers text (generateContent) and is not one of the specialised models.
 
 ---
 
@@ -1224,6 +1149,10 @@ Better Auth, or Disabled) based on environment configuration or runtime paramete
 **Imports**:
 `logging`, `os`, `typing.Any`, `utils.logging_config.single_line`, `.setup_token`, `base.BaseIAMProvider`, `providers.better_auth.BetterAuthIAMProvider`, `providers.disabled.DisabledIAMProvider`, `providers.local_duckdb.LocalDuckDBIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
+### class `IAMConfigurationError` (manager.py)
+
+The identity provider is misconfigured: the app must not start with another one in its place.
+
 ### class `IAMManager` (manager.py)
 
 Central facade managing IAM operations and provider lifecycle.
@@ -1234,7 +1163,9 @@ Central facade managing IAM operations and provider lifecycle.
   > Initialize IAM Manager with configuration or environment variables.
 
 - **_resolve_config_from_env**(`cls`) -> `IAMConfig`
-  > Read IAM configuration from process environment variables.
+  > Read IAM configuration from process environment variables. An unknown CMP_IAM_PROVIDER raises
+  > IAMConfigurationError: a misspelt provider used to give local accounts without a word, so a server meant to
+  > sign users in elsewhere ran with its own accounts instead.
 
 - **_build_provider**(`cls, config: IAMConfig`) -> `BaseIAMProvider`
   > Construct the designated provider instance.
@@ -1247,6 +1178,9 @@ Central facade managing IAM operations and provider lifecycle.
 
 - **provider_name**(`self`) -> `str`
   > Name of the active provider.
+
+- **provider_type**(`self`) -> `IAMProviderType`
+  > The configured provider (CMP_IAM_PROVIDER, or the configuration given).
 
 - **set_provider**(`self, provider: BaseIAMProvider`) -> `None`
   > Manually inject a custom or mock IAM provider.
@@ -1936,7 +1870,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`json`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `manage.ai_payload.column_profile`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -2341,7 +2275,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `enrich.formulas.evaluate_formula_safely`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.formulas.evaluate_formula_safely`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
 
 ### class `ReplayResult` (reproduction_manager.py)
 
@@ -2790,7 +2724,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.steps.step_title`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 
@@ -2836,7 +2770,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`contextlib`, `json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.lineage.TRACE_SCHEMA`, `core.lineage.genesis_hash`, `core.lineage.seal_step`, `core.lineage.verify_trace`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`
+`contextlib`, `json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.lineage.TRACE_SCHEMA`, `core.lineage.genesis_hash`, `core.lineage.seal_step`, `core.lineage.verify_trace`, `core.steps.STEPS`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`
 
 ### class `TransformationManager` (transformation_manager.py)
 

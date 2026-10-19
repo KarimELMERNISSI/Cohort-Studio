@@ -677,6 +677,49 @@ tuple
 
 ---
 
+## environment.py
+
+_The software a dataset was loaded and analysed with: CohortStudio's version and commit, Python and the key libraries.
+It is recorded in the trace when a dataset is loaded (the ``initial_load`` step) and printed in the study dossier,
+so that a reader knows which versions produced the results._
+
+**Imports**:
+`__future__.annotations`, `platform`, `tomllib`, `importlib.metadata.PackageNotFoundError`, `importlib.metadata.version`, `pathlib.Path`
+
+### def `app_version` (environment.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+CohortStudio's version: the installed package, else pyproject.toml (a source checkout).
+
+### def `git_commit` (environment.py)
+
+- **Arguments**: `root: Path`
+
+- **Returns**: `ComplexType`
+
+The short commit of a source checkout (read from .git, without running git), or None.
+
+### def `environment` (environment.py)
+
+- **Arguments**: ``
+
+- **Returns**: `dict[ComplexType]`
+
+CohortStudio, its commit (when known), Python and the versions of the key libraries that are installed.
+
+### def `environment_text` (environment.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+The environment in one line, for reports: "CohortStudio 2.4.1 (commit abc1234), Python 3.14.3, numpy 2.4, ...".
+
+---
+
 ## epidemiology_utils.py
 
 _Epidemiology and Biostatistics Utility Module (legacy entry points).
@@ -1391,11 +1434,13 @@ optional `ml` extra (follow-up programme M4), so it is imported only when MissFo
 
 ## multipage.py
 
-_Legacy loader entry points used by the pages. Parsing lives in :mod:`ingest.loaders`; this module
+_Loader entry points used by the pages. Parsing lives in :mod:`ingest.loaders`, the engine the import and the
+replay use, so a file read here, by upload or by path, gives the table the replay will read again. Each table
+carries the options it was parsed with in ``df.attrs["parse_options"]``, for the step that records it. This module
 has no Streamlit dependency (pages render their own messages)._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `io`, `logging`, `typing.Any`, `pandas`, `manage.file_handling`, `core.state.ParseOptions`, `ingest.loaders.detect_decimal`, `ingest.loaders.detect_delimiter`, `ingest.loaders.excel_sheet_names`, `ingest.loaders.file_kind`, `ingest.loaders.read_table`, `ingest.loaders.detect_encoding`, `utils.config_loader.create_empty_config`
+`__future__.annotations`, `hashlib`, `logging`, `typing.Any`, `pandas`, `core.state.ParseOptions`, `ingest.loaders.LoadResult`, `ingest.loaders.excel_sheet_names`, `ingest.loaders.file_kind`, `ingest.loaders.read_path`, `ingest.loaders.read_table`, `ingest.loaders.detect_encoding`, `utils.config_loader.create_empty_config`
 
 ### def `detect_encoding` (multipage.py)
 
@@ -1405,30 +1450,24 @@ has no Streamlit dependency (pages render their own messages)._
 
 Encoding of ``file_content`` (UTF-8, then Windows-1252, then charset-normalizer).
 
-### def `detect_separator` (multipage.py)
+### def `_with_options` (multipage.py)
 
-- **Arguments**: `text: str`
+- **Arguments**: `result: LoadResult`
 
-- **Returns**: `str`
+- **Returns**: `pd.DataFrame`
 
-The delimiter whose count is constant across the first lines.
-
-### def `load_csv_with_separator` (multipage.py)
-
-- **Arguments**: `file_bytes: bytes, encoding: str, num_lines: int`
-
-- **Returns**: `ComplexType`
-
-CSV bytes -> DataFrame with detected delimiter and decimal separator; ``None`` on failure.
+The table, carrying the options it was parsed with (recorded by the step that uses it, for the replay).
 
 ### def `load_dataframe` (multipage.py)
 
-- **Arguments**: `uploaded_file: Any`
+- **Arguments**: `uploaded_file: Any, options: ComplexType`
 
 - **Returns**: `ComplexType`
 
-DataFrame from a Streamlit upload or a file path. A multi-sheet workbook returns the sentinel
-``{"__multi_sheet__": True, "sheet_names": [...]}`` so the caller can ask which sheets to load.
+DataFrame from a Streamlit upload or a file path, read with ``options`` (the ones the user chose in
+``ui.components.csv_options``; detected when omitted). A multi-sheet workbook uploaded returns the sentinel
+``{"__multi_sheet__": True, "sheet_names": [...]}`` so the caller can ask which sheets to load; a workbook read
+by path gives its first sheet, as the replay does. A file that cannot be read by path raises.
 
 ### def `_load_excel_with_selection` (multipage.py)
 

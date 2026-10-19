@@ -137,6 +137,17 @@ def test_the_wheel_ships_every_first_party_package() -> None:
     assert on_disk == first_party, sorted(first_party - on_disk)
 
 
+def test_no_source_file_starts_with_a_byte_order_mark() -> None:
+    """Python imports such a file, but ast.parse and the developer-reference generator do not (a Windows editor or
+    PowerShell's Out-File adds the mark; dev_scripts/doc_gen.py once dropped a whole page from the reference)."""
+    marked = [
+        file.relative_to(ROOT).as_posix()
+        for file in _files(*SOURCE_DIRS, "prompts", "tests", "dev_scripts")
+        if file.read_bytes().startswith(b"\xef\xbb\xbf")
+    ]
+    assert not marked, marked
+
+
 def test_tests_are_not_named_like_packages() -> None:
     """A tests/<name>/ directory named like a top-level package shadows it under pytest."""
     packages = {p.name for p in ROOT.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
