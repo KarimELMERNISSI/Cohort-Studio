@@ -444,7 +444,7 @@ def result_blocks(value: Any) -> ResultBlocks:
         blocks.lines.extend(
             [
                 f"Mantel-Haenszel odds ratio = {_num(value.or_mh)} (95% CI {_ci(value.or_mh_ci)}); crude OR = {_num(value.crude_or)}",
-                f"Mantel-Haenszel risk ratio = {_num(value.rr_mh)} (95% CI {_ci(value.rr_mh_ci)})",
+                f"Mantel-Haenszel risk ratio = {_num(value.rr_mh)} (95% CI {_ci(value.rr_mh_ci)}); crude RR = {_num(value.crude_rr)}",
                 f"Mantel-Haenszel test: chi2 = {_num(value.mh_test_statistic)}, {_peq(value.mh_test_p)}; "
                 f"Breslow-Day homogeneity: chi2 = {_num(value.breslow_day_statistic)}, {_peq(value.breslow_day_p)}; "
                 f"{value.n_strata} strata",

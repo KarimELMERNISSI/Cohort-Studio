@@ -17,6 +17,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Example: 15 events in 1,200 person-years against 4 in 1,000 give a rate ratio of 3.1, now with 95% CI 0.996 to
     12.9 and p = 0.051; before, 1.09 to 8.96 and p = 0.038.
   - The score interval remains available (`ci_method="score"`), paired with the score test.
+- **Mantel-Haenszel.** The note no longer calls the stratum variable "a confounder" whenever the crude and adjusted
+  odds ratios differ by more than 10%: odds ratios are non-collapsible, so they can differ without any confounding.
+  - The crude risk ratio is now reported next to the crude odds ratio, and the note reads the risk ratios first.
+  - When the risk ratios differ too, the stratum variable "may be a confounder".
+  - When only the odds ratios differ, the note says that this need not mean confounding.
 
 ### Documentation: a DOI to cite
 

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 from scipy import stats
 
-from biostats.rates import rate_ratio
+from biostats.rates import mantel_haenszel, rate_ratio
 
 CASES = [
     (15, 1200, 4, 1000),
@@ -58,3 +59,42 @@ def test_a_group_without_events() -> None:
         rate_ratio(0, 500, 7, 900, ci_method="score")
     with pytest.raises(ValueError, match="unknown interval method"):
         rate_ratio(5, 500, 7, 900, ci_method="wald")  # type: ignore[arg-type]
+
+
+def _strata(cells: dict[str, tuple[int, int, int, int]]) -> pd.DataFrame:
+    """Rows from the 2x2 counts of each stratum: exposed events, exposed non-events, reference events, reference
+    non-events."""
+    rows = []
+    for stratum, (a, b, c, d) in cells.items():
+        for exposed, event, n in (
+            ("yes", "yes", a),
+            ("yes", "no", b),
+            ("no", "yes", c),
+            ("no", "no", d),
+        ):
+            rows += [{"exposed": exposed, "event": event, "stratum": stratum}] * n
+    return pd.DataFrame(rows)
+
+
+def test_odds_ratios_that_differ_without_confounding_are_not_called_confounding() -> None:
+    # exposure independent of the stratum (half exposed in each), the same odds ratio of 9 in both strata: the
+    # crude odds ratio (5.4) differs from the adjusted one only because odds ratios are non-collapsible, and the
+    # crude and adjusted risk ratios agree (2.33)
+    df = _strata({"low risk": (50, 50, 10, 90), "high risk": (90, 10, 50, 50)})
+    res = mantel_haenszel(
+        df, "exposed", "event", "stratum", exposure_level="yes", event_level="yes"
+    )
+    assert res.or_mh == pytest.approx(9.0) and res.crude_or == pytest.approx(49 / 9)
+    assert res.crude_rr == pytest.approx(res.rr_mh) == pytest.approx(7 / 3)
+    assert not any("may be a confounder" in w for w in res.warnings)
+    assert any("non-collapsible" in w and "need not mean confounding" in w for w in res.warnings)
+
+
+def test_confounding_shows_on_the_risk_ratios() -> None:
+    # exposure concentrated in the high-risk stratum, no effect within the strata: the crude ratios are confounded
+    df = _strata({"low risk": (2, 18, 16, 144), "high risk": (90, 90, 10, 10)})
+    res = mantel_haenszel(
+        df, "exposed", "event", "stratum", exposure_level="yes", event_level="yes"
+    )
+    assert res.rr_mh == pytest.approx(1.0) and res.crude_rr > 2
+    assert any("risk ratios differ" in w and "may be a confounder" in w for w in res.warnings)

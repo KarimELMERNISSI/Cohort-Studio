@@ -361,6 +361,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                 f"{res.crude_or:.3f}",
                 help="Unadjusted odds ratio from the pooled table.",
             )
+            m3.caption(f"crude RR {res.crude_rr:.3f}")
             m4.metric(
                 "MH test p", f"{res.mh_test_p:.4g}", help=f"chi2 = {res.mh_test_statistic:.3f}"
             )

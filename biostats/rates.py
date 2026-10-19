@@ -178,8 +178,39 @@ class StratifiedResult:
     mh_test_statistic: float
     mh_test_p: float
     per_stratum: pd.DataFrame
+    crude_rr: float = float("nan")  # unadjusted risk ratio from the pooled table
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+def _differ(crude: float, adjusted: float) -> bool:
+    """The crude and adjusted ratios are known and differ by more than 10%."""
+    known = np.isfinite(crude) and np.isfinite(adjusted) and crude > 0 and adjusted > 0
+    return bool(known and abs(np.log(crude) - np.log(adjusted)) > np.log(1.1))
+
+
+def _change_in_estimate(crude_or: float, or_mh: float, crude_rr: float, rr_mh: float) -> list[str]:
+    """
+    The 10% change-in-estimate hint, read on the risk ratio first. Odds ratios are non-collapsible: the crude and
+    adjusted odds ratios can differ when the stratum variable is not a confounder at all, while the risk ratios
+    then agree.
+    """
+    rr_known = bool(np.isfinite(crude_rr) and np.isfinite(rr_mh))
+    if rr_known and _differ(crude_rr, rr_mh):
+        return [
+            "the crude and adjusted risk ratios differ by more than 10%: the stratum variable may be a confounder"
+        ]
+    if not _differ(crude_or, or_mh):
+        return []
+    if rr_known:
+        return [
+            "the crude and adjusted odds ratios differ by more than 10% but the risk ratios do not: odds ratios "
+            "are non-collapsible, so this difference need not mean confounding"
+        ]
+    return [
+        "the crude and adjusted odds ratios differ by more than 10%: the stratum variable may be a confounder, "
+        "although odds ratios can also differ without confounding (they are non-collapsible)"
+    ]
 
 
 def _rr_mh(tables: Sequence[np.ndarray], alpha: float) -> tuple[float, CI]:
@@ -264,14 +295,9 @@ def mantel_haenszel(
         if pooled[0, 1] * pooled[1, 0] > 0
         else float("nan")
     )
-    if (
-        np.isfinite(crude)
-        and np.isfinite(st.oddsratio_pooled)
-        and abs(np.log(crude) - np.log(st.oddsratio_pooled)) > np.log(1.1)
-    ):
-        warnings.append(
-            "the crude and adjusted odds ratios differ by more than 10%: the stratum variable is a confounder"
-        )
+    a, b, c, d = pooled.ravel()
+    crude_rr = (a / (a + b)) / (c / (c + d)) if a + b > 0 and c + d > 0 and c > 0 else float("nan")
+    warnings.extend(_change_in_estimate(crude, float(st.oddsratio_pooled), crude_rr, rr))
     return StratifiedResult(
         n_strata=len(tables),
         or_mh=float(st.oddsratio_pooled),
@@ -289,6 +315,7 @@ def mantel_haenszel(
         mh_test_statistic=float(mh.statistic),
         mh_test_p=float(mh.pvalue),
         per_stratum=pd.DataFrame(rows),
+        crude_rr=float(crude_rr),
         references=[
             REFERENCES["mantel1959"],
             REFERENCES["breslow1980"],
