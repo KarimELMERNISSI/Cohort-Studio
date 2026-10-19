@@ -36,6 +36,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Now:** the ratios are then not pooled. The risk difference still is, and a warning says why.
   - **Sensitivity analysis:** a new option adds 0.5 to every cell of every table, so that the ratios can be pooled.
     The page and the dossier label that run as a sensitivity analysis.
+- **Transformations (Enrich > Create new variables) replay to the same table.** The page computed the new
+  columns with its own copy of the transformation engine; the replay of the trace used the shared one.
+  - Applying a transformation twice gave `age_Z-Score_Standardization_1` on the page, but a second column with
+    the same name on replay.
+  - PCA was not seeded, so every replayed PCA step differed slightly and was flagged.
+  - The page now calls the shared engine. The renaming and the refusal of missing values moved into it, and PCA
+    is seeded like the other methods.
+  - Older traces now replay with the names the page gave.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

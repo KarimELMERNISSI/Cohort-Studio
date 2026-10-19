@@ -14,7 +14,6 @@ from rapidfuzz import fuzz
 
 import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
-from core.expressions import safe_format
 from core.population import catalogue
 from enrich.formulas import (
     evaluate_formula_safely,
@@ -25,6 +24,7 @@ from enrich.formulas import (
     validate_variable_name,
 )
 from enrich.imputation_service import impute_rows
+from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
 from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
@@ -1557,35 +1557,21 @@ def merge_transformed_columns(main_data, transformed_data, handle_duplicates="re
 
 
 def compute_transformations(dataframe):
-    # Local imports: heavy ML libraries are only needed in this section. UMAP and prince (FAMD) are in the optional
-    # 'ml' extra: when missing, their methods are not offered (utils/optional.py).
+    """
+    The transformation form. The columns are computed by enrich.transformation_logic.apply_variable_transformation,
+    the function the replay of the trace calls with the same parameters, so the replay gives the same columns.
+    """
+    # prince (PCA explained variance, FAMD) and UMAP are in the optional 'ml' extra: when missing, their methods
+    # are not offered (utils/optional.py)
     import importlib
 
     prince = importlib.import_module("prince") if method_available("FAMD") else None
-    umap = importlib.import_module("umap") if method_available("UMAP") else None
-    from sklearn.manifold import TSNE
-    from sklearn.preprocessing import (
-        LabelEncoder,
-        MinMaxScaler,
-        OneHotEncoder,
-        OrdinalEncoder,
-        StandardScaler,
-    )
 
     st.subheader("Transformation and Aggregation")
 
-    # Define available transformations
-    TRANSFORMATIONS = {
-        "Mean": lambda x: x.mean(),
-        "Median": lambda x: x.median(),
-        "Summation": lambda x: x.sum(),
-        "Minimum Value": lambda x: x.min(),
-        "Maximum Value": lambda x: x.max(),
-        "Standard Deviation": lambda x: x.std(),
-        "Natural Logarithm Transformation": lambda x: np.log(x + 1),
-        "Min-Max Normalization": lambda x: MinMaxScaler().fit_transform(x.values.reshape(-1, 1)).flatten(),
-        "Z-Score Standardization": lambda x: (x - x.mean()) / x.std(),
-    }
+    # the settings below are recorded in the trace only when the form shows them
+    n_components = perplexity = learning_rate = n_neighbors = min_dist = None
+    n_clusters = eps = min_samples = category_orders = None
 
     # Step 1: Transformation Type Selection
     transformation_type = st.selectbox(
@@ -1786,6 +1772,7 @@ def compute_transformations(dataframe):
                         rescale_with_std=True,      # Scale the data by dividing by standard deviation
                         copy=True,                  # Do not modify the original data
                         check_input=True,           # Ensure input is valid
+                        random_state=RANDOM_STATE,  # the same components as the transformation itself
                         engine='sklearn'            # Select sklearn computation engine
                     )
 
@@ -1886,197 +1873,43 @@ def compute_transformations(dataframe):
             st.warning("Please select at least one column to proceed.")
             return None
 
-        new_columns = {}
-
-        # CHECK FOR MISSING VALUES (Elegant Error Handling)
-        if transformation_type in ["Dimensionality Reduction", "Clustering"]:
-             if dataframe[columns].isnull().any().any():
-                 st.error("**Input columns contain missing values (NaNs).**\n\n"
-                          "Dimensionality reduction (PCA, t-SNE, etc.) and Clustering require complete data to function correctly.\n\n"
-                          "**Action Required:** Please go to the **Handle Missing Data** tab to impute these missing values before proceeding.")
-                 return None
-
+        params = {
+            "transformation_type": transformation_type,
+            "transformation": transformation,
+            "columns": columns,
+            "naming_pattern": naming_pattern,
+        }
+        shown = {
+            "n_components": n_components,
+            "perplexity": perplexity,
+            "learning_rate": learning_rate,
+            "n_neighbors": n_neighbors,
+            "min_dist": min_dist,
+            "category_orders": category_orders,
+            "n_clusters": n_clusters,
+            "eps": eps,
+            "min_samples": min_samples,
+        }
+        params |= {name: value for name, value in shown.items() if value is not None}
         try:
-            if transformation_type == "Dimensionality Reduction":
-                # Standardize data
-                if transformation in ["t-SNE", "UMAP"]:
-                    scaler = StandardScaler()
-                    scaled_data = scaler.fit_transform(dataframe[columns])
-
-                if transformation == "PCA":
-                    #model = PCA(n_components=n_components)
-                    model = prince.PCA(
-                        n_components=n_components,  # Number of principal components to retain
-                        rescale_with_mean=True,     # Center the data by subtracting the mean
-                        rescale_with_std=True,      # Scale the data by dividing by standard deviation
-                        copy=True,                  # Do not modify the original data
-                        check_input=True,           # Ensure input is valid
-                        engine='sklearn'            # Select sklearn computation engine
-                    )
-                    transformed_data = model.fit_transform(dataframe[columns])
-
-                elif transformation == "t-SNE":
-                    model = TSNE(n_components=n_components, perplexity=perplexity,
-                                learning_rate=learning_rate, random_state=42)
-                    transformed_data = model.fit_transform(scaled_data)
-                elif transformation == "UMAP":
-                    model = umap.UMAP(n_components=n_components, n_neighbors=n_neighbors,
-                                    min_dist=min_dist, random_state=42)
-                    transformed_data = model.fit_transform(scaled_data)
-                else:  # FAMD
-                    model = prince.FAMD(n_components=n_components, random_state=42)
-                    transformed_data = model.fit_transform(dataframe[columns])
-
-                # Create column names and DataFrame
-                component_names = [safe_format(naming_pattern, method_applied=transformation.replace(" ", "_")) + f"_{i + 1}" for i in range(n_components)]
-
-                if transformation in ["t-SNE", "UMAP"]:
-                    result_df = pd.DataFrame(transformed_data, columns=component_names, index=dataframe.index)
-                else:
-                    # Ensure it's treated as a DataFrame (since FAMD already returns one)
-                    result_df = transformed_data.copy()
-                    result_df.columns = component_names
-
-                
-                # Convert to dictionary and update new_columns
-                new_columns.update(result_df.to_dict(orient="list"))
-
-            elif transformation_type == "Clustering":
-                from utils.clustering_utils import (
-                    fit_dbscan,
-                    fit_gaussian_mixture,
-                    fit_kmeans,
-                    prepare_data_for_clustering,
-                )
-                
-                # Prepare Data (handles standardization)
-                numeric_cols = dataframe[columns].select_dtypes(include=np.number).columns.tolist()
-                prep_data, valid_idx = prepare_data_for_clustering(dataframe[columns], numeric_cols)
-                
-                if len(prep_data) < 2:
-                    st.error("Not enough valid data points for clustering.")
-                    return None
-                
-                # Run Clustering
-                if transformation == "K-Means":
-                    labels, _ = fit_kmeans(prep_data, n_clusters)
-                elif transformation == "DBSCAN":
-                    labels, _ = fit_dbscan(prep_data, eps, min_samples)
-                elif transformation == "Gaussian Mixture":
-                    labels, _ = fit_gaussian_mixture(prep_data, n_clusters)
-                
-                # Map results back to original index
-                full_labels = pd.Series(index=dataframe.index, data=np.nan)
-                full_labels.loc[valid_idx] = labels
-                
-                col_name = safe_format(naming_pattern, method_applied=transformation.replace(" ", "_"))
-                new_columns[col_name] = full_labels.values
-
-
-            elif transformation_type == "Encoding":
-                if transformation == "One-Hot Encoding":
-                    encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
-                    for col in columns:
-                        encoded_data = encoder.fit_transform(dataframe[[col]])
-                        categories = encoder.categories_[0]
-                        for i, category in enumerate(categories):
-                            
-                            new_col_name = safe_format(naming_pattern, 
-                                initial_variable=col,
-                                category=category
-                            )
-                            new_columns[new_col_name]  = encoded_data[:, i]
-                
-                elif transformation == "Label Encoding":
-                    encoder = LabelEncoder()
-                    for col in columns:
-                        new_col_name = safe_format(naming_pattern, 
-                            initial_variable=col,
-                            category="label_encoded"
-                        )
-                        new_columns[new_col_name] = encoder.fit_transform(dataframe[col])
-                
-                elif transformation == "Ordinal Encoding":
-
-                    for col in columns:
-                        # Initialize the encoder with the specified category order for the current column
-                        encoder = OrdinalEncoder(categories=[category_orders[col]])
-                        new_col_name = safe_format(naming_pattern, 
-                            initial_variable=col,
-                            category="ordinal"
-                        )
-                        new_columns[new_col_name] = encoder.fit_transform(dataframe[[col]]).flatten()
-
-            else:
-                # Handle statistical and scaling transformations
-                method_function = TRANSFORMATIONS.get(transformation, None)
-                if method_function:
-                    for col in columns:
-                        new_col_name = safe_format(naming_pattern, 
-                            initial_variable=col,
-                            method_applied=transformation.replace(" ", "_")
-                        )
-                        result = method_function(dataframe[col])
-                        # Ensure result is array-like
-                        if np.isscalar(result):
-                            result = [result] * len(dataframe)
-                        new_columns[new_col_name] = result
-
-            # Resolve duplicate column names
-            final_new_columns = {}
-            for col_name, data in new_columns.items():
-                original_col_name = col_name
-                counter = 1
-                # Check against existing dataframe columns AND newly created columns
-                while col_name in dataframe.columns or col_name in final_new_columns:
-                    col_name = f"{original_col_name}_{counter}"
-                    counter += 1
-                final_new_columns[col_name] = data
-            
-            new_columns = final_new_columns
-
-            # Create final result DataFrame
-            if new_columns:
-                result_df = pd.DataFrame(new_columns, index=dataframe.index)
-                st.success("Transformations applied successfully!")
-                st.dataframe(result_df, width='stretch')
-
-                new_df = pd.concat([dataframe, result_df], axis=1)
-
-                # Save snapshot
-                snapshot_path = save_snapshot(new_df, "variable_transformation")
-
-                # Log transformation
-                params = {
-                    "transformation_type": transformation_type,
-                    "transformation": transformation,
-                    "columns": columns,
-                    "naming_pattern": naming_pattern,
-                }
-                
-                # Add optional params if they exist in local scope
-                if 'n_components' in locals(): params['n_components'] = n_components
-                if 'perplexity' in locals(): params['perplexity'] = perplexity
-                if 'learning_rate' in locals(): params['learning_rate'] = learning_rate
-                if 'n_neighbors' in locals(): params['n_neighbors'] = n_neighbors
-                if 'min_dist' in locals(): params['min_dist'] = min_dist
-                if 'category_orders' in locals(): params['category_orders'] = category_orders
-                if 'n_clusters' in locals(): params['n_clusters'] = n_clusters
-                if 'eps' in locals(): params['eps'] = eps
-                if 'min_samples' in locals(): params['min_samples'] = min_samples
-
-                # Into the Enrich draft; traced when the draft is applied
-                get_state().stage(new_df, "variable_transformation", params, f"Applied {transformation}",
-                                  output_dataset_path=snapshot_path)
-
-                return result_df
-            else:
-                st.warning("No transformations were applied.")
-                return None
-
+            result_df = apply_variable_transformation(dataframe, params)
+        except ValueError as e:  # missing values, too few columns or rows: the message says what to do
+            st.error(str(e))
+            return None
         except Exception as e:
             st.error(f"Error applying transformation: {e!s}")
             return None
+        if result_df is None:
+            st.warning("No transformations were applied.")
+            return None
+        st.success("Transformations applied successfully!")
+        st.dataframe(result_df, width='stretch')
+        new_df = pd.concat([dataframe, result_df], axis=1)
+        snapshot_path = save_snapshot(new_df, "variable_transformation")
+        # Into the Enrich draft; traced when the draft is applied
+        get_state().stage(new_df, "variable_transformation", params, f"Applied {transformation}",
+                          output_dataset_path=snapshot_path)
+        return result_df
     return None
 
 
