@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from biostats._types import TestResult
+from biostats.assumptions import read_assumptions
 
 
 def _fmt(value: float | None, digits: int = 3) -> str:
@@ -37,12 +38,11 @@ def how_to_read(result: TestResult) -> str:
             f"The {label}-value ({_fmt(p, 2)}) is the probability of a result at least this extreme if the true effect were zero; "
             "it is not the probability that there is no effect, and a value above 0.05 is not evidence of absence."
         )
-    worries = [a for a in result.assumptions if a.status in ("caution", "violated")]
+    worries = [r for r in read_assumptions(result) if r.status in ("caution", "violated")]
     if worries:
         parts.append(
             "Diagnostics to keep in mind: "
-            + "; ".join(f"{a.name} ({a.detail})" for a in worries)
-            + "."
+            + "; ".join(f"{r.check} ({r.finding}): {r.meaning}" for r in worries)
         )
     if result.family == "nonparametric":
         parts.append(

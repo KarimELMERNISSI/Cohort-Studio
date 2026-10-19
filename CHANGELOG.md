@@ -189,6 +189,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     row's values, and bars or boxes showed the first rows' values.
   - The columns now go to Plotly Express, which matches them to the points of each trace. The choice is offered where
     each point is one row: scatter plots (points or regression), and line plots without aggregation or interval band.
+- **Analyze > Hypothesis tests: the result card explains its assumption checks.**
+  - The card showed "normality (No)" and "normality (Yes)" side by side, with neither the group variable, the
+    finding, nor whether the check matters for the test.
+  - Each check is now one line: the group it concerns (*Normality, diabetes = No (n = 506)*), the finding with its
+    test and p-value, and what it means for the test that ran. For example, unequal variances are "Not required:
+    Welch's test allows the groups different variances", and non-normality with 30 or more values is not critical
+    for a test of means.
+  - The same reading feeds "How to read this".
+- **Analyze > Hypothesis tests: the figures of the detailed view.**
+  - They stretched to the full width at fixed heights, the histograms overlaid opaque counts, and one Q-Q plot of
+    the pooled residuals sat beside per-group normality checks.
+  - Four figures now form a two-column grid at one height, one colour per group throughout (the colour-blind-safe
+    palette): box plot with brackets and n, means with 95% CI, histograms as the percentage of each group, and a
+    normal Q-Q plot of each group.
+  - Significance brackets give "p < 0.001" rather than scientific notation, here and on Visualize.
 - **Group comparison pooled over the imputed datasets: Test selection.** *Recommended* keeps the automatic choice.
   *Choose the method* lets a numeric variable in two groups be compared with Student's t-test (equal variances)
   instead of Welch's, pooled the same way. A warning says why Welch's is recommended, and the summary and the

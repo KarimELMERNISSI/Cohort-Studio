@@ -9,6 +9,7 @@ from scipy import stats
 from scipy.stats import t as t_dist
 from statsmodels.stats.power import TTestIndPower
 
+import app_pages.group_figures as gf
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
@@ -654,7 +655,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         with col_det2:
             detail_result = au.compare_variable_result(df_analysis_filtered, group_col, selected_detail, manual_test=selected_test_method) if is_numeric else None
             if detail_result is not None:
-                result_card(detail_result)
+                result_card(detail_result, group_variable=group_col)
             else:
                 st.info(f"**{detail_res['Test Used']}**: statistic {detail_res['Statistic']:.4f}, p = {detail_res['P-Value']:.4g}. {detail_res['Assumptions']}")
 
@@ -683,27 +684,8 @@ def run_univariate_analysis(df, analyzer, transformed=False):
             if epi is not None:
                 _render_twobytwo_panel(epi)
 
-        # Visualizations
+        # Visualizations (the Q-Q plot of each group is in the grid, next to the histograms)
         visualize_result(df_analysis_filtered, group_col, selected_detail, analyzer)
-
-        
-        # Diagnostic Plots (Q-Q Plot)
-        if is_numeric:
-            st.subheader("Assumption Diagnostics")
-            col_diag1, col_diag2 = st.columns(2)
-            with col_diag1:
-                st.markdown("**Normality Check (Q-Q Plot)**")
-                # Plot Q-Q for residuals or raw data? Usually residuals for ANOVA, but per group for T-test.
-                # Let's plot for the whole dataset or per group? Per group is better but cluttered.
-                # Let's plot residuals of the model: Value - GroupMean
-                
-                clean_df = df_analysis_filtered[[group_col, selected_detail]].dropna()
-                group_means = clean_df.groupby(group_col)[selected_detail].transform('mean')
-                residuals = clean_df[selected_detail] - group_means
-                
-                fig_qq = vu.create_qq_plot(residuals, title=f"Q-Q Plot of Residuals ({selected_detail})")
-                st.plotly_chart(fig_qq, width='stretch')
-                st.caption("Points should fall along the red line if data is Normally distributed.")
 
 def run_multivariate_analysis(df, analyzer):
     st.header("Multivariate Analysis (ANCOVA)")
@@ -1042,10 +1024,11 @@ def visualize_result(df, group_col, target, analyzer):
             with col_ref3:
                 add_ref = st.checkbox("Show Line", key=f"add_ref_{target}", help=HELP["ref_show"])
         
-        # 1. Boxplot with Significance
-        st.subheader("Distribution & Significance")
-        
+        # Four figures in a two-column grid, one colour per group throughout (app_pages/group_figures.py)
+        st.subheader("Figures")
+        reference = ref_val if add_ref else None
         groups = df[group_col].dropna().unique()
+        significant_pairs = None
         if len(groups) >= 2:
             data_list = [df[df[group_col] == g][target].dropna().values for g in groups]
             significant_pairs = vu.compute_significant_pairs(
@@ -1053,75 +1036,23 @@ def visualize_result(df, group_col, target, analyzer):
                 test_type=st.session_state.get("test_pref", "Auto-Detect (Recommended)"),
                 correction_method=st.session_state.get("correction", "Holm (recommended)"),
             )  # same family and correction as the summary table (audit S6)
-            
-            fig = vu.create_boxplot_with_significance_streamlit(
-                df=df,
-                group_col=group_col,
-                value_col=target,
-                significant_pairs=significant_pairs,
-                title=f"{target} by {group_col} (with Significance)",
-                y_label=target
-            )
-            
-            if add_ref:
-                fig.add_hline(y=ref_val, line_dash="dash", line_color="red", annotation_text=ref_label, annotation_position="bottom right")
-                
-            st.plotly_chart(fig, width='stretch')
+        box = gf.box_figure(df, group_col, target, significant_pairs=significant_pairs, reference=reference)
+        top_left, top_right = st.columns(2)
+        if box is not None:
+            top_left.plotly_chart(box, width="stretch")
         else:
-            st.warning("Not enough groups to display significance plot.")
+            top_left.warning("Not enough groups to display the box plot.")
+        top_right.plotly_chart(gf.means_figure(df, group_col, target, reference=reference), width="stretch")
+        bottom_left, bottom_right = st.columns(2)
+        bottom_left.plotly_chart(gf.histogram_figure(df, group_col, target, reference=reference), width="stretch")
+        bottom_right.plotly_chart(gf.qq_figure(df, group_col, target), width="stretch")
+        st.caption(
+            "Box plot: the box spans the middle half of the values, the solid line is the median and the dashed line "
+            "the mean; brackets mark the significant pairs. Q-Q plot: each group standardised; its points follow the "
+            "dashed line when the group is normally distributed (the normality checks of the result card)."
+            + (f" Reference line: {ref_label} = {ref_val:g}." if add_ref else "")
+        )
 
-        # 2. Confidence Interval Plot
-        st.subheader("Means & 95% Confidence Intervals")
-        
-        # Calculate stats
-        stats_df = df.groupby(group_col)[target].agg(['mean', 'count', 'std']).reset_index()
-        # Calculate 95% CI
-        # CI = 1.96 * (std / sqrt(n))
-        # Use Student's t-distribution for accurate CI (important for small samples)
-        stats_df['ci'] = stats_df.apply(
-            lambda row: t_dist.ppf(0.975, row['count'] - 1) * (row['std'] / np.sqrt(row['count'])) 
-            if row['count'] > 1 else 0, axis=1
-        )
-        
-        fig_ci = go.Figure()
-        
-        fig_ci.add_trace(go.Scatter(
-            x=stats_df[group_col],
-            y=stats_df['mean'],
-            error_y=dict(
-                type='data',
-                array=stats_df['ci'],
-                visible=True,
-                width=5,
-                thickness=1.5
-            ),
-            mode='markers',
-            marker=dict(size=12, color='royalblue', symbol='diamond'),
-            name='Mean (95% CI)'
-        ))
-        
-        if add_ref:
-            fig_ci.add_hline(y=ref_val, line_dash="dash", line_color="red", annotation_text=ref_label)
-        
-        fig_ci.update_layout(
-            title=f"Mean {target} by {group_col} (95% CI)",
-            xaxis_title=group_col,
-            yaxis_title=f"Mean {target}",
-            template="plotly_white",
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig_ci, width='stretch')
-        
-        # 3. Histogram
-        st.subheader("Distribution Histogram")
-        fig2 = px.histogram(df, x=target, color=group_col, barmode="overlay", 
-                            title=f"Histogram of {target} by {group_col}",
-                            opacity=0.7)
-        if add_ref:
-            fig2.add_vline(x=ref_val, line_dash="dash", line_color="red", annotation_text=ref_label)
-            
-        st.plotly_chart(fig2, width='stretch')
-        
     else:
         # Bar chart (Stacked or Grouped)
         # Calculate percentages

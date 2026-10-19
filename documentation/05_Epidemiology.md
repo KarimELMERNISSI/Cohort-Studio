@@ -18,7 +18,19 @@ you know the page.
   warnings: very small or unbalanced groups, many groups, variables with 20% or more missing values, and tests
   run without a multiple-testing correction. It suggests a correction (none for one test, Holm up to 9 tests,
   Benjamini-Hochberg for screens of 10 or more) and applies it in one click.
-- **Detailed view** — choosing a test by hand shows what that test assumes.
+- **Detailed view** — choosing a test by hand shows what that test assumes. The result card lists its
+  **assumption checks**, which are diagnostics, not gates: the test runs regardless. Each line names the group it
+  concerns (*Normality, diabetes = No (n = 506)*), gives the finding with its test and p-value, and says what it
+  means for the test that ran:
+  - unequal variances are not required by Welch's test, but undermine Student's t-test and the one-way ANOVA;
+  - non-normality matters for a test of means only in small groups (fewer than 30 values), and never for a rank
+    test.
+- **Figures of the detailed view** — four figures in a two-column grid, one colour per group throughout:
+  - the box plot with the significance brackets and n;
+  - the mean of each group with its 95% CI;
+  - the histograms as the percentage of each group, so that groups of different sizes compare;
+  - a normal Q-Q plot of each group, standardised within the group, which matches the normality lines of the
+    card.
 - **ANCOVA model check** — complete observations per model parameter (at least 10, better 20), rows excluded
   for missing values, covariates largely explained by the group (possible mediators or collinearity), and a
   reminder of how to choose covariates.

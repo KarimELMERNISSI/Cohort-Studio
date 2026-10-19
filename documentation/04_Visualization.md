@@ -56,7 +56,7 @@ The visualization workflow follows a decoupled, three-stage processing pipeline:
 Other diagnostic charts are on other pages:
 
 * **Likelihood ratios** ($LR+$, $LR-$) and the **Bland-Altman agreement plot**: Analyze > Hypothesis tests & epidemiology, *Diagnostic accuracy & agreement* tab (chapter 5).
-* **Q-Q plots** of residuals: the detailed view and the ANCOVA diagnostics of Analyze > Hypothesis tests & epidemiology.
+* **Q-Q plots**: of each group, standardised within the group, in the detailed view of Analyze > Hypothesis tests & epidemiology; of the residuals in its ANCOVA diagnostics.
 * **Nullity matrix** (missingness pattern): Data > Validate, *Completeness (Missing)* tab of the quality dashboard (chapter 2).
 
 ### D. Categorical Trajectories & Hierarchies

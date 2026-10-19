@@ -628,13 +628,13 @@ def add_significance_annotations(fig, data_list, significant_pairs, row=None, co
             row=row, col=col
         )
 
-        # Add star above bracket
+        # Add star above bracket; below 0.001 the p-value is reported as "p < 0.001", not in scientific notation
         if p < 0.001:
-            sig_text = f"*** (p={p:.3e})"
+            sig_text = "*** p < 0.001"
         elif p < 0.01:
-            sig_text = f"** (p={p:.3f})"
+            sig_text = f"** p = {p:.3f}"
         elif p < 0.05:
-            sig_text = f"* (p={p:.3f})"
+            sig_text = f"* p = {p:.3f}"
         else:
             sig_text = "ns"
 

@@ -236,8 +236,14 @@ def _fmt(value: float | None, digits: int = 3) -> str:
     return "n/a" if value is None else f"{value:.{digits}g}"
 
 
-def result_card(result: Any, *, title: str | None = None) -> None:
-    """Estimate -> CI -> p (raw/adjusted) -> n -> method and reference -> 'How to read this' (audit S9/U4)."""
+def result_card(
+    result: Any, *, title: str | None = None, group_variable: str | None = None
+) -> None:
+    """
+    Estimate -> CI -> p (raw/adjusted) -> n -> assumption checks -> method and reference -> 'How to read this'
+    (audit S9/U4). ``group_variable`` names the groups in the checks ("Normality, diabetes = No").
+    """
+    from biostats.assumptions import read_assumptions
     from ui.guidance.interpretation import how_to_read
 
     with st.container(border=True):
@@ -297,10 +303,15 @@ def result_card(result: Any, *, title: str | None = None) -> None:
                 f"FMI = {info.fmi:.3f}, RIV = {info.riv:.3f}."
             )
         if result.assumptions:
-            chips = st.columns(min(4, len(result.assumptions)))
-            for i, check in enumerate(result.assumptions[:8]):
-                with chips[i % len(chips)]:
-                    status_chip(check.name, "neutral" if check.status == "na" else check.status)
+            # each check with the group it concerns, its finding and what it means for this test (biostats)
+            st.caption("**Assumption checks**: diagnostics, not gates; the test ran regardless.")
+            for reading in read_assumptions(result, group_variable):
+                chip, text = st.columns([2, 5], vertical_alignment="center")
+                with chip:
+                    status_chip(
+                        reading.check, "neutral" if reading.status == "na" else reading.status
+                    )
+                text.caption(reading.sentence)
         if result.references:
             st.caption("Method: " + " | ".join(result.references))
         help_popover(how_to_read(result))
