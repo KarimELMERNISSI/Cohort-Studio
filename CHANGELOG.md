@@ -88,6 +88,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - the multivariate methods assess the complete rows only and say how many they left out. Validate used to
     impute those rows first (with MissForest, from the optional ML extra), so it now flags only among the
     complete rows.
+- **One name, one statistic.**
+  - **Cramér's V:** the missingness scan reported the uncorrected V (0.500 on [[3,1],[1,3]]), while every other
+    screen reports the bias-corrected one (0.354). It now reports the bias-corrected V and says so; a 2x2
+    co-occurrence keeps its phi.
+  - **Normality:** above 5,000 values, Describe's "Shapiro-Wilk p-value" was Shapiro-Wilk's, which is not reliable
+    there, while the analyses use D'Agostino's K². Describe now uses the analyses' test, and the column's help says
+    so.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

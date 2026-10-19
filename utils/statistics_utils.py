@@ -75,8 +75,13 @@ def normality_test(column, method='dagostino'):
     
     try:
         if method == 'shapiro':
-            stat, p_value = stats.shapiro(column.dropna())
-        
+            # the analyses' test: D'Agostino's K2 beyond 5,000 values, where Shapiro-Wilk's p-value is not reliable
+            from biostats.normality import shapiro_p
+
+            p_value = shapiro_p(column)
+            if np.isnan(p_value):
+                return np.nan
+
         elif method == 'dagostino':
             stat, p_value = stats.normaltest(column.dropna())
         

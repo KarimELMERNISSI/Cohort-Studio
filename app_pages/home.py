@@ -893,8 +893,8 @@ def app():
                             options=numerical_stats.columns.tolist(),
                             default=numerical_stats.columns.tolist()
                         )
-                    st.dataframe(numerical_stats[selected_quant_columns], 
-                                width='stretch', 
+                    st.dataframe(numerical_stats[selected_quant_columns],
+                                width='stretch',
                                 column_config={
                                     "fill_percentage": st.column_config.ProgressColumn(
                                         "Fill Percentage",
@@ -902,6 +902,11 @@ def app():
                                         format="%d%%",  # Display as a percentage
                                         min_value=0,
                                         max_value=100,
+                                    ),
+                                    "Shapiro-Wilk p-value": st.column_config.NumberColumn(
+                                        "Shapiro-Wilk p-value",
+                                        help="Shapiro-Wilk up to 5,000 values; D'Agostino's K² beyond, where "
+                                        "Shapiro-Wilk's p-value is not reliable (as in the analyses).",
                                     )}
                                 )
                     

@@ -18,6 +18,8 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
+from biostats.effect_sizes import cramers_v
+
 Correction = Literal["none", "bonferroni", "holm", "fdr_bh"]
 TestPreference = Literal["auto", "parametric", "nonparametric"]
 
@@ -80,11 +82,11 @@ def _cohens_d(x: pd.Series, y: pd.Series) -> float:
     return float((x.mean() - y.mean()) / np.sqrt(pooled)) if pooled > 0 else float("nan")
 
 
-def _cramers_v(table: pd.DataFrame) -> float:
+def _phi(table: pd.DataFrame) -> float:
+    """|phi| of a 2x2 table, sqrt(chi2 / n): the uncorrected Cramer's V, reported under its own name."""
     chi2 = stats.chi2_contingency(table, correction=False)[0]
     n = table.to_numpy().sum()
-    k = min(table.shape) - 1
-    return float(np.sqrt(chi2 / (n * k))) if n > 0 and k > 0 else float("nan")
+    return float(np.sqrt(chi2 / n)) if n > 0 else float("nan")
 
 
 def _numeric_test(
@@ -180,10 +182,13 @@ def scan_missingness_dependencies(
                                 test_name = "Fisher's exact test"
                             else:
                                 test_name = "Chi-square test"
-                            effect = _cramers_v(table)
+                            # the bias-corrected V, as every other Cramer's V the app shows
+                            effect = cramers_v(table.to_numpy(dtype=float), n_boot=0).estimate
                             direction = f"distribution of {pred} differs when {target} is missing"
                             effect_text = (
-                                f"Cramer's V = {effect:.2f}" if np.isfinite(effect) else ""
+                                f"Cramer's V (bias-corrected) = {effect:.2f}"
+                                if np.isfinite(effect)
+                                else ""
                             )
                         rows.append(
                             {
@@ -225,7 +230,7 @@ def scan_missingness_dependencies(
                                 "Dependency Type": "Missingness co-occurrence",
                                 "Test Used": test_name,
                                 "P-Value": float(p),
-                                "Effect": f"phi = {_cramers_v(table):.2f}",
+                                "Effect": f"phi = {_phi(table):.2f}",
                                 "Direction": f"{both} rows missing both",
                                 "n_missing": int(p_missing.sum()),
                                 "n_observed": int((~p_missing).sum()),
