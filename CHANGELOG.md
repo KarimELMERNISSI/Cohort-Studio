@@ -136,6 +136,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   so under Better Auth its activations, deletions and password resets reached nobody who signs in. The page now names
   the provider, and says there is nothing to manage when sign-in is disabled.
 
+### Usability
+
+- **The OpenAI and Mistral providers work.** Both use the `openai` package, which the `ai` group did not install:
+  choosing either in Settings gave "'openai' package is not installed". The group now installs it, and `httpx`, which
+  the Ollama connector uses, is declared rather than arriving through other packages. A test checks that each
+  provider's packages belong to the `ai` group.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

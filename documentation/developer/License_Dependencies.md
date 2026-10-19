@@ -9,7 +9,7 @@ CohortStudio is released under the Apache License 2.0.
 
 ## Summary
 
-- The core application installs 73 packages. The optional groups add 41 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
+- The core application installs 73 packages. The optional groups add 42 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
 - Copyleft licences among the shipped packages: `certifi` (MPL-2.0), `orjson` (MPL-2.0 AND (Apache-2.0 OR MIT)), `tqdm` (MPL-2.0 AND MIT). They are weak, file-level licences: they apply to the library's own files, which CohortStudio uses unmodified, and require keeping their notices.
 - One optional component is proprietary and needs an internet connection: the yFiles graph engine (group `graph-yfiles`, not installed by default). See below.
 
@@ -139,6 +139,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | langchain-protocol | 0.0.19 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.8 | MIT |
+| openai | 3.35.1 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.4 | BSD-2-Clause |

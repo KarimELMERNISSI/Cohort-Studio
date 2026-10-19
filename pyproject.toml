@@ -53,6 +53,8 @@ ai = [
     "langchain-text-splitters>=1.1.0",
     "pypdf>=6.19.0",
     "anthropic>=1.0",  # Claude connector (chat; documents embedded by another provider)
+    "openai>=3.0",  # OpenAI connector, and Mistral's (an OpenAI-compatible API)
+    "httpx>=0.28",  # Ollama connector
     # Vector databases (selectable in Settings > AI engine): LanceDB embedded by default, Qdrant embedded or server
     "lancedb>=0.25",
     "qdrant-client>=1.15",

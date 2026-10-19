@@ -14,8 +14,19 @@ from __future__ import annotations
 import importlib.util
 from functools import cache
 
+# A module of each package of the extra (tests/test_ai_provider_sdks.py keeps them equal to pyproject.toml)
 EXTRAS: dict[str, tuple[str, ...]] = {
-    "ai": ("langchain_core", "langchain_text_splitters", "pypdf", "lancedb", "qdrant_client"),
+    "ai": (
+        "google.genai",
+        "langchain_core",
+        "langchain_text_splitters",
+        "pypdf",
+        "anthropic",
+        "openai",
+        "httpx",
+        "lancedb",
+        "qdrant_client",
+    ),
     "ml": ("lightgbm", "umap", "prince"),
     "survival": ("lifelines",),
 }
