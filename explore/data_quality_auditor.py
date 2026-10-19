@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-import enrich.custom_metrics_and_filters as ecm
+from core.population import family_masks
 
 logger = logging.getLogger(__name__)
 
@@ -243,12 +243,14 @@ class DataQualityAuditor:
     def compute_clinical_validity(self) -> float | None:
         """
         Calculates a score based on declared anomaly criteria (if available).
-        Score = 100 - (% of rows triggering at least one anomaly).
+        Score = 100 - (% of rows the clinical-anomalies family flags). The rules are read as the analysis
+        population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
+        evaluated is listed in the details, and the score uses the rules that can.
         Returns None if no anomaly rules are defined (shows as N/A in dashboard).
         """
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
-        
+
         # If no config or no mask_families, return None (N/A - rules not configured)
         if not self.config or "mask_families" not in self.config:
             return None
@@ -259,24 +261,19 @@ class DataQualityAuditor:
             return None
 
         try:
-            # Generate masks for all defined anomalies
-            masks_zip = list(ecm.zip_masks(self.df, anomaly_config))
-            
-            # Combine masks to find rows with ANY anomaly
-            any_anomaly_mask = pd.Series(False, index=self.df.index)
-            has_masks = False
-            anomaly_data = {}
-            
-            for mask_name, mask_values in masks_zip:
-                if mask_values is not None:
-                    any_anomaly_mask |= mask_values
-                    anomaly_data[mask_name] = mask_values
-                    has_masks = True
-            
-            if not has_masks:
-                # No valid masks generated - treat as N/A (rules exist but none matched columns)
+            masks = family_masks(self.df, anomaly_config)
+            broken = [(str(rule), f"cannot be evaluated: {message}", None, None) for rule, message in masks.errors.items()]
+            if masks.errors and "operator" not in masks.errors:  # the family result over the rules that can be evaluated
+                masks = family_masks(
+                    self.df, {k: v for k, v in anomaly_config.items() if k == "operator" or k not in masks.errors}
+                )
+            if masks.flag is None:
+                # no rule can be evaluated (or the operator is unusable): N/A, with the reasons
+                self.details["Clinical Validity"] = _details(broken)
                 return None
-            
+            any_anomaly_mask = masks.flag
+            anomaly_data = dict(masks.rules)
+
             # Store details for UI
             if anomaly_data:
                 # 1. Store the boolean mask for styling logic
@@ -303,6 +300,7 @@ class DataQualityAuditor:
                     for rule, mask in anomaly_data.items()
                     if mask.sum()
                 ]
+                + broken
             )
             anomaly_count = any_anomaly_mask.sum()
             score = (1 - (anomaly_count / total_rows)) * 100

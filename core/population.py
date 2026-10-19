@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from core.criteria import CriterionError, criterion_mask
+from core.criteria import CriterionError, criterion_columns, criterion_mask, rule_kind
 from core.fingerprint import ids_fingerprint, ids_to_ranges
 
 EXCLUSION, INCLUSION = "exclusion", "inclusion"
@@ -61,19 +61,7 @@ class Criterion:
     @property
     def columns(self) -> tuple[str, ...]:
         """Columns the criterion reads (empty when they cannot be determined)."""
-        from core.expressions import column_references
-
-        spec = self.definition
-        if "bounds" in spec:
-            return tuple(spec.get("bounds") or {})
-        if spec.get("numeric"):
-            return (str(spec.get("column") or self.name),)
-        if spec.get("expression"):
-            try:
-                return tuple(sorted(column_references(str(spec["expression"]))))
-            except Exception:
-                return ()
-        return ()
+        return criterion_columns(self.name, self.definition)
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -85,20 +73,38 @@ class Criterion:
         }
 
 
+def family_operator(members: Mapping[str, Any]) -> tuple[str, Any]:
+    """
+    How a family combines its rules: ("any", None), ("all", None) or ("threshold", k). Text is read without regard
+    to case or spaces ("All" is "all"); any other operator reads as "any", the default, and
+    :func:`configuration_problems` reports it.
+    """
+    operator = members.get("operator", "any")
+    if isinstance(operator, Mapping):
+        return "threshold", operator.get("threshold")
+    text = str(operator).strip().lower()
+    if text == "threshold":
+        return "threshold", None
+    return ("all" if text == "all" else "any"), None
+
+
+def _rules(members: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(name): spec
+        for name, spec in members.items()
+        if name != "operator" and isinstance(spec, Mapping)
+    }
+
+
 def catalogue(config: Mapping[str, Any] | None) -> tuple[Criterion, ...]:
     """Every criterion of the configuration, family by family, in configuration order."""
     out: list[Criterion] = []
     for family, members in ((config or {}).get("mask_families") or {}).items():
         if not isinstance(members, Mapping):
             continue
-        operator = members.get("operator", "any")
-        rules = {
-            name: spec
-            for name, spec in members.items()
-            if name != "operator" and isinstance(spec, Mapping)
-        }
-        if isinstance(operator, Mapping) or operator == "threshold":
-            k = operator.get("threshold") if isinstance(operator, Mapping) else None
+        operator, k = family_operator(members)
+        rules = _rules(members)
+        if operator == "threshold":
             name = f"At least {k} rules of {family}"
             out.append(
                 Criterion(
@@ -115,10 +121,10 @@ def catalogue(config: Mapping[str, Any] | None) -> tuple[Criterion, ...]:
         for name, spec in rules.items():
             out.append(
                 Criterion(
-                    criterion_id(family, str(name)),
+                    criterion_id(family, name),
                     family,
                     kind,
-                    str(name),
+                    name,
                     dict(spec),
                     str(spec.get("description") or ""),
                 )
@@ -129,6 +135,102 @@ def catalogue(config: Mapping[str, Any] | None) -> tuple[Criterion, ...]:
 def family_kind(config: Mapping[str, Any] | None, family: str) -> str | None:
     kinds = {c.kind for c in catalogue(config) if c.family == family}
     return kinds.pop() if len(kinds) == 1 else None
+
+
+@dataclass(frozen=True)
+class FamilyMasks:
+    """The rules of one family evaluated on a table, as the analysis population evaluates them."""
+
+    operator: str  # any | all | threshold
+    threshold: Any
+    rules: Mapping[str, pd.Series]  # rule name -> rows where it fires
+    errors: Mapping[str, str]  # rule name -> why it cannot be evaluated
+    # any: a rule fires; all: every rule fires; threshold: at least k fire (None while a rule has an error)
+    flag: pd.Series | None
+
+
+def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
+    """
+    Every rule of a family on ``df`` with :func:`core.criteria.criterion_mask`, and the family result read with
+    its operator. The Validate checks and the quality dashboard use it, so they count what the population counts.
+    A rule that cannot be evaluated is listed in ``errors`` and leaves the family result unset: the population
+    refuses such a rule while it is ticked.
+    """
+    operator, k = family_operator(members)
+    rules: dict[str, pd.Series] = {}
+    errors: dict[str, str] = {}
+    for name, spec in _rules(members).items():
+        try:
+            rules[name] = criterion_mask(df, name, spec)
+        except CriterionError as exc:
+            errors[name] = str(exc)
+    if operator == "threshold" and (isinstance(k, bool) or not isinstance(k, int | float)):
+        errors["operator"] = 'a threshold family needs a number of rules, as {"threshold": 2}'
+    flag = None
+    if rules and not errors:
+        fired = pd.DataFrame(rules, index=df.index)
+        if operator == "any":
+            flag = fired.any(axis=1)
+        elif operator == "all":
+            flag = fired.all(axis=1)
+        else:
+            flag = fired.sum(axis=1) >= int(k)
+    return FamilyMasks(operator, k, rules, errors, flag)
+
+
+def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
+    """
+    What makes a study configuration ambiguous or unusable, in words (empty when it is sound): an unknown family
+    operator, a threshold without a number, a family entry that is not a rule, a rule of an unknown shape or with
+    both a numeric range and an expression. An uploaded configuration with problems is refused.
+    """
+    problems: list[str] = []
+    families = (config or {}).get("mask_families")
+    if families is None:
+        return problems
+    if not isinstance(families, Mapping):
+        return ["mask_families must map each family name to its rules"]
+    for family, members in families.items():
+        if not isinstance(members, Mapping):
+            problems.append(f"family '{family}' must map each rule name to its definition")
+            continue
+        operator = members.get("operator", "any")
+        if isinstance(operator, Mapping):
+            k = operator.get("threshold")
+            if isinstance(k, bool) or not isinstance(k, int) or k < 1:
+                problems.append(
+                    f"family '{family}': the threshold must be a whole number of rules, as {{\"threshold\": 2}}"
+                )
+        elif str(operator).strip().lower() not in ("any", "all"):
+            problems.append(
+                f'family \'{family}\': unknown operator {operator!r}; use "any", "all" or {{"threshold": k}}'
+            )
+        for name, spec in members.items():
+            if name == "operator":
+                continue
+            if not isinstance(spec, Mapping):
+                problems.append(
+                    f"family '{family}': '{name}' is not a rule (only rules and \"operator\" belong in a family)"
+                )
+                continue
+            try:
+                kind = rule_kind(str(name), spec)
+            except CriterionError as exc:
+                problems.append(f"family '{family}': {exc}")
+                continue
+            if (
+                kind == "numeric"
+                and spec.get("lower_bound") is None
+                and spec.get("upper_bound") is None
+            ):
+                problems.append(
+                    f"family '{family}': rule '{name}' has neither a lower nor an upper bound"
+                )
+            if kind == "numeric" and spec.get("strategy") not in (None, "include", "exclude"):
+                problems.append(
+                    f"family '{family}': rule '{name}': the strategy must be include or exclude, not {spec.get('strategy')!r}"
+                )
+    return problems
 
 
 @dataclass(frozen=True)
@@ -313,12 +415,16 @@ __all__ = [
     "INCLUSION",
     "Criterion",
     "CriterionCount",
+    "FamilyMasks",
     "PopulationResult",
     "Stage",
     "active_criteria",
     "catalogue",
+    "configuration_problems",
     "criteria_from_trace",
     "criterion_id",
     "evaluate_population",
     "family_kind",
+    "family_masks",
+    "family_operator",
 ]

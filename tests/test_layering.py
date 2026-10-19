@@ -14,7 +14,7 @@ NO_STREAMLIT = [
     "manage/flow_figure.py", "manage/dossier.py", "manage/report_tables.py", "utils/optional.py",
     "utils/analysis_utils.py", "utils/path_utils.py", "utils/statistics_utils.py", "utils/visualization_utils.py",
     "utils/multipage.py", "utils/data_paths.py", "enrich/transformation_logic.py",
-    "enrich/custom_metrics_and_filters.py", "enrich/formulas.py", "enrich/imputation_service.py",
+    "enrich/formulas.py", "enrich/imputation_service.py",
     "explore/data_quality_auditor.py",
 ]  # utils/session_scope.py is the one bridge that reads the Streamlit session by design
 # Packages whose modules must not import pages (app_pages, ui) at module level.

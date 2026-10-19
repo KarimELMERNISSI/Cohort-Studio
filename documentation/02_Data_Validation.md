@@ -69,8 +69,10 @@ organised into **mask families** — groups of related conditions combined with 
 A numeric mask applies to the column named like the mask. With both bounds, the strategy *include* selects the
 values inside the range and *exclude* the values outside it: for an inclusion criterion, use *include* with the
 eligible range (age 18–85); for an anomaly rule, use *exclude* with the plausible range (potassium 2.5–7.0 flags 9.8).
-With a single bound, the values at or beyond it are selected (lower bound 18: age ≥ 18). An expression is a Python
-condition on `df`; combine conditions with `&` (and) or `|` (or), each in brackets.
+With a single bound, the values at or beyond it are selected (lower bound 18: age ≥ 18). In a configuration file, a
+single bound with the strategy *exclude* selects the values short of it instead (age < 18), and the participant
+flow says so. An expression is a Python condition on `df`; combine conditions with `&` (and) or `|` (or), each in
+brackets.
 
 ### Workflow
 
@@ -90,6 +92,15 @@ condition on `df`; combine conditions with `&` (and) or `|` (or), each in bracke
   value never fires a rule: it does not flag an anomaly and does not meet an inclusion criterion.
 - A ticked criterion that cannot be evaluated (a typo in a column name, a text column in a numeric rule) stops the
   analyses with an explanation instead of silently keeping or dropping rows.
+- **The checks, the quality dashboard and the population read the rules the same way**, so they count the same rows.
+  A rule that cannot be evaluated is shown with its reason on the tab that checks it.
+- **Loading a configuration file.** A file that would be read in more than one way is refused, with the list of its
+  problems:
+  - an unknown family operator (operators are read without regard to case, so `All` is `all`);
+  - a threshold that is not a whole number;
+  - a family entry that is not a rule;
+  - a numeric rule without bounds or with an unknown strategy;
+  - a rule that holds both a numeric range and an expression.
 - The **Analysis population** tab draws the participant flow (STROBE item 13): the records read in the file,
   the rows removed by recorded steps, the rows excluded by each family of criteria and the analysis population.
   Click a box, or choose it in the menu under the diagram, to see the criteria behind an exclusion, the rows

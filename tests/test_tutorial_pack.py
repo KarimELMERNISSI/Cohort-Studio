@@ -13,8 +13,8 @@ from scipy import stats
 from sklearn.metrics import cohen_kappa_score, roc_auc_score
 from statsmodels.stats.contingency_tables import StratifiedTable
 
-import enrich.custom_metrics_and_filters as ecm
 from app_pages.data_enrichment import evaluate_formula_safely
+from core.population import family_masks
 
 ROOT = Path(__file__).resolve().parents[1]
 TUTORIAL = ROOT / "assets" / "tutorial"
@@ -41,9 +41,9 @@ def config() -> dict:
 
 
 def _masks(df: pd.DataFrame, config: dict, family: str) -> pd.DataFrame:
-    masks = dict(ecm.zip_masks(df, config["mask_families"][family]))
-    assert all(m is not None for m in masks.values()), [k for k, m in masks.items() if m is None]
-    return pd.DataFrame(masks)
+    masks = family_masks(df, config["mask_families"][family])
+    assert not masks.errors, masks.errors
+    return pd.DataFrame(masks.rules)
 
 
 @pytest.fixture(scope="module")

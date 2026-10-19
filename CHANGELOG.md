@@ -44,6 +44,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The page now calls the shared engine. The renaming and the refusal of missing values moved into it, and PCA
     is seeded like the other methods.
   - Older traces now replay with the names the page gave.
+- **Criteria: one reading of the rules on every screen.** The Validate checks and the quality dashboard read the
+  rules with older helpers, the population with `core.criteria`. They could disagree:
+  - a rule holding both a range and an expression counted 3 rows in Validate but 6 in the population;
+  - a threshold family counted 5 rows on the dashboard but 1 in the population;
+  - an inclusion rule that could not be evaluated still showed rows "to include", while the population refused it;
+  - an outlier rule (frozen bounds or rows) was not evaluated by the checks at all.
+
+  Now:
+  - Validate and the dashboard evaluate the rules as the population does, with the family's operator, and show a
+    rule that cannot be evaluated with its reason.
+  - A rule with both shapes is refused.
+  - The participant flow and the dossier describe a one-sided *exclude* rule the right way round: "age < 18", not
+    "age >= 18".
+  - Operators are read without regard to case: `"All"` made an inclusion family an exclusion family.
+  - An uploaded configuration with an unknown operator or an ambiguous rule is refused, with the list of its problems.
+  - The legacy helpers (`enrich/custom_metrics_and_filters.py`) are removed.
 - **Logistic regression: the apparent AUC.** The AUC of a logistic model is computed on the data the model was
   fitted to, so it overstates how well the model would discriminate in new patients. The page and the dossier now
   call it the "apparent AUC (in-sample)", with a note saying so. Validated performance comes with the prediction

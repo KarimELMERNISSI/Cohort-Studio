@@ -6,9 +6,9 @@ flagged, for an inclusion criterion the row meets it. A missing value never fire
 flagged on a missing value, an inclusion criterion is not met by one), unless an expression asks for
 missing values explicitly (``df['x'].isna()``).
 
-Unlike the legacy helpers in ``enrich.custom_metrics_and_filters`` (which return ``None`` or an all-False
-mask when something goes wrong), every problem raises :class:`CriterionError`, so a population built on a
-broken criterion fails visibly instead of silently keeping or dropping rows.
+Every problem raises :class:`CriterionError`, so a population built on a broken criterion fails visibly instead
+of silently keeping or dropping rows. The Validate checks and the quality dashboard evaluate the rules here too
+(``core.population.family_masks``), so every screen counts the same rows.
 """
 
 from __future__ import annotations
@@ -72,24 +72,81 @@ def _inside(series: pd.Series, lower: Any, upper: Any) -> pd.Series:
     return inside
 
 
+RULE_KINDS = ("threshold", "row_ids", "bounds", "numeric", "expression")
+
+
+def rule_kind(name: str, definition: Mapping[str, Any]) -> str:
+    """
+    The kind of a criterion, one of RULE_KINDS: the only place that decides it, so that the evaluation, the
+    columns read and the description agree (they disagreed when each decided in its own order).
+
+    The keys are read in the order of RULE_KINDS. A rule that holds both a numeric range and an expression is
+    refused rather than read one way or the other: keep one of them.
+    """
+    if not isinstance(definition, Mapping):
+        raise CriterionError(f"criterion '{name}' has no definition")
+    if "threshold" in definition:
+        return "threshold"
+    if "row_ids" in definition:
+        return "row_ids"
+    if "bounds" in definition:
+        return "bounds"
+    expression = str(definition.get("expression") or "").strip()
+    if definition.get("numeric"):
+        if expression:
+            raise CriterionError(
+                f"criterion '{name}' holds both a numeric range and an expression: keep one of them"
+            )
+        return "numeric"
+    if expression:
+        return "expression"
+    raise CriterionError(f"criterion '{name}' has neither an expression nor a numeric range")
+
+
+def criterion_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]:
+    """The columns a criterion reads (empty when they cannot be determined)."""
+    from core.expressions import column_references
+
+    try:
+        kind = rule_kind(name, definition)
+    except CriterionError:
+        return ()
+    if kind == "threshold":
+        members = definition.get("members") or {}
+        found = [
+            c for member, spec in members.items() for c in criterion_columns(str(member), spec)
+        ]
+        return tuple(dict.fromkeys(found))
+    if kind == "row_ids":  # the outlier rules record the columns they were found on
+        return tuple(str(c) for c in definition.get("columns") or ())
+    if kind == "bounds":
+        return tuple(definition.get("bounds") or {})
+    if kind == "numeric":
+        return (str(definition.get("column") or name),)
+    try:
+        return tuple(sorted(column_references(str(definition["expression"]))))
+    except Exception:
+        return ()
+
+
 def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
     """Rows of ``df`` on which the criterion fires (boolean Series on ``df.index``).
 
-    Supported definitions (the study configuration format):
+    Supported definitions (the study configuration format), recognised by :func:`rule_kind`:
 
     - ``{"expression": "df['age'] > 110"}``: a whitelisted boolean expression;
     - ``{"numeric": true, "lower_bound": a, "upper_bound": b, "strategy": "include" | "exclude"}``: a range
       on the column named like the criterion (or ``"column"``): *include* fires inside ``[a, b]``,
-      *exclude* outside; with a single bound, values at or beyond it (``>= a`` or ``<= b``) fire;
+      *exclude* outside. With a single bound, the range is open on the other side: ``>= a`` (or ``<= b``)
+      fires with *include* or no strategy, ``< a`` (or ``> b``) with *exclude*;
     - ``{"bounds": {"col": [low, high], ...}}``: frozen outlier thresholds, fires when a value of any listed
       column lies outside its range;
     - ``{"row_ids": [[first, last], ...]}``: listed rows (outliers found by a multivariate method);
     - ``{"threshold": k, "members": {name: definition, ...}}``: fires when at least ``k`` members fire.
     """
-    if not isinstance(definition, Mapping):
-        raise CriterionError(f"criterion '{name}' has no definition")
+    kind = rule_kind(name, definition)
 
-    if "threshold" in definition:
+    if kind == "threshold":
         members = definition.get("members") or {}
         k = definition.get("threshold")
         if not members or k is None:
@@ -102,18 +159,18 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
         )
         return fired.sum(axis=1) >= int(k)
 
-    if "row_ids" in definition:
+    if kind == "row_ids":
         ids = ranges_to_ids(definition.get("row_ids") or [])
         return pd.Series(df.index.isin(ids), index=df.index)
 
-    if "bounds" in definition:
+    if kind == "bounds":
         fires = pd.Series(False, index=df.index)
         for column, (low, high) in (definition.get("bounds") or {}).items():
             series = _numeric_series(df, column)
             fires |= series.notna() & ~_inside(series, low, high)
         return fires
 
-    if definition.get("numeric"):
+    if kind == "numeric":
         series = _numeric_series(df, str(definition.get("column") or name))
         lower, upper = definition.get("lower_bound"), definition.get("upper_bound")
         if lower is None and upper is None:
@@ -129,11 +186,9 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
         fires = ~inside if strategy == "exclude" else inside
         return fires & series.notna()
 
-    expression = definition.get("expression")
-    if not expression or not str(expression).strip():
-        raise CriterionError(f"criterion '{name}' has neither an expression nor a numeric range")
+    expression = str(definition.get("expression")).strip()
     try:
-        result = evaluate(str(expression), df)
+        result = evaluate(expression, df)
     except UnsafeExpressionError as exc:
         raise CriterionError(f"criterion '{name}': expression rejected ({exc})") from exc
     except Exception as exc:
@@ -141,4 +196,4 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
     return _as_mask(result, df.index)
 
 
-__all__ = ["CriterionError", "criterion_mask"]
+__all__ = ["RULE_KINDS", "CriterionError", "criterion_columns", "criterion_mask", "rule_kind"]

@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from core.criteria import CriterionError, rule_kind
 from core.population import EXCLUSION, PopulationResult
 
 SOURCE, LOADED, DATA, STAGE, POPULATION, ANALYSIS = (
@@ -122,33 +123,40 @@ class ParticipantFlow:
         }
 
 
-def _bounds_text(low: Any, high: Any) -> str:
+def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
+    """Where a numeric rule fires, in words: inside the range, or outside it with the *exclude* strategy."""
     if low is not None and high is not None:
-        return f"[{low}, {high}]"
-    return f">= {low}" if low is not None else f"<= {high}"
+        return f"{column} {'outside' if exclude else 'within'} [{low}, {high}]"
+    if low is not None:
+        return f"{column} < {low}" if exclude else f"{column} >= {low}"
+    return f"{column} > {high}" if exclude else f"{column} <= {high}"
 
 
 def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
-    """A criterion's definition in words (what makes it fire)."""
-    if "threshold" in definition:
+    """A criterion's definition in words (what makes it fire), read with :func:`core.criteria.rule_kind`."""
+    try:
+        kind = rule_kind(name, definition)
+    except CriterionError as exc:
+        return f"cannot be evaluated: {exc}"
+    if kind == "threshold":
         members = ", ".join(str(m) for m in (definition.get("members") or {}))
         return f"at least {definition.get('threshold')} of: {members}"
-    if "row_ids" in definition:
+    if kind == "row_ids":
         n = sum(int(b) - int(a) + 1 for a, b in definition.get("row_ids") or [])
         return f"{n:,} listed rows (a multivariate outlier method)"
-    if "bounds" in definition:
+    if kind == "bounds":
         parts = [
             f"{col} outside [{lo}, {hi}]"
             for col, (lo, hi) in (definition.get("bounds") or {}).items()
         ]
         return "; ".join(parts)
-    if definition.get("numeric"):
-        column = definition.get("column") or name
-        bounds = _bounds_text(definition.get("lower_bound"), definition.get("upper_bound"))
-        where = "outside" if definition.get("strategy") == "exclude" else "within"
-        if "[" not in bounds:
-            return f"{column} {bounds}"
-        return f"{column} {where} {bounds}"
+    if kind == "numeric":
+        return _numeric_text(
+            definition.get("column") or name,
+            definition.get("lower_bound"),
+            definition.get("upper_bound"),
+            definition.get("strategy") == "exclude",
+        )
     return str(definition.get("expression") or "").strip()
 
 

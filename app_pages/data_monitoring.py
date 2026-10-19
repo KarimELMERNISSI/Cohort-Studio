@@ -14,8 +14,7 @@ import monitor.outliers as mo
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from core.fingerprint import ids_to_ranges
-from core.population import catalogue, criterion_id
-from enrich import custom_metrics_and_filters as ecm
+from core.population import catalogue, configuration_problems, criterion_id, family_masks
 from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import no_dataset
@@ -1309,71 +1308,31 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
     Returns:
     - Updated DataFrame with mask family tags and lists.
     - The names of the columns related to the masks family
+
+    The rules are evaluated as the analysis population evaluates them (core.population.family_masks), so the
+    counts here are the counts of the population. A rule that cannot be evaluated is shown with its reason, and
+    the family result is then left out: the population refuses such a rule while it is ticked.
     """
-    masks_family_cols = []
-
-    print(f"Processing Family Operator for: {family_name}")
-    
-    # Step 1: Get the operator configuration, ensuring it is interpreted correctly
-    operator_config = family_config.get("operator", "any")
-    print(f"operator_config: {operator_config}")
-
-    # Handle different types of operator_config
-    if isinstance(operator_config, str):
-        # If it's a string, set operator_type directly and no threshold
-        operator_type = operator_config
-        threshold = None
-    elif isinstance(operator_config, dict):
-        # If it's a dictionary, extract operator type and optional threshold
-        operator_type = "threshold"
-        threshold = operator_config.get("threshold", None)
-    else:
-        # Handle unexpected types (fallback or raise error)
-        print("Invalid operator configuration format.")
-        raise ValueError(f"Unsupported operator configuration type: {type(operator_config)}")
-
-    print(f"Resolved operator_type: {operator_type}, threshold: {threshold}")
-
-    
-    # Step 2: Generate masks_zip using zip_masks function
-    print(f"Processing Family Masks for: {family_name}")
-    masks_zip = ecm.zip_masks(df, family_config)
-    print(f"Mask Configuration for '{family_name}':", family_config)
-    
-    # Step 3: Create masks DataFrame
-    masks_df = pd.DataFrame(index=df.index)
-
-    for mask_name, mask_values in masks_zip:
-        #st_container.write(f"Processing Mask: {mask_name}")
-        masks_df[mask_name] = mask_values
-
+    masks = family_masks(df, family_config)
+    for rule, message in masks.errors.items():
+        st_container.error(
+            f"Rule '{rule}' of {family_name} cannot be evaluated: {message}. Correct it or untick it: the "
+            "analysis population refuses it while it is ticked."
+        )
+    masks_df = pd.DataFrame(masks.rules, index=df.index)
     st_container.dataframe(masks_df)
-
-    # Step 4: Add family-level tags to the DataFrame
-    # List of activated masks per row
-    df[f"{family_name}_list"] = masks_df.apply(ecm.tag_masks, axis=1)
-    masks_family_cols.append(f"{family_name}_list")
-
-    # Apply family operator
-    if operator_type == "any":
-        # Tag rows where any mask in the family is satisfied
-        df[f"{family_name}_any"] = masks_df.any(axis=1)
-        masks_family_cols.append(f"{family_name}_any")
-    elif operator_type == "all":
-        # Tag rows where all masks in the family are satisfied
-        df[f"{family_name}_all"] = masks_df.all(axis=1)
-        masks_family_cols.append(f"{family_name}_all")
-    elif operator_type == "threshold":
-        if threshold is not None:
-            df[f"{family_name}_above_{threshold}"] = masks_df.sum(axis=1) >= threshold
-            masks_family_cols.append(f"{family_name}_above_{threshold}")
-        else:
-            st_container.error(f"Threshold not set for family '{family_name}'.")
-            return df, masks_family_cols  # Return early if no threshold is defined
-    else:
-        st_container.error(f"Unknown operator '{operator_type}' in family '{family_name}'.")
-        return df, masks_family_cols  # Return early for unknown operator type
-
+    # the rules each row meets
+    df[f"{family_name}_list"] = masks_df.apply(lambda row: ", ".join(str(c) for c in row.index if row[c]), axis=1)
+    masks_family_cols = [f"{family_name}_list"]
+    if masks.flag is None:
+        return df, masks_family_cols
+    column = {
+        "any": f"{family_name}_any",
+        "all": f"{family_name}_all",
+        "threshold": f"{family_name}_above_{masks.threshold}",
+    }[masks.operator]
+    df[column] = masks.flag
+    masks_family_cols.append(column)
     return df, masks_family_cols
 
 
@@ -1922,11 +1881,18 @@ def app():
             try:
                 # Parse the uploaded JSON file
                 new_config = json.load(uploaded_file)
-
-                # Merge the new configuration with the existing one
-                deep_merge_dicts(st.session_state.config, new_config)
-
-                st.sidebar.success("Configuration loaded and merged successfully!")
+                # an ambiguous rule or operator would be read one way here and another there: refused, with why
+                problems = configuration_problems(new_config) if isinstance(new_config, dict) else [
+                    "the file must hold one JSON object"
+                ]
+                if problems:
+                    st.sidebar.error(
+                        "This configuration was not loaded:\n\n" + "\n".join(f"- {p}" for p in problems)
+                    )
+                else:
+                    # Merge the new configuration with the existing one
+                    deep_merge_dicts(st.session_state.config, new_config)
+                    st.sidebar.success("Configuration loaded and merged successfully!")
             except json.JSONDecodeError:
                 st.error("Invalid JSON file. Please upload a valid configuration file.")
             
@@ -1992,7 +1958,7 @@ def app():
             else:
                 st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
-        if detect:
+        if detect and f"{anomaly_family}_any" in df.columns:  # absent while a rule cannot be evaluated
             with st.expander("Results", expanded=True):
                 display_results_with_anomaly(df=df,anomaly_col=f"{anomaly_family}_any", st=st)
             
@@ -2027,7 +1993,7 @@ def app():
             else:
                 st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
-        if check_inc:
+        if check_inc and f"{inclusion_family}_all" in df.columns:  # absent while a rule cannot be evaluated
             with st.expander("Results", expanded=True):
                 display_results_with_inclusion(df=df,inclusion_col=f"{inclusion_family}_all", st=st)
 

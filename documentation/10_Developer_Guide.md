@@ -238,14 +238,26 @@ Each rule is a key of its family (the rule name) with one of two shapes:
 - **Expression rule:** `{"numeric": false, "expression": "<expression>"}`. The expression uses `df['column']`
   (bare names are rejected), `& | ~` with parenthesised comparisons, and the allow-listed `pd.*` / `np.*`
   functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`, `.str.*`, `.dt.*`,
-  `pd.to_datetime(..., dayfirst=True)`, ...). If present, the expression takes precedence.
+  `pd.to_datetime(..., dayfirst=True)`, ...).
 - **Numeric rule:** `{"numeric": true, "lower_bound": x, "upper_bound": y, "strategy": "include" | "exclude"}`.
   The rule name must be the column name. With both bounds, *include* matches values inside the range and
   *exclude* values outside it, so use *exclude* with the plausible range for anomalies and *include* with the
   eligible range for inclusion. NaN never matches. Avoid leaving `strategy` empty when both bounds are set.
 
-Extra keys in a rule are kept; `description` is shown as the help text of the criterion in the sidebar. Do not
-add keys at family level other than `operator`: they would be read as rules.
+A rule has exactly one shape. `core.criteria.rule_kind` decides it, and it is the only place that does: the
+evaluation, the columns read and the description in the participant flow all use it. A rule that holds both a
+numeric range and an expression is refused rather than read one way or the other. The outlier rules (`bounds`,
+`row_ids`) and threshold families (`{"threshold": k}` as the operator) have their own shapes.
+
+Extra keys in a rule are kept; `description` is shown as the help text of the criterion in the sidebar. Do not add
+keys at family level other than `operator`. Operators are read without regard to case.
+
+`core.population.configuration_problems` lists what makes a configuration ambiguous or unusable, and an uploaded
+file with problems is not loaded:
+- an unknown operator, or a threshold that is not a whole number;
+- a family entry that is not a rule;
+- a numeric rule without bounds or with an unknown strategy;
+- a rule of an unknown shape, or with both shapes.
 
 Ticked criteria define the analysis population (`core/population.py`). A family with the `any` operator is an
 exclusion family (`clinical_anomalies`, and `outliers`, which the Handle Outliers tab fills with frozen row ids):
@@ -253,9 +265,10 @@ a row is excluded when a ticked rule fires. A family with `all` is an inclusion 
 is excluded when it fails a ticked criterion. A family with a threshold operator is one exclusion rule, "at least
 k of these rules". A ticked criterion that cannot be evaluated (unknown column, syntax error) stops the analyses:
 `core/criteria.py` raises `CriterionError`, the population is not `ok`, and the pages show the error until the
-criterion is unticked or corrected. Only the **Run Anomaly Detection** and **Run Inclusion Criteria Check**
-buttons of the Validate tabs (the result columns above) still use the older helpers of
-`enrich/custom_metrics_and_filters.py`, which log such a rule and skip it.
+criterion is unticked or corrected. The **Run Anomaly Detection** and **Run Inclusion Criteria Check** buttons of
+the Validate tabs (the result columns above) and the quality dashboard evaluate the rules with the same functions
+(`core.population.family_masks`), so they count what the population counts. A rule that cannot be evaluated is
+shown with its reason, and the family result is left out until it is corrected.
 
 `assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion
 criteria). `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay
