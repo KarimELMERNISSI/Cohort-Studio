@@ -330,6 +330,10 @@ ANTHROPIC_API_KEY=
 - Without them, the first start writes a **one-time setup token** to the server log, and the login page creates the administrator with it. Only a hash of the token is stored; it stops working once used. `python manage_users.py setup-token` issues a new one.
 - `python manage_users.py list | activate | deactivate | reset-password <username>` covers day-to-day administration.
 
+### The data folder
+
+The application keeps what it stores under `DATA_ROOT`, one workspace per user: datasets, traces and their snapshots, uploads, the document library. (A parallel multiple imputation also writes the table to the system's temporary folder while it runs, and deletes it afterwards.) When the application deletes a file, it is a plain file deletion: copies kept by backups, synchronised folders or the disk itself are not removed. Keep `DATA_ROOT` on an encrypted disk and outside folders synchronised to a cloud service, and remember that backups keep their own copies.
+
 ---
 
 ## Verification & Test Suite

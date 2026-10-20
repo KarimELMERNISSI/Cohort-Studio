@@ -44,6 +44,7 @@ from core.session import (
 from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
 from core.steps import FITTED
 from core.steps import ids as step_ids
+from manage.snapshots import delete_unreferenced
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.session_scope import get_current_scope
@@ -261,7 +262,10 @@ class AppState:
         parent: dict[str, Any] | None = None,
     ) -> DatasetRef:
         """Install ``df`` as the session dataset: reset derived state, start a trace, store the source."""
+        # a pending draft is dropped with the dataset it was built on (checked against the trace that ends here)
+        dropped = self._draft_snapshots()
         tm = self.transformation_manager
+        ended = list(tm.history)
         tm.initialize_session(source_name or ref.name, username=self.username, parent=parent)
         session_id = tm.session_id
 
@@ -309,13 +313,16 @@ class AppState:
         ss["last_uploaded_file_hash"] = ref.file_hash
         ss["dataset_ref"] = ref
         self._install_views()
+        self._delete_snapshots(dropped, ended)
         return ref
 
     def clear_dataset(self) -> None:
         ss = st.session_state
         for key in DERIVED_KEYS:
             ss.pop(key, None)
+        dropped = self._draft_snapshots()
         self.session.clear()
+        self._delete_snapshots(dropped)
         ss["dataset_ref"] = None
         ss.pop("current_dataset_name", None)
         ss.pop("last_uploaded_file_hash", None)
@@ -410,15 +417,21 @@ class AppState:
         output_dataset_path: str | None = None,
     ) -> bool:
         """Add a change to the Enrich draft (traced when applied); ``False`` when it changes nothing."""
-        pending = self.session.stage(
-            df,
-            step,
-            params,
-            description,
-            population=population,
-            replayable=replayable,
-            output_dataset_path=self.recorded_path(output_dataset_path),
-        )
+        try:
+            pending = self.session.stage(
+                df,
+                step,
+                params,
+                description,
+                population=population,
+                replayable=replayable,
+                output_dataset_path=self.recorded_path(output_dataset_path),
+            )
+        except Exception:  # the change did not join the draft: neither does its snapshot
+            self._delete_snapshots([output_dataset_path])
+            raise
+        if pending is None:  # nothing changed: the snapshot written for the change is not needed
+            self._delete_snapshots([output_dataset_path])
         self._install_views()
         return pending is not None
 
@@ -444,8 +457,30 @@ class AppState:
         return True, f"{n} change{'s' if n != 1 else ''} applied to the dataset."
 
     def discard_staging(self) -> None:
+        dropped = self._draft_snapshots()
         self.session.discard_staging()
+        self._delete_snapshots(dropped)
         self._install_views()
+
+    def _draft_snapshots(self) -> list[str | None]:
+        """The snapshots written for the draft's changes: they reach the trace only when the draft is applied."""
+        draft = self.session.draft
+        return [step.output_dataset_path for step in draft.steps] if draft is not None else []
+
+    def _delete_snapshots(
+        self, paths: list[str | None], steps: list[dict[str, Any]] | None = None
+    ) -> None:
+        """
+        Delete the snapshots of changes that will never reach the trace, except a file that a trace names (the
+        session's trace, or ``steps``). Best effort: a failure is logged, and the change goes on.
+        """
+        if not any(paths):
+            return
+        try:
+            history = self.transformation_manager.history if steps is None else steps
+            delete_unreferenced(paths, get_current_scope(), history)
+        except Exception as exc:
+            logger.warning("The snapshots of the draft were not deleted (%s)", type(exc).__name__)
 
     def rebase_staging(self, *, refit_population: bool = False) -> tuple[bool, str]:
         """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
@@ -487,6 +522,8 @@ class AppState:
                 return False, result.error or f"'{pending.description}' could not be redone."
             frame = result.df
             redone.append((pending, frame, step.get("population")))
+        # the snapshots show the changes on the older data: the replay recomputes the redone changes
+        dropped = self._draft_snapshots()
         session.discard_staging()
         for pending, staged, block in redone:
             session.stage(
@@ -498,6 +535,7 @@ class AppState:
                 replayable=pending.replayable,
                 output_dataset_path=None,
             )
+        self._delete_snapshots(dropped)
         self._install_views()
         n = len(redone)
         return True, f"{n} change{'s' if n != 1 else ''} redone on the current data."

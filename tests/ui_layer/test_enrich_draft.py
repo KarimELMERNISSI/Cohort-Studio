@@ -235,3 +235,142 @@ def test_the_draft_banner_is_at_the_top_of_the_enrich_page(data_root: Path) -> N
     first, second = list(at.main.children.values())[:2]
     assert "draft_apply" in [b.key for b in first.button]  # Apply to the dataset, above the tabs
     assert second.type == "tab_container"
+
+
+def _snapshots_script(action: str) -> None:
+    from pathlib import Path
+
+    import pandas as pd
+    import streamlit as st
+
+    from core.state import DatasetRef
+    from ui.state import get_state
+    from utils.data_paths import get_traces_dir
+
+    state = get_state()
+    # no user is signed in: the snapshots folder of the data folder (save_snapshot)
+    folder = Path(get_traces_dir()) / "snapshots"
+    folder.mkdir(exist_ok=True)
+
+    def snapshot(name: str, frame: pd.DataFrame) -> str:
+        path = folder / f"{name}.parquet"
+        frame.to_parquet(path)
+        return str(path)
+
+    state.set_dataset(
+        pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
+    )
+    frame = state.working_frame()
+    staged = frame.assign(b=frame["a"] * 2)
+    params = {"variable_name": "b", "formula": "a * 2"}
+    state.stage(
+        staged,
+        "variable_computation",
+        params,
+        "Computed new variable: b",
+        output_dataset_path=snapshot("staged", staged),
+    )
+    if action == "no_change":  # the same table again: the change is not added to the draft
+        again = state.working_frame()
+        state.stage(
+            again, "variable_computation", params, "b", output_dataset_path=snapshot("same", again)
+        )
+    elif action == "discard":
+        state.discard_staging()
+    elif action == "rebase":  # the dataset changes underneath: the change is redone on the new data
+        state.commit_change(state.base.assign(c=0), "external_write", {}, "Added c")
+        assert state.rebase_staging()[0]
+    elif action == "load":  # another dataset while the draft is pending
+        state.set_dataset(
+            pd.DataFrame({"x": [1]}), DatasetRef(name="e", origin="upload", file_hash="h2")
+        )
+    elif action == "clear":
+        state.clear_dataset()
+    elif action == "apply":
+        state.commit_staging()
+    elif action == "error":  # the change fails before it joins the draft
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("the change failed")
+
+        state.session.stage = fail
+        try:
+            state.stage(
+                staged,
+                "variable_computation",
+                params,
+                "b",
+                output_dataset_path=snapshot("x", staged),
+            )
+        except RuntimeError:
+            pass
+    st.session_state["probe"] = {
+        "left": sorted(p.name for p in folder.glob("*.parquet")),
+        "traced": [s.get("output_dataset_path") for s in state.transformation_manager.history],
+    }
+
+
+@pytest.mark.parametrize(
+    ("action", "left"),
+    [
+        ("none", ["staged.parquet"]),
+        ("no_change", ["staged.parquet"]),
+        ("discard", []),
+        ("rebase", []),
+        ("load", []),
+        ("clear", []),
+        ("apply", ["staged.parquet"]),
+        ("error", ["staged.parquet"]),
+    ],
+)
+def test_snapshots_of_changes_that_never_reach_the_trace_are_deleted(
+    data_root: Path, action: str, left: list[str]
+) -> None:
+    """Each change of the draft writes a copy of the table; one that is never applied left it behind."""
+    at = AppTest.from_function(
+        _snapshots_script, kwargs={"action": action}, default_timeout=120
+    ).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    probe = at.session_state["probe"]
+    assert probe["left"] == left
+    if action == "apply":  # the trace names the snapshot it keeps
+        assert probe["traced"][-1] == "traces/snapshots/staged.parquet"
+
+
+def _signed_in_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.state import DatasetRef
+    from ui.shell import _user_menu
+    from ui.state import get_state
+    from utils.session_scope import get_current_scope
+
+    if not st.session_state.get("username"):
+        return  # signed out: the session was reset
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        state.set_dataset(
+            pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
+        )
+        frame = state.working_frame()
+        staged = frame.assign(b=frame["a"] * 2)
+        scope = get_current_scope()
+        assert scope is not None
+        path = scope.snapshots_dir() / "staged.parquet"
+        staged.to_parquet(path)
+        state.stage(staged, "variable_computation", {}, "b", output_dataset_path=str(path))
+    _user_menu(state)
+
+
+def test_signing_out_deletes_the_snapshots_of_a_pending_draft(data_root: Path) -> None:
+    at = AppTest.from_function(_signed_in_script, default_timeout=120)
+    at.session_state["username"] = "alice"
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    folder = data_root / "users" / "alice" / "traces" / "snapshots"
+    assert [p.name for p in folder.glob("*.parquet")] == ["staged.parquet"]
+    at.button(key="shell_logout").click().run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert list(folder.glob("*.parquet")) == []

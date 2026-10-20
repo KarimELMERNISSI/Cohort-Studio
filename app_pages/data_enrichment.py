@@ -1,4 +1,5 @@
 import ast
+import contextlib
 import io
 import json
 import logging
@@ -1911,7 +1912,9 @@ def save_snapshot(df, step_name, base_dir=None):
         df_to_save.to_parquet(df_path)
         return df_path
     except Exception as e:
-        logging.error(f"Failed to save snapshot: {e}")
+        logging.error(f"Failed to save snapshot: {type(e).__name__}")
+        with contextlib.suppress(OSError):  # a write that failed part-way leaves a partial copy of the data
+            os.remove(df_path)
         return None
 
 

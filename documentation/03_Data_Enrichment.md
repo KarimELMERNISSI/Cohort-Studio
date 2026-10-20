@@ -261,7 +261,7 @@ their replay gives the same values.
 ## Dataset Versioning & Persistence
 
 - **Saved versions** — The sidebar dataset card: **Save** stores the current dataset as a new version, **Change** loads a saved one.
-- **Automatic Snapshots** — Each merge, transformation and imputation saves a Parquet snapshot in your workspace; the Fast replay mode uses them.
+- **Automatic Snapshots** — Each merge, transformation and imputation saves a Parquet snapshot in your workspace; the Fast replay mode uses them. A snapshot is kept when its change is applied and reaches the trace. Discarding the draft, redoing it on newer data, loading another dataset or clearing the dataset while it is pending, or signing out deletes the snapshots of its changes, as does a change that changes nothing; a snapshot that a saved trace names is never deleted. A draft still pending when the session ends without signing out (a closed tab, a server restart) keeps its snapshots, and copies left by earlier versions of CohortStudio stay until they are deleted by hand.
 - **Reproduce Analysis** — On Reproduce > Versions & traces, upload or select a trace file to replay it or download its Word report.
 
 ---

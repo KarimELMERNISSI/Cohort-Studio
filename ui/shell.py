@@ -128,6 +128,7 @@ def _user_menu(state: AppState) -> None:
             "admin" if admin else (state.role or "researcher"), color="violet" if admin else "gray"
         )
     if st.button("Log out", key="shell_logout", type="tertiary", icon=":material/logout:"):
+        state.discard_staging()  # the session ends: a pending draft is lost, and its snapshots are deleted
         logout()
 
 
