@@ -18,7 +18,8 @@ from pathlib import Path
 
 # Measured 2026-10-20 (M5b): app_pages 53.2, biostats 95.0, core 94.3, enrich 69.9, explore 77.0, graph 93.7,
 # ingest 90.7, manage 74.3, monitor 8.3 (it needs tests), prompts 87.0, ui 84.9, utils 63.2 (72.4 overall).
-# app_pages raised to 54 at 56.3 measured, when the smoke test began opening every tab of the lazy pages.
+# app_pages raised to 54 at 56.3 measured, when the smoke test began opening every tab of the lazy pages; utils to 64
+# at 67.0 in CI, with the settings module and its tests (M5b step 3).
 FLOORS: dict[str, float] = {
     "app_pages": 54.0,
     "biostats": 93.0,
@@ -31,7 +32,7 @@ FLOORS: dict[str, float] = {
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 83.0,
-    "utils": 61.0,
+    "utils": 64.0,
 }
 MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised
 
