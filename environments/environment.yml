@@ -10,6 +10,7 @@
 name: cohortstudio
 channels:
   - conda-forge
+  - nodefaults  # not the channels of the user's configuration (Anaconda's defaults have their own terms)
 dependencies:
   - python=3.14
   - pip

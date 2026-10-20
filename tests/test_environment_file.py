@@ -21,7 +21,7 @@ def test_the_conda_environment_installs_the_locked_requirements() -> None:
     env = yaml.safe_load(ENVIRONMENT.read_text(encoding="utf-8"))
     conda = [d for d in env["dependencies"] if isinstance(d, str)]
     pip = [d["pip"] for d in env["dependencies"] if isinstance(d, dict)]
-    assert env["channels"] == ["conda-forge"]
+    assert env["channels"] == ["conda-forge", "nodefaults"]  # never the user's defaults channel
     assert pip == [["-r ../requirements.txt"]]  # conda runs pip from the environment file's folder
     assert (ENVIRONMENT.parent / ".." / "requirements.txt").resolve().is_file()
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]

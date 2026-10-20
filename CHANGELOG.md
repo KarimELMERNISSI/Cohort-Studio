@@ -300,8 +300,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The conda environment installs what the application uses.** `environments/environment.yml` kept a list of its
   own, which had drifted: it installed ChromaDB and three LangChain packages that the application no longer uses,
   and none of the vector databases (LanceDB, Qdrant), the OpenAI, Anthropic and Ollama connectors, pyarrow, xlrd or
-  lifelines. It now installs Python 3.14 from conda-forge, then the locked packages of `requirements.txt`, which
-  follow `uv.lock`; a test keeps it so. The README shows how to use it.
+  lifelines. It now installs Python 3.14 from conda-forge only (never the user's `defaults` channel), then the
+  locked packages of `requirements.txt`, which follow `uv.lock`; a test keeps it so. The README shows how to use it,
+  how to update it (create it again), and that on macOS the full install needs Apple silicon.
 
 ### Internal structure: one catalogue of trace steps
 

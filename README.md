@@ -267,6 +267,13 @@ conda activate cohortstudio
 streamlit run main.py
 ```
 
+Run it from your copy of the repository: conda reads `requirements.txt` next to the `environments` folder. After an
+update, create the environment again (`conda env remove -n cohortstudio` first): `conda env update` keeps the pip
+packages that the lock no longer lists.
+
+On macOS the full install needs Apple silicon, with pip as with conda: some locked packages (LanceDB, numba,
+cryptography) ship no wheel for Intel Macs.
+
 ### Option C: Containerized Deployment (Docker)
 
 ```bash
