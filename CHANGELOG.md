@@ -435,6 +435,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the identity manager, and `CMP_RANDOM_SEED=` every statistics module at import. Every part of the application now
   reads its settings from the one object, the log redaction included (from the raw environment, so that a wrong
   setting cannot stop it).
+- **Settings keeps your choices for the next session**: the AI provider and its models, Claude's embedding
+  provider, the vector database, the graph engine and the day-first reading of dates, saved in your workspace
+  (`preferences.json`) when you change them. Before, every sign-in started from the defaults. API keys and the
+  confirmation that data may leave the server are never saved: a cloud provider kept from the last session starts
+  nothing until you confirm again. A saved choice the server no longer offers is not used, and the page names it.
 
 ### AI engine: Gemini Flash-Lite
 

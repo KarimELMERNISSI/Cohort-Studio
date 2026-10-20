@@ -21,6 +21,7 @@ from manage.iam import IAMConfigurationError, get_iam_manager
 from manage.iam.authz import is_admin_role
 from ui import nav, shell
 from ui.auth import LOGO, require_login
+from ui.preferences import seed_session
 from ui.state import get_state
 from ui.theme import APP_NAME, apply_theme, show_logo
 from utils.logging_config import configure_logging
@@ -49,6 +50,7 @@ def main() -> None:
 
     if not require_login():
         st.stop()
+    seed_session()  # once per user: the choices of Settings kept from the last session
 
     state = get_state()
     state.begin_run()  # the dataset views of this run (AppState is the only writer of the data)

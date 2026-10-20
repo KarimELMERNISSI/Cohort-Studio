@@ -10,6 +10,7 @@ renders. Nothing here knows about yFiles or Plotly specifics.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import streamlit as st
 
@@ -91,9 +92,16 @@ def render_graph(
 
 
 def renderer_selector(
-    *, container=None, key: str = RENDERER_OVERRIDE_KEY, label: str = "Graph engine"
+    *,
+    container=None,
+    key: str = RENDERER_OVERRIDE_KEY,
+    label: str = "Graph engine",
+    on_change: Callable[[], None] | None = None,
 ) -> None:
-    """Selectbox listing the available renderers; the choice applies to the whole session."""
+    """
+    Selectbox listing the available renderers; the choice applies to the whole session. ``on_change`` runs when the
+    user changes it (Settings keeps it for the next session; graph imports nothing from ui).
+    """
     manager = get_graph_renderer_manager()
     target = container if container is not None else st
     entries = manager.available_renderers()
@@ -114,6 +122,7 @@ def renderer_selector(
         help="Automatic picks the offline Plotly engine. The yFiles engine needs internet access "
         "(it loads its runtime from yworks.com) and reports anonymised usage data to yWorks.",
         key=f"{key}__selectbox",
+        on_change=on_change,
     )
     st.session_state[key] = None if chosen == "auto" else chosen
 

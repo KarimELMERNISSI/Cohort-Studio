@@ -30,6 +30,11 @@ The **Start** page shows the workflow as a diagram. Three core steps take you fr
 The AI engine is optional and local by default (Settings > AI engine); without it, every core step and the
 enrichment path still work.
 
+Your choices in Settings are kept for your next session: the AI provider and its models, the vector database, the
+graph engine and the day-first reading of dates. API keys and the confirmation that data may leave the server are
+not: you enter and confirm them again in each session. A choice this server no longer offers (a model its provider
+stopped listing, say) is not used, and Settings says which.
+
 ### How the diagram follows your progress
 
 The diagram on the Start page, and the step cards under it, show where you are with the dataset currently loaded:

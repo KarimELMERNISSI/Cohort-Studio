@@ -205,3 +205,72 @@ def test_a_withdrawal_unticks_the_other_boxes_that_name_the_recipient(
     assert signed_in.checkbox(key="rag_consent::anthropic+openai").value is False
     # not confirmed again by showing it
     assert signed_in.session_state["rag_manager"].confirmed == set()
+
+
+def _new_session(username: str = "persist_user") -> AppTest:
+    """Another session of the same user (a new browser, the next day): only the files are shared."""
+    at = AppTest.from_file(MAIN, default_timeout=240)
+    at.run()
+    at.session_state["user_authenticated"] = True
+    at.session_state["username"] = username
+    at.session_state["user_role"] = "researcher"
+    at.run()
+    _visit(at, "settings")
+    return at
+
+
+def _saved(tmp_path: Path, username: str = "persist_user") -> str:
+    path = tmp_path / "users" / username / "preferences.json"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def test_the_choices_of_settings_are_kept_for_the_next_session(
+    app: AppTest, tmp_path: Path
+) -> None:
+    """Settings kept its choices for the session only: the next sign-in started from the defaults (M5b)."""
+    app.toggle(key="import_default_dayfirst").set_value(True).run()
+    assert '"import_dayfirst": true' in _saved(tmp_path)
+    later = _new_session()
+    assert later.session_state["import_default_dayfirst"] is True  # what the Import page reads
+    assert later.toggle(key="import_default_dayfirst").value is True
+
+
+def test_a_saved_cloud_provider_starts_nothing_and_no_secret_is_saved(
+    app: AppTest, tmp_path: Path
+) -> None:
+    """The provider and its model are kept; keys and consent stay in the session (audit E6)."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    app.selectbox(key="rag_provider_select").select("gemini").run()
+    app.text_input(key="rag_gemini_api_key").input("AIza-CANARY-KEY-0123456789").run()
+    app.selectbox(key="rag_gemini_model_select").select("gemini-flash-lite-latest").run()
+    app.checkbox(key="rag_consent::gemini").check().run()
+    if any(t.key == "rag_qdrant_api_key" for t in app.text_input):
+        app.text_input(key="rag_qdrant_api_key").input("QDRANT-CANARY-KEY").run()
+    saved = _saved(tmp_path)
+    assert '"ai_provider": "gemini"' in saved and "gemini-flash-lite-latest" in saved
+    assert "CANARY" not in saved and "consent" not in saved
+    later = _new_session()
+    assert later.selectbox(key="rag_provider_select").value == "gemini"
+    assert later.selectbox(key="rag_gemini_model_select").value == "gemini-flash-lite-latest"
+    assert (
+        later.checkbox(key="rag_consent::gemini").value is False
+    )  # confirmed again in each session
+    assert later.session_state["rag_manager"].cloud_consent is False
+
+
+def test_a_saved_model_no_longer_offered_is_named_and_kept(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    folder = tmp_path / "users" / "persist_user"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "preferences.json").write_text(
+        '{"ai_provider": "gemini", "ai_chat_model": {"gemini": "gemini-0.1-retired"}}',
+        encoding="utf-8",
+    )
+    later = _new_session()
+    assert later.selectbox(key="rag_provider_select").value == "gemini"
+    model = later.selectbox(key="rag_gemini_model_select")
+    assert model.value == model.options[0]
+    assert any("gemini-0.1-retired is not offered here" in c.value for c in later.caption)
+    assert "gemini-0.1-retired" in _saved(tmp_path)  # kept until the user chooses again

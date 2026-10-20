@@ -41,6 +41,7 @@ from manage.vectorstores import (
     resolve_engine,
 )
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
+from ui import preferences
 from ui.components import confirm
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
@@ -175,10 +176,14 @@ def _provider_card() -> dict:
     """Provider, connection and model choice; returns the engine configuration."""
     cfg: dict = {"api_key": None, "base_url": None}
     running = _running()
+    prefs = preferences.current()  # the choices kept from the last session (never a key or a consent)
     with st.container(border=True):
         st.subheader("Provider and models", icon=":material/smart_toy:", anchor=False)
-        if "rag_provider_select" not in st.session_state and running.get("provider") in PROVIDER_NAMES:
-            st.session_state["rag_provider_select"] = running["provider"]  # the page starts from the running engine
+        if "rag_provider_select" not in st.session_state:
+            if running.get("provider") in PROVIDER_NAMES:
+                st.session_state["rag_provider_select"] = running["provider"]  # from the running engine
+            elif prefs.ai_provider in PROVIDER_NAMES:
+                st.session_state["rag_provider_select"] = prefs.ai_provider  # a saved cloud provider starts nothing
         provider = st.selectbox(
             "AI provider",
             options=list(PROVIDER_NAMES),
@@ -188,6 +193,8 @@ def _provider_card() -> dict:
             help="Ollama runs on this server or your network; the cloud providers need an API key and your "
             "confirmation that data may be sent to them.",
             persist_state=PERSIST,
+            on_change=preferences.save_from,
+            args=("rag_provider_select", "ai_provider"),
         )
         cfg["provider"] = provider
         if provider == "ollama":
@@ -227,16 +234,42 @@ def _provider_card() -> dict:
                 embed_options, embed_help = _claude_embedding_block(cfg)
                 embed_key = f"rag_anthropic_{cfg['embedding_provider']}_embed_select"
         engine_model = running.get("model") if running.get("provider") == provider else None
-        if chat_key not in st.session_state and engine_model in chat_options:
-            st.session_state[chat_key] = engine_model
+        embed_owner = cfg.get("embedding_provider") or provider  # Claude's documents are embedded by another provider
+        stale = [
+            *_seed_model(chat_key, chat_options, engine_model, prefs.ai_chat_model.get(provider), "chat"),
+            *_seed_model(embed_key, list(embed_options), None, prefs.ai_embedding_model.get(embed_owner), "embedding"),
+        ]
         col_chat, col_embed = st.columns(2)
         cfg["model"] = col_chat.selectbox(
-            "Chat model", chat_options, index=0, key=chat_key, help=chat_help, persist_state=PERSIST
+            "Chat model", chat_options, index=0, key=chat_key, help=chat_help, persist_state=PERSIST,
+            on_change=preferences.save_from, args=(chat_key, "ai_chat_model"), kwargs={"provider": provider},
         )
         cfg["embedding"] = col_embed.selectbox(
-            "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST
+            "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST,
+            on_change=preferences.save_from, args=(embed_key, "ai_embedding_model"), kwargs={"provider": embed_owner},
         )
+        for notice in stale:
+            st.caption(notice)
     return cfg
+
+
+def _seed_model(
+    key: str, options: list[str], running: str | None, saved: str | None, kind: str
+) -> list[str]:
+    """
+    The model a control starts from, when the session has none: the running engine's, then the one kept from the last
+    session. A saved model that is no longer offered is not used: the notice returned says so, and the file keeps it
+    until the user chooses again.
+    """
+    if key in st.session_state or not options:
+        return []
+    if running in options:
+        st.session_state[key] = running
+    elif saved in options:
+        st.session_state[key] = saved
+    elif saved:
+        return [f"Your saved {kind} model {saved} is not offered here: {options[0]} is used."]
+    return []
 
 
 def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
@@ -247,12 +280,17 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         "for a question are sent to Claude; Document insight sends it the text of the document whose graph it "
         "extracts."
     )
+    saved = preferences.current().ai_claude_embedding_provider
+    if "rag_claude_embed_provider" not in st.session_state and saved in EMBEDDING_PROVIDERS:
+        st.session_state["rag_claude_embed_provider"] = saved  # the choice kept from the last session
     embed_provider = st.selectbox(
         "Embedding provider",
         EMBEDDING_PROVIDERS,
         format_func=lambda p: PROVIDER_NAMES.get(p, p),
         index=0,
         key="rag_claude_embed_provider",
+        on_change=preferences.save_from,
+        args=("rag_claude_embed_provider", "ai_claude_embedding_provider"),
         help="Who turns your documents into vectors for search. Ollama keeps the documents on this machine or at "
         "its address; a cloud provider needs its own API key and receives the text of the indexed PDFs and every "
         "search text.",
@@ -535,7 +573,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         st.session_state.setdefault("rag_qdrant_url", settings.qdrant_url or "")
         server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
-        default = resolve_engine(None, settings, advice)
+        default = resolve_engine(preferences.current().vector_store, settings, advice)
         choice = st.segmented_control(
             "Engine",
             options=[e.value for e in VectorEngine],
@@ -544,6 +582,8 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             key="rag_vector_engine",
             help="Where the chunks of your documents and their vectors are stored and searched.",
             persist_state=PERSIST,
+            on_change=preferences.save_from,
+            args=("rag_vector_engine", "vector_store"),
         )
         engine = VectorEngine(choice or default.value)
         st.caption(ENGINE_SUMMARIES[engine])

@@ -45,6 +45,18 @@ KEYS: tuple[Key, ...] = (
         "the study configuration: the criteria definitions (edited on Validate), the enrichments, the folders",
     ),
     Key(
+        "_preferences",
+        "ui.preferences",
+        "session",
+        note="the user's choices kept from the last session (manage.preferences), read once per session",
+    ),
+    Key(
+        "_preferences_seeded",
+        "ui.preferences",
+        "session",
+        note="the user whose preferences seeded this session",
+    ),
+    Key(
         "validate_tab",
         "app_pages.data_monitoring",
         "page",

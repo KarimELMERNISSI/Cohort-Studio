@@ -1,8 +1,11 @@
 """Settings page: AI engine and consent, graph engine, import defaults, workspace maintenance."""
 
+from functools import partial
+
 import streamlit as st
 
 from ui.components import confirm, page_header
+from ui.preferences import save_from
 from ui.shell import clear_workspace_statistics
 from ui.state import get_state
 from utils.optional import extra_installed, missing_message
@@ -25,10 +28,13 @@ with tab_ai:
                 icon=":material/extension:")
 
 with tab_graph, st.container(border=True, width=760):
-    from graph.ui import renderer_selector
+    from graph.ui import RENDERER_OVERRIDE_KEY, renderer_selector
 
     st.subheader("Graph rendering engine", icon=":material/hub:", anchor=False)
-    renderer_selector()
+    # kept for the next session ("auto", the server's default, keeps no preference)
+    renderer_selector(
+        on_change=partial(save_from, f"{RENDERER_OVERRIDE_KEY}__selectbox", "graph_renderer", auto="auto")
+    )
     st.caption("Plotly + NetworkX renders offline. The optional yFiles engine loads its runtime from yworks.com and reports "
                "anonymised graph-structure analytics; see the About page.")
 
@@ -36,7 +42,8 @@ with tab_import, st.container(border=True, width=760):
     st.subheader("Defaults applied when a file is imported", icon=":material/upload_file:", anchor=False)
     # kept for the session: Import, the page that reads it, does not show this toggle
     st.toggle("Treat dates as day-first (31/12/2024) by default", key="import_default_dayfirst",
-              help="European date order. You can still change it per file in the import flow.", persist_state="session")
+              help="European date order. You can still change it per file in the import flow.", persist_state="session",
+              on_change=save_from, args=("import_default_dayfirst", "import_dayfirst"))  # kept for the next session
     st.caption("Encoding, delimiter and decimal separator are always detected per file and shown for review.")
 
 with tab_workspace, st.container(border=True, width=760):
