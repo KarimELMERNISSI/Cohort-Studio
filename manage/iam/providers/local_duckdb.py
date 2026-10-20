@@ -16,12 +16,14 @@ import duckdb
 
 import utils.data_paths as dp
 from utils.logging_config import single_line
+from utils.settings import get_settings
 
 from ..base import BaseIAMProvider
 from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
 
-MAX_FAILED_LOGINS = int(os.getenv("CMP_MAX_FAILED_LOGINS", "5"))
-LOCKOUT_MINUTES = int(os.getenv("CMP_LOCKOUT_MINUTES", "15"))
+# the CMP_MAX_FAILED_LOGINS and CMP_LOCKOUT_MINUTES settings, read once; tests patch these attributes
+MAX_FAILED_LOGINS = get_settings().iam.max_failed_logins
+LOCKOUT_MINUTES = get_settings().iam.lockout_minutes
 
 logger = logging.getLogger(__name__)
 

@@ -11,6 +11,7 @@ import os
 from typing import Any
 
 from utils.logging_config import single_line
+from utils.settings import Settings, get_settings
 
 from . import setup_token
 from .base import BaseIAMProvider
@@ -59,28 +60,26 @@ class IAMManager:
         self._provider: BaseIAMProvider = self._build_provider(self._config)
 
     @classmethod
-    def _resolve_config_from_env(cls) -> IAMConfig:
+    def _resolve_config_from_env(cls, settings: Settings | None = None) -> IAMConfig:
         """
-        Read IAM configuration from process environment variables. An unknown CMP_IAM_PROVIDER raises
-        IAMConfigurationError: a misspelt provider used to give local accounts without a word, so a server meant to
-        sign users in elsewhere ran with its own accounts instead.
+        The IAM configuration of the settings (utils.settings; the current ones by default). An unknown
+        CMP_IAM_PROVIDER raises IAMConfigurationError: a misspelt provider used to give local accounts without a word,
+        so a server meant to sign users in elsewhere ran with its own accounts instead.
         """
-        raw_type = os.getenv("CMP_IAM_PROVIDER", "local").lower().strip() or "local"
+        iam = (settings or get_settings()).iam
+        raw_type = iam.provider or "local"
         provider_type = PROVIDER_ALIASES.get(raw_type)
         if provider_type is None:
             raise IAMConfigurationError(
                 f"CMP_IAM_PROVIDER={raw_type!r} is not an identity provider: use local, better_auth or disabled."
             )
 
-        better_auth_url = os.getenv("CMP_BETTER_AUTH_URL", "http://localhost:3000/api/auth")
-        better_auth_api_key = os.getenv("CMP_BETTER_AUTH_API_KEY")
-        cache_ttl = int(os.getenv("CMP_IAM_CACHE_TTL", "300"))
-
+        key = iam.better_auth_api_key
         return IAMConfig(
             provider_type=provider_type,
-            better_auth_url=better_auth_url,
-            better_auth_api_key=better_auth_api_key,
-            session_cache_ttl_seconds=cache_ttl,
+            better_auth_url=iam.better_auth_url,
+            better_auth_api_key=key.get_secret_value() if key is not None else None,
+            session_cache_ttl_seconds=iam.cache_ttl,
         )
 
     @classmethod
@@ -271,9 +270,10 @@ class IAMManager:
             setup_token.clear(self._setup_dir())  # a token left from before the administrator existed
             return False, "An active administrator already exists"
 
-        username = os.getenv("CMP_ADMIN_USERNAME", "admin").strip()
-        password = os.getenv("CMP_ADMIN_PASSWORD")
-        password_file = os.getenv("CMP_ADMIN_PASSWORD_FILE")
+        iam = get_settings().iam
+        username = iam.admin_username
+        password = iam.admin_password.get_secret_value() if iam.admin_password is not None else None
+        password_file = iam.admin_password_file
         if not password and password_file and os.path.isfile(password_file):
             with open(password_file, encoding="utf-8") as handle:
                 password = handle.read().strip()

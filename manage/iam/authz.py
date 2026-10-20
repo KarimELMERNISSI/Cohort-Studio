@@ -7,12 +7,14 @@ the username string (audit finding E5).
 
 from __future__ import annotations
 
-import os
 import re
+
+from utils.settings import get_settings
 
 from .schemas import UserRole
 
-MIN_PASSWORD_LENGTH = int(os.getenv("CMP_MIN_PASSWORD_LENGTH", "12"))
+# the CMP_MIN_PASSWORD_LENGTH setting, read once; tests patch this attribute
+MIN_PASSWORD_LENGTH = get_settings().iam.min_password_length
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$")
 
 

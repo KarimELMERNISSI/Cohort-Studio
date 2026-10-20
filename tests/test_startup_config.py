@@ -110,3 +110,11 @@ def test_the_command_line_stops_on_a_wrong_setting(tmp_path: Path) -> None:
     )
     assert out.returncode != 0
     assert "CMP_IAM_CACHE_TTL" in out.stderr and "zz9" not in out.stderr
+
+
+def test_an_empty_setting_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CMP_IAM_CACHE_TTL= (a line left empty in .env) stopped the identity manager with int('')."""
+    monkeypatch.setenv("CMP_IAM_PROVIDER", "")
+    monkeypatch.setenv("CMP_IAM_CACHE_TTL", "")
+    config = IAMManager._resolve_config_from_env()
+    assert config.provider_type == IAMProviderType.LOCAL and config.session_cache_ttl_seconds == 300

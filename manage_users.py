@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import os
 import sys
 from pathlib import Path
 
-from utils.settings import SettingsError, load_settings
+from utils.settings import SettingsError, get_settings, load_settings
 
 # .env first, then every setting validated, as main.py does: the identity provider and the CMP_ADMIN_* settings
 try:
@@ -39,9 +38,9 @@ def _fail(message: str) -> None:
 
 
 def _read_password(prompt: str) -> str:
-    env_password = os.getenv("CMP_ADMIN_PASSWORD")
-    if env_password:
-        return env_password
+    env_password = get_settings().iam.admin_password
+    if env_password is not None:
+        return env_password.get_secret_value()
     first = getpass.getpass(prompt)
     second = getpass.getpass("Confirm password: ")
     if first != second:
