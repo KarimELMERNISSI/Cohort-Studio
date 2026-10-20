@@ -71,7 +71,7 @@ CLOUD_CATALOG = {
         "label": "Google GenAI API key",
         # the provider's list: the models that fit the app's uses, Flash-Lite included (cheap and fast)
         "chat": list(GEMINI_CHAT_MODELS),
-        "embed": ["models/gemini-embedding-2", "models/text-embedding-005", "models/text-embedding-004", "models/gemini-embedding-001"],
+        "embed": ["models/gemini-embedding-2", "models/text-embedding-005", "models/gemini-embedding-001"],
     },
     "openai": {
         "env": "OPENAI_API_KEY",

@@ -2,11 +2,17 @@
 
 from pathlib import Path
 
-from dotenv import load_dotenv
+from utils.settings import SettingsError, load_settings
 
-# .env first, before any module reads the configuration (identity provider, data folder, logging, AI keys); a
-# variable already set in the environment wins, which is how Docker passes them
-load_dotenv(Path(__file__).with_name(".env"), override=False)
+# .env first, then every setting validated, before any module reads the configuration (identity provider, data
+# folder, logging, AI keys); a variable already set in the environment wins, which is how Docker passes them
+try:
+    load_settings(Path(__file__).with_name(".env"))
+except SettingsError as exc:  # stopped before a module reads the wrong value; the message never shows a value
+    import streamlit as st
+
+    st.error(f"CohortStudio cannot start: {exc}", icon=":material/gpp_bad:")
+    st.stop()
 
 import streamlit as st
 

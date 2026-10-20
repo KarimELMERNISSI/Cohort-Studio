@@ -193,7 +193,6 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
         fallback = [
             "models/gemini-embedding-2",
             "models/text-embedding-005",
-            "models/text-embedding-004",
             "models/gemini-embedding-001",
         ]
         if not self.client or not GEMINI_AVAILABLE:
@@ -213,7 +212,6 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
             self.config.embedding_model,
             "models/gemini-embedding-2",
             "models/text-embedding-005",
-            "models/text-embedding-004",
         ]
         seen = set()
         deduped = [m for m in models_to_try if not (m in seen or seen.add(m))]

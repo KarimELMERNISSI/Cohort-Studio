@@ -78,3 +78,35 @@ def test_a_custom_provider_is_not_built_from_the_configuration() -> None:
     # CUSTOM gave local accounts without a word; a custom provider is installed with set_provider
     with pytest.raises(IAMConfigurationError, match="set_provider"):
         IAMManager(config=IAMConfig(provider_type=IAMProviderType.CUSTOM))
+
+
+def test_a_wrong_setting_stops_the_app_named_without_its_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every setting is validated first (utils.settings): before, a wrong value failed later, or silently counted as
+    another (CMP_LOG_LEVEL=verbose as INFO, CMP_OFFLINE=enabled as off, CMP_MI_MAX_WORKERS=0 at the first imputation)."""
+    from streamlit.testing.v1 import AppTest
+
+    from utils.settings import reset_settings
+
+    monkeypatch.setenv("CMP_LOG_LEVEL", "verbose-zz9")
+    monkeypatch.setenv("CMP_OFFLINE", "enabled-zz9")
+    monkeypatch.setenv("CMP_MI_MAX_WORKERS", "0")
+    reset_settings()
+    at = AppTest.from_file(str(ROOT / "main.py"), default_timeout=120).run()
+    shown = " ".join(e.value for e in at.error)
+    assert "cannot start" in shown
+    assert all(name in shown for name in ("CMP_LOG_LEVEL", "CMP_OFFLINE", "CMP_MI_MAX_WORKERS"))
+    assert "zz9" not in shown and not at.text_input  # no sign-in form
+    reset_settings()
+
+
+def test_the_command_line_stops_on_a_wrong_setting(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    app.mkdir()
+    shutil.copy(ROOT / "manage_users.py", app / "manage_users.py")  # no .env next to it: the developer's is not read
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "CMP_IAM_CACHE_TTL": "-55zz9", "DATA_ROOT": str(tmp_path / "data")}
+    out = subprocess.run(
+        [sys.executable, str(app / "manage_users.py"), "list"],
+        capture_output=True, text=True, env=env, cwd=tmp_path, timeout=300,
+    )
+    assert out.returncode != 0
+    assert "CMP_IAM_CACHE_TTL" in out.stderr and "zz9" not in out.stderr
