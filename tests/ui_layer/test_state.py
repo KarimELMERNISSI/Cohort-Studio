@@ -299,33 +299,38 @@ def _dashboard_script() -> None:
         base = state.base
         state.commit_change(base.drop(columns=base.columns[-1]), "external_write", {}, "Dropped")
     ss = st.session_state
-    settings = (  # what the dashboard audits with in this run
-        ss.get("validity_outlier_method", "iqr"),
-        ss.get("validity_outlier_params", {"multiplier": 1.5}),
-    )
     render_dashboard(state.base, ss["config"])
-    ss["probe"] = {"metrics": state.quality_audit(*settings)[1], "base": state.base}  # kept
+    if ss.pop("compare", False):  # the scorecard's audit, asked for again
+        settings = ss["validity_outlier_method"], ss["validity_outlier_params"]
+        ss["probe"] = {"metrics": state.quality_audit(*settings)[1], "base": state.base}
 
 
-def test_the_quality_audit_runs_once_per_data_and_validity_method(
+def test_the_quality_audit_runs_once_per_data_and_detection_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every click on Validate audited the whole dataset again, a weight slider included."""
     import explore.data_quality_auditor as dqa
 
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
-    audits: list[str | None] = []
+    audits: list[tuple] = []
     run_audit = dqa.DataQualityAuditor.run_audit
 
     def counted(self, *args, **kwargs):
-        audits.append(kwargs.get("validity_method"))
+        audits.append((kwargs.get("validity_method"), dict(kwargs.get("validity_params") or {})))
         return run_audit(self, *args, **kwargs)
 
     monkeypatch.setattr(dqa.DataQualityAuditor, "run_audit", counted)
-    at = AppTest.from_function(_dashboard_script, default_timeout=180).run()
+    at = AppTest.from_function(_dashboard_script, default_timeout=180)
+    at.session_state["compare"] = True
+    at.run()
     assert not at.exception, [str(e.value) for e in at.exception]
-    assert audits == ["iqr"]
-    # the tutorial cohort's audit, kept, equals a fresh one
+    iqr, iqr2, zscore = (
+        ("iqr", {"multiplier": 1.5}),
+        ("iqr", {"multiplier": 2.0}),
+        ("zscore", {"threshold": 3.0}),
+    )
+    # the scorecard's audit is kept (the probe asks for it again) and equals a fresh one
+    assert audits == [iqr]
     probe = at.session_state["probe"]
     fresh = dqa.DataQualityAuditor(probe["base"], config=at.session_state["config"])
     assert probe["metrics"] == run_audit(
@@ -333,10 +338,12 @@ def test_the_quality_audit_runs_once_per_data_and_validity_method(
     )
     weight = next(s for s in at.slider if s.label.endswith("Weight"))
     weight.set_value(3.0).run()  # the score changes, not the audit
-    assert not at.exception and audits == ["iqr"]
+    assert not at.exception and audits == [iqr]
+    # the scorecard above the detection settings follows them at once (it was one click late)
+    at.slider(key="validity_iqr_mult").set_value(2.0).run()
+    assert audits == [iqr, iqr2]
     at.selectbox(key="validity_detection_method").set_value("zscore").run()
-    at.run()  # the scorecard at the top of the page uses the method chosen below it in the run before
-    assert audits == ["iqr", "zscore"]
+    assert audits == [iqr, iqr2, zscore]
     at.session_state["action"] = "commit"
-    at.run()
-    assert not at.exception and len(audits) == 3  # the data changed: audited again
+    at.run()  # the data changed: audited again, with the settings chosen (not the defaults)
+    assert not at.exception and audits == [iqr, iqr2, zscore, zscore]

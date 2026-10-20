@@ -91,6 +91,34 @@ def _score_breakdown(quality, details, checks, weights) -> None:
             )
 
 
+# The parameters of each detection method in the "Statistical Validity" settings: the widget key and the default
+VALIDITY_PARAMS = {
+    "iqr": {"multiplier": ("validity_iqr_mult", 1.5)},
+    "zscore": {"threshold": ("validity_zscore_thresh", 3.0)},
+    "quantile": {"lower": ("validity_q_lower", 0.01), "upper": ("validity_q_upper", 0.99)},
+}
+
+
+def _sync_validity_settings() -> None:
+    """
+    The scorecard at the top of the dashboard is computed before the detection settings further down run, so it
+    used the settings of the run before: it followed a change one click late, and fell back to the defaults for a
+    run after each change of the data. Streamlit updates a widget's value before the rerun: the settings are read
+    from the widgets here.
+    """
+    ss = st.session_state
+    method = ss.get("validity_detection_method")
+    if method is None:
+        return  # the settings have not been shown yet: the stored settings, or their defaults, stand
+    same = ss.get("validity_outlier_method") == method
+    stored = (ss.get("validity_outlier_params") or {}) if same else {}
+    ss["validity_outlier_method"] = method
+    ss["validity_outlier_params"] = {
+        name: ss.get(key, stored.get(name, default))
+        for name, (key, default) in VALIDITY_PARAMS.get(method, {}).items()
+    }
+
+
 def render_dashboard(df, config):
     """
     Renders the Data Quality Dashboard of ``df``, the session's dataset (every row) with its ``config``.
@@ -102,6 +130,7 @@ def render_dashboard(df, config):
         st.session_state['validity_outlier_method'] = 'iqr'
     if 'validity_outlier_params' not in st.session_state:
         st.session_state['validity_outlier_params'] = {'multiplier': 1.5}
+    _sync_validity_settings()
 
     # Get selected outlier method from session state (set in Tab 2)
     validity_method = st.session_state['validity_outlier_method']

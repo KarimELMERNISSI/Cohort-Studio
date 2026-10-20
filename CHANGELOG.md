@@ -379,6 +379,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The quality audit on Validate runs once per dataset and detection settings.** The dashboard audited every row
   again on every click, a score weight included. The audit is now kept until the data, the criteria definitions or
   the outlier detection settings change.
+- **The health scorecard follows the outlier detection settings at once.** It sits above those settings and used
+  the ones stored in the click before, so it followed a change one click late, and showed the default settings for
+  one click after each change of the data. It now reads the settings from their controls.
 
 ### AI engine: Gemini Flash-Lite
 
