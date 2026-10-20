@@ -1648,10 +1648,12 @@ def compute_transformations(dataframe):
 
     # Step 3: Column Selection based on transformation type
     if transformation_type == "Encoding":
+        # keyed: a transformation adds columns to the draft, and an unkeyed list would forget the next choice
         columns = st.multiselect(
             "Choose categorical columns to encode:",
             options=dataframe.select_dtypes(include=['object', 'category']).columns,
-            help="Select one or more categorical columns from the dataset."
+            help="Select one or more categorical columns from the dataset.",
+            key="tf_columns_encoding",
         )
         if transformation == "Ordinal Encoding":
             category_orders = {}
@@ -1674,6 +1676,7 @@ def compute_transformations(dataframe):
             options=usable,
             help="FAMD takes numbers and categories (numbers as quantitative variables, other columns as "
                  "categories, as in FactoMineR); PCA takes numbers.",
+            key="tf_columns_reduction",
         )
         if excluded:
             st.caption(
@@ -1684,7 +1687,8 @@ def compute_transformations(dataframe):
         columns = st.multiselect(
             "Choose columns to apply the selected transformation:",
             options=dataframe.select_dtypes(include=np.number).columns,
-            help="Select one or more columns from the dataset."
+            help="Select one or more columns from the dataset.",
+            key="tf_columns_numeric",
         )
 
     # Step 4: Naming Pattern Customization

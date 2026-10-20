@@ -209,6 +209,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   instead of Welch's, pooled the same way. A warning says why Welch's is recommended, and the summary and the
   dossier mark the test as chosen. The page says which analyses have no pooled alternative (three or more groups,
   categorical variables) and which have no pooling rule (rank tests, Fisher's exact test).
+- **Enrich > Create new variables: the columns chosen for a transformation stay chosen.** Applying a transformation
+  adds columns to the draft, and the column list then started again empty, so a second transformation of the same
+  columns meant choosing them again. The three column lists (encoding, PCA and FAMD, the other methods) now keep
+  the choice.
 
 ### Internal structure: one catalogue of trace steps
 
