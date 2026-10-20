@@ -376,6 +376,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   tests & epidemiology and Survival & regression sorted the columns into numeric, categorical, date and other types
   on every click, trying a dozen date formats on each text column; Statistics & correlations did it four times per
   click. The types are now kept until the data or the ticked criteria change.
+- **The quality audit on Validate runs once per dataset and detection settings.** The dashboard audited every row
+  again on every click, a score weight included. The audit is now kept until the data, the criteria definitions or
+  the outlier detection settings change.
 
 ### AI engine: Gemini Flash-Lite
 

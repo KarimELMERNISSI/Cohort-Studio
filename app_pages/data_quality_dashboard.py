@@ -10,7 +10,6 @@ import streamlit as st
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
-from explore.data_quality_auditor import DataQualityAuditor
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
     DIMENSION_HELP,
@@ -21,6 +20,7 @@ from explore.quality_score import (
 )
 from ui.progress import mark_step, record_quality_check
 from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
+from ui.state import get_state
 
 
 def _selected_dimension(event) -> str | None:
@@ -93,7 +93,7 @@ def _score_breakdown(quality, details, checks, weights) -> None:
 
 def render_dashboard(df, config):
     """
-    Renders the Data Quality Dashboard.
+    Renders the Data Quality Dashboard of ``df``, the session's dataset (every row) with its ``config``.
     """
     st.markdown("Comprehensive assessment of your dataset's health across key dimensions.")
 
@@ -108,11 +108,10 @@ def render_dashboard(df, config):
     validity_params = st.session_state['validity_outlier_params']
     
 
-    # Initialize Auditor
-    auditor = DataQualityAuditor(df, config=config)
-    metrics = auditor.run_audit(validity_method=validity_method, validity_params=validity_params)
-    advice_list = auditor.generate_advice()
-    
+    # The audit of the dataset, kept until the data, the criteria or the validity method change (M5b): a weight
+    # slider or another tab no longer runs it again
+    auditor, metrics, advice_list = get_state().quality_audit(validity_method, validity_params)
+
 
     # --- Global Score Calculation ---
     preferred_order = list(DIMENSIONS)

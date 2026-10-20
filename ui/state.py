@@ -26,7 +26,7 @@ import os
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import streamlit as st
@@ -49,6 +49,9 @@ from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.session_scope import get_current_scope
+
+if TYPE_CHECKING:
+    from explore.data_quality_auditor import DataQualityAuditor
 
 logger = logging.getLogger(__name__)
 
@@ -634,6 +637,42 @@ class AppState:
                 slot, key = "analyzer:analysis", population.fingerprint
         profile = session.memo(slot, key, lambda: DataAnalyzer(frame.copy(deep=False)).profile)
         return DataAnalyzer.from_profile(frame.copy(deep=False), profile)
+
+    def quality_audit(
+        self, method: str, params: Mapping[str, Any] | None
+    ) -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
+        """
+        The quality audit of every row (the Validate dashboard): the auditor, its metrics and its advice. It is kept
+        until the data, the criteria definitions or the validity method change; the page only reads the auditor.
+        """
+        import copy
+        import hashlib
+
+        from core.lineage import canonical_json
+        from explore.data_quality_auditor import DataQualityAuditor
+
+        session = self.session
+        base = session.base
+        if base is None:
+            raise RuntimeError("no dataset is loaded")
+        config = (
+            self.config
+        )  # changed in place by the page: its content is the key, read on every run
+        rules = canonical_json(config.get("mask_families") or {})
+        settings = dict(params or {})
+        key = (
+            hashlib.sha256(rules.encode("utf-8")).hexdigest(),
+            str(method),
+            canonical_json(settings),
+        )
+
+        def audit() -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
+            auditor = DataQualityAuditor(base.copy(deep=False), config=copy.deepcopy(config))
+            metrics = auditor.run_audit(validity_method=method, validity_params=settings)
+            return auditor, metrics, list(auditor.advice)
+
+        auditor, metrics, advice = session.memo("quality_audit", key, audit)
+        return auditor, dict(metrics), list(advice)
 
     # ------------------------------------------------------------------ multiple imputation
 
