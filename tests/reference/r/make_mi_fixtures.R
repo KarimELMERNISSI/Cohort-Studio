@@ -105,36 +105,67 @@ models <- lapply(names(fits), function(k) {
 r2 <- pool.r.squared(fits$lm)
 r2_adj <- pool.r.squared(fits$lm, adjusted = TRUE)
 
-# 5. The groups compared with robust (HC3) variances: lm per dataset, sandwich::vcovHC, pooled by mitml ----------
-robust_fit <- function(d) {
+# 5. The groups compared without assuming equal variances (biostats.linear.welch_means) -------------------------
+#    lm(y ~ group) with sandwich HC2 variances (each group's own s^2 / n) and Welch-type complete-data df: n - 1
+#    for a group mean, Satterthwaite's for a difference, Welch's df for the test (oneway.test). Each quantity is
+#    pooled by mice::pool.scalar with its own df (the smallest over the imputations), the test by mitml's D1.
+welch_fit <- function(d) {
+  d$group <- factor(d$group)
   fit <- lm(y ~ group, data = d)
   b <- coef(fit)
-  v <- vcovHC(fit, type = "HC3")
+  v <- vcovHC(fit, type = "HC2")
   terms <- sub("(Intercept)", "Intercept", names(b), fixed = TRUE)  # syntactic names for testConstraints
   names(b) <- terms
   dimnames(v) <- list(terms, terms)
-  list(coef = b, vcov = v, df = df.residual(fit))
+  n <- table(d$group)
+  vg <- tapply(d$y, d$group, var) / n
+  lv <- levels(d$group)
+  ref <- lv[1]
+  satt <- function(g) as.numeric((vg[g] + vg[ref])^2 / (vg[g]^2 / (n[g] - 1) + vg[ref]^2 / (n[ref] - 1)))
+  df_terms <- c(Intercept = as.numeric(n[ref] - 1), setNames(sapply(lv[-1], satt), paste0("group", lv[-1])))
+  welch <- oneway.test(y ~ group, data = d, var.equal = FALSE)
+  means_fit <- lm(y ~ 0 + group, data = d)
+  list(
+    coef = b, vcov = v, df_terms = df_terms, df2 = unname(welch$parameter[2]),
+    welch_f = unname(welch$statistic), welch_p = welch$p.value,
+    means = coef(means_fit), means_var = diag(vcovHC(means_fit, type = "HC2")), means_df = as.numeric(n - 1)
+  )
 }
-robust_fits <- lapply(complete(imp, "all"), robust_fit)
-qhat <- lapply(robust_fits, `[[`, "coef")
-uhat <- lapply(robust_fits, `[[`, "vcov")
-robust_dfcom <- robust_fits[[1]]$df
-estimates <- as.data.frame(testEstimates(qhat = qhat, uhat = uhat, df.com = robust_dfcom)$estimates)
-robust_d1 <- as.data.frame(
-  testConstraints(qhat = qhat, uhat = uhat, constraints = c("groupb", "groupc"), method = "D1", df.com = robust_dfcom)$test
+welch_fits <- lapply(complete(imp, "all"), welch_fit)
+qhat <- lapply(welch_fits, `[[`, "coef")
+uhat <- lapply(welch_fits, `[[`, "vcov")
+term_dfcom <- apply(sapply(welch_fits, `[[`, "df_terms"), 1, min)
+pooled_terms <- lapply(names(qhat[[1]]), function(term) {
+  p <- pool.scalar(sapply(qhat, `[[`, term), sapply(uhat, function(u) u[term, term]), n = term_dfcom[[term]] + 1, k = 1)
+  se <- sqrt(p$t)
+  list(
+    term = term, estimate = p$qbar, std_error = se, df = p$df, riv = p$r, fmi = p$fmi, dfcom = term_dfcom[[term]],
+    p_value = 2 * pt(abs(p$qbar / se), p$df, lower.tail = FALSE)
+  )
+})
+means_q <- sapply(welch_fits, `[[`, "means")
+means_u <- sapply(welch_fits, `[[`, "means_var")
+means_dfcom <- apply(sapply(welch_fits, `[[`, "means_df"), 1, min)
+pooled_means <- lapply(seq_len(nrow(means_q)), function(j) {
+  p <- pool.scalar(means_q[j, ], means_u[j, ], n = means_dfcom[[j]] + 1, k = 1)
+  list(group = sub("^group", "", rownames(means_q)[j]), mean = p$qbar, se = sqrt(p$t), df = p$df, fmi = p$fmi)
+})
+welch_df2 <- min(sapply(welch_fits, `[[`, "df2"))
+welch_d1 <- as.data.frame(
+  testConstraints(qhat = qhat, uhat = uhat, constraints = c("groupb", "groupc"), method = "D1", df.com = welch_df2)$test
 )
+first <- welch_fits[[1]]
 robust <- list(
   formula = "y ~ group",
-  dfcom = robust_dfcom,
-  first_vcov = list(terms = names(qhat[[1]]), matrix = unname(uhat[[1]])),
-  table = data.frame(
-    term = rownames(estimates), estimate = estimates[["Estimate"]], std_error = estimates[["Std.Error"]],
-    statistic = estimates[["t.value"]], df = estimates[["df"]], p_value = estimates[["P(>|t|)"]],
-    riv = estimates[["RIV"]], fmi = estimates[["FMI"]]
+  first = list(
+    terms = names(first$coef), vcov = unname(first$vcov), df_terms = as.list(first$df_terms), df2 = first$df2,
+    welch_f = first$welch_f, welch_p = first$welch_p
   ),
+  terms = pooled_terms,
+  means = pooled_means,
   d1 = list(
-    statistic = robust_d1[["F.value"]][1], df1 = robust_d1[["df1"]][1], df2 = robust_d1[["df2"]][1],
-    p_value = robust_d1[["P(>F)"]][1], riv = robust_d1[["RIV"]][1]
+    statistic = welch_d1[["F.value"]][1], df1 = welch_d1[["df1"]][1], df2 = welch_d1[["df2"]][1],
+    p_value = welch_d1[["P(>F)"]][1], riv = welch_d1[["RIV"]][1], dfcom = welch_df2
   )
 )
 

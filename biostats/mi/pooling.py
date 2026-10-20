@@ -143,9 +143,16 @@ class PooledTable(BaseModel):
         raise KeyError(name)
 
     def wald(
-        self, terms: Sequence[str], *, null: Sequence[float] | None = None
+        self,
+        terms: Sequence[str],
+        *,
+        null: Sequence[float] | None = None,
+        dfcom: float | None = None,
     ) -> MultiParameterTest:
-        """D1 test that the given terms are jointly equal to ``null`` (zero by default)."""
+        """
+        D1 test that the given terms are jointly equal to ``null`` (zero by default); ``dfcom`` is the complete-data
+        denominator df of that test when it is not the table's (Welch's df for group means of unequal variances).
+        """
         if self.covariances is None:
             raise ValueError(
                 "the covariance matrices of the completed-data analyses are needed for a Wald test"
@@ -153,7 +160,9 @@ class PooledTable(BaseModel):
         idx = [self.names.index(t) for t in terms]
         q = np.asarray(self.estimates, dtype=float)[:, idx]
         u = np.asarray(self.covariances, dtype=float)[:, idx][:, :, idx]
-        return d1_wald(q, u, null=null, dfcom=self.dfcom, terms=list(terms))
+        return d1_wald(
+            q, u, null=null, dfcom=self.dfcom if dfcom is None else dfcom, terms=list(terms)
+        )
 
     def to_frame(self) -> pd.DataFrame:
         rows = []
@@ -377,7 +386,7 @@ def pool_terms(
     covariances: Sequence[Any] | None = None,
     variances: Sequence[Any] | None = None,
     terms: Sequence[str] | None = None,
-    dfcom: float = math.inf,
+    dfcom: float | Mapping[str, float] = math.inf,
     alpha: float = 0.05,
     scales: str | Mapping[str, str] | None = None,
 ) -> PooledTable:
@@ -386,7 +395,8 @@ def pool_terms(
 
     ``estimates`` are m mappings term -> estimate (pandas Series from ``fit.params``) or an m x k array with
     ``terms``. Give either the m covariance matrices (``fit.cov_params()``; needed for Wald tests of several
-    terms) or the m vectors of variances. Every analysis must estimate the same terms.
+    terms) or the m vectors of variances. Every analysis must estimate the same terms. ``dfcom`` is the
+    complete-data df, one for the table or one per term (a mapping; the table keeps the smallest).
     """
     q, names = _as_matrix(estimates, terms)
     m, k = q.shape
@@ -413,11 +423,16 @@ def pool_terms(
         per_term = dict.fromkeys(names, scales)
     elif scales is not None:
         per_term = {n: scales.get(n, "identity") for n in names}
+    term_dfcom = (
+        {n: float(dfcom[n]) for n in names}
+        if isinstance(dfcom, Mapping)
+        else dict.fromkeys(names, float(dfcom))
+    )
     pooled = [
         pool_scalar(
             q[:, j],
             u[:, j],
-            dfcom=dfcom,
+            dfcom=term_dfcom[names[j]],
             alpha=alpha,
             term=names[j],
             scale=per_term.get(names[j], "identity"),
@@ -427,7 +442,7 @@ def pool_terms(
     return PooledTable(
         terms=pooled,
         m=m,
-        dfcom=float(dfcom),
+        dfcom=min(term_dfcom.values(), default=math.inf),
         alpha=alpha,
         estimates=q.tolist(),
         covariances=None if cov is None else cov.tolist(),
@@ -475,7 +490,9 @@ def d1_wald(
     t = k * (m - 1)
     note = ""
     if r <= 0:
-        df2 = math.inf
+        # no variance between the imputations (a fully observed variable): the complete-data df, as mitml's .D1;
+        # infinity here made the test of a finite-df model use F(k, inf), depending on rounding
+        df2 = math.inf if math.isinf(dfcom) else (dfcom + 1) / (dfcom + 3) * dfcom
     elif math.isinf(dfcom) or t <= 4:
         df2 = (
             4 + (t - 4) * (1 + (1 - 2 / t) / r) ** 2

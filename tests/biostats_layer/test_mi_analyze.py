@@ -12,7 +12,7 @@ from scipy import stats
 from biostats import TestResult
 from biostats.contingency import TwoByTwo, analyze_twobytwo, chi_square_independence
 from biostats.inference import compare_groups
-from biostats.linear import ancova, linear_regression
+from biostats.linear import ancova, linear_regression, welch_means
 from biostats.mi import (
     MIAnalysisError,
     MIData,
@@ -170,30 +170,35 @@ def test_ancova_pools_the_adjusted_means() -> None:
     assert (means["fmi"] >= 0).all()
 
 
-def test_a_robust_linear_model_is_pooled_with_its_robust_variances() -> None:
-    # three groups or more under MI: the HC3 model, poolable by D1, gives each group its own variance
+def test_welch_type_group_means_are_pooled_with_their_own_df() -> None:
+    # three groups or more under MI: each group keeps its own variance, and each pooled quantity its own
+    # complete-data df (the smallest over the imputations): n - 1 for a group mean, Satterthwaite's for a
+    # difference, Welch's for the D1 test. The residual df made the test reject too often.
     mi, _ = _mi()
     levels = {"site": ["Ettelbruck", "Luxembourg", "Metz"]}
-    result = analyze_mi(lambda d: ancova(d, "sbp", "site", levels=levels, cov_type="HC3"), mi)
-    fits = [ancova(d, "sbp", "site", levels=levels, cov_type="HC3") for _, d in mi.completed()]
+    result = analyze_mi(lambda d: welch_means(d, "sbp", "site", levels=levels), mi)
+    fits = [welch_means(d, "sbp", "site", levels=levels) for _, d in mi.completed()]
+    term_dfcom = {t: min(f.term_df[t] for f in fits) for t in fits[0].term_df}
     expected = pool_terms(
-        [f.params for f in fits], covariances=[f.vcov for f in fits], dfcom=fits[0].df_resid
+        [f.params for f in fits], covariances=[f.vcov for f in fits], dfcom=term_dfcom
     )
-    for term in ("site_Luxembourg", "site_Metz"):
-        assert result.term(term).ubar == pytest.approx(
-            expected.term(term).ubar
-        )  # mean of the HC3 variances
-        assert result.term(term).se == pytest.approx(expected.term(term).se)
-    assert result.tests["site"].method == "D1"
-    assert result.tests["site"].statistic == pytest.approx(
-        expected.wald(["site_Luxembourg", "site_Metz"]).statistic
-    )
-    assert result.extra["cov_type"] == "HC3" and any(
-        "Long JS" in r for r in result.extra["references"]
-    )
-    classical = analyze_mi(lambda d: ancova(d, "sbp", "site", levels=levels), mi)
-    assert classical.extra["cov_type"] == "nonrobust"
-    assert classical.term("site_Metz").se != pytest.approx(result.term("site_Metz").se, rel=1e-6)
+    for term in ("const", "site_Luxembourg", "site_Metz"):
+        pooled = result.term(term)
+        assert pooled.dfcom == pytest.approx(term_dfcom[term]) and pooled.dfcom < fits[0].df_resid
+        # the mean of the HC2 variances
+        assert pooled.ubar == pytest.approx(expected.term(term).ubar)
+        assert pooled.df == pytest.approx(expected.term(term).df)
+    welch_df2 = min(f.factor_df["site"] for f in fits)
+    test = result.tests["site"]
+    reference = expected.wald(["site_Luxembourg", "site_Metz"], dfcom=welch_df2)
+    assert test.method == "D1" and test.statistic == pytest.approx(reference.statistic)
+    assert test.df2 == pytest.approx(reference.df2)
+    means = result.extra["adjusted_means"].set_index("group")
+    sizes = mi.base["site"].value_counts()
+    for level in levels["site"]:  # each mean pooled with the df of its own group
+        assert means.loc[level, "df"] <= sizes[level] - 1
+    assert result.extra["cov_type"] == "HC2"
+    assert any("Welch BL (1951)" in r for r in result.extra["references"])
 
 
 def test_logistic_regression_reports_odds_ratios_factor_tests_and_counted_warnings() -> None:

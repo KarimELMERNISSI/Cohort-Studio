@@ -11,18 +11,25 @@ factor at once) is the extra-sum-of-squares test of adding it last, which equals
 coefficients; partial eta squared = F q / (F q + residual df). Adjusted (least-squares) means are the
 model predictions for each group at the mean of every other covariate (Searle, Speed & Milliken 1980).
 
-Robust variances (``cov_type="HC3"``): the coefficients, the Wald tests and the adjusted means use the HC3
-covariance (MacKinnon & White 1985), which does not assume equal variances and suits small samples (Long &
-Ervin 2000), with the same t and F reference distributions as R's ``lmtest::coeftest`` and
-``car::Anova(white.adjust = "hc3")``. The sums of squares and partial eta squared still describe the OLS fit. In
-a one-way layout the HC3 variance of a group mean is s^2 / (n - 1) for the group's own s^2 and n: the groups are
-not pooled into one variance, as in Welch's ANOVA.
+Robust variances (``cov_type="HC2"`` or ``"HC3"``, MacKinnon & White 1985; Long & Ervin 2000): the coefficients,
+the Wald tests and the adjusted means use a covariance that does not assume equal variances, with the t and F
+reference distributions of R's ``lmtest::coeftest`` and ``car::Anova(white.adjust=)`` (the residual df). The
+Type II table then leaves the sums of squares out, since its F no longer compares mean squares; partial eta
+squared still describes the OLS fit.
+
+``welch_means`` compares the group means of a one-way layout as Welch's ANOVA does. Its HC2 variances are each
+group's own s^2 / n, and its degrees of freedom are Welch-type: n - 1 for a group mean, Satterthwaite's for a
+difference between two groups, Welch's (1951) denominator df for the test of the group effect. On complete data
+that test is Welch's ANOVA itself (for two groups, Welch's t-test). Pooled over imputed datasets, D1 combines its
+Wald form (Welch's ANOVA without the second-order correction, which has no pooling rule) with Welch's df. The
+residual df would be too large when the smaller groups vary more. Each term keeps its df (``term_df``,
+``factor_df``), and the pooling over imputed datasets uses them.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -53,7 +60,8 @@ REFERENCES.setdefault(
     "Am Stat 54:217-224.",
 )
 
-COV_TYPES = ("nonrobust", "HC3")
+COV_TYPES = ("nonrobust", "HC2", "HC3")
+FEW_VALUES = 5  # a group's own variance is estimated poorly from fewer values
 
 
 @dataclass
@@ -73,9 +81,11 @@ class LinearModelResult:
     fitted: np.ndarray
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    cov_type: str = (
-        "nonrobust"  # "HC3": robust standard errors and tests (unequal variances allowed)
-    )
+    # "HC2" or "HC3": robust standard errors and tests (unequal variances allowed)
+    cov_type: str = "nonrobust"
+    # complete-data df of a term or of a factor's test when it is not df_resid (welch_means)
+    term_df: dict[str, float] = field(default_factory=dict)
+    factor_df: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -117,8 +127,8 @@ def linear_regression(
     cov_type: str = "nonrobust",
 ) -> LinearModelResult:
     """
-    OLS of ``outcome`` on ``covariates`` (complete cases); ``levels`` fixes the factor levels. ``cov_type="HC3"``
-    gives robust standard errors and tests, which do not assume equal variances.
+    OLS of ``outcome`` on ``covariates`` (complete cases); ``levels`` fixes the factor levels. ``cov_type`` "HC2"
+    or "HC3" gives robust standard errors and tests, which do not assume equal variances.
     """
     if cov_type not in COV_TYPES:
         raise ValueError(f"cov_type is one of {list(COV_TYPES)}, not {cov_type!r}")
@@ -135,15 +145,16 @@ def linear_regression(
     params = np.asarray(res.params, dtype=float)
     classical = np.asarray(res.cov_params(), dtype=float)
     vcov = classical
-    if cov_type == "HC3":
+    robust = cov_type != "nonrobust"
+    if robust:
         xa = x.to_numpy(dtype=float)
         leverage = np.einsum("ij,jk,ik->i", xa, np.linalg.pinv(xa.T @ xa), xa)
         if np.any(leverage > 1 - 1e-8):
             raise ValueError(
-                "a row has leverage 1 (a group with a single value, for example): its robust (HC3) variance "
-                "cannot be estimated"
+                f"a row has leverage 1 (a group with a single value, for example): its robust ({cov_type}) "
+                "variance cannot be estimated"
             )
-        vcov = np.asarray(res.cov_HC3, dtype=float)
+        vcov = np.asarray(res.cov_HC2 if cov_type == "HC2" else res.cov_HC3, dtype=float)
     se = np.sqrt(np.diag(vcov))
     df_resid = float(res.df_resid)
     crit = stats.t.ppf(1 - alpha / 2, df_resid)
@@ -170,7 +181,8 @@ def linear_regression(
             {
                 "source": source,
                 "df": float(q),
-                "sum_sq": f_ols * q * rss / df_resid,
+                # a robust F does not compare mean squares: no sum of squares beside it
+                "sum_sq": np.nan if robust else f_ols * q * rss / df_resid,
                 "F": f_stat,
                 "p": float(stats.f.sf(f_stat, q, df_resid)),
                 "partial_eta2": f_ols * q / (f_ols * q + df_resid),
@@ -204,7 +216,7 @@ def linear_regression(
         residuals=np.asarray(res.resid, dtype=float),
         fitted=np.asarray(res.fittedvalues, dtype=float),
         references=[REFERENCES["cohen1973"]]
-        + ([REFERENCES["mackinnon1985"], REFERENCES["long2000"]] if cov_type == "HC3" else []),
+        + ([REFERENCES["mackinnon1985"], REFERENCES["long2000"]] if robust else []),
         warnings=warnings,
         cov_type=cov_type,
     )
@@ -272,7 +284,7 @@ def ancova(
 ) -> AncovaResult:
     """
     ANCOVA: group differences in ``outcome`` adjusted for ``covariates`` (Type II F test, adjusted means);
-    ``cov_type="HC3"`` for robust tests and means that do not assume equal variances.
+    ``cov_type`` "HC2" or "HC3" for robust tests and means that do not assume equal variances.
     """
     covs = [c for c in covariates if c not in (outcome, group)]
     frame = df[[outcome, group, *covs]].dropna()
@@ -291,11 +303,99 @@ def ancova(
     )
 
 
+def welch_means(
+    df: pd.DataFrame,
+    outcome: str,
+    group: str,
+    *,
+    levels: Mapping[str, Sequence[str]] | None = None,
+    alpha: float = 0.05,
+) -> AncovaResult:
+    """
+    The group means of ``outcome`` compared without assuming equal variances, as Welch's ANOVA: the linear model on
+    the groups with HC2 variances (each group's own s^2 / n) and Welch-type degrees of freedom, n - 1 for a group
+    mean, Satterthwaite's for a difference from the reference group, Welch's (1951) df for the group effect, whose
+    Type II row is Welch's ANOVA (for two groups, Welch's t-test). Each group needs two values or more, and a
+    variance above zero.
+    """
+    if levels and group in levels:
+        df = df[df[group].astype(str).isin([str(v) for v in levels[group]])]
+    fit = ancova(df, outcome, group, levels=levels, alpha=alpha, cov_type="HC2")
+    order = _levels_from(fit)[group]
+    frame = df[[outcome, group]].dropna()
+    values = pd.to_numeric(frame[outcome], errors="coerce").groupby(frame[group].astype(str))
+    n = values.count().reindex(order).astype(float)
+    variance = values.var(ddof=1).reindex(order)
+    constant = [level for level in order if not variance[level] > 0]
+    if constant:
+        raise ValueError(
+            f"{', '.join(constant)}: the same value throughout, so a variance of zero, which a comparison that "
+            "does not assume equal variances cannot weigh"
+        )
+    v = variance / n  # the variance of each group mean
+    reference = order[0]
+
+    def satterthwaite(level: str) -> float:
+        return float(
+            (v[level] + v[reference]) ** 2
+            / (v[level] ** 2 / (n[level] - 1) + v[reference] ** 2 / (n[reference] - 1))
+        )
+
+    term_df = {"const": float(n[reference] - 1)} | {
+        f"{group}_{level}": satterthwaite(level) for level in order[1:]
+    }
+    share = (1 / v) / (1 / v).sum()
+    k = len(order)
+    spread = float(((1 - share) ** 2 / (n - 1)).sum() / (k**2 - 1))
+    df2 = 1 / (3 * spread)
+    # the Type II row is Welch's ANOVA itself: the Wald F of these variances with Welch's second-order correction
+    # (1 for two groups), as on the observed data; the pooled D1 uses the Wald form, which has a pooling rule
+    correction = 1 + 2 * (k - 2) * spread
+
+    table = fit.table.copy()
+    dfs = table["term"].map(term_df).astype(float).to_numpy()
+    crit = stats.t.ppf(1 - alpha / 2, dfs)
+    table["ci_low"] = table["coef"] - crit * table["se"]
+    table["ci_high"] = table["coef"] + crit * table["se"]
+    table["p"] = 2 * stats.t.sf(np.abs(table["t"]), dfs)
+    type2 = fit.type2.copy()
+    row = type2["source"] == group
+    welch_f = type2.loc[row, "F"].to_numpy(dtype=float) / correction
+    type2.loc[row, "F"] = welch_f
+    type2.loc[row, "p"] = stats.f.sf(welch_f, k - 1, df2)
+    means = fit.adjusted_means.copy() if fit.adjusted_means is not None else pd.DataFrame()
+    means["df"] = means["group"].map(n - 1).astype(float)
+    crit_means = stats.t.ppf(1 - alpha / 2, means["df"].to_numpy())
+    means["ci_low"] = means["mean"] - crit_means * means["se"]
+    means["ci_high"] = means["mean"] + crit_means * means["se"]
+    few = [f"{level} ({int(n[level])})" for level in order if n[level] < FEW_VALUES]
+    warnings = list(fit.warnings) + (
+        [
+            f"groups with fewer than {FEW_VALUES} values: {', '.join(few)}. A group's own variance is estimated "
+            "poorly from so few values, and the test can then reject too often."
+        ]
+        if few
+        else []
+    )
+    return replace(
+        fit,
+        table=table,
+        type2=type2,
+        adjusted_means=means,
+        term_df=term_df,
+        factor_df={group: df2},
+        references=[REFERENCES["mackinnon1985"], REFERENCES["welch1951"]],
+        warnings=warnings,
+    )
+
+
 __all__ = [
     "COV_TYPES",
+    "FEW_VALUES",
     "AncovaResult",
     "LinearModelResult",
     "adjusted_means",
     "ancova",
     "linear_regression",
+    "welch_means",
 ]

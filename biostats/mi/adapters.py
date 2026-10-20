@@ -43,6 +43,10 @@ class Extract:
     vcov: pd.DataFrame | None = None
     variances: pd.Series | None = None
     dfcom: float = math.inf
+    # complete-data df of each term and of each factor's test, when they are not ``dfcom`` (Welch-type df of
+    # group means with unequal variances); the smallest over the imputed datasets is used
+    term_dfcom: dict[str, float] = field(default_factory=dict)
+    test_dfcom: dict[str, float] = field(default_factory=dict)
     scales: dict[str, str] = field(default_factory=dict)  # term -> pooling scale
     factors: dict[str, list[str]] = field(default_factory=dict)  # factor -> its terms (D1 tests)
     chisq: dict[str, tuple[float, float]] = field(
@@ -157,17 +161,20 @@ class LinearAdapter(Adapter):
             "r2": result.r2,
             "r2_adj": result.r2_adj,
             "n": result.n,
-            "cov_type": result.cov_type,  # HC3: the pooled tests and means do not assume equal variances
+            "cov_type": result.cov_type,  # robust: the pooled tests and means do not assume equal variances
             "references": list(result.references),
         }
         means = getattr(result, "adjusted_means", None)
         if means is not None:
-            extra["adjusted_means"] = means.set_index("group")[["mean", "se"]]
+            columns = ["mean", "se", "df"] if "df" in means else ["mean", "se"]
+            extra["adjusted_means"] = means.set_index("group")[columns]
             extra["group"] = result.group
         return Extract(
             params=result.params,
             vcov=result.vcov,
             dfcom=float(result.df_resid),
+            term_dfcom=dict(result.term_df),
+            test_dfcom=dict(result.factor_df),
             factors={k: v for k, v in result.terms_of.items()},
             warnings=list(result.warnings),
             extra=extra,
@@ -179,7 +186,13 @@ class LinearAdapter(Adapter):
         out: dict[str, MultiParameterTest] = {}
         if table is not None:
             for source, terms in extracts[0].factors.items():
-                out[source] = table.wald(terms)  # the Type II test of each covariate
+                # the Type II test of each covariate, with its own complete-data df when it has one (Welch's)
+                dfcom = (
+                    min(e.test_dfcom[source] for e in extracts)
+                    if all(source in e.test_dfcom for e in extracts)
+                    else None
+                )
+                out[source] = table.wald(terms, dfcom=dfcom)
         return out
 
     def finish(
@@ -196,10 +209,16 @@ class LinearAdapter(Adapter):
         if "adjusted_means" in extracts[0].extra:
             rows = []
             for level in extracts[0].extra["adjusted_means"].index:
+                means = [e.extra["adjusted_means"].loc[level] for e in extracts]
+                # a mean's own complete-data df when it has one (n - 1 of its group), else the model's
+                dfcom = min(
+                    float(row["df"]) if "df" in row else e.dfcom
+                    for row, e in zip(means, extracts, strict=True)
+                )
                 pooled = pool_scalar(
-                    [e.extra["adjusted_means"].loc[level, "mean"] for e in extracts],
-                    [e.extra["adjusted_means"].loc[level, "se"] ** 2 for e in extracts],
-                    dfcom=extracts[0].dfcom,
+                    [row["mean"] for row in means],
+                    [row["se"] ** 2 for row in means],
+                    dfcom=dfcom,
                     alpha=alpha,
                     term=str(level),
                 )

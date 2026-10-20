@@ -237,6 +237,11 @@ def test_d1_edge_cases() -> None:
     assert math.isinf(same.df2) and same.p_value == pytest.approx(
         stats.chi2.sf(same.statistic * 2, 2)
     )
+    # no variance between the imputations with a finite complete-data df: that df (vstar), as mitml's .D1;
+    # F(k, inf) was used, depending on whether rounding left the between variance at exactly zero
+    finite = d1_wald(q, u, dfcom=40)
+    assert finite.df2 == pytest.approx(41 / 43 * 40)
+    assert finite.p_value == pytest.approx(stats.f.sf(finite.statistic, 2, 41 / 43 * 40))
     few = d1_wald(np.array([[1.0], [1.3]]), np.array([[[0.1]], [[0.1]]]), dfcom=30)
     assert "Too few imputations" in few.note
     with pytest.raises(ValueError, match="singular"):

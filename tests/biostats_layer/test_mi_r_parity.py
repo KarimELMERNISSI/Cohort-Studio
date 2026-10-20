@@ -19,7 +19,7 @@ import pytest
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
-from biostats.linear import linear_regression
+from biostats.linear import linear_regression, welch_means
 from biostats.mi import MIData, analyze_mi, d2_chisq, pool_r_squared, pool_scalar, pool_terms
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import cox_regression
@@ -204,45 +204,64 @@ def test_analyze_mi_on_the_mice_imputations_matches_mice(reference: dict, kind: 
 ROBUST_TERMS = {"Intercept": "const", "groupb": "group_b", "groupc": "group_c"}
 
 
-def test_the_robust_linear_model_matches_sandwich_and_mitml(reference: dict) -> None:
-    """The groups with HC3 variances (sandwich::vcovHC), pooled by mitml (testEstimates, testConstraints D1)."""
+def test_welch_type_group_means_match_sandwich_mice_and_mitml(reference: dict) -> None:
+    """
+    The groups compared without equal variances (biostats.linear.welch_means): HC2 variances (sandwich), Welch's
+    ANOVA (oneway.test), each quantity pooled with its own complete-data df (mice::pool.scalar), and D1 (mitml).
+    """
     robust = reference.get("robust")
-    if robust is None:
+    if robust is None or "means" not in robust:
         pytest.skip(
-            "the HC3 reference values come with the next run of the 'R reference fixtures' workflow"
+            "the Welch-type reference values come with the next run of the 'R reference fixtures' workflow"
         )
     mi = MIData.from_long(pd.read_csv(COMPLETED))
     levels = mi.levels(["group"])
-    first = linear_regression(
-        mi.complete(1, ["y", "group"]), "y", ["group"], levels=levels, cov_type="HC3"
-    )
-    terms = [ROBUST_TERMS[t] for t in robust["first_vcov"]["terms"]]
+    first = welch_means(mi.complete(1, ["y", "group"]), "y", "group", levels=levels)
+    expected = robust["first"]
+    terms = [ROBUST_TERMS[t] for t in expected["terms"]]
     np.testing.assert_allclose(
-        first.vcov.loc[terms, terms].to_numpy(),
-        np.asarray(robust["first_vcov"]["matrix"]),
-        rtol=1e-10,
+        first.vcov.loc[terms, terms].to_numpy(), np.asarray(expected["vcov"]), rtol=1e-10
     )
+    for name, df in expected["df_terms"].items():
+        assert first.term_df[ROBUST_TERMS[name]] == pytest.approx(df, rel=1e-10), name
+    welch = first.type2.set_index("source").loc["group"]
+    assert welch["F"] == pytest.approx(expected["welch_f"], rel=1e-10)
+    assert welch["p"] == pytest.approx(expected["welch_p"], rel=1e-8, abs=1e-14)
+    assert first.factor_df["group"] == pytest.approx(expected["df2"], rel=1e-10)
+
     result = analyze_mi(
-        lambda d: linear_regression(d, "y", ["group"], levels=levels, cov_type="HC3"),
+        lambda d: welch_means(d, "y", "group", levels=levels),
         mi,
         columns=["y", "group"],
         complete_case=False,
     )
-    for row in robust["table"]:
+    for row in robust["terms"]:
         term = result.term(ROBUST_TERMS[row["term"]])
         for ours, theirs in [
             (term.estimate, row["estimate"]),
             (term.se, row["std_error"]),
-            (term.statistic, row["statistic"]),
             (term.df, row["df"]),
             (term.p_value, row["p_value"]),
             (term.riv, row["riv"]),
             (term.fmi, row["fmi"]),
+            (term.dfcom, row["dfcom"]),
         ]:
             assert ours == pytest.approx(theirs, rel=1e-8, abs=1e-12), row["term"]
+    means = result.extra["adjusted_means"].set_index("group")
+    for row in robust["means"]:
+        pooled = means.loc[row["group"]]
+        for ours, theirs in [
+            (pooled["mean"], row["mean"]),
+            (pooled["se"], row["se"]),
+            (pooled["df"], row["df"]),
+            (pooled["fmi"], row["fmi"]),
+        ]:
+            assert ours == pytest.approx(theirs, rel=1e-8, abs=1e-12), row["group"]
     d1 = result.tests["group"]
     expected = robust["d1"]
-    assert d1.statistic == pytest.approx(expected["statistic"], rel=1e-8)
-    assert d1.df1 == expected["df1"] and d1.df2 == pytest.approx(expected["df2"], rel=1e-8)
-    assert d1.p_value == pytest.approx(expected["p_value"], rel=1e-8, abs=1e-12)
-    assert d1.riv == pytest.approx(expected["riv"], rel=1e-8)
+    # mitml's testConstraints differentiates the constraints numerically (numericDeriv), so its D1 carries
+    # errors of about 1e-9 even for these linear constraints: 1e-7 here
+    assert d1.statistic == pytest.approx(expected["statistic"], rel=1e-7)
+    assert d1.df1 == expected["df1"] and d1.df2 == pytest.approx(expected["df2"], rel=1e-7)
+    assert d1.p_value == pytest.approx(expected["p_value"], rel=1e-7, abs=1e-12)
+    assert d1.riv == pytest.approx(expected["riv"], rel=1e-7)

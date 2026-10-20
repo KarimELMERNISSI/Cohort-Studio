@@ -110,7 +110,7 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
         app.selectbox(key="mi_cmp_detail").select(target).run()
         _ok(app)
 
-    # three or more groups: D1 on a linear model with robust (HC3) variances, as Welch's ANOVA on the observed data
+    # three or more groups: each group keeps its own variance (Welch-type), as Welch's ANOVA on the observed data
     app.selectbox(key="mi_cmp_group").select("site").run()
     app.multiselect(key="mi_cmp_levels::site").set_value(
         SITES
@@ -118,8 +118,8 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
     app.button(key="mi_cmp_run").click().run()
     _ok(app)
     by_site = _stored(app, "univariate_mi")["results"]["hba1c_pct"]
-    assert by_site.kind == "hc3" and by_site.result.tests["site"].method == "D1"
-    assert by_site.result.extra["cov_type"] == "HC3"
+    assert by_site.kind == "robust" and by_site.result.tests["site"].method == "D1"
+    assert by_site.result.extra["cov_type"] == "HC2"
 
     app.session_state["epi_analysis_mode"] = "Multivariate (ANCOVA/Regression)"
     app.run()
@@ -160,7 +160,7 @@ def test_the_pooled_two_group_test_can_be_chosen_with_a_warning(app: AppTest) ->
 
 
 def test_the_pooled_test_of_three_groups_can_be_chosen_with_a_warning(app: AppTest) -> None:
-    """Recommended (robust HC3 variances) or chosen: the equal-variance model, with why HC3 is recommended."""
+    """Recommended (unequal variances, Welch-type) or chosen: the equal-variance model, with a warning."""
     from manage.report_tables import _pooled_comparison_blocks
 
     app.session_state["analysis_data_mode"] = "multiple"
@@ -171,7 +171,7 @@ def test_the_pooled_test_of_three_groups_can_be_chosen_with_a_warning(app: AppTe
     app.multiselect(key="mi_cmp_levels::site").set_value(SITES).run()
     app.multiselect(key="mi_cmp_targets").set_value(["hba1c_pct"]).run()
     app.radio(key="mi_cmp_selection").set_value("Choose the method").run()
-    assert app.selectbox(key="mi_cmp_more_groups").value == "hc3"
+    assert app.selectbox(key="mi_cmp_more_groups").value == "robust"
     app.selectbox(key="mi_cmp_more_groups").select("anova").run()
     assert any("The one-way ANOVA assumes equal variances" in w.value for w in app.warning)
     app.button(key="mi_cmp_run").click().run()
@@ -186,7 +186,7 @@ def test_the_pooled_test_of_three_groups_can_be_chosen_with_a_warning(app: AppTe
 
 
 def test_a_group_of_one_value_is_refused_by_the_robust_model() -> None:
-    """HC3 gives each group its own variance, which one value does not have: the message says what to do."""
+    """Each group keeps its own variance, which one value does not have: the message says what to do."""
     import numpy as np
     import pandas as pd
 
@@ -201,7 +201,9 @@ def test_a_group_of_one_value_is_refused_by_the_robust_model() -> None:
     completed = [base.fillna({"sbp": 130.0 + i}) for i in range(3)]
     mi = MIData.from_completed(base, completed, methods={"sbp": "pmm"})
     levels = ["Luxembourg", "Metz", "Metz "]
-    with pytest.raises(MIAnalysisError, match="Metz␣ has a single value, while the robust"):
+    with pytest.raises(
+        MIAnalysisError, match="Metz␣ has a single value, while a comparison without"
+    ):
         compare_pooled(mi, "site", levels, "sbp", numeric=True)
     chosen = compare_pooled(mi, "site", levels, "sbp", numeric=True, more_groups="anova")
     assert chosen.kind == "anova"  # the equal-variance model still runs

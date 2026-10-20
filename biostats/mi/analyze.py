@@ -118,7 +118,14 @@ def analyze_mi(
         notes.append("the complete-data df differ between imputed datasets; the smallest is used")
     table: PooledTable | None = None
     if len(extracts[0].params):
-        common = dict(dfcom=dfcom, alpha=alpha, scales=extracts[0].scales)
+        # terms with their own complete-data df (Welch-type) use the smallest over the imputed datasets
+        names = extracts[0].term_dfcom
+        term_dfcom = (
+            {name: min(e.term_dfcom[name] for e in extracts) for name in names}
+            if names and all(set(e.term_dfcom) == set(names) for e in extracts)
+            else None
+        )
+        common = dict(dfcom=term_dfcom or dfcom, alpha=alpha, scales=extracts[0].scales)
         if all(e.vcov is not None for e in extracts):
             table = pool_terms(
                 [e.params for e in extracts], covariances=[e.vcov for e in extracts], **common

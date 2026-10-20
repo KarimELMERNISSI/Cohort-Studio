@@ -40,18 +40,36 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Before:** on the observed data, three groups or more are compared with Welch's ANOVA, which gives each group
     its own variance. Pooled over the imputed datasets, they were compared with a linear model that assumes equal
     variances (a one-way ANOVA), because Welch's ANOVA has no pooling rule.
-  - **Now:** the pooled comparison uses the linear model with robust (HC3) variances (MacKinnon & White 1985; Long
-    & Ervin 2000), tested by D1. Like Welch's ANOVA it does not assume equal variances, and it can be pooled. The
-    group means are pooled with their robust standard errors.
-  - **When the variances differ, the results change.** In a simulation of three groups of 10, 20 and 40 values,
-    where the smallest group varied most and the means were equal, the equal-variance test rejected at the 5% level
-    in 23% of 300 runs, the robust test in 7%.
+  - **Now:** the pooled comparison compares the group means as Welch's ANOVA does. Each group keeps its own variance
+    (s²/n, the HC2 variance of the linear model on the groups), and each pooled quantity has Welch-type degrees of
+    freedom: n − 1 for a group mean, Satterthwaite's for a difference, Welch's (1951) for the D1 test of the group
+    effect. For two groups it is Welch's t-test, as before. The complete-case result shown below the pooled one is
+    Welch's ANOVA itself.
+  - **When the variances differ, the results change.** Simulations of three groups whose means were equal and
+    whose smallest group varied most (standard deviations 4, 2 and 1), rejections at the 5% level:
+
+    | Group sizes | Data | Equal variances | Now |
+    | --- | --- | --- | --- |
+    | 10, 20, 40 | complete (2,000 runs) | 25% | 5.1% (Welch's ANOVA) |
+    | 5, 20, 40 | complete (2,000 runs) | 35% | 6.2% |
+    | 10, 20, 40 | 30% missing, 5 imputations within each group (1,000 runs) | 11.7% (D1) | 3.7% (D1) |
+    | 5, 20, 40 | as above | 14.3% | 4.3% |
+
+    The biostatistician's review of a first version, with HC3 variances and the residual df, found it rejected too
+    often in the same setting (6.2% and 8.7%), and much more with 2 to 4 values per group.
+  - **Small groups:** a group with a single value has no variance of its own: the page asks to deselect or merge
+    it, or to choose the equal-variance model. Below 5 values, a warning says that the test can reject too often.
+  - **Imputation:** the pooled test only sees the differences in variance that the imputations keep, so the page
+    advises imputing within each group when the variances may differ.
   - **Choose the method** keeps the equal-variance model, with a warning; the summary and the dossier mark it as
     chosen.
-  - **A group with a single value** has no variance of its own: the robust model then asks to deselect or merge it,
-    or to choose the equal-variance model.
-  - The R reference script compares the result with `sandwich::vcovHC` and `mitml` (the check runs once the
-    reference values are regenerated).
+  - The R reference script checks the variances (`sandwich::vcovHC`), Welch's ANOVA (`oneway.test`), the pooled
+    means and differences (`mice::pool.scalar`) and the test (`mitml`); the check runs once the reference values
+    are regenerated.
+- **D1 test with no variance between the imputed datasets.** When the imputations of the variables of a model did
+  not differ (a fully observed variable), the D1 test used F(k, ∞) instead of the model's complete-data df
+  (mitml's rule). Whether that happened depended on rounding. Such tests now use the complete-data df, so their
+  p-values are slightly larger.
 - **Transformations (Enrich > Create new variables) replay to the same table.** The page computed the new
   columns with its own copy of the transformation engine; the replay of the trace used the shared one.
   - Applying a transformation twice gave `age_Z-Score_Standardization_1` on the page, but a second column with

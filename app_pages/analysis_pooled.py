@@ -4,9 +4,9 @@ imputed datasets of the analysis population and pooled with Rubin's rules (biost
 
 Group comparison, per variable:
 - numeric, two groups: Welch t-test, the mean difference pooled (Barnard-Rubin df);
-- numeric, three or more groups: a linear model on the groups with robust (HC3) variances, the group means
-  pooled and the group effect tested by D1 (pooled Wald F). Like Welch's ANOVA on the observed data, it does not
-  assume equal variances; Welch's ANOVA itself has no pooling rule;
+- numeric, three or more groups: the group means compared without assuming equal variances, as Welch's ANOVA on
+  the observed data (biostats.linear.welch_means: each group's own variance, Welch-type df), the means pooled and
+  the group effect tested by D1 with Welch's df; Welch's ANOVA itself has no pooling rule;
 - the analysis can be chosen instead (*Choose the method*): Student's t-test for two groups, the equal-variance
   linear model (one-way ANOVA) for three or more, each with a warning;
 - two categories, two groups: odds ratio and risk ratio (log scale) and risk difference pooled, the
@@ -31,7 +31,7 @@ from biostats.contingency import (
     detect_reference_level,
 )
 from biostats.inference import compare_groups
-from biostats.linear import ancova
+from biostats.linear import ancova, welch_means
 from biostats.mi import analyze_mi, not_poolable
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
 from biostats.multiplicity import adjust as adjust_pvalues
@@ -51,7 +51,7 @@ NOT_POOLED = (
 ANALYSIS_NAMES = {
     "welch": "Welch t-test",
     "student": "Student t-test (equal variances, chosen)",
-    "hc3": "Linear model on the groups, robust variances (HC3; D1)",
+    "robust": "Group means, unequal variances (Welch-type; D1)",
     "anova": "Linear model on the groups, equal variances (chosen; D1)",
     "twobytwo": "2x2: odds ratio (Wald on the pooled log OR)",
     "chisq": "Chi-square test of independence (D2)",
@@ -64,13 +64,17 @@ STUDENT_WARNING = (
     "when they are equal (Delacre 2017): it is the recommended test. Report why you chose Student's."
 )
 MORE_GROUP_TESTS = {
-    "hc3": "Linear model, robust variances (HC3, recommended)",
+    "robust": "Group means, unequal variances (Welch-type, recommended)",
     "anova": "Linear model, equal variances (one-way ANOVA)",
 }
 ANOVA_WARNING = (
-    "The one-way ANOVA assumes equal variances in the groups. The linear model with robust (HC3) variances does "
-    "not, as Welch's ANOVA does not on the observed data, and stays valid when they are equal: it is the "
-    "recommended analysis. Report why you chose the equal-variance model."
+    "The one-way ANOVA assumes equal variances in the groups. The recommended analysis does not, as Welch's ANOVA "
+    "does not on the observed data, and remains approximately valid when they are equal. Report why you chose the "
+    "equal-variance model."
+)
+CONGENIAL = (
+    "The pooled test only sees the differences in variance that the imputations keep: when the groups' variances "
+    "may differ, impute within each group (Enrich > Multiple imputation, *Impute separately within*)."
 )
 
 
@@ -94,17 +98,20 @@ def _in_groups(data: pd.DataFrame, group: str, levels: list[str]) -> pd.DataFram
     return data[data[group].astype(str).isin(levels)]
 
 
-def _two_per_group(data: pd.DataFrame, group: str, levels: list[str]) -> None:
-    """The robust (HC3) model gives each group its own variance, which a group of one value does not have."""
+def _two_per_group(data: pd.DataFrame, group: str, levels: list[str], *, observed: bool) -> None:
+    """Each group keeps its own variance, which a group of one value does not have."""
     sizes = data[group].astype(str).value_counts()
     single = [show_level(level) for level in levels if sizes.get(level, 0) == 1]
-    if single:
-        has = "has a single value" if len(single) == 1 else "have a single value each"
-        raise ValueError(
-            f"{', '.join(single)} {has}, while the robust (HC3) model needs two or more per group: deselect it in "
-            "Groups to include or merge it with another group (it may be a spelling variant), or choose the "
-            "equal-variance model."
-        )
+    if not single:
+        return
+    has = "has a single value" if len(single) == 1 else "have a single value each"
+    if observed:  # the complete-case analysis under the pooled one: the pooled run may well have succeeded
+        raise ValueError(f"{', '.join(single)} {has} in the observed data")
+    raise ValueError(
+        f"{', '.join(single)} {has}, while a comparison without equal variances needs two or more per group: "
+        "deselect it in Groups to include or merge it with another group (it may be a spelling variant), or choose "
+        "the equal-variance model."
+    )
 
 
 def _columns(mi, analyzer) -> tuple[list[str], list[str], list[str]]:
@@ -127,7 +134,7 @@ def compare_pooled(
     numeric: bool,
     haldane: str = "if_zero",
     two_groups: str = "welch",
-    more_groups: str = "hc3",
+    more_groups: str = "robust",
 ) -> Pooled:
     """
     Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
@@ -135,8 +142,8 @@ def compare_pooled(
     ``haldane="always"`` adds 0.5 to every cell of every 2x2 table (a sensitivity analysis): without it, a zero
     cell in some imputed datasets leaves the odds and risk ratios unpooled. ``two_groups`` is the t-test of a
     numeric variable in two groups: Welch's (recommended) or Student's (equal variances), both pooled the same way.
-    ``more_groups`` is the linear model of a numeric variable in three groups or more: with robust HC3 variances
-    (recommended) or equal variances (one-way ANOVA), both tested by D1.
+    ``more_groups`` compares a numeric variable in three groups or more: without assuming equal variances
+    (recommended; Welch-type) or with the equal-variance linear model (one-way ANOVA), both tested by D1.
     """
     if two_groups not in TWO_GROUP_TESTS:
         raise ValueError(f"two_groups is one of {list(TWO_GROUP_TESTS)}, not {two_groups!r}")
@@ -157,13 +164,13 @@ def compare_pooled(
 
         return Pooled(two_groups, analyze_mi(t_test, mi, columns=columns), reference, comparison)
     if numeric:
-        cov_type = "HC3" if more_groups == "hc3" else "nonrobust"
 
-        def linear_model(data: pd.DataFrame):
+        def linear_model(data: pd.DataFrame, i: int):
             data = _in_groups(data, group, levels)
-            if cov_type == "HC3":
-                _two_per_group(data.dropna(subset=columns), group, levels)
-            return ancova(data, target, group, levels={group: levels}, cov_type=cov_type)
+            if more_groups == "anova":
+                return ancova(data, target, group, levels={group: levels})
+            _two_per_group(data.dropna(subset=columns), group, levels, observed=i == 0)
+            return welch_means(data, target, group, levels={group: levels})
 
         return Pooled(more_groups, analyze_mi(linear_model, mi, columns=columns), reference=levels[0])
     outcome_levels = _levels(mi.base[target])
@@ -213,7 +220,7 @@ def _summary_row(target: str, item: Pooled, group: str) -> dict[str, Any]:
             "p": test.p_value,
             "fmi": test.mi.fmi,
         }
-    elif item.kind in ("hc3", "anova"):
+    elif item.kind in ("robust", "anova"):
         d1 = res.tests[group]
         row |= {
             "test": f"F({d1.df1:.0f}, {d1.df2:.1f}) = {d1.statistic:.2f}",
@@ -350,7 +357,7 @@ def _show_detail(target: str, item: Pooled, group: str) -> None:
             st.warning(STUDENT_WARNING, icon=":material/rule:")
         result_card(res.extra["result"])
         show_mi_notes(res, complete_case=result_card)
-    elif item.kind in ("hc3", "anova"):
+    elif item.kind in ("robust", "anova"):
         if item.kind == "anova":
             st.warning(ANOVA_WARNING, icon=":material/rule:")
         _show_means(res.extra["adjusted_means"], label=f"Mean of {target} (pooled)")
@@ -359,10 +366,10 @@ def _show_detail(target: str, item: Pooled, group: str) -> None:
         show_pooled_terms(res, alt="Pooled differences between groups")
         st.caption(
             (
-                "With imputed data the group means are compared with a linear model whose variances are robust "
-                "(HC3): each group keeps its own variance, as in Welch's ANOVA on the observed data, which has no "
-                "pooling rule."
-                if item.kind == "hc3"
+                "With imputed data the group means are compared as Welch's ANOVA compares them on the observed "
+                "data, which has no pooling rule: each group keeps its own variance (s²/n), with Welch-type degrees "
+                f"of freedom; for two groups this is Welch's t-test. {CONGENIAL}"
+                if item.kind == "robust"
                 else "With imputed data the group means are compared with a linear model with equal variances "
                 "(chosen), as a one-way ANOVA."
             )
@@ -451,7 +458,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
             key="mi_cmp_selection",
             help="The analyses offered are those with a pooling rule over the imputed datasets.",
         )
-        two_groups, more_groups = "welch", "hc3"
+        two_groups, more_groups = "welch", "robust"
         if selection == "Choose the method":
             two_groups = c1.selectbox(
                 "Numeric variable, two groups",
@@ -467,7 +474,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
             )
             if two_groups != "welch":
                 st.warning(STUDENT_WARNING, icon=":material/rule:")
-            if more_groups != "hc3":
+            if more_groups != "robust":
                 st.warning(ANOVA_WARNING, icon=":material/rule:")
             st.caption(
                 "Categorical variables have one pooled analysis: odds ratio, risk ratio and risk difference (two "
@@ -476,9 +483,10 @@ def run_pooled_comparison(mi, analyzer) -> None:
             )
         else:
             st.caption(
-                "Numeric variables: Welch t-test (two groups) or a linear model with robust (HC3) variances and a D1 "
-                "test (three or more groups); neither assumes equal variances. Categorical variables: odds ratio, "
-                "risk ratio and risk difference (two groups, two categories) or the chi-square test by D2."
+                "Numeric variables: Welch t-test (two groups) or the group means compared with Welch-type degrees "
+                "of freedom and a D1 test (three or more groups); neither assumes equal variances. Categorical "
+                "variables: odds ratio, risk ratio and risk difference (two groups, two categories) or the "
+                "chi-square test by D2."
             )
     with st.expander("Rank tests and Fisher's exact test are not pooled"):
         for key, label in NOT_POOLED:
