@@ -74,7 +74,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **D1 test with a small complete-data df.** Reiter's small-sample df, which the D1 test uses when the model has a
   complete-data df, needs that df to be large enough. With Welch's df of a group of three values it gave a
   negative df (no p-value) or one larger than the data allow (too many rejections). A Barnard-Rubin-type df is then
-  used instead, and the test says so. mitml uses Reiter's formula throughout.
+  used instead, and the test says so. With too few imputations for Reiter's df (two or three), the large-sample df
+  ignored the complete-data df and could reach hundreds where the data allow four: the same combination now applies.
+  mitml uses Reiter's formula throughout.
 - **Transformations (Enrich > Create new variables) replay to the same table.** The page computed the new
   columns with its own copy of the transformation engine; the replay of the trace used the shared one.
   - Applying a transformation twice gave `age_Z-Score_Standardization_1` on the page, but a second column with

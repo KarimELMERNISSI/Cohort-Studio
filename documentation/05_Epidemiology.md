@@ -219,6 +219,8 @@ default. Neither recommended analysis of a numeric variable assumes equal varian
     variance is estimated poorly, and the page warns that the test can reject too often.
   - The pooled test only sees the differences in variance that the imputations keep: when the groups' variances
     may differ, impute within each group (*Impute separately within*, chapter 3).
+  - When the variances are in fact equal, the pooled test rejects somewhat less often than its nominal level: the
+    price of the smallest df over the imputations and of Welch's correction.
 
 With *Choose the method*, a numeric variable in two groups can be compared with Student's t-test instead, and three
 groups or more with the equal-variance linear model (a one-way ANOVA), each pooled the same way. The page then

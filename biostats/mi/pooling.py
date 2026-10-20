@@ -502,7 +502,14 @@ def d1_wald(
             else t * (1 + 1 / k) * (1 + 1 / r) ** 2 / 2
         )
         if not math.isinf(dfcom):
-            note = "Too few imputations for Reiter's small-sample df (k(m - 1) <= 4); large-sample df used."
+            # the large-sample df ignores the complete-data df, far too large when it is small (Welch's df of a
+            # small group with m = 2): combined with the observed-data df, as below
+            vstar = (dfcom + 1) / (dfcom + 3) * dfcom
+            df2 = 1 / (1 / df2 + (1 + r) / vstar)
+            note = (
+                "Too few imputations for Reiter's small-sample df (k(m - 1) <= 4); a Barnard-Rubin-type df is "
+                "used."
+            )
     else:
         a = r * t / (t - 2)
         vstar = (dfcom + 1) / (dfcom + 3) * dfcom

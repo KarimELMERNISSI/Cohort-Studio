@@ -257,6 +257,9 @@ def test_d1_with_a_small_complete_data_df_falls_back_to_a_barnard_rubin_type_df(
         assert "Barnard-Rubin-type df" in test.note
     large = d1_wald(q, u, dfcom=200)
     assert "Barnard-Rubin" not in large.note  # Reiter's df where it holds
+    # too few imputations for Reiter's df (m = 2): the large-sample df gave 28 to 1,323 with a df of 5
+    two = d1_wald(q[:2], u[:2], dfcom=5.0)
+    assert 0 < two.df2 <= 6 / 8 * 5 and "Too few imputations" in two.note
     few = d1_wald(np.array([[1.0], [1.3]]), np.array([[[0.1]], [[0.1]]]), dfcom=30)
     assert "Too few imputations" in few.note
     with pytest.raises(ValueError, match="singular"):
