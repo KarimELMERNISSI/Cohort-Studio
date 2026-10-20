@@ -44,8 +44,9 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
-      - name: Type check (pyright, errors only, scoped by pyrightconfig.json)
-        run: uv run pyright --level error
+      # Every package; the errors per file may only fall from dev_scripts/pyright_baseline.json
+      - name: Type check (pyright, against the baseline)
+        run: uv run python dev_scripts/check_type_baseline.py
 
       - name: Tests (offline; integration tests run from the manual workflow)
         shell: bash  # with pipefail: the step fails when pytest fails, not when tee succeeds

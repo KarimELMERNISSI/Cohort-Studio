@@ -1,17 +1,24 @@
 {
   "include": [
-    "core",
+    "app_pages",
     "biostats",
-    "ingest",
-    "ui",
+    "core",
+    "enrich",
+    "explore",
     "graph",
-    "manage/iam",
-    "manage/db_manager.py",
-    "manage/transformation_manager.py",
-    "manage/reproduction_manager.py",
-    "main.py"
+    "ingest",
+    "manage",
+    "monitor",
+    "prompts",
+    "ui",
+    "utils",
+    "main.py",
+    "manage_users.py"
   ],
-  "exclude": ["**/__pycache__", ".venv"],
+  "exclude": [
+    "**/__pycache__",
+    ".venv"
+  ],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.14",
@@ -23,7 +30,7 @@
   "reportCallIssue": "warning",
   "reportOptionalMemberAccess": "warning",
   "reportOptionalSubscript": "warning",
-  "reportPossiblyUnbound": "warning",
+  "reportPossiblyUnboundVariable": "warning",
   "reportIndexIssue": "warning",
   "reportOperatorIssue": "warning",
   "reportReturnType": "warning",

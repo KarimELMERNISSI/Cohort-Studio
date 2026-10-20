@@ -337,6 +337,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Formatting covers every file.** CI and pre-commit now check the whole repository with `ruff format`, except a
   list of the 166 files not yet formatted, which can only shrink: a test fails when a listed file is formatted and
   still listed. Each file is reformatted in its own commit, recorded in `.git-blame-ignore-revs`.
+- **Type checking covers every package.** pyright now checks all twelve packages and both entry points, where it
+  checked six. The 24 errors of today's code in 11 files are counted in `dev_scripts/pyright_baseline.json`. CI fails
+  when a file has more errors than its count, and when it has fewer until the count is lowered, so the count can
+  only fall. A setting that pyright did not recognise (`reportPossiblyUnbound`) now has its real name.
 
 ### AI engine: Gemini Flash-Lite
 
