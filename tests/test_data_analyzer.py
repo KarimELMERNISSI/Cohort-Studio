@@ -97,3 +97,20 @@ class TestDataAnalyzer:
         analyzer_const = DataAnalyzer(constant_df)
         assert "constant_num" in analyzer_const.low_cardinality_numeric_cols
         assert analyzer_const.profile.total_rows == 10
+
+    def test_an_analyzer_from_the_profile_equals_a_fresh_analysis(self, sample_clinical_df):
+        fresh = DataAnalyzer(sample_clinical_df)
+        rebuilt = DataAnalyzer.from_profile(sample_clinical_df, fresh.profile)
+        assert vars(rebuilt).keys() == vars(fresh).keys()
+        for name, value in vars(fresh).items():
+            if name != "df":
+                assert getattr(rebuilt, name) == value, name
+        assert rebuilt.get_suitable_columns("Box Plot") == fresh.get_suitable_columns("Box Plot")
+        # a caller that changes the analyzer's lists changes neither the profile nor the next analyzer
+        profile = fresh.profile
+        rebuilt = DataAnalyzer.from_profile(sample_clinical_df, profile)
+        rebuilt.numeric_cols.append("added")
+        rebuilt.refresh(sample_clinical_df.drop(columns="bmi"))
+        assert "added" not in profile.numeric_cols and "bmi" in profile.numeric_cols
+        with pytest.raises(ValueError, match="other data"):
+            DataAnalyzer.from_profile(sample_clinical_df.head(3), profile)

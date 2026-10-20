@@ -218,3 +218,68 @@ def test_a_version_changed_outside_the_app_is_reported(data_root: Path) -> None:
     at = AppTest.from_function(_lineage_script, kwargs={"tamper": True}, default_timeout=120).run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert "modified outside" in at.session_state["probe"]["message"]
+
+
+def _analyzer_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.population import criterion_id
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        st.session_state["config"] = {
+            "mask_families": {
+                "study_inclusion": {"operator": "all", "Adult": {"expression": "df['age'] >= 18"}}
+            }
+        }
+        state.set_dataset(
+            pd.DataFrame({"age": range(10, 130, 10), "site": ["a", "b"] * 6}),
+            DatasetRef(name="d", origin="upload", file_hash="h"),
+        )
+    action = st.session_state.pop("action", None)
+    if action == "tick":
+        state.set_ticked([criterion_id("study_inclusion", "Adult")])
+    elif action == "commit":
+        state.commit_change(
+            state.base.assign(bmi=state.base["age"] / 2), "external_write", {}, "bmi"
+        )
+    analysis, every_row = state.analyzer(), state.analyzer("base")
+    analysis.numeric_cols.append("changed by a page")  # a page may change its own analyzer
+    st.session_state["probe"] = {
+        "rows": (len(analysis.df), len(every_row.df)),
+        "numeric": state.analyzer().numeric_cols,
+    }
+
+
+def test_the_column_profile_is_computed_once_per_data_and_population(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every page analysed the columns on every run (dates tried in a dozen formats); now once per data."""
+    import utils.data_analyzer as da
+
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    analysed: list[int] = []
+    analyze = da.DataAnalyzer.analyze_columns
+
+    def counted(self) -> None:
+        analysed.append(len(self.df))
+        analyze(self)
+
+    monkeypatch.setattr(da.DataAnalyzer, "analyze_columns", counted)
+    at = AppTest.from_function(_analyzer_script, default_timeout=120).run()
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert analysed == [12]  # nothing ticked: the analysis rows are every row, profiled once
+    assert at.session_state["probe"] == {"rows": (12, 12), "numeric": ["age"]}
+    at.session_state["action"] = "tick"
+    at.run()
+    at.run()
+    assert analysed == [12, 11] and at.session_state["probe"]["rows"] == (11, 12)
+    at.session_state["action"] = "commit"
+    at.run()
+    assert analysed == [12, 11, 11, 12]  # the data changed: both profiles again
+    assert at.session_state["probe"]["numeric"] == ["age", "bmi"]

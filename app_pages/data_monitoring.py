@@ -1605,7 +1605,7 @@ def app():
     df = state.base
     analyzer = None
     if df is not None:
-        analyzer = DataAnalyzer(df)
+        analyzer = state.analyzer("base")  # its column profile is kept until the data change (M5b)
         render_date_conversion(state, df, analyzer)
         
 

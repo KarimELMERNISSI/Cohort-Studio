@@ -51,7 +51,7 @@ from ui.guidance.analysis import (
 )
 from ui.progress import mark_step
 from ui.results import CURRENT, provenance, recall, remember, status
-from utils.data_analyzer import DataAnalyzer
+from ui.state import get_state
 from utils.export_utils import to_excel
 
 
@@ -193,7 +193,7 @@ def app(mi=None):
         return
 
     df = st.session_state['data']
-    analyzer = DataAnalyzer(df)
+    analyzer = get_state().analyzer()  # its column profile is kept until the rows change (M5b)
 
     # Page options next to the content (the sidebar belongs to the application shell)
     with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):

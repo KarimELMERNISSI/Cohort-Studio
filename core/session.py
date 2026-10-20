@@ -21,7 +21,7 @@ what it did to the table: rows and columns in and out, and the fingerprints befo
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
@@ -217,6 +217,7 @@ class DataSession:
         self._recorded_populations: set[str] = set()
         self.single_imputed: Cells = {}
         self.exact_imputed: Cells = {}
+        self._memo: dict[str, tuple[tuple[str, Hashable], Any]] = {}
 
     # ------------------------------------------------------------------ state
 
@@ -254,12 +255,26 @@ class DataSession:
             recorded_at=recorded_at,
         )
 
+    def memo[T](self, name: str, key: Hashable, compute: Callable[[], T]) -> T:
+        """
+        A value computed from the base (a profile of its columns, a quality audit), kept until the base or ``key``
+        (the caller's other inputs) changes. One slot per ``name``: a new key replaces the value kept.
+        """
+        slot = self._memo.get(name)
+        full = (self.data_fp, key)
+        if slot is not None and slot[0] == full:
+            return slot[1]
+        value = compute()
+        self._memo[name] = (full, value)
+        return value
+
     def _set_base(self, frame: pd.DataFrame, fp: str, *, revisions: int = 1) -> None:
         self.base = frame
         self.data_fp = fp
         self.revision += revisions
         self._population = None
         self._analysis = None
+        self._memo.clear()
 
     # ------------------------------------------------------------------ loading
 
@@ -283,6 +298,7 @@ class DataSession:
         self.exact_imputed = {}
         self._population = None
         self._analysis = None
+        self._memo.clear()
         self._recorded_populations.clear()
         if record:
             self._record(function, params, description, change=change)
@@ -296,6 +312,7 @@ class DataSession:
         self.ticked = ()
         self._population = None
         self._analysis = None
+        self._memo.clear()
         self._recorded_populations.clear()
 
     # ------------------------------------------------------------------ base changes

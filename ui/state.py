@@ -26,7 +26,7 @@ import os
 from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 import streamlit as st
@@ -45,6 +45,7 @@ from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksu
 from core.steps import FITTED
 from core.steps import ids as step_ids
 from manage.snapshots import delete_unreferenced
+from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.session_scope import get_current_scope
@@ -610,6 +611,27 @@ class AppState:
         members = [c.id for c in catalogue(self.config) if c.family == family]
         ticked = [c for c in self.session.ticked if c not in members]
         self.set_ticked(ticked + (members if on else []))
+
+    # ------------------------------------------------------------------ derived from the data
+
+    def analyzer(self, rows: Literal["base", "analysis"] = "analysis") -> DataAnalyzer | None:
+        """
+        A DataAnalyzer of every row (``"base"``, as Validate checks the data) or of the analysis population
+        (``"analysis"``, the rows of ``st.session_state["data"]``). A new one on each call, which a page may
+        refresh; the column profile behind it is computed once per dataset and population (``DataSession.memo``).
+        """
+        session = self.session
+        if not session.loaded or session.base is None:
+            return None
+        frame, slot, key = session.base, "analyzer:base", ""
+        if rows == "analysis":
+            population = session.population(self.config)
+            # every row when no criterion is ticked, or a ticked one is broken (as the views, _install_views)
+            if population.ok and population.criteria:
+                frame = session.analysis_frame(self.config)
+                slot, key = "analyzer:analysis", population.fingerprint
+        profile = session.memo(slot, key, lambda: DataAnalyzer(frame.copy(deep=False)).profile)
+        return DataAnalyzer.from_profile(frame.copy(deep=False), profile)
 
     # ------------------------------------------------------------------ multiple imputation
 

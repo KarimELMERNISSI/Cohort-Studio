@@ -204,3 +204,24 @@ def test_freezing_keeps_only_the_population(session: DataSession) -> None:
     assert list(session.base.index) == [1, 3, 4] and session.ticked == ()
     frozen = steps(session)[-1]
     assert frozen["function"] == "freeze_population" and frozen["population"]["n_included"] == 3
+
+
+def test_a_memo_is_kept_until_the_data_or_its_key_changes(session: DataSession) -> None:
+    calls: list[str] = []
+
+    def profile(label: str) -> str:
+        calls.append(label)
+        return label
+
+    assert session.memo("profile", "all rows", lambda: profile("a")) == "a"
+    assert session.memo("profile", "all rows", lambda: profile("b")) == "a"  # kept: not recomputed
+    assert session.memo("audit", "all rows", lambda: profile("c")) == "c"  # one slot per name
+    assert (
+        session.memo("profile", "population", lambda: profile("d")) == "d"
+    )  # another key replaces it
+    assert session.memo("profile", "all rows", lambda: profile("e")) == "e"
+    session.commit(session.base.assign(bmi=0.0), "external_write", {}, "bmi set")
+    assert session.memo("audit", "all rows", lambda: profile("f")) == "f"  # a change of the data
+    session.install(pd.DataFrame({"age": [1]}))
+    assert session.memo("audit", "all rows", lambda: profile("g")) == "g"  # another dataset
+    assert calls == ["a", "c", "d", "e", "f", "g"]

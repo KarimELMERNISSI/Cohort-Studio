@@ -368,6 +368,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     its snapshots, and copies left by earlier versions stay until they are deleted by hand.
   - A deletion is a plain file deletion: copies kept by backups or synchronised folders stay (README, "The data
     folder").
+- **The column types are worked out once per dataset.** Validate, Statistics & correlations, Visualize, Hypothesis
+  tests & epidemiology and Survival & regression sorted the columns into numeric, categorical, date and other types
+  on every click, trying a dozen date formats on each text column; Statistics & correlations did it four times per
+  click. The types are now kept until the data or the ticked criteria change.
 
 ### AI engine: Gemini Flash-Lite
 

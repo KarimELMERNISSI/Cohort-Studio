@@ -20,7 +20,6 @@ from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
 from ui.progress import mark_step
 from ui.state import get_state
-from utils.data_analyzer import DataAnalyzer
 from utils.export_utils import to_excel, to_excel_sheets
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 
@@ -153,8 +152,8 @@ class RenameColumnsComponent:
             search_term = st.text_input("Search columns", "", key="search_term")
 
 
-        # Refresh the analyzer with the updated DataFrame
-        self.analyzer.refresh(st.session_state["working_df"])
+        # The analyzer of the analysis rows, from the profile kept until they change
+        self.analyzer = get_state().analyzer() or self.analyzer
         # Map the filter to the appropriate columns
         type_map = {
             "All": st.session_state["working_df"].columns, #self.original_df.columns,
@@ -245,7 +244,7 @@ class RenameColumnsComponent:
                     f"Renamed {len(changed)} column(s)",
                 )
                 st.success("Columns renamed successfully!")
-                self.analyzer.refresh(st.session_state["working_df"])
+                self.analyzer = get_state().analyzer() or self.analyzer
             else:
                 st.info("No changes made to column names.")
 
@@ -753,7 +752,7 @@ def app():
 
     if df is not None:
         df = df.copy(deep=False)  # local: the coercion below must not change the session data (audit E8)
-        analyzer = DataAnalyzer(df)
+        analyzer = get_state().analyzer()  # its column profile is kept until the analysis rows change (M5b)
         cols_to_convert = analyzer.low_cardinality_numeric_cols + analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols
         # Ensure no duplicates in the column list
         cols_to_convert = list(set(cols_to_convert))
@@ -772,8 +771,8 @@ def app():
 
     with tabs[1]:
         if 'working_df' in st.session_state:
-            analyzer.refresh(st.session_state["working_df"])
-        
+            analyzer = get_state().analyzer()
+
         #df = st.session_state.get('data', None)
         if df is not None:
             # Instantiate DataAnalyzer and RenameColumnsComponent
@@ -790,8 +789,8 @@ def app():
             no_dataset()
 
     with tabs[0]:
-        if 'working_df' in st.session_state:
-            analyzer.refresh(st.session_state["working_df"])
+        if 'working_df' in st.session_state:  # a rename applied in the tab above: the renamed columns
+            analyzer = get_state().analyzer()
         col_title, col_reset = st.columns([4, 1])
         with col_title:
             st.subheader("Dataset statistics", icon=":material/table_chart:", anchor=False)

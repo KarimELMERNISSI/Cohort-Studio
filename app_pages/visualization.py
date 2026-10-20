@@ -14,7 +14,7 @@ import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from manage.db_manager import DBManager
 from ui.components import no_dataset
-from utils.data_analyzer import DataAnalyzer
+from ui.state import get_state
 
 
 def hover_columns_input(df: pd.DataFrame) -> list[str] | None:
@@ -43,7 +43,7 @@ def app():
         return
     
     df_full = st.session_state["data"].copy(deep=False)  # local: date parsing below stays on this page
-    analyzer = DataAnalyzer(df_full)
+    analyzer = get_state().analyzer()  # its column profile is kept until the rows change (M5b)
     # Apply pd.to_datetime with infer_datetime_format=True for each date column
     df_full[analyzer.date_cols] = df_full[analyzer.date_cols].apply(pd.to_datetime, errors='coerce')
 

@@ -24,6 +24,9 @@ class DatasetProfile:
     high_cardinality_cat_cols: list[str] = field(default_factory=list)
     timedelta_cols: list[str] = field(default_factory=list)
     date_formats: dict[str, str] = field(default_factory=dict)
+    num_binary_cols: list[str] = field(default_factory=list)
+    non_num_binary_cols: list[str] = field(default_factory=list)
+    non_binary_low_cardinality_numeric_cols: list[str] = field(default_factory=list)
 
 
 class DataAnalyzer:
@@ -60,7 +63,28 @@ class DataAnalyzer:
         self.timedelta_cols: list[str] = []
         self.high_cardinality_cat_cols: list[str] = []
         self.analyze_columns()
-    
+
+    @classmethod
+    def from_profile(cls, df: pd.DataFrame, profile: DatasetProfile) -> "DataAnalyzer":
+        """An analyzer of ``df`` from the profile of the same data, without analysing it again (M5b: the
+        profile is kept until the data changes, AppState.analyzer)."""
+        if profile.total_rows != len(df) or profile.total_columns != len(df.columns):
+            raise ValueError("the profile describes other data")
+        analyzer = cls.__new__(cls)
+        analyzer.df = df
+        analyzer.date_formats = dict(profile.date_formats)
+        analyzer.numeric_cols = list(profile.numeric_cols)
+        analyzer.categorical_cols = list(profile.categorical_cols)
+        analyzer.date_cols = list(profile.date_cols)
+        analyzer.binary_cols = list(profile.binary_cols)
+        analyzer.num_binary_cols = list(profile.num_binary_cols)
+        analyzer.non_num_binary_cols = list(profile.non_num_binary_cols)
+        analyzer.low_cardinality_numeric_cols = list(profile.low_cardinality_numeric_cols)
+        analyzer.non_binary_low_cardinality_numeric_cols = list(profile.non_binary_low_cardinality_numeric_cols)
+        analyzer.timedelta_cols = list(profile.timedelta_cols)
+        analyzer.high_cardinality_cat_cols = list(profile.high_cardinality_cat_cols)
+        return analyzer
+
     def refresh(self, df: pd.DataFrame) -> None:
         """
         Refresh the column metadata based on the latest DataFrame state.
@@ -86,6 +110,9 @@ class DataAnalyzer:
             high_cardinality_cat_cols=list(self.high_cardinality_cat_cols),
             timedelta_cols=list(self.timedelta_cols),
             date_formats=dict(self.date_formats),
+            num_binary_cols=list(self.num_binary_cols),
+            non_num_binary_cols=list(self.non_num_binary_cols),
+            non_binary_low_cardinality_numeric_cols=list(self.non_binary_low_cardinality_numeric_cols),
         )
     
     def analyze_columns(self) -> None:
