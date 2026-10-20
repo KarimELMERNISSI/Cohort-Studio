@@ -1,4 +1,5 @@
-# Streamlit runtime configuration (committed). Secrets belong in secrets.toml, which is git-ignored.
+# Streamlit runtime configuration (committed). The application's settings and secrets come from the environment
+# and .env only (utils/settings.py, template .env.example); a .streamlit/secrets.toml is not read.
 
 [browser]
 # No usage statistics leave the server (privacy requirement for clinical deployments).

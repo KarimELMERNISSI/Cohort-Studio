@@ -306,17 +306,30 @@ shown with its reason, and the family result is left out until it is corrected.
 criteria). `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay
 machine-specific).
 
-### API keys
+### Settings, preferences and API keys
 
-Cloud providers read their key from the environment (`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `MISTRAL_API_KEY`,
-`ANTHROPIC_API_KEY`), for example from a git-ignored `.env` file (template: `.env.example`). A key typed in Settings
-> AI engine is kept for the session only. `st.secrets` is not read; `.streamlit/secrets.toml` stays git-ignored.
+**One settings object.** `utils/settings.py` holds every setting the application reads, one field per environment
+variable (the names of `.env.example`, which a test keeps equal to the fields), in sections: `paths`, `logging`,
+`iam`, `ai`, `vector_store`, `graph`, `statistics` and `development`. Keys and passwords are `SecretStr`. Read them
+with `get_settings()`, which validates again only when a variable has changed; it is the only module that reads the
+environment (`tests/test_layering.py` checks every module, with a short list of exceptions that can only shrink).
+`core` and `biostats` never read settings: they receive values as parameters.
 
-**When `.env` is read.** `main.py` and `manage_users.py` load the `.env` next to them first, before any module reads
-the configuration: the identity provider, `DATA_ROOT`, the log level and the keys all see it. A variable already
-set in the environment wins, which is how Docker passes them (`env_file`). The tests never read `.env`:
-`tests/conftest.py` turns `load_dotenv` into a no-op, and `tests/test_startup_config.py` checks the loading in a
-subprocess.
+**When `.env` is read.** `main.py` and `manage_users.py` call `load_settings()` first: it loads the `.env` next to
+them (once per process; a variable already set in the environment wins, which is how Docker passes them), then
+validates every setting. A wrong one stops start-up with the variable's name and what is expected, never its value.
+The tests never read `.env`: `tests/conftest.py` turns `load_dotenv` into a no-op, and `tests/test_startup_config.py`
+checks the loading in a subprocess. `st.secrets` is not read; a `.streamlit/secrets.toml` is logged at start-up.
+
+**API keys.** Cloud providers read the server's key from the settings (`get_settings().ai.api_key(provider)`:
+`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). A key typed in Settings > AI engine is
+kept for the session only.
+
+**Preferences.** The user's choices in Settings (the AI provider and models, the vector database, the graph engine,
+the day-first default) are kept for the next session in `<workspace>/preferences.json` (`manage/preferences.py`,
+written whole and atomically). `ui/preferences.py` seeds the session after sign-in, once per user, only for the keys
+the session has not set, and the controls save them from their `on_change` callbacks. A preference never holds a
+key, a password or a consent; a choice the server no longer offers is not used, and the page names it.
 
 **An unknown identity provider stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
 `better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`), in any case. Any other value raises
