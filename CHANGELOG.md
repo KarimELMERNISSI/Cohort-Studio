@@ -340,9 +340,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   list of the 166 files not yet formatted, which can only shrink: a test fails when a listed file is formatted and
   still listed. Each file is reformatted in its own commit, recorded in `.git-blame-ignore-revs`.
 - **Type checking covers every package.** pyright now checks all twelve packages and both entry points, where it
-  checked six. The 24 errors of today's code in 11 files are counted in `dev_scripts/pyright_baseline.json`. CI fails
-  when a file has more errors than its count, and when it has fewer until the count is lowered, so the count can
-  only fall. A setting that pyright did not recognise (`reportPossiblyUnbound`) now has its real name.
+  checked six. The errors of today's code are counted in `dev_scripts/pyright_baseline.json` (24 in 11 files when
+  the check was added, 17 in 10 since the Validate changes below). CI fails when a file has more errors than its
+  count, and when it has fewer until the count is lowered, so the count can only fall. A setting that pyright did not recognise (`reportPossiblyUnbound`) now has its real name.
 - **Every package has a coverage floor**, about 2 points under its measured coverage: the pages, `utils`,
   `prompts` and `monitor` had none (`monitor`, at 8 %, needs tests). Floors only rise: a package more than 4 points
   above its floor fails until the floor is raised. The overall minimum rises from 63 % to 70 % (72 % measured).
@@ -390,6 +390,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     outlier detection works on the dataset.
   - On Hypothesis tests & epidemiology, the chosen transformation is computed in the Analysis tab only, where it
     applies, and its note is shown there.
+- **The session keys shared between tabs and pages are declared** in `ui/keys.py`: the module that writes each,
+  how long it lives and the modules that read it. A test checks the declarations against the code and against
+  what the application clears when the data change.
 
 ### AI engine: Gemini Flash-Lite
 

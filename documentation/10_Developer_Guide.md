@@ -166,6 +166,10 @@ Classifies DataFrame columns into semantic types:
 | `date_cols` | Datetime columns. |
 | `low_cardinality_numeric_cols` | Numerical columns with few unique values (may be coded categories). |
 
+Pages do not build one themselves: `AppState.analyzer()` (the analysis rows) or `AppState.analyzer("base")` (every
+row) returns a new analyzer each call, built from a column profile that is computed once per dataset and population
+(`DataSession.memo`). The Validate dashboard's quality audit is kept the same way (`AppState.quality_audit`).
+
 ### `utils/statistics_utils.py`
 - Normality tests (Shapiro-Wilk, D'Agostino).
 - Test selection guidelines based on sample size and distribution.
@@ -328,5 +332,8 @@ subprocess.
    `commit_change()` for a change of the dataset, `stage()` for the Enrich draft (traced when applied), `note()` for a
    trace step that does not change the data. Each change becomes one trace step; with `CMP_STRICT_STATE=1` (the test
    suite), an in-place change of the session data raises `UntracedMutationError`.
-4. Add utility functions to the appropriate `utils/` module, not inline in app pages.
-5. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).
+4. A tab reads its own inputs: it never uses a value that another tab of the page computed in the same run. A
+   session key that one tab or page writes and another reads is declared in `ui/keys.py`, with its owner, its
+   lifetime and its readers; a test checks the declarations against the code and against what `AppState` clears.
+5. Add utility functions to the appropriate `utils/` module, not inline in app pages.
+6. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).
