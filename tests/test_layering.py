@@ -526,3 +526,67 @@ def test_biostats_imports_only_biostats() -> None:
         if t.split(".")[0] != "biostats"
     )
     assert not found, found
+
+
+# --- the environment (M5b step 3) ------------------------------------------------------------------------------------
+
+# Only utils.settings reads the environment, loads .env or asks Streamlit for secrets; the modules below may, for the
+# reason given, until the step named. The list can only shrink.
+KNOWN_ENVIRONMENT = {
+    # its seed: biostats imports no first-party package (parsed as utils.settings parses it; the seed moves into the
+    # analysis specs in M8)
+    "biostats._types",
+    # the environment of the parallel imputation's worker process: a process variable, not a setting
+    "biostats.mi.parallel",
+    # turns the tracing switches of third-party libraries (LangSmith) off: not settings of the application
+    "manage.ai_payload",
+}
+_ENVIRONMENT_NAMES = {"environ", "environb", "getenv", "getenvb", "putenv", "unsetenv"}
+
+
+def _reads_environment(tree: ast.AST) -> list[str]:
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id == "os" and node.attr in _ENVIRONMENT_NAMES:
+                found.append(f"os.{node.attr}")
+            elif node.value.id == "st" and node.attr == "secrets":
+                found.append("st.secrets")
+        elif isinstance(node, ast.ImportFrom) and node.module == "os":
+            found += [
+                f"from os import {a.name}" for a in node.names if a.name in _ENVIRONMENT_NAMES
+            ]
+        elif isinstance(node, ast.Import | ast.ImportFrom):
+            names = (
+                [a.name for a in node.names]
+                if isinstance(node, ast.Import)
+                else [node.module or ""]
+            )
+            found += [f"import {n}" for n in names if n == "dotenv" or n.startswith("dotenv.")]
+    return found
+
+
+def test_only_the_settings_read_the_environment() -> None:
+    """utils.settings validates every setting at start-up: a module reading the environment itself would see a value
+    nobody checked (M5b step 3)."""
+    found = {
+        name
+        for name, path in modules().items()
+        if name != "utils.settings"
+        and _reads_environment(ast.parse(path.read_text(encoding="utf-8")))
+    }
+    assert found == KNOWN_ENVIRONMENT, _difference(
+        found, KNOWN_ENVIRONMENT, rule="only utils.settings reads the environment"
+    )
+
+
+@pytest.mark.parametrize("package", ["core", "biostats"])
+def test_the_engine_never_reads_the_settings(package: str) -> None:
+    """core and biostats receive values as parameters: they stay usable without the application's settings."""
+    first, _, _ = graph()
+    reading = sorted(
+        name
+        for name, targets in first.items()
+        if _matches(name, (package,)) and any(target == "utils.settings" for target, _ in targets)
+    )
+    assert not reading, reading

@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 IN_SUBPROCESS = "CMP_MI_SUBPROCESS"
 
 
+def in_subprocess() -> bool:
+    """Whether this process is the worker of a parallel imputation (a process variable, not a setting)."""
+    return bool(os.environ.get(IN_SUBPROCESS))
+
+
 def interpreter() -> tuple[str, dict[str, str]]:
     """
     The interpreter to start, and what its environment needs. On Windows, the python.exe of a virtual environment

@@ -340,13 +340,11 @@ def impute(
     the Streamlit page script that is ``__main__`` in the application. If that run fails (the system refuses
     the processes, the interpreter stops), the chains run here instead, with a warning: the result is the same.
     """
-    import os
-
-    from biostats.mi.parallel import IN_SUBPROCESS, run_in_subprocess
+    from biostats.mi.parallel import in_subprocess, run_in_subprocess
 
     _check(df, spec)
     fallback: str | None = None
-    if workers > 1 and spec.m > 1 and not os.environ.get(IN_SUBPROCESS):
+    if workers > 1 and spec.m > 1 and not in_subprocess():
         try:
             return run_in_subprocess(df, spec, workers, progress)
         except (RuntimeError, OSError, EOFError, pickle.UnpicklingError) as exc:
