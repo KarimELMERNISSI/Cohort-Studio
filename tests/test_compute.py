@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from manage.compute import SETTING, WorkerBudget, default_total, total_from
+from manage.compute import SETTING, WorkerBudget, default_total
 
 
 def test_a_lease_grants_what_is_free_and_gives_it_back() -> None:
@@ -49,11 +49,15 @@ def test_concurrent_sessions_never_exceed_the_budget() -> None:
     assert sorted(granted, reverse=True) == [3, 2, 1, 1, 1, 1, 1, 1] and budget.free == 5
 
 
-def test_the_setting_names_itself_when_wrong() -> None:
-    assert total_from("") == default_total() >= 1
-    assert total_from(" 3 ") == 3
-    for wrong in ("0", "-2", "two", "1.5"):
-        with pytest.raises(ValueError, match=SETTING):
-            total_from(wrong)
+def test_the_budget_comes_from_the_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CMP_MI_MAX_WORKERS is validated with the other settings (tests/test_settings.py); unset, processors - 1."""
+    import manage.compute as compute
+
+    monkeypatch.setattr(compute, "_budget", None)
+    monkeypatch.setenv(SETTING, "3")
+    assert compute.mi_workers().total == 3
+    monkeypatch.setattr(compute, "_budget", None)
+    monkeypatch.delenv(SETTING)
+    assert compute.mi_workers().total == default_total() >= 1
     with pytest.raises(ValueError, match="at least 1"):
         WorkerBudget(0)

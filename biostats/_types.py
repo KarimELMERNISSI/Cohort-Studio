@@ -7,7 +7,17 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-RANDOM_STATE: int = int(os.getenv("CMP_RANDOM_SEED", "20260101"))
+
+def seed_from(value: str | None) -> int:
+    """
+    The seed a CMP_RANDOM_SEED value gives, parsed as utils.settings parses it (a test checks they agree): biostats
+    imports no first-party package, so it reads its seed itself until the seed moves into the analysis specs (M8).
+    An empty value is unset.
+    """
+    return int((value or "").strip() or "20260101")
+
+
+RANDOM_STATE: int = seed_from(os.getenv("CMP_RANDOM_SEED"))
 
 
 class CI(BaseModel):

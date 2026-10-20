@@ -7,14 +7,16 @@ This allows Docker deployments to use mounted volumes while keeping local develo
 Usage:
     from utils.data_paths import get_datasets_dir, get_vectors_dir
 
-Environment Variables:
+Settings (utils.settings):
     DATA_ROOT: Base directory for all data storage (default: "./data")
 """
 
 import os
 
-# Base data directory - configurable via environment variable
-DATA_ROOT = os.environ.get("DATA_ROOT", "./data")
+from utils.settings import get_settings
+
+# Base data directory: the DATA_ROOT setting, read once; tests patch this attribute
+DATA_ROOT = get_settings().paths.data_root
 
 
 def get_data_root() -> str:

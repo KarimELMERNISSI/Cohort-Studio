@@ -49,6 +49,7 @@ from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.session_scope import get_current_scope
+from utils.settings import get_settings
 
 if TYPE_CHECKING:
     from explore.data_quality_auditor import DataQualityAuditor
@@ -163,7 +164,7 @@ class UntracedMutationError(RuntimeError):
 
 
 def strict_state() -> bool:
-    return os.environ.get("CMP_STRICT_STATE", "").strip() == "1"
+    return get_settings().development.strict_state
 
 
 def tutorial_config() -> dict:

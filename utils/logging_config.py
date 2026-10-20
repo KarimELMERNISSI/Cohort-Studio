@@ -7,8 +7,9 @@ as Google does for a suspended key ("Consumer 'api_key:...' has been suspended")
 from __future__ import annotations
 
 import logging
-import os
 import re
+
+from utils.settings import get_settings, secret_values
 
 _CONFIGURED = False
 _NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "lancedb", "qdrant_client", "portalocker", "watchdog", "PIL", "matplotlib", "numba")
@@ -21,15 +22,14 @@ _KEYS = (
 _KEY_FIELD = re.compile(
     r"(?i)\b(api[_-]?key|x-api-key|authorization)(['\"]?\s*[:=]\s*['\"]?(?:bearer\s+)?)([^\s'\",;&}]{8,})"
 )
-_SECRET_VARIABLE = re.compile(r"(?i)(API_KEY|_SECRET|_PASSWORD)$")  # not the setup token, which the log must show
 
 
 def redact_secrets(text: str) -> str:
     """The text without API keys: the values of the configured secrets (variables named ``*API_KEY``,
     ``*_SECRET`` or ``*_PASSWORD``), Google, OpenAI and Anthropic keys, and the value of an ``api_key: ...``,
     ``x-api-key: ...`` or ``Authorization: ...`` field."""
-    for name, value in os.environ.items():
-        if len(value) >= 8 and _SECRET_VARIABLE.search(name) and value in text:
+    for value in secret_values():  # read as they are, never validated: a wrong setting cannot stop the redaction
+        if value in text:
             text = text.replace(value, REDACTED)
     for pattern in _KEYS:
         text = pattern.sub(REDACTED, text)
@@ -59,7 +59,7 @@ def configure_logging(level: str | None = None) -> None:
     global _CONFIGURED
     if _CONFIGURED:
         return
-    level_name = (level or os.getenv("CMP_LOG_LEVEL", "INFO")).upper()
+    level_name = (level or get_settings().logging.level).upper()
     root = logging.getLogger()
     root.setLevel(getattr(logging, level_name, logging.INFO))
     if not root.handlers:

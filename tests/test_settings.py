@@ -166,3 +166,15 @@ def test_the_env_example_lists_exactly_the_settings() -> None:
 def test_settings_are_frozen(env: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValidationError, match="frozen"):
         setattr(cfg.get_settings().iam, "cache_ttl", 1)
+
+
+def test_the_statistics_seed_is_read_as_the_settings_read_it(env: pytest.MonkeyPatch) -> None:
+    """biostats reads its seed itself (it imports no first-party package): its parsing must agree."""
+    from biostats._types import seed_from
+
+    for value in (None, "", " 7 ", "123", "4294967295"):
+        if value is None:
+            env.delenv("CMP_RANDOM_SEED", raising=False)
+        else:
+            env.setenv("CMP_RANDOM_SEED", value)
+        assert seed_from(value) == cfg.get_settings().statistics.random_seed, value

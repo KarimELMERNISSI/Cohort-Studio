@@ -6,8 +6,8 @@ The budget is shared by every session of the server process: a lease grants what
 it back when the run ends, however it ends. When fewer than two are free, the run takes place in the session's
 own process (one worker), which uses none of the budget.
 
-``CMP_MI_MAX_WORKERS`` sets the total. The default is the processors of this process minus one; a container's CPU
-quota is not visible in that count, so set the variable there.
+``CMP_MI_MAX_WORKERS`` (utils.settings) sets the total. The default is the processors of this process minus one; a
+container's CPU quota is not visible in that count, so set the variable there.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ import os
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+
+from utils.settings import get_settings
 
 SETTING = "CMP_MI_MAX_WORKERS"
 
@@ -57,31 +59,17 @@ def default_total() -> int:
     return max(1, (os.process_cpu_count() or 2) - 1)
 
 
-def total_from(value: str | None) -> int:
-    """The budget a ``CMP_MI_MAX_WORKERS`` value gives (its default when empty)."""
-    value = (value or "").strip()
-    if not value:
-        return default_total()
-    try:
-        total = int(value)
-    except ValueError:
-        total = 0
-    if total < 1:
-        raise ValueError(f"{SETTING} must be a whole number of 1 or more, not {value!r}")
-    return total
-
-
 _budget: WorkerBudget | None = None
 _create = threading.Lock()
 
 
 def mi_workers() -> WorkerBudget:
-    """The budget of this server process, read from ``CMP_MI_MAX_WORKERS`` once."""
+    """The budget of this server process, from the ``CMP_MI_MAX_WORKERS`` setting, read once."""
     global _budget
     with _create:
         if _budget is None:
-            _budget = WorkerBudget(total_from(os.environ.get(SETTING)))
+            _budget = WorkerBudget(get_settings().statistics.mi_max_workers or default_total())
         return _budget
 
 
-__all__ = ["SETTING", "WorkerBudget", "default_total", "mi_workers", "total_from"]
+__all__ = ["SETTING", "WorkerBudget", "default_total", "mi_workers"]

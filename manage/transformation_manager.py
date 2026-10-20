@@ -12,6 +12,7 @@ from core.steps import STEPS
 from core.workspace import UserScope
 from utils.data_paths import get_traces_dir
 from utils.session_scope import get_current_scope
+from utils.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ class TransformationManager:
             raise RuntimeError("This trace was loaded for review and cannot be extended.")
         if function_name not in STEPS:
             # every kind of step is declared in core/steps.py, so that the replay and the report know it
-            if os.environ.get("CMP_STRICT_STATE", "").strip() == "1":  # the test suite
+            if get_settings().development.strict_state:  # the test suite
                 STEPS.get(function_name)  # raises UnknownIdError, which lists the registered steps
             logger.warning("Trace step %r is not registered in core/steps.py", function_name)
         # Convert params to serializable format if necessary
