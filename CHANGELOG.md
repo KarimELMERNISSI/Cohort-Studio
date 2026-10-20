@@ -246,6 +246,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The same applies to the pooled comparison over the imputed datasets and to the power analysis.
   - Another grouping variable now starts with all its groups. The list kept the previous variable's choice, none of
     which is a group of the new variable, so it was empty (Analyze and the power analysis).
+- **The conda environment installs what the application uses.** `environments/environment.yml` kept a list of its
+  own, which had drifted: it installed ChromaDB and three LangChain packages that the application no longer uses,
+  and none of the vector databases (LanceDB, Qdrant), the OpenAI, Anthropic and Ollama connectors, pyarrow, xlrd or
+  lifelines. It now installs Python 3.14 from conda-forge, then the locked packages of `requirements.txt`, which
+  follow `uv.lock`; a test keeps it so. The README shows how to use it.
 
 ### Internal structure: one catalogue of trace steps
 

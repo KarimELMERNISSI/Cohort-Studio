@@ -44,7 +44,7 @@ CohortStudio/
 ├── documentation/           # Project documentation
 │   └── developer/           # Developer notes and generated API docs
 ├── enrich/                  # Data enrichment logic
-├── environments/            # Conda environment file
+├── environments/            # Conda environment (Python 3.14, then requirements.txt)
 ├── explore/                 # Data exploration modules
 ├── graph/                   # Renderer-agnostic graph layer
 ├── ingest/                  # File loaders (encoding, delimiter and decimal detection)

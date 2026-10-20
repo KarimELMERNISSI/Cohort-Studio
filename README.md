@@ -258,6 +258,15 @@ streamlit run main.py
 `requirements.txt` and `requirements-yfiles.txt` are exported from `uv.lock`, so pip installs the same versions as
 uv; a workflow exports them again whenever `uv.lock` changes on `main`.
 
+With conda instead of a virtual environment, `environments/environment.yml` installs Python 3.14 from conda-forge
+and then `requirements.txt`, so the packages are the same:
+
+```bash
+conda env create -f environments/environment.yml
+conda activate cohortstudio
+streamlit run main.py
+```
+
 ### Option C: Containerized Deployment (Docker)
 
 ```bash
