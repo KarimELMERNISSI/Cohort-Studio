@@ -6,7 +6,7 @@ This is part of the RAGManager class composition pattern.
 """
 import json
 
-from manage.ai_payload import safe_stats
+from manage.ai_payload import frequent_values, safe_stats
 
 
 class TaxonomyMixin:
@@ -103,7 +103,7 @@ class TaxonomyMixin:
                 if col_info.get("stats"):
                     var_data["stats"] = safe_stats(col_info["stats"])
                 elif col_info.get("top_values"):
-                    var_data["stats"] = safe_stats(col_info["top_values"])
+                    var_data["stats"] = frequent_values(col_info["top_values"])
         return taxonomy
 
     def _generate_simple_taxonomy(self, columns_info, existing_mapping=None, deep_analysis=False, progress_callback=None):

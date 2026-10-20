@@ -983,10 +983,14 @@ class AppState:
         rm = st.session_state.get("rag_manager")
         initialized = bool(getattr(rm, "initialized", False))
         provider = getattr(rm, "provider", None) if rm is not None else None
+        uses_cloud = getattr(rm, "uses_cloud", None)
+        # data leaves this machine and the private network (a cloud provider, or an Ollama elsewhere)
+        sends_out = uses_cloud() if callable(uses_cloud) else provider not in (None, "ollama")
         return {
             "initialized": initialized,
             "provider": provider,
             "consent": bool(getattr(rm, "cloud_consent", False)),
+            "local": not sends_out,
         }
 
 

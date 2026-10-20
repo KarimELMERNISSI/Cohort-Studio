@@ -43,11 +43,12 @@ class DocumentsMixin:
 
         try:
             # Check if Gemini File API is available on the client
+            # Gemini's file API, chosen by the provider: Anthropic's client has a files API too, and the PDF went
+            # to Anthropic and stayed there, though only the passages of a question are meant to reach Claude
             has_gemini_file_api = (
-                hasattr(self, 'llm') and 
-                hasattr(self.llm, 'client') and 
-                self.llm.client is not None and 
-                hasattr(self.llm.client, 'files')
+                getattr(self, "provider", None) == "gemini"
+                and getattr(getattr(self, "llm", None), "client", None) is not None
+                and hasattr(self.llm.client, "files")
             )
 
             if has_gemini_file_api:

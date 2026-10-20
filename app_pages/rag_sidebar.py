@@ -18,6 +18,13 @@ from urllib.parse import urlparse
 import streamlit as st
 
 from core.workspace import remove_pdf, safe_filename
+from manage.ai_payload import (
+    host_of,
+    on_this_machine,
+    outside_private_network,
+    provider_label,
+    recipient,
+)
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
 from manage.vectorstores import (
@@ -43,7 +50,6 @@ from utils.session_scope import get_current_scope
 # revisit showed Ollama, the first model and an empty consent box, and withdrew the running engine's consent
 PERSIST = "session"
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
-LOCAL_PROVIDERS = {"ollama"}  # every other provider needs the data-sharing confirmation
 PROVIDER_NAMES = {
     "ollama": "Ollama (local, open-source)",
     "gemini": "Google Gemini (cloud)",
@@ -51,14 +57,10 @@ PROVIDER_NAMES = {
     "mistral": "Mistral AI (cloud)",
     "anthropic": "Anthropic Claude (cloud)",
 }
-SHORT_NAMES = {
-    "ollama": "Ollama",
-    "gemini": "Google Gemini",
-    "openai": "OpenAI",
-    "mistral": "Mistral AI",
-    "anthropic": "Anthropic Claude",
-}
-THIS_MACHINE = {"localhost", "127.0.0.1", "::1"}
+STOP_NOTICE = (
+    "Confirmation withdrawn: the AI engine stopped. Nothing more is sent from this tab; what was already sent stays "
+    "with the provider, under its own terms."
+)
 # Claude answers but has no embedding model: these providers can embed the documents for it.
 EMBEDDING_PROVIDERS = ("ollama", "gemini", "openai", "mistral")
 OLLAMA_CHAT_FALLBACK = ["llama3.2:latest", "llama3.1:8b", "mistral:latest", "deepseek-r1:8b", "qwen2.5:7b"]
@@ -153,13 +155,17 @@ def _running() -> dict:
     }
 
 
-def _host(url: str) -> str:
-    return urlparse(url if "//" in url else f"//{url}").hostname or url
-
-
-def _on_this_machine(url: str) -> bool:
-    """An Ollama address on this machine: elsewhere, the prompts and documents go to that host."""
-    return _host(url).lower() in THIS_MACHINE
+def _address_badge(url: str) -> None:
+    """Where an Ollama address sends the prompts and the documents."""
+    host = host_of(url) or "this machine"
+    if on_this_machine(url):
+        st.badge("Local: no data leaves this server", icon=":material/lock:", color="green")
+    elif outside_private_network(url):
+        st.badge(f"Outside your network: data goes to {host}", icon=":material/public:", color="red")
+    else:
+        st.badge(f"Your network: data goes to {host}", icon=":material/lan:", color="orange")
+    if not on_this_machine(url) and urlparse(url.strip()).scheme == "http":
+        st.caption("This address uses http: the prompts and documents cross the network unencrypted.")
 
 
 # ----------------------------------------------------------------------------- cards
@@ -192,10 +198,7 @@ def _provider_card() -> dict:
                 icon=":material/dns:",
                 persist_state=PERSIST,
             )
-            if _on_this_machine(cfg["base_url"]):
-                st.badge("Local: no data leaves this server", icon=":material/lock:", color="green")
-            else:  # another machine receives the prompts and the documents
-                st.badge(f"Network: data goes to {_host(cfg['base_url'])}", icon=":material/lan:", color="orange")
+            _address_badge(cfg["base_url"])
             chat_options = _discover_ollama_models(cfg["base_url"]) or OLLAMA_CHAT_FALLBACK
             embed_options = OLLAMA_EMBEDDINGS
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
@@ -238,8 +241,9 @@ def _provider_card() -> dict:
 def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     """Claude has no embedding model: choose the provider that embeds the documents (local Ollama by default)."""
     st.caption(
-        "Claude answers; another provider embeds your documents for search. With local Ollama the whole library "
-        "is indexed on this server, and only the passages retrieved for a question are sent to Claude."
+        "Claude answers; another provider embeds your documents for search. With Ollama your Ollama service "
+        "indexes the whole library (on this machine, or at the address below), and only the passages retrieved "
+        "for a question are sent to Claude."
     )
     embed_provider = st.selectbox(
         "Embedding provider",
@@ -280,28 +284,40 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
 
 def _recipients(cfg: dict) -> list[str]:
     """
-    The providers outside this server that a configuration sends data to: the chat provider, and the embedding
-    provider of Claude when it is another cloud provider (it receives the documents and every search text).
+    The recipients of a configuration that need the confirmation: its cloud provider, the embedding provider of
+    Claude when it is another cloud provider (it receives the documents and every search text), and an Ollama
+    outside the private network.
     """
-    providers = [cfg["provider"]]
-    if cfg.get("embedding_provider") and cfg["embedding_provider"] != cfg["provider"]:
-        providers.append(cfg["embedding_provider"])
-    return [p for p in providers if p not in LOCAL_PROVIDERS]
-
-
-def _names(providers: list[str], embedding: str | None = None) -> str:
-    return " and ".join(
-        f"{SHORT_NAMES.get(p, p)}{' (embeddings)' if p == embedding else ''}" for p in providers
+    chat = recipient(cfg["provider"], cfg.get("base_url"))
+    embedding = recipient(
+        cfg.get("embedding_provider") or cfg["provider"], cfg.get("embedding_base_url") or cfg.get("base_url")
     )
+    return list(dict.fromkeys(r for r in (chat, embedding) if r))
 
 
-def _consent_key(providers: list[str]) -> str:
-    """The session key of the confirmation of these recipients: one per provider, or per pair."""
-    return f"rag_{'_'.join(providers)}_consent"
+def _names(recipients: list[str], embedding: str | None = None) -> str:
+    return " and ".join(f"{provider_label(r)}{' (embeddings)' if r == embedding else ''}" for r in recipients)
 
 
-def _consent_providers(key: str) -> list[str]:
-    return key.removeprefix("rag_").removesuffix("_consent").split("_")
+def _consent_key(recipients: list[str]) -> str:
+    """The session key of the confirmation of exactly these recipients."""
+    return f"rag_consent::{'+'.join(recipients)}"
+
+
+def _consent_recipients(key: str) -> list[str]:
+    return key.removeprefix("rag_consent::").split("+")
+
+
+def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
+    """
+    The user ticked or unticked a box: only then does the confirmation change. Acting on how a box is shown made
+    an untouched box for another configuration withdraw, and stop, the engine that runs.
+    """
+    manager = st.session_state.rag_manager
+    if st.session_state.get(key):
+        manager.confirm(*recipients)
+    elif manager.withdraw_consent(*recipients):
+        st.session_state["rag_stop_notice"] = STOP_NOTICE
 
 
 def _notice(recipients: list[str], cfg: dict) -> str:
@@ -321,8 +337,8 @@ def _notice(recipients: list[str], cfg: dict) -> str:
         )
     if embedding:
         lines.append(
-            f"- **{SHORT_NAMES.get(embedding, embedding)}, for the embeddings:** the text of the PDFs you index and "
-            "every search text (your questions, column names and hints)."
+            f"- **{provider_label(embedding)}, for the embeddings:** the text of the PDFs you index and every "
+            "search text (your questions, column names and hints)."
         )
     return (
         "\n".join(lines)
@@ -336,38 +352,41 @@ def _running_engine(manager) -> None:
     """Where the running engine sends data, whatever provider is selected below, and how to stop it at once."""
     if not manager.initialized or not manager.recipients():
         return
-    order = [p for p in dict.fromkeys([manager.provider, manager.embedding_provider]) if p in manager.recipients()]
-    embedding = manager.embedding_provider if manager.embedding_provider != manager.provider else None
+    order = sorted(manager.recipients(), key=lambda r: r.partition("@")[0] != manager.provider)
+    embedding = order[1] if len(order) > 1 else None
     st.info(f"The AI engine runs with {_names(order, embedding)}: your data goes there.", icon=":material/cloud_sync:")
     if st.button("Withdraw the confirmation and stop", key="rag_withdraw_stop", icon=":material/block:"):
         withdrawn = manager.recipients()
         manager.withdraw_consent(*withdrawn)
-        for key in [k for k in st.session_state if isinstance(k, str) and k.startswith("rag_") and k.endswith("_consent")]:
-            if set(_consent_providers(key)) & withdrawn:
-                st.session_state[key] = False  # the boxes of these providers start unticked
+        for key in [k for k in st.session_state if isinstance(k, str) and k.startswith("rag_consent::")]:
+            if set(_consent_recipients(key)) & withdrawn:
+                st.session_state[key] = False  # the boxes of these recipients start unticked
+        st.session_state["rag_stop_notice"] = STOP_NOTICE
         st.rerun()
 
 
 def _consent_card(cfg: dict) -> bool:
     """
-    Explicit, session-scoped confirmation before any data can be sent outside this server (audit E6). It names
-    every recipient (with Claude, a cloud embedding provider too), and is given per provider: one given for a
-    provider is not shown as given for another. Unticking it stops an engine that uses one of them.
+    Explicit, session-scoped confirmation before any data is sent outside this machine and the private network
+    (audit E6). One box per set of recipients, naming each (with Claude, a cloud embedding provider too); ticking or
+    unticking it is what counts, and unticking stops an engine that sends data to one of them.
     """
     manager = st.session_state.rag_manager
     with st.container(border=True):
         st.subheader("Data sharing", icon=":material/shield_person:", anchor=False)
+        if notice := st.session_state.pop("rag_stop_notice", None):
+            st.toast(notice, icon=":material/block:")
         _running_engine(manager)
         recipients = _recipients(cfg)
         if not recipients:
-            # choosing the local provider changes nothing for a cloud engine that runs until another starts
-            base_url = cfg.get("base_url") or ""
-            if _on_this_machine(base_url):
+            # choosing a local provider changes nothing for a cloud engine that runs until another starts
+            url = cfg.get("embedding_base_url") or cfg.get("base_url") or ""
+            if on_this_machine(url):
                 st.caption("The local provider keeps every prompt, document and dataset excerpt on this server.")
             else:
                 st.caption(
-                    f"Ollama at {_host(base_url)} receives the prompts, the text of your documents and the column "
-                    "summaries. Check that this host may receive your data."
+                    f"Ollama at {host_of(url)}, on your network, receives the prompts, the text of your documents "
+                    "and the column summaries."
                 )
             return True
         embedding = recipients[1] if len(recipients) > 1 else None
@@ -376,25 +395,21 @@ def _consent_card(cfg: dict) -> bool:
             _notice(recipients, cfg), title=f"What leaves this server with {names}", icon=":material/cloud_upload:"
         )
         key = _consent_key(recipients)
-        if key not in st.session_state and set(recipients) <= manager.consents:
-            st.session_state[key] = True  # given in this session, for the engine that runs
+        if key not in st.session_state and manager.is_confirmed(frozenset(recipients)):
+            st.session_state[key] = True  # confirmed in this session, for an engine started before this page
         consent = bool(
             st.checkbox(
                 f"I confirm this data may be sent to {names}",
                 key=key,
+                on_change=_consent_changed,
+                args=(key, tuple(recipients)),
                 help=f"Required before any of your data is sent to {names}. Applies to this browser tab only; "
                 "untick it to stop an engine that uses them.",
                 persist_state=PERSIST,
             )
         )
-        if consent:
-            manager.consents |= set(recipients)
-        elif manager.withdraw_consent(*recipients):
-            st.toast(
-                "Confirmation withdrawn: the AI engine stopped. Nothing more is sent from this tab; what was already "
-                "sent stays with the provider, under its own terms.",
-                icon=":material/block:",
-            )
+        if consent and not manager.is_confirmed(frozenset(recipients)):
+            manager.confirm(*recipients)  # ticked earlier in the session, for an engine manager rebuilt since
         return consent
 
 

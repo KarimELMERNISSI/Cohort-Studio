@@ -21,12 +21,18 @@ retrieval. On the Documents page, choose the documents in the sidebar (*Choose D
 Settings > AI engine > **Provider and models** offers local **Ollama** (the default) and four cloud providers, which
 need an API key and your explicit confirmation that data may be sent to them: Google Gemini, OpenAI, Mistral AI and
 **Anthropic Claude**. Claude answers questions but has no embedding model, so a second choice appears: the
-**embedding provider** that indexes your documents. Keep **Ollama** there to index the whole library on this
-server; only the passages retrieved for each question are then sent to Claude. The temperature slider does not
-apply to Claude.
+**embedding provider** that indexes your documents. Keep **Ollama** there to index the whole library with your
+Ollama service; for a question, only the passages retrieved are then sent to Claude. **Document insight** sends
+Claude the text of the document whose graph it extracts, never the file. The temperature slider does not apply to
+Claude.
 
-Nothing leaves the server with an Ollama on this machine. An Ollama address elsewhere (another machine of your
-network) receives the prompts, the text of your documents and the column summaries: the page shows that host.
+Nothing leaves the server with an Ollama on this machine. An Ollama on another machine receives the prompts, the
+text of your documents and the column summaries, and the page shows its host:
+- **on your network** (a private address, a Docker service name, a .local, .lan or .internal name): no
+  confirmation is asked;
+- **outside your network** (a public address or name): it may be anywhere, so it needs your confirmation, as a
+  cloud provider does;
+- an address in **http** crosses the network unencrypted, and the page says so.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria) is a summary of each column, never a row:
@@ -42,19 +48,22 @@ Google to delete it. A cloud **embedding provider** of Claude receives the text 
 search text (your questions, column names and hints). The **Data sharing** card of Settings lists all of this and
 names every recipient.
 
-**The confirmation.** The box names the providers it confirms: with Claude and a cloud embedding provider, both.
-It is yours, for this browser tab only: another tab asks again. It does not replace the approvals of your
-data-protection framework, and what was already sent stays with the provider, under its own terms.
+**The confirmation.** The box names the recipients it confirms: with Claude and a cloud embedding provider, both,
+together. A provider confirmed as Claude's embedding provider is not confirmed to answer on its own, which sends it
+more (column summaries, descriptions, criteria): its own box asks again. The confirmation is yours, for this browser
+tab only: another tab asks again. It does not replace the approvals of your data-protection framework, and what
+was already sent stays with the provider, under its own terms.
 
-- **Untick it** to withdraw it: an engine that uses one of these providers stops at once, so nothing more is sent
-  from this tab.
+- **Untick it** to withdraw it: every confirmation that names one of these recipients goes, and an engine that
+  uses one of them stops at once, so nothing more is sent from this tab. Only your ticking or unticking counts:
+  looking at another configuration changes nothing.
 - **Withdraw the confirmation and stop**, at the top of the card, does the same whatever provider is selected below;
   the card says which providers the running engine sends data to.
 - Your documents stay indexed: tick the box again, then **Initialise / reindex** reuses the index.
 
-The prompts are never sent to a tracing service: the app switches LangChain's tracing (LangSmith) off at start-up,
-whatever `.env` says. A **Qdrant server** (rather than the embedded Qdrant) stores the text of the indexed passages
-and keeps it after the engine stops.
+The prompts are never sent to a tracing service: at start-up the app switches LangChain's tracing (LangSmith) off,
+both its environment variables and LangSmith's own switch, whatever `.env` says. A **Qdrant server** (rather than
+the embedded Qdrant) stores the text of the indexed passages and keeps it after the engine stops.
 
 ### Choosing the vector database
 

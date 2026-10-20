@@ -130,14 +130,14 @@ def test_rag_manager_requires_consent_and_keys(monkeypatch: pytest.MonkeyPatch, 
     manager = rm.RAGManager(documents_dir=str(tmp_path), provider="anthropic")
     ok, message = manager.initialize_system(provider="anthropic", model_name="claude-fable-5-1")
     assert not ok and "explicit confirmation" in message
-    manager.cloud_consent = True
+    manager.confirm("anthropic")
     ok, message = manager.initialize_system(provider="anthropic", model_name="claude-fable-5-1")
     assert not ok and message == "Anthropic API Key is required."
     manager.api_key = "sk-test"
     ok, message = manager.initialize_system(provider="anthropic", embedding_provider="anthropic")
     assert not ok and "no embedding API" in message
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    manager.consents.add("openai")  # the embedding provider needs the confirmation too
+    manager.confirm("anthropic", "openai")  # the embedding provider needs the confirmation too
     ok, message = manager.initialize_system(provider="anthropic", embedding_provider="openai")
     assert not ok and message == "Openai API Key is required for the embeddings."
 
@@ -171,7 +171,7 @@ def test_rag_manager_passes_the_embedding_provider(
     docs = tmp_path / "docs"
     docs.mkdir()
     manager = rm.RAGManager(documents_dir=str(docs), provider="anthropic", api_key="sk-test")
-    manager.cloud_consent = True
+    manager.confirm("anthropic")
     ok, message = manager.initialize_system(
         provider="anthropic",
         model_name="claude-fable-5-1",

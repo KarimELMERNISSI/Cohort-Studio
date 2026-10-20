@@ -3,8 +3,8 @@ The data-sharing confirmation of the AI engine (M5, with the data-protection rev
 
 - Withdrawing it stops the engine: it was checked only when the engine started, so an engine kept
   answering, and sending data to its cloud provider, after the box was unticked.
-- Every provider outside this server needs it, the embedding one too (Claude answering, OpenAI
-  embedding).
+- Every recipient outside this machine and the private network needs it, as the exact set of one
+  box: the embedding provider too (Claude answering, OpenAI embedding), and an Ollama elsewhere.
 - A refused, failed or interrupted start leaves no connection behind and never relabels the engine.
 - Model discovery never sends a cloud key to the Ollama address of an earlier engine.
 - No prompt carries a statistic that the notice says is never sent (the extremes of a column).
@@ -57,7 +57,7 @@ def _engine(monkeypatch, tmp_path, provider: str, embedding: str | None = None) 
     docs = tmp_path / "docs"
     docs.mkdir(exist_ok=True)
     manager = rm.RAGManager(documents_dir=str(docs), provider=provider, api_key="sk-test")
-    manager.consents = {p for p in (provider, embedding) if p and p not in rm.LOCAL_PROVIDERS}
+    manager.confirm(*rm.RAGManager.recipients_of(provider, None, embedding or provider))
     ok, message = _start(manager, provider, embedding)
     assert ok, message
     return manager
@@ -70,7 +70,7 @@ def test_withdrawing_the_confirmation_stops_a_cloud_engine(monkeypatch, tmp_path
 
     assert manager.withdraw_consent() is True
     assert not manager.initialized and not manager.holds_connections()
-    assert manager.consents == set() and manager.llm is None and manager.vector_store is None
+    assert manager.confirmed == set() and manager.llm is None and manager.vector_store is None
     assert "confirmation was withdrawn" in (manager.stop_reason or "")
     answers_before = llm.i
     assert manager.suggest_column_renaming(["age", "sex"]) == (None, "RAG system not initialized.")
@@ -78,7 +78,7 @@ def test_withdrawing_the_confirmation_stops_a_cloud_engine(monkeypatch, tmp_path
     assert manager.suggest_alternative_formula("egfr", "creat", ["age"]) == {"alternative_found": False}
     assert llm.i == answers_before  # nothing more was sent to the provider
 
-    manager.consents.add("gemini")  # confirmed again, and started again
+    manager.confirm("gemini")  # confirmed again, and started again
     ok, message = _start(manager, "gemini")
     assert ok, message
     assert manager.initialized and manager.stop_reason is None
@@ -97,16 +97,50 @@ def test_the_embedding_provider_needs_the_confirmation_too(monkeypatch, tmp_path
     docs = tmp_path / "docs"
     docs.mkdir()
     manager = rm.RAGManager(documents_dir=str(docs), provider="anthropic", api_key="sk-test")
-    manager.consents = {"anthropic"}
+    manager.confirm("anthropic")
     ok, message = _start(manager, "anthropic", "openai")
-    assert not ok and "explicit confirmation" in message and "openai" in message
-    manager.consents.add("openai")
+    assert not ok and "explicit confirmation" in message and "Anthropic Claude and OpenAI" in message
+    manager.confirm("anthropic", "openai")
     ok, message = _start(manager, "anthropic", "openai")
     assert ok, message
     assert manager.recipients() == {"anthropic", "openai"}
 
     assert manager.withdraw_consent("openai") is True  # the embedding provider's withdrawal stops it
-    assert not manager.holds_connections() and manager.consents == {"anthropic"}
+    assert not manager.holds_connections()
+    assert manager.confirmed == {frozenset({"anthropic"})}  # every confirmation naming OpenAI went
+
+
+def test_a_confirmation_covers_its_recipients_together_not_each_alone(monkeypatch, tmp_path) -> None:
+    # OpenAI confirmed as Claude's embedding provider made the OpenAI chat box show ticked, and that
+    # engine start: answering, it also receives the column summaries, descriptions and criteria
+    _fake_connectors(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="openai", api_key="sk-test")
+    manager.confirm("anthropic", "openai")
+    ok, message = _start(manager, "openai")
+    assert not ok and "may leave this server (OpenAI)" in message
+    assert not manager.is_confirmed(frozenset({"openai"}))
+
+
+def test_an_ollama_outside_the_private_network_needs_the_confirmation(monkeypatch, tmp_path) -> None:
+    _fake_connectors(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    outside = "https://ollama.example.com"
+    ok, message = manager.initialize_system(
+        provider="ollama", base_url=outside, model_name="m", vector_engine="lancedb"
+    )
+    assert not ok and "Ollama at ollama.example.com" in message
+    manager.confirm("ollama@ollama.example.com")
+    ok, message = manager.initialize_system(
+        provider="ollama", base_url=outside, model_name="m", vector_engine="lancedb"
+    )
+    assert ok, message
+    assert manager.recipients() == {"ollama@ollama.example.com"} and manager.uses_cloud()
+    for private in ("http://192.168.1.20:11434", "http://gpu-box.lan:11434", "http://ollama:11434"):
+        assert rm.RAGManager.recipients_of("ollama", private) == frozenset(), private
 
 
 def test_a_refused_start_leaves_the_running_engine_as_it_was(monkeypatch, tmp_path) -> None:
@@ -114,7 +148,7 @@ def test_a_refused_start_leaves_the_running_engine_as_it_was(monkeypatch, tmp_pa
     # engine, and a later withdrawal of its real provider missed it
     manager = _engine(monkeypatch, tmp_path, "gemini")
     ok, message = _start(manager, "openai")
-    assert not ok and "openai" in message
+    assert not ok and "OpenAI" in message
     assert manager.initialized and manager.provider == "gemini"
     assert manager.recipients() == {"gemini"}
     assert manager.withdraw_consent("gemini") is True
@@ -170,6 +204,7 @@ def test_model_discovery_sends_no_cloud_key_to_the_ollama_address(monkeypatch, t
 def test_cloud_embeddings_count_as_cloud(tmp_path) -> None:
     manager = rm.RAGManager(documents_dir=str(tmp_path), provider="ollama")
     manager.embedding_provider = "openai"  # the embedding provider embeds every question
+    manager.embedding_base_url = None
     assert manager.uses_cloud() and manager.recipients() == {"openai"}
 
 
@@ -204,6 +239,7 @@ def test_no_prompt_carries_the_extremes_of_a_column(tmp_path) -> None:
 def test_the_uploaded_pdf_is_deleted_when_the_extraction_fails(tmp_path) -> None:
     pytest.importorskip("google.genai", reason="the Gemini SDK is in the optional 'ai' extra")
     deleted: list[str] = []
+    # (the provider decides the file API: test_claude_never_uploads_the_pdf)
     uploaded = SimpleNamespace(
         name="files/1", state=SimpleNamespace(name="ACTIVE"), uri="u", mime_type="application/pdf"
     )
@@ -224,3 +260,22 @@ def test_the_uploaded_pdf_is_deleted_when_the_extraction_fails(tmp_path) -> None
     graph, error = manager.extract_custom_graph_from_doc("paper.pdf")
     assert graph is None and error
     assert deleted == ["files/1"]  # the PDF itself was sent: Google is asked to delete it anyway
+
+
+def test_claude_never_uploads_the_pdf(tmp_path) -> None:
+    # Anthropic's client has a files API too: the graph extraction uploaded each PDF to Anthropic and left it
+    # there, though only the passages of a question are meant to reach Claude
+    uploads: list[str] = []
+    prompts: list[str] = []
+    client = SimpleNamespace(files=SimpleNamespace(upload=lambda file: uploads.append(file)))
+
+    def invoke(prompt: str):
+        prompts.append(prompt)
+        return SimpleNamespace(content="[]")
+
+    manager = rm.RAGManager(documents_dir=str(tmp_path), provider="anthropic")
+    manager.initialized = True
+    manager.llm = SimpleNamespace(client=client, invoke=invoke)
+    (tmp_path / "paper.pdf").write_bytes(b"%PDF-1.4")
+    manager.extract_custom_graph_from_doc("paper.pdf")
+    assert uploads == []  # the text path (or nothing, when no text could be read)

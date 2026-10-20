@@ -169,8 +169,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The consent card of Settings lists exactly that.
 - **The variable map no longer sends the extremes of a column.** Refining it sent the minimum, maximum and mean of
   every numeric column, though the notice says the minimum and maximum are never sent. Later prompts then sent the
-  whole map with them, and a map imported from a file could carry them too. Every prompt now sends only the
-  percentiles and the frequent values the notice lists.
+  whole map with them, and a map imported or edited could carry anything. The prompts that carry the variable map
+  now keep only the percentiles of its statistics (an allow-list) and none of its keys that hold values of the data;
+  the refinement sends the summary the notice lists.
 - **Withdrawing the confirmation stops the AI engine.** The data-sharing confirmation was checked only when the
   engine started, so an engine kept answering, and sending data to its cloud provider, after the box was unticked.
   - Unticking *I confirm this data may be sent to …* now stops an engine that uses one of the providers it names:
@@ -180,8 +181,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     selected. The card says which providers the running engine sends data to: with Ollama selected, it read "no
     data leaves this server" while a cloud engine ran.
   - **Every recipient needs it.** With Claude, a cloud embedding provider receives the documents and every search
-    text; the confirmation of Claude covered it. The box now names both, and each provider has its own: one given
-    for a provider was shown as given for the next one chosen in the list. Only the local Ollama is exempt.
+    text; the confirmation of Claude covered it. The box now names both, and confirms them together: a provider
+    confirmed as Claude's embedding provider is not confirmed to answer on its own. A confirmation given for one
+    provider was shown as given for the next one chosen in the list. Ollama is exempt on this machine and the
+    private network; an Ollama at a public address needs the confirmation too.
+  - Only ticking or unticking the box counts: looking at another configuration changes nothing.
   - A refused, failed or interrupted start keeps no connection, and no longer relabels the engine that runs, which
     a later withdrawal could then miss.
   - The documents stay indexed on disk: once the box is ticked again, **Initialise / reindex** reuses the index.
@@ -189,9 +193,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Listing a cloud provider's models could send the typed key to the Ollama address of an earlier engine.
   - Google Gemini's graph extraction uploads the PDF file itself. The notice now says so, and Google is asked to
     delete the file even when the extraction fails.
-  - LangChain's tracing service (LangSmith) is switched off at start-up: a tracing switch left in `.env` would have
-    sent every prompt there.
-  - An Ollama address on another machine is shown as such, not as "Local: no data leaves this server".
+  - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
+    there. The file API is now used with Gemini only; the other providers receive the document's text.
+  - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own
+    global switch: a tracing switch left in `.env` would have sent every prompt there.
+  - An Ollama address on another machine is shown as such, not as "Local: no data leaves this server", with a
+    warning when it uses http. The sidebar and the Start page say so too.
   - The notice says that the confirmation is the user's, for one browser tab, and does not replace the approvals of
     a data-protection framework, and that what was sent stays with the provider. "Mistral AI (cloud, EU)" claimed
     a location the app cannot check: it reads "Mistral AI (cloud)".

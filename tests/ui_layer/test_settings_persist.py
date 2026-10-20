@@ -57,14 +57,14 @@ def test_the_ai_provider_model_and_consent_survive_a_revisit(app: AppTest) -> No
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
     app.selectbox(key="rag_provider_select").select("gemini").run()
     app.selectbox(key="rag_gemini_model_select").select("gemini-flash-lite-latest").run()
-    app.checkbox(key="rag_gemini_consent").check().run()
+    app.checkbox(key="rag_consent::gemini").check().run()
     assert app.session_state["rag_manager"].cloud_consent is True
 
     _visit(app, "start")
     _visit(app, "settings")
     assert app.selectbox(key="rag_provider_select").value == "gemini"
     assert app.selectbox(key="rag_gemini_model_select").value == "gemini-flash-lite-latest"
-    assert app.checkbox(key="rag_gemini_consent").value is True
+    assert app.checkbox(key="rag_consent::gemini").value is True
     assert app.session_state["rag_manager"].cloud_consent is True  # not withdrawn by the visit
     assert not [w for w in app.warning if "Session State API" in str(w.value)]
 
@@ -78,13 +78,13 @@ def test_settings_start_from_the_engine_that_runs(signed_in: AppTest, tmp_path: 
 
     manager = RAGManager(documents_dir=str(tmp_path / "documents"), provider="mistral")
     manager.initialized = True
-    manager.cloud_consent = True
+    manager.confirm("mistral")
     manager.llm = SimpleNamespace(config=SimpleNamespace(model_name="mistral-large-latest"))
     signed_in.session_state["rag_manager"] = manager
     _visit(signed_in, "settings")
     assert signed_in.selectbox(key="rag_provider_select").value == "mistral"
     assert signed_in.selectbox(key="rag_mistral_model_select").value == "mistral-large-latest"
-    assert signed_in.checkbox(key="rag_mistral_consent").value is True
+    assert signed_in.checkbox(key="rag_consent::mistral").value is True
     assert signed_in.session_state["rag_manager"].cloud_consent is True
 
 
@@ -99,19 +99,19 @@ def test_unticking_the_consent_stops_the_engine_that_runs(
 
     manager = RAGManager(documents_dir=str(tmp_path / "documents"), provider="mistral")
     manager.initialized = True
-    manager.cloud_consent = True
+    manager.confirm("mistral")
     manager.llm = SimpleNamespace(config=SimpleNamespace(model_name="mistral-large-latest"))
     manager.vector_store = SimpleNamespace()
     signed_in.session_state["rag_manager"] = manager
     _visit(signed_in, "settings")
 
     signed_in.selectbox(key="rag_provider_select").select("gemini").run()
-    assert signed_in.checkbox(key="rag_gemini_consent").value is False  # one consent per provider
+    assert signed_in.checkbox(key="rag_consent::gemini").value is False  # one consent per provider
     # looking at another provider stops nothing
     assert signed_in.session_state["rag_manager"].initialized
 
     signed_in.selectbox(key="rag_provider_select").select("mistral").run()
-    signed_in.checkbox(key="rag_mistral_consent").uncheck().run()
+    signed_in.checkbox(key="rag_consent::mistral").uncheck().run()
     assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
     stopped = signed_in.session_state["rag_manager"]
     assert not stopped.initialized and stopped.llm is None and stopped.vector_store is None
@@ -130,7 +130,7 @@ def _running_mistral(at: AppTest, tmp_path: Path):
 
     manager = RAGManager(documents_dir=str(tmp_path / "documents"), provider="mistral")
     manager.initialized = True
-    manager.consents = {"mistral"}
+    manager.confirm("mistral")
     manager.llm = SimpleNamespace(config=SimpleNamespace(model_name="mistral-large-latest"))
     manager.vector_store = SimpleNamespace()
     at.session_state["rag_manager"] = manager
@@ -148,9 +148,9 @@ def test_the_running_engine_can_be_stopped_whatever_provider_is_shown(
     signed_in.button(key="rag_withdraw_stop").click().run()
     assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
     stopped = signed_in.session_state["rag_manager"]
-    assert not stopped.holds_connections() and stopped.consents == set()
+    assert not stopped.holds_connections() and stopped.confirmed == set()
     signed_in.selectbox(key="rag_provider_select").select("mistral").run()
-    assert signed_in.checkbox(key="rag_mistral_consent").value is False  # to confirm again
+    assert signed_in.checkbox(key="rag_consent::mistral").value is False  # to confirm again
 
 
 def test_claude_with_cloud_embeddings_names_both_recipients(signed_in: AppTest) -> None:
@@ -158,10 +158,29 @@ def test_claude_with_cloud_embeddings_names_both_recipients(signed_in: AppTest) 
     _visit(signed_in, "settings")
     signed_in.selectbox(key="rag_provider_select").select("anthropic").run()
     signed_in.selectbox(key="rag_claude_embed_provider").select("openai").run()
-    box = signed_in.checkbox(key="rag_anthropic_openai_consent")
+    box = signed_in.checkbox(key="rag_consent::anthropic+openai")
     names = "Anthropic Claude and OpenAI (embeddings)"
     assert box.label == f"I confirm this data may be sent to {names}"
     notice = next(w for w in signed_in.warning if "What leaves this server" in (w.title or ""))
     assert "OpenAI, for the embeddings" in notice.value
     box.check().run()
-    assert signed_in.session_state["rag_manager"].consents == {"anthropic", "openai"}
+    confirmed = signed_in.session_state["rag_manager"].confirmed
+    assert confirmed == {frozenset({"anthropic", "openai"})}
+    # confirmed together as Claude's embedding provider, OpenAI is not confirmed to answer on its own
+    signed_in.selectbox(key="rag_provider_select").select("openai").run()
+    assert signed_in.checkbox(key="rag_consent::openai").value is False
+
+
+def test_an_untouched_box_of_another_configuration_stops_nothing(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    """Every render withdrew the recipients of an unticked box: looking at Claude with Mistral embeddings
+    stopped a Mistral engine."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    _running_mistral(signed_in, tmp_path)
+    signed_in.selectbox(key="rag_provider_select").select("anthropic").run()
+    signed_in.selectbox(key="rag_claude_embed_provider").select("mistral").run()
+    assert signed_in.checkbox(key="rag_consent::anthropic+mistral").value is False
+    manager = signed_in.session_state["rag_manager"]
+    assert manager.initialized and manager.is_confirmed(frozenset({"mistral"}))
+    assert not signed_in.toast

@@ -17,7 +17,15 @@ from pathlib import Path
 import pandas as pd
 from rapidfuzz import process
 
-from manage.ai_payload import column_profile, safe_stats, taxonomy_for_prompt
+from manage.ai_payload import (
+    LOCAL_PROVIDERS,
+    column_profile,
+    frequent_values,
+    provider_label,
+    recipient,
+    safe_stats,
+    taxonomy_for_prompt,
+)
 
 # Import prompt functions
 from prompts import (
@@ -44,8 +52,6 @@ from .rag_documents import DocumentsMixin
 from .rag_taxonomy import TaxonomyMixin
 
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
-# The providers that run on this server or the user's network: every other one needs the data-sharing confirmation
-LOCAL_PROVIDERS = {"ollama"}
 _ENV_KEY_NAMES = {
     "gemini": "GOOGLE_API_KEY",
     "openai": "OPENAI_API_KEY",
@@ -157,28 +163,47 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.formulas_registry = {}
         
         self.embedding_provider: str | None = None
-        # The providers outside this server that the user confirmed may receive data, in this session (browser tab):
-        # each one the engine uses, for answers or for embeddings, needs it (Settings > AI engine > Data sharing)
-        self.consents: set[str] = set()
+        self.embedding_base_url: str | None = None
+        # The recipients the user confirmed may receive data, in this session (browser tab), as the exact set of one
+        # box of Settings > AI engine > Data sharing: a provider confirmed as Claude's embedding provider is not
+        # confirmed to answer on its own, which receives more (column summaries, descriptions, criteria)
+        self.confirmed: set[frozenset[str]] = set()
         self.stop_reason: str | None = None  # why a running engine was stopped (shown by Settings)
 
-    def recipients(self) -> set[str]:
-        """The providers outside this server that the engine sends data to: its chat and embedding providers."""
-        return {p for p in (self.provider, self.embedding_provider) if p and p not in LOCAL_PROVIDERS}
+    @staticmethod
+    def recipients_of(
+        provider: str | None,
+        base_url: str | None = None,
+        embedding_provider: str | None = None,
+        embedding_base_url: str | None = None,
+    ) -> frozenset[str]:
+        """
+        The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, and
+        an Ollama outside the private network ("ollama@<host>").
+        """
+        found = {recipient(provider, base_url), recipient(embedding_provider, embedding_base_url or base_url)}
+        return frozenset(r for r in found if r)
+
+    def recipients(self) -> frozenset[str]:
+        """The recipients the engine sends data to, for answers and for embeddings."""
+        return self.recipients_of(self.provider, self.base_url, self.embedding_provider, self.embedding_base_url)
 
     def uses_cloud(self) -> bool:
-        """Whether data leaves the server: a provider of the engine is not a local one."""
+        """Whether data leaves this machine and the private network."""
         return bool(self.recipients())
+
+    def confirm(self, *recipients: str) -> None:
+        """The user confirms that data may be sent to these recipients together (one box of Settings)."""
+        if recipients:
+            self.confirmed.add(frozenset(recipients))
+
+    def is_confirmed(self, recipients: frozenset[str]) -> bool:
+        return not recipients or recipients in self.confirmed
 
     @property
     def cloud_consent(self) -> bool:
-        """Whether every provider outside this server that the engine uses has the user's confirmation."""
-        return self.recipients() <= self.consents
-
-    @cloud_consent.setter
-    def cloud_consent(self, value: bool) -> None:
-        providers = self.recipients()
-        self.consents = (self.consents | providers) if value else (self.consents - providers)
+        """Whether the user confirmed the recipients the engine sends data to."""
+        return self.is_confirmed(self.recipients())
 
     def holds_connections(self) -> bool:
         """Whether a connection to a provider is still held (a running engine, or one stopped half-way)."""
@@ -202,14 +227,14 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self._drop_connections()
         self.stop_reason = reason
 
-    def withdraw_consent(self, *providers: str) -> bool:
+    def withdraw_consent(self, *recipients: str) -> bool:
         """
-        The user withdraws the confirmation of ``providers`` (all of them when none is named). An engine that sends
-        data to one of them stops at once: the confirmation used to be checked only when the engine started, so it
-        kept answering. Returns whether it stopped.
+        The user withdraws the confirmation of ``recipients`` (all of them when none is named): every confirmation
+        that names one of them goes. An engine that sends data to one of them stops at once: the confirmation used
+        to be checked only when the engine started, so it kept answering. Returns whether it stopped.
         """
-        withdrawn = set(providers) if providers else set(self.consents)
-        self.consents -= withdrawn
+        withdrawn = set(recipients) if recipients else {r for confirmed in self.confirmed for r in confirmed}
+        self.confirmed = {c for c in self.confirmed if not c & withdrawn}
         if self.holds_connections() and self.recipients() & withdrawn:
             self.stop("the data-sharing confirmation was withdrawn")
             return True
@@ -350,12 +375,15 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return False, f"{embed_provider.capitalize()} has no embedding API: choose another embedding provider."
         separate_embeddings = embed_provider != provider_clean
         embed_key = embedding_api_key or (_env_api_key(embed_provider) if separate_embeddings else effective_key)
-        # every provider outside this server needs the confirmation: the embedding one receives the documents and
-        # every search text (an allow-list of local providers: an unknown provider needs it too)
-        unconfirmed = sorted({p for p in (provider_clean, embed_provider) if p not in LOCAL_PROVIDERS} - self.consents)
-        if unconfirmed:
+        # every recipient outside this machine and the private network needs the confirmation, as the exact set of
+        # one box: the embedding provider receives the documents and every search text (an allow-list of local
+        # providers: an unknown provider needs it too, and so does an Ollama outside the private network)
+        own_embedding_url = embedding_base_url if separate_embeddings else None
+        needed = self.recipients_of(provider_clean, base_url, embed_provider, own_embedding_url)
+        if not self.is_confirmed(needed):
+            names = " and ".join(provider_label(r) for r in sorted(needed))
             return False, (
-                f"Cloud providers require explicit confirmation that data may leave this server ({', '.join(unconfirmed)}). "
+                f"Cloud providers require explicit confirmation that data may leave this server ({names}). "
                 "Confirm the data-sharing notice in Settings > AI engine first."
             )
         if provider_clean in CLOUD_PROVIDERS and not effective_key:
@@ -368,6 +396,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # providers it was started with, so a withdrawn confirmation always finds and stops them.
         self._drop_connections()
         self.provider, self.base_url, self.embedding_provider = provider_clean, base_url, embed_provider
+        self.embedding_base_url = own_embedding_url
         succeeded = False
         try:
             # 1. Load Documents using native PDFDocumentLoader
@@ -645,7 +674,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             
             col_info = next((c for c in columns_info if c['name'] == var), {})
             # only what the data-sharing notice lists: percentiles and frequent values, never the extremes
-            top_values = safe_stats(col_info.get('top_values', {}))
+            top_values = frequent_values(col_info.get('top_values', {}))
             stats = safe_stats(col_info.get('stats', {}))
 
             context_str = f"""
