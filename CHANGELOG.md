@@ -322,6 +322,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   `outlier_handling` now replays from its snapshot instead of skipping the step as unknown.
 - **A step recorded under an unregistered name is logged**, and the test suite refuses it.
 
+### Internal structure: the safety net for the architecture work (M5b)
+
+- **The layers are checked.** `tests/test_layering.py` classifies every module by layer, from `utils` up to the
+  pages, and checks five rules:
+  - imports go down the layers;
+  - no import cycles;
+  - nothing below the user interface reaches Streamlit;
+  - the AI providers' packages are imported only by their connectors;
+  - the command-line entry point loads neither Streamlit nor the AI packages.
+
+  It follows what actually runs: imports inside functions, parent packages, and modules named in strings. Today's
+  exceptions are listed, each with the step that removes it, and the lists can only shrink.
+- **Formatting covers every file.** CI and pre-commit now check the whole repository with `ruff format`, except a
+  list of the 166 files not yet formatted, which can only shrink: a test fails when a listed file is formatted and
+  still listed. Each file is reformatted in its own commit, recorded in `.git-blame-ignore-revs`.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

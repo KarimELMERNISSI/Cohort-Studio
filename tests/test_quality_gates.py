@@ -153,3 +153,38 @@ def test_tests_are_not_named_like_packages() -> None:
     packages = {p.name for p in ROOT.iterdir() if p.is_dir() and (p / "__init__.py").exists()}
     clashes = [d.name for d in (ROOT / "tests").iterdir() if d.is_dir() and d.name in packages]
     assert not clashes, clashes
+
+
+# The files not yet formatted (M5b): the list only shrinks. Lower the ceiling with it.
+UNFORMATTED_CEILING = 166
+
+
+def test_the_list_of_unformatted_files_only_shrinks() -> None:
+    """
+    Formatting applies to every file but pyproject's [tool.ruff.format] exclude. A listed file that is formatted
+    now must leave the list, so that a later change cannot unformat it unseen.
+    """
+    import subprocess
+    import sys
+
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    listed = pyproject["tool"]["ruff"]["format"]["exclude"]
+    assert listed == sorted(set(listed)), "keep the list sorted, without repeats"
+    assert len(listed) <= UNFORMATTED_CEILING, "the list only shrinks: do not add a file to it"
+    missing = [path for path in listed if not (ROOT / path).exists()]
+    assert not missing, f"no longer exist, delete them from the list: {missing}"
+    check = subprocess.run(
+        [sys.executable, "-m", "ruff", "format", "--check", "--output-format", "concise"]
+        + ["--config", "format.exclude = []", *listed],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    reported = {
+        line.split(":")[0].replace("\\", "/")
+        for line in check.stdout.splitlines()
+        if "unformatted" in line
+    }
+    formatted = sorted(set(listed) - reported)
+    assert not formatted, f"formatted now, delete them from [tool.ruff.format] exclude: {formatted}"

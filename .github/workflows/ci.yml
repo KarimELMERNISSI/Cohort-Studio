@@ -40,8 +40,9 @@ jobs:
       - name: Lint (ruff, project configuration)
         run: uv run ruff check --output-format github .
 
-      - name: Format check (packages written under the 2026 audit)
-        run: uv run ruff format --check core biostats ingest ui graph tests/core_layer tests/biostats_layer tests/ingest_layer tests/ui_layer tests/graph_layer
+      # Every file but the list of pyproject's [tool.ruff.format] exclude, which only shrinks (test_quality_gates.py)
+      - name: Format check
+        run: uv run ruff format --check .
 
       - name: Type check (pyright, errors only, scoped by pyrightconfig.json)
         run: uv run pyright --level error

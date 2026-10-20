@@ -1,0 +1,4 @@
+# Commits that only reformat files (ruff format), left out of `git blame`:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file by itself. Each formatting commit removes its files from pyproject's
+# [tool.ruff.format] exclude; its full SHA is added here in a later commit, and is never rewritten afterwards.
