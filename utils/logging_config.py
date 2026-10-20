@@ -24,15 +24,20 @@ _KEY_FIELD = re.compile(
 )
 
 
+_URL_CREDENTIALS = re.compile(r"(?<=://)[^/\s@]+@")  # http://user:password@host
+
+
 def redact_secrets(text: str) -> str:
     """The text without API keys: the values of the configured secrets (variables named ``*API_KEY``,
-    ``*_SECRET`` or ``*_PASSWORD``), Google, OpenAI and Anthropic keys, and the value of an ``api_key: ...``,
+    ``*_SECRET`` or ``*_PASSWORD``, as set and without their surrounding spaces), Google, OpenAI and Anthropic keys,
+    the credentials of an address (``http://user:password@host``), and the value of an ``api_key: ...``,
     ``x-api-key: ...`` or ``Authorization: ...`` field."""
     for value in secret_values():  # read as they are, never validated: a wrong setting cannot stop the redaction
         if value in text:
             text = text.replace(value, REDACTED)
     for pattern in _KEYS:
         text = pattern.sub(REDACTED, text)
+    text = _URL_CREDENTIALS.sub(f"{REDACTED}@", text)
     return _KEY_FIELD.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", text)
 
 

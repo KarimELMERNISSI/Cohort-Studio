@@ -436,6 +436,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   named in the start-up log. **If you kept values there, move them to `.env` before you update.**
 - A setting that stops start-up is also written to the server log (`docker compose logs`), with the reminder that
   `.env` is read once: correct it, then restart.
+- **No credentials in an address, none in the log.** An `OLLAMA_BASE_URL` or `CMP_QDRANT_URL` holding a user name or
+  password stops start-up: it was shown to every user in Settings and logged. The log redaction also removes the
+  credentials of any address (`http://user:password@host`) and a key's value without the spaces around it, the form
+  the settings use. A password is used as it is, spaces included. A wrong boolean names the accepted spellings (1/0,
+  true/false, yes/no, on/off), and an unknown identity provider is named without its value.
 - **An empty value counts as unset everywhere**, as `.env.example`'s empty lines mean: `CMP_IAM_CACHE_TTL=` stopped
   the identity manager, and `CMP_RANDOM_SEED=` every statistics module at import. Every part of the application now
   reads its settings from the one object, the log redaction included (from the raw environment, so that a wrong

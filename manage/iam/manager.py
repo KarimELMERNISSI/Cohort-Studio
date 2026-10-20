@@ -71,7 +71,7 @@ class IAMManager:
         provider_type = PROVIDER_ALIASES.get(raw_type)
         if provider_type is None:
             raise IAMConfigurationError(
-                f"CMP_IAM_PROVIDER={raw_type!r} is not an identity provider: use local, better_auth or disabled."
+                "CMP_IAM_PROVIDER is not an identity provider: use local, better_auth or disabled."
             )
 
         key = iam.better_auth_api_key

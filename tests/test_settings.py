@@ -214,3 +214,40 @@ def test_a_server_without_a_home_folder_starts(env: pytest.MonkeyPatch) -> None:
 
     env.setattr(Path, "home", staticmethod(no_home))
     assert cfg.load_settings().paths.data_root == "./data"
+
+
+def test_a_password_is_used_as_it_is(env: pytest.MonkeyPatch) -> None:
+    env.setenv("CMP_ADMIN_PASSWORD", " pass phrase ")  # spaces are part of a password
+    password = cfg.get_settings().iam.admin_password
+    assert password is not None and password.get_secret_value() == " pass phrase "
+
+
+@pytest.mark.parametrize("variable", ["OLLAMA_BASE_URL", "CMP_QDRANT_URL"])
+def test_an_address_holding_credentials_is_refused(env: pytest.MonkeyPatch, variable: str) -> None:
+    """It would be shown to every user in Settings, and logged (data-protection review, M5b)."""
+    env.setenv(variable, "http://admin:S3cret-zz9@10.0.0.5:11434")
+    with pytest.raises(cfg.SettingsError) as raised:
+        cfg.get_settings()
+    assert variable in str(raised.value) and "zz9" not in str(raised.value)
+
+
+def test_a_wrong_boolean_names_the_spellings(env: pytest.MonkeyPatch) -> None:
+    env.setenv("CMP_OFFLINE", "enabled")
+    with pytest.raises(cfg.SettingsError, match="1/0, true/false, yes/no, on/off"):
+        cfg.get_settings()
+
+
+def test_the_redaction_covers_a_key_as_set_and_as_used(env: pytest.MonkeyPatch) -> None:
+    """The settings strip a key: the stripped form is the one sent, and logged by a provider's error."""
+    from utils.logging_config import redact_secrets
+
+    env.setenv("MISTRAL_API_KEY", "  mistral-planted-key-0123  ")
+    assert "mistral-planted-key-0123" in cfg.secret_values()
+    assert "mistral-planted-key-0123" not in redact_secrets("refused key mistral-planted-key-0123")
+    assert "s3cret" not in redact_secrets("connecting to http://user:s3cret@10.0.0.5:11434/api")
+
+
+def test_the_qdrant_key_is_never_printed() -> None:
+    from manage.vectorstores import VectorStoreSettings
+
+    assert "planted" not in repr(VectorStoreSettings(qdrant_api_key="planted-qdrant-key"))

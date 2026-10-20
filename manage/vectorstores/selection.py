@@ -47,7 +47,7 @@ BYTES_PER_CHUNK_OF_PDF = (
 class VectorStoreSettings:
     engine: str = AUTO  # auto | lancedb | qdrant
     qdrant_url: str | None = None
-    qdrant_api_key: str | None = None
+    qdrant_api_key: str | None = field(default=None, repr=False)  # a key: never printed
 
     @classmethod
     def from_env(cls, settings: Settings | None = None) -> VectorStoreSettings:

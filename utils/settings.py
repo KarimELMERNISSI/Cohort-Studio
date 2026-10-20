@@ -21,6 +21,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -44,10 +45,11 @@ class _Section(BaseSettings):
 
     @field_validator("*", mode="before")
     @classmethod
-    def _strip(cls, value: object) -> object:
-        return (
-            value.strip() if isinstance(value, str) else value
-        )  # " 1 " is refused as a boolean otherwise
+    def _strip(cls, value: object, info) -> object:
+        # " 1 " is refused as a boolean otherwise; a password is used as it is, spaces included, as before
+        if isinstance(value, str) and "password" not in (info.field_name or ""):
+            return value.strip()
+        return value
 
 
 class _Names(_Section):
@@ -101,8 +103,25 @@ _PROVIDER_KEYS = {
 }
 
 
+def _no_credentials(value: str | None) -> str | None:
+    """An address without a user name or password: it is shown to every user in Settings, and logged."""
+    if value:
+        parts = urlparse(value)
+        if parts.username or parts.password:
+            raise ValueError(
+                "an address must not hold a user name or password: give the credentials another way"
+            )
+    return value
+
+
 class AISection(_Section):
     ollama_base_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def _address(cls, value: str) -> str:
+        return _no_credentials(value) or value
+
     google_api_key: SecretStr | None = Field(None, validation_alias="GOOGLE_API_KEY")
     openai_api_key: SecretStr | None = Field(None, validation_alias="OPENAI_API_KEY")
     mistral_api_key: SecretStr | None = Field(None, validation_alias="MISTRAL_API_KEY")
@@ -119,6 +138,11 @@ class VectorStoreSection(_Names):
     engine: str = Field("auto", validation_alias="CMP_VECTOR_STORE")
     qdrant_url: str | None = Field(None, validation_alias="CMP_QDRANT_URL")
     qdrant_api_key: SecretStr | None = Field(None, validation_alias="CMP_QDRANT_API_KEY")
+
+    @field_validator("qdrant_url")
+    @classmethod
+    def _address(cls, value: str | None) -> str | None:
+        return _no_credentials(value)
 
 
 class GraphSection(_Names):
@@ -178,6 +202,7 @@ def _validate() -> Settings:
         except ValidationError as exc:
             problems += [
                 f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                + (" (1/0, true/false, yes/no, on/off)" if error["type"] == "bool_parsing" else "")
                 for error in exc.errors()
             ]
     if problems:
@@ -258,11 +283,14 @@ def secret_values(min_length: int = 8) -> list[str]:
     The values of the secret variables of the environment (names ending in API_KEY, _SECRET or _PASSWORD), for the
     log redaction: read as they are, never validated, so that a wrong setting cannot stop the redaction.
     """
-    return [
-        value
-        for name, value in os.environ.items()
-        if len(value) >= min_length and SECRET_VARIABLE.search(name)
-    ]
+    values = []
+    for name, value in os.environ.items():
+        if SECRET_VARIABLE.search(name):
+            # as set, and as used: the settings strip the spaces around a key
+            values += [
+                form for form in dict.fromkeys((value, value.strip())) if len(form) >= min_length
+            ]
+    return values
 
 
 def reset_settings() -> None:
