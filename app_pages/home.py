@@ -76,14 +76,14 @@ class RenameColumnsComponent:
                     suggestion_mode = st.radio(
                         "Suggestion Source:", 
                         ["Medical Literature (Context)", "Standard Terminologies (UMLS/SNOMED/LOINC)"],
-                        horizontal=True
+                        key="rename_suggestion_mode", persist_state="page", horizontal=True
                     )
                     
                     selected_cols = st.multiselect(
                         "Select columns to rename (leave empty for all):",
                         options=list(self.original_df.columns),
                         default=[],
-                        key="rag_col_select",
+                        persist_state="page", key="rag_col_select",
                         help="Select specific columns to generate suggestions for. If empty, all columns will be processed."
                     )
                 
@@ -141,15 +141,15 @@ class RenameColumnsComponent:
         col1, col2, col3 = st.columns([1, 2, 2])
 
         with col1:
-            sort_order = st.checkbox("Sort alphabetically", value=True, key="sort_order")
+            sort_order = st.checkbox("Sort alphabetically", value=True, persist_state="page", key="sort_order")
         with col2:
             type_filter = st.selectbox(
                 "Filter by type",
                 options=["All", "Numeric", "Categorical", "Date", "Binary", "Non-Binary Low-Cardinality Numeric", "High-Cardinality Categorical"],
-                key="type_filter"
+                persist_state="page", key="type_filter"
             )
         with col3:
-            search_term = st.text_input("Search columns", "", key="search_term")
+            search_term = st.text_input("Search columns", "", persist_state="page", key="search_term")
 
 
         # The analyzer of the analysis rows, from the profile kept until they change
@@ -188,7 +188,7 @@ class RenameColumnsComponent:
 
                 with col_rename:
                     current_val = st.session_state["rename_dict"].get(col, col)
-                    new_name = st.text_input(f"Rename '{col}' to:", value=current_val, key=f"rename_{col}")
+                    new_name = st.text_input(f"Rename '{col}' to:", value=current_val, persist_state="page", key=f"rename_{col}")
                     st.session_state["rename_dict"][col] = new_name
                     
                     # Show AI suggestion if available
@@ -732,6 +732,12 @@ def run_benchmark(df, analyzer):
         st.caption("For information: the statistics of the application are computed with pandas.")
 
 
+# The tabs of Statistics & correlations; only the open one runs (M5b). Their labels are part of the tabs' identity
+# (Streamlit 1.66): keep them fixed, without counts.
+TABS = ("Dataset Statistics", "Columns Renaming", "Performance Benchmark")
+TAB_KEY = "home_tab"
+
+
 def app():
     # Initialize DB Manager
     if 'db_manager' not in st.session_state:
@@ -747,530 +753,517 @@ def app():
 
     # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
-    # Load or select dataset (assuming df is already loaded into session state) 
+    # The analysis rows (the criteria ticked in the sidebar)
     df = st.session_state.get('data', None)
 
-    if df is not None:
-        df = df.copy(deep=False)  # local: the coercion below must not change the session data (audit E8)
-        analyzer = get_state().analyzer()  # its column profile is kept until the analysis rows change (M5b)
-        cols_to_convert = analyzer.low_cardinality_numeric_cols + analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols
-        # Ensure no duplicates in the column list
-        cols_to_convert = list(set(cols_to_convert))
-        # Coerce numeric format for specified columns
-        df[cols_to_convert] = df[cols_to_convert].apply(pd.to_numeric, errors='coerce')
-
-    # Create tabs for different visualization aspects
-    tabs = st.tabs(["Dataset Statistics", "Columns Renaming", "Performance Benchmark"])
+    # Only the open tab runs (M5b): a click no longer recomputes the three tabs
+    tabs = st.tabs(list(TABS), key=TAB_KEY, on_change="rerun")
 
     with tabs[2]:
-        st.subheader("Performance benchmark", icon=":material/speed:", anchor=False)
-        if df is not None:
-            run_benchmark(df, analyzer)
-        else:
-            no_dataset()
+        if tabs[2].open:
+            st.subheader("Performance benchmark", icon=":material/speed:", anchor=False)
+            if df is not None:
+                bench = df.copy(deep=False)  # local: the coercion below must not change the session data (audit E8)
+                analyzer = get_state().analyzer()  # its column profile is kept until the analysis rows change
+                cols_to_convert = list(set(analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols))
+                bench[cols_to_convert] = bench[cols_to_convert].apply(pd.to_numeric, errors='coerce')
+                run_benchmark(bench, analyzer)
+            else:
+                no_dataset()
 
     with tabs[1]:
-        if 'working_df' in st.session_state:
-            analyzer = get_state().analyzer()
-
-        #df = st.session_state.get('data', None)
-        if df is not None:
-            # Instantiate DataAnalyzer and RenameColumnsComponent
-            
-            #analyzer = DataAnalyzer(st.session_state.get('data', None))
-            rename_component = RenameColumnsComponent(st.session_state.get('data', None), analyzer)
-
-            # Display the component (a rename is committed by AppState; nothing is written back here)
-            rename_component.display()
-            #st.write("test: ")
-            #st.dataframe(st.session_state["data"])
-            
-        else:
-            no_dataset()
+        if tabs[1].open:
+            if df is not None:
+                rename_component = RenameColumnsComponent(df, get_state().analyzer())
+                # Display the component (a rename is committed by AppState; nothing is written back here)
+                rename_component.display()
+            else:
+                no_dataset()
 
     with tabs[0]:
-        # its own inputs: the analysis rows as they stand (a rename applied in the Renaming tab included)
-        df = st.session_state.get('working_df')
-        if df is not None:
-            analyzer = get_state().analyzer()
-        col_title, col_reset = st.columns([4, 1])
-        with col_title:
-            st.subheader("Dataset statistics", icon=":material/table_chart:", anchor=False)
-        with col_reset:
-             def _reset_statistics_cache() -> None:
-                if 'db_manager' in st.session_state:
-                    st.session_state.db_manager.clear_all_stats()  # this user's workspace only
-                get_statistics_dataframe.clear()  # this session's statistics only
-                st.toast("Cache cleared.")
+        if tabs[0].open:
+            # its own inputs: the analysis rows as they stand (a rename applied in the Renaming tab included)
+            df = st.session_state.get('working_df')
+            if df is not None:
+                analyzer = get_state().analyzer()
+            col_title, col_reset = st.columns([4, 1])
+            with col_title:
+                st.subheader("Dataset statistics", icon=":material/table_chart:", anchor=False)
+            with col_reset:
+                 def _reset_statistics_cache() -> None:
+                    if 'db_manager' in st.session_state:
+                        st.session_state.db_manager.clear_all_stats()  # this user's workspace only
+                    get_statistics_dataframe.clear()  # this session's statistics only
+                    st.toast("Cache cleared.")
 
-             if st.button("Reset Cache", help="Force full recomputation of statistics"):
-                confirm("Reset the statistics cache?",
-                        "Cached statistics in your workspace and the in-memory cache will be recomputed on the next visit. "
-                        "Datasets and traces are not affected.", _reset_statistics_cache, confirm_label="Reset")
-        #df = st.session_state.get('data', None)
-        max_top_modalities = 3  # the number_input below can change it
-        if df is not None:
+                 if st.button("Reset Cache", help="Force full recomputation of statistics"):
+                    confirm("Reset the statistics cache?",
+                            "Cached statistics in your workspace and the in-memory cache will be recomputed on the next visit. "
+                            "Datasets and traces are not affected.", _reset_statistics_cache, confirm_label="Reset")
+            #df = st.session_state.get('data', None)
+            max_top_modalities = 3  # the number_input below can change it
+            if df is not None:
             
-            st.subheader("Dataset Preview")
-            with st.expander("Preview the first lines of your dataset", expanded=True):
-                # The rows are the analysis population (criteria ticked in the sidebar)
-                filtered_df = df
-                st.dataframe(df.head(), width='stretch', hide_index=True)
-                st.write(f"**Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns.")
+                st.subheader("Dataset Preview")
+                with st.expander("Preview the first lines of your dataset", expanded=True):
+                    # The rows are the analysis population (criteria ticked in the sidebar)
+                    filtered_df = df
+                    st.dataframe(df.head(), width='stretch', hide_index=True)
+                    st.write(f"**Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns.")
 
-                #st.subheader("Data session")
-                #st.dataframe(st.session_state["data"].head(), width='stretch', hide_index=True)
+                    #st.subheader("Data session")
+                    #st.dataframe(st.session_state["data"].head(), width='stretch', hide_index=True)
 
-                # Column information
-                st.subheader("Columns Information")
-                # Analyze the dataset using DataAnalyzer
-                column_categories = {
-                            "Quantitative: Columns with numerical quantitative data": sorted(analyzer.numeric_cols),
-                            "Binary: Columns with 2 unique values (e.g., 0/1 or Yes/No)": sorted(analyzer.binary_cols),
-                            "Non Binary Low-Cardinality Numeric: Numerical columns with few distinct values": sorted(analyzer.non_binary_low_cardinality_numeric_cols),
-                            "Categorical: Columns with non-numerical data": sorted(analyzer.categorical_cols),
-                            "High-Cardinality Categorical: Categorical columns with many unique values (e.g., id)": sorted(analyzer.high_cardinality_cat_cols),
-                            "Date: Columns containing date or time data": sorted(analyzer.date_cols),
-                            "Time Delta: Columns containing time interval data (e.g., age or period)": sorted(analyzer.timedelta_cols)
-                        }
-                for category, columns in column_categories.items():
-                    display_category_box(category, columns)
+                    # Column information
+                    st.subheader("Columns Information")
+                    # Analyze the dataset using DataAnalyzer
+                    column_categories = {
+                                "Quantitative: Columns with numerical quantitative data": sorted(analyzer.numeric_cols),
+                                "Binary: Columns with 2 unique values (e.g., 0/1 or Yes/No)": sorted(analyzer.binary_cols),
+                                "Non Binary Low-Cardinality Numeric: Numerical columns with few distinct values": sorted(analyzer.non_binary_low_cardinality_numeric_cols),
+                                "Categorical: Columns with non-numerical data": sorted(analyzer.categorical_cols),
+                                "High-Cardinality Categorical: Categorical columns with many unique values (e.g., id)": sorted(analyzer.high_cardinality_cat_cols),
+                                "Date: Columns containing date or time data": sorted(analyzer.date_cols),
+                                "Time Delta: Columns containing time interval data (e.g., age or period)": sorted(analyzer.timedelta_cols)
+                            }
+                    for category, columns in column_categories.items():
+                        display_category_box(category, columns)
                 
-                # Generate statistics
-                #numerical_stats, non_numerical_stats = get_statistics_dataframe(df, analyzer, nb_top_modalities=max_top_modalities, qual_var_threshold=50) #get_statistics_dataframe(df)
+                    # Generate statistics
+                    #numerical_stats, non_numerical_stats = get_statistics_dataframe(df, analyzer, nb_top_modalities=max_top_modalities, qual_var_threshold=50) #get_statistics_dataframe(df)
             
-            group_select = sorted(list(set(analyzer.categorical_cols + analyzer.low_cardinality_numeric_cols + analyzer.binary_cols) - set(analyzer.high_cardinality_cat_cols)))
+                group_select = sorted(list(set(analyzer.categorical_cols + analyzer.low_cardinality_numeric_cols + analyzer.binary_cols) - set(analyzer.high_cardinality_cat_cols)))
 
-            #st.write(group_select, analyzer.high_cardinality_cat_cols)
+                #st.write(group_select, analyzer.high_cardinality_cat_cols)
 
-            st.subheader("Quantitative Data Statistics")
-            with st.expander("Get a descriptive view of your quantitative variables", expanded=True): 
-                # User selects a categorical variable
-                col_quant_1, col_quant_2 = st.columns(2)
+                st.subheader("Quantitative Data Statistics")
+                with st.expander("Get a descriptive view of your quantitative variables", expanded=True): 
+                    # User selects a categorical variable
+                    col_quant_1, col_quant_2 = st.columns(2)
 
-                with col_quant_1:
-                    selected_group_quant = st.selectbox(label="Select grouping column (optional):", options=["None"] + group_select, index=0, key='select_group_quant')
+                    with col_quant_1:
+                        selected_group_quant = st.selectbox(label="Select grouping column (optional):", options=["None"] + group_select, index=0, persist_state="page", key='select_group_quant')
                 
-                date_stats = pd.DataFrame()
-                if selected_group_quant == "None":
-                    # Display numerical stats
-                    dataset_name = st.session_state.get('current_dataset_name', None)
-                    numerical_stats, _, date_stats = get_statistics_dataframe(
-                        filtered_df, 
-                        analyzer, 
-                        nb_top_categories=max_top_modalities, 
-                        qual_var_threshold=50,
-                        dataset_name=dataset_name,
-                        _db_manager=st.session_state.db_manager
-                    )
-                    mark_step("analyse", "descriptive statistics")
-                    # Show available columns and let user select columns to retain
-                    selected_quant_columns = st.multiselect(
-                            "Select columns to retain in descriptive statistics of quantitative variables",
-                            options=numerical_stats.columns.tolist(),
-                            default=numerical_stats.columns.tolist()
+                    date_stats = pd.DataFrame()
+                    if selected_group_quant == "None":
+                        # Display numerical stats
+                        dataset_name = st.session_state.get('current_dataset_name', None)
+                        numerical_stats, _, date_stats = get_statistics_dataframe(
+                            filtered_df, 
+                            analyzer, 
+                            nb_top_categories=max_top_modalities, 
+                            qual_var_threshold=50,
+                            dataset_name=dataset_name,
+                            _db_manager=st.session_state.db_manager
                         )
-                    st.dataframe(numerical_stats[selected_quant_columns],
-                                width='stretch',
-                                column_config={
-                                    "fill_percentage": st.column_config.ProgressColumn(
-                                        "Fill Percentage",
-                                        help="Shows the percentage of non-missing values in this column.",
-                                        format="%d%%",  # Display as a percentage
-                                        min_value=0,
-                                        max_value=100,
-                                    ),
-                                    "Shapiro-Wilk p-value": st.column_config.NumberColumn(
-                                        "Shapiro-Wilk p-value",
-                                        help="Shapiro-Wilk up to 5,000 values; D'Agostino's K² beyond, where "
-                                        "Shapiro-Wilk's p-value is not reliable (as in the analyses).",
-                                    )}
-                                )
-                    
-                    st.download_button(
-                        label="Download as Excel",
-                        data=to_excel(numerical_stats[selected_quant_columns]),
-                        file_name="Quantitative Data Statistics.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key='quant_download_ungrouped'
-                    )
-                else:
-                    # Group data by the selected categorical variable
-                    quant_category_groups = filtered_df.groupby(selected_group_quant)
-                    # Generate descriptive statistics for each group using the custom function
-                    quant_dict = {}
-                    date_stats_dict = {}
-                    for category, group in quant_category_groups:
-                        if group.empty:
-                            continue
-                        #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
-                        numerical_stats, _, group_date_stats = get_statistics_dataframe(
-                            df=group, 
-                            _analyzer=analyzer, 
-                            nb_top_categories=1
-                        )
-                        quant_dict[category] = numerical_stats
-                        date_stats_dict[category] = group_date_stats
-                    
-                    with col_quant_2:
-                        selected_category = st.selectbox(label="Select grouping value:", options=quant_dict.keys(), index=0, key='quant_group_value')
-                    
-                    
-                    selected_quant_columns = st.multiselect(
-                            "Select columns to retain in descriptive statistics of quantitative variables",
-                            options=numerical_stats.columns.tolist(),
-                            default=numerical_stats.columns.tolist(),
-                            key='quant_cols_select'
-                        )
-                    
-                    # Filter columns for all groups
-                    for category in quant_dict:
-                        quant_dict[category] = quant_dict[category][selected_quant_columns]
-
-                    # Display the first table as an example
-                    st.dataframe(quant_dict[selected_category],
-                                 width='stretch',
-                                 column_config={
-                                    "fill_percentage": st.column_config.ProgressColumn(
-                                        "Fill Percentage",
-                                        help="Shows the percentage of non-missing values in this column.",
-                                        format="%d%%",  # Display as a percentage
-                                        min_value=0,
-                                        max_value=100,
-                                    )}
-                                 )
-
-                    # Allow user to download all data as a multi-sheet Excel file
-                    # Allow user to download all data as a multi-sheet Excel file
-                    st.download_button(
-                        label="Download as Excel",
-                        data=to_excel_sheets(quant_dict),
-                        file_name=f"Descriptive_Statistics_by_{selected_group_quant}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key='quant_download_grouped'
-                    )
-                # Display Date Stats if available
-                # Display Date Stats if available
-                current_date_stats = pd.DataFrame()
-                if selected_group_quant == "None":
-                    current_date_stats = date_stats
-                elif selected_group_quant != "None" and 'date_stats_dict' in locals() and selected_category in date_stats_dict:
-                    current_date_stats = date_stats_dict[selected_category]
-
-                if not current_date_stats.empty:
-                    st.divider()
-                    st.markdown("#### Date Statistics")
-                    st.dataframe(current_date_stats,
-                                width='stretch', 
-                                column_config={
-                                    "Fill Percentage": st.column_config.ProgressColumn(
-                                        "Fill Percentage",
-                                        help="Shows the percentage of non-missing values in this column.",
-                                        format="%d%%",
-                                        min_value=0,
-                                        max_value=100,
-                                    ),
-                                    "Min Date": st.column_config.DateColumn("Min Date"),
-                                    "Max Date": st.column_config.DateColumn("Max Date"),
-                                }
-                    )
-
-                # Call the function to display the guide
-                #show_test_guidelines()
-
-
-            st.subheader("Qualitative Data Statistics")
-            with st.expander("Get a descriptive view of your qualitative variables", expanded=True):
-                # User selects a categorical variable
-                col_qual_1, col_qual_2 = st.columns(2)
-
-                with col_qual_1:
-                    selected_group_qual = st.selectbox(label="Select grouping column (optional):", options=["None"] + group_select, index=0, key='select_group_qual')
-
-                # Display non-numerical stats
-                col1, col2 = st.columns([1, 5])
-                with col1:
-                    max_top_modalities = st.number_input(
-                        "Select the number of top modalities to display",
-                        min_value=1, 
-                        max_value=50, 
-                        value=3, 
-                        step=1,
-                        help="This controls the number of top categories displayed for qualitative data."
-                    )
-
-                if selected_group_qual == "None":
-                    dataset_name = st.session_state.get('current_dataset_name', None)
-                    dataset_name = st.session_state.get('current_dataset_name', None)
-                    _, non_numerical_stats, _ = get_statistics_dataframe(
-                        filtered_df, 
-                        analyzer, 
-                        nb_top_categories=max_top_modalities, 
-                        qual_var_threshold=50,
-                        dataset_name=dataset_name,
-                        _db_manager=st.session_state.db_manager
-                    )
-                    
-                    with col2:
+                        mark_step("analyse", "descriptive statistics")
                         # Show available columns and let user select columns to retain
-                        selected_qual_columns = st.multiselect(
+                        selected_quant_columns = st.multiselect(
                                 "Select columns to retain in descriptive statistics of quantitative variables",
-                                options=non_numerical_stats.columns.tolist(),
-                                default=non_numerical_stats.columns.tolist()
+                                key="stats_quant_columns", persist_state="page", options=numerical_stats.columns.tolist(),
+                                default=numerical_stats.columns.tolist()
                             )
-                        
-                    st.dataframe(non_numerical_stats[selected_qual_columns], 
-                                width='stretch', 
-                                column_config={
-                                    "fill_percentage": st.column_config.ProgressColumn(
-                                        "Fill Percentage",
-                                        help="Shows the percentage of non-missing values in this column.",
-                                        format="%d%%",  # Display as a percentage
-                                        min_value=0,
-                                        max_value=100,
-                                    )}
-                                )
+                        st.dataframe(numerical_stats[selected_quant_columns],
+                                    width='stretch',
+                                    column_config={
+                                        "fill_percentage": st.column_config.ProgressColumn(
+                                            "Fill Percentage",
+                                            help="Shows the percentage of non-missing values in this column.",
+                                            format="%d%%",  # Display as a percentage
+                                            min_value=0,
+                                            max_value=100,
+                                        ),
+                                        "Shapiro-Wilk p-value": st.column_config.NumberColumn(
+                                            "Shapiro-Wilk p-value",
+                                            help="Shapiro-Wilk up to 5,000 values; D'Agostino's K² beyond, where "
+                                            "Shapiro-Wilk's p-value is not reliable (as in the analyses).",
+                                        )}
+                                    )
                     
-                    st.download_button(
-                        label="Download as Excel",
-                        data=to_excel(non_numerical_stats[selected_qual_columns]),
-                        file_name="Qualitative Data Statistics.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key='qual_download_ungrouped'
-                    )
-                    
-                else:
-                    # Group data by the selected categorical variable
-                    qual_category_groups = filtered_df.groupby(selected_group_qual)
-                    # Generate descriptive statistics for each group using the custom function
-                        
-                    qual_dict = {}
-                    for category, group in qual_category_groups:
-                        #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
-                        _, non_numerical_stats, _ = get_statistics_dataframe(
-                            df=group, 
-                            _analyzer=analyzer, 
-                            nb_top_categories=max_top_modalities
+                        st.download_button(
+                            label="Download as Excel",
+                            data=to_excel(numerical_stats[selected_quant_columns]),
+                            file_name="Quantitative Data Statistics.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key='quant_download_ungrouped'
                         )
-                        qual_dict[category] = non_numerical_stats
-
-                    with col2:
-                        # Show available columns and let user select columns to retain
-                        selected_qual_columns = st.multiselect(
-                                "Select columns to retain in descriptive statistics of qualitative variables",
-                                options=non_numerical_stats.columns.tolist(),
-                                default=non_numerical_stats.columns.tolist(),
-                                key='qual_cols_select'
+                    else:
+                        # Group data by the selected categorical variable
+                        quant_category_groups = filtered_df.groupby(selected_group_quant)
+                        # Generate descriptive statistics for each group using the custom function
+                        quant_dict = {}
+                        date_stats_dict = {}
+                        for category, group in quant_category_groups:
+                            if group.empty:
+                                continue
+                            #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
+                            numerical_stats, _, group_date_stats = get_statistics_dataframe(
+                                df=group, 
+                                _analyzer=analyzer, 
+                                nb_top_categories=1
                             )
-                        
-                    with col_qual_2:
-                        selected_category = st.selectbox(label="Select grouping value:", options=qual_dict.keys(), index=0, key='qual_group_value')
-
-                    # Filter columns for all groups
-                    for category in qual_dict:
-                        qual_dict[category] = qual_dict[category][selected_qual_columns]
-
-                    # Display the first table as an example
-                    st.dataframe(qual_dict[selected_category],
-                                 width='stretch',
-                                 column_config={
-                                    "fill_percentage": st.column_config.ProgressColumn(
-                                        "Fill Percentage",
-                                        help="Shows the percentage of non-missing values in this column.",
-                                        format="%d%%",  # Display as a percentage
-                                        min_value=0,
-                                        max_value=100,
-                                    )}
-                                 )
-
-                    # Allow user to download all data as a multi-sheet Excel file
-                    # Allow user to download all data as a multi-sheet Excel file
-                    st.download_button(
-                        label="Download as Excel",
-                        data=to_excel_sheets(qual_dict),
-                        file_name=f"Descriptive_Statistics_by_{selected_group_qual}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key='qual_download_grouped'
-                    )
-            
-            st.subheader("Correlation Matrix Analysis")
-            
-            # Ensure unique columns for correlation analysis to prevent errors
-            filtered_df = filtered_df.loc[:, ~filtered_df.columns.duplicated()]
-            
-            with st.expander("Get a view of variables interactions", expanded=True):
-                
-                
-                #group_select = list(set(analyzer.binary_cols + analyzer.categorical_cols + analyzer.non_binary_low_cardinality_numeric_cols)) # Grouping column
-                colcor1, colcor2, colcor3 = st.columns(3)
-                
-                with colcor1:
-                    # Columns selection
-                    sym = st.checkbox("symetrical", True)
+                            quant_dict[category] = numerical_stats
+                            date_stats_dict[category] = group_date_stats
                     
-                    st.markdown("---")
-                    st.markdown("**Clustering Options**")
-                    cluster_rows = st.checkbox("Cluster Rows", False)
-                    if cluster_rows:
-                        show_row_dendrogram = st.checkbox("Show Row Dendrogram", False)
-                    else:
-                        show_row_dendrogram = False
+                        with col_quant_2:
+                            selected_category = st.selectbox(label="Select grouping value:", options=quant_dict.keys(), index=0, persist_state="page", key='quant_group_value')
+                    
+                    
+                        selected_quant_columns = st.multiselect(
+                                "Select columns to retain in descriptive statistics of quantitative variables",
+                                options=numerical_stats.columns.tolist(),
+                                default=numerical_stats.columns.tolist(),
+                                persist_state="page", key='quant_cols_select'
+                            )
+                    
+                        # Filter columns for all groups
+                        for category in quant_dict:
+                            quant_dict[category] = quant_dict[category][selected_quant_columns]
+
+                        # Display the first table as an example
+                        st.dataframe(quant_dict[selected_category],
+                                     width='stretch',
+                                     column_config={
+                                        "fill_percentage": st.column_config.ProgressColumn(
+                                            "Fill Percentage",
+                                            help="Shows the percentage of non-missing values in this column.",
+                                            format="%d%%",  # Display as a percentage
+                                            min_value=0,
+                                            max_value=100,
+                                        )}
+                                     )
+
+                        # Allow user to download all data as a multi-sheet Excel file
+                        # Allow user to download all data as a multi-sheet Excel file
+                        st.download_button(
+                            label="Download as Excel",
+                            data=to_excel_sheets(quant_dict),
+                            file_name=f"Descriptive_Statistics_by_{selected_group_quant}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key='quant_download_grouped'
+                        )
+                    # Display Date Stats if available
+                    # Display Date Stats if available
+                    current_date_stats = pd.DataFrame()
+                    if selected_group_quant == "None":
+                        current_date_stats = date_stats
+                    elif selected_group_quant != "None" and 'date_stats_dict' in locals() and selected_category in date_stats_dict:
+                        current_date_stats = date_stats_dict[selected_category]
+
+                    if not current_date_stats.empty:
+                        st.divider()
+                        st.markdown("#### Date Statistics")
+                        st.dataframe(current_date_stats,
+                                    width='stretch', 
+                                    column_config={
+                                        "Fill Percentage": st.column_config.ProgressColumn(
+                                            "Fill Percentage",
+                                            help="Shows the percentage of non-missing values in this column.",
+                                            format="%d%%",
+                                            min_value=0,
+                                            max_value=100,
+                                        ),
+                                        "Min Date": st.column_config.DateColumn("Min Date"),
+                                        "Max Date": st.column_config.DateColumn("Max Date"),
+                                    }
+                        )
+
+                    # Call the function to display the guide
+                    #show_test_guidelines()
+
+
+                st.subheader("Qualitative Data Statistics")
+                with st.expander("Get a descriptive view of your qualitative variables", expanded=True):
+                    # User selects a categorical variable
+                    col_qual_1, col_qual_2 = st.columns(2)
+
+                    with col_qual_1:
+                        selected_group_qual = st.selectbox(label="Select grouping column (optional):", options=["None"] + group_select, index=0, persist_state="page", key='select_group_qual')
+
+                    # Display non-numerical stats
+                    col1, col2 = st.columns([1, 5])
+                    with col1:
+                        max_top_modalities = st.number_input(
+                            "Select the number of top modalities to display",
+                            key="stats_top_modalities", persist_state="page", min_value=1, 
+                            max_value=50, 
+                            value=3, 
+                            step=1,
+                            help="This controls the number of top categories displayed for qualitative data."
+                        )
+
+                    if selected_group_qual == "None":
+                        dataset_name = st.session_state.get('current_dataset_name', None)
+                        dataset_name = st.session_state.get('current_dataset_name', None)
+                        _, non_numerical_stats, _ = get_statistics_dataframe(
+                            filtered_df, 
+                            analyzer, 
+                            nb_top_categories=max_top_modalities, 
+                            qual_var_threshold=50,
+                            dataset_name=dataset_name,
+                            _db_manager=st.session_state.db_manager
+                        )
+                    
+                        with col2:
+                            # Show available columns and let user select columns to retain
+                            selected_qual_columns = st.multiselect(
+                                    "Select columns to retain in descriptive statistics of quantitative variables",
+                                    key="stats_qual_columns", persist_state="page", options=non_numerical_stats.columns.tolist(),
+                                    default=non_numerical_stats.columns.tolist()
+                                )
                         
-                    cluster_cols = st.checkbox("Cluster Cols", False)
-                    if cluster_cols:
-                        show_col_dendrogram = st.checkbox("Show Col Dendrogram", False)
-                    else:
-                        show_col_dendrogram = False
+                        st.dataframe(non_numerical_stats[selected_qual_columns], 
+                                    width='stretch', 
+                                    column_config={
+                                        "fill_percentage": st.column_config.ProgressColumn(
+                                            "Fill Percentage",
+                                            help="Shows the percentage of non-missing values in this column.",
+                                            format="%d%%",  # Display as a percentage
+                                            min_value=0,
+                                            max_value=100,
+                                        )}
+                                    )
                     
-                with colcor2:
-                    # Correlation method
-                    corr_method = st.selectbox("Select correlation method", ["kendall", "spearman", "pearson"])
-                    if corr_method == "pearson":
-                        cols_select = sorted(list(set(analyzer.numeric_cols))) # numerical columns
-                    else:
-                        cols_select = sorted(list(set(analyzer.num_binary_cols + analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols))) # numerical columns
-                with colcor3:
+                        st.download_button(
+                            label="Download as Excel",
+                            data=to_excel(non_numerical_stats[selected_qual_columns]),
+                            file_name="Qualitative Data Statistics.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key='qual_download_ungrouped'
+                        )
                     
-                    group_column = st.selectbox("Select grouping column (optional)", ["None"] + group_select) # sorted(group_select)
-                    group_column = None if group_column == "None" else group_column
+                    else:
+                        # Group data by the selected categorical variable
+                        qual_category_groups = filtered_df.groupby(selected_group_qual)
+                        # Generate descriptive statistics for each group using the custom function
+                        
+                        qual_dict = {}
+                        for category, group in qual_category_groups:
+                            #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
+                            _, non_numerical_stats, _ = get_statistics_dataframe(
+                                df=group, 
+                                _analyzer=analyzer, 
+                                nb_top_categories=max_top_modalities
+                            )
+                            qual_dict[category] = non_numerical_stats
+
+                        with col2:
+                            # Show available columns and let user select columns to retain
+                            selected_qual_columns = st.multiselect(
+                                    "Select columns to retain in descriptive statistics of qualitative variables",
+                                    options=non_numerical_stats.columns.tolist(),
+                                    default=non_numerical_stats.columns.tolist(),
+                                    persist_state="page", key='qual_cols_select'
+                                )
+                        
+                        with col_qual_2:
+                            selected_category = st.selectbox(label="Select grouping value:", options=qual_dict.keys(), index=0, persist_state="page", key='qual_group_value')
+
+                        # Filter columns for all groups
+                        for category in qual_dict:
+                            qual_dict[category] = qual_dict[category][selected_qual_columns]
+
+                        # Display the first table as an example
+                        st.dataframe(qual_dict[selected_category],
+                                     width='stretch',
+                                     column_config={
+                                        "fill_percentage": st.column_config.ProgressColumn(
+                                            "Fill Percentage",
+                                            help="Shows the percentage of non-missing values in this column.",
+                                            format="%d%%",  # Display as a percentage
+                                            min_value=0,
+                                            max_value=100,
+                                        )}
+                                     )
+
+                        # Allow user to download all data as a multi-sheet Excel file
+                        # Allow user to download all data as a multi-sheet Excel file
+                        st.download_button(
+                            label="Download as Excel",
+                            data=to_excel_sheets(qual_dict),
+                            file_name=f"Descriptive_Statistics_by_{selected_group_qual}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key='qual_download_grouped'
+                        )
+            
+                st.subheader("Correlation Matrix Analysis")
+            
+                # Ensure unique columns for correlation analysis to prevent errors
+                filtered_df = filtered_df.loc[:, ~filtered_df.columns.duplicated()]
+            
+                with st.expander("Get a view of variables interactions", expanded=True):
                 
-                if sym:
-                    cols = st.multiselect("Select columns", options=cols_select, default=cols_select)
-                    targets = cols
-                    predictors = cols
-                    triangle = 'full'
-                else:
-                    targets = st.multiselect("Select target columns", cols_select)
-                    predictors = st.multiselect("Select predictor columns", cols_select)
-                    triangle = 'lower'
-
-                if not targets or not predictors:
-                    st.info("Please select target and predictor columns to compute correlations.")
-                else:
-                    # Generate correlation matrix ONCE
-                    try:
-                        # Pre-calculate matrix to optimize performance
-                        unique_cols = list(set(targets + predictors))
-                        # Filter numeric columns only to avoid errors
-                        data_for_corr = filtered_df[unique_cols].select_dtypes(include=[np.number])
-                        
-                        if not data_for_corr.empty:
-                            import warnings
-
-                            with warnings.catch_warnings():
-                                warnings.simplefilter("ignore", category=Warning)
-                                corr_matrix_precalc = data_for_corr.corr(method=corr_method)
+                
+                    #group_select = list(set(analyzer.binary_cols + analyzer.categorical_cols + analyzer.non_binary_low_cardinality_numeric_cols)) # Grouping column
+                    colcor1, colcor2, colcor3 = st.columns(3)
+                
+                    with colcor1:
+                        # Columns selection
+                        sym = st.checkbox("symetrical", True, key="corr_symmetric", persist_state="page")
+                    
+                        st.markdown("---")
+                        st.markdown("**Clustering Options**")
+                        cluster_rows = st.checkbox("Cluster Rows", False, key="corr_cluster_rows", persist_state="page")
+                        if cluster_rows:
+                            show_row_dendrogram = st.checkbox("Show Row Dendrogram", False, key="corr_row_dendrogram", persist_state="page")
                         else:
-                            corr_matrix_precalc = pd.DataFrame() # Empty if no data
+                            show_row_dendrogram = False
+                        
+                        cluster_cols = st.checkbox("Cluster Cols", False, key="corr_cluster_cols", persist_state="page")
+                        if cluster_cols:
+                            show_col_dendrogram = st.checkbox("Show Col Dendrogram", False, key="corr_col_dendrogram", persist_state="page")
+                        else:
+                            show_col_dendrogram = False
+                    
+                    with colcor2:
+                        # Correlation method
+                        corr_method = st.selectbox("Select correlation method", ["kendall", "spearman", "pearson"], key="corr_method", persist_state="page")
+                        if corr_method == "pearson":
+                            cols_select = sorted(list(set(analyzer.numeric_cols))) # numerical columns
+                        else:
+                            cols_select = sorted(list(set(analyzer.num_binary_cols + analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols))) # numerical columns
+                    with colcor3:
+                    
+                        group_column = st.selectbox("Select grouping column (optional)", ["None"] + group_select, key="corr_group_column", persist_state="page") # sorted(group_select)
+                        group_column = None if group_column == "None" else group_column
+                
+                    if sym:
+                        cols = st.multiselect("Select columns", key="corr_columns", persist_state="page", options=cols_select, default=cols_select)
+                        targets = cols
+                        predictors = cols
+                        triangle = 'full'
+                    else:
+                        targets = st.multiselect("Select target columns", cols_select, key="corr_targets", persist_state="page")
+                        predictors = st.multiselect("Select predictor columns", cols_select, key="corr_predictors", persist_state="page")
+                        triangle = 'lower'
 
-                        # Create Tabs - Graph first as requested
-                        tab_graph, tab_matrix = st.tabs(["Correlation Graph", "Correlation Matrix"])
+                    if not targets or not predictors:
+                        st.info("Please select target and predictor columns to compute correlations.")
+                    else:
+                        # Generate correlation matrix ONCE
+                        try:
+                            # Pre-calculate matrix to optimize performance
+                            unique_cols = list(set(targets + predictors))
+                            # Filter numeric columns only to avoid errors
+                            data_for_corr = filtered_df[unique_cols].select_dtypes(include=[np.number])
+                        
+                            if not data_for_corr.empty:
+                                import warnings
 
-                        with tab_matrix:
-                            # Generate the heatmap figure
-                            fig = ecm.plotly_corr_mat(
-                                data=filtered_df,
-                                targets=targets,
-                                predictors=predictors,
-                                method=corr_method,
-                                selected_color='Plasma',
-                                triangle=triangle,
-                                cluster_rows=cluster_rows,
-                                cluster_cols=cluster_cols,
-                                show_row_dendrogram=show_row_dendrogram,
-                                show_col_dendrogram=show_col_dendrogram,
-                                correlation_matrix=corr_matrix_precalc
-                            )
-                            st.plotly_chart(fig, width='stretch')
-                            
-                            # Define output file name
-                            try:
-                                excel_data = _cached_corr_excel_bytes(
-                                    filtered_df,
-                                    targets,
-                                    predictors,
-                                    group_column,
-                                    corr_method
-                                )
-                                st.download_button(
-                                    label="Download Correlation Matrix (.xlsx)",
-                                    data=excel_data,
-                                    file_name="correlation_matrix.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                )
-                            except Exception as excel_err:
-                                st.warning(f"Excel export unavailable: {excel_err}")
-
-                        with tab_graph:
-                            # Correlation Network Graph (rendered through the graph connector)
-                            st.subheader("Correlation Network Graph")
-
-                            col_thresh, col_focus, col_engine = st.columns([1, 1, 1])
-                            with col_thresh:
-                                net_thresh = st.select_slider(
-                                    "Minimum correlation strength",
-                                    options=["Negligible", "Weak", "Moderate", "Strong", "Very Strong"],
-                                    value="Moderate",
-                                    help="Show only pairs whose correlation strength is at least this category "
-                                         "(thresholds follow Schober et al. 2018 for Pearson)."
-                                )
-                            with col_focus:
-                                focus_options = sorted(list(set(targets + predictors)))
-                                focus_variable = st.selectbox(
-                                    "Focus on variable (connected component)",
-                                    ["None"] + focus_options,
-                                    help="Show only the variables connected to the selected one (directly or "
-                                         "indirectly) at the chosen minimum strength."
-                                )
-                            with col_engine:
-                                renderer_selector(container=col_engine)
-
-                            focus_node = None if focus_variable == "None" else focus_variable
-
-                            spec = build_correlation_graph(
-                                corr_matrix_precalc,
-                                method=corr_method,
-                                min_strength=net_thresh,
-                                focus=focus_node,
-                                theme=current_theme(),
-                            )
-
-                            if not spec.nodes:
-                                st.info("No correlations found meeting the criteria.")
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("ignore", category=Warning)
+                                    corr_matrix_precalc = data_for_corr.corr(method=corr_method)
                             else:
-                                with st.expander("Legend & Help", expanded=False):
-                                    render_legend(spec)
-                                    st.markdown(
-                                        "- **Node heat:** warmer nodes have a higher cumulative correlation "
-                                        "strength with their neighbours.\n"
-                                        "- **Focus:** selecting a variable highlights it and shows only its "
-                                        "connected component.\n"
-                                        "- **Selection:** select nodes in the graph to list their strongest "
-                                        "correlations below."
-                                    )
-                                selection = render_graph(
-                                    spec,
-                                    RenderOptions(
-                                        key="corr_network_graph",
-                                        height=550,
-                                        heat=True,
-                                        selectable=True,
-                                        layout=LayoutHint.ORGANIC,
-                                        show_legend=False,
-                                    ),
-                                )
-                                if selection.node_ids:
-                                    st.markdown("**Strongest correlations of the selected variable(s)**")
-                                    st.dataframe(
-                                        _top_correlations(corr_matrix_precalc, selection.node_ids),
-                                        width="stretch",
-                                        hide_index=True,
-                                    )
-                                render_graph_exports(
-                                    spec, RenderOptions(key="corr_network_graph"), file_stem="correlation_network"
-                                )
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
+                                corr_matrix_precalc = pd.DataFrame() # Empty if no data
 
-        else:
-            no_dataset()
+                            # Create Tabs - Graph first as requested
+                            tab_graph, tab_matrix = st.tabs(["Correlation Graph", "Correlation Matrix"])
+
+                            with tab_matrix:
+                                # Generate the heatmap figure
+                                fig = ecm.plotly_corr_mat(
+                                    data=filtered_df,
+                                    targets=targets,
+                                    predictors=predictors,
+                                    method=corr_method,
+                                    selected_color='Plasma',
+                                    triangle=triangle,
+                                    cluster_rows=cluster_rows,
+                                    cluster_cols=cluster_cols,
+                                    show_row_dendrogram=show_row_dendrogram,
+                                    show_col_dendrogram=show_col_dendrogram,
+                                    correlation_matrix=corr_matrix_precalc
+                                )
+                                st.plotly_chart(fig, width='stretch')
+                            
+                                # Define output file name
+                                try:
+                                    excel_data = _cached_corr_excel_bytes(
+                                        filtered_df,
+                                        targets,
+                                        predictors,
+                                        group_column,
+                                        corr_method
+                                    )
+                                    st.download_button(
+                                        label="Download Correlation Matrix (.xlsx)",
+                                        data=excel_data,
+                                        file_name="correlation_matrix.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    )
+                                except Exception as excel_err:
+                                    st.warning(f"Excel export unavailable: {excel_err}")
+
+                            with tab_graph:
+                                # Correlation Network Graph (rendered through the graph connector)
+                                st.subheader("Correlation Network Graph")
+
+                                col_thresh, col_focus, col_engine = st.columns([1, 1, 1])
+                                with col_thresh:
+                                    net_thresh = st.select_slider(
+                                        "Minimum correlation strength",
+                                        key="corr_graph_threshold", persist_state="page", options=["Negligible", "Weak", "Moderate", "Strong", "Very Strong"],
+                                        value="Moderate",
+                                        help="Show only pairs whose correlation strength is at least this category "
+                                             "(thresholds follow Schober et al. 2018 for Pearson)."
+                                    )
+                                with col_focus:
+                                    focus_options = sorted(list(set(targets + predictors)))
+                                    focus_variable = st.selectbox(
+                                        "Focus on variable (connected component)",
+                                        ["None"] + focus_options,
+                                        key="corr_graph_focus", persist_state="page", help="Show only the variables connected to the selected one (directly or "
+                                             "indirectly) at the chosen minimum strength."
+                                    )
+                                with col_engine:
+                                    renderer_selector(container=col_engine)
+
+                                focus_node = None if focus_variable == "None" else focus_variable
+
+                                spec = build_correlation_graph(
+                                    corr_matrix_precalc,
+                                    method=corr_method,
+                                    min_strength=net_thresh,
+                                    focus=focus_node,
+                                    theme=current_theme(),
+                                )
+
+                                if not spec.nodes:
+                                    st.info("No correlations found meeting the criteria.")
+                                else:
+                                    with st.expander("Legend & Help", expanded=False):
+                                        render_legend(spec)
+                                        st.markdown(
+                                            "- **Node heat:** warmer nodes have a higher cumulative correlation "
+                                            "strength with their neighbours.\n"
+                                            "- **Focus:** selecting a variable highlights it and shows only its "
+                                            "connected component.\n"
+                                            "- **Selection:** select nodes in the graph to list their strongest "
+                                            "correlations below."
+                                        )
+                                    selection = render_graph(
+                                        spec,
+                                        RenderOptions(
+                                            key="corr_network_graph",
+                                            height=550,
+                                            heat=True,
+                                            selectable=True,
+                                            layout=LayoutHint.ORGANIC,
+                                            show_legend=False,
+                                        ),
+                                    )
+                                    if selection.node_ids:
+                                        st.markdown("**Strongest correlations of the selected variable(s)**")
+                                        st.dataframe(
+                                            _top_correlations(corr_matrix_precalc, selection.node_ids),
+                                            width="stretch",
+                                            hide_index=True,
+                                        )
+                                    render_graph_exports(
+                                        spec, RenderOptions(key="corr_network_graph"), file_stem="correlation_network"
+                                    )
+                        except Exception as e:
+                            st.error(f"An error occurred: {e}")
+
+            else:
+                no_dataset()

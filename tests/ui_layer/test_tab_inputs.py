@@ -80,8 +80,13 @@ def test_the_statistics_tab_lists_a_column_renamed_in_the_renaming_tab(app: AppT
     """The Statistics tab used the frame the Renaming tab returned; it now reads the analysis rows itself."""
     app.switch_page(nav.page_path("explore")).run()
     _ok(app)
+    app.session_state["home_tab"] = "Columns Renaming"  # only the open tab runs
+    app.run()
     app.text_input(key="rename_age").set_value("age_years")
     next(b for b in app.button if b.label == "Apply Renaming").click().run()
+    _ok(app)
+    app.session_state["home_tab"] = "Dataset Statistics"
+    app.run()
     _ok(app)
     listed = " ".join(m.value for m in app.markdown if "column(s)" in m.value)
     assert "age_years" in listed and "age," not in listed.replace("age_years", "")

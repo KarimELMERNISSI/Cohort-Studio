@@ -400,6 +400,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   uploaders cannot keep their files while it is closed. The controls of a closed tab keep their values while you
   stay on the page; the confirmation before overwriting a criterion is asked again. The dashboard records the quality
   check and the workflow step when it is open, which it is when Validate opens.
+- **Statistics & correlations runs only the open tab.** Each click computed the statistics, rebuilt the renaming
+  table and ran the performance benchmark, which times every analysis on the data. Now only the open tab runs, and
+  its controls keep their values while you stay on the page.
 - **The session keys shared between tabs and pages are declared** in `ui/keys.py`: the module that writes each,
   how long it lives and the modules that read it. A test checks the declarations against the code and against
   what the application clears when the data change.

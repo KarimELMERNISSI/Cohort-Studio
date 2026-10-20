@@ -47,6 +47,12 @@ KEYS: tuple[Key, ...] = (
         note="the open tab of Validate: only that tab runs",
     ),
     Key(
+        "home_tab",
+        "app_pages.home",
+        "page",
+        note="the open tab of Statistics & correlations: only that tab runs",
+    ),
+    Key(
         "anomaly_check_done",
         "app_pages.data_monitoring",
         "dataset",

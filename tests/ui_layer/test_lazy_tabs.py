@@ -21,7 +21,7 @@ NO_PERSIST = {
     "data_editor",
 }  # Streamlit cannot keep them while their tab is closed
 # the modules of the pages that run only their open tab
-LAZY = ("app_pages/data_monitoring.py", "app_pages/data_quality_dashboard.py")
+LAZY = ("app_pages/data_monitoring.py", "app_pages/data_quality_dashboard.py", "app_pages/home.py")
 # widgets deliberately not kept when their tab is closed: a confirmation is asked again
 CONFIRMATIONS = ("mask_overwrite_",)
 
@@ -171,3 +171,34 @@ def test_the_detection_settings_survive_a_page_switch(app: AppTest) -> None:
     assert app.number_input(key="validity_q_lower").value == 0.05
     next(s for s in app.slider if s.label.endswith("Weight")).set_value(2.0).run()  # another click
     assert app.session_state["validity_outlier_params"] == {"lower": 0.05, "upper": 0.99}
+
+
+def test_only_the_open_tab_of_statistics_and_correlations_runs(
+    app: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each click ran the statistics, the renaming table and the benchmark (the benchmark times every analysis)."""
+    from app_pages import home
+
+    calls: list[str] = []
+    display = home.RenameColumnsComponent.display
+    benchmark = home.run_benchmark
+
+    def counted_display(self, *args, **kwargs):
+        calls.append("rename")
+        return display(self, *args, **kwargs)
+
+    def counted_benchmark(*args, **kwargs):
+        calls.append("benchmark")
+        return benchmark(*args, **kwargs)
+
+    monkeypatch.setattr(home.RenameColumnsComponent, "display", counted_display)
+    monkeypatch.setattr(home, "run_benchmark", counted_benchmark)
+    app.switch_page(nav.page_path("explore")).run()
+    _ok(app)
+    assert calls == []  # the statistics tab is open
+    for label, work in (("Columns Renaming", "rename"), ("Performance Benchmark", "benchmark")):
+        calls.clear()
+        app.session_state[home.TAB_KEY] = label
+        app.run()
+        _ok(app)
+        assert calls == [work], label
