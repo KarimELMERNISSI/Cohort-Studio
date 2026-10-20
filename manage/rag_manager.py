@@ -383,7 +383,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         if not self.is_confirmed(needed):
             names = " and ".join(provider_label(r) for r in sorted(needed))
             return False, (
-                f"Cloud providers require explicit confirmation that data may leave this server ({names}). "
+                f"These recipients need your explicit confirmation that data may leave this server ({names}). "
                 "Confirm the data-sharing notice in Settings > AI engine first."
             )
         if provider_clean in CLOUD_PROVIDERS and not effective_key:

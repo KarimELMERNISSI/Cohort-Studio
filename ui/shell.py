@@ -112,7 +112,7 @@ def _ai_status(state: AppState) -> None:
     if status["initialized"]:
         local = status["local"]
         st.badge(
-            f"AI engine: {provider} ({'local' if local else 'data leaves the network'})",
+            f"AI engine: {provider} ({'this machine or your network' if local else 'data leaves the network'})",
             icon=":material/smart_toy:",
             color="green" if local else "orange",
         )

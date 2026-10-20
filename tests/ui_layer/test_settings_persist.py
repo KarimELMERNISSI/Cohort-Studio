@@ -184,3 +184,24 @@ def test_an_untouched_box_of_another_configuration_stops_nothing(
     manager = signed_in.session_state["rag_manager"]
     assert manager.initialized and manager.is_confirmed(frozenset({"mistral"}))
     assert not signed_in.toast
+
+
+def test_a_withdrawal_unticks_the_other_boxes_that_name_the_recipient(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    """Unticking OpenAI withdrew the Claude + OpenAI confirmation too, but its box stayed ticked and confirmed
+    the pair again, without a click, as soon as it was shown."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    _visit(signed_in, "settings")
+    signed_in.selectbox(key="rag_provider_select").select("anthropic").run()
+    signed_in.selectbox(key="rag_claude_embed_provider").select("openai").run()
+    signed_in.checkbox(key="rag_consent::anthropic+openai").check().run()
+    signed_in.selectbox(key="rag_provider_select").select("openai").run()
+    signed_in.checkbox(key="rag_consent::openai").check().run()
+    signed_in.checkbox(key="rag_consent::openai").uncheck().run()
+    manager = signed_in.session_state["rag_manager"]
+    assert manager.confirmed == set()  # every confirmation naming OpenAI went
+    signed_in.selectbox(key="rag_provider_select").select("anthropic").run()
+    assert signed_in.checkbox(key="rag_consent::anthropic+openai").value is False
+    # not confirmed again by showing it
+    assert signed_in.session_state["rag_manager"].confirmed == set()

@@ -34,9 +34,22 @@ TOP_VALUES = 5
 PERCENTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 FEW_LEVELS = 10  # a numeric column with this many distinct values or fewer is described by its values
 PERCENTILE_KEYS = tuple(f"p{round(q * 100)}" for q in PERCENTILES)
-# keys of a taxonomy entry that hold values of the data: an imported or edited map may hold anything there
-DATA_KEYS = frozenset(
-    {"top_values", "values", "range", "sample", "samples", "examples", "rows", "min", "max", "mean", "median"}
+# the keys of a taxonomy entry that describe the variable, not its values: only these reach a prompt (an imported or
+# edited map may hold anything in the others)
+DESCRIPTIVE_KEYS = frozenset(
+    {
+        "standard_name",
+        "description",
+        "unit",
+        "node_type",
+        "role",
+        "relationships",
+        "related_formula_ids",
+        "clinical_usage",
+        "category",
+        "formula",
+        "type",
+    }
 )
 # environment switches of the LangChain tracing service, which would receive every prompt
 TRACING_VARIABLES = ("LANGSMITH_TRACING", "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING")
@@ -117,16 +130,18 @@ def frequent_values(values: Any) -> dict[str, int]:
 
 def taxonomy_for_prompt(taxonomy: Mapping[str, Any]) -> dict[str, Any]:
     """
-    A variable taxonomy as a prompt may carry it: the percentiles of each variable's statistics, and none of the
-    keys that hold values of the data (``DATA_KEYS``). The user's map itself is unchanged.
+    A variable taxonomy as a prompt may carry it (allow-lists): the keys that describe each variable
+    (``DESCRIPTIVE_KEYS``) and the percentiles of its statistics. An entry that is not a mapping is left out. The
+    user's map itself is unchanged.
     """
     out: dict[str, Any] = {}
     for name, entry in taxonomy.items():
-        if isinstance(entry, Mapping):
-            entry = {key: value for key, value in entry.items() if key not in DATA_KEYS}
-            if "stats" in entry:
-                entry["stats"] = safe_stats(entry["stats"])
-        out[name] = entry
+        if not isinstance(entry, Mapping):
+            continue
+        kept = {key: value for key, value in entry.items() if key in DESCRIPTIVE_KEYS}
+        if percentiles := safe_stats(entry.get("stats")):
+            kept["stats"] = percentiles
+        out[name] = kept
     return out
 
 

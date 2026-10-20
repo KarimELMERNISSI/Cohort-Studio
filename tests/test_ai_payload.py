@@ -67,13 +67,13 @@ def test_statistics_outside_the_notice_are_dropped() -> None:
     assert frequent_values({"II": 80, "III": 40, "Mrs Dupont": 1}) == {"II": 80, "III": 40}
     taxonomy = {
         "creatinine": {"unit": "umol/L", "stats": {"min": 31.5, "p50": 88.0}, "range": "31.5 to 912"},
-        "nyha": {"description": "class", "top_values": {"Mrs Dupont": 1}},
-        "note": "text",
+        "nyha": {"description": "class", "top_values": {"Mrs Dupont": 1}, "levels": ["Mrs Dupont"]},
+        "note": "min 18, max 97",
     }
+    # only the keys that describe a variable (an allow-list), and only mappings
     assert taxonomy_for_prompt(taxonomy) == {
         "creatinine": {"unit": "umol/L", "stats": {"p50": 88.0}},
         "nyha": {"description": "class"},
-        "note": "text",
     }
     assert taxonomy["creatinine"]["stats"]["min"] == 31.5  # the user's map itself is unchanged
 

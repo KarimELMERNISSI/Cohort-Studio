@@ -51,7 +51,7 @@ from utils.session_scope import get_current_scope
 PERSIST = "session"
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 PROVIDER_NAMES = {
-    "ollama": "Ollama (local, open-source)",
+    "ollama": "Ollama (this machine or your network, open-source)",
     "gemini": "Google Gemini (cloud)",
     "openai": "OpenAI (cloud)",
     "mistral": "Mistral AI (cloud)",
@@ -243,7 +243,8 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     st.caption(
         "Claude answers; another provider embeds your documents for search. With Ollama your Ollama service "
         "indexes the whole library (on this machine, or at the address below), and only the passages retrieved "
-        "for a question are sent to Claude."
+        "for a question are sent to Claude; Document insight sends it the text of the document whose graph it "
+        "extracts."
     )
     embed_provider = st.selectbox(
         "Embedding provider",
@@ -251,8 +252,9 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         format_func=lambda p: PROVIDER_NAMES.get(p, p),
         index=0,
         key="rag_claude_embed_provider",
-        help="Who turns your documents into vectors for search. Ollama keeps the documents on this server; a cloud "
-        "provider needs its own API key and receives the text of the indexed PDFs.",
+        help="Who turns your documents into vectors for search. Ollama keeps the documents on this machine or at "
+        "its address; a cloud provider needs its own API key and receives the text of the indexed PDFs and every "
+        "search text.",
         persist_state=PERSIST,
     )
     cfg["embedding_provider"] = embed_provider
@@ -265,6 +267,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
             icon=":material/dns:",
             persist_state=PERSIST,
         )
+        _address_badge(cfg["embedding_base_url"])
         return OLLAMA_EMBEDDINGS, "Local embedding model (pull it first: 'ollama pull <model>')."
     catalog = CLOUD_CATALOG[embed_provider]
     typed = st.text_input(
@@ -316,8 +319,14 @@ def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
     manager = st.session_state.rag_manager
     if st.session_state.get(key):
         manager.confirm(*recipients)
-    elif manager.withdraw_consent(*recipients):
+        return
+    if manager.withdraw_consent(*recipients):
         st.session_state["rag_stop_notice"] = STOP_NOTICE
+    # every confirmation naming these recipients went: so do the ticks of their other boxes, which would otherwise
+    # confirm them again when shown
+    for other in [k for k in st.session_state if isinstance(k, str) and k.startswith("rag_consent::")]:
+        if other != key and set(_consent_recipients(other)) & set(recipients):
+            st.session_state[other] = False
 
 
 def _notice(recipients: list[str], cfg: dict) -> str:
