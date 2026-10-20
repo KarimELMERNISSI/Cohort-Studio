@@ -9,9 +9,14 @@ from utils.settings import SettingsError, load_settings
 try:
     load_settings(Path(__file__).with_name(".env"))
 except SettingsError as exc:  # stopped before a module reads the wrong value; the message never shows a value
+    import sys
+
     import streamlit as st
 
-    st.error(f"CohortStudio cannot start: {exc}", icon=":material/gpp_bad:")
+    # .env is read once per server process: a correction applies after a restart
+    message = f"CohortStudio cannot start: {exc} Correct it in the environment or .env, then restart the application."
+    print(message, file=sys.stderr)  # the server log (docker compose logs), where the page is not seen
+    st.error(message, icon=":material/gpp_bad:")
     st.stop()
 
 import streamlit as st

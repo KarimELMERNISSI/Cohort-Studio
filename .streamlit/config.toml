@@ -1,6 +1,11 @@
 # Streamlit runtime configuration (committed). The application's settings and secrets come from the environment
 # and .env only (utils/settings.py, template .env.example); a .streamlit/secrets.toml is not read.
 
+[secrets]
+# No secrets file: Streamlit would otherwise copy every value of .streamlit/secrets.toml into the environment when the
+# server starts, over the environment and .env, before the settings are validated (M5b review).
+files = []
+
 [browser]
 # No usage statistics leave the server (privacy requirement for clinical deployments).
 gatherUsageStats = false

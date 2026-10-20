@@ -429,8 +429,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   expected, never its value. Before, some wrong values counted silently as others (`CMP_LOG_LEVEL=verbose` as INFO,
   `CMP_OFFLINE=enabled` as off), and some failed later (`CMP_MI_MAX_WORKERS=0` at the first imputation). Check your
   `.env` when you update: a value accepted before may now be refused.
-- A `.streamlit/secrets.toml` is not read (the settings come from the environment and `.env` only): its presence is
-  logged at start-up, so that its values can be moved to `.env` and the file deleted.
+- **A `.streamlit/secrets.toml` is no longer read.** Streamlit copied every value of that file into the environment
+  when the server started, over the environment and `.env`: a `CMP_IAM_PROVIDER="disabled"` left there turned
+  sign-in off without a word. The committed configuration now turns it off (`[secrets] files = []` in
+  `.streamlit/config.toml`), so the settings come from the environment and `.env` only. A file that still exists is
+  named in the start-up log. **If you kept values there, move them to `.env` before you update.**
+- A setting that stops start-up is also written to the server log (`docker compose logs`), with the reminder that
+  `.env` is read once: correct it, then restart.
 - **An empty value counts as unset everywhere**, as `.env.example`'s empty lines mean: `CMP_IAM_CACHE_TTL=` stopped
   the identity manager, and `CMP_RANDOM_SEED=` every statistics module at import. Every part of the application now
   reads its settings from the one object, the log redaction included (from the raw environment, so that a wrong

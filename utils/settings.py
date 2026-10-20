@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -166,15 +167,6 @@ NAMES: tuple[str, ...] = tuple(
     for section in _SECTIONS.values()
     for field in section.model_fields.values()
 )
-# Variables of the environment that are not settings: the processes' own (a parallel imputation's worker, the
-# interpreter, Streamlit's options, read before main.py runs) and third-party switches set by the app
-PROCESS_VARIABLES = (
-    "CMP_MI_SUBPROCESS",
-    "PYTHONPATH",
-    "__PYVENV_LAUNCHER__",
-    "LANGSMITH_*",
-    "STREAMLIT_*",
-)
 
 
 def _validate() -> Settings:
@@ -209,12 +201,19 @@ def get_settings() -> Settings:
 
 
 _loaded: set[str] = set()
+_load_lock = (
+    threading.Lock()
+)  # the first runs of several sessions: .env is loaded before any of them validates
 _warned = False
 
 
 def _secrets_toml(app_folder: Path | None) -> list[str]:
     """Where a Streamlit secrets file exists, named without its path (the path names the server's account)."""
-    places = {"the working folder": Path.cwd(), "the home folder": Path.home()}
+    places = {"the working folder": Path.cwd()}
+    try:
+        places["the home folder"] = Path.home()
+    except RuntimeError, OSError:  # no home folder (a service account): nothing to look at there
+        pass
     if app_folder is not None:
         places["the application folder"] = app_folder
     found: dict[Path, str] = {}
@@ -233,22 +232,24 @@ def load_settings(env_file: str | Path | None = None) -> Settings:
     """
     global _warned
     app_folder = None
-    if env_file is not None:
-        path = Path(env_file).resolve()
-        app_folder = path.parent
-        if str(path) not in _loaded:
-            _loaded.add(str(path))
-            import dotenv  # through the module: the test suite turns load_dotenv into a no-op
+    with _load_lock:
+        if env_file is not None:
+            path = Path(env_file).resolve()
+            app_folder = path.parent
+            if str(path) not in _loaded:
+                import dotenv  # through the module: the test suite turns load_dotenv into a no-op
 
-            dotenv.load_dotenv(path, override=False)
-    if not _warned:
-        _warned = True
-        for place in _secrets_toml(app_folder):
-            logger.warning(
-                "A .streamlit/secrets.toml exists in %s and is not read: the settings come from the environment "
-                "and .env only. Move its values to .env, then delete it.",
-                place,
-            )
+                dotenv.load_dotenv(path, override=False)
+                _loaded.add(str(path))
+        if not _warned:
+            _warned = True
+            for place in _secrets_toml(app_folder):
+                logger.warning(
+                    "A .streamlit/secrets.toml exists in %s and is not read ([secrets] files = [] in "
+                    ".streamlit/config.toml): the settings come from the environment and .env only. Move its "
+                    "values to .env, then delete it.",
+                    place,
+                )
     return get_settings()
 
 
@@ -274,7 +275,6 @@ def reset_settings() -> None:
 
 __all__ = [
     "NAMES",
-    "PROCESS_VARIABLES",
     "SECRET_VARIABLE",
     "Settings",
     "SettingsError",

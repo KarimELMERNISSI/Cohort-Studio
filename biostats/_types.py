@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import os
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+
+# the seeds of numpy's legacy generators and of scikit-learn are below 2**32: the settings' own field
+_SEED = TypeAdapter(Annotated[int, Field(ge=0, le=2**32 - 1)])
 
 
 def seed_from(value: str | None) -> int:
     """
-    The seed a CMP_RANDOM_SEED value gives, parsed as utils.settings parses it (a test checks they agree): biostats
-    imports no first-party package, so it reads its seed itself until the seed moves into the analysis specs (M8).
-    An empty value is unset.
+    The seed a CMP_RANDOM_SEED value gives, parsed by pydantic as utils.settings parses it (a test checks they agree):
+    biostats imports no first-party package, so it reads its seed itself until the seed moves into the analysis specs
+    (M8). An empty value is unset.
     """
-    return int((value or "").strip() or "20260101")
+    text = (value or "").strip()
+    return _SEED.validate_python(text) if text else 20260101
 
 
 RANDOM_STATE: int = seed_from(os.getenv("CMP_RANDOM_SEED"))

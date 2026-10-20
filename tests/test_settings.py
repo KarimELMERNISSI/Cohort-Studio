@@ -172,9 +172,45 @@ def test_the_statistics_seed_is_read_as_the_settings_read_it(env: pytest.MonkeyP
     """biostats reads its seed itself (it imports no first-party package): its parsing must agree."""
     from biostats._types import seed_from
 
-    for value in (None, "", " 7 ", "123", "4294967295"):
+    for value in (None, "", " 7 ", "123", "4294967295", "20260101.0"):
         if value is None:
             env.delenv("CMP_RANDOM_SEED", raising=False)
         else:
             env.setenv("CMP_RANDOM_SEED", value)
         assert seed_from(value) == cfg.get_settings().statistics.random_seed, value
+    # refused by both: start-up stops on the setting, and the engine never reads a seed the settings refused
+    for value in ("-1", "abc", "4294967296", "1.5"):
+        env.setenv("CMP_RANDOM_SEED", value)
+        with pytest.raises(cfg.SettingsError):
+            cfg.get_settings()
+        with pytest.raises(ValueError):  # pydantic's ValidationError is a ValueError
+            seed_from(value)
+
+
+def test_streamlit_reads_no_secrets_file() -> None:
+    """Streamlit copied every value of .streamlit/secrets.toml into the environment when the server started, over the
+    environment and .env, before the settings were validated: the committed configuration turns that off."""
+    import subprocess
+    import sys
+    import tomllib
+
+    config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert config["secrets"]["files"] == []
+    probe = "import streamlit.config as c; c.get_config_options(force_reparse=True); print(c.get_option('secrets.files'))"
+    out = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+    assert out.stdout.strip().splitlines()[-1] == "[]"
+
+
+def test_a_server_without_a_home_folder_starts(env: pytest.MonkeyPatch) -> None:
+    def no_home() -> Path:
+        raise RuntimeError("Could not determine home directory.")
+
+    env.setattr(Path, "home", staticmethod(no_home))
+    assert cfg.load_settings().paths.data_root == "./data"
