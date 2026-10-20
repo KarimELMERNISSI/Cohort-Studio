@@ -26,7 +26,7 @@ jobs:
           use-public-rspm: true
 
       - name: Install the R packages (binary builds)
-        run: Rscript -e 'install.packages(c("mice", "mitml", "survival", "jsonlite", "broom"))'
+        run: Rscript -e 'install.packages(c("mice", "mitml", "survival", "sandwich", "jsonlite", "broom"))'
 
       - name: Compute the reference values
         run: |

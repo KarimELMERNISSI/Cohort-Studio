@@ -10,6 +10,13 @@ Type II tests: in a model without interactions, the Type II F test of a covariat
 factor at once) is the extra-sum-of-squares test of adding it last, which equals the Wald F test of its
 coefficients; partial eta squared = F q / (F q + residual df). Adjusted (least-squares) means are the
 model predictions for each group at the mean of every other covariate (Searle, Speed & Milliken 1980).
+
+Robust variances (``cov_type="HC3"``): the coefficients, the Wald tests and the adjusted means use the HC3
+covariance (MacKinnon & White 1985), which does not assume equal variances and suits small samples (Long &
+Ervin 2000), with the same t and F reference distributions as R's ``lmtest::coeftest`` and
+``car::Anova(white.adjust = "hc3")``. The sums of squares and partial eta squared still describe the OLS fit. In
+a one-way layout the HC3 variance of a group mean is s^2 / (n - 1) for the group's own s^2 and n: the groups are
+not pooled into one variance, as in Welch's ANOVA.
 """
 
 from __future__ import annotations
@@ -35,6 +42,18 @@ REFERENCES.setdefault(
     "Cohen J (1973). Eta-squared and partial eta-squared in fixed factor ANOVA designs. Educ Psychol Meas "
     "33:107-112.",
 )
+REFERENCES.setdefault(
+    "mackinnon1985",
+    "MacKinnon JG, White H (1985). Some heteroskedasticity-consistent covariance matrix estimators with improved "
+    "finite sample properties. J Econom 29:305-325.",
+)
+REFERENCES.setdefault(
+    "long2000",
+    "Long JS, Ervin LH (2000). Using heteroscedasticity consistent standard errors in the linear regression model. "
+    "Am Stat 54:217-224.",
+)
+
+COV_TYPES = ("nonrobust", "HC3")
 
 
 @dataclass
@@ -54,6 +73,9 @@ class LinearModelResult:
     fitted: np.ndarray
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    cov_type: str = (
+        "nonrobust"  # "HC3": robust standard errors and tests (unequal variances allowed)
+    )
 
 
 @dataclass
@@ -92,8 +114,14 @@ def linear_regression(
     *,
     levels: Mapping[str, Sequence[str]] | None = None,
     alpha: float = 0.05,
+    cov_type: str = "nonrobust",
 ) -> LinearModelResult:
-    """OLS of ``outcome`` on ``covariates`` (complete cases); ``levels`` fixes the factor levels."""
+    """
+    OLS of ``outcome`` on ``covariates`` (complete cases); ``levels`` fixes the factor levels. ``cov_type="HC3"``
+    gives robust standard errors and tests, which do not assume equal variances.
+    """
+    if cov_type not in COV_TYPES:
+        raise ValueError(f"cov_type is one of {list(COV_TYPES)}, not {cov_type!r}")
     frame = df[[outcome, *covariates]].dropna()
     y = pd.to_numeric(frame[outcome], errors="coerce")
     if y.isna().any():
@@ -105,7 +133,17 @@ def linear_regression(
     res = sm.OLS(y.to_numpy(dtype=float), x).fit()
     names = list(x.columns)
     params = np.asarray(res.params, dtype=float)
-    vcov = np.asarray(res.cov_params(), dtype=float)
+    classical = np.asarray(res.cov_params(), dtype=float)
+    vcov = classical
+    if cov_type == "HC3":
+        xa = x.to_numpy(dtype=float)
+        leverage = np.einsum("ij,jk,ik->i", xa, np.linalg.pinv(xa.T @ xa), xa)
+        if np.any(leverage > 1 - 1e-8):
+            raise ValueError(
+                "a row has leverage 1 (a group with a single value, for example): its robust (HC3) variance "
+                "cannot be estimated"
+            )
+        vcov = np.asarray(res.cov_HC3, dtype=float)
     se = np.sqrt(np.diag(vcov))
     df_resid = float(res.df_resid)
     crit = stats.t.ppf(1 - alpha / 2, df_resid)
@@ -126,15 +164,16 @@ def linear_regression(
     for source, cols in terms_of.items():
         idx = [names.index(c) for c in cols]
         f_stat = _wald_block(params, vcov, idx)
+        f_ols = _wald_block(params, classical, idx)  # the sums of squares describe the OLS fit
         q = len(idx)
         rows.append(
             {
                 "source": source,
                 "df": float(q),
-                "sum_sq": f_stat * q * rss / df_resid,
+                "sum_sq": f_ols * q * rss / df_resid,
                 "F": f_stat,
                 "p": float(stats.f.sf(f_stat, q, df_resid)),
-                "partial_eta2": f_stat * q / (f_stat * q + df_resid),
+                "partial_eta2": f_ols * q / (f_ols * q + df_resid),
             }
         )
     rows.append(
@@ -164,8 +203,10 @@ def linear_regression(
         type2=pd.DataFrame(rows),
         residuals=np.asarray(res.resid, dtype=float),
         fitted=np.asarray(res.fittedvalues, dtype=float),
-        references=[REFERENCES["cohen1973"]],
+        references=[REFERENCES["cohen1973"]]
+        + ([REFERENCES["mackinnon1985"], REFERENCES["long2000"]] if cov_type == "HC3" else []),
         warnings=warnings,
+        cov_type=cov_type,
     )
 
 
@@ -227,12 +268,18 @@ def ancova(
     *,
     levels: Mapping[str, Sequence[str]] | None = None,
     alpha: float = 0.05,
+    cov_type: str = "nonrobust",
 ) -> AncovaResult:
-    """ANCOVA: group differences in ``outcome`` adjusted for ``covariates`` (Type II F test, adjusted means)."""
+    """
+    ANCOVA: group differences in ``outcome`` adjusted for ``covariates`` (Type II F test, adjusted means);
+    ``cov_type="HC3"`` for robust tests and means that do not assume equal variances.
+    """
     covs = [c for c in covariates if c not in (outcome, group)]
     frame = df[[outcome, group, *covs]].dropna()
     frame = frame.assign(**{group: frame[group].astype(str)})
-    fit = linear_regression(frame, outcome, [group, *covs], levels=levels, alpha=alpha)
+    fit = linear_regression(
+        frame, outcome, [group, *covs], levels=levels, alpha=alpha, cov_type=cov_type
+    )
     if not fit.terms_of.get(group):
         raise ValueError(f"{group} needs at least two levels")
     means = adjusted_means(fit, frame, group, alpha=alpha)
@@ -244,4 +291,11 @@ def ancova(
     )
 
 
-__all__ = ["AncovaResult", "LinearModelResult", "adjusted_means", "ancova", "linear_regression"]
+__all__ = [
+    "COV_TYPES",
+    "AncovaResult",
+    "LinearModelResult",
+    "adjusted_means",
+    "ancova",
+    "linear_regression",
+]

@@ -203,15 +203,23 @@ with Rubin's rules (van Buuren 2018). The complete-case analysis is shown under 
 | Page | Pooled analyses |
 | --- | --- |
 | Survival & regression | Kaplan-Meier curves (pooled on the log(-log) scale, median read from the pooled curve), log-rank test (D2), Cox, logistic and count models (ratios pooled on the log scale, D1 test of each factor) |
-| Hypothesis tests > Analysis | Welch t-test (two groups); group means and a D1 test (three or more groups); odds ratio, risk ratio and risk difference (binary variable); chi-square test of independence (D2); ANCOVA (Type II tests by D1, adjusted means, R2 by Harel's method) |
+| Hypothesis tests > Analysis | Welch t-test (two groups); group means with robust (HC3) variances and a D1 test (three or more groups); odds ratio, risk ratio and risk difference (binary variable); chi-square test of independence (D2); ANCOVA (Type II tests by D1, adjusted means, R2 by Harel's method) |
 | Hypothesis tests > Paired, rates & stratified | paired and one-sample t-tests |
 
 **Test selection.** The group comparison pooled over the imputed datasets uses the recommended analysis by
-default. With *Choose the method*, a numeric variable in two groups can be compared with Student's t-test (equal
-variances) instead of Welch's, pooled the same way. The page then warns that Welch's test is recommended: it does
-not assume equal variances and loses little power when they are equal (Delacre 2017). The summary and the study
-dossier mark the test as chosen. The other variables have a single pooled analysis, and rank tests and Fisher's
-exact test have no pooling rule: run them on the observed data.
+default. Neither recommended analysis of a numeric variable assumes equal variances, as on the observed data:
+
+- **two groups:** Welch's t-test;
+- **three groups or more:** a linear model with robust (HC3) variances, tested by D1 (MacKinnon & White 1985;
+  Long & Ervin 2000). Welch's ANOVA, used on the observed data, has no pooling rule; the robust model also gives
+  each group its own variance. Each group needs two values or more: deselect or merge a group of one value.
+
+With *Choose the method*, a numeric variable in two groups can be compared with Student's t-test instead, and three
+groups or more with the equal-variance linear model (a one-way ANOVA), each pooled the same way. The page then
+warns that the recommended analysis does not assume equal variances and stays valid when they are equal (Delacre
+2017 for Welch's test). The summary and the study dossier mark the analysis as chosen. Categorical variables have
+a single pooled analysis, and rank tests and Fisher's exact test have no pooling rule: run them on the observed
+data.
 
 How to read a pooled table:
 

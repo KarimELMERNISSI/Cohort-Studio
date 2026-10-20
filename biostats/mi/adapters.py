@@ -153,7 +153,13 @@ class LinearAdapter(Adapter):
     kind = "linear"
 
     def extract(self, result: Any) -> Extract:
-        extra: dict[str, Any] = {"r2": result.r2, "r2_adj": result.r2_adj, "n": result.n}
+        extra: dict[str, Any] = {
+            "r2": result.r2,
+            "r2_adj": result.r2_adj,
+            "n": result.n,
+            "cov_type": result.cov_type,  # HC3: the pooled tests and means do not assume equal variances
+            "references": list(result.references),
+        }
         means = getattr(result, "adjusted_means", None)
         if means is not None:
             extra["adjusted_means"] = means.set_index("group")[["mean", "se"]]
@@ -182,6 +188,8 @@ class LinearAdapter(Adapter):
         n = int(extracts[0].extra["n"])
         out: dict[str, Any] = {
             "r2": pool_r_squared([e.extra["r2"] for e in extracts], n=n, alpha=alpha),
+            "cov_type": extracts[0].extra.get("cov_type", "nonrobust"),
+            "references": extracts[0].extra.get("references", []),
         }
         if all(e.extra["r2_adj"] >= 0 for e in extracts):
             out["r2_adj"] = pool_r_squared([e.extra["r2_adj"] for e in extracts], n=n, alpha=alpha)

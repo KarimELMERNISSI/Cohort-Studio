@@ -199,3 +199,50 @@ def test_analyze_mi_on_the_mice_imputations_matches_mice(reference: dict, kind: 
     assert group.statistic == pytest.approx(
         expected.get("statistic", expected.get("F.value")), rel=tol
     )
+
+
+ROBUST_TERMS = {"Intercept": "const", "groupb": "group_b", "groupc": "group_c"}
+
+
+def test_the_robust_linear_model_matches_sandwich_and_mitml(reference: dict) -> None:
+    """The groups with HC3 variances (sandwich::vcovHC), pooled by mitml (testEstimates, testConstraints D1)."""
+    robust = reference.get("robust")
+    if robust is None:
+        pytest.skip(
+            "the HC3 reference values come with the next run of the 'R reference fixtures' workflow"
+        )
+    mi = MIData.from_long(pd.read_csv(COMPLETED))
+    levels = mi.levels(["group"])
+    first = linear_regression(
+        mi.complete(1, ["y", "group"]), "y", ["group"], levels=levels, cov_type="HC3"
+    )
+    terms = [ROBUST_TERMS[t] for t in robust["first_vcov"]["terms"]]
+    np.testing.assert_allclose(
+        first.vcov.loc[terms, terms].to_numpy(),
+        np.asarray(robust["first_vcov"]["matrix"]),
+        rtol=1e-10,
+    )
+    result = analyze_mi(
+        lambda d: linear_regression(d, "y", ["group"], levels=levels, cov_type="HC3"),
+        mi,
+        columns=["y", "group"],
+        complete_case=False,
+    )
+    for row in robust["table"]:
+        term = result.term(ROBUST_TERMS[row["term"]])
+        for ours, theirs in [
+            (term.estimate, row["estimate"]),
+            (term.se, row["std_error"]),
+            (term.statistic, row["statistic"]),
+            (term.df, row["df"]),
+            (term.p_value, row["p_value"]),
+            (term.riv, row["riv"]),
+            (term.fmi, row["fmi"]),
+        ]:
+            assert ours == pytest.approx(theirs, rel=1e-8, abs=1e-12), row["term"]
+    d1 = result.tests["group"]
+    expected = robust["d1"]
+    assert d1.statistic == pytest.approx(expected["statistic"], rel=1e-8)
+    assert d1.df1 == expected["df1"] and d1.df2 == pytest.approx(expected["df2"], rel=1e-8)
+    assert d1.p_value == pytest.approx(expected["p_value"], rel=1e-8, abs=1e-12)
+    assert d1.riv == pytest.approx(expected["riv"], rel=1e-8)

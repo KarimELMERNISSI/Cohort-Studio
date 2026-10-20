@@ -170,6 +170,32 @@ def test_ancova_pools_the_adjusted_means() -> None:
     assert (means["fmi"] >= 0).all()
 
 
+def test_a_robust_linear_model_is_pooled_with_its_robust_variances() -> None:
+    # three groups or more under MI: the HC3 model, poolable by D1, gives each group its own variance
+    mi, _ = _mi()
+    levels = {"site": ["Ettelbruck", "Luxembourg", "Metz"]}
+    result = analyze_mi(lambda d: ancova(d, "sbp", "site", levels=levels, cov_type="HC3"), mi)
+    fits = [ancova(d, "sbp", "site", levels=levels, cov_type="HC3") for _, d in mi.completed()]
+    expected = pool_terms(
+        [f.params for f in fits], covariances=[f.vcov for f in fits], dfcom=fits[0].df_resid
+    )
+    for term in ("site_Luxembourg", "site_Metz"):
+        assert result.term(term).ubar == pytest.approx(
+            expected.term(term).ubar
+        )  # mean of the HC3 variances
+        assert result.term(term).se == pytest.approx(expected.term(term).se)
+    assert result.tests["site"].method == "D1"
+    assert result.tests["site"].statistic == pytest.approx(
+        expected.wald(["site_Luxembourg", "site_Metz"]).statistic
+    )
+    assert result.extra["cov_type"] == "HC3" and any(
+        "Long JS" in r for r in result.extra["references"]
+    )
+    classical = analyze_mi(lambda d: ancova(d, "sbp", "site", levels=levels), mi)
+    assert classical.extra["cov_type"] == "nonrobust"
+    assert classical.term("site_Metz").se != pytest.approx(result.term("site_Metz").se, rel=1e-6)
+
+
 def test_logistic_regression_reports_odds_ratios_factor_tests_and_counted_warnings() -> None:
     mi, _ = _mi()
     levels = mi.levels(["smoker", "site"])

@@ -36,6 +36,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Now:** the ratios are then not pooled. The risk difference still is, and a warning says why.
   - **Sensitivity analysis:** a new option adds 0.5 to every cell of every table, so that the ratios can be pooled.
     The page and the dossier label that run as a sensitivity analysis.
+- **Multiple imputation: three groups or more are compared without assuming equal variances.**
+  - **Before:** on the observed data, three groups or more are compared with Welch's ANOVA, which gives each group
+    its own variance. Pooled over the imputed datasets, they were compared with a linear model that assumes equal
+    variances (a one-way ANOVA), because Welch's ANOVA has no pooling rule.
+  - **Now:** the pooled comparison uses the linear model with robust (HC3) variances (MacKinnon & White 1985; Long
+    & Ervin 2000), tested by D1. Like Welch's ANOVA it does not assume equal variances, and it can be pooled. The
+    group means are pooled with their robust standard errors.
+  - **When the variances differ, the results change.** In a simulation of three groups of 10, 20 and 40 values,
+    where the smallest group varied most and the means were equal, the equal-variance test rejected at the 5% level
+    in 23% of 300 runs, the robust test in 7%.
+  - **Choose the method** keeps the equal-variance model, with a warning; the summary and the dossier mark it as
+    chosen.
+  - **A group with a single value** has no variance of its own: the robust model then asks to deselect or merge it,
+    or to choose the equal-variance model.
+  - The R reference script compares the result with `sandwich::vcovHC` and `mitml` (the check runs once the
+    reference values are regenerated).
 - **Transformations (Enrich > Create new variables) replay to the same table.** The page computed the new
   columns with its own copy of the transformation engine; the replay of the trace used the shared one.
   - Applying a transformation twice gave `age_Z-Score_Standardization_1` on the page, but a second column with
@@ -213,9 +229,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Significance brackets give "p < 0.001" rather than scientific notation, here and on Visualize.
 - **Group comparison pooled over the imputed datasets: Test selection.** *Recommended* keeps the automatic choice.
   *Choose the method* lets a numeric variable in two groups be compared with Student's t-test (equal variances)
-  instead of Welch's, pooled the same way. A warning says why Welch's is recommended, and the summary and the
-  dossier mark the test as chosen. The page says which analyses have no pooled alternative (three or more groups,
-  categorical variables) and which have no pooling rule (rank tests, Fisher's exact test).
+  instead of Welch's, pooled the same way, and three groups or more with the equal-variance linear model (see
+  Statistics). A warning says why the recommended analysis is recommended, and the summary and the dossier mark
+  the chosen one. The page says which analyses have a single pooled analysis (categorical variables) and which
+  have no pooling rule (rank tests, Fisher's exact test).
 - **Enrich > Create new variables: the columns chosen for a transformation stay chosen.** Applying a transformation
   adds columns to the draft, and the column list then started again empty, so a second transformation of the same
   columns meant choosing them again. The three column lists (encoding, PCA and FAMD, the other methods) now keep

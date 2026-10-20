@@ -12,6 +12,7 @@ suppressPackageStartupMessages({
   library(mice)
   library(mitml)
   library(survival)
+  library(sandwich)
   library(jsonlite)
 })
 
@@ -104,6 +105,39 @@ models <- lapply(names(fits), function(k) {
 r2 <- pool.r.squared(fits$lm)
 r2_adj <- pool.r.squared(fits$lm, adjusted = TRUE)
 
+# 5. The groups compared with robust (HC3) variances: lm per dataset, sandwich::vcovHC, pooled by mitml ----------
+robust_fit <- function(d) {
+  fit <- lm(y ~ group, data = d)
+  b <- coef(fit)
+  v <- vcovHC(fit, type = "HC3")
+  terms <- sub("(Intercept)", "Intercept", names(b), fixed = TRUE)  # syntactic names for testConstraints
+  names(b) <- terms
+  dimnames(v) <- list(terms, terms)
+  list(coef = b, vcov = v, df = df.residual(fit))
+}
+robust_fits <- lapply(complete(imp, "all"), robust_fit)
+qhat <- lapply(robust_fits, `[[`, "coef")
+uhat <- lapply(robust_fits, `[[`, "vcov")
+robust_dfcom <- robust_fits[[1]]$df
+estimates <- as.data.frame(testEstimates(qhat = qhat, uhat = uhat, df.com = robust_dfcom)$estimates)
+robust_d1 <- as.data.frame(
+  testConstraints(qhat = qhat, uhat = uhat, constraints = c("groupb", "groupc"), method = "D1", df.com = robust_dfcom)$test
+)
+robust <- list(
+  formula = "y ~ group",
+  dfcom = robust_dfcom,
+  first_vcov = list(terms = names(qhat[[1]]), matrix = unname(uhat[[1]])),
+  table = data.frame(
+    term = rownames(estimates), estimate = estimates[["Estimate"]], std_error = estimates[["Std.Error"]],
+    statistic = estimates[["t.value"]], df = estimates[["df"]], p_value = estimates[["P(>|t|)"]],
+    riv = estimates[["RIV"]], fmi = estimates[["FMI"]]
+  ),
+  d1 = list(
+    statistic = robust_d1[["F.value"]][1], df1 = robust_d1[["df1"]][1], df2 = robust_d1[["df2"]][1],
+    p_value = robust_d1[["P(>F)"]][1], riv = robust_d1[["RIV"]][1]
+  )
+)
+
 write_json(
   list(
     meta = list(
@@ -111,10 +145,12 @@ write_json(
       mice = as.character(packageVersion("mice")),
       mitml = as.character(packageVersion("mitml")),
       survival = as.character(packageVersion("survival")),
+      sandwich = as.character(packageVersion("sandwich")),
       seed = 20261014, m = 5, n = n
     ),
     scalar = scalar,
     models = models,
+    robust = robust,
     r_squared = list(
       estimate = r2[1, 1], low = r2[1, 2], high = r2[1, 3], fmi = r2[1, 4],
       adjusted_estimate = r2_adj[1, 1], adjusted_low = r2_adj[1, 2], adjusted_high = r2_adj[1, 3]

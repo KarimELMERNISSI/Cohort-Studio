@@ -314,16 +314,19 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
             analysis = "Welch t-test" if item.kind == "welch" else "Student t-test (equal variances, chosen)"
             rows.append({"Variable": target, "Analysis": analysis, "Result": _test_line(test)})
             blocks.references.extend(test.references)
-        elif item.kind == "anova":
+        elif item.kind in ("hc3", "anova"):
             group = next(iter(res.tests))
             d1 = res.tests[group]
             rows.append(
                 {
                     "Variable": target,
-                    "Analysis": "Linear model on the groups (D1)",
+                    "Analysis": "Linear model on the groups, robust variances (HC3; D1)"
+                    if item.kind == "hc3"
+                    else "Linear model on the groups, equal variances (chosen; D1)",
                     "Result": f"F = {_num(d1.statistic)}, df = {_num(d1.df1, 4)}, {_num(d1.df2, 4)}; {_peq(d1.p_value)}",
                 }
             )
+            blocks.references.extend(res.extra.get("references", []))
         elif item.kind == "twobytwo" and "odds_ratio" in res.table.names:
             t = res.term("odds_ratio")
             sensitivity = getattr(item, "haldane", "if_zero") == "always"

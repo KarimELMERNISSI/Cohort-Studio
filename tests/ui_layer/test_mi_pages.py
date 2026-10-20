@@ -13,6 +13,8 @@ from ui import nav
 
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = str(ROOT / "main.py")
+# the tutorial's four sites; "Metz " and the other spelling variants hold one to three rows
+SITES = ["Esch-sur-Alzette", "Ettelbruck", "Luxembourg", "Metz"]
 
 
 def _ok(at: AppTest) -> None:
@@ -108,13 +110,16 @@ def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
         app.selectbox(key="mi_cmp_detail").select(target).run()
         _ok(app)
 
-    app.selectbox(key="mi_cmp_group").select(
-        "site"
-    ).run()  # three or more groups: D1 on a linear model
+    # three or more groups: D1 on a linear model with robust (HC3) variances, as Welch's ANOVA on the observed data
+    app.selectbox(key="mi_cmp_group").select("site").run()
+    app.multiselect(key="mi_cmp_levels::site").set_value(
+        SITES
+    ).run()  # the four sites, not the variants
     app.button(key="mi_cmp_run").click().run()
     _ok(app)
     by_site = _stored(app, "univariate_mi")["results"]["hba1c_pct"]
-    assert by_site.kind == "anova" and by_site.result.tests["site"].method == "D1"
+    assert by_site.kind == "hc3" and by_site.result.tests["site"].method == "D1"
+    assert by_site.result.extra["cov_type"] == "HC3"
 
     app.session_state["epi_analysis_mode"] = "Multivariate (ANCOVA/Regression)"
     app.run()
@@ -152,6 +157,54 @@ def test_the_pooled_two_group_test_can_be_chosen_with_a_warning(app: AppTest) ->
     _, table = _pooled_comparison_blocks(_stored(app, "univariate_mi")).tables[0]  # the dossier
     assert table["Analysis"].tolist() == ["Student t-test (equal variances, chosen)"]
     app.radio(key="mi_cmp_selection").set_value("Recommended").run()
+
+
+def test_the_pooled_test_of_three_groups_can_be_chosen_with_a_warning(app: AppTest) -> None:
+    """Recommended (robust HC3 variances) or chosen: the equal-variance model, with why HC3 is recommended."""
+    from manage.report_tables import _pooled_comparison_blocks
+
+    app.session_state["analysis_data_mode"] = "multiple"
+    app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"
+    app.switch_page(nav.page_path("analyze")).run()
+    _ok(app)
+    app.selectbox(key="mi_cmp_group").select("site").run()
+    app.multiselect(key="mi_cmp_levels::site").set_value(SITES).run()
+    app.multiselect(key="mi_cmp_targets").set_value(["hba1c_pct"]).run()
+    app.radio(key="mi_cmp_selection").set_value("Choose the method").run()
+    assert app.selectbox(key="mi_cmp_more_groups").value == "hc3"
+    app.selectbox(key="mi_cmp_more_groups").select("anova").run()
+    assert any("The one-way ANOVA assumes equal variances" in w.value for w in app.warning)
+    app.button(key="mi_cmp_run").click().run()
+    _ok(app)
+    item = _stored(app, "univariate_mi")["results"]["hba1c_pct"]
+    assert item.kind == "anova" and item.result.extra["cov_type"] == "nonrobust"
+    _, table = _pooled_comparison_blocks(_stored(app, "univariate_mi")).tables[0]  # the dossier
+    assert table["Analysis"].tolist() == [
+        "Linear model on the groups, equal variances (chosen; D1)"
+    ]
+    app.radio(key="mi_cmp_selection").set_value("Recommended").run()
+
+
+def test_a_group_of_one_value_is_refused_by_the_robust_model() -> None:
+    """HC3 gives each group its own variance, which one value does not have: the message says what to do."""
+    import numpy as np
+    import pandas as pd
+
+    from app_pages.analysis_pooled import compare_pooled
+    from biostats.mi import MIAnalysisError, MIData
+
+    rng = np.random.default_rng(5)
+    base = pd.DataFrame(
+        {"site": ["Metz"] * 20 + ["Luxembourg"] * 20 + ["Metz "], "sbp": rng.normal(130, 10, 41)}
+    )
+    base.loc[[3, 25], "sbp"] = np.nan
+    completed = [base.fillna({"sbp": 130.0 + i}) for i in range(3)]
+    mi = MIData.from_completed(base, completed, methods={"sbp": "pmm"})
+    levels = ["Luxembourg", "Metz", "Metz "]
+    with pytest.raises(MIAnalysisError, match="Metz␣ has a single value, while the robust"):
+        compare_pooled(mi, "site", levels, "sbp", numeric=True)
+    chosen = compare_pooled(mi, "site", levels, "sbp", numeric=True, more_groups="anova")
+    assert chosen.kind == "anova"  # the equal-variance model still runs
 
 
 def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:

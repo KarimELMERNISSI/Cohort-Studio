@@ -45,7 +45,8 @@ NOT_POOLABLE: dict[str, NotPoolable] = {
         NotPoolable(
             analysis="kruskal_wallis",
             reason="A rank statistic is not an estimate with a variance.",
-            alternative="Fit a linear regression on the groups and test the group terms jointly with D1; the D2 "
+            alternative="Fit a linear regression on the groups, with robust (HC3) variances when the groups' "
+            "variances may differ, and test the group terms jointly with D1 (on the log scale if skewed); the D2 "
             "combination of the Kruskal-Wallis chi-square is only an approximation.",
         ),
         NotPoolable(
