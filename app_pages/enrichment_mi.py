@@ -13,8 +13,6 @@ and re-computed by the replay. The panel runs as a fragment so its widgets do no
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -284,15 +282,26 @@ def render_multiple_imputation() -> None:
                 by=None if by == "(no strata)" else by,
                 survival=survival,
             )
-            bar = st.progress(0.0, text="Imputing")
             from biostats.mi import impute
+            from manage.compute import mi_workers
 
-            run = impute(
-                frame,
-                spec,
-                progress=lambda f: bar.progress(f, text=f"Imputing: {f:.0%}"),
-                workers=max(1, (os.cpu_count() or 2) - 1) if parallel else 1,
-            )
+            # the worker processes are shared by every session of the server: a lease grants what is free
+            budget = mi_workers()
+            with budget.lease(min(spec.m, budget.total) if parallel else 1) as workers:
+                label = f"Imputing in {workers} processes" if workers > 1 else "Imputing"
+                if parallel and workers == 1:
+                    st.caption(
+                        "This server allows one process for imputations (CMP_MI_MAX_WORKERS)."
+                        if budget.total <= 1
+                        else "Other imputations use the processor cores of this server: this one runs in one."
+                    )
+                bar = st.progress(0.0, text=label)
+                run = impute(
+                    frame,
+                    spec,
+                    progress=lambda f: bar.progress(f, text=f"{label}: {f:.0%}"),
+                    workers=workers,
+                )
             state.set_mi(run)
         except Exception as exc:
             error_card("The multiple imputation failed.", exc)

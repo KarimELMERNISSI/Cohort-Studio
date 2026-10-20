@@ -353,6 +353,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **An interrupted imputation stops its worker process.** A click during a parallel multiple imputation reruns the
   page, which skipped the clean-up: the worker process ran on, unseen, holding the files of its temporary folder.
   It is now stopped.
+- **Imputations share the processor cores of the server.** Each session started as many worker processes as the
+  server has cores minus one, so two people imputing at once ran twice that number. The worker processes are now
+  shared by every session of the server: a run gets the ones that are free and never waits. When none are free, it
+  runs in one process, and the page says so. `CMP_MI_MAX_WORKERS` sets the total (default: the cores minus one);
+  set it on a container with a CPU limit, which the app cannot see.
 
 ### AI engine: Gemini Flash-Lite
 

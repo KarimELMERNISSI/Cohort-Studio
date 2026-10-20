@@ -246,3 +246,34 @@ def test_observed_mode_is_unchanged_and_a_stale_imputation_is_not_used(app: AppT
     _ok(app)  # a narrower population: the imputation covers more rows than it now analyses
     assert any("fitted on more rows" in c.label for c in app.checkbox)
     assert any("analyses below use the observed data" in w.value for w in app.warning)
+
+
+def test_the_page_imputes_with_the_workers_the_budget_grants(
+    app: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each session asked for cpu_count - 1 processes; the server's budget now grants what is free."""
+    import biostats.mi as mi_package
+    import manage.compute as compute
+
+    original = mi_package.impute
+    asked: list[int] = []
+
+    def impute(frame, spec, *, workers=1, **kwargs):
+        asked.append(workers)
+        # one process: the test is about the count asked for
+        return original(frame, spec, workers=1, **kwargs)
+
+    budget = compute.WorkerBudget(2)
+    monkeypatch.setattr(compute, "_budget", budget)
+    monkeypatch.setattr(mi_package, "impute", impute)
+    app.switch_page(nav.page_path("enrich")).run()
+    _ok(app)
+    app.number_input(key="mi_m").set_value(3)
+    app.number_input(key="mi_maxit").set_value(1)
+    app.toggle(key="mi_parallel").set_value(True)
+    app.button(key="mi_run").click().run()
+    _ok(app)
+    with budget.lease(2):  # another session holds the whole budget
+        app.button(key="mi_run").click().run()
+    _ok(app)
+    assert asked == [2, 1] and budget.free == 2
