@@ -382,6 +382,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The health scorecard follows the outlier detection settings at once.** It sits above those settings and used
   the ones stored in the click before, so it followed a change one click late, and showed the default settings for
   one click after each change of the data. It now reads the settings from their controls.
+  - The settings are kept when the data change, wherever the change is made, and when you leave the page and come
+    back: the quantile limits started again at 0.01 and 0.99, while the scorecard still used yours. Loading another
+    dataset resets them.
+  - With a multivariate method, the score uses every numeric column, as its help now says; the table below it
+    counts the outliers of the columns selected.
 - **Each tab reads its own data** on Validate, Statistics & correlations and Hypothesis tests & epidemiology; the
   tabs passed their table on to the next one.
   - On Validate, the anomaly check's flag columns reached the Outliers tab, where a multivariate method (Isolation

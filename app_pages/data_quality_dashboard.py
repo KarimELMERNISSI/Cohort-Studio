@@ -99,6 +99,12 @@ VALIDITY_PARAMS = {
 }
 
 
+def _validity_control(method: str, name: str) -> tuple[str, float]:
+    """The key of a detection parameter's control, and its start: the stored setting, or the default."""
+    key, default = VALIDITY_PARAMS[method][name]
+    return key, float((st.session_state.get("validity_outlier_params") or {}).get(name, default))
+
+
 def _sync_validity_settings() -> None:
     """
     The scorecard at the top of the dashboard is computed before the detection settings further down run, so it
@@ -777,23 +783,25 @@ def render_dashboard(df, config):
             
             # --- Method-Specific Parameters ---
             with col2:
+                # each control starts from the stored setting, as the scorecard above reads it (VALIDITY_PARAMS)
                 if detection_method == "iqr":
-                    # Get default from session state or use 1.5
-                    default_mult = st.session_state.get('validity_outlier_params', {}).get('multiplier', 1.5)
-                    multiplier = st.slider("IQR Multiplier", 0.5, 3.0, float(default_mult), 0.1, persist_state="page", key="validity_iqr_mult",
+                    key, start = _validity_control("iqr", "multiplier")
+                    multiplier = st.slider("IQR Multiplier", 0.5, 3.0, start, 0.1, persist_state="page", key=key,
                                           help="Higher values = fewer outliers detected")
                     params = {"multiplier": multiplier}
                 elif detection_method == "zscore":
-                    default_thresh = st.session_state.get('validity_outlier_params', {}).get('threshold', 3.0)
-                    threshold = st.slider("Z-score Threshold", 1.0, 5.0, float(default_thresh), 0.1, persist_state="page", key="validity_zscore_thresh",
+                    key, start = _validity_control("zscore", "threshold")
+                    threshold = st.slider("Z-score Threshold", 1.0, 5.0, start, 0.1, persist_state="page", key=key,
                                          help="Number of standard deviations from mean")
                     params = {"threshold": threshold}
                 elif detection_method == "quantile":
                     c1, c2 = st.columns(2)
                     with c1:
-                        lower = st.number_input("Lower Percentile", 0.0, 0.5, 0.01, 0.01, persist_state="page", key="validity_q_lower")
+                        key, start = _validity_control("quantile", "lower")
+                        lower = st.number_input("Lower Percentile", 0.0, 0.5, start, 0.01, persist_state="page", key=key)
                     with c2:
-                        upper = st.number_input("Upper Percentile", 0.5, 1.0, 0.99, 0.01, persist_state="page", key="validity_q_upper")
+                        key, start = _validity_control("quantile", "upper")
+                        upper = st.number_input("Upper Percentile", 0.5, 1.0, start, 0.01, persist_state="page", key=key)
                     params = {"lower": lower, "upper": upper}
                 else:
                     # ML methods - show info
@@ -862,7 +870,12 @@ def render_dashboard(df, config):
                 st.metric(
                     "Statistical Validity Score (from Health Scorecard)", 
                     f"{scorecard_validity:.2f}%",
-                    help=f"Based on {detection_method.upper()} method. This value matches the Health Scorecard above."
+                    help=(
+                        f"Based on the {detection_method} method, on every numeric column: the value of the Health "
+                        "Scorecard above."
+                        + ("" if detection_method in UNIVARIATE_METHODS
+                           else " The table below counts the outliers of the columns selected.")
+                    ),
                 )
                 
                 # Summary chart and table

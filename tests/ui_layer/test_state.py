@@ -347,3 +347,15 @@ def test_the_quality_audit_runs_once_per_data_and_detection_settings(
     at.session_state["action"] = "commit"
     at.run()  # the data changed: audited again, with the settings chosen (not the defaults)
     assert not at.exception and audits == [iqr, iqr2, zscore, zscore]
+    # a criterion edited in place, as the Validate tabs edit the configuration: audited again, once
+    rules = at.session_state["config"]["mask_families"]["clinical_anomalies"]
+    rules.pop(next(name for name in rules if name != "operator"))
+    at.session_state["compare"] = True
+    at.run()
+    at.run()
+    assert not at.exception and audits == [iqr, iqr2, zscore, zscore, zscore]
+    probe = at.session_state["probe"]
+    fresh = dqa.DataQualityAuditor(probe["base"], config=at.session_state["config"])
+    assert probe["metrics"] == run_audit(
+        fresh, validity_method="zscore", validity_params={"threshold": 3.0}
+    )

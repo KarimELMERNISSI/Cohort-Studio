@@ -151,3 +151,23 @@ def test_the_labels_of_lazy_tabs_are_fixed() -> None:
             assert all(
                 isinstance(e, ast.Constant) and isinstance(e.value, str) for e in labels.elts
             )
+
+
+def test_the_detection_settings_survive_a_page_switch(app: AppTest) -> None:
+    """The quantile inputs started at 0.01 and 0.99 whatever the stored settings: after a page switch the scorecard
+    kept the user's 0.05 while the input showed 0.01, and the next click audited with 0.01 (review, M5b)."""
+    from app_pages import data_monitoring as dm
+
+    app.switch_page(nav.page_path("validate")).run()
+    app.session_state[dm.TAB_KEY] = "Data Quality Dashboard"
+    app.run()
+    app.selectbox(key="validity_detection_method").set_value("quantile").run()
+    app.number_input(key="validity_q_lower").set_value(0.05).run()
+    _ok(app)
+    app.switch_page(nav.page_path("explore")).run()  # the controls' values are discarded
+    app.switch_page(nav.page_path("validate")).run()
+    _ok(app)
+    assert app.selectbox(key="validity_detection_method").value == "quantile"
+    assert app.number_input(key="validity_q_lower").value == 0.05
+    next(s for s in app.slider if s.label.endswith("Weight")).set_value(2.0).run()  # another click
+    assert app.session_state["validity_outlier_params"] == {"lower": 0.05, "upper": 0.99}

@@ -61,14 +61,29 @@ KEYS: tuple[Key, ...] = (
     Key(
         "validity_outlier_method",
         "app_pages.data_quality_dashboard",
-        "data_change",
-        note="the outlier detection settings, read by the scorecard above them",
+        "dataset",
+        note="the outlier detection settings, read by the scorecard above them; kept wherever the data change",
     ),
     Key(
         "validity_outlier_params",
         "app_pages.data_quality_dashboard",
-        "data_change",
+        "dataset",
         note="the parameters of that method",
+    ),
+    *(
+        Key(
+            control,
+            "app_pages.data_quality_dashboard",
+            "dataset",
+            note="a control of those settings, read at the top of the dashboard by the scorecard",
+        )
+        for control in (
+            "validity_detection_method",
+            "validity_iqr_mult",
+            "validity_zscore_thresh",
+            "validity_q_lower",
+            "validity_q_upper",
+        )
     ),
     Key(
         "rename_dict",

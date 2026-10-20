@@ -91,6 +91,12 @@ DERIVED_KEYS: tuple[str, ...] = (
     "epidemiology_group_col",
     "validity_outlier_params",
     "validity_outlier_method",
+    # the controls of those detection settings (Validate dashboard): reset with them when another dataset is loaded
+    "validity_detection_method",
+    "validity_iqr_mult",
+    "validity_zscore_thresh",
+    "validity_q_lower",
+    "validity_q_upper",
     "univariate_cache",
     "diag_result",
     "ba_result",
@@ -131,6 +137,15 @@ KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
         "anomaly_data_applied",
         "inclusion_data_applied",
         "outliers_data_applied",
+        # the outlier detection settings of the Validate dashboard, and their controls: the user's choice, kept
+        # wherever the data change
+        "validity_outlier_method",
+        "validity_outlier_params",
+        "validity_detection_method",
+        "validity_iqr_mult",
+        "validity_zscore_thresh",
+        "validity_q_lower",
+        "validity_q_upper",
         "_results",
         "_report",
         "_mi",
@@ -643,7 +658,8 @@ class AppState:
     ) -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
         """
         The quality audit of every row (the Validate dashboard): the auditor, its metrics and its advice. It is kept
-        until the data, the criteria definitions or the validity method change; the page only reads the auditor.
+        until the data, the criteria definitions or the validity method change; the page only reads the auditor. One
+        audit is kept per session, with the rows that break an anomaly rule (``clinical_anomalies_df``).
         """
         import copy
         import hashlib
