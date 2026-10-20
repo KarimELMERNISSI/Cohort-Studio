@@ -472,14 +472,16 @@ class AppState:
         self, paths: list[str | None], steps: list[dict[str, Any]] | None = None
     ) -> None:
         """
-        Delete the snapshots of changes that will never reach the trace, except a file that a trace names (the
-        session's trace, or ``steps``). Best effort: a failure is logged, and the change goes on.
+        Delete the snapshots of changes that will never reach the trace, except a file that a trace (the session's
+        trace, or ``steps``) or a change still in the draft names. Best effort: a failure is logged, and the change
+        goes on.
         """
         if not any(paths):
             return
         try:
             history = self.transformation_manager.history if steps is None else steps
-            delete_unreferenced(paths, get_current_scope(), history)
+            pending = [{"output_dataset_path": path} for path in self._draft_snapshots()]
+            delete_unreferenced(paths, get_current_scope(), [*history, *pending])
         except Exception as exc:
             logger.warning("The snapshots of the draft were not deleted (%s)", type(exc).__name__)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 
 import pytest
 
@@ -21,35 +20,33 @@ def test_a_lease_grants_what_is_free_and_gives_it_back() -> None:
         assert one == 1 and budget.free == 4
 
 
-def test_a_failed_run_gives_its_workers_back() -> None:
+def test_a_failed_or_interrupted_run_gives_its_workers_back() -> None:
+    class Rerun(BaseException):  # a click reruns the page: Streamlit raises a BaseException
+        pass
+
     budget = WorkerBudget(4)
-    with pytest.raises(RuntimeError), budget.lease(4):
-        raise RuntimeError("the imputation failed")
-    assert budget.free == 4
+    for error in (RuntimeError, Rerun):
+        with pytest.raises(error), budget.lease(4):
+            raise error
+        assert budget.free == 4
 
 
 def test_concurrent_sessions_never_exceed_the_budget() -> None:
     budget = WorkerBudget(5)
-    in_use: list[int] = []
-    lock = threading.Lock()
-    current = [0]
+    granted: list[int] = []
+    together = threading.Barrier(8, timeout=10)  # every session holds its lease at the same time
 
     def session() -> None:
-        with budget.lease(3) as granted:
-            taken = granted if granted > 1 else 0
-            with lock:
-                current[0] += taken
-                in_use.append(current[0])
-            time.sleep(0.01)
-            with lock:
-                current[0] -= taken
+        with budget.lease(3) as workers:
+            granted.append(workers)
+            together.wait()
 
     threads = [threading.Thread(target=session) for _ in range(8)]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
-    assert max(in_use) <= 5 and budget.free == 5
+    assert sorted(granted, reverse=True) == [3, 2, 1, 1, 1, 1, 1, 1] and budget.free == 5
 
 
 def test_the_setting_names_itself_when_wrong() -> None:

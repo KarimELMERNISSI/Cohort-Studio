@@ -3,8 +3,8 @@ The process-wide budget of worker processes for the multiple imputation (M5b).
 
 Each session asked for cpu_count - 1 workers, so two people imputing at once started twice the processor's cores.
 The budget is shared by every session of the server process: a lease grants what is free, never waits, and gives
-it back when the run ends, however it ends. When nothing is free, the run takes place in the session's own
-process (one worker), which uses none of the budget.
+it back when the run ends, however it ends. When fewer than two are free, the run takes place in the session's
+own process (one worker), which uses none of the budget.
 
 ``CMP_MI_MAX_WORKERS`` sets the total. The default is the processors of this process minus one; a container's CPU
 quota is not visible in that count, so set the variable there.

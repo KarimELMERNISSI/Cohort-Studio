@@ -359,13 +359,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   page unchanged; it no longer turns into a failed run that was redone in one process.
 - **Imputations share the processor cores of the server.** Each session started as many worker processes as the
   server has cores minus one, so two people imputing at once ran twice that number. The worker processes are now
-  shared by every session of the server: a run gets the ones that are free and never waits. When none are free, it
-  runs in one process, and the page says so. `CMP_MI_MAX_WORKERS` sets the total (default: the cores minus one);
-  set it on a container with a CPU limit, which the app cannot see.
-- **Changes that never reach the trace no longer leave copies of the data behind.** Each change prepared on the
-  Enrich page saves a copy of the whole table (a snapshot) in the workspace before it joins the draft. The copy
-  stayed when the change never reached the trace: a draft discarded, redone on newer data, or dropped when another
-  dataset was loaded, the dataset was cleared or the user signed out; a change that changed nothing or failed; and a
+  shared by every session of the server: a run gets the ones that are free and never waits. When fewer than two
+  are free, it runs in one process, and the page says so. `CMP_MI_MAX_WORKERS` sets the total (default: the cores
+  minus one); set it on a container with a CPU quota (`cpus:`), which the app cannot see.
+- **Changes that never reach the trace no longer leave copies of the data behind.** Each merge, transformation
+  and imputation prepared on the Enrich page saves a copy of the whole table (a snapshot) in the workspace before it
+  joins the draft. The copy stayed when the change never reached the trace: a draft discarded, redone on newer data
+  or refitted on the current population, or dropped when another dataset was loaded, the dataset was cleared or the user signed out; a change that changed nothing or failed; and a
   copy whose writing failed part-way. These copies are now deleted. Only files in the workspace's snapshots folder
   are deleted, and never one that a saved trace names (the replay and the fast mode of Reproduce use them).
   - Limits: a draft still pending when a session ends without signing out (a closed tab, a server restart) keeps

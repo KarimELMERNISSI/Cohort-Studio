@@ -28,8 +28,8 @@ services:
       # Vector database: LanceDB embedded by default. For several users or large libraries, start the
       # qdrant service below and set CMP_VECTOR_STORE=qdrant and CMP_QDRANT_URL=http://qdrant:6333
       - CMP_VECTOR_STORE=auto
-      # Worker processes for the multiple imputation, shared by all users. The app cannot see a CPU limit set on
-      # the container: with one, set this to the cores the container may use.
+      # Worker processes for the multiple imputation, shared by all users. The app cannot see a CPU quota set on
+      # the container (cpus:): with one, set this to the cores the quota allows.
       # - CMP_MI_MAX_WORKERS=3
     restart: unless-stopped
 

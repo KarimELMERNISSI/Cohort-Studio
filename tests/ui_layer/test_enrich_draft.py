@@ -275,6 +275,14 @@ def _snapshots_script(action: str) -> None:
         state.stage(
             again, "variable_computation", params, "b", output_dataset_path=snapshot("same", again)
         )
+    elif action == "same_file":  # a change that changes nothing names a file the draft still uses
+        state.stage(
+            state.working_frame(),
+            "variable_computation",
+            params,
+            "b",
+            output_dataset_path=str(folder / "staged.parquet"),
+        )
     elif action == "discard":
         state.discard_staging()
     elif action == "rebase":  # the dataset changes underneath: the change is redone on the new data
@@ -315,6 +323,7 @@ def _snapshots_script(action: str) -> None:
     [
         ("none", ["staged.parquet"]),
         ("no_change", ["staged.parquet"]),
+        ("same_file", ["staged.parquet"]),
         ("discard", []),
         ("rebase", []),
         ("load", []),
