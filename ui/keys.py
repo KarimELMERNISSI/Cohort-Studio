@@ -10,7 +10,8 @@ M5b step 7 derives those lists from this file.
 Lifetimes:
 
 - ``session``: kept for the whole session;
-- ``page``: a widget's own state, kept while the user stays on its page;
+- ``page``: a widget's own state, kept while the user stays on its page (``reset_on_dataset``: also cleared when
+  another dataset is loaded);
 - ``dataset``: cleared when another dataset is loaded, kept when the same dataset changes;
 - ``data_change``: cleared on any change of the data, and when another dataset is loaded.
 """
@@ -30,6 +31,9 @@ class Key:
     lifetime: Lifetime
     readers: tuple[str, ...] = ()  # the other modules that read it
     note: str = ""
+    reset_on_dataset: bool = (
+        False  # a page key that AppState also clears when another dataset is loaded
+    )
 
 
 KEYS: tuple[Key, ...] = (
@@ -86,8 +90,9 @@ KEYS: tuple[Key, ...] = (
         Key(
             control,
             "app_pages.data_quality_dashboard",
-            "dataset",
+            "page",
             note="a control of those settings, read at the top of the dashboard by the scorecard",
+            reset_on_dataset=True,
         )
         for control in (
             "validity_detection_method",

@@ -188,7 +188,9 @@ class RenameColumnsComponent:
 
                 with col_rename:
                     current_val = st.session_state["rename_dict"].get(col, col)
-                    new_name = st.text_input(f"Rename '{col}' to:", value=current_val, persist_state="page", key=f"rename_{col}")
+                    # mirrors rename_dict, which keeps the pending renames: not persisted, or a stale name would
+                    # come back after a rename (M5b review)
+                    new_name = st.text_input(f"Rename '{col}' to:", value=current_val, key=f"rename_{col}")
                     st.session_state["rename_dict"][col] = new_name
                     
                     # Show AI suggestion if available

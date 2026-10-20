@@ -395,20 +395,28 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     outlier detection works on the dataset.
   - On Hypothesis tests & epidemiology, the chosen transformation is computed in the Analysis tab only, where it
     applies, and its note is shown there.
-- **Validate runs only the open tab.** Each click ran all six tabs: the quality audit, both criteria checks, the
-  outlier detection and the participant flow. Now only the open tab runs, except Compare Data Files, whose file
-  uploaders cannot keep their files while it is closed. The controls of a closed tab keep their values while you
-  stay on the page; the confirmation before overwriting a criterion is asked again. The dashboard records the quality
-  check and the workflow step when it is open, which it is when Validate opens.
+- **Validate runs only the open tab.** Each click ran all six tabs: the dashboard, both criteria checks, the
+  outlier detection, the participant flow and the file comparison. Now only the open tab runs. Compare Data Files
+  still shows its source controls while it is closed, because its file uploaders cannot keep their files otherwise,
+  but reads and compares nothing until it is opened. The preview of the text columns that look like dates, above the
+  tabs, is worked out once per dataset. The controls of a closed tab keep their values while you stay on the page;
+  the confirmations (overwriting a criterion, keeping only the population's rows) are asked again. The dashboard
+  records the quality check and the workflow step when it is open, which it is when Validate opens.
 - **Statistics & correlations runs only the open tab.** Each click computed the statistics, rebuilt the renaming
-  table and ran the performance benchmark, which times every analysis on the data. Now only the open tab runs, and
-  its controls keep their values while you stay on the page.
+  table and prepared the benchmark's copy of the data (the benchmark itself runs from its button). Now only the open
+  tab runs, and its controls keep their values while you stay on the page.
 - **Hypothesis tests & epidemiology runs only the open tab.** Each click ran the six tabs. Now only the open tab
   runs; its controls keep their values while you stay on the page, and a result of the Analysis tab is still
   offered to the Power tab.
-- **The session keys shared between tabs and pages are declared** in `ui/keys.py`: the module that writes each,
-  how long it lives and the modules that read it. A test checks the declarations against the code and against
-  what the application clears when the data change.
+- **The session keys shared between the tabs of these pages are declared** in `ui/keys.py`: the module that
+  writes each, how long it lives and the modules that read it. A test checks the declarations against the code and
+  against what the application clears when the data change. The other shared keys (`analysis_data_mode`,
+  `workflow_marks`, the stored results) are declared when the session state is reorganised (M5b, step 7).
+- **Inputs that show a value kept elsewhere follow it again.** Keeping every control's value while its tab is closed
+  made three inputs come back stale: a column renamed and renamed back was renamed again at the next Apply; the
+  Mann-Whitney effect returned to its old value after a change of scale; and a chi-square result loaded into the
+  power calculator kept the calculator's previous effect and minimum dimension, under "Parameters loaded!". These
+  inputs are no longer kept on their own, and loading a result sets the calculator's inputs themselves.
 
 ### AI engine: Gemini Flash-Lite
 

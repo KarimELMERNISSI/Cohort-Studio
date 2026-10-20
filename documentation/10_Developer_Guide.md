@@ -332,8 +332,10 @@ subprocess.
    `commit_change()` for a change of the dataset, `stage()` for the Enrich draft (traced when applied), `note()` for a
    trace step that does not change the data. Each change becomes one trace step; with `CMP_STRICT_STATE=1` (the test
    suite), an in-place change of the session data raises `UntracedMutationError`.
-4. A tab reads its own inputs: it never uses a value that another tab of the page computed in the same run. A
+4. A tab reads its own inputs: it never uses a value that another tab of the page computed in the same run. A new
    session key that one tab or page writes and another reads is declared in `ui/keys.py`, with its owner, its
-   lifetime and its readers; a test checks the declarations against the code and against what `AppState` clears.
+   lifetime and its readers; a test checks the declarations against the code and against what `AppState` clears. On
+   a page whose tabs run only when open, every control has a key and `persist_state="page"`, except a confirmation
+   and an input whose `value=` comes from a session key that already keeps it (a kept value would come back stale).
 5. Add utility functions to the appropriate `utils/` module, not inline in app pages.
 6. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).

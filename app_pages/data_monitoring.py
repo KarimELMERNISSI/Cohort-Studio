@@ -106,7 +106,7 @@ class OutlierHandler:
 
 ######################################## handle data for comparisons
 
-def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]:
+def data_selection(tmp:str, label:str, load: bool = True) -> tuple[pd.DataFrame | None, str | None]:
     """
     Handle data selection from various sources.
 
@@ -116,6 +116,9 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         Unique identifier for the session keys.
     label : str
         Label to display in the UI selector.
+    load : bool
+        False while the Compare tab is closed: the source controls are shown, so that an uploaded file is kept, but
+        nothing is read (M5b: only the open tab works).
 
     Returns:
     --------
@@ -128,7 +131,9 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
         options.insert(0, "Current Session Data")
         
     selection_method = st.radio(f"Choose source for {label}:", options, persist_state="page", key=f"{tmp}_data_method")
-    
+    if not load and selection_method != "Upload File":
+        return None, None  # its controls keep their values (persist_state); an uploader must be shown to keep its file
+
     if selection_method == "Current Session Data":
         st.info("Using the dataset currently loaded in the application.")
         return st.session_state['data'].copy(), "Current Session Data"
@@ -186,7 +191,7 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
             type=UPLOAD_TYPES,
             key=f"{tmp}_data_uploader"
         )
-        if uploaded_file is not None:
+        if uploaded_file is not None and load:
             try:
                 # a text file: the delimiter and decimal separator, detected and changeable
                 options = csv_options(uploaded_file.getvalue(), uploaded_file.name, key=f"{tmp}_upload_read")
@@ -1482,21 +1487,28 @@ def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):
 
 ####################### APP PART ###############################
 
-def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
-    """Text columns that look like dates: preview the parsing, convert them as one traced step on request.
-
-    Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
-    """
+def _date_preview(df: pd.DataFrame, analyzer) -> tuple[list, dict, dict, dict]:
+    """The text columns that look like dates, their parsing, the format found and the values that would be lost."""
     candidates = [c for c in analyzer.date_cols
                   if c in df.columns and not pd.api.types.is_datetime64_any_dtype(df[c])]
-    if not candidates:
-        return
     parsed, notes, lost = {}, {}, {}
     for col in candidates:
         series, used_notes = smart_parse_dates(df[col])
         parsed[col] = series
         notes[col] = ", ".join(used_notes)
         lost[col] = int(series.isna().sum() - df[col].isna().sum())
+    return candidates, parsed, notes, lost
+
+
+def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
+    """Text columns that look like dates: preview the parsing, convert them as one traced step on request.
+
+    Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
+    """
+    # above the tabs, so it runs on every click: the parsing is kept until the data change (M5b)
+    candidates, parsed, notes, lost = state.session.memo("date_preview", "", lambda: _date_preview(df, analyzer))
+    if not candidates:
+        return
     n = len(candidates)
     with st.expander(f"{n} text column{'s' if n != 1 else ''} look like dates", icon=":material/calendar_month:"):
         st.caption("They stay as text until you convert them. The conversion is one step of the trace and is "
@@ -1740,7 +1752,7 @@ def app():
 
             with col1:
                 st.subheader("Reference Dataset")
-                data_c1, c1_file = data_selection("c1", "Reference Dataset")
+                data_c1, c1_file = data_selection("c1", "Reference Dataset", load=tab4.open)
                 if data_c1 is not None:
                     data_c1 = process_dataset(data_c1)
                     st.dataframe(data_c1.head(), width='stretch')
@@ -1748,7 +1760,7 @@ def app():
 
             with col2:
                 st.subheader("New Dataset")
-                data_c2, c2_file = data_selection("c2", "New Dataset")
+                data_c2, c2_file = data_selection("c2", "New Dataset", load=tab4.open)
                 if data_c2 is not None:
                     data_c2 = process_dataset(data_c2)
                     st.dataframe(data_c2.head(), width='stretch')

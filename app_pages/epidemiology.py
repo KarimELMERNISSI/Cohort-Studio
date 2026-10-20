@@ -2177,17 +2177,22 @@ def run_power_analysis(df, analyzer):
                         if es_type_res == "Cramer's V":
                             st.session_state['es_type_chi2'] = "Cramer's V"
                             st.session_state['chi2_w'] = es_val * np.sqrt(min_dim_val)
+                            st.session_state['es_chi2_input'] = es_val
                         elif es_type_res == "Odds Ratio":
                             st.session_state['es_type_chi2'] = "Cohen's w"
                             st.session_state['chi2_w'] = 0.3
+                            st.session_state['es_chi2_input'] = 0.3
                             st.toast("Odds Ratio cannot be directly converted to Cohen's w. Defaulted to Medium effect (0.3). Please adjust manually.")
                         else:
                             st.session_state['es_type_chi2'] = "Cohen's w"
                             st.session_state['chi2_w'] = es_val
-                        
-                        st.session_state['n_cat_chi2'] = n_cat_val
+                            st.session_state['es_chi2_input'] = es_val
+
                         st.session_state['n_total_chi2'] = n_total_val
                         st.session_state['min_dim_chi2'] = min_dim_val
+                        # the inputs' own keys: an input already on screen ignores its value= (M5b review)
+                        st.session_state['power_chi2_min_dim'] = min_dim_val
+                        st.session_state['df_chi2'] = max(1, n_cat_val - 1)
                     
                     # Set the test type dropdown - use the selectbox key directly
                     st.session_state['power_test_type'] = target_test
@@ -2463,7 +2468,8 @@ def run_power_analysis(df, analyzer):
                     min_v, max_v = -10.0, 10.0
                 val_input = st.number_input(
                     f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f",
-                    min_value=min_v, max_value=max_v, persist_state="page", key=f"es_input_{es_type}", help=HELP["es_mwu"],
+                    # mirrors mwu_p_xy, which keeps the effect: not persisted, or a stale value would come back
+                    min_value=min_v, max_value=max_v, key=f"es_input_{es_type}", help=HELP["es_mwu"],
                 )
                 if es_type == "P(X < Y)":
                     st.session_state['mwu_p_xy'] = val_input
@@ -2648,13 +2654,15 @@ def run_power_analysis(df, analyzer):
             else:
                 if 'min_dim_chi2' not in st.session_state:
                     st.session_state['min_dim_chi2'] = 1
+                # these two inputs mirror min_dim_chi2 and chi2_w, which keep the values: not persisted (M5b review)
                 min_dim_input = st.number_input(
-                    "Min Dimension (min(r-1, c-1))", key="power_chi2_min_dim", persist_state="page", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1,
+                    "Min Dimension (min(r-1, c-1))", key="power_chi2_min_dim", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1,
                     help=HELP["min_dim"],
                 )
+                st.session_state['min_dim_chi2'] = int(min_dim_input)
                 display_val = st.session_state['chi2_w'] / np.sqrt(min_dim_input) if es_type == "Cramer's V" else st.session_state['chi2_w']
                 effect_size_input = st.number_input(
-                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", persist_state="page", key="es_chi2_input",
+                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", key="es_chi2_input",
                     help=HELP["es_chi2"],
                 )
                 st.session_state['chi2_w'] = effect_size_input * np.sqrt(min_dim_input) if es_type == "Cramer's V" else effect_size_input

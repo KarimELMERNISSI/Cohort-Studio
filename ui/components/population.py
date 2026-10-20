@@ -76,26 +76,27 @@ def render_population_selector(state) -> None:
         for criterion in criteria:
             families.setdefault(criterion.family, []).append(criterion)
         ss = st.session_state
+        # the boxes mirror the session's ticked criteria, set on every run: never kept on their own (M5b)
         for family, members in families.items():
-            fam_key = _family_key(family)
-            ss[fam_key] = all(c.id in ticked for c in members)
+            family_box = _family_key(family)
+            ss[family_box] = all(c.id in ticked for c in members)
             st.checkbox(
                 f"**{family_title(family, members[0].kind)}**",
-                key=fam_key,
+                key=family_box,
                 on_change=_on_family,
                 args=(family,),
                 help="Tick or untick every criterion of this family.",
             )
             for criterion in members:
-                key = _widget_key(criterion.id)
-                ss[key] = criterion.id in ticked
+                criterion_box = _widget_key(criterion.id)
+                ss[criterion_box] = criterion.id in ticked
                 excludes = counts.get(criterion.id)
                 suffix = (
                     " (cannot be evaluated)" if excludes is None else f" ({excludes:,} excluded)"
                 )
                 st.checkbox(
                     f"{criterion.name}{suffix}",
-                    key=key,
+                    key=criterion_box,
                     on_change=_on_toggle,
                     args=(criterion.id,),
                     help=criterion.description or None,
@@ -221,9 +222,10 @@ def render_population_panel(state) -> None:
         save_as = st.text_input(
             "Save the result as a version (optional)",
             key="pop_freeze_name",
+            persist_state="page",  # kept while the tab is closed (M5b)
             placeholder="e.g. analysis_set",
         )
-        st.checkbox(
+        st.checkbox(  # a confirmation: asked again when the tab has been left, so it is not kept
             "I understand that the excluded rows are removed from the current data",
             key=_FREEZE_CONFIRM,
         )

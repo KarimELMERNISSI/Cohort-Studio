@@ -32,9 +32,21 @@ LAZY = (
     "app_pages/analysis_extras.py",
     "app_pages/analysis_pooled.py",
     "app_pages/analysis_guidance_ui.py",
+    # the panels of the Analysis population tab of Validate
+    "ui/components/population.py",
+    "ui/components/flow.py",
 )
 # widgets deliberately not kept when their tab is closed: a confirmation is asked again
-CONFIRMATIONS = ("mask_overwrite_",)
+CONFIRMATIONS = ("mask_overwrite_", "_FREEZE_CONFIRM")
+# nor an input that mirrors a session key holding its value (value= comes from it): a kept value would come back stale
+MIRRORS = (
+    "rename_",
+    "es_input_",
+    "es_chi2_input",
+    "power_chi2_min_dim",
+    "family_box",  # the sidebar's population boxes, set from the ticked criteria on every run
+    "criterion_box",
+)
 
 
 def _ok(at: AppTest) -> None:
@@ -126,8 +138,8 @@ def test_the_widgets_of_lazy_pages_have_a_key_and_keep_their_value() -> None:
                 missing.append(f"{path}:{call.lineno} {call.func.attr} has no key")
                 continue
             text = ast.unparse(key)
-            confirmation = any(prefix in text for prefix in CONFIRMATIONS)
-            if call.func.attr not in NO_PERSIST and not confirmation and "persist_state" not in kws:
+            exempt = any(prefix in text for prefix in (*CONFIRMATIONS, *MIRRORS))
+            if call.func.attr not in NO_PERSIST and not exempt and "persist_state" not in kws:
                 missing.append(
                     f"{path}:{call.lineno} {call.func.attr} ({text}) has no persist_state"
                 )
@@ -247,7 +259,22 @@ def test_only_the_open_tab_of_hypothesis_tests_runs(
         assert calls == [name], label
 
 
-def test_a_comparison_run_in_the_analysis_tab_prefills_the_power_tab(app: AppTest) -> None:
+def _power_tab(app: AppTest) -> None:
+    from app_pages import epidemiology as epi
+
+    app.switch_page(nav.page_path("analyze")).run()
+    app.session_state[epi.TAB_KEY] = "Power & Sample Size"
+    app.run()
+    _ok(app)
+
+
+def _load(app: AppTest, option: str) -> None:
+    app.selectbox(key="power_import_result").set_value(option).run()
+    next(b for b in app.button if b.label == "Load Parameters into Calculator").click().run()
+    _ok(app)
+
+
+def test_a_comparison_run_in_the_analysis_tab_loads_into_the_power_tab(app: AppTest) -> None:
     """The Power tab reads the Analysis tab's results from the session (ui/keys.py): they no longer run together."""
     from app_pages import epidemiology as epi
 
@@ -257,15 +284,73 @@ def test_a_comparison_run_in_the_analysis_tab_prefills_the_power_tab(app: AppTes
     app.selectbox(key="group_col").select("arm").run()
     app.button(key="univariate_run").click().run()
     _ok(app)
-    assert app.session_state["epidemiology_results"]
-    app.session_state[epi.TAB_KEY] = "Power & Sample Size"
+    results = app.session_state["epidemiology_results"]
+    t_test = next(r for r in results if r["Test Used"] in ("Student's t-test", "Welch's t-test"))
+    _power_tab(app)
+    _load(app, f"{t_test['Variable']} ({t_test['Test Used']})")
+    assert app.selectbox(key="power_test_type_selector").value == "T-Test (Independent)"
+    assert app.session_state["es_ttest"] == pytest.approx(abs(float(t_test["Effect Size"])))
+    assert app.session_state["power_group_col"] == "arm"
+
+
+def test_a_loaded_chi_square_result_reaches_the_calculator_on_screen(app: AppTest) -> None:
+    """The minimum dimension and the effect mirror session keys: Load writes the inputs' own keys, or an input
+    already on screen keeps its old value under "Parameters loaded!" (review, M5b)."""
+    _power_tab(app)
+    app.selectbox(key="power_test_type_selector").select("Chi-Square").run()
+    app.selectbox(key="es_type_chi2").select("Cohen's w").run()
+    app.number_input(key="es_chi2_input").set_value(0.10).run()
+    _ok(app)
+    cramer = {
+        "Variable": "smoker",
+        "Test Used": "Chi-Square",
+        "Effect Size": 0.25,
+        "Effect Type": "Cramer's V",
+        "Sample Info": {"N_Cats": 3, "N_Total": 200, "Min_Dim": 2},
+    }
+    app.session_state["epidemiology_results"] = [cramer]
     app.run()
+    _load(app, "smoker (Chi-Square)")
+    assert app.selectbox(key="es_type_chi2").value == "Cramer's V"
+    assert app.number_input(key="power_chi2_min_dim").value == 2
+    assert app.number_input(key="es_chi2_input").value == pytest.approx(0.25)
+    assert app.session_state["chi2_w"] == pytest.approx(0.25 * 2**0.5)
+    assert app.number_input(key="df_chi2").value == 2
+
+
+def test_the_mann_whitney_effect_follows_its_scale(app: AppTest) -> None:
+    """The effect input mirrors mwu_p_xy: a kept value came back stale after a change of scale (review, M5b)."""
+    _power_tab(app)
+    app.selectbox(key="power_test_type_selector").select("Mann-Whitney U (Non-parametric)").run()
+    app.selectbox(key="es_type_mwu").select("P(X < Y)").run()
+    app.number_input(key="es_input_P(X < Y)").set_value(0.70).run()
+    app.selectbox(key="es_type_mwu").select("Rank-Biserial r").run()
+    assert app.number_input(key="es_input_Rank-Biserial r").value == pytest.approx(0.40)
+    app.number_input(key="es_input_Rank-Biserial r").set_value(0.20).run()
+    app.selectbox(key="es_type_mwu").select("P(X < Y)").run()
     _ok(app)
-    imported = app.selectbox(key="power_import_result")
-    assert len(imported.options) > 1  # "None" and the results of the Analysis tab
-    imported.set_value(imported.options[1]).run()
-    next(b for b in app.button if b.label == "Load Parameters into Calculator").click().run()
+    assert app.number_input(key="es_input_P(X < Y)").value == pytest.approx(0.60)
+    assert app.session_state["mwu_p_xy"] == pytest.approx(0.60)
+
+
+def test_a_column_renamed_and_renamed_back_is_not_renamed_again(app: AppTest) -> None:
+    """The rename inputs mirror rename_dict: a kept input showed the old new name and renamed the column again."""
+    from app_pages import home
+
+    app.switch_page(nav.page_path("explore")).run()
+    app.session_state[home.TAB_KEY] = "Columns Renaming"
+    app.run()
+    apply = "Apply Renaming"
+    app.text_input(key="rename_age").set_value("age_years")
+    next(b for b in app.button if b.label == apply).click().run()
+    app.run()  # the rename is applied after the inputs of that run: the inputs of the new names come next
+    app.text_input(key="rename_age_years").set_value("age")
+    next(b for b in app.button if b.label == apply).click().run()
     _ok(app)
-    assert any(
-        "arm" in m.value for m in app.markdown
-    )  # the grouping variable of the imported result
+    assert "age" in app.session_state["_data_session"].base.columns
+    app.run()
+    assert app.text_input(key="rename_age").value == "age"  # not the old age_years
+    next(b for b in app.button if b.label == apply).click().run()
+    _ok(app)
+    columns = app.session_state["_data_session"].base.columns
+    assert "age" in columns and "age_years" not in columns

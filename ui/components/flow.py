@@ -178,6 +178,7 @@ def render_flow(flow: ParticipantFlow | None, *, key: str) -> None:
         ids,
         format_func=labels.__getitem__,
         key=f"{key}::item",
+        persist_state="page",  # kept while the tab that shows the flow is closed (M5b)
     )
     item = flow.item(chosen)
     for line in item.details:

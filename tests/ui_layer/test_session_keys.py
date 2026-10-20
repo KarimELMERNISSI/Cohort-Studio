@@ -20,8 +20,11 @@ def test_each_key_is_declared_once_with_the_lifetime_appstate_gives_it() -> None
     assert len(names) == len(set(names))
     for key in KEYS:
         derived, kept = key.name in DERIVED_KEYS, key.name in KEPT_ON_DATA_CHANGE
-        if key.lifetime == "page":  # a widget's own state: AppState does not clear it
-            assert not derived, key.name
+        if key.lifetime == "page":  # a widget's own state: AppState clears it only on request
+            assert derived == key.reset_on_dataset, key.name
+            assert kept or not derived, (
+                key.name
+            )  # kept when the data change, cleared with another dataset
             continue
         lifetime = "session" if not derived else ("dataset" if kept else "data_change")
         assert key.lifetime == lifetime, key.name
