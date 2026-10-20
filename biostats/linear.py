@@ -324,7 +324,10 @@ def welch_means(
     order = _levels_from(fit)[group]
     frame = df[[outcome, group]].dropna()
     values = pd.to_numeric(frame[outcome], errors="coerce").groupby(frame[group].astype(str))
-    n = values.count().reindex(order).astype(float)
+    n = values.count().reindex(order).fillna(0).astype(float)
+    empty = [level for level in order if n[level] == 0]
+    if empty:
+        raise ValueError(f"{', '.join(empty)}: no value in the data")
     variance = values.var(ddof=1).reindex(order)
     constant = [level for level in order if not variance[level] > 0]
     if constant:

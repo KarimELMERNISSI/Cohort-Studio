@@ -130,6 +130,10 @@ def test_small_or_constant_groups() -> None:
     )
     with pytest.raises(ValueError, match="variance of zero"):
         welch_means(flat, "y", "g")
+    with pytest.raises(
+        ValueError, match="absent from these rows"
+    ):  # a selected group absent from the data
+        welch_means(_groups(), "y", "g", levels={"g": ["a", "b", "c", "z"]})
 
 
 def test_an_unknown_variance_estimator_is_refused() -> None:

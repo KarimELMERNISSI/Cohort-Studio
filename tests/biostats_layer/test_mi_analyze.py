@@ -191,14 +191,58 @@ def test_welch_type_group_means_are_pooled_with_their_own_df() -> None:
     welch_df2 = min(f.factor_df["site"] for f in fits)
     test = result.tests["site"]
     reference = expected.wald(["site_Luxembourg", "site_Metz"], dfcom=welch_df2)
-    assert test.method == "D1" and test.statistic == pytest.approx(reference.statistic)
+    correction = 1 + 2 * (3 - 2) / (3 * welch_df2)  # Welch's second-order correction, three groups
+    assert test.method == "D1" and test.statistic == pytest.approx(reference.statistic / correction)
     assert test.df2 == pytest.approx(reference.df2)
+    assert test.p_value == pytest.approx(stats.f.sf(test.statistic, 2, test.df2))
     means = result.extra["adjusted_means"].set_index("group")
     sizes = mi.base["site"].value_counts()
     for level in levels["site"]:  # each mean pooled with the df of its own group
         assert means.loc[level, "df"] <= sizes[level] - 1
     assert result.extra["cov_type"] == "HC2"
     assert any("Welch BL (1951)" in r for r in result.extra["references"])
+
+
+def test_with_identical_imputations_the_pooled_statistic_is_welchs_f() -> None:
+    # no variance between the imputed datasets (a fully observed outcome): the corrected D1 statistic is
+    # Welch's F of the data, with the complete-data df of mitml's rule
+    from statsmodels.stats.oneway import anova_oneway
+
+    rng = np.random.default_rng(8)
+    sizes, sds = (6, 9, 12, 20, 30), (3.0, 2.5, 2.0, 1.5, 1.0)
+    names = list("abcde")
+    base = pd.DataFrame(
+        {
+            "y": np.concatenate([rng.normal(0, s, n) for n, s in zip(sizes, sds, strict=True)]),
+            "g": np.repeat(names, sizes),
+            "x": rng.normal(0, 1, sum(sizes)),
+        }
+    )
+    base.loc[[0, 7], "x"] = np.nan  # imputed identically, so nothing varies between the imputations
+    completed = [base.fillna({"x": 0.0}) for _ in range(4)]
+    mi = MIData.from_completed(base, completed, methods={"x": "pmm"})
+    result = analyze_mi(lambda d: welch_means(d, "y", "g", levels={"g": names}), mi)
+    welch = anova_oneway(
+        [base.loc[base["g"] == g, "y"].to_numpy() for g in names], use_var="unequal"
+    )
+    test = result.tests["g"]
+    assert test.statistic == pytest.approx(welch.statistic, rel=1e-10)
+    df = welch.df_denom
+    assert test.df2 == pytest.approx((df + 1) / (df + 3) * df, rel=1e-10)
+
+
+def test_terms_with_different_complete_data_df_are_refused() -> None:
+    from dataclasses import replace
+
+    mi, _ = _mi()
+    levels = {"site": ["Ettelbruck", "Luxembourg", "Metz"]}
+
+    def uneven(data, i):
+        fit = welch_means(data, "sbp", "site", levels=levels)
+        return replace(fit, term_df={"const": 9.0}) if i == 2 else fit
+
+    with pytest.raises(ValueError, match="different complete-data df"):
+        analyze_mi(uneven, mi)
 
 
 def test_logistic_regression_reports_odds_ratios_factor_tests_and_counted_warnings() -> None:

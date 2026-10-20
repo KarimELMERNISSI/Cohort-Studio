@@ -213,7 +213,8 @@ default. Neither recommended analysis of a numeric variable assumes equal varian
 - **three groups or more:** the group means compared as Welch's ANOVA compares them on the observed data, which
   has no pooling rule. Each group keeps its own variance (s²/n), and each pooled quantity has Welch-type degrees
   of freedom: n − 1 for a group mean, Satterthwaite's for a difference, Welch's (1951) for the D1 test of the
-  group effect. The complete-case result shown below the pooled one is Welch's ANOVA itself.
+  group effect, which also takes Welch's second-order correction. When the imputations agree, the pooled
+  statistic is Welch's F. Below the pooled result, the complete cases show their group means and Welch's ANOVA.
   - Each group needs two values or more: deselect or merge a group of one value. Below 5 values, a group's own
     variance is estimated poorly, and the page warns that the test can reject too often.
   - The pooled test only sees the differences in variance that the imputations keep: when the groups' variances

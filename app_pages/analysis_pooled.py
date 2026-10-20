@@ -350,6 +350,18 @@ def _show_means(means: pd.DataFrame, *, label: str) -> None:
     )
 
 
+def _show_complete_groups(cc, target: str, group: str) -> None:
+    """The complete-case comparison: the group means, and Welch's ANOVA (or the one-way ANOVA when chosen)."""
+    _show_means(cc.adjusted_means, label=f"Mean of {target} (complete cases)")
+    row = cc.type2.set_index("source").loc[group]
+    welch = group in cc.factor_df
+    df2 = cc.factor_df[group] if welch else cc.df_resid
+    st.caption(
+        f"{'Welch' if welch else 'One-way'} ANOVA on the complete cases: F({row['df']:.0f}, {df2:.1f}) = "
+        f"{row['F']:.2f}, p = {row['p']:.4g}"
+    )
+
+
 def _show_detail(target: str, item: Pooled, group: str) -> None:
     res = item.result
     if item.kind in ("welch", "student"):
@@ -376,10 +388,7 @@ def _show_detail(target: str, item: Pooled, group: str) -> None:
             + " Pairwise post-hoc tests (Tukey, Games-Howell) have no pooling rule: the differences from "
             f"{item.reference} are shown instead."
         )
-        show_mi_notes(
-            res,
-            complete_case=lambda cc: _show_means(cc.adjusted_means, label=f"Mean of {target} (complete cases)"),
-        )
+        show_mi_notes(res, complete_case=lambda cc: _show_complete_groups(cc, target, group))
     elif item.kind == "twobytwo":
         st.markdown(f"**{item.comparison} compared with {item.reference}; event: {target} = {item.event}**")
         number = st.column_config.NumberColumn

@@ -43,20 +43,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - **Now:** the pooled comparison compares the group means as Welch's ANOVA does. Each group keeps its own variance
     (s²/n, the HC2 variance of the linear model on the groups), and each pooled quantity has Welch-type degrees of
     freedom: n − 1 for a group mean, Satterthwaite's for a difference, Welch's (1951) for the D1 test of the group
-    effect. For two groups it is Welch's t-test, as before. The complete-case result shown below the pooled one is
-    Welch's ANOVA itself.
-  - **When the variances differ, the results change.** Simulations of three groups whose means were equal and
-    whose smallest group varied most (standard deviations 4, 2 and 1), rejections at the 5% level:
+    effect, which also takes Welch's second-order correction. When the imputations agree, the pooled statistic is
+    Welch's F. For two groups it is Welch's t-test, as before. Below the pooled result, the complete cases show their
+    group means and Welch's ANOVA.
+  - **When the variances differ, the results change.** Simulations where the means were equal and the smallest
+    groups varied most, rejections at the 5% level. Complete data: 2,000 runs, the F test against Welch's ANOVA.
+    Imputed: 30% of the values missing, 5 imputations within each group, 1,000 runs, both tests by D1.
 
-    | Group sizes | Data | Equal variances | Now |
-    | --- | --- | --- | --- |
-    | 10, 20, 40 | complete (2,000 runs) | 25% | 5.1% (Welch's ANOVA) |
-    | 5, 20, 40 | complete (2,000 runs) | 35% | 6.2% |
-    | 10, 20, 40 | 30% missing, 5 imputations within each group (1,000 runs) | 11.7% (D1) | 3.7% (D1) |
-    | 5, 20, 40 | as above | 14.3% | 4.3% |
+    | Group sizes (standard deviations) | Complete, equal variances | Complete, now | Imputed, equal variances | Imputed, now |
+    | --- | --- | --- | --- | --- |
+    | 10, 20, 40 (4, 2, 1) | 22% | 5.0% | 12.5% | 4.4% |
+    | 5, 20, 40 (4, 2, 1) | 34% | 6.2% | 13.7% | 4.0% |
+    | 8, 12, 20, 30, 40 (4, 3, 2, 1.5, 1) | 26% | 5.3% | 12.8% | 5.3% |
 
     The biostatistician's review of a first version, with HC3 variances and the residual df, found it rejected too
-    often in the same setting (6.2% and 8.7%), and much more with 2 to 4 values per group.
+    often on complete data in the same settings (6.2% and 8.4%), and much more with 2 to 4 values per group.
   - **Small groups:** a group with a single value has no variance of its own: the page asks to deselect or merge
     it, or to choose the equal-variance model. Below 5 values, a warning says that the test can reject too often.
   - **Imputation:** the pooled test only sees the differences in variance that the imputations keep, so the page
@@ -70,6 +71,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   not differ (a fully observed variable), the D1 test used F(k, ∞) instead of the model's complete-data df
   (mitml's rule). Whether that happened depended on rounding. Such tests now use the complete-data df, so their
   p-values are slightly larger.
+- **D1 test with a small complete-data df.** Reiter's small-sample df, which the D1 test uses when the model has a
+  complete-data df, needs that df to be large enough. With Welch's df of a group of three values it gave a
+  negative df (no p-value) or one larger than the data allow (too many rejections). A Barnard-Rubin-type df is then
+  used instead, and the test says so. mitml uses Reiter's formula throughout.
 - **Transformations (Enrich > Create new variables) replay to the same table.** The page computed the new
   columns with its own copy of the transformation engine; the replay of the trace used the shared one.
   - Applying a transformation twice gave `age_Z-Score_Standardization_1` on the page, but a second column with

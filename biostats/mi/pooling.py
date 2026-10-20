@@ -423,6 +423,8 @@ def pool_terms(
         per_term = dict.fromkeys(names, scales)
     elif scales is not None:
         per_term = {n: scales.get(n, "identity") for n in names}
+    if isinstance(dfcom, Mapping) and set(names) - set(dfcom):
+        raise ValueError(f"no complete-data df for the terms {sorted(set(names) - set(dfcom))}")
     term_dfcom = (
         {n: float(dfcom[n]) for n in names}
         if isinstance(dfcom, Mapping)
@@ -507,15 +509,24 @@ def d1_wald(
         c0 = 1 / (t - 4)
         c1 = vstar - 2 * (1 + a)
         c2 = vstar - 4 * (1 + a)
-        # Reiter (2007) eq. 1-2 in full, as mitml's .D1
-        z = (
-            1 / c2
-            + c0 * (a**2 * c1 / ((1 + a) ** 2 * c2))
-            + c0 * (8 * a**2 * c1 / ((1 + a) * c2**2) + 4 * a**2 / ((1 + a) * c2))
-            + c0 * (4 * a**2 / (c2 * c1) + 16 * a**2 * c1 / c2**3)
-            + c0 * (8 * a**2 / c2**2)
-        )
-        df2 = 4 + 1 / z
+        df2 = math.nan
+        if c2 > 0:
+            # Reiter (2007) eq. 1-2 in full, as mitml's .D1
+            z = (
+                1 / c2
+                + c0 * (a**2 * c1 / ((1 + a) ** 2 * c2))
+                + c0 * (8 * a**2 * c1 / ((1 + a) * c2**2) + 4 * a**2 / ((1 + a) * c2))
+                + c0 * (4 * a**2 / (c2 * c1) + 16 * a**2 * c1 / c2**3)
+                + c0 * (8 * a**2 / c2**2)
+            )
+            df2 = 4 + 1 / z
+        if not 0 < df2 <= vstar:
+            # Reiter's approximation needs vstar > 4(1 + a): with a small complete-data df (a group of three values
+            # in Welch's df) it gave a negative or too large df, so a NaN or a liberal p. A Barnard-Rubin-type df
+            # combines the large-sample df with the observed-data df instead.
+            lrr = 4 + (t - 4) * (1 + (1 - 2 / t) / r) ** 2
+            df2 = 1 / (1 / lrr + (1 + r) / vstar)
+            note = "The complete-data df is too small for Reiter's small-sample df; a Barnard-Rubin-type df is used."
     refs = [REFERENCES["li1991_d1"]] + ([] if math.isinf(dfcom) else [REFERENCES["reiter2007"]])
     return MultiParameterTest(
         method="D1",
@@ -528,6 +539,24 @@ def d1_wald(
         m=m,
         note=note,
         references=refs,
+    )
+
+
+def welch_corrected(test: MultiParameterTest, dfcom: float) -> MultiParameterTest:
+    """
+    The D1 test of k group means with Welch's (1951) second-order correction, 1 + 2(k - 2) / (3 dfcom) for Welch's
+    complete-data df: with no variance between the imputations its statistic is then Welch's F (with the df of
+    mitml's rule, a little below Welch's). The uncorrected Wald form rejects too often from about five groups on.
+    """
+    groups = test.df1 + 1
+    correction = 1 + 2 * (groups - 2) / (3 * dfcom)
+    statistic = test.statistic / correction
+    return test.model_copy(
+        update={
+            "statistic": statistic,
+            "p_value": _f_sf(statistic, test.df1, test.df2),
+            "references": [*test.references, REFERENCES["welch1951"]],
+        }
     )
 
 
@@ -615,4 +644,5 @@ __all__ = [
     "pool_r_squared",
     "pool_scalar",
     "pool_terms",
+    "welch_corrected",
 ]

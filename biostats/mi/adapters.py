@@ -26,6 +26,7 @@ from biostats.mi.pooling import (
     d2_chisq,
     pool_r_squared,
     pool_scalar,
+    welch_corrected,
 )
 
 
@@ -186,13 +187,13 @@ class LinearAdapter(Adapter):
         out: dict[str, MultiParameterTest] = {}
         if table is not None:
             for source, terms in extracts[0].factors.items():
-                # the Type II test of each covariate, with its own complete-data df when it has one (Welch's)
-                dfcom = (
-                    min(e.test_dfcom[source] for e in extracts)
-                    if all(source in e.test_dfcom for e in extracts)
-                    else None
-                )
-                out[source] = table.wald(terms, dfcom=dfcom)
+                # the Type II test of each covariate; a factor with its own complete-data df has Welch's (the group
+                # means of welch_means), and its test then takes Welch's second-order correction too
+                if all(source in e.test_dfcom for e in extracts):
+                    dfcom = min(e.test_dfcom[source] for e in extracts)
+                    out[source] = welch_corrected(table.wald(terms, dfcom=dfcom), dfcom)
+                else:
+                    out[source] = table.wald(terms)
         return out
 
     def finish(

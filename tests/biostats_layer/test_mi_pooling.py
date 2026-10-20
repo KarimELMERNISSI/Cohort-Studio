@@ -242,6 +242,21 @@ def test_d1_edge_cases() -> None:
     finite = d1_wald(q, u, dfcom=40)
     assert finite.df2 == pytest.approx(41 / 43 * 40)
     assert finite.p_value == pytest.approx(stats.f.sf(finite.statistic, 2, 41 / 43 * 40))
+
+
+def test_d1_with_a_small_complete_data_df_falls_back_to_a_barnard_rubin_type_df() -> None:
+    # Reiter's df needs vstar > 4(1 + a): with Welch's df of a group of three values it gave a negative df (a NaN
+    # p-value) or one above vstar (a liberal test)
+    rng = np.random.default_rng(3)
+    q = rng.normal(0, 1, (5, 2))
+    u = np.array([np.eye(2) * 0.3] * 5)
+    for dfcom in (3.0, 4.0, 5.0):
+        test = d1_wald(q, u, dfcom=dfcom)
+        vstar = (dfcom + 1) / (dfcom + 3) * dfcom
+        assert 0 < test.df2 <= vstar and np.isfinite(test.p_value), dfcom
+        assert "Barnard-Rubin-type df" in test.note
+    large = d1_wald(q, u, dfcom=200)
+    assert "Barnard-Rubin" not in large.note  # Reiter's df where it holds
     few = d1_wald(np.array([[1.0], [1.3]]), np.array([[[0.1]], [[0.1]]]), dfcom=30)
     assert "Too few imputations" in few.note
     with pytest.raises(ValueError, match="singular"):

@@ -18,6 +18,7 @@ import pandas as pd
 import pytest
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from scipy import stats
 
 from biostats.linear import linear_regression, welch_means
 from biostats.mi import MIData, analyze_mi, d2_chisq, pool_r_squared, pool_scalar, pool_terms
@@ -259,9 +260,13 @@ def test_welch_type_group_means_match_sandwich_mice_and_mitml(reference: dict) -
             assert ours == pytest.approx(theirs, rel=1e-8, abs=1e-12), row["group"]
     d1 = result.tests["group"]
     expected = robust["d1"]
-    # mitml's testConstraints differentiates the constraints numerically (numericDeriv), so its D1 carries
-    # errors of about 1e-9 even for these linear constraints: 1e-7 here
-    assert d1.statistic == pytest.approx(expected["statistic"], rel=1e-7)
+    # mitml's D1, divided by Welch's second-order correction for these three groups. mitml's testConstraints
+    # differentiates the constraints numerically (numericDeriv), so its D1 carries errors of about 1e-9 even for
+    # these linear constraints: 1e-7 here
+    correction = 1 + 2 * (3 - 2) / (3 * expected["dfcom"])
+    statistic = expected["statistic"] / correction
+    assert d1.statistic == pytest.approx(statistic, rel=1e-7)
     assert d1.df1 == expected["df1"] and d1.df2 == pytest.approx(expected["df2"], rel=1e-7)
-    assert d1.p_value == pytest.approx(expected["p_value"], rel=1e-7, abs=1e-12)
+    p_value = float(stats.f.sf(statistic, expected["df1"], expected["df2"]))
+    assert d1.p_value == pytest.approx(p_value, rel=1e-7, abs=1e-12)
     assert d1.riv == pytest.approx(expected["riv"], rel=1e-7)
