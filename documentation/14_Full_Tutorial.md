@@ -45,7 +45,8 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 - **Uniqueness 99.5%**: 6 rows are exact duplicates of another row.
 - **Clinical Validity 98.67%**: 16 of the 1,206 rows break at least one anomaly rule of the configuration.
 - **Uniformity**: the `sex` column mixes codes (*male*, *Female*, *f*, *M* with a trailing space, ...) and 8 `site`
-  values end with a space. You will clean both in step 3.
+  values end with a space. You will clean both in step 3. Until then, the lists of groups on Analyze show such a
+  space as ␣ (*Luxembourg␣*), and warn that these groups differ only by spaces or capitals.
 - **Completeness**: the cells missing in `hba1c_pct`, `nt_probnp_pg_ml`, `sbp_6m` and `ldl_mmol_l` (see 2.5).
 
 ### 2.2 Clinical anomalies

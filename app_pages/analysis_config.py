@@ -3,6 +3,7 @@
 import streamlit as st
 
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
+from ui.components.levels import level_warning, show_level
 from ui.guidance.analysis import HELP
 
 
@@ -39,14 +40,17 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
             
             # Group Filtering
             selected_groups = []
+            unique_groups = []
             if group_col != "None" and group_col in df.columns:
                 unique_groups = sorted(df[group_col].dropna().unique())
                 selected_groups = st.multiselect(
                     "Groups to Include",
                     options=unique_groups,
                     default=unique_groups,
+                    format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
                     help=HELP["groups"],
-                    key=f"{key_prefix}selected_groups"
+                    # one choice per grouping variable: with one key, the next variable's list started empty
+                    key=f"{key_prefix}selected_groups::{group_col}"
                 )
             elif group_col != "None":
                  # Handle case where group_col is not in df (e.g. "Missingness Status" created on the fly)
@@ -71,7 +75,9 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 help=HELP["targets"],
                 key=f"{key_prefix}target_cols"
             )
-            
+
+        level_warning(group_col, unique_groups)  # full width, under the choice of groups
+
         # Global Test Preference
         col3, col4 = st.columns(2)
         with col3:

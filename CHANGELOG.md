@@ -213,6 +213,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   adds columns to the draft, and the column list then started again empty, so a second transformation of the same
   columns meant choosing them again. The three column lists (encoding, PCA and FAMD, the other methods) now keep
   the choice.
+- **Groups to include: groups that differ only by a space are told apart.** "Luxembourg" and "Luxembourg " are two
+  groups, which the list showed identically, so the tutorial cohort's sites seemed to be listed twice.
+  - A space at either end, or a run of spaces, now shows as ␣ (*Luxembourg␣*).
+  - A warning names the groups that differ only by spaces or capitals, and gives the formula of a cleaned copy to
+    group by, to add in Enrich > Create New Variables: for example `site_clean` = `site.str.strip()`.
+  - Nothing is merged for you: the analysis uses the values as they are.
+  - The same applies to the pooled comparison over the imputed datasets and to the power analysis.
+  - Another grouping variable now starts with all its groups. The list kept the previous variable's choice, none of
+    which is a group of the new variable, so it was empty (Analyze and the power analysis).
 
 ### Internal structure: one catalogue of trace steps
 

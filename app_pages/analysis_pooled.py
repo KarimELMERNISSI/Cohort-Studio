@@ -33,6 +33,7 @@ from biostats.mi import analyze_mi, not_poolable
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
 from biostats.multiplicity import adjust as adjust_pvalues
 from ui.components import error_card, result_card
+from ui.components.levels import level_warning, show_level
 from ui.components.mi_mode import mi_token, show_mi_notes, show_pooled_terms, show_tests
 from ui.progress import mark_step
 from ui.results import provenance, recall, remember
@@ -374,7 +375,14 @@ def run_pooled_comparison(mi, analyzer) -> None:
         levels: list[str] = []
         if group != "None":
             all_levels = _levels(mi.base[group])
-            levels = c1.multiselect("Groups to include", all_levels, default=all_levels, key=f"mi_cmp_levels::{group}")
+            levels = c1.multiselect(
+                "Groups to include",
+                all_levels,
+                default=all_levels,
+                format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
+                key=f"mi_cmp_levels::{group}",
+            )
+            level_warning(group, all_levels)
         candidates = [c for c in [*numeric, *categorical] if c != group]
         targets = c2.multiselect(
             "Variables to compare",

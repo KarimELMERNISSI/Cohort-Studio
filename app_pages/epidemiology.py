@@ -36,6 +36,7 @@ from biostats.power import (
 from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
 from ui.components import error_card, no_dataset, result_card
+from ui.components.levels import level_warning, show_level
 from ui.guidance.analysis import (
     HELP,
     ancova_check,
@@ -2172,7 +2173,7 @@ def run_power_analysis(df, analyzer):
                          if g_col in df.columns and df[g_col].nunique() < 20:
                              st.session_state['power_group_col'] = g_col
                              # Clear selected groups to force a refresh/reset based on the new group column
-                             st.session_state.pop('power_selected_groups', None)
+                             st.session_state.pop(f"power_selected_groups::{g_col}", None)
 
                     st.success("Parameters loaded! The calculator fields below have been updated.")
                     st.rerun()  # Refresh UI to show updated values
@@ -2209,10 +2210,13 @@ def run_power_analysis(df, analyzer):
                 "Groups to Include (Power Analysis)",
                 options=unique_groups,
                 default=unique_groups,
+                format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
                 help="Deselect groups to exclude them from the structure calculation.",
-                key="power_selected_groups"
+                # one choice per grouping variable: with one key, the next variable's list started empty
+                key=f"power_selected_groups::{group_col_power}"
             )
-        
+            level_warning(group_col_power, unique_groups)
+
         # Track changes to trigger updates
         if 'last_power_selected_groups' not in st.session_state:
             st.session_state['last_power_selected_groups'] = []
