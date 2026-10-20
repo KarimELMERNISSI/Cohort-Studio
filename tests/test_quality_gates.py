@@ -156,7 +156,7 @@ def test_tests_are_not_named_like_packages() -> None:
 
 
 # The files not yet formatted (M5b): the list only shrinks. Lower the ceiling with it.
-UNFORMATTED_CEILING = 166
+UNFORMATTED_CEILING = 165
 
 
 def test_the_list_of_unformatted_files_only_shrinks() -> None:
@@ -181,6 +181,8 @@ def test_the_list_of_unformatted_files_only_shrinks() -> None:
         text=True,
         check=False,
     )
+    # 0: all formatted, 1: some to reformat; anything else is ruff failing, not a list to empty
+    assert check.returncode in (0, 1), check.stderr
     reported = {
         line.split(":")[0].replace("\\", "/")
         for line in check.stdout.splitlines()
@@ -188,3 +190,32 @@ def test_the_list_of_unformatted_files_only_shrinks() -> None:
     }
     formatted = sorted(set(listed) - reported)
     assert not formatted, f"formatted now, delete them from [tool.ruff.format] exclude: {formatted}"
+
+
+def test_every_package_has_a_coverage_floor() -> None:
+    """dev_scripts/check_coverage_floors.py: one floor per package of the wheel, which CI checks."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_coverage_floors", ROOT / "dev_scripts" / "check_coverage_floors.py"
+    )
+    assert spec is not None and spec.loader is not None
+    floors = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(floors)
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    wheel = set(pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
+    assert set(floors.FLOORS) == wheel, {"no floor": sorted(wheel - set(floors.FLOORS))}
+
+
+def test_pre_commit_and_ci_format_with_the_same_ruff() -> None:
+    """Dependabot bumps ruff in uv.lock; the pre-commit hook would otherwise format with another version."""
+    hook = re.search(
+        r"ruff-pre-commit\s*\n\s*rev:\s*v?([\d.]+)",
+        (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"),
+    )
+    lock = re.search(
+        r'\[\[package\]\]\nname = "ruff"\nversion = "([\d.]+)"',
+        (ROOT / "uv.lock").read_text(encoding="utf-8"),
+    )
+    assert hook and lock
+    assert hook.group(1) == lock.group(1), "set the ruff-pre-commit rev to the version in uv.lock"

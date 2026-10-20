@@ -140,7 +140,6 @@ exclude = [
     "app_pages/views/which_test.py",
     "app_pages/visualization.py",
     "dev_scripts/ai_screenshots.py",
-    "dev_scripts/check_coverage_floors.py",
     "dev_scripts/doc_gen.py",
     "dev_scripts/make_readme_assets.py",
     "dev_scripts/make_sample_cohort.py",

@@ -347,7 +347,7 @@ uv run pytest -v
 uv run pytest --cov=. --cov-report=term-missing
 ```
 
-CI fails when the line coverage of the non-test code falls below 63 %, or a package falls below its floor: biostats and core 92 %, graph 91 %, ingest 87 %, ui 81 %, explore 74 %, manage 61 %, enrich 56 %. It also runs the suite in an environment without the optional groups (the AI tests are skipped), builds the Docker image and checks a fresh container, and runs the statistical simulation suites (`pytest -m slow`) every week. Dependabot proposes the dependency updates in `uv.lock` (and the GitHub Actions versions); the requirements files follow automatically.
+CI fails when the line coverage of the non-test code falls below 70 %, or a package falls below its floor (one per package, about 2 points under its measured coverage, in [`check_coverage_floors.py`](dev_scripts/check_coverage_floors.py)); a package more than 4 points above its floor fails too, until the floor is raised. It checks the formatting of every file but a list that only shrinks, the type errors per file against a baseline that only falls ([`check_type_baseline.py`](dev_scripts/check_type_baseline.py)), and the layers of the code ([`test_layering.py`](tests/test_layering.py)). It also runs the suite in an environment without the optional groups (the AI tests are skipped), builds the Docker image and checks a fresh container, and runs the statistical simulation suites (`pytest -m slow`) every week. Dependabot proposes the dependency updates in `uv.lock` (and the GitHub Actions versions); the requirements files follow automatically.
 
 ### What is checked, and where
 
@@ -357,7 +357,7 @@ CI fails when the line coverage of the non-test code falls below 63 %, or a pack
 | Under data missing at random, the imputation is unbiased and its 95 % intervals reach their nominal coverage, while the complete cases are biased | [`test_mi_simulation.py`](tests/biostats_layer/test_mi_simulation.py), 200 simulated samples, run weekly by [`slow.yml`](.github/workflows/slow.yml) |
 | The trace is hash-chained: an edited, removed or reordered step is reported | [`core/lineage.py`](core/lineage.py), [`test_lineage.py`](tests/core_layer/test_lineage.py) |
 | The ticked criteria drive the imputation, and a replay reproduces the analysed table | [`test_pipeline_integrity.py`](tests/test_pipeline_integrity.py) |
-| The data and statistics engine imports no Streamlit | [`test_layering.py`](tests/test_layering.py) |
+| Imports go down the layers, without cycles; nothing below the interface reaches Streamlit; the engine loads no interface, plotting or AI package | [`test_layering.py`](tests/test_layering.py) |
 | Each account works in its own workspace, paths cannot leave it, and expressions run in a whitelisted sandbox | [`test_workspace.py`](tests/core_layer/test_workspace.py), [`test_safe_eval.py`](tests/core_layer/test_safe_eval.py) |
 | The coverage floors, overall and per package | [`ci.yml`](.github/workflows/ci.yml), [`check_coverage_floors.py`](dev_scripts/check_coverage_floors.py) |
 

@@ -52,7 +52,7 @@ jobs:
         shell: bash  # with pipefail: the step fails when pytest fails, not when tee succeeds
         env:
           COLUMNS: "240"  # the short summary keeps the start of each failure message
-        run: uv run pytest -m "not integration and not slow" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=63 2>&1 | tee pytest.log
+        run: uv run pytest -m "not integration and not slow" -q --cov=. --cov-report=term-missing:skip-covered --cov-report=xml --cov-fail-under=70 2>&1 | tee pytest.log
 
       # The failed tests and the coverage verdict as one annotation: shown on the run page and readable through
       # the public API (downloading the job log needs admin rights on the repository)

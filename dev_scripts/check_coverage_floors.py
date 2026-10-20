@@ -3,8 +3,9 @@ Per-package coverage floors, checked in CI after the test run.
 
 Reads the ``coverage.xml`` written by pytest-cov (the same measurement as ``--cov-fail-under``; the
 ``.coverage`` data file can miss lines run in Streamlit AppTest threads) and fails when a package falls
-under its floor. Floors sit a little under the measured values: raise a floor when its package exceeds
-it by 2 points.
+under its floor. Every package has one (tests/test_quality_gates.py). Floors sit about 2 points under the
+measured values, and only rise: a package more than ``MARGIN`` points above its floor fails too, until the
+floor is raised.
 
 Usage: python dev_scripts/check_coverage_floors.py [coverage.xml]
 """
@@ -15,18 +16,23 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# Measured 2026-10-16 (follow-up programme M4): biostats 94.5, core 94.2, graph 93.7, ingest 89.8, ui 83.6, explore 76.9,
-# manage 64.2, enrich 58.6 (66 overall).
+# Measured 2026-10-20 (M5b): app_pages 53.2, biostats 95.0, core 94.3, enrich 69.9, explore 77.0, graph 93.7,
+# ingest 90.7, manage 74.3, monitor 8.3 (it needs tests), prompts 87.0, ui 84.9, utils 63.2 (72.4 overall).
 FLOORS: dict[str, float] = {
-    "biostats": 92.0,
+    "app_pages": 51.0,
+    "biostats": 93.0,
     "core": 92.0,
-    "graph": 91.0,
-    "ingest": 87.0,
-    "ui": 81.0,
-    "explore": 74.0,
-    "manage": 61.0,
-    "enrich": 56.0,
+    "enrich": 68.0,
+    "explore": 75.0,
+    "graph": 92.0,
+    "ingest": 89.0,
+    "manage": 72.0,
+    "monitor": 6.0,
+    "prompts": 85.0,
+    "ui": 83.0,
+    "utils": 61.0,
 }
+MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised
 
 
 def package_coverage(xml_path: Path) -> dict[str, tuple[int, int]]:
@@ -44,14 +50,20 @@ def package_coverage(xml_path: Path) -> dict[str, tuple[int, int]]:
 
 
 def check(xml_path: Path, floors: dict[str, float] = FLOORS) -> list[str]:
-    """Print one line per package and return the packages under their floor."""
+    """Print one line per package and return the packages under their floor or too far above it."""
     coverage = package_coverage(xml_path)
     failures = []
     for package, floor in floors.items():
         covered, total = coverage.get(package, (0, 0))
         percent = 100.0 * covered / total if total else 0.0
-        print(f"{package:10s} {percent:5.1f} %  (floor {floor:.0f} %)  {'ok' if percent >= floor else 'UNDER THE FLOOR'}")
         if percent < floor:
+            verdict = "UNDER THE FLOOR"
+        elif percent > floor + MARGIN:
+            verdict = f"RAISE THE FLOOR to {int(percent) - 2}"
+        else:
+            verdict = "ok"
+        print(f"{package:10s} {percent:5.1f} %  (floor {floor:.0f} %)  {verdict}")
+        if verdict != "ok":
             failures.append(package)
     return failures
 

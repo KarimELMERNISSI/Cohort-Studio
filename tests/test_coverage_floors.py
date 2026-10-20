@@ -42,3 +42,12 @@ def test_packages_under_their_floor_are_reported(report: Path, capsys: pytest.Ca
 
 def test_every_floor_names_a_package() -> None:
     assert all((ROOT / package).is_dir() for package in floors.FLOORS)
+
+
+def test_a_package_far_above_its_floor_asks_for_a_higher_floor(
+    report: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # biostats is at 75 %: a floor of 70 is within the margin, a floor of 65 must rise
+    assert floors.check(report, {"biostats": 75.0 - floors.MARGIN}) == []
+    assert floors.check(report, {"biostats": 65.0}) == ["biostats"]
+    assert "RAISE THE FLOOR to 73" in capsys.readouterr().out

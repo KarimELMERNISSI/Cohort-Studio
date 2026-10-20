@@ -343,6 +343,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   checked six. The 24 errors of today's code in 11 files are counted in `dev_scripts/pyright_baseline.json`. CI fails
   when a file has more errors than its count, and when it has fewer until the count is lowered, so the count can
   only fall. A setting that pyright did not recognise (`reportPossiblyUnbound`) now has its real name.
+- **Every package has a coverage floor**, about 2 points under its measured coverage: the pages, `utils`,
+  `prompts` and `monitor` had none (`monitor`, at 8 %, needs tests). Floors only rise: a package more than 4 points
+  above its floor fails until the floor is raised. The overall minimum rises from 63 % to 70 % (72 % measured).
+- The pre-commit hook and CI format with the same version of ruff, which a test checks against `uv.lock`.
 
 ### AI engine: Gemini Flash-Lite
 
