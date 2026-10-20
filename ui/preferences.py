@@ -67,6 +67,38 @@ def save(**changes: Any) -> None:
         st.session_state[PREFERENCES_KEY] = saved
 
 
+def save_renderer() -> None:
+    """The ``on_change`` of every graph engine selector: the engine chosen is kept for the next session."""
+    from graph.ui import RENDERER_OVERRIDE_KEY
+
+    save_from(f"{RENDERER_OVERRIDE_KEY}__selectbox", "graph_renderer", auto="auto")
+
+
+def shown(name: str) -> str:
+    """A saved name, as code in a notice: the file is the user's, and its text must not become a link or a format."""
+    return "`" + " ".join(str(name).replace("`", "").split()) + "`"
+
+
+def renderer_notice() -> str | None:
+    """Why the graph engine kept from the last session is not used on this server, or None."""
+    saved = current().graph_renderer
+    if not saved:
+        return None
+    from graph.manager import get_graph_renderer_manager
+
+    for rtype, ok, reason in get_graph_renderer_manager().available_renderers():
+        if rtype.value == saved:
+            if ok:
+                return None
+            return (
+                f"Your saved graph engine {shown(saved)} is not available here ({reason}): the automatic engine "
+                "is used."
+            )
+    return (
+        f"Your saved graph engine {shown(saved)} is not offered here: the automatic engine is used."
+    )
+
+
 def save_from(key: str, name: str, *, provider: str | None = None, auto: str | None = None) -> None:
     """
     An ``on_change`` callback: keep the value of the control ``key`` as the preference ``name`` (for ``provider``,
@@ -78,4 +110,14 @@ def save_from(key: str, name: str, *, provider: str | None = None, auto: str | N
     save(**{name: {provider: value} if provider is not None else value})
 
 
-__all__ = ["PREFERENCES_KEY", "SEEDED_KEY", "current", "save", "save_from", "seed_session"]
+__all__ = [
+    "PREFERENCES_KEY",
+    "SEEDED_KEY",
+    "current",
+    "renderer_notice",
+    "save",
+    "shown",
+    "save_from",
+    "save_renderer",
+    "seed_session",
+]

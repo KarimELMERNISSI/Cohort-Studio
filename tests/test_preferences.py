@@ -100,3 +100,33 @@ def test_concurrent_changes_are_all_kept(scope: UserScope) -> None:
     for thread in threads:
         thread.join()
     assert load_preferences(scope).ai_chat_model == {p: f"model-{p}" for p in providers}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[" * 100_000 + "]" * 100_000,  # nested too deeply: json raises RecursionError
+        '{"ai_provider": "' + "x" * 70_000 + '"}',  # larger than any preferences file
+    ],
+    ids=["nested-too-deeply", "too-large"],  # an id holding the content is too long for Windows
+)
+def test_a_hostile_file_gives_no_preference(scope: UserScope, content: str) -> None:
+    path = preferences_path(scope)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    assert load_preferences(scope) == Preferences()
+    assert update_preferences(scope, vector_store="lancedb") is not None  # and saving starts afresh
+
+
+def test_names_and_maps_are_bounded(scope: UserScope) -> None:
+    path = preferences_path(scope)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    many = {f"p{i}": "m" for i in range(60)}
+    path.write_text(
+        json.dumps({"ai_provider": "y" * 300, "ai_chat_model": many, "graph_renderer": "plotly"}),
+        encoding="utf-8",
+    )
+    prefs = load_preferences(scope)
+    assert (
+        prefs.ai_provider is None and prefs.ai_chat_model == {} and prefs.graph_renderer == "plotly"
+    )

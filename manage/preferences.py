@@ -3,8 +3,9 @@ The user's preferences: the choices made in Settings, kept for the next session 
 
 A preference is not a setting. A setting is the server's (utils.settings, read from the environment); a preference is
 the user's choice among what the server allows: the day-first reading of dates on import, the AI engine and its
-models, the graph renderer, the vector database. No key, password or consent is ever stored: a cloud provider saved
-here starts nothing until the user confirms again in the session (audit E6).
+models, the graph renderer, the vector database. No key, password, consent or address is ever stored: a cloud provider
+saved here starts nothing until the user confirms again in the session (audit E6), and the address of a model
+server (Ollama, Qdrant), which decides where the data go, is entered again in each session.
 
 The file is ``<workspace>/preferences.json``, read whole and written whole, atomically, under a lock. A missing or
 unreadable file gives no preference; a field that is not valid is left out, and the others are kept.
@@ -20,9 +21,9 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from core.workspace import UserScope
 
@@ -30,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 FILE_NAME = "preferences.json"
 VERSION = 1
+# A preferences file holds a few hundred bytes: a larger one, or a longer name, is not read (a hostile file must not
+# hold up the page or be carried in the session)
+MAX_BYTES = 64 * 1024
+Name = Annotated[str, StringConstraints(max_length=200)]
 
 
 class Preferences(BaseModel):
@@ -39,14 +44,13 @@ class Preferences(BaseModel):
 
     version: int = VERSION
     import_dayfirst: bool | None = None
-    ai_provider: str | None = None
-    ai_chat_model: dict[str, str] = Field(default_factory=dict)  # by provider
-    ai_embedding_model: dict[str, str] = Field(default_factory=dict)  # by provider
-    ai_claude_embedding_provider: str | None = (
-        None  # Claude answers; another provider embeds the documents
-    )
-    graph_renderer: str | None = None
-    vector_store: str | None = None
+    ai_provider: Name | None = None
+    ai_chat_model: dict[Name, Name] = Field(default_factory=dict, max_length=50)  # by provider
+    ai_embedding_model: dict[Name, Name] = Field(default_factory=dict, max_length=50)  # by provider
+    # Claude answers; another provider embeds the documents
+    ai_claude_embedding_provider: Name | None = None
+    graph_renderer: Name | None = None
+    vector_store: Name | None = None
 
 
 # the fields kept by provider: a change to one provider's model keeps the others'
@@ -84,10 +88,15 @@ def load_preferences(scope: UserScope) -> Preferences:
     """The user's preferences; none when the file is missing or unreadable (logged without its content)."""
     path = preferences_path(scope)
     try:
+        if path.stat().st_size > MAX_BYTES:
+            logger.warning(
+                "The preferences file is too large to be preferences: no preference is used"
+            )
+            return Preferences()
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return Preferences()
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RecursionError) as exc:  # RecursionError: nested too deeply
         logger.warning(
             "The preferences file cannot be read (%s): no preference is used", type(exc).__name__
         )

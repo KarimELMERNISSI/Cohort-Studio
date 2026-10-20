@@ -1,11 +1,9 @@
 """Settings page: AI engine and consent, graph engine, import defaults, workspace maintenance."""
 
-from functools import partial
-
 import streamlit as st
 
 from ui.components import confirm, page_header
-from ui.preferences import save_from
+from ui.preferences import renderer_notice, save_from, save_renderer
 from ui.shell import clear_workspace_statistics
 from ui.state import get_state
 from utils.optional import extra_installed, missing_message
@@ -28,13 +26,13 @@ with tab_ai:
                 icon=":material/extension:")
 
 with tab_graph, st.container(border=True, width=760):
-    from graph.ui import RENDERER_OVERRIDE_KEY, renderer_selector
+    from graph.ui import renderer_selector
 
     st.subheader("Graph rendering engine", icon=":material/hub:", anchor=False)
     # kept for the next session ("auto", the server's default, keeps no preference)
-    renderer_selector(
-        on_change=partial(save_from, f"{RENDERER_OVERRIDE_KEY}__selectbox", "graph_renderer", auto="auto")
-    )
+    renderer_selector(on_change=save_renderer)
+    if notice := renderer_notice():
+        st.caption(notice)
     st.caption("Plotly + NetworkX renders offline. The optional yFiles engine loads its runtime from yworks.com and reports "
                "anonymised graph-structure analytics; see the About page.")
 

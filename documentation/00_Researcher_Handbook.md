@@ -30,10 +30,14 @@ The **Start** page shows the workflow as a diagram. Three core steps take you fr
 The AI engine is optional and local by default (Settings > AI engine); without it, every core step and the
 enrichment path still work.
 
-Your choices in Settings are kept for your next session: the AI provider and its models, the vector database, the
-graph engine and the day-first reading of dates. API keys and the confirmation that data may leave the server are
-not: you enter and confirm them again in each session. A choice this server no longer offers (a model its provider
-stopped listing, say) is not used, and Settings says which.
+Your choices in Settings are kept for your next session, in your workspace on the server (`preferences.json`): the AI
+provider and its models, the provider that embeds your documents for Claude, the vector database, the graph engine
+and the day-first reading of dates. Not kept: API keys, the confirmation that data may leave the server, and the
+addresses of an Ollama or Qdrant server, which decide where your data go; you enter and confirm them again in each
+session. A graph engine kept from the last session is used again: the yFiles engine then connects to yworks.com
+again. A choice this server no longer offers (a model its provider stopped listing, say) is not used, and Settings
+says which. To change a choice, choose again; to start from the defaults, delete `preferences.json` from your
+workspace folder.
 
 ### How the diagram follows your progress
 

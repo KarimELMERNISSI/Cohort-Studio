@@ -272,5 +272,65 @@ def test_a_saved_model_no_longer_offered_is_named_and_kept(
     assert later.selectbox(key="rag_provider_select").value == "gemini"
     model = later.selectbox(key="rag_gemini_model_select")
     assert model.value == model.options[0]
-    assert any("gemini-0.1-retired is not offered here" in c.value for c in later.caption)
+    assert any(
+        "`gemini-0.1-retired` is not offered here" in c.value for c in later.caption
+    )  # as code
     assert "gemini-0.1-retired" in _saved(tmp_path)  # kept until the user chooses again
+
+
+def _prefs(tmp_path: Path, text: str, username: str = "persist_user") -> None:
+    folder = tmp_path / "users" / username
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "preferences.json").write_text(text, encoding="utf-8")
+
+
+def test_no_address_and_no_qdrant_key_is_saved(app: AppTest, tmp_path: Path) -> None:
+    """An address decides where the data go and can carry credentials: it is entered again in each session."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    app.text_input(key="rag_ollama_base_url").input("http://user:CANARY-PASS@127.0.0.1:9").run()
+    app.segmented_control(key="rag_vector_engine").set_value("qdrant").run()
+    app.text_input(key="rag_qdrant_url").input("http://CANARY-HOST:6333").run()
+    app.text_input(key="rag_qdrant_api_key").input("QDRANT-CANARY-KEY").run()
+    saved = _saved(tmp_path)
+    assert '"vector_store": "qdrant"' in saved
+    assert "CANARY" not in saved and "127.0.0.1" not in saved
+
+
+def test_a_saved_choice_this_server_cannot_use_is_named(
+    signed_in: AppTest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each kept choice the server no longer offers is not used, and Settings says which (the models, the provider,
+    Claude's embedding provider, the vector database and the graph engine)."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    import graph.manager as gm
+
+    monkeypatch.setenv("CMP_OFFLINE", "1")  # yFiles needs internet access
+    monkeypatch.setattr(gm, "_GLOBAL_MANAGER", None)
+    _prefs(
+        tmp_path, '{"ai_provider": "cohere", "vector_store": "chroma", "graph_renderer": "yfiles"}'
+    )
+    later = _new_session()
+    captions = " ".join(c.value for c in later.caption)
+    assert "`cohere` is not offered here" in captions
+    assert "`chroma` is not available here" in captions
+    assert later.selectbox(key="rag_provider_select").value == "ollama"
+    from graph.ui import RENDERER_OVERRIDE_KEY
+
+    assert later.session_state[RENDERER_OVERRIDE_KEY] is None  # the automatic engine
+    assert "`yfiles` is not available here" in captions
+    monkeypatch.setattr(gm, "_GLOBAL_MANAGER", None)
+
+
+def test_the_saved_vector_database_and_claude_embedding_provider_come_back(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    pytest.importorskip("qdrant_client", reason="the Qdrant engine is in the optional 'ai' extra")
+    _prefs(
+        tmp_path,
+        '{"ai_provider": "anthropic", "ai_claude_embedding_provider": "gemini", "vector_store": "qdrant"}',
+    )
+    later = _new_session()
+    assert later.selectbox(key="rag_provider_select").value == "anthropic"
+    assert later.selectbox(key="rag_claude_embed_provider").value == "gemini"
+    assert later.segmented_control(key="rag_vector_engine").value == "qdrant"

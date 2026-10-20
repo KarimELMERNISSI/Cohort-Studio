@@ -442,8 +442,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   setting cannot stop it).
 - **Settings keeps your choices for the next session**: the AI provider and its models, Claude's embedding
   provider, the vector database, the graph engine and the day-first reading of dates, saved in your workspace
-  (`preferences.json`) when you change them. Before, every sign-in started from the defaults. API keys and the
-  confirmation that data may leave the server are never saved: a cloud provider kept from the last session starts
+  (`preferences.json`) when you change them, also from a page's own graph engine menu. Before, every sign-in started
+  from the defaults. API keys, the confirmation that data may leave the server and the addresses of an Ollama or
+  Qdrant server (they decide where the data go) are never saved: a cloud provider kept from the last session starts
   nothing until you confirm again. A saved choice the server no longer offers is not used, and the page names it.
 
 ### AI engine: Gemini Flash-Lite

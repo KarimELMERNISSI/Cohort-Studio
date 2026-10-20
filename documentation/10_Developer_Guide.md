@@ -329,7 +329,10 @@ kept for the session only.
 the day-first default) are kept for the next session in `<workspace>/preferences.json` (`manage/preferences.py`,
 written whole and atomically). `ui/preferences.py` seeds the session after sign-in, once per user, only for the keys
 the session has not set, and the controls save them from their `on_change` callbacks. A preference never holds a
-key, a password or a consent; a choice the server no longer offers is not used, and the page names it.
+key, a password, a consent or an address (an Ollama or Qdrant address decides where the data go: it is entered again
+in each session); a choice the server no longer offers is not used, and the page names it. The file is read only if
+it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on one
+`DATA_ROOT`: the last write wins).
 
 **An unknown identity provider stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
 `better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`), in any case. Any other value raises

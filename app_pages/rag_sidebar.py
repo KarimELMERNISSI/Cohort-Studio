@@ -40,6 +40,7 @@ from manage.vectorstores import (
     recommend,
     resolve_engine,
 )
+from manage.vectorstores.lancedb_index import LanceDBIndex
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui import preferences
 from ui.components import confirm
@@ -196,6 +197,11 @@ def _provider_card() -> dict:
             on_change=preferences.save_from,
             args=("rag_provider_select", "ai_provider"),
         )
+        if prefs.ai_provider and prefs.ai_provider not in PROVIDER_NAMES:
+            st.caption(
+                f"Your saved AI provider {preferences.shown(prefs.ai_provider)} is not offered here: "
+                f"{PROVIDER_NAMES[provider]} is used."
+            )
         cfg["provider"] = provider
         if provider == "ollama":
             cfg["base_url"] = st.text_input(
@@ -268,7 +274,10 @@ def _seed_model(
     elif saved in options:
         st.session_state[key] = saved
     elif saved:
-        return [f"Your saved {kind} model {saved} is not offered here: {options[0]} is used."]
+        return [
+            f"Your saved {kind} model {preferences.shown(saved)} is not offered here: "
+            f"{preferences.shown(options[0])} is used."
+        ]
     return []
 
 
@@ -283,6 +292,8 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     saved = preferences.current().ai_claude_embedding_provider
     if "rag_claude_embed_provider" not in st.session_state and saved in EMBEDDING_PROVIDERS:
         st.session_state["rag_claude_embed_provider"] = saved  # the choice kept from the last session
+    elif saved and saved not in EMBEDDING_PROVIDERS:
+        st.caption(f"Your saved embedding provider {preferences.shown(saved)} is not offered here.")
     embed_provider = st.selectbox(
         "Embedding provider",
         EMBEDDING_PROVIDERS,
@@ -558,6 +569,17 @@ def _vectors_dir() -> Path:
     return scope.vectors_dir() if scope else Path(get_vectors_dir())
 
 
+def _engine_usable(name: str | None) -> tuple[bool, str]:
+    """Whether this server can run the vector database ``name`` (kept from the last session), and why not."""
+    if not name:
+        return False, ""
+    try:
+        engine = VectorEngine(name)
+    except ValueError:
+        return False, "not an engine of this version"
+    return (LanceDBIndex if engine is VectorEngine.LANCEDB else QdrantIndex).availability()
+
+
 def _vector_card(selected_files: list[str] | None) -> dict:
     """Choice of the vector database for this machine and library; returns the engine settings."""
     settings = VectorStoreSettings.from_env()
@@ -573,7 +595,9 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         st.session_state.setdefault("rag_qdrant_url", settings.qdrant_url or "")
         server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
-        default = resolve_engine(preferences.current().vector_store, settings, advice)
+        saved = preferences.current().vector_store
+        usable, why = _engine_usable(saved)
+        default = resolve_engine(saved if usable else None, settings, advice)
         choice = st.segmented_control(
             "Engine",
             options=[e.value for e in VectorEngine],
@@ -586,6 +610,11 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             args=("rag_vector_engine", "vector_store"),
         )
         engine = VectorEngine(choice or default.value)
+        if saved and not usable:
+            st.caption(
+                f"Your saved vector database {preferences.shown(saved)} is not available here ({why}): "
+                f"{ENGINE_TITLES[default]} is used."
+            )
         st.caption(ENGINE_SUMMARIES[engine])
         if engine is advice.engine:
             st.badge("Recommended for this machine", icon=":material/recommend:", color="green")
