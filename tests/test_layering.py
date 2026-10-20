@@ -32,7 +32,9 @@ The graph is read from the source:
   recorded as both, so ``from google import genai`` counts as ``google.genai``;
 - R1 and R2 use the imports as written. R3, R5 and the engine check follow what actually runs: importing
   ``a.b.c`` also runs ``a/__init__`` and ``a/b/__init__``, and a module named in a string (a lazy registry such as
-  ``"graph.renderers.plotly"``) or in ``importlib.import_module`` is loaded when it is used.
+  ``"graph.renderers.plotly"``) or in ``import_module`` is loaded when it is used. A string that equals a
+  module's name counts as loading it, which errs on the safe side;
+- a Streamlit component package counts as Streamlit, all along the chains.
 
 Today's exceptions are listed below, each with the milestone step that removes it. The lists can only shrink: a
 new violation fails, and so does a listed one that no longer occurs, until it is deleted from its list.
@@ -44,7 +46,7 @@ import ast
 import re
 import tomllib
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import cache
 from pathlib import Path
 
@@ -120,6 +122,7 @@ KNOWN_STREAMLIT = {
     ("graph.legend", "streamlit"),
     ("graph.ui", "streamlit"),
     ("graph.ui", "graph.legend"),
+    ("graph.ui", "graph.manager"),  # the registry names the yFiles renderer
     # the yFiles renderer imports its Streamlit component outside render, and the renderer registry names it
     # (M5b, connectors on one kit)
     ("graph.renderers.yfiles", "yfiles_graphs_for_streamlit"),
@@ -202,6 +205,26 @@ def _streamlit(name: str) -> bool:
     return "streamlit" in name.split(".")[0]
 
 
+def _ai(name: str) -> bool:
+    return _matches(name, AI_PACKAGES)
+
+
+def _not_in_engine(name: str) -> bool:
+    return _streamlit(name) or _matches(name, NOT_IN_ENGINE)
+
+
+def _import_module_target(call: ast.Call) -> str | None:
+    """The module named in ``importlib.import_module("<name>")`` or ``import_module("<name>")``."""
+    func = call.func
+    named = (isinstance(func, ast.Attribute) and func.attr == "import_module") or (
+        isinstance(func, ast.Name) and func.id == "import_module"
+    )
+    first = call.args[0] if call.args else None
+    if named and isinstance(first, ast.Constant) and isinstance(first.value, str):
+        return first.value
+    return None
+
+
 @cache
 def graph() -> tuple[
     dict[str, set[tuple[str, bool]]], dict[str, set[tuple[str, bool]]], dict[str, set[str]]
@@ -227,11 +250,14 @@ def graph() -> tuple[
                 ):
                     named[name].add(node.value.split(":")[0])
                 continue
-            if not isinstance(node, ast.Import | ast.ImportFrom):
-                continue
-            if isinstance(node, ast.Import):
+            if isinstance(node, ast.Call):
+                target = _import_module_target(node)
+                if target is None:
+                    continue
+                targets = [target]
+            elif isinstance(node, ast.Import):
                 targets = [alias.name for alias in node.names]
-            else:
+            elif isinstance(node, ast.ImportFrom):
                 base = node.module or ""
                 if node.level:
                     anchor = package[: len(package) - node.level + 1]
@@ -246,6 +272,8 @@ def graph() -> tuple[
                         targets += [base, full]
                     else:
                         targets.append(base)
+            else:
+                continue
             for target in targets:
                 if renderer and function == "render" and _streamlit(target):
                     continue  # allowed by design: a renderer draws through Streamlit
@@ -254,18 +282,6 @@ def graph() -> tuple[
                     other[name].add((target, lazy))
                 elif resolved != name:
                     first[name].add((resolved, lazy))
-        for call in (n for n in ast.walk(tree) if isinstance(n, ast.Call)):
-            func = call.func
-            if (
-                isinstance(func, ast.Attribute)
-                and func.attr == "import_module"
-                and call.args
-                and isinstance(call.args[0], ast.Constant)
-                and isinstance(call.args[0].value, str)
-            ):
-                target = call.args[0].value
-                if _resolve(target) is None:
-                    other[name].add((target, True))
     return first, other, named
 
 
@@ -310,15 +326,11 @@ def _matches(name: str, packages: tuple[str, ...]) -> bool:
 
 
 @cache
-def _reaching(packages: tuple[str, ...], lazy: bool) -> frozenset[str]:
-    """The modules from which one of the third-party ``packages`` is loaded, through any chain of imports."""
+def _reaching(match: Callable[[str], bool], lazy: bool) -> frozenset[str]:
+    """The modules from which a third-party package that ``match`` accepts is loaded, through any chain."""
     _, other, _ = graph()
     edges = runs()
-    reach = {
-        m
-        for m, names in other.items()
-        if any(_matches(n, packages) and (lazy or not z) for n, z in names)
-    }
+    reach = {m for m, names in other.items() if any(match(n) and (lazy or not z) for n, z in names)}
     queue = deque(reach)
     importers: dict[str, set[str]] = {}
     for module, targets in edges.items():
@@ -333,8 +345,8 @@ def _reaching(packages: tuple[str, ...], lazy: bool) -> frozenset[str]:
     return frozenset(reach)
 
 
-def _chain(start: str, packages: tuple[str, ...], lazy: bool = True) -> list[str] | None:
-    """One chain of imports from ``start`` to one of ``packages``, or None."""
+def _chain(start: str, match: Callable[[str], bool], lazy: bool = True) -> list[str] | None:
+    """One chain of imports from ``start`` to a third-party package that ``match`` accepts, or None."""
     _, other, _ = graph()
     edges = runs()
     previous: dict[str, str | None] = {start: None}
@@ -342,7 +354,7 @@ def _chain(start: str, packages: tuple[str, ...], lazy: bool = True) -> list[str
     while queue:
         current = queue.popleft()
         hit = next(
-            (n for n, z in sorted(other[current]) if (lazy or not z) and _matches(n, packages)),
+            (n for n, z in sorted(other[current]) if (lazy or not z) and match(n)),
             None,
         )
         if hit:
@@ -445,9 +457,7 @@ def test_r2_no_import_cycles() -> None:
 def test_r3_nothing_below_ui_reaches_streamlit() -> None:
     _, other, _ = graph()
     edges = runs()
-    reach = _reaching(("streamlit",), lazy=True) | {
-        m for m, names in other.items() if any(_streamlit(n) for n, _ in names)
-    }
+    reach = _reaching(_streamlit, lazy=True)
     found = set()
     for module in modules():
         if module in ENTRY_POINTS or layer(module) >= LAYERS["ui"]:
@@ -457,7 +467,7 @@ def test_r3_nothing_below_ui_reaches_streamlit() -> None:
     assert found == KNOWN_STREAMLIT, _difference(
         found, KNOWN_STREAMLIT, rule="R3: nothing below ui reaches Streamlit"
     ) + "".join(
-        f" Chain: {' -> '.join(_chain(m, ('streamlit',)) or [m, h])}."
+        f" Chain: {' -> '.join(_chain(m, _streamlit) or [m, h])}."
         for m, h in sorted(found - KNOWN_STREAMLIT)
     )
 
@@ -467,7 +477,7 @@ def test_r4_ai_sdks_only_in_the_providers() -> None:
     found = {
         module
         for module, names in other.items()
-        if not module.startswith("manage.rag.providers")
+        if not _matches(module, ("manage.rag.providers",))
         and any(_matches(name, AI_SDKS) for name, _lazy in names)
     }
     assert found == KNOWN_SDK, _difference(
@@ -481,8 +491,8 @@ def test_r4_ai_sdks_only_in_the_providers() -> None:
 def test_r5_headless_entry_points_reach_neither_streamlit_nor_ai(entry: str) -> None:
     if entry not in modules():
         pytest.skip(f"{entry} does not exist yet")
-    for packages in (("streamlit",), AI_PACKAGES):
-        chain = _chain(entry, packages)
+    for match in (_streamlit, _ai):
+        chain = _chain(entry, match)
         assert chain is None, f"R5: {entry} reaches {chain[0]}: {' -> '.join(chain)}"
 
 
@@ -499,7 +509,7 @@ def test_the_engine_needs_no_ui_plotting_or_ai_library(package: str) -> None:
         " -> ".join(chain)
         for module in modules()
         if module.split(".")[0] == package
-        and (chain := _chain(module, NOT_IN_ENGINE, lazy=False)) is not None
+        and (chain := _chain(module, _not_in_engine, lazy=False)) is not None
     )
     assert not offenders, offenders
 
