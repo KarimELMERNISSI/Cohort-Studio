@@ -296,11 +296,28 @@ def _chain(
     return _ChainOutput(draws=draws, mean=mean, sd=sd, dropped=dropped)
 
 
-def _one_thread() -> None:
-    """Worker initialiser: one BLAS thread per process (the processes already use the cores)."""
+def _init_worker() -> None:
+    """
+    Worker initialiser: one BLAS thread per process (the processes already use the cores), and an exit with the
+    process that started the pool. Stopping that process (an interrupted run, :mod:`biostats.mi.parallel`) left its
+    workers computing, unseen, each with a copy of the data and the processor cores the run had given back.
+    """
+    import multiprocessing
+    import os
+    import threading
+
     from threadpoolctl import threadpool_limits
 
     threadpool_limits(1)
+    parent = multiprocessing.parent_process()
+    if parent is None:
+        return
+
+    def exit_with_parent() -> None:
+        parent.join()  # returns when the parent process has ended (spawn, forkserver and fork)
+        os._exit(1)
+
+    threading.Thread(target=exit_with_parent, name="exit-with-parent", daemon=True).start()
 
 
 def _run_chain(job: tuple[Any, ...]) -> _ChainOutput:
@@ -387,7 +404,7 @@ def impute(
 
             outputs: list[_ChainOutput | None] = [None] * spec.m
             with ProcessPoolExecutor(
-                max_workers=min(workers, spec.m), initializer=_one_thread
+                max_workers=min(workers, spec.m), initializer=_init_worker
             ) as pool:
                 futures = {pool.submit(_run_chain, job): k for k, job in enumerate(jobs)}
                 for future in as_completed(futures):

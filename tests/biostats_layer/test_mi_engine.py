@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import sys
+import time
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -310,3 +315,73 @@ def test_an_interrupted_parallel_run_stops_its_worker_process(
     with pytest.raises(Rerun):
         parallel.run_in_subprocess(pd.DataFrame({"x": [1.0]}), object(), 2, progress)
     assert not started[0].running and started[0].waited
+
+
+def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = wintypes.DWORD()
+            kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def test_an_interrupted_parallel_run_leaves_no_process_and_no_copy_of_the_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stopping the run's interpreter left its pool workers computing, unseen, with the data (review, M5b)."""
+    import tempfile
+
+    from biostats.mi import parallel
+
+    # every interpreter the run starts notes its process id (a test-only sitecustomize on PYTHONPATH)
+    hook, seen, temp = tmp_path / "hook", tmp_path / "pids", tmp_path / "temp"
+    for folder in (hook, seen, temp):
+        folder.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        "import os\n"
+        "folder = os.environ.get('CMP_TEST_PIDS')\n"
+        "if folder:\n"
+        "    open(os.path.join(folder, str(os.getpid())), 'w').close()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(hook))
+    monkeypatch.setenv("CMP_TEST_PIDS", str(seen))
+    monkeypatch.setattr(tempfile, "tempdir", str(temp))
+
+    class Rerun(BaseException):
+        pass
+
+    def progress(fraction: float) -> None:
+        if fraction > 0:  # the first chains are done, the others are being computed
+            raise Rerun
+
+    _, df = _cohort(n=3000)
+    with pytest.raises(Rerun):
+        parallel.run_in_subprocess(df, SPEC.model_copy(update={"m": 4, "maxit": 30}), 2, progress)
+    assert list(temp.iterdir()) == []  # the copy of the data is deleted
+    pids = [int(p.name) for p in seen.iterdir()]
+    assert len(pids) >= 3  # the run's interpreter and its two workers
+    deadline = time.monotonic() + 15
+    while any(_alive(pid) for pid in pids) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    assert not [pid for pid in pids if _alive(pid)]

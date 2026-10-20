@@ -350,9 +350,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ### Runtime (M5b)
 
-- **An interrupted imputation stops its worker process.** A click during a parallel multiple imputation reruns the
-  page, which skipped the clean-up: the worker process ran on, unseen, holding the files of its temporary folder.
-  It is now stopped.
+- **An interrupted imputation stops all its processes and deletes its copy of the data.** A click during a parallel
+  multiple imputation reruns the page, which skipped the clean-up. The run's interpreter and its worker processes
+  ran on, unseen, on cores already given back to other runs, and the temporary folder with a copy of the data stayed.
+  The workers now exit with the interpreter that started them, and the folder is deleted however the run ends. On
+  Windows, the run starts the base interpreter of the virtual environment, as Python's multiprocessing does:
+  stopping the environment's launcher left the interpreter it started running. The interruption itself reaches the
+  page unchanged; it no longer turns into a failed run that was redone in one process.
 - **Imputations share the processor cores of the server.** Each session started as many worker processes as the
   server has cores minus one, so two people imputing at once ran twice that number. The worker processes are now
   shared by every session of the server: a run gets the ones that are free and never waits. When none are free, it
