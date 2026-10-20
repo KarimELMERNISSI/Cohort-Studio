@@ -267,3 +267,46 @@ def test_a_failed_parallel_run_falls_back_to_one_process(monkeypatch: pytest.Mon
     assert fallback.mi.fingerprint() == sequential.mi.fingerprint()
     assert any("the parallel run failed" in w and "exit code 3" in w for w in fallback.warnings)
     assert not any("parallel" in w for w in sequential.warnings)
+
+
+def test_an_interrupted_parallel_run_stops_its_worker_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # a click reruns the page: Streamlit raises a BaseException in the progress callback, which skipped the
+    # clean-up, so the worker process ran on and kept the files of its temporary folder
+    from pathlib import Path
+
+    from biostats.mi import parallel
+
+    class Worker:
+        def __init__(self, args, **kwargs) -> None:
+            Path(args[-1]).write_text("0.5", encoding="utf-8")  # its progress file
+            self.running, self.waited = True, False
+            self.returncode = None
+
+        def poll(self):
+            return None if self.running else self.returncode
+
+        def terminate(self) -> None:
+            self.running, self.returncode = False, -15
+
+        def wait(self, timeout=None):
+            self.waited = True
+            return self.returncode
+
+    started: list[Worker] = []
+
+    def popen(args, **kwargs):
+        started.append(Worker(args, **kwargs))
+        return started[-1]
+
+    class Rerun(BaseException):
+        pass
+
+    def progress(fraction: float) -> None:
+        raise Rerun
+
+    monkeypatch.setattr(parallel.subprocess, "Popen", popen)
+    with pytest.raises(Rerun):
+        parallel.run_in_subprocess(pd.DataFrame({"x": [1.0]}), object(), 2, progress)
+    assert not started[0].running and started[0].waited

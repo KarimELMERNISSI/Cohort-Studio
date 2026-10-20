@@ -48,11 +48,22 @@ def run_in_subprocess(
                 stdout=subprocess.DEVNULL,
                 stderr=err,
             )
-            while process.poll() is None:
-                if progress is not None and ticks.exists():
-                    with contextlib.suppress(ValueError, OSError):
-                        progress(float(ticks.read_text(encoding="utf-8") or 0))
-                time.sleep(0.3)
+            try:
+                while process.poll() is None:
+                    if progress is not None and ticks.exists():
+                        with contextlib.suppress(ValueError, OSError):
+                            progress(float(ticks.read_text(encoding="utf-8") or 0))
+                    time.sleep(0.3)
+            finally:
+                # interrupted (a click reruns the page: Streamlit raises a BaseException in the progress callback):
+                # the worker must not run on, unseen, and must release the files of the temporary folder
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
         stderr = errors.read_text(encoding="utf-8", errors="replace")
         if process.returncode != 0 or not result.exists():
             last = (

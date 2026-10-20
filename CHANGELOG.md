@@ -348,6 +348,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   above its floor fails until the floor is raised. The overall minimum rises from 63 % to 70 % (72 % measured).
 - The pre-commit hook and CI format with the same version of ruff, which a test checks against `uv.lock`.
 
+### Runtime (M5b)
+
+- **An interrupted imputation stops its worker process.** A click during a parallel multiple imputation reruns the
+  page, which skipped the clean-up: the worker process ran on, unseen, holding the files of its temporary folder.
+  It is now stopped.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,
