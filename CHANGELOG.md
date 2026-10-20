@@ -382,6 +382,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The health scorecard follows the outlier detection settings at once.** It sits above those settings and used
   the ones stored in the click before, so it followed a change one click late, and showed the default settings for
   one click after each change of the data. It now reads the settings from their controls.
+- **Each tab reads its own data** on Validate, Statistics & correlations and Hypothesis tests & epidemiology; the
+  tabs passed their table on to the next one.
+  - On Validate, the anomaly check's flag columns reached the Outliers tab, where a multivariate method (Isolation
+    Forest, Local Outlier Factor, DBSCAN) selected them by default: its result depended on whether the check had
+    been run. The inclusion check also showed the anomaly flags. Each check now shows its own flags, and the
+    outlier detection works on the dataset.
+  - On Hypothesis tests & epidemiology, the chosen transformation is computed in the Analysis tab only, where it
+    applies, and its note is shown there.
 
 ### AI engine: Gemini Flash-Lite
 

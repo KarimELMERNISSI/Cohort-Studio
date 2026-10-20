@@ -781,7 +781,7 @@ def app():
             rename_component = RenameColumnsComponent(st.session_state.get('data', None), analyzer)
 
             # Display the component (a rename is committed by AppState; nothing is written back here)
-            df = rename_component.display()
+            rename_component.display()
             #st.write("test: ")
             #st.dataframe(st.session_state["data"])
             
@@ -789,7 +789,9 @@ def app():
             no_dataset()
 
     with tabs[0]:
-        if 'working_df' in st.session_state:  # a rename applied in the tab above: the renamed columns
+        # its own inputs: the analysis rows as they stand (a rename applied in the Renaming tab included)
+        df = st.session_state.get('working_df')
+        if df is not None:
             analyzer = get_state().analyzer()
         col_title, col_reset = st.columns([4, 1])
         with col_title:

@@ -1627,6 +1627,7 @@ def app():
     with tab1:
         anomaly_family = "clinical_anomalies"
         detect = False  # set when the family is checked below
+        anomaly_view = None
         with st.expander("New Anomaly Criterion", expanded=True):
             add_domain_expert_based_anomaly_mask(st.session_state.config, st)
 
@@ -1646,11 +1647,11 @@ def app():
                 detect = bool(st.session_state.get("anomaly_check_done"))
 
                 if detect:
-                    df, anom_cols = apply_family_mask(df, anomaly_family, family_config, st)
-                    print(f"Columns containing anomaly detection information: {anom_cols}")
+                    # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                    anomaly_view, anom_cols = apply_family_mask(df.copy(deep=False), anomaly_family, family_config, st)
                     # Increase the max elements limit for Pandas Styler
                     pd.set_option("styler.render.max_elements", 600000)
-                    styled_df = df.style.apply(
+                    styled_df = anomaly_view.style.apply(
                                             color_columns, 
                                             axis=0, 
                                             columns_to_highlight=anom_cols
@@ -1660,13 +1661,14 @@ def app():
             else:
                 st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
-        if detect and f"{anomaly_family}_any" in df.columns:  # absent while a rule cannot be evaluated
+        if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
             with st.expander("Results", expanded=True):
-                display_results_with_anomaly(df=df,anomaly_col=f"{anomaly_family}_any", st=st)
+                display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
             
     with tab2:
         inclusion_family = "study_inclusion"
         check_inc = False  # set when the family is checked below
+        inclusion_view = None
         with st.expander("New Inclusion Criterion", expanded=True):
             add_study_inclusion_mask(st.session_state.config, st)
         
@@ -1683,9 +1685,9 @@ def app():
                 check_inc = bool(st.session_state.get("inclusion_check_done"))
 
                 if check_inc:
-                    df, inc_cols = apply_family_mask(df, inclusion_family, family_config, st)
-                    print(f"Columns containing anomaly detection information: {inc_cols}")
-                    styled_df = df.style.apply(
+                    # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                    inclusion_view, inc_cols = apply_family_mask(df.copy(deep=False), inclusion_family, family_config, st)
+                    styled_df = inclusion_view.style.apply(
                                             color_columns, 
                                             axis=0, 
                                             columns_to_highlight=inc_cols
@@ -1695,9 +1697,9 @@ def app():
             else:
                 st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
-        if check_inc and f"{inclusion_family}_all" in df.columns:  # absent while a rule cannot be evaluated
+        if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
             with st.expander("Results", expanded=True):
-                display_results_with_inclusion(df=df,inclusion_col=f"{inclusion_family}_all", st=st)
+                display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
 
 
     with tab3:

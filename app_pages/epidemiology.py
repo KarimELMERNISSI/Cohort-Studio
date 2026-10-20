@@ -174,6 +174,47 @@ def _render_twobytwo_panel(epi):
 
 
 
+def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> pd.DataFrame:
+    """
+    The data of the Analysis tab, its numeric variables transformed as chosen above the tabs. Computed in that tab
+    only (M5b): the other tabs analyse the data as they are.
+    """
+    df_analysis = df.copy()
+    if transformation == "None (Raw Data)":
+        return df_analysis
+    if numeric_cols:
+        if transformation == "Log Transformation (Log1p)":
+            # Check for negative values
+            cols_to_transform = []
+            skipped_cols = []
+            for col in numeric_cols:
+                if pd.api.types.is_numeric_dtype(df_analysis[col]):
+                    if df_analysis[col].min() >= 0:
+                        df_analysis[col] = np.log1p(df_analysis[col])
+                        cols_to_transform.append(col)
+                    else:
+                        skipped_cols.append(col)
+            
+            if skipped_cols:
+                st.warning(f"Log transformation skipped for columns with negative values: {', '.join(skipped_cols)}")
+                
+        elif transformation == "Z-Score Standardization":
+            for col in numeric_cols:
+                if pd.api.types.is_numeric_dtype(df_analysis[col]) and df_analysis[col].std() > 0:
+                    df_analysis[col] = (df_analysis[col] - df_analysis[col].mean()) / df_analysis[col].std()
+                    
+        elif transformation == "Min-Max Normalization":
+            for col in numeric_cols:
+                if pd.api.types.is_numeric_dtype(df_analysis[col]):
+                    min_val = df_analysis[col].min()
+                    max_val = df_analysis[col].max()
+                    if max_val > min_val:
+                        df_analysis[col] = (df_analysis[col] - min_val) / (max_val - min_val)
+    
+    st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
+    return df_analysis
+
+
 def app(mi=None):
     """
     Main application function for the Epidemiology Analysis page.
@@ -226,40 +267,6 @@ def app(mi=None):
     if guidance_on():
         render_orientation()
 
-    # Apply Transformation
-    df_analysis = df.copy()
-    if transformation != "None (Raw Data)":
-        numeric_cols = analyzer.numeric_cols
-        if numeric_cols:
-            if transformation == "Log Transformation (Log1p)":
-                # Check for negative values
-                cols_to_transform = []
-                skipped_cols = []
-                for col in numeric_cols:
-                    if pd.api.types.is_numeric_dtype(df_analysis[col]):
-                        if df_analysis[col].min() >= 0:
-                            df_analysis[col] = np.log1p(df_analysis[col])
-                            cols_to_transform.append(col)
-                        else:
-                            skipped_cols.append(col)
-                
-                if skipped_cols:
-                    st.warning(f"Log transformation skipped for columns with negative values: {', '.join(skipped_cols)}")
-                    
-            elif transformation == "Z-Score Standardization":
-                for col in numeric_cols:
-                    if pd.api.types.is_numeric_dtype(df_analysis[col]) and df_analysis[col].std() > 0:
-                        df_analysis[col] = (df_analysis[col] - df_analysis[col].mean()) / df_analysis[col].std()
-                        
-            elif transformation == "Min-Max Normalization":
-                for col in numeric_cols:
-                    if pd.api.types.is_numeric_dtype(df_analysis[col]):
-                        min_val = df_analysis[col].min()
-                        max_val = df_analysis[col].max()
-                        if max_val > min_val:
-                            df_analysis[col] = (df_analysis[col] - min_val) / (max_val - min_val)
-        
-        st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
 
     tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Paired, rates & stratified", "Power & Sample Size",
                     "Z-Score & Reference", "Test Guide & Education"])
@@ -276,9 +283,10 @@ def app(mi=None):
             else:
                 run_pooled_ancova(mi, analyzer)
         elif analysis_mode == "Univariate (Group Comparison)":
+            df_analysis = _transformed(df, analyzer.numeric_cols, transformation)
             run_univariate_analysis(df_analysis, analyzer, transformed=transformation != "None (Raw Data)")
         else:
-            run_multivariate_analysis(df_analysis, analyzer)
+            run_multivariate_analysis(_transformed(df, analyzer.numeric_cols, transformation), analyzer)
 
     with tabs[1]:
         if mi is not None:
