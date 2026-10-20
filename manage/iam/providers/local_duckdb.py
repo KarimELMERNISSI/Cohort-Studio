@@ -8,6 +8,7 @@ clinical environments, and full backward compatibility.
 
 import logging
 import os
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -15,6 +16,7 @@ import bcrypt
 import duckdb
 
 import utils.data_paths as dp
+from core.workspace import safe_dirname
 from utils.logging_config import single_line
 from utils.settings import get_settings
 
@@ -26,6 +28,19 @@ MAX_FAILED_LOGINS = get_settings().iam.max_failed_logins
 LOCKOUT_MINUTES = get_settings().iam.lockout_minutes
 
 logger = logging.getLogger(__name__)
+
+
+def _folder(username: str) -> str | None:
+    try:
+        return safe_dirname(username).lower()
+    except ValueError:
+        return None
+
+
+def _shares_a_folder(username: str, existing: Iterable[str]) -> bool:
+    """Whether ``username`` would have the workspace folder of an existing account (core.workspace.safe_dirname)."""
+    folder = _folder(username)
+    return folder is not None and any(_folder(name) == folder for name in existing)
 
 
 class LocalDuckDBIAMProvider(BaseIAMProvider):
@@ -211,6 +226,10 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
             if res:
                 return False, "Username already exists"
+            # one workspace folder per account: a name differing from another only by case (one folder on Windows
+            # and macOS) or by a final '.', '_' or '-' (dropped from folder names) would share its datasets
+            if _shares_a_folder(username, (row[0] for row in con.execute("SELECT username FROM users").fetchall())):
+                return False, "A username differing from an existing one only by case or punctuation is not allowed"
 
             hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
             # Accounts are never activated or promoted because of their name (audit E5).

@@ -17,7 +17,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$")
+# a new name starts and ends with a letter or a digit: it is its own workspace folder (core.workspace.safe_dirname
+# drops a final ".", "_" or "-", so "drlee." and "drlee" would share one; data-protection review, M5b)
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{1,30}[A-Za-z0-9]$")
 _UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
 KINDS: tuple[str, ...] = (
     "datasets",

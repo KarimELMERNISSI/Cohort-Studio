@@ -37,3 +37,11 @@ def test_new_credentials_order_of_checks() -> None:
     assert "Username" in validate_new_credentials("!bad", good, good)
     assert "at least" in validate_new_credentials("dr_lee", "short", "short")
     assert "match" in validate_new_credentials("dr_lee", good, good + "x")
+
+
+def test_a_new_name_is_its_own_workspace_folder() -> None:
+    """A final '.', '_' or '-' is dropped from folder names: "drlee." would share drlee's workspace."""
+    for name in ("drlee.", "drlee_", "drlee-", ".drlee"):
+        assert validate_username(name) is not None, name
+    for name in ("drlee", "dr.lee", "dr_lee-2"):
+        assert validate_username(name) is None, name

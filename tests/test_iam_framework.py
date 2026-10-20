@@ -354,3 +354,15 @@ class TestIAMManager:
         monkeypatch.setenv("CMP_BETTER_AUTH_URL", "http://test-server:3000/api/auth")
         manager_better = IAMManager()
         assert manager_better.provider_name == "better_auth"
+
+
+def test_a_name_sharing_an_accounts_workspace_folder_is_refused(local_provider: LocalDuckDBIAMProvider) -> None:
+    """One folder per account (data-protection review, M5b): case variants share a folder on Windows and macOS, and
+    a final '.', '_' or '-' is dropped from folder names."""
+    assert local_provider.create_user("drlee", "a-long-password-1")[0]
+    for look_alike in ("DrLee", "DRLEE", "drlee_", "drlee."):
+        ok, message = local_provider.create_user(look_alike, "a-long-password-1")
+        assert not ok and "case or punctuation" in message, look_alike
+    assert local_provider.create_user("jdoe.", "a-long-password-1")[0]  # an account made before the rule
+    assert not local_provider.create_user("jdoe", "a-long-password-1")[0]
+    assert local_provider.create_user("dr.lee", "a-long-password-1")[0]  # another folder

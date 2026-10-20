@@ -441,6 +441,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   credentials of any address (`http://user:password@host`) and a key's value without the spaces around it, the form
   the settings use. A password is used as it is, spaces included. A wrong boolean names the accepted spellings (1/0,
   true/false, yes/no, on/off), and an unknown identity provider is named without its value.
+- **One workspace per account.** A new username must begin and end with a letter or a digit, and is refused when it
+  differs from an existing one only by case or by a final `.`, `_` or `-`: `drlee.`, `drlee_` and (on Windows and
+  macOS) `DrLee` were valid new accounts that shared `drlee`'s workspace folder, its datasets, documents and
+  preferences, once activated. Existing accounts are not changed.
 - **An empty value counts as unset everywhere**, as `.env.example`'s empty lines mean: `CMP_IAM_CACHE_TTL=` stopped
   the identity manager, and `CMP_RANDOM_SEED=` every statistics module at import. Every part of the application now
   reads its settings from the one object, the log redaction included (from the raw environment, so that a wrong
