@@ -424,6 +424,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   environment variable (unchanged), grouped by subsystem and validated; the keys and passwords are hidden when
   printed. A test checks that `.env.example` lists exactly these settings, in both directions, that its values are
   the defaults and that its secret lines are empty.
+- **A wrong setting stops start-up, with its name.** The application and `manage_users.py` load `.env`, then
+  validate every setting before anything reads one; a wrong one stops start-up with the variable's name and what is
+  expected, never its value. Before, some wrong values counted silently as others (`CMP_LOG_LEVEL=verbose` as INFO,
+  `CMP_OFFLINE=enabled` as off), and some failed later (`CMP_MI_MAX_WORKERS=0` at the first imputation). Check your
+  `.env` when you update: a value accepted before may now be refused.
+- A `.streamlit/secrets.toml` is not read (the settings come from the environment and `.env` only): its presence is
+  logged at start-up, so that its values can be moved to `.env` and the file deleted.
 
 ### AI engine: Gemini Flash-Lite
 
