@@ -426,7 +426,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
         group = c1.selectbox(
             "Grouping variable",
             ["None", *groupers],
-            key="mi_cmp_group",
+            persist_state="page", key="mi_cmp_group",
             help=f"A categorical variable with 2 to {MAX_GROUP_LEVELS} levels in the analysis population.",
         )
         levels: list[str] = []
@@ -437,7 +437,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
                 all_levels,
                 default=all_levels,
                 format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
-                key=f"mi_cmp_levels::{group}",
+                persist_state="page", key=f"mi_cmp_levels::{group}",
             )
             level_warning(group, all_levels)
         candidates = [c for c in [*numeric, *categorical] if c != group]
@@ -445,15 +445,15 @@ def run_pooled_comparison(mi, analyzer) -> None:
             "Variables to compare",
             candidates,
             default=[c for c in numeric if c != group][:5],
-            key="mi_cmp_targets",
+            persist_state="page", key="mi_cmp_targets",
             help="Variables created after the imputation are not in the imputed datasets.",
         )
-        correction = c2.selectbox("Multiple testing correction", list(CORRECTION_OPTIONS), key="mi_cmp_correction")
+        correction = c2.selectbox("Multiple testing correction", list(CORRECTION_OPTIONS), persist_state="page", key="mi_cmp_correction")
         haldane = (
             "always"
             if c2.checkbox(
                 "Zero cells: add 0.5 to every cell of every 2x2 table (sensitivity analysis)",
-                key="mi_cmp_haldane",
+                persist_state="page", key="mi_cmp_haldane",
                 help="A zero cell gets the +0.5 correction in its own imputed dataset only, so by default the odds "
                 "and risk ratios are then not pooled (the risk difference is). Adding 0.5 everywhere keeps one "
                 "estimator across the imputed datasets; report it as a sensitivity analysis.",
@@ -464,7 +464,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
             "Test selection",
             ["Recommended", "Choose the method"],
             horizontal=True,
-            key="mi_cmp_selection",
+            persist_state="page", key="mi_cmp_selection",
             help="The analyses offered are those with a pooling rule over the imputed datasets.",
         )
         two_groups, more_groups = "welch", "robust"
@@ -473,13 +473,13 @@ def run_pooled_comparison(mi, analyzer) -> None:
                 "Numeric variable, two groups",
                 list(TWO_GROUP_TESTS),
                 format_func=TWO_GROUP_TESTS.get,
-                key="mi_cmp_two_groups",
+                persist_state="page", key="mi_cmp_two_groups",
             )
             more_groups = c1.selectbox(
                 "Numeric variable, three groups or more",
                 list(MORE_GROUP_TESTS),
                 format_func=MORE_GROUP_TESTS.get,
-                key="mi_cmp_more_groups",
+                persist_state="page", key="mi_cmp_more_groups",
             )
             if two_groups != "welch":
                 st.warning(STUDENT_WARNING, icon=":material/rule:")
@@ -549,7 +549,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
     provenance("univariate_mi")
     if stored["results"]:
         st.subheader("Detail")
-        target = st.selectbox("Variable", list(stored["results"]), key="mi_cmp_detail")
+        target = st.selectbox("Variable", list(stored["results"]), persist_state="page", key="mi_cmp_detail")
         _show_detail(target, stored["results"][target], group)
 
 
@@ -560,10 +560,10 @@ def run_pooled_ancova(mi, analyzer) -> None:
         st.info("ANCOVA needs a numeric outcome and a grouping variable.")
         return
     c1, c2, c3 = st.columns(3)
-    target = c1.selectbox("Target variable (Y)", numeric, key="mi_anc_target")
-    group = c2.selectbox("Grouping variable (factor)", [g for g in groupers if g != target], key="mi_anc_group")
+    target = c1.selectbox("Target variable (Y)", numeric, persist_state="page", key="mi_anc_target")
+    group = c2.selectbox("Grouping variable (factor)", [g for g in groupers if g != target], persist_state="page", key="mi_anc_group")
     covariates = c3.multiselect(
-        "Covariates (confounders)", [c for c in numeric if c not in (target, group)], key="mi_anc_covs"
+        "Covariates (confounders)", [c for c in numeric if c not in (target, group)], persist_state="page", key="mi_anc_covs"
     )
     config = (target, group, tuple(covariates), mi_token(get_state()))
     if st.button("Run pooled ANCOVA", type="primary", key="mi_anc_run"):

@@ -67,6 +67,8 @@ def test_guidance_can_be_hidden(app: AppTest) -> None:
 
 
 def test_power_from_expected_means_and_proportions(app: AppTest) -> None:
+    app.session_state["epi_tab"] = "Power & Sample Size"  # only the open tab runs
+    app.run()
     app.selectbox(key="power_test_type_selector").select("T-Test (Independent)").run()
     app.selectbox(key="es_mode_ttest").select("Expected means and SD").run()
     app.number_input(key="ratio_ttest").set_value(
@@ -87,6 +89,8 @@ def test_power_from_expected_means_and_proportions(app: AppTest) -> None:
     _click(app, "Calculate Sample Size")
     success = " ".join(s.value for s in app.success)
     assert "an association of w = 0.17" in success and "per group" in success
+    app.session_state["epi_tab"] = "Analysis"  # the tests below use the first tab
+    app.run()
 
 
 def test_ancova_model_check(app: AppTest) -> None:

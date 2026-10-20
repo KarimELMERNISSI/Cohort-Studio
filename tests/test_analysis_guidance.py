@@ -153,9 +153,9 @@ def test_result_sentences() -> None:
 
 def test_orientation_matches_the_page_tabs_and_help_texts_are_complete() -> None:
     source = (ROOT / "app_pages" / "epidemiology.py").read_text(encoding="utf-8")
-    tabs_call = re.search(r"tabs = st\.tabs\((\[.*?\])", source, re.S)
-    assert tabs_call
-    assert [g.tab for g in TAB_GUIDE] == ast.literal_eval(tabs_call.group(1))
+    tabs = re.search(r"^TABS = (\(.*?\))$", source, re.S | re.M)  # the labels of the page's tabs (M5b)
+    assert tabs
+    assert [g.tab for g in TAB_GUIDE] == list(ast.literal_eval(tabs.group(1)))
     assert all(text.strip() for text in HELP.values()) and len(HELP) >= 45
     assert set(TEST_NOTES) >= {"Auto-Detect", "Student's t-test", "Welch's t-test", "Mann-Whitney U",
                                "ANOVA", "Kruskal-Wallis", "Chi-Square", "Fisher's Exact"}

@@ -68,19 +68,19 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         before = c1.selectbox(
             "Before / method A",
             numeric,
-            key="pair_before",
+            persist_state="page", key="pair_before",
             help="First measurement of each subject.",
         )
         after = c2.selectbox(
             "After / method B",
             [c for c in numeric if c != before],
-            key="pair_after",
+            persist_state="page", key="pair_after",
             help="Second measurement of the same subject (differences are after - before).",
         )
         kind = c3.radio(
             "Test",
             ["Paired t-test", "Wilcoxon signed-rank"],
-            key="pair_kind",
+            persist_state="page", key="pair_kind",
             horizontal=True,
             help="Paired t for roughly symmetric differences; Wilcoxon for skewed differences or outliers.",
         )
@@ -118,17 +118,17 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
     )
     if numeric:
         c1, c2, c3 = st.columns(3)
-        col = c1.selectbox("Variable", numeric, key="one_col", help="The measurement to compare.")
+        col = c1.selectbox("Variable", numeric, persist_state="page", key="one_col", help="The measurement to compare.")
         ref = c2.number_input(
             "Reference value",
             value=float(pd.to_numeric(df[col], errors="coerce").median() or 0.0),
-            key="one_ref",
+            persist_state="page", key="one_ref",
             help="The fixed value the mean (or median) is compared with.",
         )
         kind = c3.radio(
             "Test ",
             ["One-sample t-test", "Wilcoxon signed-rank"],
-            key="one_kind",
+            persist_state="page", key="one_kind",
             horizontal=True,
             help="t-test for roughly symmetric data; Wilcoxon otherwise.",
         )
@@ -166,13 +166,13 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         b1 = c1.selectbox(
             "Before (binary)",
             binary,
-            key="mc_before",
+            persist_state="page", key="mc_before",
             help="First binary measurement of each subject.",
         )
         b2 = c2.selectbox(
             "After (binary)",
             [c for c in binary if c != b1],
-            key="mc_after",
+            persist_state="page", key="mc_after",
             help="Second binary measurement of the same subject.",
         )
         if st.button("Run McNemar's test", key="mc_run", type="primary"):
@@ -201,11 +201,11 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         min_value=0,
         value=30,
         step=1,
-        key="prop_k",
+        persist_state="page", key="prop_k",
         help="Observed number of successes.",
     )
     n_total = p2.number_input(
-        "Trials", min_value=1, value=100, step=1, key="prop_n", help="Number of trials or subjects."
+        "Trials", min_value=1, value=100, step=1, persist_state="page", key="prop_n", help="Number of trials or subjects."
     )
     p_ref = p3.number_input(
         "Reference proportion",
@@ -213,7 +213,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         max_value=1.0,
         value=0.2,
         step=0.01,
-        key="prop_ref",
+        persist_state="page", key="prop_ref",
         help="Hypothesised proportion.",
     )
     if st.button("Run exact binomial test", key="prop_run"):
@@ -229,14 +229,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         min_value=0,
         value=15,
         step=1,
-        key="rate_e1",
+        persist_state="page", key="rate_e1",
         help="Number of events in the exposed group.",
     )
     t1 = r2.number_input(
         "Person-time (exposed)",
         min_value=0.0,
         value=1200.0,
-        key="rate_t1",
+        persist_state="page", key="rate_t1",
         help="Total follow-up of the exposed group.",
     )
     e0 = r3.number_input(
@@ -244,18 +244,18 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         min_value=0,
         value=4,
         step=1,
-        key="rate_e0",
+        persist_state="page", key="rate_e0",
         help="Number of events in the reference group (0 for a single rate).",
     )
     t0 = r4.number_input(
         "Person-time (reference)",
         min_value=0.0,
         value=1000.0,
-        key="rate_t0",
+        persist_state="page", key="rate_t0",
         help="Total follow-up of the reference group.",
     )
     per = r5.selectbox(
-        "Per", [100, 1000, 10000, 100000], index=1, key="rate_per", help="Multiplier for display."
+        "Per", [100, 1000, 10000, 100000], index=1, persist_state="page", key="rate_per", help="Multiplier for display."
     )
     if st.button("Compute rates", key="rate_run"):
         try:
@@ -298,19 +298,19 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         exposure = c1.selectbox(
             "Exposure (binary)",
             binary,
-            key="mh_exposure",
+            persist_state="page", key="mh_exposure",
             help="The factor whose effect is estimated.",
         )
         outcome = c2.selectbox(
             "Outcome (binary)",
             [c for c in binary if c != exposure],
-            key="mh_outcome",
+            persist_state="page", key="mh_outcome",
             help="The event.",
         )
         stratum = c3.selectbox(
             "Stratum",
             [c for c in small_cats if c not in (exposure, outcome)],
-            key="mh_stratum",
+            persist_state="page", key="mh_stratum",
             help="The variable to adjust for (2 to 8 levels).",
         )
         l1, l2 = st.columns(2)
@@ -320,14 +320,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
             "Exposed level",
             exp_levels,
             index=len(exp_levels) - 1,
-            key="mh_exp_level",
+            persist_state="page", key="mh_exp_level",
             help="Level counted as exposed.",
         )
         ev_level = l2.selectbox(
             "Event level",
             out_levels,
             index=len(out_levels) - 1,
-            key="mh_ev_level",
+            persist_state="page", key="mh_ev_level",
             help="Level counted as the event.",
         )
         if st.button("Run Mantel-Haenszel", key="mh_run", type="primary"):
@@ -399,14 +399,14 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         min_value=0,
         value=25,
         step=1,
-        key="smr_obs",
+        persist_state="page", key="smr_obs",
         help="Events observed in the cohort.",
     )
     expected = s2.number_input(
         "Expected events",
         min_value=0.0,
         value=18.4,
-        key="smr_exp",
+        persist_state="page", key="smr_exp",
         help="Sum of reference rates times the cohort's person-time by stratum.",
     )
     if st.button("Compute SMR", key="smr_run"):
@@ -434,17 +434,17 @@ def run_reliability(df: pd.DataFrame, analyzer) -> None:
     )
     if len(cats) >= 2:
         c1, c2, c3 = st.columns(3)
-        r1 = c1.selectbox("Rater A", cats, key="kappa_a", help="Ratings of the first rater.")
+        r1 = c1.selectbox("Rater A", cats, persist_state="page", key="kappa_a", help="Ratings of the first rater.")
         r2 = c2.selectbox(
             "Rater B",
             [c for c in cats if c != r1],
-            key="kappa_b",
+            persist_state="page", key="kappa_b",
             help="Ratings of the second rater.",
         )
         weights = c3.selectbox(
             "Weights",
             ["none", "linear", "quadratic"],
-            key="kappa_w",
+            persist_state="page", key="kappa_w",
             help="Weighted kappa for ordered categories.",
         )
         if st.button("Compute kappa", key="kappa_run", type="primary"):
@@ -480,13 +480,13 @@ def run_reliability(df: pd.DataFrame, analyzer) -> None:
             "Rater / occasion columns",
             numeric,
             default=numeric[:2],
-            key="icc_cols",
+            persist_state="page", key="icc_cols",
             help="Each column is one rater or measurement occasion of the same subjects.",
         )
         model = st.radio(
             "Model",
             ["ICC(2,1)", "ICC(3,1)"],
-            key="icc_model",
+            persist_state="page", key="icc_model",
             horizontal=True,
             help="ICC(2,1): absolute agreement, raters are a random sample. ICC(3,1): consistency, these specific raters.",
         )

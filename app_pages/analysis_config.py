@@ -35,7 +35,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 options=group_col_options,
                 index=group_col_options.index(default_group_col) if default_group_col in group_col_options else 0,
                 help=HELP["group_col"],
-                key=f"{key_prefix}group_col"
+                persist_state="page", key=f"{key_prefix}group_col"
             )
             
             # Group Filtering
@@ -50,7 +50,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                     format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
                     help=HELP["groups"],
                     # one choice per grouping variable: with one key, the next variable's list started empty
-                    key=f"{key_prefix}selected_groups::{group_col}"
+                    persist_state="page", key=f"{key_prefix}selected_groups::{group_col}"
                 )
             elif group_col != "None":
                  # Handle case where group_col is not in df (e.g. "Missingness Status" created on the fly)
@@ -73,7 +73,7 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 options=target_col_options,
                 default=default_targets,
                 help=HELP["targets"],
-                key=f"{key_prefix}target_cols"
+                persist_state="page", key=f"{key_prefix}target_cols"
             )
 
         level_warning(group_col, unique_groups)  # full width, under the choice of groups
@@ -85,14 +85,14 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 "Test Selection Strategy",
                 ["Auto-Detect (Recommended)", "Force Parametric (T-test/ANOVA)", "Force Non-Parametric (Mann-Whitney/Kruskal)"],
                 help=HELP["strategy"],
-                key=f"{key_prefix}test_pref"
+                persist_state="page", key=f"{key_prefix}test_pref"
             )
         with col4:
             correction_method = st.selectbox(
                 "Multiple Testing Correction",
                 list(CORRECTION_OPTIONS),
                 help=HELP["correction"],
-                key=f"{key_prefix}correction"
+                persist_state="page", key=f"{key_prefix}correction"
             )
             
     return {

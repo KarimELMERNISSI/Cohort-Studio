@@ -213,7 +213,11 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     app.session_state["analysis_data_mode"] = "multiple"
     app.switch_page(nav.page_path("analyze")).run()
     _ok(app)
-    assert any("analyse the observed data" in i.value for i in app.info)  # diagnostic & agreement
+    app.session_state["epi_tab"] = "Diagnostic accuracy & agreement"  # only the open tab runs
+    app.run()
+    assert any("analyse the observed data" in i.value for i in app.info)
+    app.session_state["epi_tab"] = "Paired, rates & stratified"
+    app.run()
     app.selectbox(key="pair_before").select("sbp_baseline").run()
     app.selectbox(key="pair_after").select("sbp_6m").run()  # 183 imputed values
     app.button(key="pair_run").click().run()

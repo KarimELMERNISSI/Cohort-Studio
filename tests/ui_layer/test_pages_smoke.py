@@ -16,11 +16,12 @@ DATA_PAGES = ("validate", "explore", "visualize", "analyze", "enrich", "variable
 
 def _tabs() -> dict[str, tuple[str, tuple[str, ...]]]:
     """The pages that run only their open tab (M5b): the smoke test opens each tab."""
-    from app_pages import data_monitoring, home
+    from app_pages import data_monitoring, epidemiology, home
 
     return {
         "validate": (data_monitoring.TAB_KEY, data_monitoring.TABS),
         "explore": (home.TAB_KEY, home.TABS),
+        "analyze": (epidemiology.TAB_KEY, epidemiology.TABS),
     }
 
 

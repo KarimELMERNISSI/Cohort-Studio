@@ -19,7 +19,7 @@ _ICON = {"ok": ":material/check_circle:", "info": ":material/info:", "caution": 
 
 
 def guidance_toggle() -> bool:
-    return st.toggle("Guidance", value=True, key=GUIDANCE_KEY, help=HELP["guidance"])
+    return st.toggle("Guidance", value=True, persist_state="page", key=GUIDANCE_KEY, help=HELP["guidance"])
 
 
 def guidance_on() -> bool:

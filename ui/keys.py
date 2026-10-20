@@ -53,6 +53,12 @@ KEYS: tuple[Key, ...] = (
         note="the open tab of Statistics & correlations: only that tab runs",
     ),
     Key(
+        "epi_tab",
+        "app_pages.epidemiology",
+        "page",
+        note="the open tab of Hypothesis tests & epidemiology: only that tab runs",
+    ),
+    Key(
         "anomaly_check_done",
         "app_pages.data_monitoring",
         "dataset",

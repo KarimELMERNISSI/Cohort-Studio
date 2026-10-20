@@ -56,24 +56,24 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
         st.info("This analysis needs one binary reference standard and one numeric score.")
     else:
         c1, c2, c3 = st.columns(3)
-        outcome = c1.selectbox("Reference standard (binary outcome)", binary, key="diag_outcome",
+        outcome = c1.selectbox("Reference standard (binary outcome)", binary, persist_state="page", key="diag_outcome",
                                help="The true disease status or event, coded with two levels.")
-        score = c2.selectbox("Index test (score or marker)", [c for c in numeric if c != outcome], key="diag_score",
+        score = c2.selectbox("Index test (score or marker)", [c for c in numeric if c != outcome], persist_state="page", key="diag_score",
                              help="Higher values are assumed to indicate the positive level.")
         levels = sorted(df[outcome].dropna().unique(), key=str)
-        pos_label = c3.selectbox("Positive (disease) level", levels, index=len(levels) - 1, key="diag_pos",
+        pos_label = c3.selectbox("Positive (disease) level", levels, index=len(levels) - 1, persist_state="page", key="diag_pos",
                                  help="The level of the reference standard that counts as the condition present.")
         c4, c5, c6 = st.columns(3)
-        mode = c4.radio("Cut-off", ["Youden-optimal (data-driven)", "Manual"], key="diag_mode", horizontal=True,
+        mode = c4.radio("Cut-off", ["Youden-optimal (data-driven)", "Manual"], persist_state="page", key="diag_mode", horizontal=True,
                         help="The Youden cut-off is chosen on this data and is therefore optimistic; a pre-specified manual cut-off is preferable.")
         clean = df[[outcome, score]].dropna()
         clean = clean[clean[score].apply(lambda v: isinstance(v, (int, float, np.number)))]
         default_cut = float(clean[score].median()) if len(clean) else 0.0
-        manual = c5.number_input("Manual cut-off (score >= cut-off is positive)", value=default_cut, key="diag_cut",
+        manual = c5.number_input("Manual cut-off (score >= cut-off is positive)", value=default_cut, persist_state="page", key="diag_cut",
                                  help="Used when the cut-off mode is Manual.")
         observed_prev = float((clean[outcome] == pos_label).mean()) if len(clean) else 0.5
         prevalence = c6.number_input("Prevalence for predictive values", min_value=0.0, max_value=1.0, value=round(observed_prev, 3),
-                                     step=0.01, key="diag_prev",
+                                     step=0.01, persist_state="page", key="diag_prev",
                                      help="PPV and NPV depend on the prevalence; enter the prevalence of the target population "
                                           "(default: the proportion observed in this dataset).")
         diag_config = (outcome, score, str(pos_label), mode, float(manual), float(prevalence))
@@ -141,8 +141,8 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
         st.info("Two numeric columns measuring the same quantity are needed.")
         return
     a1, a2 = st.columns(2)
-    method_a = a1.selectbox("Method A", numeric, key="ba_a", help="First measurement method (differences are A - B).")
-    method_b = a2.selectbox("Method B", [c for c in numeric if c != method_a], key="ba_b", help="Second measurement method.")
+    method_a = a1.selectbox("Method A", numeric, persist_state="page", key="ba_a", help="First measurement method (differences are A - B).")
+    method_b = a2.selectbox("Method B", [c for c in numeric if c != method_a], persist_state="page", key="ba_b", help="Second measurement method.")
     if st.button("Run Bland-Altman", key="ba_run"):
         try:
             ba = bland_altman(df[method_a], df[method_b])

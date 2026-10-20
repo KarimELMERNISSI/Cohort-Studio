@@ -69,15 +69,15 @@ def _prefilled_number_input(label, default, *, key, help, **kwargs):
     Calculator", the group sizes of the dataset). Streamlit warns when a widget gets both a default value and a
     session-state value, so the default is passed only while the key is unset."""
     if key in st.session_state:
-        return st.number_input(label, key=key, help=help, **kwargs)
-    return st.number_input(label, value=default, key=key, help=help, **kwargs)
+        return st.number_input(label, persist_state="page", key=key, help=help, **kwargs)
+    return st.number_input(label, value=default, persist_state="page", key=key, help=help, **kwargs)
 
 def _expected_means_inputs(prefix: str):
     """Expected means of two groups and the common SD; returns (mean1, mean2, sd)."""
     c_m1, c_m2, c_sd = st.columns(3)
-    mean1 = c_m1.number_input("Mean, group 1", value=120.0, key=f"{prefix}_m1", help=HELP["mean1"])
-    mean2 = c_m2.number_input("Mean, group 2", value=125.0, key=f"{prefix}_m2", help=HELP["mean2"])
-    sd = c_sd.number_input("SD", value=10.0, min_value=1e-9, key=f"{prefix}_sd", help=HELP["sd"])
+    mean1 = c_m1.number_input("Mean, group 1", value=120.0, persist_state="page", key=f"{prefix}_m1", help=HELP["mean1"])
+    mean2 = c_m2.number_input("Mean, group 2", value=125.0, persist_state="page", key=f"{prefix}_m2", help=HELP["mean2"])
+    sd = c_sd.number_input("SD", value=10.0, min_value=1e-9, persist_state="page", key=f"{prefix}_sd", help=HELP["sd"])
     return mean1, mean2, sd
 
 
@@ -93,17 +93,17 @@ def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
     default_ref = default_epi.get("reference_level")
     ref_index = next((i for i, lvl in enumerate(levels_group) if str(lvl) == str(default_ref)), 0)
     reference = c1.selectbox(
-        "Reference group", levels_group, index=ref_index, key=f"ref_{outcome_col}", format_func=str,
+        "Reference group", levels_group, index=ref_index, persist_state="page", key=f"ref_{outcome_col}", format_func=str,
         help="Risks are compared against this group: RR, RD and NNT describe the other group relative to it.",
     )
     default_event = default_epi.get("event_level")
     event_index = next((i for i, lvl in enumerate(levels_out) if str(lvl) == str(default_event)), len(levels_out) - 1)
     event = c2.selectbox(
-        "Event level", levels_out, index=event_index, key=f"event_{outcome_col}", format_func=str,
+        "Event level", levels_out, index=event_index, persist_state="page", key=f"event_{outcome_col}", format_func=str,
         help="Which value of the outcome counts as the event (for example Yes, 1 or Dead).",
     )
     design = c3.selectbox(
-        "Study design", ["unknown", "cohort", "rct", "cross-sectional", "case-control"], key=f"design_{outcome_col}",
+        "Study design", ["unknown", "cohort", "rct", "cross-sectional", "case-control"], persist_state="page", key=f"design_{outcome_col}",
         help="Determines which measures are interpretable: only the odds ratio in case-control designs.",
     )
     try:
@@ -172,6 +172,19 @@ def _render_twobytwo_panel(epi):
             st.info(note)
 
 
+
+
+# The tabs of Hypothesis tests & epidemiology; only the open one runs (M5b). Their labels are part of the tabs'
+# identity (Streamlit 1.66): keep them fixed, without counts.
+TABS = (
+    "Analysis",
+    "Diagnostic accuracy & agreement",
+    "Paired, rates & stratified",
+    "Power & Sample Size",
+    "Z-Score & Reference",
+    "Test Guide & Education",
+)
+TAB_KEY = "epi_tab"
 
 
 def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> pd.DataFrame:
@@ -243,7 +256,7 @@ def app(mi=None):
             ["Univariate (Group Comparison)", "Multivariate (ANCOVA/Regression)"],
             default="Univariate (Group Comparison)",
             required=True,
-            key="epi_analysis_mode",
+            persist_state="page", key="epi_analysis_mode",
             help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
         )
         transformation = "None (Raw Data)"
@@ -251,7 +264,7 @@ def app(mi=None):
             transformation = st.selectbox(
                 "Transform numeric variables",
                 ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
-                key="epi_transformation",
+                persist_state="page", key="epi_transformation",
                 width=300,
                 help=HELP["transform"],
             )
@@ -268,53 +281,59 @@ def app(mi=None):
         render_orientation()
 
 
-    tabs = st.tabs(["Analysis", "Diagnostic accuracy & agreement", "Paired, rates & stratified", "Power & Sample Size",
-                    "Z-Score & Reference", "Test Guide & Education"])
+    # Only the open tab runs (M5b): a click no longer recomputes the six tabs
+    tabs = st.tabs(list(TABS), key=TAB_KEY, on_change="rerun")
 
     observed_only = (
         "Imputed data selected: this tab analyses the observed data (complete cases of each analysis)."
     )
     with tabs[0]:
-        if mi is not None:
-            from app_pages.analysis_pooled import run_pooled_ancova, run_pooled_comparison
+        if tabs[0].open:
+            if mi is not None:
+                from app_pages.analysis_pooled import run_pooled_ancova, run_pooled_comparison
 
-            if analysis_mode == "Univariate (Group Comparison)":
-                run_pooled_comparison(mi, analyzer)
+                if analysis_mode == "Univariate (Group Comparison)":
+                    run_pooled_comparison(mi, analyzer)
+                else:
+                    run_pooled_ancova(mi, analyzer)
+            elif analysis_mode == "Univariate (Group Comparison)":
+                df_analysis = _transformed(df, analyzer.numeric_cols, transformation)
+                run_univariate_analysis(df_analysis, analyzer, transformed=transformation != "None (Raw Data)")
             else:
-                run_pooled_ancova(mi, analyzer)
-        elif analysis_mode == "Univariate (Group Comparison)":
-            df_analysis = _transformed(df, analyzer.numeric_cols, transformation)
-            run_univariate_analysis(df_analysis, analyzer, transformed=transformation != "None (Raw Data)")
-        else:
-            run_multivariate_analysis(_transformed(df, analyzer.numeric_cols, transformation), analyzer)
+                run_multivariate_analysis(_transformed(df, analyzer.numeric_cols, transformation), analyzer)
 
     with tabs[1]:
-        if mi is not None:
-            _observed_agreement_note()
-        run_diagnostic_accuracy(df, analyzer)
-        run_reliability(df, analyzer)
+        if tabs[1].open:
+            if mi is not None:
+                _observed_agreement_note()
+            run_diagnostic_accuracy(df, analyzer)
+            run_reliability(df, analyzer)
 
     with tabs[2]:
-        if mi is not None:
-            st.info(
-                "Imputed data selected: the paired and one-sample t-tests are pooled over the imputed datasets; "
-                "McNemar and Mantel-Haenszel analyse the observed data. Rates and standardised ratios use the "
-                "counts you enter.",
-                icon=":material/info:",
-            )
-        run_paired_and_rates(df, analyzer, mi=mi)
+        if tabs[2].open:
+            if mi is not None:
+                st.info(
+                    "Imputed data selected: the paired and one-sample t-tests are pooled over the imputed datasets; "
+                    "McNemar and Mantel-Haenszel analyse the observed data. Rates and standardised ratios use the "
+                    "counts you enter.",
+                    icon=":material/info:",
+                )
+            run_paired_and_rates(df, analyzer, mi=mi)
 
     with tabs[3]:
-        run_power_analysis(df, analyzer)
+        if tabs[3].open:
+            run_power_analysis(df, analyzer)
 
     with tabs[4]:
-        if mi is not None:
-            st.info(observed_only, icon=":material/info:")
-        # Use raw data for Z-Score tab as it has its own standardization logic
-        run_zscore_analysis(df, analyzer)
+        if tabs[4].open:
+            if mi is not None:
+                st.info(observed_only, icon=":material/info:")
+            # Use raw data for Z-Score tab as it has its own standardization logic
+            run_zscore_analysis(df, analyzer)
 
     with tabs[5]:
-        show_educational_content()
+        if tabs[5].open:
+            show_educational_content()
 
 def _observed_agreement_note():
     """Diagnostic accuracy and agreement with imputed data selected: what is analysed, and why it is not pooled."""
@@ -626,7 +645,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
 
     # Detailed View
     st.subheader("Detailed Analysis & Visualization")
-    selected_detail = st.selectbox("Select variable for detailed view", target_cols, help=HELP["detail_variable"])
+    selected_detail = st.selectbox("Select variable for detailed view", target_cols, key="uni_detail_variable", persist_state="page", help=HELP["detail_variable"])
     
     if selected_detail:
         # Allow specific manual test selection for this variable
@@ -645,7 +664,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         col_det1, col_det2 = st.columns([1, 3])
         with col_det1:
             selected_test_method = st.selectbox(
-                "Test Method (Detail)", available_tests, index=0, help=HELP["detail_test"]
+                "Test Method (Detail)", available_tests, key="uni_detail_test", persist_state="page", index=0, help=HELP["detail_test"]
             )
             if guidance_on():
                 render_test_note(selected_test_method)
@@ -745,7 +764,7 @@ def run_multivariate_analysis(df, analyzer):
         target_col = st.selectbox(
             "Target Variable (Y)",
             options=analyzer.numeric_cols,
-            key="ancova_target",
+            persist_state="page", key="ancova_target",
             help="The continuous dependent variable you want to compare across groups."
         )
 
@@ -753,7 +772,7 @@ def run_multivariate_analysis(df, analyzer):
         group_col = st.selectbox(
             "Grouping Variable (Factor)",
             options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 10],
-            key="ancova_group",
+            persist_state="page", key="ancova_group",
             help="The main categorical variable defining your groups (e.g., Treatment, Sex)."
         )
 
@@ -761,7 +780,7 @@ def run_multivariate_analysis(df, analyzer):
         covariates = st.multiselect(
             "Covariates (Confounders)",
             options=[c for c in analyzer.numeric_cols if c != target_col],
-            key="ancova_covs",
+            persist_state="page", key="ancova_covs",
             help=HELP["ancova_covariates"]
         )
     
@@ -1027,11 +1046,11 @@ def visualize_result(df, group_col, target, analyzer):
             st.caption("Add horizontal reference lines (e.g., clinical thresholds, normal range limits).")
             col_ref1, col_ref2, col_ref3 = st.columns([2, 2, 1])
             with col_ref1:
-                ref_val = st.number_input("Value", value=0.0, key=f"ref_val_{target}", help=HELP["ref_value"])
+                ref_val = st.number_input("Value", value=0.0, persist_state="page", key=f"ref_val_{target}", help=HELP["ref_value"])
             with col_ref2:
-                ref_label = st.text_input("Label", value="Threshold", key=f"ref_lbl_{target}", help=HELP["ref_label"])
+                ref_label = st.text_input("Label", value="Threshold", persist_state="page", key=f"ref_lbl_{target}", help=HELP["ref_label"])
             with col_ref3:
-                add_ref = st.checkbox("Show Line", key=f"add_ref_{target}", help=HELP["ref_show"])
+                add_ref = st.checkbox("Show Line", persist_state="page", key=f"add_ref_{target}", help=HELP["ref_show"])
         
         # Four figures in a two-column grid, one colour per group throughout (app_pages/group_figures.py)
         st.subheader("Figures")
@@ -1160,7 +1179,7 @@ def run_zscore_analysis(df, analyzer):
     with col1:
         target_vars = st.multiselect(
             "Select Variables to Standardize",
-            options=analyzer.numeric_cols,
+            key="z_target_variables", persist_state="page", options=analyzer.numeric_cols,
             default=analyzer.numeric_cols[:3] if len(analyzer.numeric_cols) >= 3 else analyzer.numeric_cols,
             help="Select continuous variables to calculate Z-scores for."
         )
@@ -1169,7 +1188,7 @@ def run_zscore_analysis(df, analyzer):
         ref_method = st.selectbox(
             "Reference Population Method",
             ["Internal Control Group", "Whole Cohort (Standardization)", "Manual Reference Values"],
-            help="Define the mean and standard deviation used for Z-score calculation."
+            key="z_reference_method", persist_state="page", help="Define the mean and standard deviation used for Z-score calculation."
         )
         
     ref_group_col = None
@@ -1183,14 +1202,14 @@ def run_zscore_analysis(df, analyzer):
             potential_groupers = [c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20]
             ref_group_col = st.selectbox(
                 "Select Grouping Variable",
-                options=potential_groupers,
+                key="z_reference_group_col", persist_state="page", options=potential_groupers,
                 help="Variable that identifies groups (e.g., Case/Control, Treatment/Placebo)"
             )
         with col_ref2:
             if ref_group_col:
                 ref_group_val = st.selectbox(
                     "Select Reference Group (Control)",
-                    options=df[ref_group_col].unique(),
+                    key="z_reference_group_value", persist_state="page", options=df[ref_group_col].unique(),
                     help="The group to use as reference (mean=0, SD=1 for this group)"
                 )
                 
@@ -1209,8 +1228,8 @@ def run_zscore_analysis(df, analyzer):
             default_mu = float(series.mean()) if pd.notna(series.mean()) else 0.0
             default_sd = float(series.std()) if pd.notna(series.std()) and series.std() > 0 else 1.0
             manual_refs[var] = (
-                c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", key=f"mu_{var}", help=HELP["z_mean"]),
-                c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", key=f"sigma_{var}", help=HELP["z_sd"]),
+                c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", persist_state="page", key=f"mu_{var}", help=HELP["z_mean"]),
+                c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", persist_state="page", key=f"sigma_{var}", help=HELP["z_sd"]),
             )
 
     if not target_vars:
@@ -1350,14 +1369,14 @@ def run_zscore_analysis(df, analyzer):
             group_col = st.selectbox(
                 "Group by", 
                 options=[c for c in analyzer.categorical_cols + analyzer.binary_cols if df[c].nunique() < 20],
-                key="zscore_group_col",
+                persist_state="page", key="zscore_group_col",
                 help=HELP["z_group_by"],
             )
         with col_grp2:
             error_type = st.radio(
                 "Error bars",
                 ["95% CI", "±1 SD", "±2 SD"],
-                horizontal=True,
+                key="z_error_type", persist_state="page", horizontal=True,
                 help="CI = Confidence Interval of the mean (smaller). SD = Standard Deviation of values (larger)."
             )
         
@@ -1475,7 +1494,7 @@ def run_zscore_analysis(df, analyzer):
         else:
             heatmap_df = z_df
             
-        sort_col = st.selectbox("Sort samples by", ["None"] + z_cols, key="heatmap_sort", help=HELP["z_sort"])
+        sort_col = st.selectbox("Sort samples by", ["None"] + z_cols, persist_state="page", key="heatmap_sort", help=HELP["z_sort"])
         if sort_col != "None":
             heatmap_df = heatmap_df.sort_values(sort_col)
             
@@ -1519,14 +1538,14 @@ def run_zscore_analysis(df, analyzer):
     with viz_tabs[2]:
         st.markdown("#### Individual Z-Score Profile")
         
-        sample_id_col = st.selectbox("Select Sample ID Column", ["Row Index"] + analyzer.categorical_cols, key="profile_id_col", help=HELP["z_id_col"])
+        sample_id_col = st.selectbox("Select Sample ID Column", ["Row Index"] + analyzer.categorical_cols, persist_state="page", key="profile_id_col", help=HELP["z_id_col"])
         
         if sample_id_col == "Row Index":
-            sample_idx = st.number_input("Row Index", min_value=0, max_value=len(z_df)-1, value=0, step=1, help=HELP["z_row"])
+            sample_idx = st.number_input("Row Index", key="z_sample_index", persist_state="page", min_value=0, max_value=len(z_df)-1, value=0, step=1, help=HELP["z_row"])
             selected_row = z_df.iloc[sample_idx]
             label = f"Sample #{sample_idx}"
         else:
-            sample_val = st.selectbox("Select Sample", z_df[sample_id_col].unique(), help=HELP["z_sample"])
+            sample_val = st.selectbox("Select Sample", z_df[sample_id_col].unique(), key="z_sample_value", persist_state="page", help=HELP["z_sample"])
             selected_row = z_df[z_df[sample_id_col] == sample_val].iloc[0]
             label = str(sample_val)
             
@@ -2078,7 +2097,7 @@ def run_power_analysis(df, analyzer):
             results_list = st.session_state['epidemiology_results']
             # Create options
             options = {f"{r['Variable']} ({r['Test Used']})": r for r in results_list}
-            selected_import = st.selectbox("Select Result to Import", ["None"] + list(options.keys()), help=HELP["power_import"])
+            selected_import = st.selectbox("Select Result to Import", ["None"] + list(options.keys()), key="power_import_result", persist_state="page", help=HELP["power_import"])
             
             if selected_import != "None":
                 res = options[selected_import]
@@ -2206,7 +2225,7 @@ def run_power_analysis(df, analyzer):
             "Select Grouping Variable", 
             options=["None"] + potential_groupers,
             index=default_idx + 1 if potential_groupers else 0,
-            key="power_group_col",
+            persist_state="page", key="power_group_col",
             help=HELP["power_autofill_group"],
         )
         
@@ -2221,7 +2240,7 @@ def run_power_analysis(df, analyzer):
                 format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
                 help="Deselect groups to exclude them from the structure calculation.",
                 # one choice per grouping variable: with one key, the next variable's list started empty
-                key=f"power_selected_groups::{group_col_power}"
+                persist_state="page", key=f"power_selected_groups::{group_col_power}"
             )
             level_warning(group_col_power, unique_groups)
 
@@ -2338,12 +2357,12 @@ def run_power_analysis(df, analyzer):
             "Statistical Test", 
             ["T-Test (Independent)", "Mann-Whitney U (Non-parametric)", "ANOVA (One-way)", "Kruskal-Wallis (Non-parametric)", "Chi-Square"], 
             index=test_type_idx,
-            key='power_test_type_selector',  # separate from the imported value, synced manually
+            persist_state="page", key='power_test_type_selector',  # separate from the imported value, synced manually
             help=HELP["power_test"],
         )
         # Sync selector with session state if needed, but simpler to just let user select
     with col2:
-        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Power at this sample size"], help=HELP["power_goal"])
+        calc_mode = st.selectbox("Calculation Goal", ["Calculate Required Sample Size", "Calculate Power at this sample size"], key="power_goal", persist_state="page", help=HELP["power_goal"])
         
     st.divider()
     
@@ -2359,7 +2378,7 @@ def run_power_analysis(df, analyzer):
     # Common Inputs
     c1, c2 = st.columns(2)
     with c1:
-        alpha = st.number_input("Significance Level (Alpha)", value=0.05, step=0.01, format="%.2f", help=HELP["alpha"])
+        alpha = st.number_input("Significance Level (Alpha)", key="power_alpha", persist_state="page", value=0.05, step=0.01, format="%.2f", help=HELP["alpha"])
     
     if test_type == "T-Test (Independent)":
         st.subheader("T-Test Parameters")
@@ -2367,7 +2386,7 @@ def run_power_analysis(df, analyzer):
         
         with c2:
             es_mode = st.selectbox(
-                "Effect size input", ["Cohen's d", "Expected means and SD"], key="es_mode_ttest", help=HELP["es_mode"]
+                "Effect size input", ["Cohen's d", "Expected means and SD"], persist_state="page", key="es_mode_ttest", help=HELP["es_mode"]
             )
             if es_mode == "Cohen's d":
                 effect_size = _prefilled_number_input(
@@ -2386,7 +2405,7 @@ def run_power_analysis(df, analyzer):
         analysis = TTestIndPower()
         
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, key="power_desired", persist_state="page", help=HELP["power"])
             if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 nobs = analysis.solve_power(effect_size=effect_size, alpha=alpha, power=power, ratio=ratio)
                 st.success(sample_size_sentence(effect_label, power=power, alpha=alpha, n_groups=[nobs, nobs * ratio]))
@@ -2424,7 +2443,7 @@ def run_power_analysis(df, analyzer):
                 st.session_state['mwu_p_xy'] = 0.64
             es_type = st.selectbox(
                 "Effect Size Input", ["P(X < Y)", "Rank-Biserial r", "Cohen's d (approx)", "Expected means and SD"],
-                key="es_type_mwu", help=HELP["es_mwu_scale"],
+                persist_state="page", key="es_type_mwu", help=HELP["es_mwu_scale"],
             )
             if es_type == "Expected means and SD":
                 mean1, mean2, sd_expected = _expected_means_inputs("es_mwu")
@@ -2444,7 +2463,7 @@ def run_power_analysis(df, analyzer):
                     min_v, max_v = -10.0, 10.0
                 val_input = st.number_input(
                     f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f",
-                    min_value=min_v, max_value=max_v, key=f"es_input_{es_type}", help=HELP["es_mwu"],
+                    min_value=min_v, max_value=max_v, persist_state="page", key=f"es_input_{es_type}", help=HELP["es_mwu"],
                 )
                 if es_type == "P(X < Y)":
                     st.session_state['mwu_p_xy'] = val_input
@@ -2459,7 +2478,7 @@ def run_power_analysis(df, analyzer):
         ratio = _prefilled_number_input("Ratio of Sample Sizes (n2/n1)", float(default_ratio), step=0.1, key="ratio_mwu", help=HELP["ratio"])
         
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, key="power_desired", persist_state="page", help=HELP["power"])
             if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 if abs(p_xy - 0.5) < 0.001:
                     st.error("Effect size is too close to 0.5 (No Effect).")
@@ -2488,14 +2507,14 @@ def run_power_analysis(df, analyzer):
         planned_means = None
         with c2:
             es_type = st.selectbox(
-                "Effect Size Input", ["Cohen's f", 'Eta Squared', 'Expected group means and SD'], key="es_type_anova", help=HELP["es_anova_scale"]
+                "Effect Size Input", ["Cohen's f", 'Eta Squared', 'Expected group means and SD'], persist_state="page", key="es_type_anova", help=HELP["es_anova_scale"]
             )
             if es_type == "Expected group means and SD":
                 means_text = st.text_input(
-                    "Expected group means", value="120, 125, 132", key="es_type_anova_means", help=HELP["group_means"]
+                    "Expected group means", value="120, 125, 132", persist_state="page", key="es_type_anova_means", help=HELP["group_means"]
                 )
                 sd_expected = st.number_input(
-                    "SD within groups", value=10.0, min_value=1e-9, key="es_type_anova_sd", help=HELP["sd"]
+                    "SD within groups", value=10.0, min_value=1e-9, persist_state="page", key="es_type_anova_sd", help=HELP["sd"]
                 )
                 try:
                     planned_means = parse_numbers(means_text)
@@ -2523,7 +2542,7 @@ def run_power_analysis(df, analyzer):
         effect_label = f"an effect of f = {effect_size:.2f}"
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, key="power_desired", persist_state="page", help=HELP["power"])
             if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = anova_sample_size(effect_size, int(k_groups), alpha=alpha, power=power)
                 st.success(
@@ -2545,14 +2564,14 @@ def run_power_analysis(df, analyzer):
         planned_means = None
         with c2:
             es_type = st.selectbox(
-                "Effect Size Input", ["Cohen's f equivalent", 'Epsilon Squared', 'Expected group means and SD'], key="es_type_kw", help=HELP["es_kw_scale"]
+                "Effect Size Input", ["Cohen's f equivalent", 'Epsilon Squared', 'Expected group means and SD'], persist_state="page", key="es_type_kw", help=HELP["es_kw_scale"]
             )
             if es_type == "Expected group means and SD":
                 means_text = st.text_input(
-                    "Expected group means", value="120, 125, 132", key="es_type_kw_means", help=HELP["group_means"]
+                    "Expected group means", value="120, 125, 132", persist_state="page", key="es_type_kw_means", help=HELP["group_means"]
                 )
                 sd_expected = st.number_input(
-                    "SD within groups", value=10.0, min_value=1e-9, key="es_type_kw_sd", help=HELP["sd"]
+                    "SD within groups", value=10.0, min_value=1e-9, persist_state="page", key="es_type_kw_sd", help=HELP["sd"]
                 )
                 try:
                     planned_means = parse_numbers(means_text)
@@ -2581,13 +2600,13 @@ def run_power_analysis(df, analyzer):
         dist_assumption = st.radio(
             "Underlying Distribution Assumption",
             ["Normal Distribution (ARE 0.955)", "Unknown / Heavy-Tailed (worst case, ARE 0.864)"],
-            help="The Kruskal-Wallis requirement is the ANOVA requirement divided by the asymptotic relative "
+            key="power_kw_distribution", persist_state="page", help="The Kruskal-Wallis requirement is the ANOVA requirement divided by the asymptotic relative "
                  "efficiency; 0.864 is the lower bound over all continuous distributions.",
         )
         are = ARE_NORMAL if dist_assumption.startswith("Normal") else ARE_WORST_CASE
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, key="power_desired", persist_state="page", help=HELP["power"])
             if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = kruskal_sample_size(effect_size, int(k_groups), alpha=alpha, power=power, are=are)
                 st.success(
@@ -2612,12 +2631,12 @@ def run_power_analysis(df, analyzer):
             if 'chi2_w' not in st.session_state:
                 st.session_state['chi2_w'] = 0.3
             es_type = st.selectbox(
-                "Effect Size Input", ["Cohen's w", "Cramer's V", "Expected event proportions"], key="es_type_chi2",
+                "Effect Size Input", ["Cohen's w", "Cramer's V", "Expected event proportions"], persist_state="page", key="es_type_chi2",
                 help=HELP["es_chi2_scale"],
             )
             if es_type == "Expected event proportions":
                 props_text = st.text_input(
-                    "Expected event proportion per group", value="0.20, 0.35", key="es_chi2_props", help=HELP["proportions"]
+                    "Expected event proportion per group", value="0.20, 0.35", persist_state="page", key="es_chi2_props", help=HELP["proportions"]
                 )
                 try:
                     planned_props = parse_numbers(props_text)
@@ -2630,12 +2649,12 @@ def run_power_analysis(df, analyzer):
                 if 'min_dim_chi2' not in st.session_state:
                     st.session_state['min_dim_chi2'] = 1
                 min_dim_input = st.number_input(
-                    "Min Dimension (min(r-1, c-1))", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1,
+                    "Min Dimension (min(r-1, c-1))", key="power_chi2_min_dim", persist_state="page", value=int(st.session_state['min_dim_chi2']), min_value=1, step=1,
                     help=HELP["min_dim"],
                 )
                 display_val = st.session_state['chi2_w'] / np.sqrt(min_dim_input) if es_type == "Cramer's V" else st.session_state['chi2_w']
                 effect_size_input = st.number_input(
-                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", key="es_chi2_input",
+                    f"Effect Size ({es_type})", value=float(display_val), step=0.001, format="%.3f", persist_state="page", key="es_chi2_input",
                     help=HELP["es_chi2"],
                 )
                 st.session_state['chi2_w'] = effect_size_input * np.sqrt(min_dim_input) if es_type == "Cramer's V" else effect_size_input
@@ -2647,13 +2666,13 @@ def run_power_analysis(df, analyzer):
         else:
             df_chi2 = st.number_input(
                 "Degrees of freedom = (rows - 1) x (columns - 1)",
-                value=max(1, int(default_n_cat) - 1), step=1, min_value=1, key="df_chi2",
+                value=max(1, int(default_n_cat) - 1), step=1, min_value=1, persist_state="page", key="df_chi2",
                 help="For a 2x2 table df = 1; for k groups and a binary outcome df = k - 1.",
             )
         effect_label = f"an association of w = {effect_size:.2f}"
 
         if calc_mode == "Calculate Required Sample Size":
-            power = st.slider("Desired Power", 0.5, 0.99, 0.80, help=HELP["power"])
+            power = st.slider("Desired Power", 0.5, 0.99, 0.80, key="power_desired", persist_state="page", help=HELP["power"])
             if st.button("Calculate Sample Size") and _effect_ok(effect_size):
                 res = chi2_independence_sample_size(effect_size, int(df_chi2), alpha=alpha, power=power)
                 per_group = [res.n_total / len(planned_props)] * len(planned_props) if planned_props else None

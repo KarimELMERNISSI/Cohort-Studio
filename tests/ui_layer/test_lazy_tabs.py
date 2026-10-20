@@ -21,7 +21,18 @@ NO_PERSIST = {
     "data_editor",
 }  # Streamlit cannot keep them while their tab is closed
 # the modules of the pages that run only their open tab
-LAZY = ("app_pages/data_monitoring.py", "app_pages/data_quality_dashboard.py", "app_pages/home.py")
+LAZY = (
+    "app_pages/data_monitoring.py",
+    "app_pages/data_quality_dashboard.py",
+    "app_pages/home.py",
+    "app_pages/epidemiology.py",
+    # the panels of its tabs
+    "app_pages/analysis_config.py",
+    "app_pages/analysis_diagnostic.py",
+    "app_pages/analysis_extras.py",
+    "app_pages/analysis_pooled.py",
+    "app_pages/analysis_guidance_ui.py",
+)
 # widgets deliberately not kept when their tab is closed: a confirmation is asked again
 CONFIRMATIONS = ("mask_overwrite_",)
 
@@ -202,3 +213,59 @@ def test_only_the_open_tab_of_statistics_and_correlations_runs(
         app.run()
         _ok(app)
         assert calls == [work], label
+
+
+def test_only_the_open_tab_of_hypothesis_tests_runs(
+    app: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app_pages import epidemiology as epi
+
+    calls: list[str] = []
+    work = {
+        "Analysis": "run_univariate_analysis",
+        "Diagnostic accuracy & agreement": "run_diagnostic_accuracy",
+        "Paired, rates & stratified": "run_paired_and_rates",
+        "Power & Sample Size": "run_power_analysis",
+        "Z-Score & Reference": "run_zscore_analysis",
+        "Test Guide & Education": "show_educational_content",
+    }
+    for name in work.values():
+        original = getattr(epi, name)
+
+        def counted(*args, _name=name, _original=original, **kwargs):
+            calls.append(_name)
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(epi, name, counted)
+    app.switch_page(nav.page_path("analyze")).run()
+    _ok(app)
+    for label, name in work.items():
+        calls.clear()
+        app.session_state[epi.TAB_KEY] = label
+        app.run()
+        _ok(app)
+        assert calls == [name], label
+
+
+def test_a_comparison_run_in_the_analysis_tab_prefills_the_power_tab(app: AppTest) -> None:
+    """The Power tab reads the Analysis tab's results from the session (ui/keys.py): they no longer run together."""
+    from app_pages import epidemiology as epi
+
+    app.switch_page(nav.page_path("analyze")).run()
+    app.session_state[epi.TAB_KEY] = "Analysis"
+    app.run()
+    app.selectbox(key="group_col").select("arm").run()
+    app.button(key="univariate_run").click().run()
+    _ok(app)
+    assert app.session_state["epidemiology_results"]
+    app.session_state[epi.TAB_KEY] = "Power & Sample Size"
+    app.run()
+    _ok(app)
+    imported = app.selectbox(key="power_import_result")
+    assert len(imported.options) > 1  # "None" and the results of the Analysis tab
+    imported.set_value(imported.options[1]).run()
+    next(b for b in app.button if b.label == "Load Parameters into Calculator").click().run()
+    _ok(app)
+    assert any(
+        "arm" in m.value for m in app.markdown
+    )  # the grouping variable of the imported result
