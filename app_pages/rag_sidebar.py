@@ -51,7 +51,7 @@ from utils.session_scope import get_current_scope
 PERSIST = "session"
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 PROVIDER_NAMES = {
-    "ollama": "Ollama (this machine or your network, open-source)",
+    "ollama": "Ollama (open-source, at the address you give)",
     "gemini": "Google Gemini (cloud)",
     "openai": "OpenAI (cloud)",
     "mistral": "Mistral AI (cloud)",
