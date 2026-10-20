@@ -40,7 +40,7 @@ _AI quality page (administrators): RAG evaluation and embedding health._
 _Analysis configuration widgets of the Analyze page (moved out of utils so the engine side stays UI-free)._
 
 **Imports**:
-`streamlit`, `biostats.multiplicity.UI_OPTIONS`, `ui.guidance.analysis.HELP`
+`streamlit`, `biostats.multiplicity.UI_OPTIONS`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`
 
 ### def `grouping_options` (analysis_config.py)
 
@@ -240,7 +240,7 @@ Group comparison, per variable:
 Rank tests and Fisher's exact test have no pooling rule: the page gives the reason and the alternative._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### class `Pooled` (analysis_pooled.py)
 
@@ -279,7 +279,8 @@ Numeric and categorical columns of the imputed data, and the grouping candidates
 Compare ``target`` across the ``levels`` of ``group`` on every imputed dataset and pool the result.
 
 ``haldane="always"`` adds 0.5 to every cell of every 2x2 table (a sensitivity analysis): without it, a zero
-cell in some imputed datasets leaves the odds and risk ratios unpooled.
+cell in some imputed datasets leaves the odds and risk ratios unpooled. ``two_groups`` is the t-test of a
+numeric variable in two groups: Welch's (recommended) or Student's (equal variances), both pooled the same way.
 
 ### def `_summary_row` (analysis_pooled.py)
 
@@ -446,7 +447,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
+`ast`, `io`, `json`, `logging`, `os`, `re`, `datetime.datetime`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.catalogue`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.numeric_summary`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.impute_rows`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -1328,7 +1329,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -1462,6 +1463,90 @@ _Explore page: descriptive statistics, column renaming, correlations, performanc
 
 **Imports**:
 `app_pages.home.app`, `ui.components.page_header`, `ui.components.population.population_banner`
+
+---
+
+## group_figures.py
+
+_The figures of a group comparison (Analyze > Hypothesis tests, the detailed view), built to be read side by side:
+- the distribution of each group (box plot, with the significance brackets and n);
+
+- the mean of each group with its 95% confidence interval;
+
+- the histograms, as the percentage of each group, so that groups of different sizes compare;
+
+- a normal Q-Q plot of each group, standardised within the group, which matches the normality check of each group
+  in the result card.
+
+One colour per group in every figure (the application's colour-blind-safe palette), the application's Plotly
+template, and one height, so that a two-column grid stays readable on any screen. No Streamlit here._
+
+**Imports**:
+`__future__.annotations`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `scipy.stats`, `utils.visualization_utils`, `ui.theme.OKABE_ITO`, `ui.theme.PLOTLY_TEMPLATE_NAME`, `ui.theme.plotly_template`
+
+### def `group_order` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str`
+
+- **Returns**: `list[str]`
+
+The groups in the order of the box plot (first appearance), as text.
+
+### def `group_colors` (group_figures.py)
+
+- **Arguments**: `levels: list[str]`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_values` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str, target: str`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_style` (group_figures.py)
+
+- **Arguments**: `fig: go.Figure, title: str`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `box_figure` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str, target: str`
+
+- **Returns**: `ComplexType`
+
+Each group's distribution, its mean as a dashed line, the significance brackets and n under each box.
+
+### def `means_figure` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str, target: str`
+
+- **Returns**: `go.Figure`
+
+The mean of each group with its 95% confidence interval (t distribution).
+
+### def `histogram_figure` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str, target: str`
+
+- **Returns**: `go.Figure`
+
+Overlaid histograms as the percentage of each group, semi-transparent with outlines.
+
+### def `qq_figure` (group_figures.py)
+
+- **Arguments**: `df: pd.DataFrame, group: str, target: str`
+
+- **Returns**: `go.Figure`
+
+A normal Q-Q plot of each group, standardised within the group: on the line when the group is normal.
 
 ---
 
@@ -2188,6 +2273,16 @@ _No module description._
 
 **Imports**:
 `functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `utils.data_analyzer.DataAnalyzer`
+
+### def `hover_columns_input` (visualization.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `ComplexType`
+
+Extra columns for the tooltip of each point, passed to Plotly Express (``hover_data``), which matches them to the
+points of every trace. Offered where each mark is one row (scatter, line without aggregation): on a bar or a
+box, a row's value has no point to show it.
 
 ### def `app` (visualization.py)
 

@@ -526,7 +526,7 @@ _New variables derived from existing ones: statistics, scaling, dimensionality r
 calls it again with the parameters the page recorded, so both produce the same columns with the same names._
 
 **Imports**:
-`numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `core.expressions.safe_format`
+`numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats.reduction.fit_famd`, `biostats.reduction.fit_pca`, `core.expressions.safe_format`
 
 ### def `_unique_names` (transformation_logic.py)
 

@@ -339,10 +339,11 @@ Returns:
 
 - **Returns**: `tuple[ComplexType]`
 
-Run FAMD (Factor Analysis of Mixed Data) for mixed numeric/categorical data.
+FAMD (factor analysis of mixed data) of ``data``, its columns typed as FactoMineR types them: numbers quantitative,
+other columns categorical (biostats.reduction; prince alone made an integer column one category per value).
 
 Returns:
-    (embeddings, info_dict)
+    (embeddings, info_dict): ``explained_inertia`` in % per component, ``total_variance_explained`` a fraction
 
 ### def `fit_kmeans` (clustering_utils.py)
 
@@ -1739,15 +1740,6 @@ Converts a color (hex or rgb format) to an RGBA string with the specified transp
 
 Extracts the column names or data-related attributes from a Plotly figure
 and checks if they match any columns in the provided DataFrame (df).
-
-### def `add_custom_hovertemplate` (visualization_utils.py)
-
-- **Arguments**: `fig, df, selected_cols`
-
-- **Returns**: `None`
-
-Adds a custom hovertemplate to an existing Plotly figure, showing ``selected_cols`` on hover
-(the page renders the column picker; this helper stays UI-free).
 
 ### def `convert_to_datetime_or_timedelta` (visualization_utils.py)
 
