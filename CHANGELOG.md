@@ -390,6 +390,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     outlier detection works on the dataset.
   - On Hypothesis tests & epidemiology, the chosen transformation is computed in the Analysis tab only, where it
     applies, and its note is shown there.
+- **Validate runs only the open tab.** Each click ran all six tabs: the quality audit, both criteria checks, the
+  outlier detection and the participant flow. Now only the open tab runs, except Compare Data Files, whose file
+  uploaders cannot keep their files while it is closed. The controls of a closed tab keep their values while you
+  stay on the page; the confirmation before overwriting a criterion is asked again. The dashboard records the quality
+  check and the workflow step when it is open, which it is when Validate opens.
 - **The session keys shared between tabs and pages are declared** in `ui/keys.py`: the module that writes each,
   how long it lives and the modules that read it. A test checks the declarations against the code and against
   what the application clears when the data change.

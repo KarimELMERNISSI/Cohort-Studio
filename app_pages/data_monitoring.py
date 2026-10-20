@@ -127,7 +127,7 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
     if 'data' in st.session_state and st.session_state['data'] is not None:
         options.insert(0, "Current Session Data")
         
-    selection_method = st.radio(f"Choose source for {label}:", options, key=f"{tmp}_data_method")
+    selection_method = st.radio(f"Choose source for {label}:", options, persist_state="page", key=f"{tmp}_data_method")
     
     if selection_method == "Current Session Data":
         st.info("Using the dataset currently loaded in the application.")
@@ -147,7 +147,7 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
             selected_label = st.selectbox(
                 f"Select a dataset for {label}", 
                 list(dataset_options.keys()), 
-                key=f"{tmp}_history_select"
+                persist_state="page", key=f"{tmp}_history_select"
             )
             
             if selected_label:
@@ -198,10 +198,10 @@ def data_selection(tmp:str, label:str) -> tuple[pd.DataFrame | None, str | None]
                 return None, None
 
     elif selection_method == "Enter File Path":
-        folder_path = st.text_input("Enter folder path:", key=f"{tmp}_folder_path")
-        file_name = st.text_input("Enter file name:", key=f"{tmp}_data_name")
+        folder_path = st.text_input("Enter folder path:", persist_state="page", key=f"{tmp}_folder_path")
+        file_name = st.text_input("Enter file name:", persist_state="page", key=f"{tmp}_data_name")
         file_path = os.path.join(folder_path, file_name) if folder_path and file_name else ""
-        file_path_input = st.text_input(f"Enter file path for {label}:", value=file_path, key=f"{tmp}_data_path")
+        file_path_input = st.text_input(f"Enter file path for {label}:", value=file_path, persist_state="page", key=f"{tmp}_data_path")
         
         if file_path_input:
             scope = get_current_scope()
@@ -241,7 +241,7 @@ def add_outlier_handling_ui(df, numeric_cols):
         detection_method = st.selectbox(
             "Outlier Detection Method",
             ["zscore", "iqr", "quantile", "Local Outlier Factor", "Isolation Forest", "DBSCAN"],
-            help="Z-score: Uses standard deviations from mean\n"
+            key="outlier_detection_method", persist_state="page", help="Z-score: Uses standard deviations from mean\n"
                  "IQR: Uses interquartile range\n"
                  "Quantile: Uses percentile thresholds"
         )
@@ -255,7 +255,7 @@ def add_outlier_handling_ui(df, numeric_cols):
         handling_strategy = st.selectbox(
             "Handling Strategy",
             strat_list,
-            help="Remove: Exclude outliers\n"
+            key="outlier_handling_strategy", persist_state="page", help="Remove: Exclude outliers\n"
                  "Clip: Cap at threshold values\n"
                  "Tag: Tag outliers for later identification"
         )
@@ -318,24 +318,24 @@ def configure_method_params(detection_method):
     """Configure parameters based on the selected outlier detection method (defaults: biostats.outliers)."""
     default = mo.DEFAULT_PARAMS[detection_method]
     if detection_method == "zscore":
-        threshold = st.slider("Z-score threshold", 1.0, 5.0, default["threshold"], 0.1)
+        threshold = st.slider("Z-score threshold", 1.0, 5.0, default["threshold"], 0.1, key="outlier_zscore_threshold", persist_state="page")
         return {"threshold": threshold}
     elif detection_method == "iqr":
-        multiplier = st.slider("IQR multiplier", 0.5, 3.0, default["multiplier"], 0.1)
+        multiplier = st.slider("IQR multiplier", 0.5, 3.0, default["multiplier"], 0.1, key="outlier_iqr_multiplier", persist_state="page")
         return {"multiplier": multiplier}
     elif detection_method == "quantile":
         col1, col2 = st.columns(2)
         with col1:
-            lower = st.number_input("Lower percentile", 0.0, 0.5, default["lower"], 0.01)
+            lower = st.number_input("Lower percentile", 0.0, 0.5, default["lower"], 0.01, key="outlier_lower_percentile", persist_state="page")
         with col2:
-            upper = st.number_input("Upper percentile", 0.5, 1.0, default["upper"], 0.01)
+            upper = st.number_input("Upper percentile", 0.5, 1.0, default["upper"], 0.01, key="outlier_upper_percentile", persist_state="page")
         return {"lower": lower, "upper": upper}
     elif detection_method == "DBSCAN":
         col1, col2 = st.columns(2)
         with col1:
-            eps = st.number_input("Epsilon (eps)", 0.1, 10.0, default["eps"], 0.1)
+            eps = st.number_input("Epsilon (eps)", 0.1, 10.0, default["eps"], 0.1, key="outlier_dbscan_eps", persist_state="page")
         with col2:
-            min_samples = st.number_input("Min Samples", 1, 100, default["min_samples"], 1)
+            min_samples = st.number_input("Min Samples", 1, 100, default["min_samples"], 1, key="outlier_dbscan_min_samples", persist_state="page")
         return {'eps': eps, 'min_samples': int(min_samples)}
     return dict(default)  # Isolation Forest, Local Outlier Factor
 
@@ -343,13 +343,13 @@ def configure_method_params(detection_method):
 def select_columns_for_outlier_handling(df, numeric_cols, detection_method):
     """Select columns for outlier handling based on the detection method."""
     if detection_method in ["zscore", "iqr", "quantile"]:
-        return st.multiselect("Select columns for outlier handling", numeric_cols, default=numeric_cols[:1])
+        return st.multiselect("Select columns for outlier handling", numeric_cols, key="outlier_columns", persist_state="page", default=numeric_cols[:1])
     else:
         analyzer = DataAnalyzer(df)
         return st.multiselect(
             "Select columns for outlier handling",
             df.columns.to_list(),
-            default=list(set(analyzer.categorical_cols + analyzer.binary_cols + 
+            key="outlier_columns_multivariate", persist_state="page", default=list(set(analyzer.categorical_cols + analyzer.binary_cols + 
                              analyzer.low_cardinality_numeric_cols + analyzer.numeric_cols))
         )
 
@@ -369,7 +369,7 @@ def display_combined_information(df, df_processed, summary, selected_cols, detec
     # Streamlit radio button to select the change measure
     change_measure = st.radio(
         "Select Change Measure", 
-        options=["flat", "(%) of initial value", "(%) of IQR"], 
+        key="outlier_change_measure", persist_state="page", options=["flat", "(%) of initial value", "(%) of IQR"], 
         index=1,  # Default to "% of initial value"
         horizontal=True
     )
@@ -616,7 +616,7 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
     projection_method = st.selectbox(
         "Select Projection Method",
         available_methods(["PCA", "FAMD", "t-SNE", "UMAP"])[0],
-        index=0,
+        key="outlier_projection_method", persist_state="page", index=0,
         help="PCA: Linear (fast, numeric only)\n"
              "FAMD: Factor Analysis for Mixed Data (numeric + categorical)\n"
              "t-SNE: Non-linear, preserves local structure\n"
@@ -797,7 +797,7 @@ def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str,
         overwrite = st_container.radio(
             f"Mask '{mask_name}' already exists in family '{family_name}'. Overwrite?",
             ["No", "Yes"],
-            index=0,
+            key=f"mask_overwrite_{family_name}", index=0,  # a confirmation: not kept when the tab is left
             help="Select 'Yes' to overwrite the existing mask.",
             horizontal=True
         )
@@ -811,17 +811,17 @@ def handle_numeric_mask_input(st_container, base_key:str):
     
     col1, col2 = st_container.columns(2)
     with col1:
-        is_lower_bound = st_container.checkbox("Need lower bound?", key=f"{base_key}_lower_bound", help="Check if there is a minimum value limit.")
+        is_lower_bound = st_container.checkbox("Need lower bound?", persist_state="page", key=f"{base_key}_lower_bound", help="Check if there is a minimum value limit.")
     with col2:
-        is_upper_bound = st_container.checkbox("Need upper bound?", key=f"{base_key}_upper_bound", help="Check if there is a maximum value limit.")
+        is_upper_bound = st_container.checkbox("Need upper bound?", persist_state="page", key=f"{base_key}_upper_bound", help="Check if there is a maximum value limit.")
         
     lower_bound = st_container.number_input(
-        "Lower Bound", value=0.0, disabled=not is_lower_bound, key=f"{base_key}_lower_bound_input",
+        "Lower Bound", value=0.0, disabled=not is_lower_bound, persist_state="page", key=f"{base_key}_lower_bound_input",
         help="Values below this may be excluded or flagged depending on the strategy."
     ) if is_lower_bound else None
     
     upper_bound = st_container.number_input(
-        "Upper Bound", value=0.0, disabled=not is_upper_bound, key=f"{base_key}_upper_bound_input",
+        "Upper Bound", value=0.0, disabled=not is_upper_bound, persist_state="page", key=f"{base_key}_upper_bound_input",
         help="Values above this may be excluded or flagged depending on the strategy."
     ) if is_upper_bound else None
     
@@ -829,7 +829,7 @@ def handle_numeric_mask_input(st_container, base_key:str):
         "Strategy",
         ["exclude", "include"],
         disabled=not (is_lower_bound and is_upper_bound),
-        key=f"{base_key}_strategy",
+        persist_state="page", key=f"{base_key}_strategy",
         help=(
             "**include**: rows with a value inside [Lower, Upper] match the rule. "
             "**exclude**: rows with a value outside [Lower, Upper] match the rule.\n\n"
@@ -864,12 +864,12 @@ def handle_expression_mask_input(st_container, base_key: str):
     expression = st_container.text_area(
         "Expression", 
         placeholder="e.g. df['Age'] > 100", 
-        key=f"{base_key}_txt_area",
+        persist_state="page", key=f"{base_key}_txt_area",
         help="Enter a condition that evaluates to True/False for each row."
     )
     use_simplified_mask_expression = st_container.checkbox(
         "Use Simplified Mask Expression", 
-        key=f"{base_key}_simpl",
+        persist_state="page", key=f"{base_key}_simpl",
         help="Enable this if you want to use a simplified syntax (if available via configuration)."
     )
     
@@ -1172,7 +1172,7 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         # Save configuration
         for_sharing = st.toggle(
             "For sharing: leave out the outlier rows",
-            key=f"{key_base}_config_share",
+            persist_state="page", key=f"{key_base}_config_share",
             help="The outlier rules found by a multivariate method list the ids of the rows they exclude. Keep them "
             "to restore the same exclusions on this dataset later; leave them out when the file goes to someone else.",
         )
@@ -1229,7 +1229,7 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                 description = st.text_area(
                     "Describe Criteria", 
                     placeholder="e.g. Patients with Systolic BP > 140 or Age under 18",
-                    key=f"ai_desc_{family_name}",
+                    persist_state="page", key=f"ai_desc_{family_name}",
                     label_visibility="collapsed"
                 )
             with col_btn:
@@ -1343,11 +1343,11 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     config["mask_families"][family_name]["operator"] = family_operator
 
     # Mask Addition
-    mask_name = st_container.text_input("Anomaly Mask Name", placeholder="Enter mask name (Exact Column Name if Numeric!)")
+    mask_name = st_container.text_input("Anomaly Mask Name", key="anomaly_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")
     if not validate_mask_name(config, family_name, mask_name, st_container):
         return
 
-    is_numeric = st_container.checkbox("Is Numeric", key="is_num_anomaly")
+    is_numeric = st_container.checkbox("Is Numeric", persist_state="page", key="is_num_anomaly")
     if is_numeric:
         mask_details = handle_numeric_mask_input(st_container, base_key=family_name)
     else:
@@ -1425,11 +1425,11 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
     config["mask_families"][family_name]["operator"] = family_operator
 
     # Mask Addition
-    mask_name = st_container.text_input("Inclusion Mask Name", placeholder="Enter mask name (Exact Column Name if Numeric!)")
+    mask_name = st_container.text_input("Inclusion Mask Name", key="inclusion_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")
     if not validate_mask_name(config, family_name, mask_name, st_container):
         return
 
-    is_numeric = st_container.checkbox("Is Numeric", key="is_num_inclusion")
+    is_numeric = st_container.checkbox("Is Numeric", persist_state="page", key="is_num_inclusion")
     if is_numeric:
         mask_details = handle_numeric_mask_input(st_container, base_key=family_name)
     else:
@@ -1523,6 +1523,19 @@ def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
 
 
 
+# The tabs of Validate; only the open one runs (M5b). Their labels are part of the tabs' identity (Streamlit 1.66):
+# keep them fixed, without counts.
+TABS = (
+    "Data Quality Dashboard",
+    "Handle Clinical Anomalies",
+    "Handle Inclusion Criteria",
+    "Handle Outliers",
+    "Analysis population",
+    "Compare Data Files",
+)
+TAB_KEY = "validate_tab"
+
+
 def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """Process dataset using DataAnalyzer to fix types."""
     if df is None:
@@ -1573,11 +1586,13 @@ def app():
     # Sidebar options
     action = st.sidebar.radio(
         "Action",
-        ["Load Existing Config", "Create New Config"]
+        ["Load Existing Config", "Create New Config"],
+        key="validate_config_action",
+        persist_state="page",
     )
     
     if action == "Load Existing Config":
-        uploaded_file = st.sidebar.file_uploader("Upload configuration file", type=['json'])
+        uploaded_file = st.sidebar.file_uploader("Upload configuration file", key="validate_config_upload", type=['json'])
 
         if uploaded_file is not None:
             try:
@@ -1609,107 +1624,113 @@ def app():
         render_date_conversion(state, df, analyzer)
         
 
-    # Create tabs for different visualization aspects
-    tab_dashboard, tab1, tab2, tab3, tab_population, tab4 = st.tabs(["Data Quality Dashboard", "Handle Clinical Anomalies", "Handle Inclusion Criteria", "Handle Outliers", "Analysis population", "Compare Data Files"])
+    # Only the open tab runs (M5b): a click no longer recomputes every tab. The Compare tab always runs: its file
+    # uploaders cannot keep their files while it is closed.
+    tab_dashboard, tab1, tab2, tab3, tab_population, tab4 = st.tabs(list(TABS), key=TAB_KEY, on_change="rerun")
 
     with tab_population:
-        if df is None:
-            no_dataset()
-        else:
-            render_population_panel(state)
+        if tab_population.open:
+            if df is None:
+                no_dataset()
+            else:
+                render_population_panel(state)
 
     with tab_dashboard:
-        if df is not None:
-            render_dashboard(df, st.session_state.config)
-        else:
-            no_dataset()
+        if tab_dashboard.open:
+            if df is not None:
+                render_dashboard(df, st.session_state.config)
+            else:
+                no_dataset()
 
     with tab1:
-        anomaly_family = "clinical_anomalies"
-        detect = False  # set when the family is checked below
-        anomaly_view = None
-        with st.expander("New Anomaly Criterion", expanded=True):
-            add_domain_expert_based_anomaly_mask(st.session_state.config, st)
+        if tab1.open:
+            anomaly_family = "clinical_anomalies"
+            detect = False  # set when the family is checked below
+            anomaly_view = None
+            with st.expander("New Anomaly Criterion", expanded=True):
+                add_domain_expert_based_anomaly_mask(st.session_state.config, st)
 
-        #with st.expander("Current Mask Families", expanded=True):
-        st.subheader("Declared Anomaly Criteria")
-        display_mask_family(st.session_state.config["mask_families"][anomaly_family])
+            #with st.expander("Current Mask Families", expanded=True):
+            st.subheader("Declared Anomaly Criteria")
+            display_mask_family(st.session_state.config["mask_families"][anomaly_family])
 
-        with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
+            with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
             
-            family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
-            #st.json(family_config)
-            if family_config:
-                # The check stays on after the click, so the Results panel (and its Apply button) survive
-                # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
-                if st.button("Run Anomaly Detection"):
-                    st.session_state["anomaly_check_done"] = True
-                detect = bool(st.session_state.get("anomaly_check_done"))
+                family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
+                #st.json(family_config)
+                if family_config:
+                    # The check stays on after the click, so the Results panel (and its Apply button) survive
+                    # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
+                    if st.button("Run Anomaly Detection"):
+                        st.session_state["anomaly_check_done"] = True
+                    detect = bool(st.session_state.get("anomaly_check_done"))
 
-                if detect:
-                    # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
-                    anomaly_view, anom_cols = apply_family_mask(df.copy(deep=False), anomaly_family, family_config, st)
-                    # Increase the max elements limit for Pandas Styler
-                    pd.set_option("styler.render.max_elements", 600000)
-                    styled_df = anomaly_view.style.apply(
-                                            color_columns, 
-                                            axis=0, 
-                                            columns_to_highlight=anom_cols
-                                        )
-                    st.write("Updated Dataset:")
-                    st.dataframe(styled_df, width="stretch")
-            else:
-                st.error(f"Family '{anomaly_family}' not found in the configuration.")
+                    if detect:
+                        # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                        anomaly_view, anom_cols = apply_family_mask(df.copy(deep=False), anomaly_family, family_config, st)
+                        # Increase the max elements limit for Pandas Styler
+                        pd.set_option("styler.render.max_elements", 600000)
+                        styled_df = anomaly_view.style.apply(
+                                                color_columns, 
+                                                axis=0, 
+                                                columns_to_highlight=anom_cols
+                                            )
+                        st.write("Updated Dataset:")
+                        st.dataframe(styled_df, width="stretch")
+                else:
+                    st.error(f"Family '{anomaly_family}' not found in the configuration.")
         
-        if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
-            with st.expander("Results", expanded=True):
-                display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
+            if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
+                with st.expander("Results", expanded=True):
+                    display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
             
     with tab2:
-        inclusion_family = "study_inclusion"
-        check_inc = False  # set when the family is checked below
-        inclusion_view = None
-        with st.expander("New Inclusion Criterion", expanded=True):
-            add_study_inclusion_mask(st.session_state.config, st)
+        if tab2.open:
+            inclusion_family = "study_inclusion"
+            check_inc = False  # set when the family is checked below
+            inclusion_view = None
+            with st.expander("New Inclusion Criterion", expanded=True):
+                add_study_inclusion_mask(st.session_state.config, st)
         
-        st.subheader("Declared Inclusion Criteria")
-        display_mask_family(st.session_state.config["mask_families"][inclusion_family])
+            st.subheader("Declared Inclusion Criteria")
+            display_mask_family(st.session_state.config["mask_families"][inclusion_family])
 
-        with st.expander("Apply Data Validation based on Inclusion Criteria"):
+            with st.expander("Apply Data Validation based on Inclusion Criteria"):
             
-            family_config = st.session_state.config["mask_families"].get(inclusion_family, {})
-            #st.json(family_config)
-            if family_config:
-                if st.button("Run Inclusion Criteria Check"):
-                    st.session_state["inclusion_check_done"] = True
-                check_inc = bool(st.session_state.get("inclusion_check_done"))
+                family_config = st.session_state.config["mask_families"].get(inclusion_family, {})
+                #st.json(family_config)
+                if family_config:
+                    if st.button("Run Inclusion Criteria Check"):
+                        st.session_state["inclusion_check_done"] = True
+                    check_inc = bool(st.session_state.get("inclusion_check_done"))
 
-                if check_inc:
-                    # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
-                    inclusion_view, inc_cols = apply_family_mask(df.copy(deep=False), inclusion_family, family_config, st)
-                    styled_df = inclusion_view.style.apply(
-                                            color_columns, 
-                                            axis=0, 
-                                            columns_to_highlight=inc_cols
-                                        )
-                    st.write("Updated Dataset:")
-                    st.dataframe(styled_df, width="stretch")
-            else:
-                st.error(f"Family '{inclusion_family}' not found in the configuration.")
+                    if check_inc:
+                        # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                        inclusion_view, inc_cols = apply_family_mask(df.copy(deep=False), inclusion_family, family_config, st)
+                        styled_df = inclusion_view.style.apply(
+                                                color_columns, 
+                                                axis=0, 
+                                                columns_to_highlight=inc_cols
+                                            )
+                        st.write("Updated Dataset:")
+                        st.dataframe(styled_df, width="stretch")
+                else:
+                    st.error(f"Family '{inclusion_family}' not found in the configuration.")
         
-        if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
-            with st.expander("Results", expanded=True):
-                display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
+            if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
+                with st.expander("Results", expanded=True):
+                    display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
 
 
     with tab3:
-        if df is None or analyzer is None:
-            no_dataset()
-        else:
-            # Outliers Handler
-            with st.expander("Outliers Handler"):
-                df = add_outlier_handling_ui(df, analyzer.numeric_cols)
-            render_outlier_actions(df.attrs.get("outlier_detection"))
+        if tab3.open:
+            if df is None or analyzer is None:
+                no_dataset()
+            else:
+                # Outliers Handler
+                with st.expander("Outliers Handler"):
+                    handled = add_outlier_handling_ui(df, analyzer.numeric_cols)
+                render_outlier_actions(handled.attrs.get("outlier_detection"))
 
     with tab4:
         run_comp, row_ids, column_to_check = False, [], []  # set once both files and the ids are chosen
@@ -1747,7 +1768,7 @@ def app():
                         options=common_columns,
                         default=None,
                         help="Choose the ids that exists in both datasets",
-                        key="common_ids_comparator"
+                        persist_state="page", key="common_ids_comparator"
                     )
 
                     column_to_check = st.multiselect(
@@ -1755,7 +1776,7 @@ def app():
                         options=set(common_columns) - set(row_ids),
                         default=set(common_columns) - set(row_ids),
                         help="Choose the column that exists in both datasets",
-                        key="common_columns_comparator"
+                        persist_state="page", key="common_columns_comparator"
                     )
                     
                     if not row_ids:

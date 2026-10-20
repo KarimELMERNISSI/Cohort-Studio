@@ -55,9 +55,16 @@ def test_load_the_tutorial_cohort_with_its_configuration(app: AppTest) -> None:
     )  # merged into the default configuration
 
 
+def _open(app: AppTest, tab: str) -> None:
+    app.session_state["validate_tab"] = tab  # only the open tab of Validate runs
+    app.run()
+    _ok(app)
+
+
 def test_validate_applies_the_inclusion_criteria(app: AppTest) -> None:
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
+    _open(app, "Handle Inclusion Criteria")
     _click(app, "Run Inclusion Criteria Check")
     # the check shows its counts; it no longer writes flag columns into the dataset
     assert _metric(app, "Rows to include in the study (%)").delta == "939"
@@ -79,6 +86,7 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
     assert "anomaly_check_done" not in app.session_state
+    _open(app, "Handle Clinical Anomalies")
     _click(app, "Run Anomaly Detection")
     assert _metric(app, "Irregular Rows (%)").delta == "16"
     app.run()
@@ -86,6 +94,7 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     _ok(app)
     assert len(app.session_state["data"]) == 1190
     # with the inclusion criteria as well: the analysis set of the tutorial
+    _open(app, "Handle Inclusion Criteria")
     _click(app, "Run Inclusion Criteria Check")
     app.button(key="inclusion_data_apply_criteria").click().run()
     _ok(app)

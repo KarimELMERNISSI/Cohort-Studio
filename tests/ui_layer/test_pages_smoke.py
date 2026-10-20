@@ -14,6 +14,13 @@ MAIN = str(ROOT / "main.py")
 DATA_PAGES = ("validate", "explore", "visualize", "analyze", "enrich", "variable_map", "reproduce")
 
 
+def _tabs() -> dict[str, tuple[str, tuple[str, ...]]]:
+    """The pages that run only their open tab (M5b): the smoke test opens each tab."""
+    from app_pages import data_monitoring
+
+    return {"validate": (data_monitoring.TAB_KEY, data_monitoring.TABS)}
+
+
 @pytest.fixture(scope="module")
 def app(tmp_path_factory: pytest.TempPathFactory):
     previous = dp.DATA_ROOT
@@ -45,6 +52,12 @@ def test_sample_cohort_then_data_pages(app: AppTest) -> None:
     assert not app.exception, [str(e.value)[:400] for e in app.exception]
     assert app.session_state["data"].shape == (500, 19)
     assert app.session_state["dataset_ref"].origin == "sample"
+    tabs = _tabs()
     for key in DATA_PAGES:
         app.switch_page(nav.page_path(key)).run()
         assert not app.exception, (key, [str(e.value)[:400] for e in app.exception])
+        state_key, labels = tabs.get(key, ("", ()))
+        for label in labels:
+            app.session_state[state_key] = label
+            app.run()
+            assert not app.exception, (key, label, [str(e.value)[:400] for e in app.exception])

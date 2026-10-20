@@ -151,7 +151,8 @@ def render_dashboard(df, config):
         for i, metric_name in enumerate(ordered(metrics)):
             with cols[i % 3]:
                 weights[metric_name] = st.slider(
-                    f"{metric_name} Weight", 0.0, 5.0, DEFAULT_WEIGHTS.get(metric_name, 1.0), 0.5
+                    f"{metric_name} Weight", 0.0, 5.0, DEFAULT_WEIGHTS.get(metric_name, 1.0), 0.5,
+                    key=f"dq_weight_{metric_name}", persist_state="page",
                 )
 
     quality = weighted_score(metrics, weights)
@@ -310,24 +311,24 @@ def render_dashboard(df, config):
                 with c1:
                     # Allow user to select a column to use as row identifier
                     id_options = ["Index"] + df.columns.tolist()
-                    row_id_col = st.selectbox("Row Label (ID)", options=id_options, index=0, help="Select a column to use as the row label.")
+                    row_id_col = st.selectbox("Row Label (ID)", key="dq_missing_row_label", persist_state="page", options=id_options, index=0, help="Select a column to use as the row label.")
                 with c2:
-                    cluster_cols_matrix = st.checkbox("Cluster Variables (Cols)", value=True, key="nm_cluster_cols")
+                    cluster_cols_matrix = st.checkbox("Cluster Variables (Cols)", value=True, persist_state="page", key="nm_cluster_cols")
                 with c3:
-                    cluster_rows_matrix = st.checkbox("Cluster Samples (Rows)", value=False, key="nm_cluster_rows")
+                    cluster_rows_matrix = st.checkbox("Cluster Samples (Rows)", value=False, persist_state="page", key="nm_cluster_rows")
                 with c4:
-                    show_dendro_matrix = st.checkbox("Show Dendrograms", value=False, key="nm_show_dendro")
+                    show_dendro_matrix = st.checkbox("Show Dendrograms", value=False, persist_state="page", key="nm_show_dendro")
                 with c5:
-                    show_row_labels = st.checkbox("Show Row Labels", value=True, key="nm_show_row_labels")
+                    show_row_labels = st.checkbox("Show Row Labels", value=True, persist_state="page", key="nm_show_row_labels")
                 with c6:
-                    show_col_labels = st.checkbox("Show Column Labels", value=True, key="nm_show_col_labels")
+                    show_col_labels = st.checkbox("Show Column Labels", value=True, persist_state="page", key="nm_show_col_labels")
                 
                 # Row Filtering
                 st.markdown("##### Filter Rows by Missingness")
                 row_missing_pct = df.isnull().mean(axis=1) * 100
                 min_miss, max_miss = st.slider(
                     "Filter Rows by % Missing",
-                    min_value=0.0,
+                    key="dq_missing_range", persist_state="page", min_value=0.0,
                     max_value=100.0,
                     value=(0.0, 100.0),
                     step=1.0,
@@ -391,11 +392,11 @@ def render_dashboard(df, config):
                 # Options
                 c1, c2, c3 = st.columns(3)
                 with c1:
-                    filter_complete = st.checkbox("Filter Complete Columns", value=True, help="Exclude columns with no missing values.")
+                    filter_complete = st.checkbox("Filter Complete Columns", key="dq_nullity_filter_complete", persist_state="page", value=True, help="Exclude columns with no missing values.")
                 with c2:
-                    enable_clustering = st.checkbox("Cluster Variables", value=True, help="Group variables with similar missingness patterns.")
+                    enable_clustering = st.checkbox("Cluster Variables", key="dq_nullity_cluster", persist_state="page", value=True, help="Group variables with similar missingness patterns.")
                 with c3:
-                    show_dendrogram = st.checkbox("Show Dendrogram", value=False, disabled=not enable_clustering, help="Display the hierarchical clustering dendrogram.")
+                    show_dendrogram = st.checkbox("Show Dendrogram", key="dq_nullity_dendrogram", persist_state="page", value=False, disabled=not enable_clustering, help="Display the hierarchical clustering dendrogram.")
 
                 # Filter logic
                 if filter_complete:
@@ -481,7 +482,7 @@ def render_dashboard(df, config):
                     with st.expander("Test Configuration", expanded=True):
                         mcar_vars = st.multiselect(
                             "Select Variables for MCAR Test",
-                            options=numeric_cols,
+                            key="dq_mcar_variables", persist_state="page", options=numeric_cols,
                             default=numeric_cols[:min(10, len(numeric_cols))], # Default to top 10 to avoid performance issues
                             help="Select numerical variables to include in the test. Including too many variables may reduce performance."
                         )
@@ -529,10 +530,10 @@ def render_dashboard(df, config):
                 st.markdown("#### Missing At Random (MAR) Indicator")
                 st.markdown("Checks if the missingness of a specific variable is influenced by the values of other variables.")
                 
-                mar_mode = st.radio("Analysis Mode", ["Single Variable Analysis", "Global Dependency Scan"], horizontal=True)
+                mar_mode = st.radio("Analysis Mode", ["Single Variable Analysis", "Global Dependency Scan"], key="dq_mar_mode", persist_state="page", horizontal=True)
 
                 if mar_mode == "Single Variable Analysis":
-                    target_col = st.selectbox("Select Variable to Analyze (Target)", options=missing_counts.index, key="mar_target")
+                    target_col = st.selectbox("Select Variable to Analyze (Target)", options=missing_counts.index, persist_state="page", key="mar_target")
                     
                     if target_col:
                         # Create temporary dataframe for analysis
@@ -543,14 +544,14 @@ def render_dashboard(df, config):
                         with st.expander("Analysis Configuration", expanded=True):
                             # Predictors
                             all_cols = [c for c in df.columns if c != target_col and c != 'Missingness_Status']
-                            predictors = st.multiselect("Select Predictor Variables", options=all_cols, default=all_cols[:5] if len(all_cols) > 5 else all_cols)
+                            predictors = st.multiselect("Select Predictor Variables", key="dq_mar_predictors", persist_state="page", options=all_cols, default=all_cols[:5] if len(all_cols) > 5 else all_cols)
                             
                             # Test Preference
                             c1, c2 = st.columns(2)
                             with c1:
-                                test_pref = st.selectbox("Test Preference", ["Auto-Detect", "Force Parametric", "Force Non-Parametric"])
+                                test_pref = st.selectbox("Test Preference", ["Auto-Detect", "Force Parametric", "Force Non-Parametric"], key="dq_mar_test_preference", persist_state="page")
                             with c2:
-                                correction = st.selectbox("Multiple Testing Correction", ["None", "Bonferroni", "Benjamini-Hochberg (FDR)"], index=2)
+                                correction = st.selectbox("Multiple Testing Correction", ["None", "Bonferroni", "Benjamini-Hochberg (FDR)"], key="dq_mar_correction", persist_state="page", index=2)
     
                         if st.button("Run Dependency Check"):
                             results = []
@@ -660,7 +661,7 @@ def render_dashboard(df, config):
                         # Targets: Variables with missing data
                         scan_targets = st.multiselect(
                             "Select Target Variables (Missing Data)",
-                            options=missing_counts.index,
+                            key="dq_scan_targets", persist_state="page", options=missing_counts.index,
                             default=missing_counts.index.tolist(),
                             help="Variables whose missingness you want to explain."
                         )
@@ -668,7 +669,7 @@ def render_dashboard(df, config):
                         # Predictors: All variables
                         scan_predictors = st.multiselect(
                             "Select Predictor Variables",
-                            options=df.columns,
+                            key="dq_scan_predictors", persist_state="page", options=df.columns,
                             default=df.columns.tolist()[:min(20, len(df.columns))], # Default to top 20 to avoid overwhelming
                             help="Variables that might explain the missingness."
                         )
@@ -676,9 +677,9 @@ def render_dashboard(df, config):
                         # Test Preference
                         c1, c2 = st.columns(2)
                         with c1:
-                            scan_test_pref = st.selectbox("Test Preference", ["Auto-Detect", "Force Parametric", "Force Non-Parametric"], key="scan_test_pref")
+                            scan_test_pref = st.selectbox("Test Preference", ["Auto-Detect", "Force Parametric", "Force Non-Parametric"], persist_state="page", key="scan_test_pref")
                         with c2:
-                            scan_correction = st.selectbox("Multiple Testing Correction", ["None", "Bonferroni", "Benjamini-Hochberg (FDR)"], index=2, key="scan_correction")
+                            scan_correction = st.selectbox("Multiple Testing Correction", ["None", "Bonferroni", "Benjamini-Hochberg (FDR)"], index=2, persist_state="page", key="scan_correction")
                         
                     if st.button("Run Global Scan"):
                         if not scan_targets or not scan_predictors:
@@ -768,7 +769,7 @@ def render_dashboard(df, config):
                          "**Z-score**: Uses standard deviations from mean\n"
                          "**Quantile**: Uses percentile thresholds\n"
                          "**LOF/IsoForest/DBSCAN**: Multivariate machine learning methods",
-                    key="validity_detection_method"
+                    persist_state="page", key="validity_detection_method"
                 )
             
             # Store selected method in session state for dashboard recalculation
@@ -779,20 +780,20 @@ def render_dashboard(df, config):
                 if detection_method == "iqr":
                     # Get default from session state or use 1.5
                     default_mult = st.session_state.get('validity_outlier_params', {}).get('multiplier', 1.5)
-                    multiplier = st.slider("IQR Multiplier", 0.5, 3.0, float(default_mult), 0.1, key="validity_iqr_mult",
+                    multiplier = st.slider("IQR Multiplier", 0.5, 3.0, float(default_mult), 0.1, persist_state="page", key="validity_iqr_mult",
                                           help="Higher values = fewer outliers detected")
                     params = {"multiplier": multiplier}
                 elif detection_method == "zscore":
                     default_thresh = st.session_state.get('validity_outlier_params', {}).get('threshold', 3.0)
-                    threshold = st.slider("Z-score Threshold", 1.0, 5.0, float(default_thresh), 0.1, key="validity_zscore_thresh",
+                    threshold = st.slider("Z-score Threshold", 1.0, 5.0, float(default_thresh), 0.1, persist_state="page", key="validity_zscore_thresh",
                                          help="Number of standard deviations from mean")
                     params = {"threshold": threshold}
                 elif detection_method == "quantile":
                     c1, c2 = st.columns(2)
                     with c1:
-                        lower = st.number_input("Lower Percentile", 0.0, 0.5, 0.01, 0.01, key="validity_q_lower")
+                        lower = st.number_input("Lower Percentile", 0.0, 0.5, 0.01, 0.01, persist_state="page", key="validity_q_lower")
                     with c2:
-                        upper = st.number_input("Upper Percentile", 0.5, 1.0, 0.99, 0.01, key="validity_q_upper")
+                        upper = st.number_input("Upper Percentile", 0.5, 1.0, 0.99, 0.01, persist_state="page", key="validity_q_upper")
                     params = {"lower": lower, "upper": upper}
                 else:
                     # ML methods - show info
@@ -811,7 +812,7 @@ def render_dashboard(df, config):
                     "Select Columns for Analysis",
                     numeric_cols,
                     default=numeric_cols[:min(5, len(numeric_cols))],
-                    key="validity_ml_cols"
+                    persist_state="page", key="validity_ml_cols"
                 )
             else:
                 selected_cols = numeric_cols
@@ -888,7 +889,7 @@ def render_dashboard(df, config):
                     viz_type = st.selectbox(
                         "Visualization Type",
                         ["Box Plot", "Violin Plot", "Scatter (with outliers)"],
-                        key="validity_viz_type"
+                        persist_state="page", key="validity_viz_type"
                     )
                 with viz_col2:
                     if detection_method in ["iqr", "zscore", "quantile"]:
@@ -898,7 +899,7 @@ def render_dashboard(df, config):
                             "Select Columns",
                             available_cols,
                             default=available_cols[:min(3, len(available_cols))],
-                            key="validity_viz_cols",
+                            persist_state="page", key="validity_viz_cols",
                             help="Select multiple columns to compare"
                         )
                     else:

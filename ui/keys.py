@@ -10,6 +10,7 @@ M5b step 7 derives those lists from this file.
 Lifetimes:
 
 - ``session``: kept for the whole session;
+- ``page``: a widget's own state, kept while the user stays on its page;
 - ``dataset``: cleared when another dataset is loaded, kept when the same dataset changes;
 - ``data_change``: cleared on any change of the data, and when another dataset is loaded.
 """
@@ -19,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Lifetime = Literal["session", "dataset", "data_change"]
+Lifetime = Literal["session", "page", "dataset", "data_change"]
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,12 @@ KEYS: tuple[Key, ...] = (
         "session",
         ("app_pages.data_monitoring", "app_pages.data_enrichment"),
         "the study configuration: the criteria definitions (edited on Validate), the enrichments, the folders",
+    ),
+    Key(
+        "validate_tab",
+        "app_pages.data_monitoring",
+        "page",
+        note="the open tab of Validate: only that tab runs",
     ),
     Key(
         "anomaly_check_done",

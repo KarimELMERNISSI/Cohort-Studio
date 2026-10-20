@@ -75,6 +75,8 @@ def test_freezing_keeps_only_the_population_as_one_traced_step(app: AppTest) -> 
     app.checkbox(key=_family_key("clinical_anomalies")).check().run()
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
+    app.session_state["validate_tab"] = "Analysis population"  # only the open tab runs
+    app.run()
     app.checkbox(key="pop_freeze_confirm").check().run()
     app.button(key="pop_freeze").click().run()
     _ok(app)
@@ -91,6 +93,8 @@ def test_validate_shows_the_participant_flow_and_the_reasons_of_each_exclusion(
     app.checkbox(key=_family_key("study_inclusion")).check().run()
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
+    app.session_state["validate_tab"] = "Analysis population"  # only the open tab runs
+    app.run()
     assert app.get("plotly_chart")  # the diagram
     assert not any("does not add up" in w.value for w in app.warning)
     details = app.selectbox(key="validate_flow::item")
