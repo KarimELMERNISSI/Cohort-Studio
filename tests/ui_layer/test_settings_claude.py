@@ -43,7 +43,7 @@ def test_claude_provider_with_local_embeddings(app: AppTest) -> None:
     assert any(
         "What leaves this server" in (w.title or "") for w in app.warning
     )  # consent required
-    assert any(c.key == "rag_cloud_consent" for c in app.checkbox)
+    assert any(c.key == "rag_anthropic_consent" for c in app.checkbox)
 
     embedding.select("openai").run()
     assert not app.exception

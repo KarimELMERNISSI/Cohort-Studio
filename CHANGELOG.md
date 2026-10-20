@@ -133,6 +133,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Now the renaming, the variable map, the unit hints and the suggested criteria all send the 5th to 95th
     percentiles, the frequent values shared by at least 5 rows, and the years covered by dates.
   - The consent card of Settings lists exactly that.
+- **Withdrawing the consent stops the AI engine.** The consent was checked only when the engine started, so an
+  engine kept answering, and sending data to its cloud provider, after the box was unticked.
+  - Unticking *I confirm this data may be sent…* now stops an engine that runs with that provider: its connections
+    are dropped, so nothing more can be sent. Settings shows the engine as stopped, and why.
+  - The documents stay indexed on disk: once the consent is given again, initialising the engine reuses the index.
+  - Each cloud provider has its own consent box. A consent given for one provider was shown as given for the next
+    one chosen in the list.
 - **Sharing a study configuration**: a switch leaves out the outlier rules that list row ids, which only mean
   something for the user's dataset.
 

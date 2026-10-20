@@ -257,11 +257,15 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
 
 
 def _consent_card(provider: str) -> bool:
-    """Explicit, session-scoped confirmation before any data can be sent to a cloud provider (audit E6)."""
+    """
+    Explicit, session-scoped confirmation before any data can be sent to a cloud provider (audit E6), one per
+    provider: a consent given for one provider is not shown as given for another. Unticking it stops the engine
+    that runs with this provider, so nothing more is sent.
+    """
     with st.container(border=True):
         st.subheader("Data sharing", icon=":material/shield_person:", anchor=False)
         if provider not in CLOUD_PROVIDERS:
-            st.session_state.rag_manager.cloud_consent = False
+            # choosing the local provider changes nothing for a cloud engine that runs until another starts
             st.caption("The local provider keeps every prompt, document and dataset excerpt on this server.")
             return True
         st.warning(
@@ -276,17 +280,34 @@ def _consent_card(provider: str) -> bool:
             title=f"What leaves this server with {PROVIDER_NAMES[provider]}",
             icon=":material/cloud_upload:",
         )
+        manager = st.session_state.rag_manager
         running = _running()
-        if "rag_cloud_consent" not in st.session_state and running.get("provider") == provider and running["consent"]:
-            st.session_state["rag_cloud_consent"] = True  # given in this session, for the engine that runs
-        consent = st.checkbox(
-            "I confirm this data may be sent to the selected cloud provider",
-            key="rag_cloud_consent",
-            help="Required before any data is sent to a cloud AI provider. Applies to this session only.",
-            persist_state=PERSIST,
+        key = _consent_key(provider)
+        if key not in st.session_state and running.get("provider") == provider and running["consent"]:
+            st.session_state[key] = True  # given in this session, for the engine that runs
+        consent = bool(
+            st.checkbox(
+                "I confirm this data may be sent to the selected cloud provider",
+                key=key,
+                help="Required before any data is sent to this cloud AI provider. Applies to this session only; "
+                "untick it to stop an engine that runs with this provider.",
+                persist_state=PERSIST,
+            )
         )
-        st.session_state.rag_manager.cloud_consent = bool(consent)
-        return bool(consent)
+        if not running or running.get("provider") == provider:  # the box speaks for this provider's engine
+            if consent:
+                manager.cloud_consent = True
+            elif manager.withdraw_consent():
+                st.toast(
+                    f"Consent withdrawn: the AI engine stopped, and nothing more is sent to {PROVIDER_NAMES[provider]}.",
+                    icon=":material/block:",
+                )
+        return consent
+
+
+def _consent_key(provider: str) -> str:
+    """The session key of the consent box of a cloud provider."""
+    return f"rag_{provider}_consent"
 
 
 def _library_card() -> list[str] | None:
@@ -502,6 +523,12 @@ def _engine_card(
         if manager.initialized:
             engine_name = ENGINE_TITLES.get(VectorEngine(manager.vector_engine)) if getattr(manager, "vector_engine", None) else None
             st.badge(f"Active · {engine_name} index" if engine_name else "Active", icon=":material/check_circle:", color="green")
+        elif getattr(manager, "stop_reason", None):
+            st.badge("Stopped", icon=":material/block:", color="red")
+            st.caption(
+                f"The engine stopped because {manager.stop_reason}: nothing more is sent to the provider. Initialise "
+                "it again to resume."
+            )
         else:
             st.badge("Not initialised", icon=":material/radio_button_unchecked:", color="gray")
         use_existing_db = st.toggle(
@@ -536,6 +563,8 @@ def _engine_card(
                     dataset = st.session_state.get("working_df")
                 if cfg.get("api_key"):
                     manager.api_key = cfg["api_key"]
+                # the consent of the provider being started (the box of another provider may have been the last)
+                manager.cloud_consent = consent and cfg["provider"] in CLOUD_PROVIDERS
                 success, msg = manager.initialize_system(
                     provider=cfg["provider"],
                     model_name=cfg["model"],

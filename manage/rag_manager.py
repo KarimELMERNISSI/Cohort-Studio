@@ -156,6 +156,35 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         
         # Explicit per-session confirmation is required before data may be sent to a cloud provider.
         self.cloud_consent = False
+        self.stop_reason: str | None = None  # why a running engine was stopped (shown by Settings)
+
+    def uses_cloud(self) -> bool:
+        """Whether the engine's chat or embedding provider is a cloud provider, so that data leaves the server."""
+        return self.provider in CLOUD_PROVIDERS or getattr(self, "embedding_provider", None) in CLOUD_PROVIDERS
+
+    def stop(self, reason: str) -> None:
+        """
+        Stops the engine: its connections to the providers are dropped, so nothing more can be sent to them. The
+        document index stays on disk, and the next initialisation reuses it.
+        """
+        self.initialized = False
+        self.llm = None
+        self.qa_chain = None
+        self.vector_store = None  # it holds the embedding connection, which embeds every question
+        self.client = None
+        self._output_helper = None
+        self.stop_reason = reason
+
+    def withdraw_consent(self) -> bool:
+        """
+        The data-sharing consent is withdrawn. A running engine that sends data to a cloud provider stops at once:
+        the consent used to be checked only when the engine started, so it kept answering. Returns whether it stopped.
+        """
+        self.cloud_consent = False
+        if self.initialized and self.uses_cloud():
+            self.stop("the data-sharing consent was withdrawn")
+            return True
+        return False
 
     def is_available(self):
         """Check if RAG dependencies are available."""
@@ -413,8 +442,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
             # 5. Initialize Roles and QA Chain
             self._update_internal_state(adherence_score)
-            
+
             self.initialized = True
+            self.stop_reason = None
             return True, (
                 f"RAG System Initialized Successfully ({provider_clean.upper()}, {engine.value} index). "
                 f"Processed {len(documents)} pages and {len(texts)} chunks; the index holds {index.count()} chunks."

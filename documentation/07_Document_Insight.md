@@ -36,6 +36,10 @@ criteria) is a summary of each column, never a row:
 Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them.
 The consent card of Settings lists the same.
 
+The consent applies to this session and to the provider it names: each cloud provider has its own box. Untick it to
+withdraw it. An engine running with that provider then stops at once, so nothing more is sent to it. Your documents
+stay indexed, so after a new consent, **Initialise** reuses the index.
+
 ### Choosing the vector database
 
 Settings > AI engine > **Vector database** offers two engines; the app recommends one for your machine and says why

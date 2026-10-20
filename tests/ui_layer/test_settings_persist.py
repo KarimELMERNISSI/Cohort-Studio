@@ -3,7 +3,8 @@ Settings keeps its choices across pages (M5, AppTest).
 
 Streamlit drops the value of a widget whose page is not shown. The day-first default was lost on the way to Import,
 the page that reads it; a revisit of Settings showed Ollama, the first model and an empty consent box, and the
-consent card withdrew the running engine's consent.
+consent card withdrew the running engine's consent. Each cloud provider has its own consent box, and unticking the
+one of the engine that runs stops it.
 """
 
 import os
@@ -56,14 +57,14 @@ def test_the_ai_provider_model_and_consent_survive_a_revisit(app: AppTest) -> No
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
     app.selectbox(key="rag_provider_select").select("gemini").run()
     app.selectbox(key="rag_gemini_model_select").select("gemini-flash-lite-latest").run()
-    app.checkbox(key="rag_cloud_consent").check().run()
+    app.checkbox(key="rag_gemini_consent").check().run()
     assert app.session_state["rag_manager"].cloud_consent is True
 
     _visit(app, "start")
     _visit(app, "settings")
     assert app.selectbox(key="rag_provider_select").value == "gemini"
     assert app.selectbox(key="rag_gemini_model_select").value == "gemini-flash-lite-latest"
-    assert app.checkbox(key="rag_cloud_consent").value is True
+    assert app.checkbox(key="rag_gemini_consent").value is True
     assert app.session_state["rag_manager"].cloud_consent is True  # not withdrawn by the visit
     assert not [w for w in app.warning if "Session State API" in str(w.value)]
 
@@ -83,5 +84,40 @@ def test_settings_start_from_the_engine_that_runs(signed_in: AppTest, tmp_path: 
     _visit(signed_in, "settings")
     assert signed_in.selectbox(key="rag_provider_select").value == "mistral"
     assert signed_in.selectbox(key="rag_mistral_model_select").value == "mistral-large-latest"
-    assert signed_in.checkbox(key="rag_cloud_consent").value is True
+    assert signed_in.checkbox(key="rag_mistral_consent").value is True
     assert signed_in.session_state["rag_manager"].cloud_consent is True
+
+
+def test_unticking_the_consent_stops_the_engine_that_runs(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    """The consent was checked only when the engine started: unticking it left the engine answering."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    from types import SimpleNamespace
+
+    from manage.rag_manager import RAGManager
+
+    manager = RAGManager(documents_dir=str(tmp_path / "documents"), provider="mistral")
+    manager.initialized = True
+    manager.cloud_consent = True
+    manager.llm = SimpleNamespace(config=SimpleNamespace(model_name="mistral-large-latest"))
+    manager.vector_store = SimpleNamespace()
+    signed_in.session_state["rag_manager"] = manager
+    _visit(signed_in, "settings")
+
+    signed_in.selectbox(key="rag_provider_select").select("gemini").run()
+    assert signed_in.checkbox(key="rag_gemini_consent").value is False  # one consent per provider
+    # looking at another provider stops nothing
+    assert signed_in.session_state["rag_manager"].initialized
+
+    signed_in.selectbox(key="rag_provider_select").select("mistral").run()
+    signed_in.checkbox(key="rag_mistral_consent").uncheck().run()
+    assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
+    stopped = signed_in.session_state["rag_manager"]
+    assert not stopped.initialized and stopped.llm is None and stopped.vector_store is None
+    assert stopped.cloud_consent is False
+    assert any("nothing more is sent" in t.value for t in signed_in.toast)
+    assert any(
+        "The engine stopped because the data-sharing consent was withdrawn" in c.value
+        for c in signed_in.caption
+    )
