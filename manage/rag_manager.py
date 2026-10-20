@@ -44,6 +44,7 @@ from utils.llm_utils import (
     provider_error,
 )
 from utils.logging_config import redact_secrets
+from utils.settings import get_settings
 
 from .rag_computed_vars import ComputedVarsMixin
 from .rag_documents import DocumentsMixin
@@ -52,22 +53,13 @@ from .rag_documents import DocumentsMixin
 from .rag_taxonomy import TaxonomyMixin
 
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
-_ENV_KEY_NAMES = {
-    "gemini": "GOOGLE_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "mistral": "MISTRAL_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-}
 # Providers that answer but have no embedding API: documents are embedded by another provider.
 CHAT_ONLY_PROVIDERS = {"anthropic"}
 
 
 def _env_api_key(provider: str | None) -> str | None:
-    """Server-configured API key for a cloud provider; used only when the user typed none."""
-    env_name = _ENV_KEY_NAMES.get((provider or "").lower())
-    if not env_name:
-        return None
-    return os.getenv(env_name) or None
+    """Server-configured API key for a cloud provider (utils.settings); used only when the user typed none."""
+    return get_settings().ai.api_key(provider)
 
 # Try importing RAG dependencies
 try:

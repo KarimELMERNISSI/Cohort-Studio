@@ -19,6 +19,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from utils.settings import Settings, get_settings
+
 from .base import BaseVectorIndex, VectorEngine, VectorStoreError
 from .lancedb_index import ANN_THRESHOLD, LanceDBIndex
 from .qdrant_index import QdrantIndex, user_collection
@@ -48,14 +50,17 @@ class VectorStoreSettings:
     qdrant_api_key: str | None = None
 
     @classmethod
-    def from_env(cls) -> VectorStoreSettings:
-        engine = (os.getenv("CMP_VECTOR_STORE") or AUTO).strip().lower()
+    def from_env(cls, settings: Settings | None = None) -> VectorStoreSettings:
+        """The vector store's settings (utils.settings; the current ones by default)."""
+        section = (settings or get_settings()).vector_store
+        engine = section.engine or AUTO
         if engine not in {AUTO, *(e.value for e in VectorEngine)}:
-            engine = AUTO
+            engine = AUTO  # an unknown name stops start-up from step 4 on (connectors on one kit)
+        key = section.qdrant_api_key
         return cls(
             engine=engine,
-            qdrant_url=(os.getenv("CMP_QDRANT_URL") or "").strip() or None,
-            qdrant_api_key=os.getenv("CMP_QDRANT_API_KEY") or None,
+            qdrant_url=section.qdrant_url,
+            qdrant_api_key=key.get_secret_value() if key is not None else None,
         )
 
 

@@ -44,6 +44,7 @@ from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui.components import confirm
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
+from utils.settings import get_settings
 
 # .env is loaded once, at start-up (main.py): the keys are in the environment from the first page on
 # The choices are kept for the whole session: Streamlit drops the value of a widget whose page is not shown, so a
@@ -119,7 +120,7 @@ def _discover_cloud_models(_manager, provider: str, api_key: str) -> list[str]:
         return []
 
 
-def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | None:
+def _api_key_input(provider: str, label: str, key: str, help_text: str) -> str | None:
     """Session-scoped API key entry.
 
     The server-side key is never shown or pre-filled and nothing is written to ``os.environ``
@@ -128,7 +129,7 @@ def _api_key_input(env_var: str, label: str, key: str, help_text: str) -> str | 
     typed = st.text_input(
         label, value="", type="password", help=help_text, key=key, icon=":material/key:", persist_state=PERSIST
     )
-    if os.getenv(env_var):
+    if get_settings().ai.api_key(provider):
         st.caption("A server-side key is configured; leave this empty to use it.")
     st.session_state.rag_manager.api_key = typed or None
     return typed or None
@@ -192,7 +193,7 @@ def _provider_card() -> dict:
         if provider == "ollama":
             cfg["base_url"] = st.text_input(
                 "Ollama endpoint",
-                value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+                value=get_settings().ai.ollama_base_url,
                 key="rag_ollama_base_url",
                 help="URL of the local or network Ollama service.",
                 icon=":material/dns:",
@@ -208,7 +209,7 @@ def _provider_card() -> dict:
             catalog = CLOUD_CATALOG[provider]
             st.badge("Cloud: requires your confirmation", icon=":material/cloud:", color="orange")
             cfg["api_key"] = _api_key_input(
-                catalog["env"], catalog["label"], f"rag_{provider}_api_key", f"Required for {PROVIDER_NAMES[provider]} inference."
+                provider, catalog["label"], f"rag_{provider}_api_key", f"Required for {PROVIDER_NAMES[provider]} inference."
             )
             chat_options = list(catalog["chat"])
             if provider in ("gemini", "anthropic") and cfg["api_key"] and hasattr(
@@ -261,7 +262,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     if embed_provider == "ollama":
         cfg["embedding_base_url"] = st.text_input(
             "Ollama endpoint (embeddings)",
-            value=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            value=get_settings().ai.ollama_base_url,
             key="rag_claude_ollama_base_url",
             help="URL of the local or network Ollama service that embeds the documents.",
             icon=":material/dns:",
@@ -279,7 +280,7 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         help=f"Key for {PROVIDER_NAMES[embed_provider]} embeddings. Never stored; empty uses the server key if configured.",
         persist_state=PERSIST,
     )
-    if os.getenv(catalog["env"]):
+    if get_settings().ai.api_key(embed_provider):
         st.caption("A server-side key is configured for the embeddings; leave this empty to use it.")
     cfg["embedding_api_key"] = typed or None
     return list(catalog["embed"]), f"{PROVIDER_NAMES[embed_provider]} embedding model used to index your documents."

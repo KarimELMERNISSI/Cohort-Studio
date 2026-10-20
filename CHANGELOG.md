@@ -431,6 +431,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   `.env` when you update: a value accepted before may now be refused.
 - A `.streamlit/secrets.toml` is not read (the settings come from the environment and `.env` only): its presence is
   logged at start-up, so that its values can be moved to `.env` and the file deleted.
+- **An empty value counts as unset everywhere**, as `.env.example`'s empty lines mean: `CMP_IAM_CACHE_TTL=` stopped
+  the identity manager, and `CMP_RANDOM_SEED=` every statistics module at import. Every part of the application now
+  reads its settings from the one object, the log redaction included (from the raw environment, so that a wrong
+  setting cannot stop it).
 
 ### AI engine: Gemini Flash-Lite
 

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from graph.base import BaseGraphRenderer
+from utils.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,6 @@ _AUTO_PREFERENCE: tuple[GraphRendererType, ...] = (
 )
 
 
-def _truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in ("1", "true", "yes", "on")
-
-
 class GraphRendererManager:
     """Central facade selecting and caching the active graph renderer."""
 
@@ -72,8 +68,10 @@ class GraphRendererManager:
 
     # ----------------------------------------------------------------- configuration
     @classmethod
-    def _resolve_config_from_env(cls) -> GraphConfig:
-        raw = os.getenv("CMP_GRAPH_RENDERER", "auto").strip().lower()
+    def _resolve_config_from_env(cls, settings: Settings | None = None) -> GraphConfig:
+        """The renderer's configuration (utils.settings; the current settings by default)."""
+        graph = (settings or get_settings()).graph
+        raw = graph.renderer or "auto"
         try:
             renderer = GraphRendererType(raw)
         except ValueError:
@@ -81,8 +79,8 @@ class GraphRendererManager:
             renderer = GraphRendererType.AUTO
         return GraphConfig(
             renderer=renderer,
-            offline=_truthy(os.getenv("CMP_OFFLINE")),
-            fallback_on_error=not _truthy(os.getenv("CMP_GRAPH_NO_FALLBACK")),
+            offline=graph.offline,
+            fallback_on_error=not graph.no_fallback,
         )
 
     @property
