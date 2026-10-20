@@ -418,6 +418,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   power calculator kept the calculator's previous effect and minimum dimension, under "Parameters loaded!". These
   inputs are no longer kept on their own, and loading a result sets the calculator's inputs themselves.
 
+### Settings and preferences (M5b)
+
+- **One settings object** (`utils/settings.py`): every setting the application reads, under the name of its
+  environment variable (unchanged), grouped by subsystem and validated; the keys and passwords are hidden when
+  printed. A test checks that `.env.example` lists exactly these settings, in both directions, that its values are
+  the defaults and that its secret lines are empty.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,

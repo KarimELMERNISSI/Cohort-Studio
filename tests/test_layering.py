@@ -78,6 +78,7 @@ UTILS_PLATFORM = {
     "utils.export_utils",
     "utils.logging_config",
     "utils.optional",
+    "utils.settings",
 }
 # legacy utils modules, with the package they serve (a name covers its submodules)
 UTILS_GROUPS = {
