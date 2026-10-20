@@ -18,8 +18,9 @@ from pathlib import Path
 
 # Measured 2026-10-20 (M5b): app_pages 53.2, biostats 95.0, core 94.3, enrich 69.9, explore 77.0, graph 93.7,
 # ingest 90.7, manage 74.3, monitor 8.3 (it needs tests), prompts 87.0, ui 84.9, utils 63.2 (72.4 overall).
+# app_pages raised to 54 at 56.3 measured, when the smoke test began opening every tab of the lazy pages.
 FLOORS: dict[str, float] = {
-    "app_pages": 51.0,
+    "app_pages": 54.0,
     "biostats": 93.0,
     "core": 92.0,
     "enrich": 68.0,
