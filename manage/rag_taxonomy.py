@@ -6,6 +6,8 @@ This is part of the RAGManager class composition pattern.
 """
 import json
 
+from manage.ai_payload import safe_stats
+
 
 class TaxonomyMixin:
     """
@@ -89,16 +91,19 @@ class TaxonomyMixin:
         return res
 
     def _merge_stats(self, taxonomy, columns_info):
-        """Merges statistical info from columns_info into the taxonomy."""
+        """
+        Merges statistical info from columns_info into the taxonomy, only what may be sent (manage.ai_payload):
+        later prompts carry the taxonomy.
+        """
         col_map = {c["name"]: c for c in columns_info if isinstance(c, dict)}
-        
+
         for var_name, var_data in taxonomy.items():
             if var_name in col_map:
                 col_info = col_map[var_name]
                 if col_info.get("stats"):
-                    var_data["stats"] = col_info["stats"]
+                    var_data["stats"] = safe_stats(col_info["stats"])
                 elif col_info.get("top_values"):
-                    var_data["stats"] = col_info["top_values"]
+                    var_data["stats"] = safe_stats(col_info["top_values"])
         return taxonomy
 
     def _generate_simple_taxonomy(self, columns_info, existing_mapping=None, deep_analysis=False, progress_callback=None):

@@ -10,6 +10,7 @@ import json
 import logging
 import re
 
+from manage.ai_payload import taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
 
 # Import Pydantic schemas for structured output
@@ -153,7 +154,8 @@ class ComputedVarsMixin:
             
             taxonomy_context = ""
             if self.variable_taxonomy and use_taxonomy:
-                taxonomy_str = json.dumps(self.variable_taxonomy, indent=2)
+                # an imported taxonomy may hold extremes: only what the notice lists is sent
+                taxonomy_str = json.dumps(taxonomy_for_prompt(self.variable_taxonomy), indent=2)
                 taxonomy_context = f"\nUse this Taxonomy to understand the available variables:\n{taxonomy_str}\n"
 
             scoping_instruction = f"""
@@ -198,7 +200,7 @@ class ComputedVarsMixin:
 
         taxonomy_context = ""
         if self.variable_taxonomy and use_taxonomy:
-            taxonomy_str = json.dumps(self.variable_taxonomy, indent=2)
+            taxonomy_str = json.dumps(taxonomy_for_prompt(self.variable_taxonomy), indent=2)
             taxonomy_context = f"""
             VARIABLE TAXONOMY (Use this to understand cryptic column names):
             {taxonomy_str}
@@ -346,6 +348,8 @@ class ComputedVarsMixin:
 
     def suggest_proxy_variable(self, target_variable, available_columns):
         """Suggests a proxy variable when the target is missing."""
+        if not self.initialized:  # a stopped engine sends nothing
+            return {"proxy_found": False}
         query = f"Suggest a proxy for '{target_variable}' using [{', '.join(available_columns)}]. Return JSON with keys: proxy_found (bool), proxy_name, formula, explanation."
         try:
             response = self.llm.invoke(query)
@@ -360,6 +364,8 @@ class ComputedVarsMixin:
 
     def suggest_alternative_formula(self, target_concept, missing_variable, available_columns):
         """Suggests an alternative formula avoiding a missing variable."""
+        if not self.initialized:  # a stopped engine sends nothing
+            return {"alternative_found": False}
         query = f"Suggest alternative formula for '{target_concept}' avoiding '{missing_variable}' using [{', '.join(available_columns)}]. Return JSON with keys: alternative_found (bool), alternative_name, formula, explanation."
         try:
             response = self.llm.invoke(query)

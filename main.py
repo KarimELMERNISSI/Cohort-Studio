@@ -10,6 +10,7 @@ load_dotenv(Path(__file__).with_name(".env"), override=False)
 
 import streamlit as st
 
+from manage.ai_payload import disable_remote_tracing
 from manage.iam import IAMConfigurationError, get_iam_manager
 from manage.iam.authz import is_admin_role
 from ui import nav, shell
@@ -28,6 +29,9 @@ def _bootstrap_admin_once() -> str:
 
 def main() -> None:
     configure_logging()
+    # no prompt goes to a tracing service (LangSmith), whatever .env says: it would go round the data-sharing
+    # confirmation of Settings
+    disable_remote_tracing()
     st.set_page_config(page_title=APP_NAME, page_icon=LOGO, layout="wide")
     apply_theme()
     show_logo()

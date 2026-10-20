@@ -116,8 +116,52 @@ def test_unticking_the_consent_stops_the_engine_that_runs(
     stopped = signed_in.session_state["rag_manager"]
     assert not stopped.initialized and stopped.llm is None and stopped.vector_store is None
     assert stopped.cloud_consent is False
-    assert any("nothing more is sent" in t.value for t in signed_in.toast)
+    assert any("Nothing more is sent from this tab" in t.value for t in signed_in.toast)
     assert any(
-        "The engine stopped because the data-sharing consent was withdrawn" in c.value
+        "The engine stopped because the data-sharing confirmation was withdrawn" in c.value
         for c in signed_in.caption
     )
+
+
+def _running_mistral(at: AppTest, tmp_path: Path):
+    from types import SimpleNamespace
+
+    from manage.rag_manager import RAGManager
+
+    manager = RAGManager(documents_dir=str(tmp_path / "documents"), provider="mistral")
+    manager.initialized = True
+    manager.consents = {"mistral"}
+    manager.llm = SimpleNamespace(config=SimpleNamespace(model_name="mistral-large-latest"))
+    manager.vector_store = SimpleNamespace()
+    at.session_state["rag_manager"] = manager
+    _visit(at, "settings")
+
+
+def test_the_running_engine_can_be_stopped_whatever_provider_is_shown(
+    signed_in: AppTest, tmp_path: Path
+) -> None:
+    """With Ollama selected, the page said "no data leaves this server" while a cloud engine ran."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    _running_mistral(signed_in, tmp_path)
+    signed_in.selectbox(key="rag_provider_select").select("ollama").run()
+    assert any("The AI engine runs with Mistral AI" in i.value for i in signed_in.info)
+    signed_in.button(key="rag_withdraw_stop").click().run()
+    assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
+    stopped = signed_in.session_state["rag_manager"]
+    assert not stopped.holds_connections() and stopped.consents == set()
+    signed_in.selectbox(key="rag_provider_select").select("mistral").run()
+    assert signed_in.checkbox(key="rag_mistral_consent").value is False  # to confirm again
+
+
+def test_claude_with_cloud_embeddings_names_both_recipients(signed_in: AppTest) -> None:
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    _visit(signed_in, "settings")
+    signed_in.selectbox(key="rag_provider_select").select("anthropic").run()
+    signed_in.selectbox(key="rag_claude_embed_provider").select("openai").run()
+    box = signed_in.checkbox(key="rag_anthropic_openai_consent")
+    names = "Anthropic Claude and OpenAI (embeddings)"
+    assert box.label == f"I confirm this data may be sent to {names}"
+    notice = next(w for w in signed_in.warning if "What leaves this server" in (w.title or ""))
+    assert "OpenAI, for the embeddings" in notice.value
+    box.check().run()
+    assert signed_in.session_state["rag_manager"].consents == {"anthropic", "openai"}

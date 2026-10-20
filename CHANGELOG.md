@@ -149,13 +149,34 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - Now the renaming, the variable map, the unit hints and the suggested criteria all send the 5th to 95th
     percentiles, the frequent values shared by at least 5 rows, and the years covered by dates.
   - The consent card of Settings lists exactly that.
-- **Withdrawing the consent stops the AI engine.** The consent was checked only when the engine started, so an
-  engine kept answering, and sending data to its cloud provider, after the box was unticked.
-  - Unticking *I confirm this data may be sent…* now stops an engine that runs with that provider: its connections
-    are dropped, so nothing more can be sent. Settings shows the engine as stopped, and why.
-  - The documents stay indexed on disk: once the consent is given again, initialising the engine reuses the index.
-  - Each cloud provider has its own consent box. A consent given for one provider was shown as given for the next
-    one chosen in the list.
+- **The variable map no longer sends the extremes of a column.** Refining it sent the minimum, maximum and mean of
+  every numeric column, though the notice says the minimum and maximum are never sent. Later prompts then sent the
+  whole map with them, and a map imported from a file could carry them too. Every prompt now sends only the
+  percentiles and the frequent values the notice lists.
+- **Withdrawing the confirmation stops the AI engine.** The data-sharing confirmation was checked only when the
+  engine started, so an engine kept answering, and sending data to its cloud provider, after the box was unticked.
+  - Unticking *I confirm this data may be sent to …* now stops an engine that uses one of the providers it names:
+    its connections are dropped, so nothing more is sent from this tab. Settings shows the engine as stopped, and
+    why.
+  - **Withdraw the confirmation and stop**, at the top of the Data sharing card, does the same whatever provider is
+    selected. The card says which providers the running engine sends data to: with Ollama selected, it read "no
+    data leaves this server" while a cloud engine ran.
+  - **Every recipient needs it.** With Claude, a cloud embedding provider receives the documents and every search
+    text; the confirmation of Claude covered it. The box now names both, and each provider has its own: one given
+    for a provider was shown as given for the next one chosen in the list. Only the local Ollama is exempt.
+  - A refused, failed or interrupted start keeps no connection, and no longer relabels the engine that runs, which
+    a later withdrawal could then miss.
+  - The documents stay indexed on disk: once the box is ticked again, **Initialise / reindex** reuses the index.
+- **Smaller leaks closed.**
+  - Listing a cloud provider's models could send the typed key to the Ollama address of an earlier engine.
+  - Google Gemini's graph extraction uploads the PDF file itself. The notice now says so, and Google is asked to
+    delete the file even when the extraction fails.
+  - LangChain's tracing service (LangSmith) is switched off at start-up: a tracing switch left in `.env` would have
+    sent every prompt there.
+  - An Ollama address on another machine is shown as such, not as "Local: no data leaves this server".
+  - The notice says that the confirmation is the user's, for one browser tab, and does not replace the approvals of
+    a data-protection framework, and that what was sent stays with the provider. "Mistral AI (cloud, EU)" claimed
+    a location the app cannot check: it reads "Mistral AI (cloud)".
 - **Sharing a study configuration**: a switch leaves out the outlier rules that list row ids, which only mean
   something for the user's dataset.
 

@@ -18,12 +18,15 @@ retrieval. On the Documents page, choose the documents in the sidebar (*Choose D
 
 ### Choosing the AI provider
 
-Settings > AI engine > **Provider and models** offers local **Ollama** (the default; nothing leaves the server)
-and four cloud providers, which need an API key and your explicit data-sharing consent: Google Gemini, OpenAI,
-Mistral AI and **Anthropic Claude**. Claude answers questions but has no embedding model, so a second choice
-appears: the **embedding provider** that indexes your documents. Keep **Ollama** there to index the whole
-library on this server; only the passages retrieved for each question are then sent to Claude. The temperature
-slider does not apply to Claude.
+Settings > AI engine > **Provider and models** offers local **Ollama** (the default) and four cloud providers, which
+need an API key and your explicit confirmation that data may be sent to them: Google Gemini, OpenAI, Mistral AI and
+**Anthropic Claude**. Claude answers questions but has no embedding model, so a second choice appears: the
+**embedding provider** that indexes your documents. Keep **Ollama** there to index the whole library on this
+server; only the passages retrieved for each question are then sent to Claude. The temperature slider does not
+apply to Claude.
+
+Nothing leaves the server with an Ollama on this machine. An Ollama address elsewhere (another machine of your
+network) receives the prompts, the text of your documents and the column summaries: the page shows that host.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria) is a summary of each column, never a row:
@@ -34,11 +37,24 @@ criteria) is a summary of each column, never a row:
 - **date columns:** the first and the last year.
 
 Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them.
-The consent card of Settings lists the same.
+With Google Gemini, **Document insight** sends the PDF file itself while its graph is extracted; the app then asks
+Google to delete it. A cloud **embedding provider** of Claude receives the text of the PDFs you index and every
+search text (your questions, column names and hints). The **Data sharing** card of Settings lists all of this and
+names every recipient.
 
-The consent applies to this session and to the provider it names: each cloud provider has its own box. Untick it to
-withdraw it. An engine running with that provider then stops at once, so nothing more is sent to it. Your documents
-stay indexed, so after a new consent, **Initialise** reuses the index.
+**The confirmation.** The box names the providers it confirms: with Claude and a cloud embedding provider, both.
+It is yours, for this browser tab only: another tab asks again. It does not replace the approvals of your
+data-protection framework, and what was already sent stays with the provider, under its own terms.
+
+- **Untick it** to withdraw it: an engine that uses one of these providers stops at once, so nothing more is sent
+  from this tab.
+- **Withdraw the confirmation and stop**, at the top of the card, does the same whatever provider is selected below;
+  the card says which providers the running engine sends data to.
+- Your documents stay indexed: tick the box again, then **Initialise / reindex** reuses the index.
+
+The prompts are never sent to a tracing service: the app switches LangChain's tracing (LangSmith) off at start-up,
+whatever `.env` says. A **Qdrant server** (rather than the embedded Qdrant) stores the text of the indexed passages
+and keeps it after the engine stops.
 
 ### Choosing the vector database
 

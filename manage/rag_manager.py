@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 from rapidfuzz import process
 
-from manage.ai_payload import column_profile
+from manage.ai_payload import column_profile, safe_stats, taxonomy_for_prompt
 
 # Import prompt functions
 from prompts import (
@@ -44,6 +44,8 @@ from .rag_documents import DocumentsMixin
 from .rag_taxonomy import TaxonomyMixin
 
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
+# The providers that run on this server or the user's network: every other one needs the data-sharing confirmation
+LOCAL_PROVIDERS = {"ollama"}
 _ENV_KEY_NAMES = {
     "gemini": "GOOGLE_API_KEY",
     "openai": "OPENAI_API_KEY",
@@ -154,35 +156,62 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # Formulas Registry
         self.formulas_registry = {}
         
-        # Explicit per-session confirmation is required before data may be sent to a cloud provider.
-        self.cloud_consent = False
+        self.embedding_provider: str | None = None
+        # The providers outside this server that the user confirmed may receive data, in this session (browser tab):
+        # each one the engine uses, for answers or for embeddings, needs it (Settings > AI engine > Data sharing)
+        self.consents: set[str] = set()
         self.stop_reason: str | None = None  # why a running engine was stopped (shown by Settings)
 
-    def uses_cloud(self) -> bool:
-        """Whether the engine's chat or embedding provider is a cloud provider, so that data leaves the server."""
-        return self.provider in CLOUD_PROVIDERS or getattr(self, "embedding_provider", None) in CLOUD_PROVIDERS
+    def recipients(self) -> set[str]:
+        """The providers outside this server that the engine sends data to: its chat and embedding providers."""
+        return {p for p in (self.provider, self.embedding_provider) if p and p not in LOCAL_PROVIDERS}
 
-    def stop(self, reason: str) -> None:
-        """
-        Stops the engine: its connections to the providers are dropped, so nothing more can be sent to them. The
-        document index stays on disk, and the next initialisation reuses it.
-        """
+    def uses_cloud(self) -> bool:
+        """Whether data leaves the server: a provider of the engine is not a local one."""
+        return bool(self.recipients())
+
+    @property
+    def cloud_consent(self) -> bool:
+        """Whether every provider outside this server that the engine uses has the user's confirmation."""
+        return self.recipients() <= self.consents
+
+    @cloud_consent.setter
+    def cloud_consent(self, value: bool) -> None:
+        providers = self.recipients()
+        self.consents = (self.consents | providers) if value else (self.consents - providers)
+
+    def holds_connections(self) -> bool:
+        """Whether a connection to a provider is still held (a running engine, or one stopped half-way)."""
+        return any(
+            getattr(self, name, None) is not None for name in ("llm", "qa_chain", "vector_store", "_output_helper")
+        )
+
+    def _drop_connections(self) -> None:
         self.initialized = False
         self.llm = None
         self.qa_chain = None
         self.vector_store = None  # it holds the embedding connection, which embeds every question
         self.client = None
         self._output_helper = None
+
+    def stop(self, reason: str) -> None:
+        """
+        Stops the engine: its connections to the providers are dropped, so nothing more can be sent to them. The
+        document index stays on disk, and the next initialisation reuses it.
+        """
+        self._drop_connections()
         self.stop_reason = reason
 
-    def withdraw_consent(self) -> bool:
+    def withdraw_consent(self, *providers: str) -> bool:
         """
-        The data-sharing consent is withdrawn. A running engine that sends data to a cloud provider stops at once:
-        the consent used to be checked only when the engine started, so it kept answering. Returns whether it stopped.
+        The user withdraws the confirmation of ``providers`` (all of them when none is named). An engine that sends
+        data to one of them stops at once: the confirmation used to be checked only when the engine started, so it
+        kept answering. Returns whether it stopped.
         """
-        self.cloud_consent = False
-        if self.initialized and self.uses_cloud():
-            self.stop("the data-sharing consent was withdrawn")
+        withdrawn = set(providers) if providers else set(self.consents)
+        self.consents -= withdrawn
+        if self.holds_connections() and self.recipients() & withdrawn:
+            self.stop("the data-sharing confirmation was withdrawn")
             return True
         return False
 
@@ -196,7 +225,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             cfg = ProviderConfig(
                 provider=ProviderType(provider.lower()),
                 api_key=self.api_key or _env_api_key(provider),
-                base_url=base_url or self.base_url,
+                # the Ollama address of an earlier engine is not a cloud provider's: a key typed for one went there
+                base_url=base_url or (self.base_url if provider.lower() in LOCAL_PROVIDERS else None),
             )
             connector = ConnectorFactory.get_llm_connector(cfg)
             return connector.get_available_models()
@@ -312,9 +342,6 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
         
         provider_clean = (provider or "gemini").lower()
-        self.provider = provider_clean
-        self.base_url = base_url
-
         effective_key = self.api_key or _env_api_key(provider_clean)
         embed_provider = (
             embedding_provider or ("ollama" if provider_clean in CHAT_ONLY_PROVIDERS else provider_clean)
@@ -323,12 +350,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return False, f"{embed_provider.capitalize()} has no embedding API: choose another embedding provider."
         separate_embeddings = embed_provider != provider_clean
         embed_key = embedding_api_key or (_env_api_key(embed_provider) if separate_embeddings else effective_key)
-        self.embedding_provider = embed_provider
-        if (provider_clean in CLOUD_PROVIDERS or embed_provider in CLOUD_PROVIDERS) and not getattr(
-            self, "cloud_consent", False
-        ):
+        # every provider outside this server needs the confirmation: the embedding one receives the documents and
+        # every search text (an allow-list of local providers: an unknown provider needs it too)
+        unconfirmed = sorted({p for p in (provider_clean, embed_provider) if p not in LOCAL_PROVIDERS} - self.consents)
+        if unconfirmed:
             return False, (
-                "Cloud providers require explicit confirmation that data may leave this server. "
+                f"Cloud providers require explicit confirmation that data may leave this server ({', '.join(unconfirmed)}). "
                 "Confirm the data-sharing notice in Settings > AI engine first."
             )
         if provider_clean in CLOUD_PROVIDERS and not effective_key:
@@ -336,8 +363,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         if separate_embeddings and embed_provider in CLOUD_PROVIDERS and not embed_key:
             return False, f"{embed_provider.capitalize()} API Key is required for the embeddings."
 
+        # The engine is rebuilt from here. The previous connections go first, and a failure or an interruption keeps
+        # none (Streamlit's rerun is a BaseException): connections are held only by an engine that runs, under the
+        # providers it was started with, so a withdrawn confirmation always finds and stops them.
+        self._drop_connections()
+        self.provider, self.base_url, self.embedding_provider = provider_clean, base_url, embed_provider
+        succeeded = False
         try:
-            self.initialized = False  # the engine is rebuilt from here: off until this initialisation succeeds
             # 1. Load Documents using native PDFDocumentLoader
             if progress_callback: progress_callback(10, "Loading documents...")
             if not os.path.exists(self.documents_dir):
@@ -443,15 +475,20 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             # 5. Initialize Roles and QA Chain
             self._update_internal_state(adherence_score)
 
-            self.initialized = True
-            self.stop_reason = None
-            return True, (
+            message = (
                 f"RAG System Initialized Successfully ({provider_clean.upper()}, {engine.value} index). "
                 f"Processed {len(documents)} pages and {len(texts)} chunks; the index holds {index.count()} chunks."
             )
+            self.initialized = True
+            self.stop_reason = None
+            succeeded = True
+            return True, message
 
         except Exception as e:
             return False, redact_secrets(f"Error initializing RAG: {e!s}")
+        finally:
+            if not succeeded:
+                self._drop_connections()
 
 
     def update_adherence_score(self, adherence_score):
@@ -607,12 +644,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             feedback = feedback_dict[var]
             
             col_info = next((c for c in columns_info if c['name'] == var), {})
-            top_values = col_info.get('top_values', {})
-            stats = col_info.get('stats', {})
-            
+            # only what the data-sharing notice lists: percentiles and frequent values, never the extremes
+            top_values = safe_stats(col_info.get('top_values', {}))
+            stats = safe_stats(col_info.get('stats', {}))
+
             context_str = f"""
             Variable: {var}
-            Current Taxonomy: {json.dumps(current_data)}
+            Current Taxonomy: {json.dumps(taxonomy_for_prompt({var: current_data})[var])}
             Data Stats: {json.dumps(stats)}
             Top Values: {json.dumps(top_values)}
             USER FEEDBACK: "{feedback}"

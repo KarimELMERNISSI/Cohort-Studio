@@ -137,6 +137,7 @@ def test_rag_manager_requires_consent_and_keys(monkeypatch: pytest.MonkeyPatch, 
     ok, message = manager.initialize_system(provider="anthropic", embedding_provider="anthropic")
     assert not ok and "no embedding API" in message
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    manager.consents.add("openai")  # the embedding provider needs the confirmation too
     ok, message = manager.initialize_system(provider="anthropic", embedding_provider="openai")
     assert not ok and message == "Openai API Key is required for the embeddings."
 

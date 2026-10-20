@@ -1294,16 +1294,11 @@ def app():
                             st.warning("Please provide feedback for at least one variable.")
                         else:
                             with st.spinner("Refining taxonomy..."):
-                                # Get columns info context
+                                # the summary the data-sharing notice lists: it sent the minimum, maximum and mean
                                 columns_info = []
                                 if "working_df" in st.session_state:
-                                    df = st.session_state["working_df"]
-                                    for col in df.columns:
-                                        info = {"name": col}
-                                        if pd.api.types.is_numeric_dtype(df[col]):
-                                            info["stats"] = {"min": float(df[col].min()), "max": float(df[col].max()), "mean": float(df[col].mean())}
-                                        columns_info.append(info)
-                                
+                                    columns_info = column_profile(st.session_state["working_df"])
+
                                 updated_taxonomy, error = rag_manager.refine_variable_taxonomy(
                                     taxonomy, 
                                     feedback_dict, 

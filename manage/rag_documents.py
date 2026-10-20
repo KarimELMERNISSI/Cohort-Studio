@@ -58,43 +58,45 @@ class DocumentsMixin:
                 with open(file_path, "rb"):
                     uploaded_file = client.files.upload(file=file_path)
                 
-                while uploaded_file.state.name == "PROCESSING":
-                    if progress_callback: progress_callback(20, "Processing file...")
-                    time.sleep(2)
-                    uploaded_file = client.files.get(name=uploaded_file.name)
-                    
-                if uploaded_file.state.name == "FAILED":
-                    return None, "File processing failed by Google."
-                    
-                if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
-                
-                clean_model = getattr(self.llm, "model_name", "gemini-3.8-flash")
-                clean_model = clean_model.removeprefix("models/")
-
-                response = client.models.generate_content(
-                    model=clean_model,
-                    contents=[
-                        types.Content(
-                            role="user",
-                            parts=[
-                                types.Part.from_uri(
-                                    file_uri=uploaded_file.uri,
-                                    mime_type=uploaded_file.mime_type
-                                ),
-                                types.Part.from_text(text=prompt_text)
-                            ]
-                        )
-                    ],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        temperature=0.2
-                    )
-                )
-                
                 try:
-                    client.files.delete(name=uploaded_file.name)
-                except Exception:
-                    pass  # best-effort clean-up: the provider expires uploaded files on its own
+                    while uploaded_file.state.name == "PROCESSING":
+                        if progress_callback: progress_callback(20, "Processing file...")
+                        time.sleep(2)
+                        uploaded_file = client.files.get(name=uploaded_file.name)
+                    
+                    if uploaded_file.state.name == "FAILED":
+                        return None, "File processing failed by Google."
+                    
+                    if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
+                
+                    clean_model = getattr(self.llm, "model_name", "gemini-3.8-flash")
+                    clean_model = clean_model.removeprefix("models/")
+
+                    response = client.models.generate_content(
+                        model=clean_model,
+                        contents=[
+                            types.Content(
+                                role="user",
+                                parts=[
+                                    types.Part.from_uri(
+                                        file_uri=uploaded_file.uri,
+                                        mime_type=uploaded_file.mime_type
+                                    ),
+                                    types.Part.from_text(text=prompt_text)
+                                ]
+                            )
+                        ],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.2
+                        )
+                    )
+                finally:
+                    # the PDF file itself was sent: Google is asked to delete it however the extraction ends
+                    try:
+                        client.files.delete(name=uploaded_file.name)
+                    except Exception:
+                        pass  # best effort: the provider also expires uploaded files on its own
 
                 json_str = response.text
             else:
