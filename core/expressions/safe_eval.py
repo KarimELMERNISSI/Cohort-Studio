@@ -15,11 +15,17 @@ module globals, which is remote code execution. This module accepts only a small
 Everything else (attribute names starting with ``_``, lambdas, comprehensions, f-strings, imports,
 ``getattr``, ``open``, ``.apply``, ``.eval``, ``.to_pickle`` ...) is rejected *before* evaluation, and
 evaluation itself runs with empty builtins and facade modules as defence in depth.
+
+The sizes an expression can ask for are bounded too, since a formula written by a language model is tried on the data
+before anyone reads it: a power of constants, an exponent, a constant, the size of an array built by ``np.full``,
+``np.ones`` or ``np.zeros``, a padding width and a repeated text (``9 ** 9 ** 8`` would keep the server busy for
+minutes).
 """
 
 from __future__ import annotations
 
 import ast
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -31,6 +37,61 @@ import pandas as pd
 
 class UnsafeExpressionError(ValueError):
     """The expression uses a construct that is not allowed."""
+
+
+# what an expression may ask for (far beyond any clinical formula, far below what keeps a server busy)
+MAX_CONSTANT = 1e15  # a constant, or a power of constants
+MAX_EXPONENT = 1_000.0
+MAX_ELEMENTS = 10_000_000  # an array built from a constant size (np.full, np.ones, np.zeros)
+MAX_WIDTH = 10_000  # a padding width, or a text repeated a constant number of times
+_SIZED_ARRAYS = frozenset({"full", "ones", "zeros"})
+_WIDTHS = frozenset({"pad", "zfill", "center", "ljust", "rjust"})
+
+
+def _constant(node: ast.AST) -> float | None:
+    """The value of a subtree made of numbers and arithmetic only, computed with floats (None when it uses a name, a
+    call or text); UnsafeExpressionError when it is too large to be a measurement."""
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, int | float):
+            return None
+        value = float(node.value)
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub | ast.UAdd):
+        operand = _constant(node.operand)
+        if operand is None:
+            return None
+        value = -operand if isinstance(node.op, ast.USub) else operand
+    elif isinstance(node, ast.BinOp):
+        left, right = _constant(node.left), _constant(node.right)
+        if left is None or right is None:
+            return None
+        try:
+            if isinstance(node.op, ast.Pow):
+                if abs(right) > MAX_EXPONENT:
+                    raise UnsafeExpressionError(
+                        f"An exponent larger than {MAX_EXPONENT:,.0f} is not allowed."
+                    )
+                value = math.pow(left, right)
+            elif isinstance(node.op, ast.Add):
+                value = left + right
+            elif isinstance(node.op, ast.Sub):
+                value = left - right
+            elif isinstance(node.op, ast.Mult):
+                value = left * right
+            elif isinstance(node.op, ast.Div | ast.FloorDiv | ast.Mod):
+                value = (
+                    0.0 if right == 0 else left / right
+                )  # the evaluation says what dividing by zero gives
+            else:
+                return None
+        except OverflowError, ValueError:
+            raise UnsafeExpressionError(
+                "A number this large is not allowed in a formula."
+            ) from None
+    else:
+        return None
+    if math.isinf(value) or abs(value) > MAX_CONSTANT:
+        raise UnsafeExpressionError("A number this large is not allowed in a formula.")
+    return value
 
 
 _NP_FUNCTIONS = frozenset(
@@ -385,6 +446,29 @@ class _Validator(ast.NodeVisitor):
         self.visit(node.value)
         self.visit(node.slice)
 
+    def visit_BinOp(self, node: ast.BinOp) -> None:
+        # the sizes a formula can ask for: a power of constants, an exponent, a text repeated a constant number of times
+        _constant(node)
+        if isinstance(node.op, ast.Pow):
+            exponent = _constant(node.right)
+            if exponent is not None and abs(exponent) > MAX_EXPONENT:
+                raise UnsafeExpressionError(
+                    f"An exponent larger than {MAX_EXPONENT:,.0f} is not allowed."
+                )
+        if isinstance(node.op, ast.Mult):
+            for text, times in ((node.left, node.right), (node.right, node.left)):
+                count = _constant(times)
+                if (
+                    isinstance(text, ast.Constant)
+                    and isinstance(text.value, str)
+                    and count
+                    and count > MAX_WIDTH
+                ):
+                    raise UnsafeExpressionError(
+                        f"A text repeated more than {MAX_WIDTH:,} times is not allowed."
+                    )
+        self.generic_visit(node)
+
     def visit_Call(self, node: ast.Call) -> None:
         func = node.func
         if isinstance(func, ast.Name):
@@ -392,6 +476,15 @@ class _Validator(ast.NodeVisitor):
                 raise UnsafeExpressionError(f"Function '{func.id}' is not allowed.")
         elif isinstance(func, ast.Attribute):
             self.visit(func)
+            size = _constant(node.args[0]) if node.args else None
+            if size is not None and func.attr in _SIZED_ARRAYS and abs(size) > MAX_ELEMENTS:
+                raise UnsafeExpressionError(
+                    f"An array of more than {MAX_ELEMENTS:,} values is not allowed."
+                )
+            if size is not None and func.attr in _WIDTHS and abs(size) > MAX_WIDTH:
+                raise UnsafeExpressionError(
+                    f"A width larger than {MAX_WIDTH:,} characters is not allowed."
+                )
         else:
             raise UnsafeExpressionError("Only named functions and methods may be called.")
         for arg in node.args:

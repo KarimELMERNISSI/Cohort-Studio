@@ -89,3 +89,17 @@ def test_selection_from_event(corr_matrix: pd.DataFrame) -> None:
         and result.edge_ids == ("corr:a|b",)
         and result.renderer == "plotly"
     )
+
+
+def test_a_label_stays_text() -> None:
+    # Plotly reads its texts as HTML: a name from a file or a model must not become a link
+    from graph.model import GraphKind, NodeSpec
+
+    spec = GraphSpec(
+        kind=GraphKind.FORMULA,
+        nodes=(NodeSpec(id="n", label='<a href="http://e.x">bmi</a>', tooltip="<b>x</b> & y"),),
+    )
+    payload = _renderer().translate(spec, RenderOptions(key="k"))
+    node_trace = next(t for t in payload.figure.data if list(t.text or []) and "bmi" in t.text[0])
+    assert node_trace.text[0] == "&lt;a href=&quot;http://e.x&quot;&gt;bmi&lt;/a&gt;"
+    assert node_trace.hovertext[0] == "&lt;b&gt;x&lt;/b&gt; &amp; y"

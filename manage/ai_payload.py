@@ -101,12 +101,16 @@ def column_profile(
     return profiles
 
 
-def column_kinds(df: pd.DataFrame, columns: Iterable[str]) -> dict[str, str]:
+def column_kinds(
+    df: pd.DataFrame, columns: Iterable[str], *, date_columns: Iterable[str] = ()
+) -> dict[str, str]:
     """
     How each column is stored, for a prompt that writes formulas on them: ``number``, ``text``, ``date`` or
-    ``yes/no``. Like the column names, it sends no value: a model told that a column holds text compares it with text,
-    not with a number.
+    ``yes/no``. ``date_columns`` are dates even when they hold text (formulas compute with them: a subtraction gives
+    days). Like the column names, it sends no value: a model told that a column holds text compares it with text, not
+    with a number.
     """
+    as_dates = set(date_columns)
     kinds: dict[str, str] = {}
     for col in columns:
         if col not in df.columns:
@@ -114,7 +118,7 @@ def column_kinds(df: pd.DataFrame, columns: Iterable[str]) -> dict[str, str]:
         series = df[col]
         if pd.api.types.is_bool_dtype(series):
             kinds[str(col)] = "yes/no"
-        elif pd.api.types.is_datetime64_any_dtype(series):
+        elif col in as_dates or pd.api.types.is_datetime64_any_dtype(series):
             kinds[str(col)] = "date"
         elif pd.api.types.is_numeric_dtype(series):
             kinds[str(col)] = "number"

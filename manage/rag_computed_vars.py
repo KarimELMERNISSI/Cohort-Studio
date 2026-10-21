@@ -7,9 +7,8 @@ This is part of the RAGManager class composition pattern.
 import hashlib
 import json
 import logging
-import re
 
-from enrich.formulas import formula_from_model, read_formula
+from enrich.formulas import MAX_FORMULA_LENGTH, formula_from_model, read_formula
 from manage.ai_payload import taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
 
@@ -22,10 +21,11 @@ from .rag_schemas import (
 logger = logging.getLogger(__name__)
 
 
-def _in_app_notation(suggestion: dict, formula: str) -> str:
-    """The model's formula in the application's notation (enrich.formulas.formula_from_model), kept on the suggestion
-    with what the model wrote, so that its diagram and "Apply to Editor" compute exactly what was checked."""
-    converted = formula_from_model(formula)
+def _in_app_notation(suggestion: dict, formula: str, *targets: str) -> str:
+    """The model's formula in the application's notation (enrich.formulas.formula_from_model; a leading "name =" goes
+    when it names the suggestion or one of ``targets``), kept on the suggestion with what the model wrote, so that its
+    diagram and "Apply to Editor" compute exactly what was checked."""
+    converted = formula_from_model(formula, targets=[str(suggestion.get("name") or ""), *targets])
     if converted != formula:
         suggestion.setdefault("original_formula", formula)
     suggestion["formula"] = converted
@@ -34,11 +34,17 @@ def _in_app_notation(suggestion: dict, formula: str) -> str:
 
 def _unwrapped(answer: object) -> str:
     """A formula a model answered, without the code fence or the one pair of quotes it may be wrapped in (never the
-    ``""a name""`` quotes of a column at either end)."""
+    ``""a name""`` quotes of a column at either end). An answer too long to be a formula gives nothing, before any
+    reading of it: a model's text has no bound."""
     text = str(answer or "").strip()
-    fenced = re.fullmatch(r"```[a-z]*\s*(.*?)\s*```", text, flags=re.DOTALL)
-    if fenced:
-        text = fenced.group(1).strip()
+    if len(text) > MAX_FORMULA_LENGTH:
+        return ""
+    if len(text) >= 6 and text.startswith("```") and text.endswith("```"):
+        text = text[3:-3]
+        tag, newline, rest = text.partition("\n")
+        if newline and tag.strip().isalpha():  # ```python
+            text = rest
+        text = text.strip()
     for quote in ('"', "'"):
         if len(text) > 1 and text[0] == text[-1] == quote and not text.startswith(quote * 2):
             text = text[1:-1].strip()
@@ -271,7 +277,9 @@ class ComputedVarsMixin:
                     columns=columns
                 )
                 try:
-                    corrected = formula_from_model(_unwrapped(self.llm.invoke(fix_query).content))
+                    corrected = formula_from_model(
+                        _unwrapped(self.llm.invoke(fix_query).content), targets=[str(sugg.get("name") or "")]
+                    )
                     reading_2 = read_formula(corrected)
                     if reading_2.problem:
                         if allow_missing_variables:
@@ -414,7 +422,7 @@ class ComputedVarsMixin:
             # in the application's notation (enrich.formulas): what the page tries on the data and the editor computes
             suggestions = [s for s in parsed.get("suggestions", []) if isinstance(s, dict)]
             for sugg in suggestions:
-                _in_app_notation(sugg, str(sugg.get("formula") or ""))
+                _in_app_notation(sugg, str(sugg.get("formula") or ""), str(target_variable))
             return suggestions, None
             
         except Exception as e:

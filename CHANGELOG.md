@@ -456,6 +456,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Qdrant server (they decide where the data go) are never saved: a cloud provider kept from the last session starts
   nothing until you confirm again. A saved choice the server no longer offers is not used, and the page names it.
 
+### Formulas: a text inside a formula is no longer rewritten (results corrected)
+
+- **A column's name inside a text literal broke the formula.** The evaluator renamed the columns in the formula's
+  text before computing it, text literals included: in `np.where(diabetes == 'Type 2 diabetes', 1, 0)`, the
+  "diabetes" of the literal was renamed too, so the comparison never matched and the new variable was 0 on every row,
+  without an error. Columns named like the evaluator's internal names (`var_0`, `var_1`) could also be taken for one
+  another. The columns are now renamed in the formula's parsed form, never in its text.
+- **Replaying a trace** computes such a formula correctly, so it can differ from the value recorded by an earlier
+  version; the log notes every formula that holds a column's name inside a text literal.
+- `round()`, `abs()`, `min()` and `max()` now work in a formula, as the documentation said (they were taken for
+  columns and refused); a bare `sqrt()`, `log()` or `exp()` is refused with the hint to write `np.sqrt()` and so on.
+- A formula longer than 3,000 characters is refused, and the evaluator refuses sizes no clinical formula needs: a power
+  of constants such as `9 ** 9 ** 8` (it kept the server busy for minutes), an exponent above 1,000, an array of more
+  than ten million values (`np.ones`, `np.full`, `np.zeros`), a padding width or a repeated text above 10,000.
+
 ### AI engine: suggested formulas are read and tried as the application computes them (owner request)
 
 - **The diagram of a suggested variable** (Data > Enrich > Create New Variables > AI Variable Suggestions) is drawn
@@ -468,16 +483,27 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   One that cannot be computed says why, naming the text columns it uses: on the tutorial cohort,
   `sbp_baseline + np.where(nyha_class > 2, 5.0, -2.0)` compared `nyha_class` ('I' to 'IV') with a number and failed
   only after **Use Formula** and **Apply**. Its **Use Formula** button is now disabled.
-- **The imputation suggestions know how each column is stored** (number, text, date, yes/no), so that a text column is
-  compared with text. Like the column names, this sends no value.
+- **What the counts include:** only usable values (an infinity fills nothing), and the rows that got a value although
+  an input was missing are named: `np.where(hba1c_pct >= 6.5, 1, 0)` gives a value for all 1,206 rows of the
+  tutorial, 266 of them from a missing `hba1c_pct`, which `np.where` sends to its "false" branch. A code the formula
+  compares a text column with that occurs in no row (`nyha_class == 'Class III'`) is flagged, since the comparison
+  then answers the same everywhere. An imputation formula that gives yes/no values or text for a column of numbers is
+  refused. The examples of a text column's values are values held by five rows at least, cut to 24 characters.
+- **The imputation suggestions know how each column is stored** (number, text, date, yes/no; a date kept as text is a
+  date), and the prompt asks to test a text column only with `==`, `!=` or `.isin`. Like the column names, this sends
+  no value.
 - **A suggested formula is written in the application's notation.** A language model writes `` `a name` `` for a
-  column with spaces and `^` for a power; they become `""a name""` and `**` when the suggestion arrives, and a leading
-  `name =` is dropped. **Apply to Editor** and **Use Formula** then give the editor what the card computed. A
-  formula the model corrected keeps the quotes of a column name at its ends (they were stripped before).
+  column with spaces and `^` for a power; they become `""a name""` and `**` when the suggestion arrives (a `^` inside a
+  text stays), and a leading `name =` is dropped when it names the variable computed (`sex = 'F'` stays refused, never
+  the constant 'F'). **Apply to Editor** and **Use Formula** then give the editor what the card computed. A formula the
+  model corrected keeps the quotes of a column name at its ends (they were stripped before); an answer longer than a
+  formula is dropped before it is read.
+- **The model's words are shown as written** on the suggestion cards (titles, descriptions, sources, proxies): a link,
+  an image, a colour or an icon in them stays text. The graph engines' labels stay text too.
 - **`^` is refused in a new formula, with the hint to write `**`.** In a formula, `^` is a bitwise exclusive or, not a
   power: `height_cm ^ 2` gave 168 for a height of 170, without an error (whole numbers; with decimals it failed). The
-  editors of Create New Variables and of the targeted imputation refuse it. A formula already recorded in a trace
-  replays as it was computed.
+  editors of Create New Variables and of the targeted imputation refuse it, and the hint adds that one of two yes/no
+  conditions but not both is written `(a) != (b)`. A formula already recorded in a trace replays as it was computed.
 - One reading of a formula now serves the suggestions, their diagrams and the computation; three disagreed before.
 
 ### AI engine: Gemini Flash-Lite

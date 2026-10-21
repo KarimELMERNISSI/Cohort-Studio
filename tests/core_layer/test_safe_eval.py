@@ -165,3 +165,41 @@ class TestSafeFormat:
             safe_format("{category}", initial_variable="age")
         with pytest.raises(ValueError):
             safe_format(None)  # type: ignore[arg-type]
+
+
+# --- the sizes an expression can ask for (a formula written by a language model is tried before anyone reads it) ---
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("9 ** 9 ** 8", "A number this large"),  # minutes of a busy server before
+        ("df['age'] * 0 * 9 ** 9 ** 8", "A number this large"),
+        ("df['age'] ** 2000", "An exponent larger than 1,000"),
+        ("df['age'] ** (10 ** 6)", "An exponent larger than 1,000"),
+        ("np.ones(10 ** 9)", "An array of more than 10,000,000 values"),
+        ("np.full(2 * 10 ** 8, 1)", "An array of more than 10,000,000 values"),
+        ("df['sex'].str.pad(100000)", "A width larger than 10,000 characters"),
+        ("'x' * 10 ** 6", "A text repeated more than 10,000 times"),
+    ],
+)
+def test_an_expression_cannot_ask_for_huge_sizes(expression: str, message: str) -> None:
+    with pytest.raises(UnsafeExpressionError, match=message):
+        validate(expression)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "df['age'] / (df['age'] / 100) ** 2",
+        "71.3 * df['age'] ** 0.425 * df['age'] ** 0.725 / 10000",  # Du Bois
+        "df['age'] ** (1 / 3)",
+        "2 ** (df['age'] / 10)",
+        "10 ** 6 * df['age']",
+        "np.where(df['age'] > 2, 5.0, -2.0)",
+        "df['sex'].str.pad(12)",
+        "'-' * 20",
+    ],
+)
+def test_clinical_formulas_keep_their_sizes(expression: str) -> None:
+    validate(expression)

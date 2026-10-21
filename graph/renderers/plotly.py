@@ -10,6 +10,7 @@ straight lines.
 
 from __future__ import annotations
 
+import html
 import math
 from typing import Any, NamedTuple
 
@@ -265,11 +266,11 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 x1, y1 = positions[e.target]
                 mid_x.append((x0 + x1) / 2.0)
                 mid_y.append((y0 + y1) / 2.0)
-                labels.append(e.label if options.show_edge_labels else "")
+                labels.append(html.escape(e.label) if options.show_edge_labels else "")
                 hovers.append(
-                    e.tooltip or f"{e.source} -> {e.target}"
+                    html.escape(e.tooltip or f"{e.source} -> {e.target}")
                     if e.directed
-                    else e.tooltip or f"{e.source} - {e.target}"
+                    else html.escape(e.tooltip or f"{e.source} - {e.target}")
                 )
                 ids.append(e.id)
             fig.add_trace(
@@ -299,8 +300,9 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
                 x, y = positions[n.id]
                 nx_.append(x)
                 ny_.append(y)
-                labels.append(n.label or n.id)
-                hovers.append(n.tooltip or n.label or n.id)
+                # Plotly reads its texts as HTML: a label stays text (a name from a file or a model, a link in it)
+                labels.append(html.escape(n.label or n.id))
+                hovers.append(html.escape(n.tooltip or n.label or n.id))
                 ids.append(n.id)
                 colours.append(n.style.color or "#87CEEB")
                 symbols.append(SYMBOL_MAP.get(n.style.shape, "circle"))
@@ -344,7 +346,9 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
         fig.update_layout(
             height=options.height,
             margin=dict(l=10, r=10, t=36 if spec.title else 10, b=10),
-            title=dict(text=spec.title, x=0.0, font=dict(size=14)) if spec.title else None,
+            title=dict(text=html.escape(spec.title), x=0.0, font=dict(size=14))
+            if spec.title
+            else None,
             showlegend=False,
             hovermode="closest",
             dragmode="pan",

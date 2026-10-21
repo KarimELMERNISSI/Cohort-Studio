@@ -45,8 +45,9 @@ Instructions:
    - For conditional logic, use `np.where(condition, value_if_true, value_if_false)`.
    - Example: `np.where(""LDLc.2"" == 'mmol/L', ""LDLc.1"" * 0.387, ""LDLc.1"")`
    - Use `**` for power (e.g. `Height**2`), not `^`.
-   - A column listed as (text) holds words or codes: compare it with text in quotes (e.g. `Sex == 'F'`), never
-     with a number, and do no arithmetic on it. Arithmetic and comparisons with numbers are for (number) columns.
+   - A column listed as (text) holds words or codes: test it only with `==`, `!=` or `.isin([...])` against text in
+     quotes (e.g. `Sex == 'F'`), never with `<`, `>` or a number, and do no arithmetic on it. Arithmetic and
+     comparisons with numbers are for (number) columns; subtracting two (date) columns gives days.
 
 Return JSON Object:
 {{

@@ -41,6 +41,7 @@ from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
+from ui.components.text import plain
 from ui.graph_view import current_theme, render_graph
 from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
@@ -1188,9 +1189,13 @@ def define_new_variables(main_data):
             # Display Domain Analysis
             if st.session_state.get('ai_domain_analysis'):
                 da = st.session_state['ai_domain_analysis']
-                st.info(f"**Dataset Domain:** {da.get('dataset_domain', 'N/A')} | **Document Domain:** {da.get('document_domain', 'N/A')}")
+                # the model's words are shown as written (ui.components.text.plain): never a link, a format or an icon
+                st.info(
+                    f"**Dataset Domain:** {plain(da.get('dataset_domain', 'N/A'), limit=120)} | "
+                    f"**Document Domain:** {plain(da.get('document_domain', 'N/A'), limit=120)}"
+                )
                 if 'relevant_domains' in da:
-                    st.write("**Relevant Domains:** " + ", ".join([f"`{d}`" for d in da['relevant_domains']]))
+                    st.write("**Relevant Domains:** " + ", ".join(as_code(d) for d in da['relevant_domains'] or []))
                 st.markdown("---")
 
             # Display Suggestions
@@ -1200,24 +1205,24 @@ def define_new_variables(main_data):
                     with st.container(border=True):
                         col_head, col_badge = st.columns([3, 1])
                         with col_head:
-                            st.markdown(f"#### {sugg.get('title', sugg.get('name', 'Unknown'))}")
+                            st.markdown(f"#### {plain(sugg.get('title', sugg.get('name', 'Unknown')), limit=120)}")
                         with col_badge:
                             # Display Category badge if available, otherwise Source Type
                             category = sugg.get('suggestion_category', None)
                             source_type = sugg.get('source_type', 'Unknown')
                             
                             if category:
-                                st.caption(f"_{category}_")
+                                st.caption(plain(category, limit=80))
                             
                             color = "green" if source_type == "Document" else "orange" if source_type == "Hybrid" else "blue"
-                            st.markdown(f":{color}[**{source_type}**]")
+                            st.markdown(f":{color}[**{plain(source_type, limit=40)}**]")
                         
-                        st.markdown(f"**Description:** {sugg.get('description', sugg.get('reason', ''))}")
+                        st.markdown(f"**Description:** {plain(sugg.get('description', sugg.get('reason', '')), limit=1000)}")
                         
                         # The formula as the application reads and computes it (enrich.formulas): its diagram, what it
                         # gives on the data, and what "Apply to Editor" puts in the editor are the same formula. Earlier
                         # suggestions of the session are read in the application's notation too.
-                        formula = formula_from_model(sugg.get('formula', ''))
+                        formula = formula_from_model(sugg.get('formula', ''), targets=[str(sugg.get('name') or '')])
                         reading = read_formula(formula)
                         trial = _tried(sugg, formula, main_data)
 
@@ -1253,7 +1258,11 @@ def define_new_variables(main_data):
                             else:
                                 st.code(formula, language="python")
 
-                        _show_trial(trial, f"a value for {_count(trial)} of {len(main_data):,} rows")
+                        _show_trial(
+                            trial,
+                            f"a value for {int(trial.given().sum()):,} of {len(main_data):,} rows"
+                            + _from_missing(trial.from_missing(main_data)),
+                        )
 
                         with st.expander("View Computation Details"):
                             st.caption("Computation Formula (for interpreter):")
@@ -1266,32 +1275,32 @@ def define_new_variables(main_data):
                             else:
                                 missing_vars = [v for v in (sugg.get('missing_variables') or []) if isinstance(v, str)]
                             if missing_vars:
-                                st.error(f"Missing required variables: {', '.join(missing_vars)}")
+                                st.error(f"Missing required variables: {', '.join(as_code(v) for v in missing_vars)}")
                                 
                                 col_fix1, col_fix2 = st.columns(2)
                                 with col_fix1:
-                                    if st.button(f"Find Proxy for {missing_vars[0]}", key=f"proxy_{i}_{missing_vars[0]}"):
-                                        with st.spinner(f"Finding proxy for {missing_vars[0]}..."):
+                                    if st.button(f"Find Proxy for {plain(missing_vars[0], limit=60)}", key=f"proxy_{i}_{missing_vars[0]}"):
+                                        with st.spinner(f"Finding proxy for {plain(missing_vars[0], limit=60)}..."):
                                             proxy_res = st.session_state.rag_manager.suggest_proxy_variable(missing_vars[0], list(main_data.columns))
                                             if proxy_res.get('proxy_found'):
-                                                st.success(f"Proxy Found: {proxy_res.get('proxy_name')}")
-                                                st.info(proxy_res.get('explanation'))
+                                                st.success(f"Proxy Found: {plain(proxy_res.get('proxy_name'), limit=120)}")
+                                                st.info(plain(proxy_res.get('explanation'), limit=1000))
                                                 st.code(proxy_res.get('formula'), language="text")
                                             else:
                                                 st.warning("No valid proxy found.")
-                                                st.caption(proxy_res.get('explanation'))
+                                                st.caption(plain(proxy_res.get('explanation'), limit=1000))
                                 
                                 with col_fix2:
                                     if st.button("Find Alternative Formula", key=f"alt_{i}_{sugg.get('name', 'unknown')}"):
-                                        with st.spinner(f"Finding alternative for {sugg.get('title')}..."):
+                                        with st.spinner(f"Finding alternative for {plain(sugg.get('title'), limit=120)}..."):
                                             alt_res = st.session_state.rag_manager.suggest_alternative_formula(sugg.get('title'), missing_vars[0], list(main_data.columns))
                                             if alt_res.get('alternative_found'):
-                                                st.success(f"Alternative Found: {alt_res.get('alternative_name')}")
-                                                st.info(alt_res.get('explanation'))
+                                                st.success(f"Alternative Found: {plain(alt_res.get('alternative_name'), limit=120)}")
+                                                st.info(plain(alt_res.get('explanation'), limit=1000))
                                                 st.code(alt_res.get('formula'), language="text")
                                             else:
                                                 st.warning("No alternative formula found.")
-                                                st.caption(alt_res.get('explanation'))
+                                                st.caption(plain(alt_res.get('explanation'), limit=1000))
                             
                             source_type = sugg.get('source_type', 'Unknown')
                             
@@ -1310,15 +1319,16 @@ def define_new_variables(main_data):
                             st.markdown("---")
                             st.markdown("**Source Information**")
                             
+                            citation, explanation = plain(citation, limit=300), plain(explanation, limit=1500)
                             if source_type == "Document":
                                 st.info(f"**Source:** {citation}", icon="")
                                 if explanation:
-                                    st.caption(f"_{explanation}_")
-                                    
+                                    st.caption(explanation)
+
                             elif source_type == "Hybrid":
                                 st.warning(f"**Hybrid Source:** {citation}", icon="")
                                 st.markdown(f"**Logic:** {explanation}")
-                                
+
                             elif source_type == "Model Knowledge":
                                 st.info(f"**Model Knowledge:** {explanation}", icon="")
                                 st.caption(
@@ -1903,23 +1913,29 @@ def save_snapshot(df, step_name, base_dir=None):
 
 
 # Helper to extract statistics for context columns (Guided Mode)
-def _tried(sugg: dict, formula: str, data: pd.DataFrame) -> FormulaTrial:
-    """An AI suggestion's formula tried on the data (enrich.formulas.try_formula), once per formula and data layout:
-    kept on the suggestion, it is not computed again at every rerun."""
-    layout = (formula, tuple(map(str, data.columns)), len(data))
-    if sugg.get("_tried_on") != layout:
-        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, data), layout
+def _tried(sugg: dict, formula: str, data: pd.DataFrame, target: str | None = None) -> FormulaTrial:
+    """An AI suggestion's formula tried on the data (enrich.formulas.try_formula), kept on the suggestion: tried again
+    only for another formula, target or version of the data (a change of the draft is a new frame, under the strict
+    state), not at every rerun."""
+    key = (formula, target, id(data), tuple(map(str, data.columns)), len(data))
+    if sugg.get("_tried_on") != key:
+        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, data, target=target), key
     return sugg["_trial"]
 
 
-def _count(trial: FormulaTrial) -> str:
-    return f"{int(trial.values.notna().sum()):,}" if trial.values is not None else "0"
+def _from_missing(counts: list[tuple[str, int]]) -> str:
+    """The rows that got a value although an input is missing (a comparison or np.where answers "false" there)."""
+    if not counts:
+        return ""
+    return " (" + ", ".join(f"{n:,} from a missing {as_code(name)}" for name, n in counts[:3]) + ")"
 
 
 def _show_trial(trial: FormulaTrial, gives: str) -> None:
     """What a suggestion gives on the data, or why it cannot be computed there (its text as code: it quotes values)."""
     if trial.ok:
         st.caption(f":material/check_circle: On your data: {gives}.")
+        for warning in trial.warnings:
+            st.caption(f":material/warning: {as_code(warning, limit=120)}")
     else:
         st.caption(f":material/error: Cannot be computed on your data: {as_code(trial.problem, limit=300)}")
 
@@ -2102,9 +2118,13 @@ def app():
                                     search_hint=search_hint,
                                     context_columns=context_cols,
                                     context_stats=context_stats,
-                                    # how each column is stored (number, text...), so that a text column is compared
-                                    # with text: no value is sent
-                                    column_kinds=column_kinds(main_data, [*available_cols, target_var]),
+                                    # how each column is stored (number, text, date...), so that a text column is
+                                    # compared with text: no value is sent
+                                    column_kinds=column_kinds(
+                                        main_data,
+                                        [*available_cols, target_var],
+                                        date_columns=DataAnalyzer(main_data).date_cols,
+                                    ),
                                 )
 
                                 if error:
@@ -2119,17 +2139,19 @@ def app():
                         if st.session_state.get('imputation_suggestions_for', target_var) == target_var:
                             missing_now = main_data[target_var].isna()
                             for i, sugg in enumerate(st.session_state.get('imputation_suggestions', [])):
-                                formula = formula_from_model(sugg.get('formula', ''))
-                                trial = _tried(sugg, formula, main_data)
-                                st.markdown(f"**Option {i+1}: {sugg.get('name', 'Formula')}**")
-                                st.code(formula)
-                                st.caption(sugg.get('reasoning', ''))
-                                fills = (
-                                    int((missing_now & trial.values.notna()).sum()) if trial.values is not None else 0
+                                formula = formula_from_model(
+                                    sugg.get('formula', ''), targets=[target_var, str(sugg.get('name') or '')]
                                 )
+                                trial = _tried(sugg, formula, main_data, target=target_var)
+                                st.markdown(f"**Option {i+1}: {plain(sugg.get('name', 'Formula'), limit=120)}**")
+                                st.code(formula)
+                                st.caption(plain(sugg.get('reasoning', ''), limit=1000))
+                                fills = int((missing_now & trial.given()).sum()) if trial.ok else 0
                                 _show_trial(
                                     trial,
-                                    f"fills {fills:,} of the {int(missing_now.sum()):,} missing values of {target_var}",
+                                    f"fills {fills:,} of the {int(missing_now.sum()):,} missing values of "
+                                    f"{as_code(target_var)}"
+                                    + _from_missing(trial.from_missing(main_data, within=missing_now)),
                                 )
                                 if st.button(f"Use Formula #{i+1}", key=f"use_imp_sugg_{i}", disabled=not trial.ok):
                                     st.session_state['imputation_formula_input'] = formula

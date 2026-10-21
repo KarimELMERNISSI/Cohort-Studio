@@ -10,13 +10,14 @@ import ast
 import datetime as dt
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from core.expressions import evaluate_tree
+from core.expressions import DEFAULT_POLICY, evaluate_tree
 from utils.data_analyzer import DataAnalyzer
 from utils.date_parser import smart_parse_dates
 from utils.logging_config import single_line
@@ -63,12 +64,18 @@ def is_number(token):
     
 
 
-# Names a formula may call rather than columns: the whitelisted evaluator's numpy and pandas facades, and functions
-FORMULA_FUNCTIONS = frozenset({"np", "pd", "log", "sqrt", "exp", "abs", "min", "max", "constant"})
+# Names that are not columns: the whitelisted evaluator's numpy and pandas facades, and its functions (core.expressions)
+FORMULA_MODULES = frozenset({"np", "pd"})
+FORMULA_FUNCTIONS = frozenset(DEFAULT_POLICY.builtins)  # abs, bool, float, int, len, max, min, round, str
 _QUOTED = re.compile(r'""([^"]+)""')  # ""a column with spaces or symbols""
 _BACKTICKED = re.compile(r"`([^`]+)`")
-_QUOTED_OR_CARET = re.compile(r'""[^"]*""|\^')
-_ASSIGNED = re.compile(r"^\s*[A-Za-z_]\w*\s*=(?!=)\s*")  # "bmi = weight / ...": the formula is the right side
+# a quoted column, a text literal (its ^ is a character) or a ^
+_QUOTED_OR_CARET = re.compile(r"\"\"[^\"]*\"\"|'[^'\n]*'|\"[^\"\n]*\"|\^")
+_ASSIGNED = re.compile(r"^\s*([A-Za-z_]\w*)\s*=(?!=)\s*")  # "bmi = weight / ...": the formula is the right side
+MAX_FORMULA_LENGTH = 3_000  # characters, as the whitelisted evaluator allows (core.expressions)
+_EXAMPLE_ROWS = 5  # a value shown in a message is held by this many rows at least (as manage.ai_payload.MIN_COUNT)
+_EXAMPLE_LENGTH = 24
+_LONG_QUOTE = re.compile(r"\"[^\"\n]{13,}\"|'[^'\n]{13,}'")  # a cell a library quotes in its message
 
 
 @dataclass(frozen=True)
@@ -80,48 +87,98 @@ class FormulaReading:
     power_caret: bool = False  # it uses ^, which is a bitwise exclusive or here, not a power (write **)
 
 
-def read_formula(formula: str) -> FormulaReading:
-    """
-    The variables a formula uses: a name, or ``""a name""`` for a column with spaces or symbols; the functions it may
-    call are not variables. The one reading of a formula: the evaluator, the AI engine's suggestions and their
-    diagrams use it, so a diagram shows what computing the formula uses.
-    """
+def _parsed(formula: str) -> tuple[ast.Expression | None, dict[str, str], str | None]:
+    """The formula's tree, its ``""quoted""`` names by the placeholders that stand for them in the tree, or why it
+    cannot be read."""
     text = (formula or "").strip()
+    if len(text) > MAX_FORMULA_LENGTH:
+        return None, {}, f"a formula longer than {MAX_FORMULA_LENGTH:,} characters"
     quoted: dict[str, str] = {}
     for i, match in enumerate(dict.fromkeys(_QUOTED.findall(text))):
         placeholder = f"__quoted_var_{i}__"
         quoted[placeholder] = match
         text = text.replace(f'""{match}""', placeholder)
     try:
-        tree = ast.parse(text, mode="eval")
+        return ast.parse(text, mode="eval"), quoted, None
     except SyntaxError as exc:
-        return FormulaReading(problem=f"Syntax Error: {exc}")
+        return None, quoted, f"Syntax Error: {exc}"
+    except (ValueError, RecursionError, MemoryError) as exc:  # a null byte, a nesting too deep to read
+        return None, quoted, f"the formula cannot be read ({type(exc).__name__})"
+
+
+def _functions(tree: ast.Expression) -> set[int]:
+    """The ids of the Name nodes a formula calls (``round(x)``), as opposed to the variables it uses."""
+    return {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+
+
+def read_formula(formula: str) -> FormulaReading:
+    """
+    The variables a formula uses: a name, or ``""a name""`` for a column with spaces or symbols. ``np`` and ``pd``,
+    and the functions of the evaluator (``round``, ``abs``, ``min``... when called) are not variables; another function
+    called by its bare name (``sqrt``) is refused with the hint ``np.sqrt``. The one reading of a formula: the
+    evaluator, the AI engine's suggestions and their diagrams use it, so a diagram shows what computing it uses.
+    """
+    tree, quoted, problem = _parsed(formula)
+    if tree is None:
+        return FormulaReading(problem=problem)
+    called = _functions(tree)
     found = sorted(
         (node for node in ast.walk(tree) if isinstance(node, ast.Name)),
         key=lambda node: (node.lineno, node.col_offset),
     )
-    names = (quoted.get(node.id, node.id) for node in found)
+    names: list[str] = []
+    for node in found:
+        name = quoted.get(node.id, node.id)
+        if name in FORMULA_MODULES or (id(node) in called and name in FORMULA_FUNCTIONS):
+            continue
+        if id(node) in called:  # a function the evaluator does not have
+            hint = f": write np.{name}(...)" if hasattr(np, name) else ""
+            return FormulaReading(problem=f"{name}() is not a function of formulas{hint}")
+        names.append(name)
     return FormulaReading(
-        names=tuple(dict.fromkeys(name for name in names if name not in FORMULA_FUNCTIONS)),
+        names=tuple(dict.fromkeys(names)),
         power_caret=any(isinstance(node, ast.BitXor) for node in ast.walk(tree)),
     )
 
 
-def formula_from_model(formula: str) -> str:
+def formula_from_model(formula: str, *, targets: Iterable[str] = ()) -> str:
     """
-    A formula written by a language model, in this application's notation: a leading ``name =`` dropped,
-    `` `a name` `` written ``""a name""``, and ``^`` (a power, as in mathematics) written ``**`` (here ``^`` is a
-    bitwise exclusive or, which gives wrong numbers silently).
+    A formula written by a language model, in this application's notation: ``name =`` dropped when it starts the
+    formula and names one of ``targets`` (the variable it computes: ``sex = 'F'`` stays refused, it is no formula),
+    `` `a name` `` written ``""a name""``, and ``^`` (a power, as in mathematics) written ``**`` outside text literals
+    (here ``^`` is a bitwise exclusive or, which gives wrong numbers silently).
     """
-    text = _ASSIGNED.sub("", (formula or "").strip(), count=1)
+    text = (formula or "").strip()
+    if len(text) > MAX_FORMULA_LENGTH:
+        return text  # read_formula refuses it
+    assigned = _ASSIGNED.match(text)
+    if assigned and assigned.group(1) in set(targets):
+        text = text[assigned.end() :]
     text = _BACKTICKED.sub(lambda match: f'""{match.group(1)}""', text)
     return _QUOTED_OR_CARET.sub(lambda match: "**" if match.group(0) == "^" else match.group(0), text)
 
 
 CARET_IS_NOT_A_POWER = (
     "^ is not a power in a formula: it is a bitwise exclusive or, which gives wrong numbers without an error. "
-    "Write ** for a power, as in weight_kg / (height_cm / 100) ** 2."
+    "Write ** for a power, as in weight_kg / (height_cm / 100) ** 2. For one of two yes/no conditions but not both, "
+    "write (a) != (b), with the parentheses."
 )
+
+
+def _is_text(series: pd.Series) -> bool:
+    return not (
+        pd.api.types.is_numeric_dtype(series)
+        or pd.api.types.is_bool_dtype(series)
+        or pd.api.types.is_datetime64_any_dtype(series)
+    )
+
+
+def _given(values: pd.Series) -> pd.Series:
+    """The rows with a usable value: not missing, and finite for numbers (``fillna`` would put an infinity in)."""
+    present = values.notna()
+    if pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values):
+        present &= np.isfinite(values.astype(float))
+    return present
 
 
 @dataclass(frozen=True)
@@ -130,17 +187,66 @@ class FormulaTrial:
 
     values: pd.Series | None = None  # one value per row
     problem: str | None = None  # why it cannot be computed, in words
+    inputs: tuple[str, ...] = ()  # the columns it uses
+    warnings: tuple[str, ...] = ()  # computed, but read it twice (a text it compares with that never occurs)
 
     @property
     def ok(self) -> bool:
         return self.problem is None
 
+    def given(self) -> pd.Series:
+        """The rows that get a usable value (none when it cannot be computed)."""
+        return _given(self.values) if self.values is not None else pd.Series(dtype=bool)
 
-def try_formula(formula: str, data: pd.DataFrame) -> FormulaTrial:
+    def from_missing(self, data: pd.DataFrame, within: pd.Series | None = None) -> list[tuple[str, int]]:
+        """The inputs whose value is missing in rows that still get a value (a comparison or ``np.where`` sends a
+        missing value to its "false" branch), with how many such rows, among ``within`` when it is given."""
+        given = self.given()
+        if within is not None:
+            given = given & within
+        counts = [(name, int((given & data[name].isna()).sum())) for name in self.inputs if name in data.columns]
+        return [(name, n) for name, n in counts if n]
+
+
+def _absent_literals(formula: str, data: pd.DataFrame) -> list[str]:
+    """The texts a formula compares a text column with (``==``, ``!=``, ``.isin``) that occur in no row of it: the
+    comparison then gives the same answer everywhere, which no error reveals."""
+    tree, quoted, _ = _parsed(formula)
+    if tree is None:
+        return []
+
+    def column(node: ast.AST) -> str | None:
+        name = quoted.get(node.id, node.id) if isinstance(node, ast.Name) else None
+        return name if name in data.columns and _is_text(data[name]) else None
+
+    pairs: list[tuple[str, ast.AST]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            sides = [node.left, *node.comparators]
+            for left, right in zip(sides, sides[1:], strict=False):
+                for col, other in ((column(left), right), (column(right), left)):
+                    if col:
+                        pairs.append((col, other))
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "isin":
+            col = column(node.func.value)
+            if col and node.args and isinstance(node.args[0], ast.List | ast.Tuple | ast.Set):
+                pairs.extend((col, element) for element in node.args[0].elts)
+    absent: list[str] = []
+    for col, literal in pairs:
+        if isinstance(literal, ast.Constant) and isinstance(literal.value, str):
+            present = set(data[col].dropna().astype(str))
+            if literal.value not in present:
+                absent.append(f"{literal.value[:_EXAMPLE_LENGTH]!r} occurs in no row of {col}")
+    return list(dict.fromkeys(absent))
+
+
+def try_formula(formula: str, data: pd.DataFrame, *, target: str | None = None) -> FormulaTrial:
     """
     ``formula`` computed on ``data`` by the evaluator of "Compute" and "Apply", or why it cannot be: a syntax the
     application does not read, ``^``, a name that is not a column, or a computation the data refuse (a column that
-    holds text compared with a number, say: the text columns it uses are named, with some of their values).
+    holds text compared with a number, say: the text columns it uses are named, with values held by several rows).
+    With a ``target`` that holds numbers (an imputation), a result that is not numbers is refused too: filling the
+    column with yes/no values or text would change its type. Nothing is sent anywhere: the trial runs here.
     """
     reading = read_formula(formula)
     if reading.problem:
@@ -152,24 +258,27 @@ def try_formula(formula: str, data: pd.DataFrame) -> FormulaTrial:
         return FormulaTrial(problem=f"not in the data: {', '.join(unknown)}")
     ok, result, _ = evaluate_formula_safely(formula, "__trial__", data, return_series=True)
     if ok:
-        return FormulaTrial(values=result)
+        if (
+            target in data.columns
+            and pd.api.types.is_numeric_dtype(data[target])
+            and not pd.api.types.is_bool_dtype(data[target])
+            and (pd.api.types.is_bool_dtype(result) or not pd.api.types.is_numeric_dtype(result))
+        ):
+            kind = "yes/no values" if pd.api.types.is_bool_dtype(result) else "values that are not numbers"
+            return FormulaTrial(problem=f"it gives {kind}, while {target} holds numbers", inputs=reading.names)
+        return FormulaTrial(
+            values=result, inputs=reading.names, warnings=tuple(_absent_literals(formula, data))
+        )
     problem = str(result).split("\n")[0]
     for prefix in ("Error evaluating formula: ", "Invalid formula: "):
         problem = problem.removeprefix(prefix)
-    texts = [
-        name
-        for name in reading.names
-        if not (
-            pd.api.types.is_numeric_dtype(data[name])
-            or pd.api.types.is_bool_dtype(data[name])
-            or pd.api.types.is_datetime64_any_dtype(data[name])
-        )
-    ]
-    for name in texts:
-        frequent = data[name].dropna().astype(str).value_counts().index.tolist()[:3]
-        examples = ", ".join(repr(str(value)) for value in frequent)
+    problem = _LONG_QUOTE.sub('"…"', problem)[:200]  # a library can quote a cell: not a long one
+    for name in (name for name in reading.names if _is_text(data[name])):
+        counts = data[name].dropna().astype(str).value_counts()
+        frequent = counts[counts >= _EXAMPLE_ROWS].index.tolist()[:3]  # never a value that identifies a row
+        examples = ", ".join(repr(str(value)[:_EXAMPLE_LENGTH]) for value in frequent)
         problem += f"; {name} holds text" + (f" (such as {examples})" if examples else "")
-    return FormulaTrial(problem=problem)
+    return FormulaTrial(problem=problem, inputs=reading.names)
 
 
 def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tuple[bool, str, list[str], list[str]]:
@@ -186,40 +295,6 @@ def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tup
     return True, None, list(reading.names), []
 
 
-# Replace column names in the formula with their corresponding normalized names
-def normalize_formula(formula: str, column_mapping: dict) -> str:
-    """
-    Replace column names in the formula with normalized names (e.g., var_1, var_2).
-    
-    Parameters:
-    ----------
-    formula : str
-        The computation formula to be normalized.
-    column_mapping : dict
-        A mapping of original column names to normalized names.
-    
-    Returns:
-    -------
-    str
-        The formula with normalized column names.
-    """
-    logger.debug("original formula: %s", single_line(formula))
-    
-    # Sort mapping by length of column name descending to prevent substring replacement issues
-    # column_mapping values are Series, so we access .name
-    sorted_mapping = sorted(column_mapping.items(), key=lambda x: len(str(x[1].name)), reverse=True)
-    
-    for normalized, original in sorted_mapping:
-        col_name = str(original.name)
-        logger.debug("normalized column name %s -> %s", col_name, normalized)
-        # Replace each column name with its corresponding normalized variable name
-        formula = formula.replace(f'""{col_name}""', f'{normalized}')
-        formula = formula.replace(col_name, normalized)  # in case the column name is without quotes
-        
-    logger.debug("normalized formula: %s", single_line(formula))
-    return formula
-
-
 def extract_constant_value(constant_token: str) -> str:
     """
     Extract the value from a constant token like constant(val1) -> val1
@@ -228,40 +303,10 @@ def extract_constant_value(constant_token: str) -> str:
     return constant_token[9:-1]  # len('constant(') == 9
 
 
-def create_variables_dict(dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]) -> dict[str, pd.Series]:
-    """
-    Create a dictionary mapping variable names to their corresponding Series
-    for both regular columns and constants.
-    
-    Parameters:
-    -----------
-    dataset : pd.DataFrame
-        The input dataset
-    identified_columns : List[str]
-        List of valid column names used in the formula
-    constant_tokens : List[str]
-        List of constant tokens found in the formula
-        
-    Returns:
-    --------
-    Dict[str, pd.Series]:
-        Dictionary mapping variable names to their Series
-    """
-    local_vars = {}
-    
-    # Handle regular columns
-    for idx, col in enumerate(identified_columns):
-        local_vars[f"var_{idx}"] = dataset[col]
-    
-    # Handle constants
-    start_idx = len(identified_columns)
-    for idx, constant_token in enumerate(constant_tokens, start=start_idx):
-        constant_value = extract_constant_value(constant_token)
-        # Create a Series with the constant value repeated for each row
-        constant_series = pd.Series([constant_value] * len(dataset), index=dataset.index, name=constant_token)
-        local_vars[f"var_{idx}"] = constant_series
-    
-    return local_vars
+def _names_in_literals(tree: ast.Expression, columns: list[str]) -> bool:
+    """Whether a text literal of the formula holds one of its columns' names (the old renaming changed that text)."""
+    texts = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+    return any(column in text for column in columns for text in texts)
 
 
 def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFrame, return_series: bool = False) -> tuple[bool, Any, pd.DataFrame]:
@@ -332,22 +377,29 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
                 )
             return node
 
-    local_vars = create_variables_dict(dataset, identified_columns, constants)
-    
-    logger.debug("evaluate_formula: %d variables available; formula=%s", len(local_vars), single_line(formula))
-    normalized_formula = normalize_formula(formula, local_vars)
-    
-    local_vars['__safe_sub__'] = safe_sub # Inject helper AFTER normalization to avoid attribute error
-    
+    # The columns are renamed in the formula's tree, never in its text: a text literal that holds a column's name
+    # ('Type 2 diabetes' for a column diabetes) stays as written, and no column can be taken for another
+    tree, quoted, _ = _parsed(formula)
+    columns = {name: f"__column_{i}__" for i, name in enumerate(identified_columns)}
+    if tree is not None and _names_in_literals(tree, identified_columns):
+        logger.warning(
+            "A formula holds a column's name inside a text literal: earlier versions renamed that text too, so a "
+            "variable recorded with them may have been computed differently"
+        )
+
+    class ColumnRenamer(ast.NodeTransformer):
+        def visit_Name(self, node):
+            name = columns.get(quoted.get(node.id, node.id))
+            return ast.copy_location(ast.Name(id=name, ctx=node.ctx), node) if name else node
+
+    local_vars: dict[str, Any] = {columns[name]: dataset[name] for name in identified_columns}
+    local_vars['__safe_sub__'] = safe_sub
+    logger.debug("evaluate_formula: %d variables available; formula=%s", len(columns), single_line(formula))
+
     try:
-        # Apply AST Transformation for safe subtraction
-        # We need to parse the normalized formula again to rewrite the ops
-        tree = ast.parse(normalized_formula, mode='eval')
-        tree = DateSubRewriter().visit(tree)
+        # date subtractions give days, then the whitelisted evaluation (no builtins, restricted np/pd: core.expressions)
+        tree = DateSubRewriter().visit(ColumnRenamer().visit(tree))
         ast.fix_missing_locations(tree)
-        
-        # Whitelisted evaluation (no builtins, restricted np/pd facades): see core.expressions
-        logger.debug("Normalized formula: %s", single_line(normalized_formula))
         result = evaluate_tree(tree, dataset, extra_locals=local_vars)
         
         # Convert numpy array to Series if needed
