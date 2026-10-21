@@ -157,8 +157,16 @@ def variance_profile(
 ) -> VarianceProfile:
     """
     How the variance of ``frame`` spreads over the components: all of them for a PCA; for a FAMD, as many as the data
-    has dimensions, up to MAX_PROFILE_COMPONENTS.
+    has dimensions, up to MAX_PROFILE_COMPONENTS. Missing values are refused, by column, before any fit.
     """
+    missing = frame.isna().sum()
+    missing = missing[missing > 0]
+    if len(missing):
+        listed = ", ".join(f"{name} ({count:,})" for name, count in missing.items())
+        raise ValueError(
+            f"Missing values in {listed}: a dimensionality reduction needs complete data. Impute them first, or "
+            "choose complete columns."
+        )
     if method == PCA:
         model = fit_pca(frame, frame.shape[1], random_state=random_state)
         return VarianceProfile(

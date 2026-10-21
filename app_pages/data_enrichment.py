@@ -1781,8 +1781,8 @@ def compute_transformations(dataframe):
                 # every dimension of the data (biostats.reduction), in %: the curve reaches 100%
                 try:
                     profile = rd.variance_profile(dataframe[columns], transformation, random_state=RANDOM_STATE)
-                except ValueError as exc:
-                    st.warning(str(exc))
+                except ValueError as exc:  # missing values, by column: the names are the data's, shown as text
+                    st.warning(plain(str(exc), limit=500))
                     profile = None
                 if profile is not None:
                     cumulative = profile.cumulative

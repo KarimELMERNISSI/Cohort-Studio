@@ -93,6 +93,17 @@ def test_the_variance_profile_covers_every_dimension() -> None:
     assert pca.n_dimensions == 2 and pca.cumulative[-1] == pytest.approx(100.0, abs=1e-6)
 
 
+def test_missing_values_are_named_before_any_fit() -> None:
+    from biostats.reduction import variance_profile
+
+    frame = _cohort()
+    frame.loc[:4, "bmi"] = np.nan
+    with pytest.raises(ValueError, match=r"^Missing values in bmi \(5\): .* needs complete data"):
+        variance_profile(frame, FAMD)
+    with pytest.raises(ValueError, match=r"^Missing values in bmi \(5\)"):
+        variance_profile(frame[["age", "bmi"]], PCA)
+
+
 def test_a_famd_with_many_dimensions_says_how_many_it_shows() -> None:
     pytest.importorskip("prince", reason="FAMD runs with prince (the 'ml' extra)")
     from biostats.reduction import MAX_PROFILE_COMPONENTS, variance_profile
