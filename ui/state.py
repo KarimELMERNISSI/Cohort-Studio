@@ -21,6 +21,7 @@ Pages read the legacy keys ``data`` and ``working_df`` (the analysis population)
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
 import os
 from collections.abc import Iterable, Mapping
@@ -34,6 +35,7 @@ import streamlit as st
 from core.derived import DerivedVariable, with_definitions
 from core.derived import from_config as derived_from_config
 from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
+from core.lineage import canonical_json
 from core.population import PopulationResult, catalogue, criteria_from_trace, evaluate_population
 from core.session import (
     EMPTY,
@@ -42,11 +44,14 @@ from core.session import (
     PopulationError,
     StagingError,
     StagingStatus,
+    merge_cells,
 )
 from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
 from core.steps import FITTED, FORMULA
 from core.steps import ids as step_ids
 from manage.snapshots import delete_unreferenced
+from manage.snapshots import folders as snapshot_folders
+from manage.snapshots import save as save_snapshot_to
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
@@ -54,7 +59,7 @@ from utils.session_scope import get_current_scope
 from utils.settings import get_settings
 
 if TYPE_CHECKING:
-    from enrich.derived import DerivedCheck
+    from enrich.derived import DerivedCheck, FillPlan
     from explore.data_quality_auditor import DataQualityAuditor
 
 logger = logging.getLogger(__name__)
@@ -533,6 +538,12 @@ class AppState:
                 False,
                 f"'{blocked[0]}' cannot be redone automatically: discard the draft and redo it.",
             )
+        if any(p.params.get("derived") for p in draft.steps):
+            return (
+                False,
+                "The draft holds values filled from the declared derived variables, decided on the data it was "
+                "built on (their rounding, whether they count as observed): discard the draft and fill them again.",
+            )
         population = self.population if refit_population else None
         if population is not None and not population.ok:
             return False, "The analysis population cannot be evaluated."
@@ -547,14 +558,16 @@ class AppState:
             }
             block = None
             # redo on the population it was fitted on, as it is on the current data; or refit on the
-            # current population (every row when no criterion is ticked)
+            # current population (every row when no criterion is ticked). Evaluated on the dataset, as the page
+            # does for every change of a draft, not on the table the earlier changes filled
             if pending.population is not None:
-                if population is None:
-                    step["population"] = pending.population
-                    block = self._on_current_data(pending.population)
-                else:
-                    step["population"] = block = population.to_trace()
-            result = apply_steps(frame, [step])
+                block = (
+                    self._on_current_data(pending.population)
+                    if population is None
+                    else population.to_trace()
+                )
+                step["population"] = block
+            result = apply_steps(frame, [step], frames={session.data_fp: session.base})
             if result.error or result.df is None:
                 return False, result.error or f"'{pending.description}' could not be redone."
             # an imputation: recorded with the rows it used and the values it filled there
@@ -677,14 +690,124 @@ class AppState:
         check = session.memo(
             slot or f"derived_check::{definition.target}",
             (session.working_fp, read),
-            lambda: check_derived(definition, frame),
+            lambda: check_derived(definition, frame, imputed=self.imputed_cells()),
         )
         return replace(check, definition=definition)  # its acceptance as it is now
 
     def derived_inverse_check(self, definition: DerivedVariable, name: str) -> DerivedCheck:
         """The inverse of ``definition`` that recovers ``name``, checked as a definition of its own."""
-        inverse = DerivedVariable(name, definition.inverses[name], origin=definition.origin)
-        return self.derived_check(inverse, slot=f"derived_inverse::{definition.target}::{name}")
+        from enrich.derived import inverse_definition
+
+        return self.derived_check(
+            inverse_definition(definition, name),
+            slot=f"derived_inverse::{definition.target}::{name}",
+        )
+
+    def imputed_cells(self) -> dict[str, Any]:
+        """The cells of the Enrich data an imputation filled, single or exact (row ids per column): values no one
+        recorded, which a derived variable's check leaves out."""
+        session = self.session
+        source = session.draft if session.draft is not None else session
+        return merge_cells(dict(source.single_imputed), dict(source.exact_imputed))
+
+    def exact_fill_plan(self) -> FillPlan:
+        """What filling the declared derived variables exactly would do on the Enrich data, within the analysis
+        population (enrich.derived.plan_exact_fills), with the checks the page shows; kept until those change."""
+        from enrich.derived import plan_exact_fills
+
+        session = self.session
+        frame = session.working_frame()
+        assert frame is not None
+        scope = self.population_scope(frame)
+        definitions = self.derived_variables
+        population = scope.population.fingerprint if scope.scoped and scope.population else ""
+        read = tuple(canonical_json({"target": d.target, **d.to_config()}) for d in definitions)
+        source = session.draft if session.draft is not None else session
+        return session.memo(
+            "derived_fill_plan",
+            (session.working_fp, population, scope.blocked, read),
+            lambda: plan_exact_fills(
+                definitions,
+                frame,
+                scope.rows if scope.scoped else None,
+                imputed=self.imputed_cells(),
+                single=dict(source.single_imputed),
+                check=self.derived_check,
+                inverse_check=self.derived_inverse_check,
+            ),
+        )
+
+    def fill_exactly(self) -> int:
+        """
+        Stage what filling exactly gives on the current data (:meth:`exact_fill_plan`) in the Enrich draft, each fill a
+        targeted imputation recorded with the definition it used (core.derived.record), and with the decisions its
+        replay repeats rather than makes again (the formula, whether the values count as observed, their rounding):
+        the replay never reads the declared list. One snapshot of the filled table for the run, with its last step; it
+        is deleted when the run does not reach the draft. Returns the values filled; none while a ticked criterion
+        cannot be evaluated.
+        """
+        from enrich.derived import fill_steps
+
+        session = self.session
+        frame = session.working_frame()
+        assert frame is not None
+        scope = self.population_scope(frame)
+        plan = self.exact_fill_plan()
+        if scope.blocked or not plan.fills:
+            return 0
+        # the same fills on the same data record the same steps
+        run = hashlib.sha256(
+            canonical_json(
+                [
+                    session.working_fp,
+                    scope.population.fingerprint if scope.scoped and scope.population else "",
+                    [(f.target, f.definition.semantic_hash) for f in plan.fills],
+                ]
+            ).encode("utf-8")
+        ).hexdigest()[:12]
+        steps = fill_steps(plan, frame, scope.rows if scope.scoped else None, run)
+        snapshot = save_snapshot_to(
+            steps[-1][0], "derived_fill", snapshot_folders(get_current_scope())[2]
+        )
+        filled = 0
+        try:
+            for position, (filled_frame, params, description) in enumerate(steps, start=1):
+                if self.stage(
+                    filled_frame,
+                    "targeted_imputation",
+                    params,
+                    description,
+                    population=scope.population,
+                    output_dataset_path=snapshot if position == len(steps) else None,
+                ):
+                    filled += int(params["filled_count"])
+        except Exception:  # the run did not reach the draft whole: its snapshot is no one's
+            self._delete_snapshots([snapshot])
+            raise
+        return filled
+
+    def derived_fills_edited(self) -> list[str]:
+        """The variables the Enrich draft filled with a definition that was edited or removed since: the draft keeps
+        the values of the definition it used (its record), which the declared list no longer says."""
+        from core.derived import from_record
+
+        draft = self.session.draft
+        if draft is None:
+            return []
+        declared = {d.target: d for d in self.derived_variables}
+        edited: list[str] = []
+        for step in draft.steps:
+            used, uses, _ = from_record(step.params.get("derived") or {})
+            if used is None:
+                continue
+            now = declared.get(used.target)
+            same = now is not None and now.semantic_hash == used.semantic_hash
+            for name in uses:
+                if name != used.target:
+                    same = same and name in now.inverses and now.inverse_hash(name) == uses[name]
+            if not same and used.target not in edited:
+                edited.append(used.target)
+        return edited
 
     # ------------------------------------------------------------------ the analysis population
 

@@ -502,12 +502,15 @@ class DataSession:
         )
 
     def restore_single_imputed(self, cells: Mapping[str, Any]) -> None:
-        """The single-imputed cells of a reloaded version or a replay (row ids per column)."""
+        """The single-imputed cells of a reloaded version or a replay (row ids per column). What was computed from
+        the cells known before (a derived variable's check leaves imputed cells out) is computed again."""
         self.single_imputed = self._cells_in_base(cells)
+        self._memo.clear()
 
     def restore_exact_imputed(self, cells: Mapping[str, Any]) -> None:
         """The cells imputed by an exact formula, of a reloaded version or a replay (row ids per column)."""
         self.exact_imputed = self._cells_in_base(cells)
+        self._memo.clear()
 
     def single_imputed_counts(
         self, rows: pd.Index, columns: Iterable[str] | None = None

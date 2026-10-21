@@ -16,7 +16,15 @@ from statsmodels.stats.contingency_tables import StratifiedTable
 from app_pages.data_enrichment import evaluate_formula_safely
 from core.derived import DerivedVariable
 from core.population import family_masks
-from enrich.derived import AGREES, DISAGREES, MOSTLY, check_derived, check_inverses
+from enrich.derived import (
+    AGREES,
+    DISAGREES,
+    MOSTLY,
+    check_derived,
+    check_inverses,
+    fill_steps,
+    plan_exact_fills,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TUTORIAL = ROOT / "assets" / "tutorial"
@@ -219,10 +227,37 @@ def test_the_derived_variables_agree_but_in_the_planted_errors(
         "1,143 of 1,144 rows",
         "1,171 of 1,172 rows",
         "**34** BMIs, **49** eGFRs and **30** phenotypes",
-        "recover 10 heights",
+        "the **10** heights the\ninverse recovers",
         "24 patients have neither",
     ):
         assert number in CHAPTER, number
+
+
+def test_the_chapter_fills_exactly_what_it_says(
+    cohort: pd.DataFrame, analysis_set: pd.DataFrame
+) -> None:
+    """Step 3.3, Fill exactly: the values the definitions give in the analysis population, all counted as observed,
+    and the share of incomplete rows the multiple imputation then starts from."""
+    data = cohort.assign(
+        sex_clean=np.where(cohort["sex"].str.strip().str.lower().str.startswith("f"), "F", "M")
+    )
+    definitions = [
+        DerivedVariable("bmi_kg_m2", BMI, inverses={"height_cm": HEIGHT}),
+        DerivedVariable("egfr_ml_min_1_73m2", EGFR),
+        DerivedVariable("hf_phenotype", PHENOTYPE),
+    ]
+    plan = plan_exact_fills(definitions, data, analysis_set.index)
+    assert [(f.target, f.filled, f.exact) for f in plan.fills] == [
+        ("bmi_kg_m2", 34, True),
+        ("height_cm", 10, True),
+        ("egfr_ml_min_1_73m2", 49, True),
+        ("hf_phenotype", 30, True),
+    ]
+    assert not any(f.single for f in plan.fills)  # every value counted as observed
+    assert plan.filled == 123 and "**Fill 123" in CHAPTER
+    filled = fill_steps(plan, data, analysis_set.index, "r")[-1][0].loc[analysis_set.index]
+    incomplete = filled[[c for c in filled.columns if filled[c].isna().any()]].isna().any(axis=1)
+    assert round(float(incomplete.mean()), 2) == 0.50 and "about half of them miss" in CHAPTER
 
 
 def test_the_chapter_numbers(analysis_set: pd.DataFrame) -> None:

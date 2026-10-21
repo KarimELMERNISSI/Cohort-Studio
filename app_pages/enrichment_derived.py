@@ -12,7 +12,7 @@ from dataclasses import replace
 import pandas as pd
 import streamlit as st
 
-from core.derived import KINDS, DerivedVariable, cycles
+from core.derived import KINDS, NOTE_LENGTH, DerivedVariable, cycles, note_text
 from core.registry import as_code
 from enrich.derived import AGREES, CANNOT, DISAGREES, MOSTLY, TOO_FEW, DerivedCheck
 from enrich.formulas import evaluate_formula_safely, read_formula
@@ -322,7 +322,14 @@ def _form(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
             kind = st.selectbox(
                 "Kind", kinds, format_func=lambda k: _KIND_LABELS.get(k, k), key=_KIND
             )
-            note = st.text_input("Source", key=_NOTE, placeholder="WHO; weight in kg, height in cm")
+            note = st.text_input(
+                "Source",
+                key=_NOTE,
+                max_chars=NOTE_LENGTH,
+                placeholder="WHO; weight in kg, height in cm",
+                help="The reference and the units it assumes, on one line. Name no patient: the note is kept with "
+                "the study's configuration.",
+            )
         formula = str(formula or "").strip()
         proposed, check, circle = None, None, None
         if not target or not formula:
@@ -335,7 +342,7 @@ def _form(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
                 inverses=dict(current.inverses) if current else {},
                 kind=str(kind or ""),
                 origin=current.origin if same and current else "user",
-                note=str(note or "").strip(),
+                note=note_text(note),
                 tolerance=current.tolerance if current else None,
                 accepted=bool(same and current and current.accepted),
             )
@@ -520,6 +527,121 @@ def _proposals(definitions: tuple[DerivedVariable, ...]) -> None:
         st.button("Dismiss", icon=":material/close:", key="derived_dismiss", on_click=_dismiss)
 
 
+def _fill_exactly() -> None:
+    """Stage the fills in the Enrich draft: planned again on the current data, as the table shown was."""
+    state = get_state()
+    names = ", ".join(dict.fromkeys(f.target for f in state.exact_fill_plan().fills))
+    filled = state.fill_exactly()
+    _changed(
+        f"Filled {filled:,} values ({names}): the draft lists them; apply it to the dataset to keep them."
+    )
+
+
+def _counted(fill) -> str:
+    if not fill.single:
+        return "observed (exact)"
+    if fill.single == fill.filled:
+        return "single-imputed"
+    return f"{fill.filled - fill.single:,} observed, {fill.single:,} single-imputed"
+
+
+def _fill(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...], scope) -> None:
+    state = get_state()
+    with st.container(border=True):
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.markdown("**2. Fill exactly**")
+            help_popover(
+                "A missing value is computed where every variable of the formula has a value, by the formula of a "
+                "definition the data agree with or that you accepted, or by an inverse the data agree with: a height "
+                "from the BMI and the weight. A text or code variable must take a value the check saw in at least "
+                "10 rows. Each variable is filled in the order the definitions depend on each other, and again while "
+                "a fill gives another formula a value. The values are rounded as the variable is written. They count "
+                "as observed (exact) when the data agree with the formula and either the variable was computed from "
+                "the recorded values, or rounding its formula's variables moves it by at most the variable's own "
+                "precision or 5% of its standard deviation. Otherwise they are single-imputed, which the analyses "
+                "flag: so are the values of a definition you accepted although the data only mostly agree with it or "
+                "cannot check it, and a value computed from an imputed one. Each fill joins the draft as one step, "
+                "recorded with the definition it used, so that a replay computes the same values.",
+                label="How the values are filled",
+            )
+        where = (
+            f"the analysis population ({len(scope.rows):,} rows)" if scope.scoped else "every row"
+        )
+        st.caption(
+            f"Computes the missing values the definitions can give, on {where}: those of each variable from its "
+            "formula, and those of a formula's variables from its inverses. Each fill joins the draft; applying the "
+            "draft keeps them."
+        )
+        edited = state.derived_fills_edited()
+        if edited:
+            st.warning(
+                "The draft holds values filled with a definition edited or removed since: "
+                + ", ".join(as_code(name) for name in edited)
+                + ". They keep the formula they were computed with: discard the draft to fill them again.",
+                icon=":material/history:",
+            )
+        if not definitions:
+            st.caption("Declare a definition first.")
+            return
+        if scope.blocked:
+            st.warning(
+                "A ticked criterion cannot be evaluated, so the analysis population is unknown: correct or "
+                "untick it in the sidebar first.",
+                icon=":material/block:",
+            )
+            return
+        plan = state.exact_fill_plan()
+        if plan.problem:
+            st.warning(plan.problem, icon=":material/sync_problem:")
+            return
+        for target, reason in plan.unused.items():
+            st.caption(f":material/info: {as_code(target)}: {plain(reason)}")
+        if plan.fills:
+            table = pd.DataFrame(
+                [
+                    {
+                        "variable": fill.target,
+                        "from": f"an inverse of {fill.definition.target}"
+                        if fill.inverse
+                        else "its formula",
+                        "values": fill.filled,
+                        "counted as": _counted(fill),
+                        "rounded to": "" if fill.decimals is None else f"{10.0**-fill.decimals:g}",
+                    }
+                    for fill in plan.fills
+                ]
+            )
+            st.dataframe(
+                table,
+                hide_index=True,
+                column_config={
+                    "variable": "Variable",
+                    "from": "Computed by",
+                    "values": st.column_config.NumberColumn("Values", format="localized"),
+                    "counted as": "Counted as",
+                    "rounded to": "Rounded to",
+                },
+                alt="The missing values the declared derived variables would fill",
+            )
+        else:
+            st.caption("Nothing to fill: no missing value has every variable of a usable formula.")
+        if plan.left:
+            st.caption(
+                ("Still missing after these fills: " if plan.fills else "Missing: ")
+                + ", ".join(f"{as_code(name)} {n:,}" for name, n in plan.left.items())
+                + ". A variable of their formulas has no value there, or one the check did not cover: only an "
+                "imputation can give them."
+            )
+        if plan.fills:
+            st.button(
+                f"Fill {plan.filled:,} value{'s' if plan.filled != 1 else ''}",
+                type="primary",
+                icon=":material/calculate:",
+                key="derived_fill",
+                on_click=_fill_exactly,
+            )
+
+
 def _ai_search(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
     engine = _engine()
     with st.container(border=True):
@@ -574,7 +696,7 @@ def render_derived_variables() -> None:
     scope = state.population_scope(data)
     with st.container(border=True):
         with st.container(horizontal=True, vertical_alignment="center"):
-            st.markdown("**Definitions**")
+            st.markdown("**1. Definitions**")
             help_popover(
                 "Each definition is computed on the rows where its variable and every variable of its formula are "
                 "recorded, and compared with the recorded value: within the precision the variable is recorded with "
@@ -593,6 +715,7 @@ def render_derived_variables() -> None:
             to_fill = len(check.fillable_rows.intersection(scope.rows)) if check.fills else 0
             with st.expander(_summary(definition, check, to_fill), icon=_BADGES[check.verdict][0]):
                 _details(definition, check, data)
+    _fill(data, definitions, scope)
     _ai_search(data, definitions)
     if st.session_state.pop(_CHANGED, False):
         st.rerun(scope="app")  # the other tabs read the definitions too

@@ -263,9 +263,20 @@ def _targeted_imputation(df, step, index, overrides, warnings, result=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings, result)
     target, formula = params["target_variable"], params["formula"]
-    # an exact formula fills the rows where every variable of it has a value (not recorded: every row, as before)
+    # an exact formula fills the rows where every variable of it has a value (not recorded: every row, as before);
+    # a declared derived variable's fill is rounded as the variable was recorded, and may be limited to the values a
+    # text or code variable took when its definition was checked: decisions recorded, never made again here
     complete = bool(params.get("complete_inputs"))
-    new_df, filled = fill_with_formula(df, target, formula, rows=rows, complete_inputs=complete)
+    new_df, filled = fill_with_formula(
+        df,
+        target,
+        formula,
+        rows=rows,
+        complete_inputs=complete,
+        finite_only=bool(params.get("finite_only")),
+        decimals=params.get("round_decimals"),
+        levels=params.get("only_levels"),
+    )
     recorded = params.get("filled_count")
     if recorded is not None and int(recorded) != filled:
         warnings.append(f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded")
@@ -273,7 +284,12 @@ def _targeted_imputation(df, step, index, overrides, warnings, result=None):
         n_rows = None if rows is None else len(rows)
         left = left_missing(df, target, formula, rows) if complete else (0, ())
         exact = bool(params.get("exact"))
-        description = describe_formula_fill(target, filled, exact=exact, n_rows=n_rows, left=left)
+        derived = params.get("derived")
+        definition = derived.get("definition") if isinstance(derived, Mapping) else None
+        of = definition.get("target") if isinstance(definition, Mapping) else None
+        description = describe_formula_fill(
+            target, filled, exact=exact, n_rows=n_rows, left=left, derived_of=of
+        )
         result.records[index] = StepRecord({**params, "filled_count": filled}, description)
     return new_df, None
 
@@ -447,13 +463,17 @@ def apply_steps(
     path_overrides: dict[str, str] | None = None,
     start: int = 0,
     progress_callback: Callable[[int, str], None] | None = None,
+    frames: Mapping[str, pd.DataFrame] | None = None,
 ) -> ReplayResult:
-    """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints."""
+    """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints. ``frames``:
+    tables a step's population may name by fingerprint although the replay does not pass through them (a draft
+    redone one change at a time names the dataset it was built on)."""
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
     # the tables the recorded populations were evaluated on, kept while a step names one (_population_rows)
     named = {str(fp) for step in steps if (fp := (step.get("population") or {}).get("data_fp"))}
+    result.population_frames.update({fp: f for fp, f in (frames or {}).items() if fp in named})
     if named and (initial := frame_fingerprint(current)) in named:
         result.population_frames[initial] = current
     for offset, step in enumerate(steps):

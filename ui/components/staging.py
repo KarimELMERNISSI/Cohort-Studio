@@ -12,6 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from core.session import EMPTY, OK, POPULATION_CHANGED
+from ui.components.text import plain
 
 _NOTICE_KEY = "_draft_notice"
 
@@ -66,6 +67,15 @@ def render_draft_banner() -> None:
                 f"**:material/edit_note: Enrich draft: {n} change{'s' if n != 1 else ''} not applied yet**"
             )
             st.markdown(listing)
+            edited = state.derived_fills_edited()
+            if edited:
+                st.warning(
+                    "Values in this draft were filled with a derived variable's definition edited or removed "
+                    f"since ({plain(', '.join(edited))}): applying keeps them as they were computed. Discard "
+                    "the draft "
+                    "to fill them again.",
+                    icon=":material/history:",
+                )
             with st.container(horizontal=True):
                 st.button(
                     "Apply to the dataset",
@@ -93,7 +103,8 @@ def render_draft_banner() -> None:
             f"**This draft cannot be applied as it is:** {what}. Applying it would overwrite those changes."
         )
         st.markdown(listing)
-        redoable = all(step.replayable for step in steps)
+        # the fills of the declared derived variables are filled again, not redone (AppState.rebase_staging)
+        redoable = all(step.replayable and not step.params.get("derived") for step in steps)
         with st.container(horizontal=True):
             if redoable:
                 st.button(

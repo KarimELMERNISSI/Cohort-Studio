@@ -10,12 +10,14 @@ accepts it; agreeing with the data says nothing of the published reference, whic
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from core.derived import DerivedVariable
+from core.derived import DerivedVariable, fill_order
 from enrich.formulas import (
     CARET_IS_NOT_A_POWER,
     evaluate_formula_safely,
@@ -78,7 +80,9 @@ class DerivedCheck:
     agreeing: int = 0
     # the typical (median) difference counted as agreement, in the variable's unit; None for text
     tolerance: float | None = None
-    strict: bool = True  # the tolerance of the variable's own rounding; else with its formula's variables' rounding
+    # the tolerance of the variable's own rounding; False: with its formula's variables' rounding, or declared
+    strict: bool = True
+    tolerance_high: float | None = None  # the 95th percentile of the rows' tolerances
     reason: str | None = None  # why it disagrees, or cannot be used or checked
     unit_hint: str | None = None  # the disagreeing rows are another unit by a constant factor
     warnings: tuple[str, ...] = ()  # what the check could not test (a variable taking one value)
@@ -87,10 +91,26 @@ class DerivedCheck:
     disagreeing: pd.Index = field(default_factory=lambda: pd.Index([]), repr=False, compare=False)
     # missing values of the variable whose formula has every variable recorded, in a checked level
     fillable_rows: pd.Index = field(default_factory=lambda: pd.Index([]), repr=False, compare=False)
+    # the values each text or code variable of the formula takes in the rows compared: no other was checked
+    checked_levels: Mapping[str, frozenset[str]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @property
     def label(self) -> str:
         return LABELS[self.verdict]
+
+    def summary(self) -> dict[str, Any]:
+        """The check in numbers, as a step that used the definition records it: never its words (a reason can name a
+        value of the data, "where sex = F")."""
+        return {
+            "verdict": self.verdict,
+            "compared": self.compared,
+            "agreeing": self.agreeing,
+            "tolerance": self.tolerance,
+            "strict": self.strict,
+            "kappa": None if self.kappa is None else round(self.kappa, 4),
+        }
 
     @property
     def fillable(self) -> int:
@@ -169,18 +189,25 @@ def _floor(values: np.ndarray) -> np.ndarray:
 def _propagated(
     definition: DerivedVariable, rows: pd.DataFrame, inputs: list[str], values: np.ndarray
 ) -> np.ndarray:
-    """Per row: half the variable's recording unit, plus what rounding each input to its own unit moves the formula
-    (a BMI to 0.1 from a weight to 0.1 kg and a height to 1 cm: about 0.21)."""
+    """Per row: half the variable's recording unit, plus what rounding each input to its own unit moves the formula, up
+    or down, whichever moves it more (a BMI to 0.1 from a weight to 0.1 kg and a height to 1 cm: about 0.21; a curved
+    formula moves more one way)."""
     tau = np.full(len(values), resolution(rows[definition.target]) / 2)
     for name in inputs:
         unit = resolution(rows[name])
         if not unit or is_text_column(rows[name]):
             continue
-        shifted = rows.assign(**{name: pd.to_numeric(rows[name]) + unit / 2})
-        moved = _computed(definition.formula, shifted)
-        if moved is not None:
-            shift = np.abs(pd.to_numeric(moved, errors="coerce").to_numpy(dtype=float) - values)
-            tau += np.nan_to_num(shift, nan=0.0)
+        shift = np.zeros(len(values))
+        for half in (unit / 2, -unit / 2):
+            moved = _computed(
+                definition.formula, rows.assign(**{name: pd.to_numeric(rows[name]) + half})
+            )
+            if moved is not None:
+                moved_by = np.abs(
+                    pd.to_numeric(moved, errors="coerce").to_numpy(dtype=float) - values
+                )
+                shift = np.maximum(shift, np.nan_to_num(moved_by, nan=0.0))
+        tau += shift
     return tau + _floor(values)
 
 
@@ -250,9 +277,25 @@ def _level_disagreeing(rows: pd.DataFrame, inputs: list[str], agree: np.ndarray)
     return None
 
 
-def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedCheck:
+def _imputed_rows(
+    index: pd.Index, imputed: Mapping[str, Any] | None, names: list[str]
+) -> np.ndarray:
+    """The rows where an imputation filled one of ``names`` (row ids per column, as the session keeps them)."""
+    out = np.zeros(len(index), dtype=bool)
+    for name in names:
+        ids = (imputed or {}).get(name)
+        if ids is not None and len(ids):
+            out |= index.isin(np.asarray(ids))
+    return out
+
+
+def check_derived(
+    definition: DerivedVariable, data: pd.DataFrame, *, imputed: Mapping[str, Any] | None = None
+) -> DerivedCheck:
     """
-    The definition checked against ``data`` (the Enrich data, every row: nothing is filled here).
+    The definition checked against ``data`` (the Enrich data, every row: nothing is filled here). ``imputed``: the
+    cells an imputation filled (row ids per column), which are not compared: a value an exact formula filled agrees by
+    construction, and would add to the evidence.
 
     It cannot be used when its formula cannot be read or computed, uses the variable it computes, uses other rows (a
     mean, a rank: its values are no row's own) or names a variable the data do not have. It cannot be checked on fewer
@@ -292,22 +335,27 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
 
     recorded = data[target]
     present = data[inputs].notna().all(axis=1) & usable_values(trial.values)
-    compared = recorded.notna() & present
+    compared = recorded.notna() & present & ~_imputed_rows(data.index, imputed, [target, *inputs])
     n = int(compared.sum())
     rows = data.loc[compared]
     fills = not _is_date(recorded)
     warnings: list[str] = [] if fills else [f"{target} is a date: it is checked, never filled"]
-    # rows whose level of a text or code variable no compared row has: not checked, so not filled
+    # a level of a text or code variable is checked when LEVEL_ROWS compared rows have it, as the level rule needs: the
+    # rows with another one (rarer, or never compared) are not filled
     unchecked = pd.Series(False, index=data.index)
+    levels: dict[str, frozenset[str]] = {}
     for name in inputs:
-        if _levels(data[name]):
-            seen = set(rows[name].astype(str))
-            unchecked |= data[name].notna() & ~data[name].astype(str).isin(seen)
+        # a code is a code in its recorded values: an imputed mean is no level
+        if _levels(data.loc[~_imputed_rows(data.index, imputed, [name]), name]):
+            counts = rows[name].astype(str).value_counts()
+            levels[name] = frozenset(counts.index[counts >= LEVEL_ROWS])
+            unchecked |= data[name].notna() & ~data[name].astype(str).isin(levels[name])
     base = {
         "inputs": tuple(inputs),
         "compared": n,
         "fills": fills,
         "fillable_rows": data.index[recorded.isna() & present & ~unchecked],
+        "checked_levels": levels,
     }
     if n < MIN_ROWS:
         reason = f"{n:,} rows have {target} and every variable of its formula recorded: the check needs {MIN_ROWS}"
@@ -330,8 +378,8 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
     else:
         got = pd.to_numeric(trial.values[compared], errors="coerce").to_numpy(dtype=float)
         want = pd.to_numeric(rows[target], errors="coerce").to_numpy(dtype=float)
-        if definition.tolerance is not None:
-            tau = np.full(n, float(definition.tolerance)) + _floor(got)
+        if definition.tolerance is not None:  # declared: not the variable's own rounding
+            tau, strict = np.full(n, float(definition.tolerance)) + _floor(got), False
         else:
             # the variable's own rounding first: when nine rows in ten agree within it, the variable was
             # computed from the recorded values and the others disagree (an entry error of a few tenths)
@@ -369,6 +417,7 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
         agreeing=agreeing,
         tolerance=None if tau is None else float(np.median(tau)),
         strict=strict,
+        tolerance_high=None if tau is None else float(np.quantile(tau, 0.95)),
         reason=hint or reason,
         unit_hint=hint,
         warnings=tuple(warnings),
@@ -378,25 +427,297 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
     )
 
 
-def check_inverses(definition: DerivedVariable, data: pd.DataFrame) -> dict[str, DerivedCheck]:
+def inverse_definition(definition: DerivedVariable, name: str) -> DerivedVariable:
+    """The inverse of ``definition`` that recovers ``name``, as a definition of its own (checked like one)."""
+    return DerivedVariable(name, definition.inverses[name], origin=definition.origin)
+
+
+def check_inverses(
+    definition: DerivedVariable, data: pd.DataFrame, *, imputed: Mapping[str, Any] | None = None
+) -> dict[str, DerivedCheck]:
     """Each inverse of the definition checked as a definition of its own (its variable, its formula): the tolerance
     declared for the definition is in its variable's unit, not theirs."""
     return {
-        name: check_derived(DerivedVariable(name, formula, origin=definition.origin), data)
-        for name, formula in definition.inverses.items()
+        name: check_derived(inverse_definition(definition, name), data, imputed=imputed)
+        for name in definition.inverses
     }
+
+
+# --- filling exactly -------------------------------------------------------------------------------------------------
+
+# rounding the inputs may move an exact value by the variable's own precision, or 5% of its SD
+EXACT_SHARE = 0.05
+# an inverse can give a variable another formula needs: filled again until nothing more is
+MAX_PASSES = 5
+# a text or code variable with more checked values is a text the check cannot cover level by level (a free text, an
+# identifier): a formula using it fills nothing, and its values never reach a trace
+MAX_LEVELS = 20
+
+
+@dataclass(frozen=True)
+class ExactFill:
+    """The missing values of one variable computed by a declared definition (its formula, or an inverse of it): one
+    targeted imputation of the Enrich draft. ``target`` is the variable filled, the definition's own or a variable of
+    its formula; ``decimals`` rounds the values as the variable is recorded (None: a text, or no precision found);
+    ``levels`` limits the fill to the values a text or code variable took in the rows checked ({}: no limit)."""
+
+    definition: DerivedVariable
+    target: str
+    formula: str
+    filled: int
+    exact: bool  # the formula's values count as observed
+    decimals: int | None
+    levels: Mapping[str, tuple[str, ...]]
+    check: DerivedCheck  # the check that lets it fill
+    single: int = 0  # of the values filled, those single-imputed: not exact, or computed from an imputed value
+
+    @property
+    def inverse(self) -> bool:
+        return self.target != self.definition.target
+
+
+@dataclass(frozen=True)
+class FillPlan:
+    """What filling exactly would do: the fills in order, why a declared definition fills nothing (by variable), the
+    values each variable would still miss in the rows filled (by variable), and why nothing can be filled."""
+
+    fills: tuple[ExactFill, ...] = ()
+    unused: Mapping[str, str] = field(default_factory=dict)
+    left: Mapping[str, int] = field(default_factory=dict)
+    problem: str | None = None
+
+    @property
+    def filled(self) -> int:
+        return sum(f.filled for f in self.fills)
+
+
+def _decimals(recorded: pd.Series, unit: float) -> int | None:
+    """The decimals a variable is written with: those of its recording unit (1 for 0.1, 0 for 1, -1 for 10); 0 for
+    whole numbers (a score: its unit of 0 means no rounding slack, not full precision); None for a text or a variable
+    recorded to full precision."""
+    if unit:
+        return int(-round(np.log10(unit)))
+    if is_text_column(recorded) or pd.api.types.is_bool_dtype(recorded):
+        return None
+    values = pd.to_numeric(recorded, errors="coerce").dropna()
+    return 0 if len(values) and bool((values == values.round()).all()) else None
+
+
+def _exact(check: DerivedCheck, recorded: pd.Series, unit: float) -> bool:
+    """
+    The values count as observed when the data agree with the formula (an accepted definition only mostly agrees, or
+    could not be checked: its values are estimates) and either the variable was computed from the recorded values (it
+    agrees within its own rounding) or rounding its formula's variables moves it, in 95% of the rows, by at most the
+    variable's own precision or 5% of its standard deviation: a height from a BMI to 0.1 and a weight to 0.1 kg moves
+    by about 0.2 cm. A declared tolerance is never the variable's own rounding.
+    """
+    if check.verdict != AGREES:
+        return False
+    if check.tolerance is None or check.strict:  # a text, or within the variable's own rounding
+        return True
+    values = pd.to_numeric(recorded, errors="coerce").dropna()
+    spread = float(values.std()) if len(values) > 1 else 0.0
+    bound = check.tolerance_high if check.tolerance_high is not None else check.tolerance
+    return bound - unit / 2 <= max(unit, EXACT_SHARE * spread)
+
+
+def _unused(check: DerivedCheck) -> str | None:
+    if not check.fills:
+        return "a date is never filled"
+    if check.usable:
+        wide = [name for name, seen in check.checked_levels.items() if len(seen) > MAX_LEVELS]
+        if wide:
+            return f"{wide[0]} takes more than {MAX_LEVELS} values: a text the check cannot cover value by value"
+        return None
+    if check.verdict in (MOSTLY, TOO_FEW):
+        return "the data do not fully agree with it, or cannot check it: accept it first (Use it all the same)"
+    return "the data disagree with it" if check.verdict == DISAGREES else "it cannot be used"
+
+
+def _fill(frame: pd.DataFrame, fill: ExactFill, rows: pd.Index | None) -> tuple[pd.DataFrame, int]:
+    """One fill, as its step records it and the replay computes it (manage.reproduction_manager)."""
+    from enrich.imputation_service import fill_with_formula
+
+    return fill_with_formula(
+        frame,
+        fill.target,
+        fill.formula,
+        rows,
+        complete_inputs=True,
+        finite_only=True,
+        decimals=fill.decimals,
+        levels=fill.levels or None,
+    )
+
+
+def plan_exact_fills(
+    definitions: Sequence[DerivedVariable],
+    data: pd.DataFrame,
+    rows: pd.Index | None = None,
+    *,
+    imputed: Mapping[str, Any] | None = None,
+    single: Mapping[str, Any] | None = None,
+    check: Callable[[DerivedVariable], DerivedCheck] | None = None,
+    inverse_check: Callable[[DerivedVariable, str], DerivedCheck] | None = None,
+) -> FillPlan:
+    """
+    The missing values the declared definitions compute in ``data``, within ``rows`` (the analysis population; every
+    row when None): each formula, then its inverses, in the order the definitions depend on each other (a variable's
+    exact formulas before its others), and again while a fill gives another formula a value. A definition fills when
+    the data agree with it, or the user accepted it; an inverse when the data agree with it; a date never. A value is
+    filled where every variable of its formula has a finite value, and a text or code variable takes a value the check
+    saw in at least LEVEL_ROWS rows; it is rounded as the variable is written. It counts as observed when
+    :func:`_exact` holds for its own formula and no variable of it was single-imputed in its row, as the session sorts
+    imputed cells (core.session.sort_filled). ``imputed``: every imputed cell (left out of the checks); ``single``: the
+    single-imputed ones (row ids per column). ``check`` and ``inverse_check`` give the checks (the page's, kept); by
+    default they are computed here.
+    """
+    from enrich.imputation_service import formula_inputs
+
+    check = check or (lambda d: check_derived(d, data, imputed=imputed))
+    inverse_check = inverse_check or (
+        lambda d, name: check_derived(inverse_definition(d, name), data, imputed=imputed)
+    )
+    definitions = list(definitions)
+    order = fill_order(definitions, {d.target: read_formula(d.formula).names for d in definitions})
+    if order is None:
+        return FillPlan(
+            problem="Two definitions compute each other: declare one as the other's inverse."
+        )
+    by_target = {d.target: d for d in definitions}
+    sources: list[tuple[DerivedVariable, str, str, DerivedCheck]] = []
+    unused: dict[str, str] = {}
+    for target in order:
+        definition = by_target[target]
+        found = check(definition)
+        reason = _unused(found)
+        if reason:
+            unused[target] = reason
+            continue
+        sources.append((definition, target, definition.formula, found))
+        for name, formula in definition.inverses.items():
+            inverse = inverse_check(definition, name)
+            if inverse.verdict == AGREES and not _unused(inverse):
+                sources.append((definition, name, formula, inverse))
+    # how each variable is written, from its recorded values only (an imputed value is no record); whether a formula's
+    # values count as observed, from its own check
+    recorded: dict[str, tuple[pd.Series, float]] = {}
+    for _, name, _, _ in sources:
+        if name not in recorded and name in data.columns:
+            values = data.loc[~_imputed_rows(data.index, imputed, [name]), name].dropna()
+            recorded[name] = (values, 0.0 if is_text_column(data[name]) else resolution(values))
+    exact = [name in recorded and _exact(found, *recorded[name]) for _, name, _, found in sources]
+    first = {name: i for i, (_, name, _, _) in reversed(list(enumerate(sources)))}
+    ranked = sorted(range(len(sources)), key=lambda i: (first[sources[i][1]], not exact[i], i))
+
+    frame = data
+    scope = data.index if rows is None else data.index.intersection(rows)
+    estimated = {str(c): set(np.asarray(ids).tolist()) for c, ids in (single or {}).items()}
+    fills: list[ExactFill] = []
+    for _ in range(MAX_PASSES):
+        before = len(fills)
+        for i in ranked:
+            definition, name, formula, found = sources[i]
+            if name not in recorded or not frame.loc[scope, name].isna().any():
+                continue
+            # limited to the values a text or code variable took in the rows checked, when it takes another here
+            missing = frame.loc[scope, name].isna()
+            levels = {
+                variable: tuple(sorted(seen))
+                for variable, seen in found.checked_levels.items()
+                if variable in frame.columns
+                and (
+                    missing
+                    & frame.loc[scope, variable].notna()
+                    & ~frame.loc[scope, variable].astype(str).isin(seen)
+                ).any()
+            }
+            values, unit = recorded[name]
+            fill = ExactFill(
+                definition, name, formula, 0, exact[i], _decimals(values, unit), levels, found
+            )
+            filled_frame, n = _fill(frame, fill, rows)
+            if not n:
+                continue
+            # single-imputed: every value of a formula that is not exact, and those computed from an estimate
+            new = frame.index[frame[name].isna() & filled_frame[name].notna()]
+            inputs = formula_inputs(formula, name, frame)
+            of_estimates = {
+                row for row in new.tolist() if any(row in estimated.get(c, ()) for c in inputs)
+            }
+            singles = set(new.tolist()) if not exact[i] else of_estimates
+            estimated.setdefault(name, set()).update(singles)
+            fills.append(replace(fill, filled=n, single=len(singles)))
+            frame = filled_frame
+        if len(fills) == before:
+            break
+    left = {name: int(frame.loc[scope, name].isna().sum()) for name in recorded}
+    return FillPlan(tuple(fills), unused, {name: n for name, n in left.items() if n})
+
+
+def fill_steps(
+    plan: FillPlan, data: pd.DataFrame, rows: pd.Index | None, run: str
+) -> list[tuple[pd.DataFrame, dict[str, Any], str]]:
+    """
+    The plan as steps of the Enrich draft, one targeted imputation per fill: the table once filled (computed again
+    here by the call the replay makes), the step's parameters and its description. The parameters hold what the replay
+    repeats rather than decides again (the formula computed, whether the values count as observed, their rounding,
+    the levels a fill is limited to) and, as a record only, the definition used (core.derived.record): the replay never
+    reads the declared list.
+    """
+    from core.derived import record
+    from enrich.imputation_service import describe_formula_fill, formula_inputs, left_missing
+
+    steps = []
+    before = data
+    for position, fill in enumerate(plan.fills, start=1):
+        after, filled = _fill(before, fill, rows)
+        params: dict[str, Any] = {
+            "target_variable": fill.target,
+            "formula": fill.formula,
+            "filled_count": filled,
+            "exact": fill.exact,
+            "row_wise": True,
+            "complete_inputs": True,
+            "finite_only": True,
+            "inputs": formula_inputs(fill.formula, fill.target, before),
+        }
+        if fill.decimals is not None:
+            params["round_decimals"] = fill.decimals
+        if fill.levels:
+            params["only_levels"] = {name: list(values) for name, values in fill.levels.items()}
+        run_info = {"id": run, "fill": position, "of": len(plan.fills)}
+        params["derived"] = record(fill.definition, [fill.target], fill.check.summary(), run_info)
+        description = describe_formula_fill(
+            fill.target,
+            filled,
+            exact=fill.exact,
+            n_rows=None if rows is None else len(before.index.intersection(rows)),
+            left=left_missing(before, fill.target, fill.formula, rows),
+            derived_of=fill.definition.target,
+        )
+        steps.append((after, params, description))
+        before = after
+    return steps
 
 
 __all__ = [
     "AGREES",
     "CANNOT",
     "DISAGREES",
+    "EXACT_SHARE",
+    "MAX_LEVELS",
     "LABELS",
     "MIN_ROWS",
     "MOSTLY",
     "TOO_FEW",
     "DerivedCheck",
+    "ExactFill",
+    "FillPlan",
     "check_derived",
     "check_inverses",
+    "fill_steps",
+    "inverse_definition",
+    "plan_exact_fills",
     "resolution",
 ]

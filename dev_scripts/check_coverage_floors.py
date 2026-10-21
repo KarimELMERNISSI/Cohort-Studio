@@ -27,7 +27,7 @@ FLOORS: dict[str, float] = {
     "app_pages": 56.0,
     "biostats": 93.0,
     "core": 92.0,
-    "enrich": 78.0,
+    "enrich": 81.0,
     "explore": 75.0,
     "graph": 92.0,
     "ingest": 89.0,

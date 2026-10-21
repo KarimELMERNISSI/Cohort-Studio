@@ -230,6 +230,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ### Usability
 
+- **Show Explained Variance (Data > Enrich, PCA or FAMD) names the incomplete columns** and their missing values,
+  where it showed the library's "Input contains NaN.".
 - **The OpenAI and Mistral providers work.** Both use the `openai` package, which the `ai` group did not install:
   choosing either in Settings gave "'openai' package is not installed". The group now installs it, and `httpx`, which
   the Ollama connector uses, is declared rather than arriving through other packages. A test checks that each
@@ -517,8 +519,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   evaluates the recorded criteria again and fills the rows they keep (it warns when they keep other rows than when
   the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as
   it was computed.
+- **The fills of one Enrich draft replay on the population they were made on.** Every fill of a draft uses the
+  analysis population of the data before the draft, but the replay evaluated the criteria on the table as filled so
+  far: a weight filled at 360 kg from a mistyped BMI made "Implausible weight" fire, took its row out of the next
+  fill, and the replay diverged. Each step's population is now evaluated on the table it was evaluated on when
+  recorded.
+- **An exact formula fills no infinity:** a division by zero leaves the value missing instead of writing an
+  infinity into the column. The step records it, so a trace recorded earlier replays as it was computed.
 
-### Derived variables, declared and checked against the data
+### Derived variables, declared, checked against the data and filled exactly
 
 - **Data > Enrich > Handle Missing Data > Derived variables**, a new first tab, optional: declare the variables your
   data compute from others in the same row (a BMI from the weight and the height, a total from its items, a unit
@@ -546,6 +555,31 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The definitions are kept with the criteria**, in the configuration downloaded and uploaded on Data > Validate. An
   upload adds the definitions the session does not have, each whole; a variable defined in both keeps the session's,
   and the upload names it.
+- **Fill exactly** (the tab's second block): the missing values the definitions can give, on the analysis
+  population. Each variable is computed from its formula, and a variable of a formula from an inverse (a height from
+  the BMI and the weight), in the order the definitions depend on each other (a variable's exact formulas first), and
+  again while a fill gives another formula a value. A value is filled only where every variable of the formula has a
+  finite value and a text or code variable takes a value the check saw in at least 10 rows (a formula using a text of
+  more than 20 values fills nothing). It is rounded as the variable is written, half away from zero as records are.
+- **How the values count:** observed (exact) when the data agree with the formula and either the variable was
+  computed from the recorded values, or rounding the formula's variables moves it, in 95% of the rows, by at most the
+  variable's own precision or 5% of its standard deviation. Otherwise they are single-imputed: so are the values of a
+  definition with a declared tolerance this bound does not cover, of one accepted although the data only mostly agree
+  with it or cannot check it, and a value computed from a single-imputed one. A table lists each fill, how its values
+  count and the values still missing, before **Fill N values**.
+- **Each fill is one step of the draft, recorded with the definition it used:** its formula and inverses with their
+  fingerprints and the check's numbers (never the check's words, which can name a value of the data, nor the
+  definition's source note, free text a sealed step could never lose), and the decisions the replay repeats instead
+  of making them again (the formula computed, whether the values count as observed, their rounding, the values of a
+  text variable it is limited to, each held by 10 rows at least). The replay never reads the declared list, so
+  editing a definition later changes no recorded result; the draft says when a definition was edited or removed after
+  its fill. A draft whose data changed underneath is filled again, not redone. One snapshot of the table per run.
+- **A definition's check leaves every imputed value out:** a value filled exactly agrees by construction, and would
+  have added to the evidence. The tolerance it allows for rounding an input now takes the larger move, up or down: a
+  curved formula (a height from a BMI recorded to the unit) only mostly agreed for want of it. A declared tolerance is
+  no longer taken for the variable's own rounding. A definition's source note is one line of 300 characters at most.
+- **A draft redone on newer data** (Redo my changes) evaluates each change's population on the dataset, as the page
+  did, not on the table the earlier changes of the draft had filled.
 - **The tutorial cohort has three variables computed from others** (41 columns): `bmi_kg_m2` from the weight and the
   height, `egfr_ml_min_1_73m2` (CKD-EPI 2021, not reported under 18) and `hf_phenotype` (ESC 2021) from the ejection
   fraction. They hold the values of the hospital record and the laboratory, so each disagrees with its formula

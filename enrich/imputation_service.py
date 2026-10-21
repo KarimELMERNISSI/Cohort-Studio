@@ -8,13 +8,15 @@ imputation of one column. The replay engine calls the same functions.
 """
 
 import logging
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 import enrich.data_imputation as edi
-from enrich.formulas import evaluate_formula_safely, read_formula
+from enrich.formulas import evaluate_formula_safely, read_formula, usable_values
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +232,16 @@ def impute_rows(
     return ImputationOutcome(frame=out, params=params, columns=columns, mask=mask)
 
 
+def round_half_away(values: pd.Series, decimals: int) -> pd.Series:
+    """
+    Rounded as records are (Excel, SAS, SPSS, Stata), half away from zero, not to the even neighbour as ``round`` does:
+    2.5 gives 3. A value stored a hair below its written half (2.675 as 2.67499...) rounds as written.
+    """
+    scaled = values.astype(float) * 10.0**decimals
+    size = np.abs(scaled)
+    return np.sign(scaled) * np.floor(size + 0.5 + 1e-9 * np.maximum(1.0, size)) / 10.0**decimals
+
+
 def fill_with_formula(
     frame: pd.DataFrame,
     target: str,
@@ -237,14 +249,20 @@ def fill_with_formula(
     rows: pd.Index | None = None,
     *,
     complete_inputs: bool = False,
+    finite_only: bool = False,
+    decimals: int | None = None,
+    levels: Mapping[str, Collection[str]] | None = None,
 ) -> tuple[pd.DataFrame, int]:
     """
     Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled). With ``rows``
     (the analysis population), the formula is computed on those rows only, so that an aggregate such as a mean sees no
     excluded patient, and fills them only: the excluded rows keep their missing values, as with the global imputation.
     With ``complete_inputs`` (an exact formula), only the rows where every variable of the formula has a value are
-    filled: a comparison or ``np.where`` answers a missing value with its "false" branch, which is no exact value. The
-    page and the replay both fill through here.
+    filled: a comparison or ``np.where`` answers a missing value with its "false" branch, which is no exact value. With
+    ``finite_only``, an infinity (a division by zero) is no value either; a step recorded without it fills one, as it
+    did. ``decimals`` rounds the filled values as the variable is recorded; ``levels`` fills only the rows whose text or
+    code variables take one of these values (those a derived variable's check saw). The page and the replay both fill
+    through here.
     """
     scope = frame if rows is None else frame.loc[frame.index.intersection(rows)]
     ok, result, _ = evaluate_formula_safely(formula, target, scope, return_series=True)
@@ -255,6 +273,13 @@ def fill_with_formula(
         inputs = formula_inputs(formula, target, scope)
         if inputs:
             values = values.where(scope[inputs].notna().all(axis=1))
+    if finite_only:
+        values = values.where(usable_values(values))
+    for name, allowed in (levels or {}).items():
+        if name in scope.columns:
+            values = values.where(scope[name].astype(str).isin({str(v) for v in allowed}))
+    if decimals is not None and pd.api.types.is_numeric_dtype(values):
+        values = round_half_away(values, int(decimals))
     out = frame.copy()
     before = int(out[target].isna().sum())
     # missing outside the scope: fillna leaves those rows as they are (the whole column, so its type rules apply)
@@ -294,11 +319,19 @@ def describe_formula_fill(
     exact: bool,
     n_rows: int | None = None,
     left: tuple[int, tuple[str, ...]] = (0, ()),
+    derived_of: str | None = None,
 ) -> str:
     """The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on;
-    ``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`)."""
+    ``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`);
+    ``derived_of``: the declared derived variable whose definition computed it (its own, or an inverse)."""
     values = "value" if filled == 1 else "values"
     text = f"Imputed {filled} {values} in {target} using {'an exact formula' if exact else 'a formula'}"
+    if derived_of is not None:
+        text += (
+            " (its declared definition)"
+            if derived_of == target
+            else f" (an inverse of the declared definition of {derived_of})"
+        )
     if n_rows is not None:
         text += f", computed on the analysis population of {n_rows:,} rows"
     n_left, lacking = left
@@ -316,4 +349,5 @@ __all__ = [
     "formula_inputs",
     "impute_rows",
     "left_missing",
+    "round_half_away",
 ]

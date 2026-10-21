@@ -1,11 +1,10 @@
-import contextlib
 import html
 import io
 import json
 import logging
 import os
 import re
-from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -49,6 +48,8 @@ from graph.renderers.graphviz import GraphvizGraphRenderer
 from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_kinds, column_profile
 from manage.db_manager import DBManager
+from manage.snapshots import folders as snapshot_folders
+from manage.snapshots import save as save_snapshot_to
 from ui.components import error_card, no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
@@ -1897,30 +1898,9 @@ def compute_transformations(dataframe):
 
 
 def save_snapshot(df, step_name, base_dir=None):
-    """Saves a snapshot of the dataframe in the user's workspace and returns the path."""
-    import uuid
-
-    if base_dir is None:
-        scope = get_current_scope()
-        base_dir = str(scope.snapshots_dir()) if scope else os.path.join(get_traces_dir(), "snapshots")
-    os.makedirs(base_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_step = "".join([c for c in step_name if c.isalnum() or c=='_'])
-    base_filename = f"{timestamp}_{safe_step}_{uuid.uuid4().hex[:8]}"
-    
-    df_path = os.path.join(base_dir, f"{base_filename}.parquet")
-    try:
-        # Ensure columns are strings for parquet compatibility
-        df_to_save = df.copy()
-        df_to_save.columns = df_to_save.columns.astype(str)
-        df_to_save.to_parquet(df_path)
-        return df_path
-    except Exception as e:
-        logging.error(f"Failed to save snapshot: {type(e).__name__}")
-        with contextlib.suppress(OSError):  # a write that failed part-way leaves a partial copy of the data
-            os.remove(df_path)
-        return None
+    """Saves a snapshot of the dataframe in the user's workspace and returns the path (manage.snapshots.save)."""
+    folder = Path(base_dir) if base_dir is not None else snapshot_folders(get_current_scope())[2]
+    return save_snapshot_to(df, step_name, folder)
 
 
 # Helper to extract statistics for context columns (Guided Mode)
@@ -2241,7 +2221,12 @@ def app():
                             # ticked): the session data changes through the draft only. An exact formula fills only
                             # the rows where every variable of it has a value (np.where answers a missing one "false")
                             filled, filled_count = fill_with_formula(
-                                main_data, target_var, formula_input, target_scope.rows, complete_inputs=bool(exact)
+                                main_data,
+                                target_var,
+                                formula_input,
+                                target_scope.rows,
+                                complete_inputs=bool(exact),
+                                finite_only=bool(exact),
                             )
                             left = (
                                 left_missing(main_data, target_var, formula_input, target_scope.rows)
@@ -2261,6 +2246,7 @@ def app():
                                         "exact": bool(exact),
                                         "row_wise": other is None,
                                         "complete_inputs": bool(exact),
+                                        "finite_only": bool(exact),  # an infinity is no exact value
                                         # a value computed from a single-imputed one is single-imputed
                                         "inputs": formula_inputs(formula_input, target_var, main_data),
                                     },

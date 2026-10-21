@@ -14,12 +14,17 @@ file of the same name in any folder keeps it. When a trace cannot be read, nothi
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+import uuid
 from collections.abc import Iterable, Iterator, Mapping
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import pandas as pd
 
 from core.workspace import UserScope, resolve_within
 from utils.data_paths import get_data_root, get_traces_dir
@@ -93,6 +98,27 @@ def snapshot_file(value: str | None, root: Path, snapshots: Path) -> Path | None
     return path
 
 
+def save(frame: pd.DataFrame, step_name: str, folder: Path) -> str | None:
+    """
+    Write a copy of ``frame`` to ``folder`` (a snapshots folder, :func:`folders`) for a change of the Enrich draft;
+    returns its path, or ``None`` when it cannot be written (a copy written part-way is removed: it holds data).
+    """
+    os.makedirs(folder, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe = "".join(c for c in step_name if c.isalnum() or c == "_")
+    path = os.path.join(folder, f"{stamp}_{safe}_{uuid.uuid4().hex[:8]}{SUFFIX}")
+    try:
+        copy = frame.copy()
+        copy.columns = copy.columns.astype(str)  # parquet column names are text
+        copy.to_parquet(path)
+        return path
+    except Exception as exc:
+        logger.error("Failed to save snapshot: %s", type(exc).__name__)
+        with contextlib.suppress(OSError):
+            os.remove(path)
+        return None
+
+
 def delete_unreferenced(
     paths: Iterable[str | None],
     scope: UserScope | None,
@@ -130,4 +156,4 @@ def delete_unreferenced(
     return deleted
 
 
-__all__ = ["delete_unreferenced", "folders", "referenced", "snapshot_file"]
+__all__ = ["delete_unreferenced", "folders", "referenced", "save", "snapshot_file"]

@@ -246,3 +246,46 @@ def test_an_inverse_the_data_disagree_with_does_not_come_along(data_root: Path) 
     at.button(key="derived_adopt_agreeing").click().run()
     _ok(at)
     assert _declared(at) == {"bmi": {"formula": BMI, "origin": "ai"}}
+
+
+def test_fill_exactly_stages_the_fills_in_the_draft(data_root: Path) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120).run()
+    _declare(at, "bmi", BMI)
+    at.button(key="derived_save").click().run()
+    _ok(at)
+    table = next(d.value for d in at.dataframe if "counted as" in d.value.columns)
+    assert table.to_dict("records") == [
+        {
+            "variable": "bmi",
+            "from": "its formula",
+            "values": 10,
+            "counted as": "observed (exact)",
+            "rounded to": "0.1",
+        }
+    ]
+    at.button(key="derived_fill").click().run()
+    _ok(at)
+    (step,) = at.session_state["_data_session"].draft.steps
+    assert step.function == "targeted_imputation" and step.params["round_decimals"] == 1
+    assert step.params["derived"]["definition"] == {"target": "bmi", "formula": BMI}
+    assert (
+        step.description
+        == "Imputed 10 values in bmi using an exact formula (its declared definition)"
+    )
+    assert any("Nothing to fill" in c.value for c in at.caption)
+    # the filled values are not compared: the check still rests on the 190 recorded ones
+    evidence = "gives the recorded value in 190 of 190 rows"
+    assert any(evidence in c.value for c in at.caption), [c.value for c in at.caption]
+
+
+def test_a_definition_edited_after_its_fill_is_named(data_root: Path) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120).run()
+    _declare(at, "bmi", BMI)
+    at.button(key="derived_save").click().run()
+    at.button(key="derived_fill").click().run()
+    _ok(at)
+    assert not any("edited or removed since" in w.value for w in at.warning)
+    at.button(key="derived_remove::bmi").click().run()
+    _ok(at)
+    # the draft keeps the values of the formula it used: the page says the declared list no longer has it
+    assert any("edited or removed since" in w.value for w in at.warning)

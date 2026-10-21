@@ -25,6 +25,12 @@ CONFIG_KEY = "derived_variables"
 # what a definition is, shown and asked of the AI engine ("" when not said); an unknown one is read as ""
 KINDS = ("conversion", "ratio", "total", "index", "equation", "class", "")
 ORIGINS = ("user", "ai", "import")  # an unknown one is read as "user"
+NOTE_LENGTH = 300  # a source and units on one line: a note is never a place for data
+
+
+def note_text(value: Any) -> str:
+    """A definition's note as it is kept: one line, at most NOTE_LENGTH characters."""
+    return " ".join(str(value or "").split())[:NOTE_LENGTH]
 
 
 def _digest(body: Mapping[str, str]) -> str:
@@ -86,10 +92,57 @@ class DerivedVariable:
             inverses={str(k): str(v) for k, v in dict(data.get("inverses") or {}).items()},
             kind=kind if kind in KINDS else "",
             origin=origin if origin in ORIGINS else "user",
-            note=str(data.get("note") or ""),
+            note=note_text(data.get("note")),
             tolerance=None if tolerance is None else float(tolerance),
             accepted=data.get("accepted") is True,
         )
+
+
+def record(
+    definition: DerivedVariable,
+    uses: Iterable[str],
+    check: Mapping[str, Any] | None = None,
+    run: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    What a step that fills or imputes with a definition used of it, kept whole with the step so that its replay never
+    reads the declared list: the definition in the configuration's shape, its hash, the variables it computed (its own
+    variable, None; a variable of its formula, the hash of the inverse that computed it), the check's numbers and the
+    run. Ids and numbers only: a check's words can name a value of the data (a level). Not its note, free text that a
+    sealed step could never lose again: the configuration keeps it.
+    """
+    kept = {key: value for key, value in definition.to_config().items() if key != "note"}
+    return {
+        "definition": {"target": definition.target, **kept},
+        "hash": definition.semantic_hash,
+        "uses": {
+            name: None if name == definition.target else definition.inverse_hash(name)
+            for name in uses
+        },
+        "check": dict(check or {}),
+        "run": dict(run or {}),
+    }
+
+
+def from_record(
+    block: Mapping[str, Any],
+) -> tuple[DerivedVariable | None, dict[str, str | None], list[str]]:
+    """A step's record read back: the definition, what it computed, and what does not hold (a definition whose hash or
+    inverse no longer matches its text was changed after it was recorded)."""
+    data = block.get("definition") if isinstance(block, Mapping) else None
+    if not isinstance(data, Mapping) or shape_problems({data.get("target"): data}):
+        return None, {}, ["the record holds no readable definition"]
+    definition = DerivedVariable.from_config(str(data["target"]), data)
+    problems = []
+    if block.get("hash") != definition.semantic_hash:
+        problems.append(f"the formula of {definition.target} does not match its recorded hash")
+    uses = {str(k): v for k, v in dict(block.get("uses") or {}).items()}
+    for name, digest in uses.items():
+        if name != definition.target and (
+            name not in definition.inverses or digest != definition.inverse_hash(name)
+        ):
+            problems.append(f"the inverse that computed {name} does not match its recorded hash")
+    return definition, uses, problems
 
 
 def shape_problems(entries: Any) -> list[str]:
@@ -233,12 +286,16 @@ def fill_order(
 __all__ = [
     "CONFIG_KEY",
     "KINDS",
+    "NOTE_LENGTH",
     "ORIGINS",
     "DerivedVariable",
     "cycles",
     "fill_order",
     "from_config",
+    "from_record",
     "merge_definitions",
+    "note_text",
+    "record",
     "shape_problems",
     "with_definitions",
 ]

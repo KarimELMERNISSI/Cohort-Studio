@@ -115,3 +115,65 @@ def test_a_configuration_for_sharing_lists_no_row() -> None:
     assert set(shared["mask_families"]) == {"outliers", "study_inclusion"}
     assert "frozen bounds" in shared["mask_families"]["outliers"]
     assert "row_ids" in json.dumps(config)  # the session's configuration is unchanged
+
+
+CANARY_LEVEL = "CANARY-LEVEL-7A3"
+CANARY_NOTE = "CANARY-NOTE-2B8"
+
+
+def _fill_script() -> None:
+    import numpy as np
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.study_dossier import build_dossier_bytes
+    from core.derived import DerivedVariable
+    from core.state import DatasetRef
+    from ui.results import report_items
+    from ui.state import get_state
+
+    state = get_state()
+    ss = st.session_state
+    rng = np.random.default_rng(3)
+    n = 200
+    sex = rng.choice(["F", "M"], n).astype(object)
+    x = np.round(rng.normal(50, 10, n), 0)
+    frame = pd.DataFrame(
+        {"x": x, "sex": sex, "y": np.round(x * np.where(sex == "F", 0.85, 1.0), 1)}
+    )
+    frame.loc[0:9, "y"] = np.nan
+    frame.loc[[0, 50], "sex"] = ss["level"]  # held by one row compared, and one to fill
+    frame.loc[50, "y"] = frame.loc[50, "x"]
+    state.set_dataset(frame, DatasetRef(name="d", origin="upload", file_hash="h"))
+    state.set_derived_variables(
+        [DerivedVariable("y", "x * np.where(sex == 'F', 0.85, 1.0)", note=ss["note"])]
+    )
+    ss["filled"] = state.fill_exactly()
+    ss["applied"] = state.commit_staging()
+    ss["trace"] = state.transformation_manager.get_trace()
+    ss["dossier"] = build_dossier_bytes(
+        state, report_items(), include_stale=False, title="Canary", author="tester"
+    )
+
+
+def test_a_rare_level_or_a_note_never_reaches_a_shared_output_through_a_fill(
+    data_root: Path,
+) -> None:
+    from manage.trace_documenter import TraceDocumenter
+
+    at = AppTest.from_function(_fill_script, default_timeout=120)
+    at.session_state["username"] = "canary_user"
+    at.session_state["level"], at.session_state["note"] = CANARY_LEVEL, CANARY_NOTE
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert at.session_state["filled"] == 9  # the row with the rare level is not filled
+    trace = at.session_state["trace"]
+    trace_text = json.dumps(trace, default=str)
+    assert "targeted_imputation" in trace_text and '"only_levels"' in trace_text
+    assert CANARY_LEVEL not in trace_text and CANARY_NOTE not in trace_text
+    trace_file = data_root / "trace.json"
+    trace_file.write_text(trace_text, encoding="utf-8")
+    report = _docx_text(TraceDocumenter(str(trace_file)).generate_report())
+    assert CANARY_LEVEL not in report and CANARY_NOTE not in report
+    dossier = _docx_text(at.session_state["dossier"])
+    assert CANARY_LEVEL not in dossier and CANARY_NOTE not in dossier

@@ -89,7 +89,33 @@ added, nor an inverse they disagree with, and a proposal for a variable you decl
 definition.
 
 Each definition can have **inverses**: a formula that fills a missing variable of it from the others, a weight from
-the BMI and the height. Each inverse is checked like a definition. **Edit** a definition to change its formula, kind
+the BMI and the height. Each inverse is checked like a definition.
+
+**Fill exactly**, below the definitions, computes the missing values they can give, on the analysis population (every
+row when no criterion is ticked):
+- each variable from its formula, and a variable of a formula from an inverse (a height from the BMI and the weight),
+  in the order the definitions depend on each other (a variable's exact formulas first), and again while a fill
+  gives another formula a value;
+- only where every variable of the formula has a finite value, and a text or code variable takes a value the check
+  saw in at least 10 rows; a formula using a text of more than 20 values fills nothing. The values still missing
+  afterwards are named, as only an imputation can give them;
+- rounded as the variable is written (a BMI to 0.1, an eGFR or a score to the unit), half away from zero as records
+  are;
+- by a definition the data agree with, or one you accepted; by an inverse only when the data agree with it; never a
+  date.
+
+The values count as observed (exact), as with **Exact formula** below, when the data agree with the formula and either
+the variable was computed from the recorded values (it agrees within its own rounding), or rounding the formula's
+variables moves it by at most the variable's own precision or 5% of its standard deviation (a height from a BMI to
+0.1 moves by about 0.2 cm). Otherwise they are single-imputed, which the analyses flag: so are the values of a
+definition with a declared tolerance that this bound does not cover, of one you accepted although the data only mostly
+agree with it or cannot check it, and a value computed from a single-imputed one. A table lists each fill, with how
+its values count, before **Fill N values**. Each fill joins the draft as one step, recorded with the definition it
+used (its formula and inverses with their fingerprints, without its source note) and with what its replay must repeat
+(the formula computed, the rounding, whether the values count as observed): a replay computes the same values without
+reading your current definitions. A draft whose data changed underneath is filled again rather than redone, and
+editing or removing a definition after its fill is said on the draft. A definition's check leaves out every imputed
+value: a value filled exactly agrees by construction. **Edit** a definition to change its formula, kind
 or source: its inverses are kept. Two definitions that would compute each other are refused: declare one as the
 other's inverse. The definitions are kept with the study's
 criteria: the configuration downloaded from Data > Validate holds them, and uploading it adds those the session does

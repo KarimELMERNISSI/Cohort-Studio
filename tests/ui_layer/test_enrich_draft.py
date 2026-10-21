@@ -553,3 +553,102 @@ def test_signing_out_deletes_the_snapshots_of_a_pending_draft(data_root: Path) -
     at.button(key="shell_logout").click().run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert list(folder.glob("*.parquet")) == []
+
+
+def _fill_rule_script(derived: bool = False) -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.derived import DerivedVariable
+    from core.population import criterion_id
+    from core.state import DatasetRef
+    from enrich.imputation_service import describe_formula_fill, fill_with_formula
+    from ui.components.staging import render_draft_banner
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        rule = {"expression": "df['weight_kg'] > 300"}
+        st.session_state["config"] = {
+            "mask_families": {"clinical_anomalies": {"operator": "any", "Implausible weight": rule}}
+        }
+        state.set_dataset(
+            pd.DataFrame(
+                {
+                    "weight_kg": [70.0, None, 80.0, 60.0],
+                    "height_cm": [170.2, 150.0, 180.4, 160.1],  # not codes: whole numbers would be
+                    "bmi": [
+                        24.2,
+                        160.0,
+                        24.7,
+                        None,
+                    ],  # a BMI typed 160: its weight comes out at 360 kg
+                    "bmi_x2": [48.4, None, 49.4, None],
+                }
+            ),
+            DatasetRef(name="d", origin="upload", file_hash="h"),
+        )
+        state.set_ticked([criterion_id("clinical_anomalies", "Implausible weight")])
+        population = state.population
+        if derived:  # four rows: too few to check, so accepted, as a user may
+            state.set_derived_variables(
+                [
+                    DerivedVariable("weight_kg", "bmi * (height_cm / 100) ** 2", accepted=True),
+                    DerivedVariable("bmi_x2", "bmi * 2", accepted=True),
+                ]
+            )
+            assert state.fill_exactly() == 2
+        else:
+            frame = state.working_frame()
+            for target, formula in (
+                ("weight_kg", "bmi * (height_cm / 100) ** 2"),
+                ("bmi_x2", "bmi * 2"),
+            ):
+                frame, n = fill_with_formula(
+                    frame, target, formula, population.included, complete_inputs=True
+                )
+                params = {
+                    "target_variable": target,
+                    "formula": formula,
+                    "filled_count": n,
+                    "exact": True,
+                    "complete_inputs": True,
+                }
+                state.stage(
+                    frame,
+                    "targeted_imputation",
+                    params,
+                    describe_formula_fill(target, n, exact=True),
+                    population=population,
+                )
+        # the dataset changes underneath: the draft was built on older data
+        state.commit_change(state.base.assign(c=0), "external_write", {}, "Added c")
+    render_draft_banner()
+    draft = state.session.draft
+    st.session_state["probe"] = {
+        "status": state.staging_status().state,
+        "bmi_x2": state.working_frame()["bmi_x2"].tolist(),
+        "steps": len(draft.steps) if draft is not None else 0,
+    }
+
+
+def test_a_redone_draft_fills_the_rows_it_filled_before(data_root: Path) -> None:
+    # the first fill makes a ticked criterion fire (360 kg): the second still fills on the population the draft was
+    # built on, as on the page, instead of on the table the first fill changed
+    at = AppTest.from_function(_fill_rule_script, default_timeout=120).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"]["status"] == "base_changed"
+    at.button(key="draft_rebase").click().run()
+    probe = at.session_state["probe"]
+    assert probe["status"] == "ok" and probe["steps"] == 2
+    assert probe["bmi_x2"][1] == 320.0
+
+
+def test_a_draft_filled_exactly_is_filled_again_not_redone(data_root: Path) -> None:
+    at = AppTest.from_function(
+        _fill_rule_script, kwargs={"derived": True}, default_timeout=120
+    ).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"]["status"] == "base_changed"
+    assert _labels(at) == ["Discard the draft and restart from the current data"]
