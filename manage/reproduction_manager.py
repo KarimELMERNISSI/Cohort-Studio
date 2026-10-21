@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,6 +75,8 @@ class ReplayResult:
     single_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids filled by single imputation
     exact_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids imputed by an exact formula
     records: dict[int, StepRecord] = field(default_factory=dict)  # step index -> what a recomputed imputation did
+    # during a replay only: the tables a later step's population was evaluated on, by fingerprint
+    population_frames: dict[str, pd.DataFrame] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def reproducible(self) -> bool:
@@ -144,12 +146,24 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
     return ensure_row_ids(df), None  # the row ids a fresh load gives (AppState.set_dataset)
 
 
-def _population_rows(df: pd.DataFrame, block: dict[str, Any], index: int, warnings: list[str]) -> pd.Index:
-    """Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were)."""
+def _population_rows(
+    df: pd.DataFrame,
+    block: dict[str, Any],
+    index: int,
+    warnings: list[str],
+    frames: Mapping[str, pd.DataFrame] | None = None,
+) -> pd.Index:
+    """
+    Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
+    evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
+    to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
+    an anomaly rule's bound must not take its row out of the next fill.
+    """
     criteria = criteria_from_trace(block)
     if not criteria:
         return df.index
-    result = evaluate_population(df, criteria)
+    frame = (frames or {}).get(str(block.get("data_fp") or ""), df)
+    result = evaluate_population(frame, criteria)
     if not result.ok:
         raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
     if block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
@@ -157,7 +171,7 @@ def _population_rows(df: pd.DataFrame, block: dict[str, Any], index: int, warnin
             f"step {index + 1}: the analysis population re-evaluated on the replayed data keeps other rows "
             "than when the step was recorded"
         )
-    return result.included
+    return result.included if frame is df else df.index.intersection(result.included)
 
 
 def _snapshot(step: dict[str, Any], overrides: dict[str, str] | None) -> pd.DataFrame | None:
@@ -209,16 +223,24 @@ def _with_inputs(step: dict[str, Any]) -> dict[str, Any] | None:
     return {**params, "inputs": [n for n in names if n != params.get("target_variable")]}
 
 
-def _scoped_rows(df: pd.DataFrame, step: dict[str, Any], index: int, warnings: list[str]) -> pd.Index | None:
+def _scoped_rows(
+    df: pd.DataFrame,
+    step: dict[str, Any],
+    index: int,
+    warnings: list[str],
+    result: ReplayResult | None = None,
+) -> pd.Index | None:
     """The rows an imputation is fitted on and fills: the population recorded with the step, as when it was applied;
     None (every row) when none was recorded, as by earlier versions, or when no criterion was ticked."""
     block = step.get("population")
-    return _population_rows(df, block, index, warnings) if block and block.get("criteria") else None
+    if not block or not block.get("criteria"):
+        return None
+    return _population_rows(df, block, index, warnings, result.population_frames if result else None)
 
 
 def _imputation(df, step, index, overrides, warnings, result=None):
     params = step.get("params", {}) or {}
-    rows = _scoped_rows(df, step, index, warnings)
+    rows = _scoped_rows(df, step, index, warnings, result)
     outcome = impute_rows(
         df,
         rows,
@@ -239,7 +261,7 @@ def _imputation(df, step, index, overrides, warnings, result=None):
 
 def _targeted_imputation(df, step, index, overrides, warnings, result=None):
     params = step.get("params", {}) or {}
-    rows = _scoped_rows(df, step, index, warnings)
+    rows = _scoped_rows(df, step, index, warnings, result)
     target, formula = params["target_variable"], params["formula"]
     # an exact formula fills the rows where every variable of it has a value (not recorded: every row, as before)
     complete = bool(params.get("complete_inputs"))
@@ -333,7 +355,8 @@ def _mi_impute(df, step, index, overrides, warnings, result=None):
 
     params = step.get("params", {}) or {}
     block = step.get("population") or {}
-    rows = _population_rows(df, block, index, warnings) if block else df.index
+    frames = result.population_frames if result is not None else None
+    rows = _population_rows(df, block, index, warnings, frames) if block else df.index
     run = impute(df.loc[rows], ImputationSpec(**params["spec"]))
     if result is not None:
         result.imputations[index] = run.mi
@@ -429,6 +452,10 @@ def apply_steps(
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
+    # the tables the recorded populations were evaluated on, kept while a step names one (_population_rows)
+    named = {str(fp) for step in steps if (fp := (step.get("population") or {}).get("data_fp"))}
+    if named and (initial := frame_fingerprint(current)) in named:
+        result.population_frames[initial] = current
     for offset, step in enumerate(steps):
         i = start + offset
         description = step.get("description", step.get("function"))
@@ -445,6 +472,7 @@ def apply_steps(
             message = f"Error during step {i + 1} ({step.get('function')}): {exc}"
             logger.error(message)
             result.error, result.steps_applied = message, offset
+            result.population_frames.clear()
             return result
         if current is not None:
             result.single_imputed, result.exact_imputed = sort_filled(
@@ -458,16 +486,21 @@ def apply_steps(
         if missing:
             result.error = f"Could not find enrichment file: {missing}"
             result.missing_file, result.steps_applied = (i, missing), offset
+            result.population_frames.clear()
             return result
         expected = (step.get("data") or {}).get("fp_out")
-        if expected and replayed:
+        verified = bool(expected and replayed)
+        actual = frame_fingerprint(current) if verified or named else None
+        if verified:
             result.verified_steps += 1
-            actual = frame_fingerprint(current)
             if actual != expected and result.divergence is None:
-                result.divergence = (i, str(expected), actual)
+                result.divergence = (i, str(expected), str(actual))
                 result.warnings.append(
                     f"step {i + 1} ({step.get('function')}): the replayed table differs from the recorded one"
                 )
+        if actual in named:
+            result.population_frames[str(actual)] = current
+    result.population_frames.clear()
     result.df = current
     result.single_imputed = restrict_cells(result.single_imputed, current)
     result.exact_imputed = restrict_cells(result.exact_imputed, current)

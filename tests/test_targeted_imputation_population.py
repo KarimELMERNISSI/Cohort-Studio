@@ -111,3 +111,75 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
     assert record.description == (
         "Imputed 150 values in sbp_6m using a formula, computed on the analysis population of 928 rows"
     )
+
+
+def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> None:
+    """
+    Every fill of an Enrich draft is scoped to the population of the data before the draft, and so is its replay,
+    even when a fill makes a ticked criterion fire: a weight filled from a mistyped BMI (360 kg) must not take its row
+    out of the next fill. The replay evaluated each step's criteria on the table as filled so far, filled one value
+    less and diverged.
+    """
+    from core.population import catalogue
+    from core.session import DataSession
+    from core.state import ParseOptions
+    from enrich.imputation_service import fill_with_formula
+    from ingest.loaders import read_table
+    from manage.reproduction_manager import run_trace
+    from manage.transformation_manager import TransformationManager
+
+    source = tmp_path / "weights.csv"
+    source.write_text(
+        "weight_kg,height_cm,bmi,bmi_x2\n"
+        "70.0,170.0,24.2,48.4\n"
+        ",150.0,160.0,\n"  # a BMI typed 160: its weight comes out at 360 kg
+        "80.0,180.0,24.7,49.4\n"
+        "60.0,160.0,,\n",
+        encoding="utf-8",
+    )
+    rule = {"numeric": False, "expression": "df['weight_kg'] > 300"}
+    config = {
+        "mask_families": {"clinical_anomalies": {"operator": "any", "Implausible weight": rule}}
+    }
+    tm = TransformationManager(trace_dir=str(tmp_path / "traces"))
+    tm.initialize_session(source.name)
+    tm.source_dataset = str(source)
+    session = DataSession(trace=tm)
+    options = ParseOptions()
+    session.install(
+        read_table(source.read_bytes(), source.name, options).df,
+        params={"source_path": str(source), "parse_options": options.to_dict()},
+        description="Loaded the weights",
+    )
+    session.set_ticked([c.id for c in catalogue(config)])
+    population = session.population(config)
+    assert len(population.included) == 4  # a missing weight fires no criterion
+    frame = session.working_frame()
+    for target, formula in (("weight_kg", "bmi * (height_cm / 100) ** 2"), ("bmi_x2", "bmi * 2")):
+        frame, filled = fill_with_formula(
+            frame, target, formula, rows=population.included, complete_inputs=True
+        )
+        assert filled == 1
+        params = {
+            "target_variable": target,
+            "formula": formula,
+            "filled_count": filled,
+            "exact": True,
+            "complete_inputs": True,
+        }
+        session.stage(
+            frame,
+            "targeted_imputation",
+            params,
+            f"Imputed {filled} values in {target}",
+            population=population,
+        )
+    session.commit_staging()
+    assert (
+        session.base["weight_kg"].tolist()[1] == 360.0
+        and session.base["bmi_x2"].tolist()[1] == 320.0
+    )
+
+    replay = run_trace(tm.get_trace())
+    assert replay.reproducible and not replay.warnings, replay.warnings
+    assert replay.df["bmi_x2"].tolist()[1] == 320.0 and not replay.population_frames
