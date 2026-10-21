@@ -194,9 +194,8 @@ The line of each definition says how many missing values of the analysis populat
 **34** BMIs, **49** eGFRs and **30** phenotypes. Under **2. Fill exactly**, the table adds the **10** heights the
 inverse recovers; each fill is counted as observed (exact) and rounded as its variable is written. Click **Fill 123
 values**: four steps join the draft, each recorded with the definition it used, so that a replay computes the same
-values. Apply the draft. 24 patients have neither a height nor a BMI: the multiple imputation below gives them a
-height, but not a BMI, which it leaves aside (no planned model uses it). With the AI engine on, **Find them with the
-AI engine**
+values. Apply the draft. 24 patients have neither a height nor a BMI: an imputation below gives them a height, and
+their BMI is then computed from it. With the AI engine on, **Find them with the AI engine**
 proposes definitions from the column names and their typical values, each checked in the same way: if it proposes
 both CKD-EPI equations, only the 2021 one agrees. The definitions are saved with the criteria, in the configuration
 downloaded from Data > Validate.
@@ -218,10 +217,11 @@ Then:
      number of imputations.
   2. Step 2 keeps the variables of the planned analyses in the model, outcomes included (`death`, `fu_days`,
      `hf_hospitalisation`): leaving an outcome out would bias its associations towards zero. Set the method of
-     `sbp_6m` to *do not impute*: its values are missing because the patient died or left. Set `bmi_kg_m2` to *do
-     not impute* too: it is computed from the weight and the height, and imputing it as a variable of its own breaks
-     its formula (an imputed BMI would not be the weight over the height squared). Keep `height_cm`. Once filled
-     exactly, `egfr_ml_min_1_73m2` and `hf_phenotype` have no missing value left in the analysis population.
+     `sbp_6m` to *do not impute*: its values are missing because the patient died or left. Keep **Compute the
+     declared derived variables in each imputed dataset from its imputed values** ticked: `bmi_kg_m2` leaves the
+     methods table and each imputed dataset computes its 24 missing BMIs from its own imputed heights, instead of
+     imputing a BMI that would not be the weight over the height squared. Once filled exactly,
+     `egfr_ml_min_1_73m2` and `hf_phenotype` have no missing value left in the analysis population.
   3. In step 3, keep the suggested m (the percentage of incomplete rows: about half of them miss at least one
      value), tick the planned Cox model with time `fu_days` and event `death`, and use several processor
      cores.

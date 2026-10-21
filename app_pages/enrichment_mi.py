@@ -26,11 +26,17 @@ from biostats.mi.report import (
     missingness_summary,
 )
 from biostats.mi.spec import ImputationSpec, default_method, is_numeric, suggest_m
+from core.derived import decided_on_data, record
+from core.registry import as_code
 from core.session import PopulationError
+from enrich.derived import DERIVED_METHOD, derivation_steps, impute_and_derive, recomputed
 from ui.components import error_card, help_popover
 from ui.state import get_state
 
 DO_NOT_IMPUTE = "do not impute"
+DERIVE_KEY = "mi_derive"
+# above this share of its values computed from imputed ones, a derived variable analysed non-linearly is attenuated
+NONLINEAR_SHARE = 0.05
 METHOD_CHOICES = ["pmm", "norm", "rf", "logreg", "polyreg", DO_NOT_IMPUTE]
 PARALLEL_WORK = (
     5e7  # rows x variables x m x iterations above which several processes pay for their start-up
@@ -80,6 +86,28 @@ def render_multiple_imputation() -> None:
 
     candidates = default_model_columns(frame)
     summary = missingness_summary(frame, candidates)
+    # the declared derived variables (Derived variables tab), computed in each imputed dataset rather than imputed; one
+    # whose formula reads a variable that cannot join the model (a date, a free text) is imputed as its own variable
+    pairs = [
+        (d, c)
+        for d, c in recomputed(state.derived_variables, state.derived_check)
+        if d.target in candidates
+    ]
+    found = [
+        s
+        for s in derivation_steps(
+            state.derived_variables, state.derived_check, frame, imputed=state.imputed_cells()
+        )
+        if s["target"] in candidates
+    ]
+    steps = [s for s in found if all(i in candidates for i in s["inputs"])]
+    beyond = {
+        s["target"]: [i for i in s["inputs"] if i not in candidates]
+        for s in found
+        if s not in steps
+    }
+    computed = [s["target"] for s in steps] if st.session_state.get(DERIVE_KEY, True) else []
+    imputed_candidates = [c for c in candidates if c not in computed]
 
     # --- 1. population and missingness ---------------------------------------------------------------
     with st.container(border=True):
@@ -107,8 +135,34 @@ def render_multiple_imputation() -> None:
             )
             return
         population = state.population
-        share = incomplete_share(frame, candidates)
-        hint = suggest_m(frame, candidates)
+        # the derived variables computed from the others add no imputation uncertainty: not counted
+        share = incomplete_share(frame, imputed_candidates)
+        hint = suggest_m(frame, imputed_candidates)
+        draft = state.session.draft
+        if draft is not None and any(decided_on_data(p.params.get("derived")) for p in draft.steps):
+            st.warning(
+                "The draft holds values filled exactly that are not applied yet: apply the draft first, as the "
+                "imputation is computed on the dataset.",
+                icon=":material/edit_note:",
+            )
+        else:
+            fill = state.exact_fill_plan()
+            if fill.filled and not fill.problem:
+                if any(f.inverse for f in fill.fills):
+                    st.warning(
+                        f"{fill.filled:,} values of the declared derived variables or of their variables can be "
+                        "computed exactly (Derived variables, Fill exactly), some by an inverse: fill them and apply "
+                        "the draft first. Imputed instead, those variables would no longer match the recorded derived "
+                        "values beside them.",
+                        icon=":material/calculate:",
+                    )
+                else:
+                    st.info(
+                        f"{fill.filled:,} values of the declared derived variables can be computed exactly "
+                        "(Derived variables, Fill exactly): fill them and apply the draft first, so that they need "
+                        "no imputation.",
+                        icon=":material/calculate:",
+                    )
         with st.container(horizontal=True):
             st.metric(
                 "Analysis population",
@@ -118,7 +172,12 @@ def render_multiple_imputation() -> None:
             st.metric(
                 "Incomplete rows",
                 f"{share:.0%}",
-                help="Rows with at least one missing value in the model.",
+                help="Rows with at least one missing value in the model"
+                + (
+                    ", the derived variables computed from the others left out."
+                    if computed
+                    else "."
+                ),
             )
             st.metric(
                 "Suggested imputations",
@@ -161,9 +220,60 @@ def render_multiple_imputation() -> None:
             "null (Moons et al. 2006; White, Royston & Wood 2011).",
         )
         model = list(dict.fromkeys([*columns, *outcomes]))
-        table = summary[summary["column"].isin(model)].copy()
+        in_model = [s for s in steps if s["target"] in model]
+        derive = False
+        if in_model:
+            derive = st.checkbox(
+                "Compute the declared derived variables in each imputed dataset from its imputed values",
+                value=True,
+                key=DERIVE_KEY,
+                help="A derived variable imputed as a variable of its own no longer follows its formula, and the "
+                "chains predict the height from the imputed BMI and back, so that they barely move. Ticked, each is "
+                "left out of the chains, neither imputed nor used to predict any variable, and the variables of its "
+                "formula join the model, which then carries its information; its missing values are computed by its "
+                "formula in each imputed dataset (passive imputation: impute, then derive). Its recorded values are "
+                "kept.",
+            )
+            one = len(in_model) == 1
+            names = ", ".join(as_code(s["target"]) for s in in_model)
+            st.caption(
+                f"{names}: computed in each imputed dataset by {'its formula' if one else 'their formulas'}; a value "
+                "computed from imputed ones varies between the imputations as they do."
+                if derive
+                else f"{names}: imputed as {'a variable of its own' if one else 'variables of their own'}."
+            )
+            if derive:  # the variables of their formulas carry their information: in the model
+                added = [i for s in in_model for i in s["inputs"] if i not in model]
+                if added:
+                    model = list(dict.fromkeys([*model, *added]))
+                    st.caption(
+                        "In the model as variables of their formulas: "
+                        + ", ".join(as_code(i) for i in dict.fromkeys(added))
+                        + "."
+                    )
+        for target, names in beyond.items():
+            if target in model:
+                st.caption(
+                    f"{as_code(target)}: imputed as a variable of its own, as a variable of its formula "
+                    f"({', '.join(as_code(n) for n in names)}) cannot join the imputation model (a date, an "
+                    "identifier or a free text)."
+                )
+        left_out = [s["target"] for s in steps if s["target"] not in model]
+        if left_out:
+            st.caption(
+                "Declared derived variables outside the model are not computed: "
+                + ", ".join(as_code(t) for t in left_out)
+                + "."
+            )
+        kept_out = [s["target"] for s in in_model] if derive else []
+        table = summary[summary["column"].isin(model) & ~summary["column"].isin(kept_out)].copy()
         if table.empty:
-            st.info("None of the chosen variables has missing values.")
+            st.info(
+                "Only derived variables are missing: Fill exactly computes those whose variables are recorded "
+                "(Derived variables)."
+                if kept_out
+                else "None of the chosen variables has missing values."
+            )
             return
         edited = st.data_editor(
             table[["column", "missing", "kind", "method"]],
@@ -282,7 +392,6 @@ def render_multiple_imputation() -> None:
                 by=None if by == "(no strata)" else by,
                 survival=survival,
             )
-            from biostats.mi import impute
             from manage.compute import mi_workers
 
             # the worker processes are shared by every session of the server: a lease grants what is free
@@ -296,9 +405,15 @@ def render_multiple_imputation() -> None:
                         else "Other imputations use the processor cores of this server: this one runs in one."
                     )
                 bar = st.progress(0.0, text=label)
-                run = impute(
+                run = impute_and_derive(
                     frame,
                     spec,
+                    in_model if derive else [],
+                    declined=[] if derive else [s["record"] for s in in_model],
+                    # recorded derived values their imputed variables may no longer match
+                    watch=[
+                        record(d, [d.target], c.summary()) for d, c in pairs if d.target in model
+                    ],
                     progress=lambda f: bar.progress(f, text=f"{label}: {f:.0%}"),
                     workers=workers,
                 )
@@ -331,20 +446,38 @@ def _trace_figure(trace: dict, name: str) -> go.Figure:
     return fig
 
 
-def _distribution_figure(observed: pd.Series, imputed: pd.Series, numeric: bool) -> go.Figure:
+def _computed_share(mi, variable: str) -> float:
+    """The share of the rows whose derived variable was computed from imputed values (a variable of its formula was
+    imputed there), from the formula's variables the imputation recorded."""
+    steps = (mi.info.get("derived") or {}).get("steps") or []
+    inputs = next((s.get("inputs") or [] for s in steps if s.get("target") == variable), [])
+    computed = mi.imputations.get(variable)
+    if computed is None or not len(mi.base):
+        return 0.0
+    rows = computed.index
+    from_imputed = np.zeros(len(rows), dtype=bool)
+    for name in inputs:
+        if name in mi.imputations:
+            from_imputed |= rows.isin(mi.imputations[name].index)
+    return float(from_imputed.sum()) / len(mi.base)
+
+
+def _distribution_figure(
+    observed: pd.Series, imputed: pd.Series, numeric: bool, *, label: str = "Imputed"
+) -> go.Figure:
     fig = go.Figure()
     if numeric:
         fig.add_histogram(
             x=observed.astype(float), name="Observed", histnorm="probability density", opacity=0.6
         )
         fig.add_histogram(
-            x=imputed.astype(float), name="Imputed", histnorm="probability density", opacity=0.6
+            x=imputed.astype(float), name=label, histnorm="probability density", opacity=0.6
         )
         fig.update_layout(barmode="overlay")
     else:
-        for label, values in (("Observed", observed), ("Imputed", imputed)):
+        for name, values in (("Observed", observed), (label, imputed)):
             share = values.astype(str).value_counts(normalize=True).sort_index()
-            fig.add_bar(x=share.index, y=share.to_numpy(), name=label)
+            fig.add_bar(x=share.index, y=share.to_numpy(), name=name)
     fig.update_layout(
         height=280, margin=dict(t=10, b=10), yaxis_title="Density" if numeric else "Share"
     )
@@ -371,13 +504,28 @@ def _diagnostics(stored) -> None:
         if not imputed:
             return
         variable = st.selectbox("Variable", imputed, key="mi_diag_variable")
+        derived = stored.mi.methods.get(variable) == DERIVED_METHOD
         traces = diag.get("trace", {})
         names = [k for k in traces if k == variable or k.startswith(f"{variable} [")]
         left, right = st.columns(2)
         with left:
-            st.caption(
-                "Chain means per iteration (each line one imputation): they should mix without a trend."
-            )
+            if derived:
+                st.caption(
+                    "Computed in each imputed dataset by its formula from the imputed values: there is no chain to "
+                    "check."
+                )
+                share = _computed_share(stored.mi, variable)
+                if share > NONLINEAR_SHARE:
+                    st.caption(
+                        f":material/info: {share:.0%} of its values were computed from imputed ones. Analysed in "
+                        "categories, splines or interactions, its association is attenuated (von Hippel 2009); "
+                        "substantive-model-compatible imputation (smcfcs; Bartlett et al. 2015) is a sensitivity "
+                        "analysis."
+                    )
+            else:
+                st.caption(
+                    "Chain means per iteration (each line one imputation): they should mix without a trend."
+                )
             for name in names:
                 st.plotly_chart(
                     _trace_figure(traces[name], variable), width="stretch", key=f"mi_trace::{name}"
@@ -390,7 +538,9 @@ def _diagnostics(stored) -> None:
             values = stored.mi.imputations[variable].stack()
             numeric = is_numeric(stored.mi.base[variable])
             st.plotly_chart(
-                _distribution_figure(observed, values, numeric),
+                _distribution_figure(
+                    observed, values, numeric, label="Computed" if derived else "Imputed"
+                ),
                 width="stretch",
                 key="mi_distribution",
             )
@@ -421,6 +571,14 @@ def _use(state, stored) -> None:
             st.warning(
                 f"{current.reason}. Run the imputation again on the current analysis population."
             )
+        edited = state.mi_derived_edited()
+        if edited:
+            st.warning(
+                "This imputation computed "
+                + ", ".join(as_code(t) for t in edited)
+                + " with a definition edited or removed since (Derived variables): it keeps the formula it used. "
+                "Run it again to use the current one."
+            )
         with st.container(horizontal=True):
             if st.button(
                 "Save a version with this imputation",
@@ -448,7 +606,15 @@ def _use(state, stored) -> None:
                 icon=":material/download:",
                 on_click="ignore",
                 key="mi_export_stata",
-                help="In Stata: import delimited, then mi import flong, m(_mi_m) id(_mi_id) imputed(...).",
+                help="In Stata: import delimited, then mi import flong, m(_mi_m) id(_mi_id) imputed(...)"
+                + (
+                    " passive("
+                    + " ".join(c for c, m in stored.mi.methods.items() if m == DERIVED_METHOD)
+                    + ")"
+                    if DERIVED_METHOD in stored.mi.methods.values()
+                    else ""
+                )
+                + ".",
             )
             if st.button("Discard the imputation", icon=":material/delete:", key="mi_discard"):
                 state.clear_mi()
@@ -458,7 +624,15 @@ def _use(state, stored) -> None:
             methods_paragraph(
                 stored.binding,
                 n_rows=stored.binding.n_rows,
-                incomplete=incomplete_share(stored.mi.base, stored.binding.columns),
+                # the derived variables computed from the others are not counted, as on the page
+                incomplete=incomplete_share(
+                    stored.mi.base,
+                    [
+                        c
+                        for c in stored.binding.columns
+                        if stored.binding.methods.get(c) != DERIVED_METHOD
+                    ],
+                ),
                 info=dict(stored.mi.info),
             ),
             language=None,

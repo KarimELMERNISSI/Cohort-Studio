@@ -187,7 +187,7 @@ class TraceDocumenter:
                 binding,
                 n_rows=int(params.get("n_rows", 0)),
                 incomplete=params.get("incomplete"),
-                info={"engine": params.get("engine", "CohortStudio")},
+                info={"engine": params.get("engine", "CohortStudio"), "derived": params.get("derived")},
             )
         except (KeyError, TypeError, ValueError):
             return

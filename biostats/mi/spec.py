@@ -28,6 +28,9 @@ REFERENCES.setdefault(
 )
 
 METHODS = ("pmm", "norm", "logreg", "polyreg", "rf", "")
+# a variable left out of the chains and computed in each completed dataset by its formula (passive imputation): set
+# by the application after the imputation, never asked of the engine
+DERIVED = "derived"
 NUMERIC_METHODS = {"pmm", "norm", "rf"}
 CATEGORICAL_METHODS = {"logreg", "polyreg", "rf"}
 
@@ -77,6 +80,7 @@ def suggest_m(df: pd.DataFrame, columns: Sequence[str]) -> int:
 
 __all__ = [
     "CATEGORICAL_METHODS",
+    "DERIVED",
     "METHODS",
     "NUMERIC_METHODS",
     "ImputationSpec",

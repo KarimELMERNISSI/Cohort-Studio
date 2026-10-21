@@ -27,10 +27,12 @@ import pandas as pd
 import enrich.external_data as eed
 from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
 from core.population import criteria_from_trace, evaluate_population
+from core.registry import UnknownIdError
 from core.session import restrict_cells, sort_filled
 from core.state import ParseOptions
 from core.steps import DOCUMENT, SNAPSHOT
 from core.steps import ids as step_ids
+from enrich.derived import APPROACHES, impute_and_derive
 from enrich.formulas import evaluate_formula_safely, read_formula
 from enrich.imputation_service import (
     describe_formula_fill,
@@ -388,7 +390,18 @@ def _mi_impute(df, step, index, overrides, warnings, result=None):
     block = step.get("population") or {}
     frames = result.population_frames if result is not None else None
     rows = _population_rows(df, block, index, warnings, frames) if block else df.index
-    run = impute(df.loc[rows], ImputationSpec(**params["spec"]))
+    spec = ImputationSpec(**params["spec"])
+    derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
+    if derived is not None:
+        # the declared derived variables, computed in each completed dataset as recorded (or declined)
+        if derived.get("approach") not in APPROACHES:
+            raise UnknownIdError("derivation approach", str(derived.get("approach")), APPROACHES)
+        steps = list(derived.get("steps") or []) if derived.get("recompute") else []
+        run = impute_and_derive(
+            df.loc[rows], spec, steps, declined=list(derived.get("declined") or [])
+        )
+    else:
+        run = impute(df.loc[rows], spec)
     if result is not None:
         result.imputations[index] = run.mi
     recorded = params.get("cells_fp")

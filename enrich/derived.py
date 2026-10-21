@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from biostats.mi.spec import DERIVED
 from core.derived import DerivedVariable, fill_order
 from enrich.formulas import (
     CARET_IS_NOT_A_POWER,
@@ -702,6 +703,220 @@ def recomputed(
     return [(definition, found) for definition, found in pairs if not _unused(found)]
 
 
+# --- multiple imputation: impute, then derive --------------------------------------------------------------------------
+
+# how a multiple imputation treats declared derived variables, an id stored with the step and never renamed: left out
+# of the chains and computed in each completed dataset ("impute, then derive"); a passive imputation inside the chains
+# would get an id of its own
+IMPUTE_THEN_DERIVE = "impute_then_derive"
+APPROACHES = (IMPUTE_THEN_DERIVE,)
+# the method of a variable computed in each completed dataset (biostats.mi)
+DERIVED_METHOD = DERIVED
+
+
+def derivation_steps(
+    definitions: Sequence[DerivedVariable],
+    check: Callable[[DerivedVariable], DerivedCheck],
+    data: pd.DataFrame,
+    *,
+    imputed: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    What a multiple imputation computes instead of imputing, as its step records it and the replay repeats it: each
+    declared derived variable :func:`recomputed` keeps out that has missing values in ``data``, in fill order, with its
+    formula and the variables it reads, the rounding of its recorded values, the values of a text or code variable its
+    check saw when the data hold another, and its record (core.derived.record).
+    """
+    from core.derived import record
+    from enrich.imputation_service import formula_inputs
+
+    steps: list[dict[str, Any]] = []
+    for definition, found in recomputed(definitions, check):
+        name = definition.target
+        if name not in data.columns or not bool(data[name].isna().to_numpy().any()):
+            continue
+        recorded = data.loc[~_imputed_rows(data.index, imputed, [name]), name].dropna()
+        unit = 0.0 if is_text_column(data[name]) else resolution(recorded)
+        step: dict[str, Any] = {
+            "target": name,
+            "formula": definition.formula,
+            "inputs": formula_inputs(definition.formula, name, data),
+        }
+        decimals = _decimals(recorded, unit)
+        if decimals is not None:
+            step["round_decimals"] = decimals
+        levels = {
+            variable: sorted(seen)
+            for variable, seen in found.checked_levels.items()
+            if variable in data.columns
+            and (data[variable].notna() & ~data[variable].astype(str).isin(seen)).any()
+        }
+        if levels:
+            step["only_levels"] = levels
+        step["record"] = record(definition, [name], found.summary())
+        steps.append(step)
+    return steps
+
+
+def derive(mi: Any, steps: Sequence[Mapping[str, Any]]) -> tuple[Any, dict[str, int]]:
+    """
+    ``mi`` (biostats.mi.MIData) with the missing values of each derived variable of ``steps`` (:func:`derivation_steps`,
+    as recorded) computed in every completed dataset by its formula from the imputed values, in their order (a variable
+    computed earlier is there for a later formula), rounded and limited as recorded; method "derived". A row whose
+    formula gives no value in every imputation stays missing: they are returned, by variable.
+    """
+    from biostats.mi import MIData
+    from enrich.imputation_service import fill_with_formula
+
+    imputations, methods = dict(mi.imputations), dict(mi.methods)
+    current, left = mi, {}
+    for step in steps:
+        target, formula = str(step["target"]), str(step["formula"])
+        if target not in mi.base.columns:
+            continue
+        missing = mi.base.index[mi.base[target].isna()]
+        if not len(missing):
+            continue
+        # the formula's columns only: each evaluation profiles the columns it is given
+        names = step.get("inputs") or [n for n in read_formula(formula).names if n != target]
+        columns = list(dict.fromkeys([target, *(str(n) for n in names if n in mi.base.columns)]))
+        values = {}
+        for i in range(1, mi.m + 1):
+            filled, _ = fill_with_formula(
+                current.complete(i, columns),
+                target,
+                formula,
+                complete_inputs=True,
+                finite_only=True,
+                decimals=step.get("round_decimals"),
+                levels=step.get("only_levels"),
+            )
+            values[i] = filled.loc[missing, target]
+        frame = pd.DataFrame(values, index=missing)
+        given = frame.notna().all(axis=1)
+        if not given.all():
+            left[target] = int((~given).sum())
+        if not given.any():
+            continue
+        imputations[target] = frame.loc[given]
+        methods[target] = DERIVED_METHOD
+        current = MIData(
+            base=mi.base, imputations=imputations, m=mi.m, methods=methods, info=mi.info
+        )
+    return current, left
+
+
+def _mismatched(mi: Any, records: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    """
+    For each definition of ``records`` (core.derived.record), the rows where its variable is recorded but a variable of
+    its formula was imputed, and the formula of the imputed values gives another value in at least one imputed dataset
+    (beyond the check's tolerance): a recorded BMI beside an imputed height. An inverse filled exactly first avoids it.
+    """
+    from core.derived import from_record
+
+    out: dict[str, int] = {}
+    for block in records:
+        definition, _, _ = from_record(block)
+        if definition is None or definition.target not in mi.base.columns:
+            continue
+        target = definition.target
+        inputs = [n for n in read_formula(definition.formula).names if n in mi.imputations]
+        if not inputs:
+            continue
+        imputed = np.zeros(len(mi.base), dtype=bool)
+        for name in inputs:
+            imputed |= mi.base.index.isin(mi.imputations[name].index)
+        rows = mi.base.index[mi.base[target].notna().to_numpy() & imputed]
+        if not len(rows):
+            continue
+        tolerance = (block.get("check") or {}).get("tolerance")
+        columns = list(dict.fromkeys([target, *read_formula(definition.formula).names]))
+        columns = [c for c in columns if c in mi.base.columns]
+        differ = pd.Series(False, index=rows)
+        for i in range(1, mi.m + 1):
+            completed = mi.complete(i, columns).loc[rows]
+            values = _computed(definition.formula, completed)
+            if values is None:
+                break
+            want = completed[target]
+            if tolerance is None:  # a text: the same value
+                differ |= values.astype(str) != want.astype(str)
+            else:
+                gap = (
+                    pd.to_numeric(want, errors="coerce") - pd.to_numeric(values, errors="coerce")
+                ).abs()
+                differ |= gap > float(tolerance) + _floor(gap.to_numpy())
+        if int(differ.sum()):
+            out[target] = int(differ.sum())
+    return out
+
+
+def impute_and_derive(
+    frame: pd.DataFrame,
+    spec: Any,
+    steps: Sequence[Mapping[str, Any]],
+    *,
+    declined: Sequence[Mapping[str, Any]] = (),
+    watch: Sequence[Mapping[str, Any]] = (),
+    progress: Callable[[float], None] | None = None,
+    workers: int = 1,
+) -> Any:
+    """
+    A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec) with declared derived variables
+    (IMPUTE_THEN_DERIVE): each is left out of the chains, so neither imputed nor a predictor of any variable, then
+    computed in every completed dataset from the imputed values (:func:`derive`). The imputation keeps how
+    (``info["derived"]``: the approach, the steps, the values left missing and, for the definitions of ``watch``, the
+    recorded values their imputed variables no longer match; or the records of ``declined`` definitions the user chose
+    to impute instead), which the trace, a saved version, the diagnostics and the methods paragraph read. The page and
+    the replay both run through here, so that they compute the same cells.
+    """
+    from dataclasses import replace as replace_run
+
+    from biostats.mi import MIData, impute
+    from biostats.mi.engine import NOT_IMPUTED
+
+    targets = [str(s["target"]) for s in steps]
+    spec = spec.model_copy(
+        update={"methods": {**spec.methods, **{t: "" for t in targets if t in spec.columns}}}
+    )
+    run = impute(frame, spec, progress=progress, workers=workers)
+    mi, left = derive(run.mi, steps)
+    derived = [t for t in targets if mi.methods.get(t) == DERIVED_METHOD]
+    notes = [w for w in run.warnings if w not in {NOT_IMPUTED.format(column=t) for t in derived}]
+    notes += [
+        f"{t}: {n:,} values stay missing, where its formula gives no usable value (a variable of it is missing, "
+        "the formula leaves the value out, as an adult equation does under 18, or gives no finite number)"
+        for t, n in left.items()
+    ]
+    mismatched = _mismatched(mi, [*watch, *(s["record"] for s in steps if "record" in s)])
+    notes += [
+        f"{t}: in {n:,} rows its recorded value no longer matches its imputed variables: declare an inverse of its "
+        "definition and fill exactly first, so that those variables are computed rather than imputed"
+        for t, n in mismatched.items()
+    ]
+    if steps or declined:
+        block: dict[str, Any] = {
+            "approach": IMPUTE_THEN_DERIVE,
+            "recompute": bool(steps),
+            "steps": [dict(s) for s in steps],
+        }
+        if left:
+            block["left"] = dict(left)
+        if mismatched:
+            block["mismatched"] = dict(mismatched)
+        if declined:
+            block["declined"] = [dict(d) for d in declined]
+        mi = MIData(
+            base=mi.base,
+            imputations=mi.imputations,
+            m=mi.m,
+            methods=mi.methods,
+            info={**mi.info, "derived": block},
+        )
+    methods = {**run.methods, **{t: DERIVED_METHOD for t in derived}}
+    return replace_run(run, mi=mi, spec=spec, methods=methods, warnings=notes)
+
+
 def fill_steps(
     plan: FillPlan, data: pd.DataFrame, rows: pd.Index | None, run: str
 ) -> list[tuple[pd.DataFrame, dict[str, Any], str]]:
@@ -751,9 +966,12 @@ def fill_steps(
 
 __all__ = [
     "AGREES",
+    "APPROACHES",
     "CANNOT",
+    "DERIVED_METHOD",
     "DISAGREES",
     "EXACT_SHARE",
+    "IMPUTE_THEN_DERIVE",
     "MAX_LEVELS",
     "LABELS",
     "MIN_ROWS",
@@ -765,7 +983,10 @@ __all__ = [
     "check_derived",
     "check_inverses",
     "contradicted",
+    "derivation_steps",
+    "derive",
     "fill_steps",
+    "impute_and_derive",
     "inverse_definition",
     "plan_exact_fills",
     "recomputed",

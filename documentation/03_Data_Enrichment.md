@@ -220,7 +220,34 @@ The **Multiple imputation (for inference)** tab creates m completed versions of 
 4. **Diagnostics**: chain traces (mean and SD of each variable per iteration: the chains should mix, without a trend), an indicative R-hat, observed against imputed values, and the predictors left out (constant or collinear).
 5. **Use, save, export**: the status of the imputation against the current population (fresh, a union of whole strata, fitted on more rows, or out of date), saving a version with the imputation, mice long and Stata flong files, and a methods paragraph to adapt for the paper (Sterne et al. 2009).
 
-The imputation is recorded in the trace (`mi_impute`, with a fingerprint of the imputed cells); a full replay re-runs it and checks that it finds the same cells.
+**Derived variables.** With a definition declared on the Derived variables tab (one the data agree with, or one you
+accepted) for a variable of the model that has missing values, step 2 shows **Compute the declared derived variables
+in each imputed dataset from its imputed values**, ticked by default (passive imputation, "impute, then derive"):
+- the derived variable leaves the methods table: it is left out of the chains, neither imputed nor used to predict any
+  variable (imputed as a variable of its own, the chains would predict the height from the imputed BMI and back, so
+  that they barely move);
+- the variables of its formula join the model, which then carries its information; a derived variable whose formula
+  reads a variable that cannot join the model (a date, an identifier, a free text) is imputed as a variable of its own,
+  which the page says;
+- in each imputed dataset, its missing values are computed by its formula from that dataset's values, rounded as it is
+  written; its recorded values are kept. A value computed from imputed ones varies between the imputations as they do,
+  so Rubin's rules carry their uncertainty;
+- the suggested m counts the incomplete rows of the imputed variables only: a value computed from recorded values adds
+  no imputation uncertainty;
+- the diagnostics show no chain for it, and say when more than 5% of its values were computed from imputed ones:
+  analysed in categories, splines or interactions, its association is then attenuated (von Hippel 2009), and
+  substantive-model-compatible imputation (smcfcs; Bartlett et al. 2015) is a sensitivity analysis;
+- the methods paragraph names its formula, and the Stata help lists it in `passive()`.
+
+Fill what the formulas give exactly first (Fill exactly, then apply the draft), which the page reminds you of: those
+values then need no imputation, and a variable an inverse gives exactly is not imputed beside a recorded derived value
+it would no longer match (the diagnostics count such rows). A value its formula cannot give stays missing, and the
+diagnostics say how many. The imputation keeps the formulas it used: a definition edited or removed afterwards is
+named, and the imputation keeps its values until it is run again. Unticked, the derived variables are imputed as
+variables of their own.
+
+The imputation is recorded in the trace (`mi_impute`, with a fingerprint of the imputed cells, the computed ones
+included, and the formulas that computed them); a full replay re-runs it and checks that it finds the same cells.
 
 ---
 

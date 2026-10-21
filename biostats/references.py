@@ -37,6 +37,8 @@ REFERENCES: dict[str, str] = {
     "schober2018": "Schober P, Boer C, Schwarte LA (2018). Correlation coefficients: appropriate use and interpretation. Anesth Analg 126:1763-1768.",
     "hodges1963": "Hodges JL, Lehmann EL (1963). Estimates of location based on rank tests. Ann Math Stat 34:598-611.",
     "wasserstein2016": "Wasserstein RL, Lazar NA (2016). The ASA statement on p-values: context, process, and purpose. Am Stat 70:129-133.",
+    "vonhippel2009": "von Hippel PT (2009). How to impute interactions, squares, and other transformed variables. Sociol Methodol 39:265-291.",
+    "bartlett2015": "Bartlett JW, Seaman SR, White IR, Carpenter JR (2015). Multiple imputation of covariates by fully conditional specification: accommodating the substantive model. Stat Methods Med Res 24:462-487.",
 }
 
 

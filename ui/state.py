@@ -1055,7 +1055,8 @@ class AppState:
         """
         Keep an imputation run (biostats.mi.engine.ImputationRun) bound to the current data and population, and
         record it in the trace (``mi_impute``: the specification and the fingerprint of the imputed cells, which
-        the replay re-computes and checks).
+        the replay re-computes and checks), with how the declared derived variables were computed when they were
+        (``mi.info["derived"]``, enrich.derived.impute_and_derive), which the replay repeats.
         """
         from biostats.mi.binding import bind
 
@@ -1077,6 +1078,7 @@ class AppState:
 
             from biostats.mi.engine import ENGINE
             from biostats.mi.report import incomplete_share
+            from biostats.mi.spec import DERIVED
 
             mi = run.mi
             params = {
@@ -1085,11 +1087,16 @@ class AppState:
                 "m": mi.m,
                 "n_rows": int(len(mi.base)),
                 "n_imputed": mi.n_imputed(),
-                "incomplete": incomplete_share(mi.base, list(run.spec.columns)),
+                # the derived variables computed from the others are not counted, as on the page
+                "incomplete": incomplete_share(
+                    mi.base, [c for c in run.spec.columns if run.methods.get(c) != DERIVED]
+                ),
                 "cells_fp": mi.fingerprint(),
                 "engine": ENGINE,
                 "versions": {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__},
             }
+            if mi.info.get("derived"):
+                params["derived"] = dict(mi.info["derived"])
             label = ", ".join(f"{c} ({m})" for c, m in run.methods.items())
             with contextlib.suppress(Exception):
                 tm.add_step(
@@ -1099,6 +1106,25 @@ class AppState:
                     population=stored.binding.population,
                 )
         return stored
+
+    def mi_derived_edited(self) -> list[str]:
+        """The variables the kept imputation computed with a definition that was edited or removed since: it keeps
+        the values of the formula it used (its record), which the declared list no longer says."""
+        from core.derived import from_record
+
+        stored = self.mi
+        if stored is None:
+            return []
+        declared = {d.target: d for d in self.derived_variables}
+        edited = []
+        for step in (stored.mi.info.get("derived") or {}).get("steps") or []:
+            used, _, _ = from_record(step.get("record") or {})
+            if used is None:
+                continue
+            now = declared.get(used.target)
+            if now is None or now.semantic_hash != used.semantic_hash:
+                edited.append(used.target)
+        return edited
 
     def clear_mi(self) -> None:
         st.session_state.pop(MI_KEY, None)

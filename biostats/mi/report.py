@@ -10,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 
-from biostats.mi.spec import default_method, is_numeric
+from biostats.mi.spec import DERIVED, default_method, is_numeric
 from biostats.references import REFERENCES
 
 REFERENCES.setdefault(
@@ -25,6 +25,8 @@ METHOD_NAMES = {
     "logreg": "logistic regression",
     "polyreg": "multinomial logistic regression",
     "rf": "random-forest donors",
+    # a declared derived variable, left out of the chains and computed in each completed dataset (passive imputation)
+    DERIVED: "its formula, computed in each imputed dataset from the imputed values (passive imputation)",
 }
 
 
@@ -100,11 +102,19 @@ def methods_paragraph(
     """
     spec = binding.spec
     methods = binding.methods
+    # derived variables: left out of the chains, computed in each completed dataset (a sentence of their own)
+    derived = [col for col, method in methods.items() if method == DERIVED]
     groups: dict[str, list[str]] = {}
     for col, method in methods.items():
-        groups.setdefault(METHOD_NAMES.get(method, method), []).append(col)
-    how = "; ".join(f"{', '.join(cols)} by {name}" for name, cols in groups.items())
-    donors = f" ({spec.get('donors', 5)} donors)" if "pmm" in methods.values() else ""
+        if method != DERIVED:
+            groups.setdefault(method, []).append(col)
+    donors = spec.get("donors", 5)
+    how = "; ".join(
+        f"{', '.join(cols)} by {METHOD_NAMES.get(method, method)}"
+        + (f" ({donors} donors)" if method == "pmm" else "")
+        for method, cols in groups.items()
+    )
+    model = [c for c in binding.columns if c not in derived]
     parts = [
         "Missing data were handled by multiple imputation by chained equations (fully conditional specification), "
         "under the assumption that the data are missing at random given the variables of the imputation model.",
@@ -112,10 +122,33 @@ def methods_paragraph(
         "in these variables."
         if incomplete is not None
         else f"The analysis population had {n_rows:,} participants.",
-        f"The imputation model included {len(binding.columns)} variables ({', '.join(binding.columns)}); the outcome "
-        "of the analyses was included as a predictor.",
-        f"Missing values were imputed as follows: {how}{donors}.",
+        f"The imputation model included {len(model)} variables ({', '.join(model)}); the outcome of the analyses "
+        + (
+            "was included as a predictor, unless it is a derived variable, computed as described below."
+            if derived
+            else "was included as a predictor."
+        ),
+        f"Missing values were imputed as follows: {how}." if how else "",
     ]
+    if derived:
+        block = (info or {}).get("derived") or {}
+        formulas = {str(s.get("target")): str(s.get("formula")) for s in block.get("steps") or []}
+        named = "; ".join(f"{c} = {formulas[c]}" if c in formulas else c for c in derived)
+        one = len(derived) == 1
+        names = derived[0] if one else ", ".join(derived[:-1]) + f" and {derived[-1]}"
+        parts.append(
+            f"{names} {'was' if one else 'were'} not in the imputation model: {'its' if one else 'their'} missing "
+            f"values were computed in each imputed dataset by {'its formula' if one else 'their formulas'} from the "
+            f'imputed values ({named}; "impute, then transform", also called passive imputation; von Hippel 2009).'
+        )
+        left = block.get("left") or {}
+        if left:
+            parts.append(
+                "Where the formula gives no value, missing values remained: "
+                + ", ".join(f"{n:,} of {c}" for c, n in left.items())
+                + "."
+            )
+    parts = [part for part in parts if part]
     if spec.get("by"):
         parts.append(f"The imputation was performed separately within the levels of {spec['by']}.")
     if spec.get("survival"):

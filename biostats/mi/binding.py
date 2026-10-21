@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from biostats.mi.data import MIData
 
@@ -49,6 +49,8 @@ class MIBinding(BaseModel):
     run_id: str = ""  # identifies this imputation (results computed on it carry it)
     spec: dict[str, Any]  # the ImputationSpec
     methods: dict[str, str]
+    # variables outside the model that computed values read (a derived variable's formula), watched as the model is
+    watched: list[str] = Field(default_factory=list)
 
 
 @dataclass
@@ -82,6 +84,15 @@ def bind(
     """Attach to an imputation run (biostats.mi.engine.ImputationRun) what it was fitted on."""
     mi: MIData = run.mi
     columns = [c for c in run.spec.columns if c in mi.base.columns]
+    steps = (mi.info.get("derived") or {}).get("steps") or []
+    watched = sorted(
+        {
+            str(c)
+            for step in steps
+            for c in step.get("inputs") or []
+            if c in mi.base.columns and c not in columns
+        }
+    )
     by = run.spec.by
     binding = MIBinding(
         columns=columns,
@@ -94,6 +105,7 @@ def bind(
         run_id=uuid.uuid4().hex,
         spec=run.spec.model_dump(),
         methods=dict(run.methods),
+        watched=watched,
     )
     diag = {
         "rhat": dict(run.rhat),
@@ -108,7 +120,7 @@ def bind(
     return StoredMI(
         mi=mi,
         binding=binding,
-        hashes=row_hashes(mi.base, columns),
+        hashes=row_hashes(mi.base, [*columns, *watched]),
         strata=mi.base[by].astype(str) if by else None,
         diagnostics={**diag, **(diagnostics or {})},
     )
@@ -116,7 +128,7 @@ def bind(
 
 def status(stored: StoredMI, frame: pd.DataFrame) -> MIStatus:
     """Whether ``stored`` fits ``frame`` (the current analysis rows)."""
-    columns = stored.binding.columns
+    columns = [*stored.binding.columns, *stored.binding.watched]
     gone = [c for c in columns if c not in frame.columns]
     if gone:
         return MIStatus("stale", f"column(s) {', '.join(gone)} no longer exist", 0)

@@ -172,13 +172,22 @@ def _mi_section(state) -> dict[str, Any] | None:
         rows.append(("Largest indicative R-hat", f"{float(value):.3f} ({name})"))
     methods = pd.DataFrame(
         [
-            {"Variable": col, "Method": method or "not imputed", "Imputed values": f"{len(mi.imputations.get(col, [])):,}"}
+            {
+                "Variable": col,
+                "Method": "computed by its formula" if method == "derived" else (method or "not imputed"),
+                "Imputed values": f"{len(mi.imputations.get(col, [])):,}",
+            }
             for col, method in binding.methods.items()
         ]
     )
     return {
         "methods_paragraph": methods_paragraph(
-            binding, n_rows=binding.n_rows, incomplete=incomplete_share(mi.base, list(binding.columns)), info=mi.info
+            binding,
+            n_rows=binding.n_rows,
+            incomplete=incomplete_share(
+                mi.base, [c for c in binding.columns if binding.methods.get(c) != "derived"]
+            ),
+            info=mi.info,
         ),
         "settings": rows,
         "methods": methods,

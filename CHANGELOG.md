@@ -592,6 +592,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   (the replay keeps them out too) and the definitions used or declined; declining them leaves the imputation one that
   can be redone or refitted. On the tutorial cohort, the 24 BMIs of the patients without a height are computed from
   their imputed heights.
+- **Multiple imputation computes the derived variables in each imputed dataset** (passive imputation, "impute, then
+  derive"). With **Compute the declared derived variables in each imputed dataset from its imputed values** (step 2,
+  ticked by default), each derived variable of the model that has missing values is left out of the chains, neither
+  imputed nor used to predict any variable, the variables of its formula join the model, and its missing values are
+  computed by its formula from each imputed dataset's values, rounded as it is written; its recorded values are kept.
+  A derived variable whose formula reads a date or a free text is imputed as a variable of its own, which the page
+  says. Its method is "derived": the fingerprint of the imputed cells, the saved imputation (with its formulas), the
+  exports and the methods paragraph cover it, and the analyses pool it with the others; the methods paragraph names
+  the formula and no longer lists it in the model. The suggested m counts the imputed variables only. The page reminds
+  you to fill exactly first (a warning when an inverse can recover a variable), the diagnostics say what stays
+  missing, the recorded values their imputed variables no longer match, and when more than 5% of the values were
+  computed from imputed ones (attenuated non-linear associations; smcfcs as a sensitivity analysis). A definition
+  edited after the run is named. The step records the approach (`impute_then_derive`, an id that is never renamed,
+  any other stopping the replay) with the formulas, their variables, order and rounding, or the definitions declined;
+  the replay computes the same cells, and the imputation watches the variables its formulas read.
 - **The tutorial cohort has three variables computed from others** (41 columns): `bmi_kg_m2` from the weight and the
   height, `egfr_ml_min_1_73m2` (CKD-EPI 2021, not reported under 18) and `hf_phenotype` (ESC 2021) from the ejection
   fraction. They hold the values of the hospital record and the laboratory, so each disagrees with its formula
@@ -600,8 +615,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   missing, more often in older patients; 17 have a BMI that recovers them. Every other value, the 16 anomalies and
   the 928 patients are unchanged; more than half of the rows now miss a value, so the suggested number of
   imputations is higher (56 instead of 48 on the whole file). The tutorial (step 3.3) declares and checks them, step
-  3.2 computes the eGFR at the 6-month visit instead of a BMI and an eGFR the file now holds, and the multiple
-  imputation leaves the three out (*do not impute*).
+  3.2 computes the eGFR at the 6-month visit instead of a BMI and an eGFR the file now holds, and the imputations
+  compute the BMI of the patients without a height from their imputed heights.
 
 ### Privacy: what the AI engine writes, and the cells of a file, are shown as text
 

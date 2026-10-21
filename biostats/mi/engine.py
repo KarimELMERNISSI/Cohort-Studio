@@ -40,6 +40,8 @@ from biostats.mi.spec import (
 
 ENGINE = "cohortstudio-fcs 1"
 HAZARD = "Nelson-Aalen H(T)"
+# the warning for a variable left incomplete (method ""): it then predicts no other variable
+NOT_IMPUTED = "{column} is incomplete and not imputed, so it is not used as a predictor"
 
 
 @dataclass
@@ -190,9 +192,7 @@ def _resolve(
         if method:
             methods[col] = method
         else:
-            warnings.append(
-                f"{col} is incomplete and not imputed, so it is not used as a predictor"
-            )
+            warnings.append(NOT_IMPUTED.format(column=col))
     usable = [c for c in spec.columns if c != spec.by and (c in methods or not _incomplete(df[c]))]
     time_col = spec.survival[0] if spec.survival else None
     predictors: dict[str, list[str]] = {}
@@ -448,4 +448,4 @@ def impute(
     )
 
 
-__all__ = ["ENGINE", "HAZARD", "ImputationRun", "impute", "nelson_aalen"]
+__all__ = ["ENGINE", "HAZARD", "NOT_IMPUTED", "ImputationRun", "impute", "nelson_aalen"]

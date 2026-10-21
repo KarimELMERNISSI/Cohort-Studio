@@ -94,3 +94,51 @@ def test_parallel_run_from_the_app_matches_the_sequential_one(app: AppTest) -> N
     app.button(key="mi_run").click().run()
     assert not app.exception
     assert app.session_state["_mi"].mi.fingerprint() == parallel
+
+
+def test_the_declared_derived_variables_are_computed_in_each_imputed_dataset(app: AppTest) -> None:
+    import numpy as np
+
+    from biostats.mi.report import default_model_columns
+    from biostats.mi.spec import suggest_m
+    from core.derived import DerivedVariable, with_definitions
+
+    bmi = DerivedVariable(
+        "bmi_kg_m2",
+        "weight_kg / (height_cm / 100) ** 2",
+        inverses={"height_cm": "100 * (weight_kg / bmi_kg_m2) ** 0.5"},
+    )
+    app.session_state["config"] = with_definitions(app.session_state["config"], [bmi])
+    app.run()
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]
+    assert app.checkbox(key="mi_derive").value  # on by default
+    # computed from the others, the BMI adds no imputation uncertainty: not counted for m
+    frame = app.session_state["_data_session"].base
+    imputed = [c for c in default_model_columns(frame) if c != "bmi_kg_m2"]
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Suggested imputations"] == str(suggest_m(frame, imputed))
+    app.number_input(key="mi_m").set_value(2)
+    app.number_input(key="mi_maxit").set_value(2)
+    app.button(key="mi_run").click().run()
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]
+
+    stored = app.session_state["_mi"]
+    assert stored.mi.methods["bmi_kg_m2"] == "derived" == stored.binding.methods["bmi_kg_m2"]
+    assert stored.binding.spec["methods"]["bmi_kg_m2"] == ""  # left out of the chains
+    missing = frame.index[frame["bmi_kg_m2"].isna()]
+    computed = stored.mi.imputations["bmi_kg_m2"]
+    for i in (1, 2):
+        completed = stored.mi.complete(i).loc[computed.index]
+        formula = completed["weight_kg"] / (completed["height_cm"] / 100) ** 2
+        assert np.allclose(completed["bmi_kg_m2"], formula, atol=0.05 + 1e-9)
+    assert computed.index.isin(missing).all() and len(computed) == len(missing)
+    assert "passive imputation" in app.code[-1].value  # the methods paragraph
+    step = app.session_state["transformation_manager"].history[-1]
+    assert step["function"] == "mi_impute"
+    assert step["params"]["derived"]["approach"] == "impute_then_derive"
+    assert [s["target"] for s in step["params"]["derived"]["steps"]] == ["bmi_kg_m2"]
+    # the definition removed afterwards: the imputation keeps the formula it used, and says so
+    app.session_state["config"] = with_definitions(app.session_state["config"], [])
+    app.run()
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]
+    assert any("edited or removed since" in w.value for w in app.warning)
