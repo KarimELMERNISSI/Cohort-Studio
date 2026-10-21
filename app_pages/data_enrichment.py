@@ -49,7 +49,7 @@ from manage.ai_payload import column_kinds, column_profile
 from manage.db_manager import DBManager
 from manage.snapshots import folders as snapshot_folders
 from manage.snapshots import save as save_snapshot_to
-from ui.components import error_card, no_dataset
+from ui.components import error_card, linked_tabs, no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
 from ui.components.text import plain
@@ -1982,8 +1982,8 @@ def app():
     # changes staged by this run (rendered after the tabs, it used to appear at the bottom of the page).
     draft_slot = st.container()
 
-    # Main navigation tabs
-    main_tab, impute_tab, define_var_tab = st.tabs([
+    # Main navigation tabs; a link can open one of them (the Start page's Derived variables: ui.nav.PageDef.tabs)
+    main_tab, impute_tab, define_var_tab = linked_tabs("enrich", [
     "Import External Data",
     "Handle Missing Data",
     "Create New Variables"
@@ -2052,12 +2052,12 @@ def app():
             return
 
         # in the order of the handbook: the variables other variables determine, then exact, then statistical
-        tab_derived, tab_targeted, tab_global, tab_multiple = st.tabs([
+        tab_derived, tab_targeted, tab_global, tab_multiple = linked_tabs("enrich", [
             "Derived variables",
             "Targeted Imputation (Custom Formula)",
             "Global Imputation (single imputation)",
             "Multiple imputation (for inference)",
-        ])
+        ], depth=1)
         with tab_derived:
             render_derived_variables()
         with tab_multiple:
@@ -2410,7 +2410,8 @@ def app():
                     disabled=transformed,
                     help="A derived variable imputed as a variable of its own no longer follows its formula (an "
                     "imputed BMI is not the weight over the height squared); with chained equations or missForest, "
-                    "an imputed BMI used to impute the height also gives it back its own earlier guess. Ticked, what "
+                    "the height and the BMI then predict each other, so that they barely move from their first "
+                    "guesses. Ticked, what "
                     "the formulas give exactly is filled first; each derived variable still missing is then kept "
                     "out of the imputation, neither imputed nor used to impute any other variable, and its missing "
                     "values are computed by its formula from the imputed values. Its recorded values are kept; they "

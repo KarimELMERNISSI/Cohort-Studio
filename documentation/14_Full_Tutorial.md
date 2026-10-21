@@ -190,6 +190,8 @@ rather than an imputation. Under **Add a definition**, add:
   ESC 2016 cut-off instead, `lvef_pct < 40` for HFrEF: it only **mostly agrees**, because the 39 patients at
   exactly 40% are HFmrEF in 2016 and HFrEF in 2021.
 
+Data > Validate's dashboard repeats these checks on every row among its recommendations, with a link back to this tab.
+
 The line of each definition says how many missing values of the analysis population its formula can compute:
 **34** BMIs, **49** eGFRs and **30** phenotypes. Under **2. Fill exactly**, the table adds the **10** heights the
 inverse recovers; each fill is counted as observed (exact) and rounded as its variable is written. Click **Fill 123

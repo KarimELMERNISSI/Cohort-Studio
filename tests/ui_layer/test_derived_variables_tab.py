@@ -157,6 +157,7 @@ def test_the_enrich_page_opens_its_missing_data_tabs_with_the_derived_variables(
     derived = labels.index("Derived variables")
     assert derived + 1 == labels.index("Targeted Imputation (Custom Formula)")
     assert any("No derived variable is declared" in c.value for c in at.caption)
+    # the Start page's link to them: tests/ui_layer/test_tab_links.py
 
 
 class _Engine:

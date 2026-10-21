@@ -86,6 +86,8 @@ class DerivedCheck:
     tolerance_high: float | None = None  # the 95th percentile of the rows' tolerances
     reason: str | None = None  # why it disagrees, or cannot be used or checked
     unit_hint: str | None = None  # the disagreeing rows are another unit by a constant factor
+    # the text or code variable one of whose levels disagrees; never the level, a value of the data (in reason)
+    level_of: str | None = None
     warnings: tuple[str, ...] = ()  # what the check could not test (a variable taking one value)
     fills: bool = True  # False for a date: dates are never imputed
     kappa: float | None = None
@@ -129,9 +131,13 @@ class DerivedCheck:
     def evidence(self) -> str:
         """The check in words: 'gives the recorded value in 368 of 371 rows where bmi, weight_kg and height_cm are
         recorded (±0.05)'."""
+        return self.describe()
+
+    def describe(self, name: Callable[[str], str] = str) -> str:
+        """:attr:`evidence`, each variable written by ``name`` (core.registry.as_code where markdown renders it)."""
         if self.verdict == CANNOT or not self.compared:
             return self.reason or self.label
-        names = [self.definition.target, *self.inputs]
+        names = [name(n) for n in (self.definition.target, *self.inputs)]
         where = ", ".join(names[:-1]) + f" and {names[-1]}" if len(names) > 1 else names[0]
         if self.tolerance is None:
             within = ""
@@ -224,18 +230,15 @@ def _unit_hint(recorded: np.ndarray, values: np.ndarray) -> str | None:
     power = round(np.log10(ratio))
     if power and abs(ratio / 10.0**power - 1) <= _HINT_SPREAD:
         return f"the recorded values are {10.0**power:,.6g} times the formula's: another unit?"
-    named = next(
-        (
-            label
-            for factor, label in _FACTORS.items()
-            for f in (factor, 1 / factor)
-            if abs(ratio / f - 1) <= _HINT_SPREAD
-        ),
-        None,
-    )
-    if named is None:
-        return None
-    return f"the recorded values are {ratio:.4g} times the formula's: another unit ({named})?"
+    # the published factor, never the ratio measured on the disagreeing rows (which a few rows' values give)
+    for factor, label in _FACTORS.items():
+        if abs(ratio / factor - 1) <= _HINT_SPREAD:
+            return (
+                f"the recorded values are {factor:g} times the formula's: another unit ({label})?"
+            )
+        if abs(ratio * factor - 1) <= _HINT_SPREAD:
+            return f"the formula's values are {factor:g} times the recorded ones: another unit ({label})?"
+    return None
 
 
 def _agree(recorded: np.ndarray, values: np.ndarray, tau: np.ndarray | None) -> np.ndarray:
@@ -263,9 +266,12 @@ def _multiple_of_one(
     )
 
 
-def _level_disagreeing(rows: pd.DataFrame, inputs: list[str], agree: np.ndarray) -> str | None:
+def _level_disagreeing(
+    rows: pd.DataFrame, inputs: list[str], agree: np.ndarray
+) -> tuple[str, str] | None:
     """The first level of a text or code variable whose rows give the recorded value less often than 90%: the formula
-    is wrong for it (a factor for women only), however well the others agree."""
+    is wrong for it (a factor for women only), however well the others agree. The variable, and the reason, which names
+    the level."""
     for name in inputs:
         if not _levels(rows[name]):
             continue
@@ -274,7 +280,10 @@ def _level_disagreeing(rows: pd.DataFrame, inputs: list[str], agree: np.ndarray)
             in_level = levels == level
             if in_level.sum() >= LEVEL_ROWS and agree[in_level].mean() < LEVEL_SHARE:
                 k, m = int(agree[in_level].sum()), int(in_level.sum())
-                return f"it disagrees where {name} = {level}: {k:,} of {m:,} rows give the recorded value"
+                return (
+                    name,
+                    f"it disagrees where {name} = {level}: {k:,} of {m:,} rows give the recorded value",
+                )
     return None
 
 
@@ -404,9 +413,9 @@ def check_derived(
     else:
         verdict, reason = DISAGREES, None
     # agreeing overall, but not for one level of a text or code variable: the formula is wrong for it
-    level_reason = None if verdict == DISAGREES else _level_disagreeing(rows, inputs, agree)
-    if level_reason:
-        verdict, reason = DISAGREES, level_reason
+    level = None if verdict == DISAGREES else _level_disagreeing(rows, inputs, agree)
+    if level:
+        verdict, reason = DISAGREES, level[1]
     hint = None if verdict == AGREES or textual else _unit_hint(want[~agree], got[~agree])
     if not textual and _multiple_of_one(definition, rows, inputs, got):
         warnings.append(
@@ -421,6 +430,7 @@ def check_derived(
         tolerance_high=None if tau is None else float(np.quantile(tau, 0.95)),
         reason=hint or reason,
         unit_hint=hint,
+        level_of=level[0] if level else None,
         warnings=tuple(warnings),
         kappa=float(kappa),
         disagreeing=rows.index[~agree],

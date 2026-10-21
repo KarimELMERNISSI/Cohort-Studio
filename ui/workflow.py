@@ -19,13 +19,61 @@ BOX_W, BOX_H = 176, 60
 
 
 @dataclass(frozen=True)
+class Link:
+    page: str  # navigation key
+    label: str
+    tab: str | None = None  # a tab of that page it opens (ui.nav.PageDef.tabs)
+    icon: str | None = None  # the page's own by default
+
+
+@dataclass(frozen=True)
+class CoreStep:
+    """A card of the core path on the Start page, under the diagram."""
+
+    number: int
+    key: str  # the workflow step it stands for (a node of the diagram, core.progress)
+    icon: str
+    title: str
+    text: str
+    links: tuple[Link, ...]
+
+
+CORE_STEPS: tuple[CoreStep, ...] = (
+    CoreStep(
+        1,
+        "load",
+        ":material/upload_file:",
+        "Load a dataset",
+        "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
+        (Link("import", "Import a file"),),
+    ),
+    CoreStep(
+        2,
+        "validate",
+        ":material/fact_check:",
+        "Validate the data",
+        "Quality score, missingness pattern, clinical anomalies, inclusion criteria and outliers.",
+        (Link("validate", "Open Validate"),),
+    ),
+    CoreStep(
+        3,
+        "analyse",
+        ":material/science:",
+        "Explore and analyse",
+        "Descriptive statistics, correlations, hypothesis tests, epidemiological measures and survival.",
+        (Link("explore", "Statistics"), Link("analyze", "Hypothesis tests")),
+    ),
+)
+
+
+@dataclass(frozen=True)
 class Branch:
     key: str  # navigation key of the page that runs it
     icon: str
     title: str
     when: str  # where the branch attaches to the core path
     text: str
-    links: tuple[tuple[str, str], ...]
+    links: tuple[Link, ...]
     needs_ai: bool = False
 
 
@@ -39,7 +87,12 @@ BRANCHES: tuple[Branch, ...] = (
         "(single imputation for exploration; multiple imputation for inference, pooled by the analysis "
         "pages). "
         "Each change can be validated and analysed again before the next one.",
-        (("enrich", "Open Enrich"),),
+        (
+            Link("enrich", "Open Enrich"),
+            Link(
+                "enrich", "Derived variables", tab="derived_variables", icon=":material/calculate:"
+            ),
+        ),
     ),
     Branch(
         "variable_map",
@@ -48,7 +101,7 @@ BRANCHES: tuple[Branch, ...] = (
         "any time · uses the AI engine",
         "Build a taxonomy of your variables grounded in your clinical domain and your documents: definitions, "
         "units, relationships and derived formulas, saved as versions.",
-        (("variable_map", "Open Variable map"),),
+        (Link("variable_map", "Open Variable map"),),
         needs_ai=True,
     ),
     Branch(
@@ -58,7 +111,7 @@ BRANCHES: tuple[Branch, ...] = (
         "any time · uses the AI engine",
         "Index your literature, protocols or data dictionaries, chat with them and extract a knowledge graph that "
         "also informs the variable map and the enrichment suggestions.",
-        (("documents", "Open Documents"), ("settings", "Document library")),
+        (Link("documents", "Open Documents"), Link("settings", "Document library")),
         needs_ai=True,
     ),
     Branch(
@@ -67,7 +120,7 @@ BRANCHES: tuple[Branch, ...] = (
         "Report and reproduce",
         "at the end, or any time",
         "Every step is traced: reopen saved versions, replay an analysis step by step and export the Word report.",
-        (("reproduce", "Open Versions & traces"),),
+        (Link("reproduce", "Open Versions & traces"),),
     ),
 )
 
@@ -501,10 +554,13 @@ def node_page(node_id: str) -> str | None:
 
 __all__ = [
     "BRANCHES",
+    "CORE_STEPS",
     "EDGES",
     "NODES",
     "Branch",
+    "CoreStep",
     "Edge",
+    "Link",
     "Node",
     "edge_path",
     "edge_points",

@@ -14,7 +14,7 @@ from ui.state import (
     TUTORIAL_FOLLOWUP_PATH,
     get_state,
 )
-from ui.workflow import BRANCHES
+from ui.workflow import BRANCHES, CORE_STEPS, Link
 
 state = get_state()
 username = st.session_state.get("username") or "researcher"
@@ -68,25 +68,22 @@ def progress_chip(step: str) -> None:
         status_chip("to do" if has_data else "waiting", "neutral")
 
 
-steps = (
-    (1, "load", ":material/upload_file:", "Load a dataset", "Import a CSV, Excel or Parquet file, reopen a saved version, or try the sample cohort.",
-     (("import", "Import a file"),)),
-    (2, "validate", ":material/fact_check:", "Validate the data", "Quality score, missingness pattern, clinical anomalies, inclusion criteria and outliers.",
-     (("validate", "Open Validate"),)),
-    (3, "analyse", ":material/science:", "Explore and analyse", "Descriptive statistics, correlations, hypothesis tests, epidemiological measures and survival.",
-     (("explore", "Statistics"), ("analyze", "Hypothesis tests"))),
-)
-for column, (number, step, icon, title, text, links) in zip(st.columns(3, gap="medium"), steps, strict=True):
+def card_links(links: tuple[Link, ...]) -> None:
+    """A card's links side by side, each opening its page (on one of its tabs when it names one)."""
+    with st.container(horizontal=True):
+        for link in links:
+            page_link(link.page, link.label, icon=link.icon, tab=link.tab)
+
+
+for column, card in zip(st.columns(len(CORE_STEPS), gap="medium"), CORE_STEPS, strict=True):
     with column, st.container(border=True, height="stretch"):
         with st.container(horizontal=True, vertical_alignment="center"):
-            st.badge(f"Step {number}", color="blue")
-            progress_chip(step)
-        st.markdown(f"#### {icon} {title}")
-        st.caption(text)
-        st.caption(f":material/history: {progress.text(step)}")
-        with st.container(horizontal=True):
-            for key, label in links:
-                page_link(key, label)
+            st.badge(f"Step {card.number}", color="blue")
+            progress_chip(card.key)
+        st.markdown(f"#### {card.icon} {card.title}")
+        st.caption(card.text)
+        st.caption(f":material/history: {progress.text(card.key)}")
+        card_links(card.links)
 
 # ---------------------------------------------------------------------------- optional paths
 st.subheader("Optional paths", icon=":material/alt_route:", anchor=False)
@@ -106,9 +103,7 @@ for column, branch in zip(st.columns(len(BRANCHES), gap="medium"), BRANCHES, str
         st.caption(f"*{branch.when[:1].upper()}{branch.when[1:]}.* {branch.text}")
         if progress.text(step):
             st.caption(f":material/history: {progress.text(step)}")
-        with st.container(horizontal=True):
-            for key, label in branch.links:
-                page_link(key, label)
+        card_links(branch.links)
 
 # ---------------------------------------------------------------------------- versions, sample, AI
 st.space("small")

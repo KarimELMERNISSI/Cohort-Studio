@@ -166,3 +166,116 @@ class TestDataQualityAuditor:
         res = DataQualityAuditor(df_no_missing).perform_mcar_test()
         assert res["is_mcar"] is True
         assert "No missing data" in res["interpretation"]
+
+
+def _bmi_frame(n: int = 120) -> pd.DataFrame:
+    rng = np.random.default_rng(3)
+    weight = np.round(rng.normal(75, 12, n), 1)
+    height = np.round(rng.normal(170, 9, n), 0)
+    return pd.DataFrame(
+        {"weight_kg": weight, "height_cm": height, "bmi": np.round(weight / (height / 100) ** 2, 1)}
+    )
+
+
+def _derived(*definitions) -> dict:
+    from core.derived import with_definitions
+
+    return with_definitions({}, definitions)
+
+
+def test_the_declared_derived_variables_are_advised_on_without_changing_the_score() -> None:
+    """Computational conformance (Kahn et al. 2016): the recorded values a formula does not give, and the missing
+    values it can compute; names and counts only."""
+    from core.derived import DerivedVariable
+
+    frame = _bmi_frame()
+    frame.loc[:4, "bmi"] = np.nan  # five BMIs the formula can compute
+    frame.loc[10, "bmi"] = 77.7123  # an entry error
+    bmi = DerivedVariable("bmi", "weight_kg / (height_cm / 100) ** 2")
+    plain = DataQualityAuditor(frame.copy())
+    plain.run_audit()
+    audited = DataQualityAuditor(frame.copy(), config=_derived(bmi))
+    assert audited.run_audit() == plain.metrics  # advice only: the score does not change
+    assert not any(a["category"] == "Derived variables" for a in plain.advice)
+    advice = next(a for a in audited.advice if a["category"] == "Derived variables")
+    message = advice["message"]
+    assert "gives the recorded value in 114 of 115 rows" in message
+    assert "check the other row (a probable entry error)" in message
+    assert "can compute 5 of its missing values" in message
+    assert "77.7" not in message and advice["severity"] == "low"
+    # an imputed cell is not compared: the error, filled by an imputation, is no longer counted
+    imputed = DataQualityAuditor(frame.copy(), config=_derived(bmi), imputed={"bmi": [10]})
+    imputed.run_audit()
+    advice = next(a for a in imputed.advice if a["category"] == "Derived variables")
+    assert "check the" not in advice["message"]
+
+
+def test_a_formula_that_cannot_be_used_or_disagrees_is_named() -> None:
+    from core.derived import DerivedVariable
+
+    frame = _bmi_frame()
+    audited = DataQualityAuditor(
+        frame,
+        config=_derived(
+            DerivedVariable("bmi", "weight_kg / height_m ** 2"),  # no such column
+            DerivedVariable("weight_kg", "bmi * (height_cm / 10) ** 2"),  # a factor of 100 out
+        ),
+    )
+    audited.run_audit()
+    advice = next(a for a in audited.advice if a["category"] == "Derived variables")
+    assert "`bmi`: its formula cannot be used on these data." in advice["message"]
+    assert "`weight_kg`: the data disagree with its formula" in advice["message"]
+    assert advice["severity"] == "medium"
+    # a formula the data follow everywhere, with nothing to compute: nothing to say
+    agreeing = DataQualityAuditor(
+        frame, config=_derived(DerivedVariable("bmi", "weight_kg / (height_cm / 100) ** 2"))
+    )
+    agreeing.run_audit()
+    assert not any(a["category"] == "Derived variables" for a in agreeing.advice)
+
+
+def _advice(frame: pd.DataFrame, *definitions) -> str:
+    auditor = DataQualityAuditor(frame, config=_derived(*definitions))
+    auditor.run_audit()
+    return next(a for a in auditor.advice if a["category"] == "Derived variables")["message"]
+
+
+def test_a_check_s_reason_never_reaches_the_advice() -> None:
+    """A check's reason can quote a value of the data (a town, a level): the advice says what it is instead."""
+    from core.derived import DerivedVariable
+    from enrich.derived import CANNOT, DISAGREES, check_derived
+
+    frame = _bmi_frame(200)
+    frame["site"] = np.where(np.arange(200) % 2, "Esch-sur-Alzette", "Ettelbruck")
+    reads_text = DerivedVariable("bmi", "weight_kg / site")
+    assert check_derived(reads_text, frame).verdict == CANNOT
+    assert "Esch-sur-Alzette" in (check_derived(reads_text, frame).reason or "")
+    # a factor wrong for one sex only: it agrees overall, not for that level
+    frame["sex"] = np.where(np.arange(200) < 16, 1, 2)
+    frame["weight_adj"] = np.round(frame["weight_kg"] * np.where(frame["sex"] == 1, 0.9, 1.0), 1)
+    by_sex = DerivedVariable("weight_adj", "np.where(sex == 1, 1.0, 1.0) * weight_kg")
+    check = check_derived(by_sex, frame)
+    assert check.verdict == DISAGREES and check.level_of == "sex" and "sex = 1" in (check.reason or "")
+    message = _advice(frame, reads_text, by_sex)
+    assert "`bmi`: its formula cannot be used on these data." in message
+    assert "for one of the values of `sex`, although it gives the recorded value in 184 of 200 rows" in message
+    assert "Esch" not in message and "Ettelbruck" not in message and "sex = 1" not in message
+
+
+def test_too_few_rows_and_a_constant_variable_are_told_apart() -> None:
+    from core.derived import DerivedVariable
+
+    few = _advice(_bmi_frame(40), DerivedVariable("bmi", "weight_kg / (height_cm / 100) ** 2"))
+    assert "too few rows have it and every variable of its formula recorded to check it (40; the check needs 60)" in few
+    frame = _bmi_frame(120).assign(heavy=0)
+    constant = _advice(frame, DerivedVariable("heavy", "np.where(weight_kg > 500, 1, 0)"))
+    assert "`heavy`: it takes one value in nearly every row, so the check cannot tell its formula from chance." in constant
+
+
+def test_a_name_is_quoted_as_code_and_cannot_become_a_link() -> None:
+    """A variable named in an uploaded configuration is the user's text: on a page that renders markdown, as code."""
+    from core.derived import DerivedVariable
+
+    message = _advice(_bmi_frame(), DerivedVariable("[x](https://example.org)", "weight_kg * 2"))
+    assert "`[x](https://example.org)`: its formula cannot be used on these data." in message
+    assert message.count("](https://example.org)") == 1  # only inside the code span

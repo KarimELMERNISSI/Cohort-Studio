@@ -1,16 +1,22 @@
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
+from core.derived import from_config
 from core.population import family_masks
+from core.registry import as_code
+from enrich.derived import CANNOT, DISAGREES, MIN_ROWS, MOSTLY, TOO_FEW, check_derived
 
 logger = logging.getLogger(__name__)
 
 # What each dimension's details table holds: where the issue is, what it is, how many, and the share affected.
 DETAIL_COLUMNS: tuple[str, ...] = ("Where", "Issue", "Count", "Share")
+# the advice on the declared derived variables (DataQualityAuditor.derived_advice), which the dashboard links to their tab
+DERIVED_CATEGORY = "Derived variables"
 
 
 def _details(rows: list[tuple[str, str, float | None, float | None]]) -> pd.DataFrame:
@@ -30,9 +36,13 @@ class DataQualityAuditor:
     - Clinical Validity: Compliance with declared anomaly criteria.
     """
 
-    def __init__(self, df: pd.DataFrame, config: Any | None = None) -> None:
+    def __init__(
+        self, df: pd.DataFrame, config: Any | None = None, imputed: Mapping[str, Any] | None = None
+    ) -> None:
         self.df: pd.DataFrame = df
         self.config = config
+        # the cells an imputation filled (row ids per column): a derived variable's check does not compare them
+        self.imputed = imputed
         self.metrics: dict[str, float] = {}
         self.advice: list[dict[str, str]] = []
         self.clinical_anomalies_df = None
@@ -540,6 +550,11 @@ class DataQualityAuditor:
                 "severity": "low"
             })
 
+        # 7. Derived variables (advice only: the score does not change)
+        derived = self.derived_advice()
+        if derived is not None:
+            self.advice.append(derived)
+
         if not self.advice:
             self.advice.append({
                 "category": "General",
@@ -548,3 +563,64 @@ class DataQualityAuditor:
             })
 
         return self.advice
+
+    def derived_advice(self) -> dict[str, str] | None:
+        """
+        The declared derived variables (Enrich > Handle Missing Data > Derived variables) against the data, every row:
+        the recorded values their formula does not give, and the missing values it can compute ("computational
+        conformance", Kahn et al. 2016). Variable names (as code: a name can come from an uploaded file), counts and the
+        check's tolerance, never a row's value nor a check's reason (it can quote one); none when nothing is declared
+        or there is nothing to say. Shown on screen only: an export would need the study package's disclosure rule
+        (k = 5 for each count and difference).
+        """
+        definitions = from_config(self.config) if isinstance(self.config, Mapping) else ()
+        lines: list[str] = []
+        severity = "low"
+        for definition in definitions:
+            check = check_derived(definition, self.df, imputed=self.imputed)
+            name, evidence = as_code(definition.target), check.describe(as_code)
+            if check.verdict == CANNOT:
+                lines.append(f"{name}: its formula cannot be used on these data.")
+                continue
+            if check.verdict == TOO_FEW:
+                lines.append(
+                    f"{name}: too few rows have it and every variable of its formula recorded to check it "
+                    f"({check.compared:,}; the check needs {MIN_ROWS})."
+                    if check.compared < MIN_ROWS
+                    else f"{name}: it takes one value in nearly every row, so the check cannot tell its formula "
+                    "from chance."
+                )
+                continue
+            other = check.compared - check.agreeing
+            errors = "a probable entry error" if other == 1 else "probable entry errors"
+            if check.verdict == DISAGREES:
+                severity = "medium"
+                if check.level_of:  # the level itself is a value of the data: never named
+                    lines.append(
+                        f"{name}: the data disagree with its formula for one of the values of "
+                        f"{as_code(check.level_of)}, although it {evidence}."
+                    )
+                else:
+                    hint = f" ({check.unit_hint})" if check.unit_hint else ""
+                    lines.append(f"{name}: the data disagree with its formula, which {evidence}{hint}.")
+            elif other:
+                rows = "the other row" if other == 1 else f"the {other:,} other rows"
+                if check.unit_hint:
+                    why = check.unit_hint
+                elif check.verdict == MOSTLY and check.tolerance is None:  # a text or a code
+                    why = f"{errors}, or another definition (a cut-off)"
+                else:
+                    why = errors
+                lines.append(f"{name}: its formula {evidence}; check {rows} ({why}).")
+            if check.usable and check.fillable:
+                lines.append(
+                    f"{name}: its formula can compute {check.fillable:,} of its missing values (Fill exactly)."
+                )
+        if not lines:
+            return None
+        return {
+            "category": DERIVED_CATEGORY,
+            "message": "The declared derived variables, checked against their formulas:\n\n"
+            + "\n".join(f"- {line}" for line in lines),
+            "severity": severity,
+        }

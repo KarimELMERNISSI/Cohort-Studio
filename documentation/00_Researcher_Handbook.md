@@ -22,7 +22,7 @@ The **Start** page shows the workflow as a diagram. Three core steps take you fr
 
 | Optional path | When | What it adds | Page |
 | --- | --- | --- | --- |
-| Enrich the cohort | after validation, as often as needed | merge external sources, derive variables (formulas or AI suggestions), impute missing values; enrichment is incremental, so validate and analyse again after each change and come back for the next one (two-headed arrows on the diagram) | Data > Enrich |
+| Enrich the cohort | after validation, as often as needed | merge external sources, derive variables (formulas or AI suggestions), impute missing values; enrichment is incremental, so validate and analyse again after each change and come back for the next one (two-headed arrows on the diagram) | Data > Enrich; the card's **Derived variables** link opens Handle Missing Data > Derived variables |
 | Map your variables to your field | any time (AI engine) | a taxonomy of your variables grounded in your clinical domain and documents: definitions, units, relationships, formulas | Knowledge > Variable map |
 | Learn from your documents | any time (AI engine) | index literature, protocols or data dictionaries; chat with them; extract a knowledge graph that informs the variable map and enrichment suggestions | Knowledge > Documents |
 | Report and reproduce | at the end, or any time | saved versions, the trace of every step, step-by-step replay and the Word report | Reproduce > Versions & traces |

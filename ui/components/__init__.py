@@ -6,7 +6,7 @@ Only native Streamlit elements are used (no raw HTML), so light and dark themes 
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -19,26 +19,54 @@ from ui.theme import APP_NAME, STATUS_COLORS
 
 
 def page_link(
-    key: str, label: str | None = None, *, icon: str | None = None, width: str = "content"
+    key: str,
+    label: str | None = None,
+    *,
+    icon: str | None = None,
+    width: str = "content",
+    tab: str | None = None,
 ) -> None:
-    """Link to a registered page; degrades to a caption outside ``st.navigation`` (tests, bare mode)."""
+    """
+    Link to a registered page, opened on one of its tabs when ``tab`` names one it declares (``nav.PageDef.tabs``);
+    degrades to a caption outside ``st.navigation`` (tests, bare mode).
+    """
     definition = nav.page(key)
+    query = nav.tab_query(
+        key, tab
+    )  # an undeclared tab is refused, here rather than swallowed below
     try:
         st.page_link(
             nav.page_path(key),
             label=label or definition.title,
             icon=icon or definition.icon,
             width=width,
+            query_params=query,
         )
     except Exception:
         st.caption(f"-> {label or definition.title}")
 
 
-def switch_to(key: str) -> None:
+def switch_to(key: str, *, tab: str | None = None) -> None:
+    """Open a registered page, on one of its tabs when ``tab`` names one it declares (``nav.PageDef.tabs``)."""
+    query = nav.tab_query(key, tab)
     try:
-        st.switch_page(nav.page_path(key))
+        st.switch_page(nav.page_path(key), query_params=query)
     except Exception:
         st.rerun()
+
+
+def linked_tabs(
+    page: str, labels: Sequence[str], *, depth: int = 0, **kwargs: Any
+) -> Sequence[Any]:
+    """
+    ``st.tabs`` opened on the tab a link names (``nav.PageDef.tabs``, by the query parameter ``nav.TAB_PARAM``): the
+    label at ``depth`` of its path, the outer row being 0. A label the row does not hold (a tab renamed since the link
+    was made) opens the row as usual. The parameter stays in the address while the page is open, so the tab does not
+    change between reruns.
+    """
+    opened = nav.opened_tabs(page, st.query_params.get(nav.TAB_PARAM))
+    label = opened[depth] if len(opened) > depth else None
+    return st.tabs(list(labels), default=label if label in labels else None, **kwargs)
 
 
 # ----------------------------------------------------------------------------- page structure
@@ -323,6 +351,7 @@ __all__ = [
     "error_card",
     "glossary_popover",
     "help_popover",
+    "linked_tabs",
     "long_op",
     "no_ai",
     "no_dataset",

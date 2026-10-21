@@ -586,7 +586,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   neither imputed nor used to impute any other variable, then computes its missing values by its formula from the
   imputed values; a value computed from an imputed one is single-imputed, and the step's description says so. The
   three parts reach the draft together or not at all. Imputed as a variable of its own, a BMI no longer followed its
-  formula, and with chained equations it gave the height back its own earlier guess. The page names what stays
+  formula, and with chained equations the height and the BMI predicted each other, so that they barely moved from
+  their first guesses. The page names what stays
   missing and the rows where a recorded derived variable no longer matches its imputed variables. The option is
   unavailable with one-hot encoding, scaling or dropped columns. The imputation step records the variables kept out
   (the replay keeps them out too) and the definitions used or declined; declining them leaves the imputation one that
@@ -607,6 +608,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   edited after the run is named. The step records the approach (`impute_then_derive`, an id that is never renamed,
   any other stopping the replay) with the formulas, their variables, order and rounding, or the definitions declined;
   the replay computes the same cells, and the imputation watches the variables its formulas read.
+- **Validate's dashboard checks the declared derived variables** (Recommendations & best practices): on every row of
+  the dataset, the rows where a recorded value is not the one its formula gives (probable entry errors, or another
+  unit when a published factor explains them), the missing values its formula can compute, and a formula that
+  cannot be used, cannot be checked (too few rows, or a variable taking one value) or that the data disagree with,
+  also for one value of a code or text variable, which it does not name. Variable names and counts, never a row's
+  value nor the check's reason, which can quote one; the values an imputation filled are not compared. A link opens
+  the Derived variables tab. Advice only: the quality score does not change. The audit is computed again when the
+  definitions change. The recommendations are no longer headed "AI-Driven": they are rules.
+- **A unit the check names comes with its published factor** (2.2046 for kg and lb, 88.4 for a creatinine in mg/dL),
+  no longer the ratio measured on the rows that disagree, which a few rows' values give.
+- **The Start page's Enrich card links to the Derived variables**: the link opens Data > Enrich on Handle Missing
+  Data > Derived variables. A page declares in the navigation registry the tabs a link can open (`tab` in the
+  address); a value it does not declare opens the page as usual.
 - **The tutorial cohort has three variables computed from others** (41 columns): `bmi_kg_m2` from the weight and the
   height, `egfr_ml_min_1_73m2` (CKD-EPI 2021, not reported under 18) and `hf_phenotype` (ESC 2021) from the ejection
   fraction. They hold the values of the hospital record and the laboratory, so each disagrees with its formula

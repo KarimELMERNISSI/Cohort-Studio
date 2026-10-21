@@ -302,7 +302,8 @@ def _dashboard_script() -> None:
     render_dashboard(state.base, ss["config"])
     if ss.pop("compare", False):  # the scorecard's audit, asked for again
         settings = ss["validity_outlier_method"], ss["validity_outlier_params"]
-        ss["probe"] = {"metrics": state.quality_audit(*settings)[1], "base": state.base}
+        _, metrics, advice = state.quality_audit(*settings)
+        ss["probe"] = {"metrics": metrics, "advice": advice, "base": state.base}
 
 
 def test_the_quality_audit_runs_once_per_data_and_detection_settings(
@@ -359,3 +360,19 @@ def test_the_quality_audit_runs_once_per_data_and_detection_settings(
     assert probe["metrics"] == run_audit(
         fresh, validity_method="zscore", validity_params={"threshold": 3.0}
     )
+    assert not any(a["category"] == "Derived variables" for a in probe["advice"])
+    # a derived variable declared (the configuration replaced, as the Derived variables tab does): audited again,
+    # once, and advised on; the score does not change
+    from core.derived import DerivedVariable, with_definitions
+
+    bmi = DerivedVariable("bmi_kg_m2", "weight_kg / (height_cm / 100) ** 2")
+    at.session_state["config"] = with_definitions(at.session_state["config"], [bmi])
+    at.session_state["compare"] = True
+    at.run()
+    at.run()
+    assert not at.exception and audits == [iqr, iqr2, zscore, zscore, zscore, zscore]
+    assert at.session_state["probe"]["metrics"] == probe["metrics"]
+    advice = [
+        a for a in at.session_state["probe"]["advice"] if a["category"] == "Derived variables"
+    ]
+    assert len(advice) == 1 and "`bmi_kg_m2`" in advice[0]["message"]

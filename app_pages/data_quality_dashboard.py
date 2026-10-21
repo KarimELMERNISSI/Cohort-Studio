@@ -10,6 +10,7 @@ import streamlit as st
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
+from explore.data_quality_auditor import DERIVED_CATEGORY
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
     DIMENSION_HELP,
@@ -18,6 +19,7 @@ from explore.quality_score import (
     ordered,
     weighted_score,
 )
+from ui.components import page_link
 from ui.progress import mark_step, record_quality_check
 from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
 from ui.state import get_state
@@ -224,7 +226,7 @@ def render_dashboard(df, config):
 
     # --- 2. Actionable Advice ---
     if advice_list:
-        with st.expander("AI-Driven Recommendations & Best Practices", expanded=True):
+        with st.expander("Recommendations & best practices", expanded=True):
             
             # Split into two columns: Specific Advice vs General Best Practices
             col_advice, col_best_practices = st.columns([1.5, 1])
@@ -242,6 +244,9 @@ def render_dashboard(df, config):
                     with st.container(border=True):
                         st.markdown(f"{severity_badge} **{item['category']}**")
                         st.markdown(item['message'])
+                        if item['category'] == DERIVED_CATEGORY:
+                            page_link("enrich", "Open the derived variables", icon=":material/calculate:",
+                                      tab="derived_variables")
             
             with col_best_practices:
                 st.markdown("### Data Quality Best Practices")

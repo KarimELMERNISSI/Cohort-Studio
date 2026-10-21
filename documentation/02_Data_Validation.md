@@ -244,3 +244,13 @@ double by default, and is left out when no anomaly rule is declared). It is draw
 
 > **Tip**: Focus on resolving high-impact issues first — the top bar of "Where the score loses points" — then come
 > back after each change to see its effect on the score.
+
+**Recommendations & best practices**, under the score, lists what each dimension that loses points suggests. With
+derived variables declared (Data > Enrich > Handle Missing Data > Derived variables), it also checks each one against
+every row of the dataset, as Kahn et al. (2016) describe computational conformance: the rows where the recorded value
+is not the one its formula gives (probable entry errors, or another unit when a published factor explains them), the
+missing values its formula can compute (Fill exactly computes those of the analysis population), and a formula that
+cannot be used, cannot be checked (too few rows, or a variable taking one value) or that the data disagree with, also
+for one value of a code or text variable, which it does not name. It names the variables and counts the rows, never
+shows a row's value, and does not compare the values an imputation filled. Its link opens the Derived variables tab.
+It is advice only: the score does not change.

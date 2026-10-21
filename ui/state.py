@@ -718,11 +718,12 @@ class AppState:
             slot=f"derived_inverse::{definition.target}::{name}",
         )
 
-    def imputed_cells(self) -> dict[str, Any]:
+    def imputed_cells(self, *, base: bool = False) -> dict[str, Any]:
         """The cells of the Enrich data an imputation filled, single or exact (row ids per column): values no one
-        recorded, which a derived variable's check leaves out."""
+        recorded, which a derived variable's check leaves out. ``base``: those of the dataset, a pending draft's
+        aside (Validate audits the dataset)."""
         session = self.session
-        source = session.draft if session.draft is not None else session
+        source = session.draft if session.draft is not None and not base else session
         return merge_cells(dict(source.single_imputed), dict(source.exact_imputed))
 
     def exact_fill_plan(self) -> FillPlan:
@@ -1012,12 +1013,14 @@ class AppState:
     ) -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
         """
         The quality audit of every row (the Validate dashboard): the auditor, its metrics and its advice. It is kept
-        until the data, the criteria definitions or the validity method change; the page only reads the auditor. One
-        audit is kept per session, with the rows that break an anomaly rule (``clinical_anomalies_df``).
+        until the data, the criteria definitions, the declared derived variables or the validity method change; the
+        page only reads the auditor. One audit is kept per session, with the rows that break an anomaly rule
+        (``clinical_anomalies_df``).
         """
         import copy
         import hashlib
 
+        from core.derived import CONFIG_KEY
         from core.lineage import canonical_json
         from explore.data_quality_auditor import DataQualityAuditor
 
@@ -1029,15 +1032,23 @@ class AppState:
             self.config
         )  # changed in place by the page: its content is the key, read on every run
         rules = canonical_json(config.get("mask_families") or {})
+        derived = canonical_json(config.get(CONFIG_KEY) or {})  # checked by the advice
         settings = dict(params or {})
         key = (
             hashlib.sha256(rules.encode("utf-8")).hexdigest(),
+            hashlib.sha256(derived.encode("utf-8")).hexdigest(),
             str(method),
             canonical_json(settings),
         )
 
         def audit() -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
-            auditor = DataQualityAuditor(base.copy(deep=False), config=copy.deepcopy(config))
+            # the cells an imputation filled (the derived variables' check does not compare them) change only with
+            # the data, which empty the memo
+            auditor = DataQualityAuditor(
+                base.copy(deep=False),
+                config=copy.deepcopy(config),
+                imputed=self.imputed_cells(base=True),
+            )
             metrics = auditor.run_audit(validity_method=method, validity_params=settings)
             return auditor, metrics, list(auditor.advice)
 

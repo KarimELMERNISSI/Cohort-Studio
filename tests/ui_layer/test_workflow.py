@@ -9,6 +9,7 @@ from ui.workflow import (
     BOX_W,
     BRANCHES,
     CANVAS,
+    CORE_STEPS,
     EDGES,
     NEXT_TEXT,
     NODES,
@@ -59,9 +60,43 @@ def test_branches_link_to_registered_pages() -> None:
     assert [b.key for b in BRANCHES] == ["enrich", "variable_map", "documents", "reproduce"]
     for branch in BRANCHES:
         assert branch.key in keys
-        assert branch.links and all(key in keys for key, _ in branch.links)
         assert branch.title and branch.when and branch.text
     assert {b.key for b in BRANCHES if b.needs_ai} == {"variable_map", "documents"}
+    enrich = next(b for b in BRANCHES if b.key == "enrich")
+    assert [link.tab for link in enrich.links] == [None, "derived_variables"]
+    # the core path's cards: one per step of the diagram's core path
+    assert [s.key for s in CORE_STEPS] == ["load", "validate", "analyse"]
+    assert {s.key for s in CORE_STEPS} <= {n.id for n in NODES if n.kind == "core"}
+
+
+def test_every_start_page_link_opens_a_registered_page_and_a_tab_it_declares() -> None:
+    keys = {p.key for p in nav.PAGES}
+    for card in (*CORE_STEPS, *BRANCHES):
+        assert card.links and all(link.page in keys for link in card.links), card.title
+        assert all(
+            link.tab is None or link.tab in dict(nav.page(link.page).tabs) for link in card.links
+        ), card.title
+
+
+def test_a_link_opens_a_tab_its_page_declares() -> None:
+    import pytest
+
+    from ui.components import page_link, switch_to
+
+    assert nav.opened_tabs("enrich", "derived_variables") == (
+        "Handle Missing Data",
+        "Derived variables",
+    )
+    # no parameter, an old or mistyped one, or another page's: the page opens as usual
+    assert nav.opened_tabs("enrich", None) == () == nav.opened_tabs("enrich", "no_such_tab")
+    assert nav.opened_tabs("validate", "derived_variables") == ()
+    assert nav.tab_query("enrich", "derived_variables") == {nav.TAB_PARAM: "derived_variables"}
+    assert nav.tab_query("enrich", None) is None
+    # a link or a switch to a tab the page does not declare fails, rather than opening the page as usual
+    with pytest.raises(ValueError, match="declares no tab"):
+        page_link("validate", "Derived variables", tab="derived_variables")
+    with pytest.raises(ValueError, match="declares no tab"):
+        switch_to("validate", tab="derived_variables")
 
 
 def test_every_box_opens_a_registered_page() -> None:

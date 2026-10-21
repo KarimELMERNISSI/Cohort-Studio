@@ -14,6 +14,8 @@ NAV_POSITION = (
     "top"  # "top" keeps the sidebar free for the dataset card; "sidebar" is the alternative.
 )
 VIEWS_DIR = "app_pages/views"
+# the query parameter of a link that opens one tab of its page (PageDef.tabs), read by that page
+TAB_PARAM = "tab"
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,8 @@ class PageDef:
     admin: bool = False
     default: bool = False
     chapter: str | None = None  # handbook chapter (documentation/<chapter>.md)
+    # the tabs a link can open, by the value of TAB_PARAM (an id kept in the links): their labels, outer tab first
+    tabs: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 PAGES: tuple[PageDef, ...] = (
@@ -66,6 +70,7 @@ PAGES: tuple[PageDef, ...] = (
         "Data",
         ":material/auto_fix_high:",
         chapter="03_Data_Enrichment",
+        tabs=(("derived_variables", ("Handle Missing Data", "Derived variables")),),
     ),
     PageDef(
         "explore",
@@ -175,6 +180,22 @@ def page_path(key: str) -> str:
     return f"{VIEWS_DIR}/{page(key).file}"
 
 
+def opened_tabs(key: str, value: object) -> tuple[str, ...]:
+    """The labels of the tabs of page ``key`` that the value of TAB_PARAM opens, outer tab first; none for a value the
+    page does not declare (an old or mistyped link opens the page as usual)."""
+    return dict(page(key).tabs).get(str(value), ()) if value else ()
+
+
+def tab_query(key: str, tab: str | None) -> dict[str, str] | None:
+    """The query parameters of a link to page ``key`` opened on ``tab`` (none without one). A tab the page does not
+    declare is refused, so that a mistyped link fails in the tests instead of opening the page as usual."""
+    if tab is None:
+        return None
+    if tab not in dict(page(key).tabs):
+        raise ValueError(f"the page {key!r} declares no tab {tab!r}")
+    return {TAB_PARAM: tab}
+
+
 def visible_pages(is_admin: bool) -> list[PageDef]:
     return [p for p in PAGES if is_admin or not p.admin]
 
@@ -196,9 +217,12 @@ def build_navigation(is_admin: bool) -> dict[str, list]:
 __all__ = [
     "NAV_POSITION",
     "PAGES",
+    "TAB_PARAM",
     "PageDef",
     "build_navigation",
+    "opened_tabs",
     "page",
     "page_path",
+    "tab_query",
     "visible_pages",
 ]

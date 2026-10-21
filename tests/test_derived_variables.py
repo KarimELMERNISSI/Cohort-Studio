@@ -180,6 +180,18 @@ def test_another_unit_is_named_when_a_constant_factor_explains_the_disagreement(
     check = check_derived(DerivedVariable("bmi", "weight_kg / height_cm ** 2"), cohort)
     assert check.verdict == DISAGREES
     assert check.unit_hint == "the recorded values are 10,000 times the formula's: another unit?"
+    # a named unit: the published factor, never the ratio measured on the disagreeing rows
+    pounds = cohort.assign(weight_lb=cohort["weight_kg"] * 2.2046)
+    check = check_derived(
+        DerivedVariable("weight_lb", "weight_kg * 1.001"), pounds
+    )  # measured: 2.2024
+    assert check.unit_hint == (
+        "the recorded values are 2.2046 times the formula's: another unit (kg and lb)?"
+    )
+    check = check_derived(DerivedVariable("weight_lb", "weight_kg * 2.2046 * 2.2"), pounds)
+    assert check.unit_hint == (
+        "the formula's values are 2.2046 times the recorded ones: another unit (kg and lb)?"
+    )
     mixed = cohort.copy()
     mixed.loc[:39, "bmi"] *= 1e4  # 40 rows from a site recording another unit
     check = check_derived(DerivedVariable("bmi", BMI), mixed)

@@ -58,7 +58,9 @@ have fewer cells to estimate and more information to estimate them from.
 ### Derived variables
 
 Optional. Declare the variables your data compute from others in the same row: a BMI from the weight and the height,
-a total from its items, a unit conversion. With no definition, nothing changes.
+a total from its items, a unit conversion. With no definition, nothing changes. The Start page's Enrich card opens
+this tab (**Derived variables**), and the Data > Validate dashboard repeats the check on every row of the dataset
+among its recommendations.
 
 **Add a definition**: choose the variable, write its formula in the language of **Create New Variables**, and say,
 if you wish, what kind of definition it is and its source (the reference, the units it assumes). Before you add it,
@@ -180,8 +182,9 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 | **Compute the declared derived variables' missing values from the imputed values** | Shown when the Derived variables tab declares a definition the data agree with (or one you accepted); ticked by default. See below. |
 
 **Derived variables.** A derived variable imputed as a variable of its own no longer follows its formula (an imputed
-BMI is not the weight over the height squared); with chained equations or missForest, an imputed BMI used to impute
-the height also gives it back its own earlier guess. With the option ticked, **Apply Imputer** does three things,
+BMI is not the weight over the height squared); with chained equations or missForest, the height and the BMI then
+predict each other, so that they barely move from their first guesses. With the option ticked, **Apply Imputer** does
+three things,
 which reach the draft together or not at all:
 1. it first fills what the formulas give exactly, as **Fill exactly** does (a height from the BMI and the weight);
 2. it imputes the rest with each derived variable still missing kept out: neither imputed nor used to impute any other
