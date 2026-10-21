@@ -46,7 +46,7 @@ def test_load_the_tutorial_cohort_with_its_configuration(app: AppTest) -> None:
     app.button(key="start_tutorial").click().run()
     _ok(app)
     data = app.session_state["data"]
-    assert data.shape == (1206, 38)
+    assert data.shape == (1206, 41)
     families = app.session_state["config"]["mask_families"]
     assert len([k for k in families["clinical_anomalies"] if k != "operator"]) == 8
     assert len([k for k in families["study_inclusion"] if k != "operator"]) == 4

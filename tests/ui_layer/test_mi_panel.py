@@ -36,9 +36,9 @@ def app(tmp_path: Path):
 def test_panel_guides_from_missingness_to_a_methods_paragraph(app: AppTest) -> None:
     metrics = {m.label: m.value for m in app.metric}
     assert (
-        metrics["Analysis population"] == "1,206 rows" and metrics["Suggested imputations"] == "48"
+        metrics["Analysis population"] == "1,206 rows" and metrics["Suggested imputations"] == "56"
     )
-    assert app.number_input(key="mi_m").value == 48
+    assert app.number_input(key="mi_m").value == 56
     app.number_input(key="mi_m").set_value(2)
     app.number_input(key="mi_maxit").set_value(2)
     app.multiselect(key="mi_outcomes").set_value(["sbp_6m"])
@@ -50,6 +50,10 @@ def test_panel_guides_from_missingness_to_a_methods_paragraph(app: AppTest) -> N
         "nt_probnp_pg_ml",
         "sbp_6m",
         "ldl_mmol_l",
+        "height_cm",
+        "bmi_kg_m2",
+        "egfr_ml_min_1_73m2",
+        "hf_phenotype",
     }
     assert app.selectbox(key="mi_diag_variable").options == list(stored.mi.imputations)
     paragraph = app.code[-1].value

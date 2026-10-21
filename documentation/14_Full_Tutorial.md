@@ -2,7 +2,7 @@
 
 This tutorial walks through every step of CohortStudio with the **tutorial cohort**: a synthetic, randomised
 heart-failure study run at 4 sites (Luxembourg, Esch-sur-Alzette, Ettelbruck, Metz). There are 1,200 patients
-in 1,206 rows, because 6 patients were entered twice. There are 38 variables, and errors and gaps were planted
+in 1,206 rows, because 6 patients were entered twice. There are 41 variables, and errors and gaps were planted
 in the data on purpose. No real patient is involved. Each step says what you should see, so you can check that you are on track.
 
 **Time needed:** about 45 minutes. **AI engine:** not needed except for the optional step 7.
@@ -11,7 +11,7 @@ in the data on purpose. No real patient is involved. Each step says what you sho
 
 | File | What it is | Where it is used |
 | --- | --- | --- |
-| `tutorial_cohort.csv` | The cohort (1,206 rows, 38 columns, dates in dd/mm/yyyy) | Step 1 |
+| `tutorial_cohort.csv` | The cohort (1,206 rows, 41 columns, dates in dd/mm/yyyy) | Step 1 |
 | `tutorial_config.json` | The study configuration: 8 clinical anomaly rules and 4 inclusion criteria | Step 2 |
 | `tutorial_followup_labs.csv` | The 6-month laboratory visit (1,017 patients), to merge on `patient_id` | Step 3 |
 | `tutorial_dictionary.md` | The data dictionary and the list of planted problems | Throughout |
@@ -24,7 +24,7 @@ Download them from **Start > Tutorial cohort > Tutorial files**. They are also i
 
 1. On **Start**, in the *Tutorial cohort* card, click **Load the tutorial cohort**. This loads the cohort **and**
    its study configuration.
-2. The sidebar shows `tutorial_cohort`, **1,206 rows · 38 columns**. On the workflow map, *Load data* is ticked and
+2. The sidebar shows `tutorial_cohort`, **1,206 rows · 41 columns**. On the workflow map, *Load data* is ticked and
    *Validate* is the suggested next step.
 
 *Doing it by hand instead:* go to **Data > Import**, upload `tutorial_cohort.csv` and tick *day first* (the dates are
@@ -47,7 +47,8 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 - **Uniformity**: the `sex` column mixes codes (*male*, *Female*, *f*, *M* with a trailing space, ...) and 8 `site`
   values end with a space. You will clean both in step 3. Until then, the lists of groups on Analyze show such a
   space as ␣ (*Luxembourg␣*), and warn that these groups differ only by spaces or capitals.
-- **Completeness**: the cells missing in `hba1c_pct`, `nt_probnp_pg_ml`, `sbp_6m` and `ldl_mmol_l` (see 2.5).
+- **Completeness**: the cells missing in `hba1c_pct`, `nt_probnp_pg_ml`, `sbp_6m`, `ldl_mmol_l` and `height_cm`, and in
+  three variables computed from others: `bmi_kg_m2`, `egfr_ml_min_1_73m2` and `hf_phenotype` (see 2.5).
 
 ### 2.2 Clinical anomalies
 
@@ -109,7 +110,7 @@ strongly right-skewed. These are real patients, not errors: **do not exclude the
 
 ### 2.5 Missing data
 
-The dashboard's missing-data views show four documented patterns:
+The dashboard's missing-data views show these documented patterns:
 
 | Variable | Missing | Pattern |
 | --- | --- | --- |
@@ -117,6 +118,8 @@ The dashboard's missing-data views show four documented patterns:
 | `hba1c_pct` | about 22% | depends on `diabetes`: rarely measured in patients without diabetes (MAR) |
 | `nt_probnp_pg_ml` | about 15% | depends on NYHA class: less often measured in mild disease (MAR) |
 | `sbp_6m` | about 16% | **structural**: the patient died or left before the 6-month visit |
+| `height_cm` | about 5% | depends on `age`: less often measured in older patients (MAR); a few heights were measured but not transcribed |
+| `bmi_kg_m2`, `egfr_ml_min_1_73m2`, `hf_phenotype` | 3 to 7% | not transcribed, no BMI without a height, no eGFR under 18: each is **computed from other variables**, which can fill most of them (step 3.3) |
 
 Finally, save a version with **Save** in the sidebar. Validate is now ticked on the Start page.
 
@@ -147,20 +150,54 @@ its source columns, with its statistics on the analysis population, before **Con
 | --- | --- |
 | `site_clean` | `site.str.strip()` |
 | `sex_clean` | `np.where(sex.str.strip().str.lower().str.startswith('f'), 'F', 'M')` |
-| `bmi` | `weight_kg / (height_cm / 100) ** 2` |
-| `egfr` (CKD-EPI 2021) | `142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0)` |
+| `egfr_6m` (CKD-EPI 2021, at the 6-month visit) | `np.where(age >= 18, 142 * np.minimum(creatinine_6m_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_6m_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0), np.nan)` |
+
+The BMI and the eGFR at enrolment are already in the file, with gaps: step 3.3 declares how they are computed rather
+than computing them a second time.
 
 With the AI engine on, you can also start from **AI Variable Suggestions (RAG)** above the editor: search for
 *eGFR*, read the formula and its source, and **Apply to Editor** puts it in the editor, to check against the formula
 above before you compute it.
 
-`site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. eGFR averages about 68 mL/min/1.73 m2. Apply
-the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the data changed,
-so check the quality once more (step 2.1).
+`site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. `egfr_6m` averages about 68 mL/min/1.73 m2 in
+the 778 patients with a 6-month visit; `np.where(age >= 18, ..., np.nan)` keeps this adult equation away from
+minors. Apply the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the
+data changed, so check the quality once more (step 2.1).
 
 ### 3.3 Missing values
 
-In **Handle Missing Data**:
+In **Handle Missing Data**, start with the **Derived variables** tab. Three variables of the file are computed from
+others: `bmi_kg_m2` from the weight and the height, `egfr_ml_min_1_73m2` (CKD-EPI 2021) from creatinine, age and sex,
+and `hf_phenotype` (ESC 2021) from the ejection fraction. Declaring them is optional. The app then checks each formula
+against the rows where the variable and all its variables are recorded, and you know which gaps a formula can fill
+rather than an imputation. Under **Add a definition**, add:
+
+| Variable | Formula |
+| --- | --- |
+| `bmi_kg_m2` | `weight_kg / (height_cm / 100) ** 2` |
+| `egfr_ml_min_1_73m2` | `np.where(age >= 18, 142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0), np.nan)` |
+| `hf_phenotype` | `np.where(lvef_pct <= 40, 'HFrEF', np.where(lvef_pct <= 49, 'HFmrEF', 'HFpEF'))` |
+
+- `bmi_kg_m2` **agrees**: it gives the recorded value in **1,101 of 1,106 rows** (±0.05). Open *The 5 rows that
+  disagree*: they are the 3 heights typed in metres and the weights of 0 and 350 kg found in step 2.2. Then **Add
+  an inverse** for `height_cm`, `100 * (weight_kg / bmi_kg_m2) ** 0.5`: it recovers a height from the BMI and the
+  weight, and agrees too.
+- `egfr_ml_min_1_73m2` agrees in **1,143 of 1,144 rows**: the one that disagrees has the age 212. The
+  `np.where(age >= 18, ...)` keeps the adult equation away from the 3 minors, whose eGFR the laboratory did not
+  report. With `sex` instead of `sex_clean`, the 4 women typed *Female*, *f*, *F* with a trailing space and *female*
+  disagree too: clean the codes first.
+- `hf_phenotype` agrees in **1,171 of 1,172 rows**: the one that disagrees is the ejection fraction of 155%. Try the
+  ESC 2016 cut-off instead, `lvef_pct < 40` for HFrEF: it only **mostly agrees**, because the 39 patients at
+  exactly 40% are HFmrEF in 2016 and HFrEF in 2021.
+
+The line of each definition says how many missing values of the analysis population its formula can compute:
+**34** BMIs, **49** eGFRs and **30** phenotypes; the inverse can recover 10 heights. 24 patients have neither a
+height nor a BMI, which only an imputation can give. With the AI engine on, **Find them with the AI engine**
+proposes definitions from the column names and their typical values, each checked in the same way: if it proposes
+both CKD-EPI equations, only the 2021 one agrees. The definitions are saved with the criteria, in the configuration
+downloaded from Data > Validate.
+
+Then:
 
 - `ldl_mmol_l` is missing completely at random: single imputation (KNN or MICE) is acceptable for exploration.
   The imputation is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients
@@ -175,8 +212,11 @@ In **Handle Missing Data**:
      number of imputations.
   2. Step 2 keeps the variables of the planned analyses in the model, outcomes included (`death`, `fu_days`,
      `hf_hospitalisation`): leaving an outcome out would bias its associations towards zero. Set the method of
-     `sbp_6m` to *do not impute*: its values are missing because the patient died or left.
-  3. In step 3, keep the suggested m (the percentage of incomplete rows: about half of them miss at least one
+     `sbp_6m` to *do not impute*: its values are missing because the patient died or left. Set `bmi_kg_m2`,
+     `egfr_ml_min_1_73m2` and `hf_phenotype` to *do not impute* too: they are computed from other variables, and
+     imputing them as variables of their own breaks their formulas (an imputed BMI would not be the weight over the
+     height squared). Keep `height_cm`.
+  3. In step 3, keep the suggested m (the percentage of incomplete rows: more than half of them miss at least one
      value), tick the planned Cox model with time `fu_days` and event `death`, and use several processor
      cores.
   4. Run it. In step 4 the chain traces should mix without a trend. The imputed HbA1c values are lower than the

@@ -546,6 +546,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The definitions are kept with the criteria**, in the configuration downloaded and uploaded on Data > Validate. An
   upload adds the definitions the session does not have, each whole; a variable defined in both keeps the session's,
   and the upload names it.
+- **The tutorial cohort has three variables computed from others** (41 columns): `bmi_kg_m2` from the weight and the
+  height, `egfr_ml_min_1_73m2` (CKD-EPI 2021, not reported under 18) and `hf_phenotype` (ESC 2021) from the ejection
+  fraction. They hold the values of the hospital record and the laboratory, so each disagrees with its formula
+  exactly where a typing error was planted (the heights in metres, the age 212, the ejection fraction 155), and each
+  has gaps its formula can fill: 34 BMIs, 49 eGFRs and 30 phenotypes in the analysis population. 55 heights are now
+  missing, more often in older patients; 17 have a BMI that recovers them. Every other value, the 16 anomalies and
+  the 928 patients are unchanged; more than half of the rows now miss a value, so the suggested number of
+  imputations is higher (56 instead of 48 on the whole file). The tutorial (step 3.3) declares and checks them, step
+  3.2 computes the eGFR at the 6-month visit instead of a BMI and an eGFR the file now holds, and the multiple
+  imputation leaves the three out (*do not impute*).
 
 ### Privacy: what the AI engine writes, and the cells of a file, are shown as text
 

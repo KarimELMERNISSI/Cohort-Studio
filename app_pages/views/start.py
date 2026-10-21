@@ -148,8 +148,9 @@ with right:
     with st.container(border=True):
         st.subheader("Tutorial cohort", icon=":material/school:", anchor=False)
         st.caption(
-            "A randomised heart-failure cohort from 4 sites (1,206 rows, 38 variables) with planted data-entry errors, "
-            "patients to exclude, documented missingness, two raters, paired measurements and survival data. "
+            "A randomised heart-failure cohort from 4 sites (1,206 rows, 41 variables) with planted data-entry errors, "
+            "patients to exclude, documented missingness, variables computed from others, two raters, paired "
+            "measurements and survival data. "
             "Its study configuration (8 anomaly rules, 4 inclusion criteria) is loaded with it."
         )
         with st.container(horizontal=True, vertical_alignment="center"):

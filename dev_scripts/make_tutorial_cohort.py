@@ -4,7 +4,7 @@ Generate the tutorial pack (assets/tutorial/): a richer synthetic cohort for the
     python dev_scripts/make_tutorial_cohort.py
 
 Outputs:
-    assets/tutorial/tutorial_cohort.csv         1,206 rows (1,200 patients + 6 exact duplicates), 38 columns
+    assets/tutorial/tutorial_cohort.csv         1,206 rows (1,200 patients + 6 exact duplicates), 41 columns
     assets/tutorial/tutorial_followup_labs.csv  6-month laboratory visit, to merge on patient_id (Enrich)
     assets/tutorial/tutorial_dictionary.md      data dictionary, planted problems and expected findings
 
@@ -13,7 +13,8 @@ patients. Deterministic (seed 2027). Every analysis of the app has something to 
 matching the anomaly rules of tutorial_config.json, patients failing its inclusion criteria, MCAR / MAR /
 structural missingness, uniformity and duplicate problems, a paired before/after design, two raters,
 two measurement methods, a diagnostic marker against an adjudicated diagnosis, binary, count and
-time-to-event outcomes with real treatment effects, and a stratifying variable (site).
+time-to-event outcomes with real treatment effects, a stratifying variable (site), and variables computed from
+others (BMI, eGFR, heart-failure phenotype) with gaps that their formulas can fill.
 """
 
 from __future__ import annotations
@@ -72,6 +73,77 @@ DUPLICATED = (3, 250, 499, 750, 1000, 1150)
 
 def _expit(x):
     return 1 / (1 + np.exp(-x))
+
+
+def _ckd_epi_2021(creatinine_umol_l, age, female):
+    """eGFR in mL/min/1.73 m2, race-free CKD-EPI 2021 (Inker et al. 2021), from a creatinine in umol/L."""
+    ratio = np.asarray(creatinine_umol_l, dtype=float) / 88.4 / np.where(female, 0.7, 0.9)
+    return (
+        142
+        * np.minimum(ratio, 1) ** np.where(female, -0.241, -0.302)
+        * np.maximum(ratio, 1) ** -1.2
+        * 0.9938 ** np.asarray(age, dtype=float)
+        * np.where(female, 1.012, 1.0)
+    )
+
+
+def _with_derived(df: pd.DataFrame, true: pd.DataFrame) -> pd.DataFrame:
+    """
+    Three variables computed from others, as the hospital record and the laboratory hold them: from the values before
+    the planted typing errors, so each mistyped input disagrees with its formula. Their gaps, and the heights not
+    recorded, come from a random stream of their own (no existing value moves) and never fall on a row with a planted
+    problem, a duplicate or an exclusion.
+    """
+    n = len(df)
+    # one draw per patient for each reason a value is missing
+    u = np.random.default_rng([SEED, 1]).random((5, n))
+    special = np.zeros(n, dtype=bool)
+    for rows in (
+        *PLANTED.values(),
+        MINORS,
+        SEVERE_CKD,
+        NO_CONSENT,
+        tuple(SEX_VARIANTS),
+        SITE_TRAILING_SPACE,
+        DUPLICATED,
+    ):
+        special[list(np.atleast_1d(rows))] = True
+    minors = np.isin(np.arange(n), MINORS)
+    # 212 and -3 are typing errors, the minors' ages are not; the sex is what each code means, however typed
+    age = np.where(minors, df["age"], true["age"]).astype(float)
+    female = df["sex"].str.strip().str.lower().str.startswith("f").to_numpy()
+
+    bmi = (true["weight_kg"] / (true["height_cm"] / 100) ** 2).round(1).to_numpy()
+    egfr = _ckd_epi_2021(df["creatinine_umol_l"], age, female).round()
+    lvef = true["lvef_pct"].to_numpy()
+    phenotype = np.where(lvef <= 40, "HFrEF", np.where(lvef <= 49, "HFmrEF", "HFpEF"))  # ESC 2021
+
+    # the height not measured, more often in older patients (no BMI either), or measured but not transcribed;
+    # no eGFR under 18 either: CKD-EPI is an adult equation
+    not_measured = (u[0] < _expit(-3.7 + 0.07 * (age - 68))) & ~special
+    height_not_copied = (u[1] < 0.02) & ~special & ~not_measured
+    bmi_not_copied = (u[2] < 0.035) & ~special & ~not_measured & ~height_not_copied
+    no_egfr = ((u[3] < 0.05) & ~special) | minors
+    no_phenotype = (u[4] < 0.03) & ~special
+
+    df = df.copy()
+    df.loc[not_measured | height_not_copied, "height_cm"] = np.nan
+    df.insert(
+        df.columns.get_loc("weight_kg") + 1,
+        "bmi_kg_m2",
+        np.where(not_measured | bmi_not_copied, np.nan, bmi),
+    )
+    df.insert(
+        df.columns.get_loc("lvef_reader2_pct") + 1,
+        "hf_phenotype",
+        np.where(no_phenotype, None, phenotype),
+    )
+    df.insert(
+        df.columns.get_loc("creatinine_umol_l") + 1,
+        "egfr_ml_min_1_73m2",
+        np.where(no_egfr, np.nan, egfr),
+    )
+    return df
 
 
 def make_tutorial_cohort(n: int = N, seed: int = SEED) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -216,6 +288,8 @@ def make_tutorial_cohort(n: int = N, seed: int = SEED) -> tuple[pd.DataFrame, pd
             "angioedema": yes_no(angioedema),
         }
     )
+    # the values before the planted problems: what the hospital record and the laboratory hold
+    true = df.copy()
 
     # ---- planted problems (documented in the dictionary, caught by tutorial_config.json)
     df.loc[PLANTED["age_212"], "age"] = 212
@@ -244,6 +318,7 @@ def make_tutorial_cohort(n: int = N, seed: int = SEED) -> tuple[pd.DataFrame, pd
     for row in SITE_TRAILING_SPACE:
         df.loc[row, "site"] = df.loc[row, "site"] + " "
 
+    df = _with_derived(df, true)
     df = pd.concat([df, df.iloc[list(DUPLICATED)]], ignore_index=True)  # exact duplicate rows
 
     # ---- 6-month laboratory visit, for the merge step (patients alive and seen at 6 months)
@@ -282,30 +357,33 @@ handbook chapter *14 Full tutorial*.
 | arm | categorical | Randomised arm | Control / Intervention, 600 each |
 | age | numeric (years) | Age at enrolment | errors: 212 and -3; 3 minors (16-17) fail inclusion |
 | sex | categorical | Sex | F / M; 8 rows coded inconsistently (male, Female, f, M , ...) |
-| height_cm | numeric (cm) | Height | 3 heights typed in metres (1.6-1.8) |
+| height_cm | numeric (cm) | Height | 3 heights typed in metres (1.6-1.8); **MAR**: missing in 55 rows, more often in older patients: 38 not measured (no BMI either), 17 measured but not transcribed (their BMI is recorded) |
 | weight_kg | numeric (kg) | Weight | errors: 0 and 350 |
+| bmi_kg_m2 | numeric (kg/m2) | Body-mass index, from the hospital record | computed from the weight and the height (see below); missing in 83 rows: 38 without a height, 45 not transcribed |
 | smoking_status | categorical | Never / Former / Current | |
 | diabetes, hypertension, prior_mi | binary | Comorbidities | Yes / No |
 | nyha_class | ordinal | NYHA class by the investigator | I < II < III < IV; class I fails inclusion |
 | nyha_class_central | ordinal | NYHA class by the central committee | second rater: weighted kappa |
 | lvef_pct | numeric (%) | Ejection fraction, echo reader 1 | error: 155 |
 | lvef_reader2_pct | numeric (%) | Same echo read by reader 2 | reads about +1 point: ICC, Bland-Altman |
+| hf_phenotype | categorical | Heart-failure phenotype (ESC 2021) | HFrEF (ejection fraction 40% or less), HFmrEF (41-49%), HFpEF (50% or more), from `lvef_pct` (see below); 34 not entered |
 | sbp_baseline, dbp_baseline | numeric (mmHg) | Office blood pressure | 3 rows with diastolic > systolic (swapped) |
 | sbp_ambulatory | numeric (mmHg) | 24-hour ambulatory SBP | about 6 mmHg below office SBP (white-coat effect) |
 | heart_rate | numeric (bpm) | Resting heart rate | |
-| creatinine_umol_l | numeric (umol/L) | Serum creatinine | > 265 fails inclusion (severe kidney disease); eGFR derivable |
+| creatinine_umol_l | numeric (umol/L) | Serum creatinine | > 265 fails inclusion (severe kidney disease) |
+| egfr_ml_min_1_73m2 | numeric (mL/min/1.73 m2) | eGFR reported by the laboratory | CKD-EPI 2021 without race, from creatinine, age and sex (see below); not reported for the 3 minors (an adult equation) nor for 58 other patients |
 | potassium_mmol_l | numeric (mmol/L) | Serum potassium | errors: 9.8 and 0.9 |
 | hba1c_pct | numeric (%) | HbA1c | **MAR**: missing in 30% of non-diabetics vs 5% of diabetics |
 | ldl_mmol_l | numeric (mmol/L) | LDL cholesterol | **MCAR**: about 6% missing at random |
 | nt_probnp_pg_ml | numeric (pg/mL) | NT-proBNP | **MAR**: missing in 25% of NYHA I-II vs 5% of III-IV; right-skewed |
 | troponin_ng_l | numeric (ng/L) | High-sensitivity troponin at admission | index test for `mi_adjudicated` |
 | mi_adjudicated | binary | Myocardial infarction confirmed by adjudication | reference standard |
-| smoker_baseline, smoker_6m | binary | Current smoker at baseline and at 6 months | paired: McNemar |
+| smoker_baseline, smoker_6m | binary | Current smoker at baseline and at 6 months | paired: McNemar; `smoker_baseline` is *Yes* exactly when `smoking_status` is *Current* |
 | adherence_pct | numeric (%) | Adherence to the study treatment | |
 | sbp_6m | numeric (mmHg) | Office SBP at 6 months | paired with `sbp_baseline`; **structurally missing** if the patient died or left before 6 months |
 | hf_hospitalisation | binary | Heart-failure hospitalisation within 12 months | lower with Intervention |
 | n_hospital_visits | count | Hospital visits during follow-up | count model with `fu_days` as exposure |
-| fu_days | numeric (days) | Follow-up time | error: -12 |
+| fu_days | numeric (days) | Follow-up time | from `enrol_date` to `last_contact_date`; error: -12 |
 | death | binary | Death during follow-up | event indicator for survival analysis |
 | last_contact_date | date dd/mm/yyyy | Last contact (enrolment + follow-up) | 2 dates before enrolment |
 | angioedema | binary | Angioedema (rare adverse event) | small counts: Fisher's exact test |
@@ -326,6 +404,27 @@ handbook chapter *14 Full tutorial*.
 | 6 duplicated patients | 6 rows | Data Quality Dashboard, Uniqueness |
 | Inconsistent sex codes, site with trailing spaces | 16 rows | Data Quality Dashboard, Uniformity |
 | No consent, minors, NYHA I, creatinine > 265, age > 85 | see the tutorial | inclusion criteria |
+
+## Variables computed from others
+
+The hospital record and the laboratory computed them from the true values, before the typing errors above: each
+mistyped input disagrees with its formula. Declare them on Data > Enrich > Handle Missing Data > Derived variables
+(step 3.3 of the tutorial), where each definition is checked against the rows that have all its variables.
+
+| Variable | Definition | Agrees with | Missing values it can fill in the analysis population |
+|---|---|---|---|
+| bmi_kg_m2 | `weight_kg / (height_cm / 100) ** 2` | 1,101 of 1,106 rows: the 3 heights in metres and the weights 0 and 350 disagree | 34, and 10 heights by its inverse `height_cm = 100 * (weight_kg / bmi_kg_m2) ** 0.5` |
+| egfr_ml_min_1_73m2 | CKD-EPI 2021 for adults (below) | 1,143 of 1,144 rows: the age 212 disagrees | 49 |
+| hf_phenotype | `np.where(lvef_pct <= 40, 'HFrEF', np.where(lvef_pct <= 49, 'HFmrEF', 'HFpEF'))` | 1,171 of 1,172 rows: the ejection fraction 155 disagrees | 30 |
+| smoker_baseline | `np.where(smoking_status == 'Current', 'Yes', 'No')` | 1,206 of 1,206 rows | none |
+
+The eGFR, with `sex_clean` from step 3.2 of the tutorial (with the raw `sex`, the 4 women typed *Female*, *f*, *F*
+with a trailing space and *female* disagree too):
+`np.where(age >= 18, 142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0), np.nan)`.
+The CKD-EPI 2009 equation disagrees, and the ESC 2016 cut-offs (HFrEF below 40%) only mostly agree with the
+phenotype: the 39 patients at exactly 40% are HFmrEF in 2016 and HFrEF in 2021. 24 patients of the analysis
+population have neither a height nor a BMI: they are left to multiple imputation. `fu_days` is the number of days
+from `enrol_date` to `last_contact_date` once both are converted to dates on Data > Validate.
 """
 
 

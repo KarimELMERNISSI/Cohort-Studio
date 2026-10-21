@@ -50,7 +50,14 @@ def test_the_famd_preview_leaves_the_date_out_and_reaches_100_percent() -> None:
     ).run()
     _by_label(at.checkbox, "Show Explained Variance").check().run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    # the 55 heights not recorded are named, where the library said "Input contains NaN."
+    assert any(w.value.startswith("Missing values in height\\_cm \\(55\\)") for w in at.warning)
+    complete = [c if c != "height_cm" else "heart_rate" for c in columns.value]
+    _by_label(at.multiselect, "Choose columns to apply the selected transformation:").set_value(
+        complete
+    ).run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
     summary = next(c.value for c in at.caption if "of the variance" in c.value)
     assert summary.startswith(
-        "3 components explain 16.4% of the variance; the data has 25 dimensions"
+        "3 components explain 14.8% of the variance; the data has 25 dimensions"
     )

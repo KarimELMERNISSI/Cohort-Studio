@@ -14,11 +14,26 @@ from sklearn.metrics import cohen_kappa_score, roc_auc_score
 from statsmodels.stats.contingency_tables import StratifiedTable
 
 from app_pages.data_enrichment import evaluate_formula_safely
+from core.derived import DerivedVariable
 from core.population import family_masks
+from enrich.derived import AGREES, DISAGREES, MOSTLY, check_derived, check_inverses
 
 ROOT = Path(__file__).resolve().parents[1]
 TUTORIAL = ROOT / "assets" / "tutorial"
 CHAPTER = (ROOT / "documentation" / "14_Full_Tutorial.md").read_text(encoding="utf-8")
+DICTIONARY = (TUTORIAL / "tutorial_dictionary.md").read_text(encoding="utf-8")
+
+# the derived variables of the chapter (step 3.3) and the dictionary
+BMI = "weight_kg / (height_cm / 100) ** 2"
+HEIGHT = "100 * (weight_kg / bmi_kg_m2) ** 0.5"
+EGFR = (
+    "np.where(age >= 18, 142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** "
+    "np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / "
+    "np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0), "
+    "np.nan)"
+)
+PHENOTYPE = "np.where(lvef_pct <= 40, 'HFrEF', np.where(lvef_pct <= 49, 'HFmrEF', 'HFpEF'))"
+SMOKER = "np.where(smoking_status == 'Current', 'Yes', 'No')"
 
 
 def _generator():
@@ -65,11 +80,10 @@ def test_files_match_the_generator(cohort: pd.DataFrame) -> None:
         (TUTORIAL / "tutorial_followup_labs.csv").read_text(encoding="utf-8")
     )
     assert (
-        cohort.shape == (1206, 38) and int(cohort.duplicated().sum()) == 6 and len(followup) == 1017
+        cohort.shape == (1206, 41) and int(cohort.duplicated().sum()) == 6 and len(followup) == 1017
     )
-    dictionary = (TUTORIAL / "tutorial_dictionary.md").read_text(encoding="utf-8")
     for column in cohort.columns:
-        assert column in dictionary, column
+        assert column in DICTIONARY, column
 
 
 def test_anomaly_rules_flag_exactly_the_planted_errors(cohort: pd.DataFrame, config: dict) -> None:
@@ -107,14 +121,12 @@ def test_inclusion_criteria(cohort: pd.DataFrame, config: dict) -> None:
 
 
 def test_chapter_formulas_work_in_the_enrich_evaluator(analysis_set: pd.DataFrame) -> None:
-    df = analysis_set.copy()
+    followup = pd.read_csv(TUTORIAL / "tutorial_followup_labs.csv")
+    df = analysis_set.merge(followup, on="patient_id", how="left")  # step 3.1
     formulas = {
         "site_clean": "site.str.strip()",
         "sex_clean": "np.where(sex.str.strip().str.lower().str.startswith('f'), 'F', 'M')",
-        "bmi": "weight_kg / (height_cm / 100) ** 2",
-        "egfr": "142 * np.minimum(creatinine_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** "
-        "np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_umol_l / 88.4 / "
-        "np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0)",
+        "egfr_6m": EGFR.replace("creatinine_umol_l", "creatinine_6m_umol_l"),
     }
     for name, formula in formulas.items():
         ok, result, _ = evaluate_formula_safely(formula, name, df.copy(), return_series=True)
@@ -128,6 +140,89 @@ def test_chapter_formulas_work_in_the_enrich_evaluator(analysis_set: pd.DataFram
         "Metz",
     ]
     assert set(df["sex_clean"]) == {"F", "M"}
+    egfr_6m = pd.to_numeric(df["egfr_6m"])
+    assert int(egfr_6m.notna().sum()) == 778 and round(float(egfr_6m.mean())) == 68
+    assert "`egfr_6m` averages about 68 mL/min/1.73 m2 in\nthe 778 patients" in CHAPTER
+
+
+def test_the_derived_variables_agree_but_in_the_planted_errors(
+    cohort: pd.DataFrame, analysis_set: pd.DataFrame
+) -> None:
+    """Step 3.3 and the dictionary: each definition gives the recorded value but where an input was mistyped."""
+    data = cohort.assign(
+        sex_clean=np.where(cohort["sex"].str.strip().str.lower().str.startswith("f"), "F", "M")
+    )
+    population = analysis_set.index
+
+    def check(target: str, formula: str, **inverses: str):
+        assert f"`{formula}`" in DICTIONARY, target
+        return check_derived(DerivedVariable(target, formula, inverses=inverses), data)
+
+    def to_fill(check) -> int:
+        return len(check.fillable_rows.intersection(population))
+
+    for formula in (BMI, HEIGHT, EGFR, PHENOTYPE):
+        assert f"`{formula}`" in CHAPTER, formula
+    bmi = check("bmi_kg_m2", BMI, height_cm=HEIGHT)
+    assert (bmi.verdict, bmi.agreeing, bmi.compared) == (AGREES, 1101, 1106)
+    assert bmi.strict and bmi.tolerance == pytest.approx(0.05)
+    assert sorted(bmi.disagreeing) == [
+        41,
+        133,
+        512,
+        760,
+        990,
+    ]  # heights in metres, weights 0 and 350
+    height = check_inverses(bmi.definition, data)["height_cm"]
+    assert height.verdict == AGREES
+    neither = analysis_set["height_cm"].isna() & analysis_set["bmi_kg_m2"].isna()
+    assert (to_fill(bmi), to_fill(height), int(neither.sum())) == (34, 10, 24)
+
+    egfr = check("egfr_ml_min_1_73m2", EGFR)
+    assert (egfr.verdict, egfr.agreeing, egfr.compared, list(egfr.disagreeing)) == (
+        AGREES,
+        1143,
+        1144,
+        [17],  # the age 212
+    )
+    raw_sex = check_derived(
+        DerivedVariable("egfr_ml_min_1_73m2", EGFR.replace("sex_clean", "sex")), data
+    )
+    assert raw_sex.verdict == AGREES and sorted(raw_sex.disagreeing) == [17, 211, 377, 701, 1024]
+    ckd_epi_2009 = (
+        EGFR.replace("142 *", "141 *")
+        .replace("-0.241", "-0.329")
+        .replace("-0.302", "-0.411")
+        .replace("** -1.2 *", "** -1.209 *")
+        .replace("0.9938", "0.993")
+        .replace("1.012", "1.018")
+    )
+    assert check_derived(DerivedVariable("egfr_ml_min_1_73m2", ckd_epi_2009), data).verdict == (
+        DISAGREES
+    )
+    assert to_fill(egfr) == 49 and cohort.loc[[95, 700, 1150], "egfr_ml_min_1_73m2"].isna().all()
+
+    phenotype = check("hf_phenotype", PHENOTYPE)
+    assert (phenotype.verdict, phenotype.agreeing, phenotype.compared) == (AGREES, 1171, 1172)
+    assert list(phenotype.disagreeing) == [615] and to_fill(phenotype) == 30  # the LVEF 155
+    esc_2016 = check_derived(
+        DerivedVariable("hf_phenotype", PHENOTYPE.replace("lvef_pct <= 40", "lvef_pct < 40")), data
+    )
+    assert esc_2016.verdict == MOSTLY and int((cohort["lvef_pct"] == 40).sum()) == 39
+    assert "`lvef_pct < 40`" in CHAPTER
+
+    smoker = check("smoker_baseline", SMOKER)
+    assert (smoker.verdict, smoker.agreeing, smoker.compared) == (AGREES, 1206, 1206)
+
+    for number in (
+        "1,101 of 1,106 rows",
+        "1,143 of 1,144 rows",
+        "1,171 of 1,172 rows",
+        "**34** BMIs, **49** eGFRs and **30** phenotypes",
+        "recover 10 heights",
+        "24 patients have neither",
+    ):
+        assert number in CHAPTER, number
 
 
 def test_the_chapter_numbers(analysis_set: pd.DataFrame) -> None:
@@ -215,6 +310,6 @@ def test_the_csv_reads_with_day_first_dates(cohort: pd.DataFrame) -> None:
 
     data = (TUTORIAL / "tutorial_cohort.csv").read_bytes()
     result = read_table(data, "tutorial_cohort.csv", ParseOptions(dayfirst=True))
-    assert result.df.shape == (1206, 38)
+    assert result.df.shape == (1206, 41)
     parsed = pd.to_datetime(cohort["enrol_date"], dayfirst=True)
     assert parsed.min() >= pd.Timestamp("2021-01-01") and parsed.max() <= pd.Timestamp("2024-01-05")
