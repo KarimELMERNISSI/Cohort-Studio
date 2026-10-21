@@ -1,5 +1,6 @@
 """
-Streamlit entry points for graph rendering.
+Streamlit entry points for graph rendering (in the ui layer since M5b: the graph package below it has no Streamlit
+outside a renderer's ``render``).
 
 Pages call :func:`render_graph` with a :class:`~graph.model.GraphSpec` and
 :class:`~graph.model.RenderOptions`; the active backend is chosen by :mod:`graph.manager`
@@ -15,9 +16,9 @@ from collections.abc import Callable
 import streamlit as st
 
 from graph.base import BaseGraphRenderer
-from graph.legend import render_legend
 from graph.manager import GraphRendererType, get_graph_renderer_manager
 from graph.model import GraphSpec, RenderOptions, SelectionResult
+from ui.graph_legend import render_legend
 
 logger = logging.getLogger(__name__)
 

@@ -48,7 +48,7 @@ def seed_session() -> None:
         ss["import_default_dayfirst"] = prefs.import_dayfirst
     if prefs.graph_renderer:
         from graph.manager import get_graph_renderer_manager
-        from graph.ui import RENDERER_OVERRIDE_KEY
+        from ui.graph_view import RENDERER_OVERRIDE_KEY
 
         available = {
             rtype.value for rtype, ok, _ in get_graph_renderer_manager().available_renderers() if ok
@@ -70,7 +70,7 @@ def save(**changes: Any) -> None:
 
 def save_renderer() -> None:
     """The ``on_change`` of every graph engine selector: the engine chosen is kept for the next session."""
-    from graph.ui import RENDERER_OVERRIDE_KEY
+    from ui.graph_view import RENDERER_OVERRIDE_KEY
 
     save_from(f"{RENDERER_OVERRIDE_KEY}__selectbox", "graph_renderer", auto="auto")
 

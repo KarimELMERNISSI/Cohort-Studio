@@ -119,11 +119,6 @@ KNOWN_UPWARD = {
 CYCLES_BY_DESIGN = [{"biostats.mi.engine", "biostats.mi.parallel"}]
 # R3, (module below ui, the import through which it reaches Streamlit)
 KNOWN_STREAMLIT = {
-    # graph's Streamlit adapters, imported only by pages: they move to ui (M5b, connectors on one kit)
-    ("graph.legend", "streamlit"),
-    ("graph.ui", "streamlit"),
-    ("graph.ui", "graph.legend"),
-    ("graph.ui", "graph.manager"),  # the registry names the yFiles renderer
     # the yFiles renderer imports its Streamlit component outside render, and the renderer registry names it
     # (M5b, connectors on one kit)
     ("graph.renderers.yfiles", "yfiles_graphs_for_streamlit"),

@@ -11,13 +11,13 @@ import streamlit as st
 import explore.corr_matrix as ecm
 from core.fingerprint import frame_fingerprint
 from graph.builders.correlation import build_correlation_graph
-from graph.legend import render_legend
 from graph.model import LayoutHint, RenderOptions
-from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 from manage.ai_payload import column_profile
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
+from ui.graph_legend import render_legend
+from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.preferences import save_renderer
 from ui.progress import mark_step
 from ui.state import get_state

@@ -40,7 +40,7 @@ def _render_with_fallback(spec_json: str) -> None:
     from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
     from graph.manager import GraphConfig, get_graph_renderer_manager
     from graph.model import GraphSpec, RenderOptions, SelectionResult
-    from graph.ui import render_graph
+    from ui.graph_view import render_graph
 
     class Exploding(BaseGraphRenderer):
         name = "exploding"
@@ -81,7 +81,7 @@ def _render_empty() -> None:
     import streamlit as st
 
     from graph.model import GraphKind, GraphSpec, RenderOptions
-    from graph.ui import render_graph
+    from ui.graph_view import render_graph
 
     result = render_graph(GraphSpec(kind=GraphKind.CORRELATION), RenderOptions(key="t"))
     st.write(f"empty:{result.is_empty}")

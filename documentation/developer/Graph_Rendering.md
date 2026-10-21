@@ -7,7 +7,7 @@ Since October 2026 they share one renderer-agnostic layer, the `graph` package, 
 library can be swapped without touching analytics code or pages.
 
 ```
-domain data ──► graph.builders.*  ──► GraphSpec ──► graph.ui.render_graph ──► renderer.translate()
+domain data ──► graph.builders.*  ──► GraphSpec ──► ui.graph_view.render_graph ──► renderer.translate()
 (pandas, JSON)   (pure functions)     (model.py)      (Streamlit entry)        └─► renderer.render()
                                            ▲                                        (Plotly | yFiles | Graphviz)
                                    graph.palette (colours, legend)
@@ -23,7 +23,7 @@ domain data ──► graph.builders.*  ──► GraphSpec ──► graph.ui.r
 | `graph/base.py` | `BaseGraphRenderer` contract (`capabilities`, `availability()`, `translate()`, `render()`, `export_html()`). | no |
 | `graph/manager.py` | Backend selection from `CMP_GRAPH_RENDERER` / `CMP_OFFLINE`, lazy registry, `set_renderer()` for tests. | no |
 | `graph/renderers/` | `plotly.py` (offline default), `yfiles.py` (opt-in, proprietary), `graphviz.py` (static). | yes (inside `render`) |
-| `graph/legend.py`, `graph/ui.py` | `render_legend`, `render_graph`, `renderer_selector`, `render_graph_exports`. | yes |
+| `ui/graph_legend.py`, `ui/graph_view.py` | `render_legend`, `render_graph`, `renderer_selector`, `render_graph_exports`. | yes |
 | `explore/correlation_strength.py` | The one correlation-strength threshold table (Schober 2018) used by the builder, the Excel export and the UI. | no |
 
 ## The contract: "the connector translates the information for the library"
@@ -64,7 +64,7 @@ trace. Selection uses `st.plotly_chart(on_select="rerun")`.
 | `CMP_GRAPH_RENDERER=yfiles` | yFiles when installed (`uv sync --extra graph-yfiles`); falls back to Plotly otherwise. |
 | `CMP_GRAPH_RENDERER=plotly` / `graphviz` | Force a backend. |
 | `CMP_OFFLINE=1` | Refuse any backend with `requires_internet=True` (yFiles). |
-| In-app "Graph engine" selector | Session-wide override (`graph.ui.renderer_selector`). |
+| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`). |
 
 yFiles is distributed under the yWorks *yFiles Streamlit Component Free License*: it loads its
 runtime from yworks.com at render time (internet required), reports anonymised graph-structure

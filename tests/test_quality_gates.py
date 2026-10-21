@@ -45,8 +45,9 @@ def test_no_hard_coded_data_directories() -> None:
 
 
 def test_raw_html_is_ratcheted_down() -> None:
-    hits = _count(r"unsafe_allow_html=True", "app_pages", "ui")
-    assert len(hits) <= 30, f"{len(hits)} raw-HTML blocks (ceiling 30): {hits[:5]}"
+    # 31: the graph legend's block moved from graph/ into ui/ (M5b), and graph/ is counted too since then
+    hits = _count(r"unsafe_allow_html=True", "app_pages", "ui", "graph")
+    assert len(hits) <= 31, f"{len(hits)} raw-HTML blocks (ceiling 31): {hits[:5]}"
 
 
 def test_print_calls_are_ratcheted_down() -> None:

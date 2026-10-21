@@ -314,7 +314,7 @@ def test_a_saved_choice_this_server_cannot_use_is_named(
     assert "`cohere` is not offered here" in captions
     assert "`chroma` is not available here" in captions
     assert later.selectbox(key="rag_provider_select").value == "ollama"
-    from graph.ui import RENDERER_OVERRIDE_KEY
+    from ui.graph_view import RENDERER_OVERRIDE_KEY
 
     assert later.session_state[RENDERER_OVERRIDE_KEY] is None  # the automatic engine
     assert "`yfiles` is not available here" in captions

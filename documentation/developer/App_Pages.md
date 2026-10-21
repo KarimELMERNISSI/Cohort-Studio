@@ -751,7 +751,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.ai_payload.column_profile`, `ui.components.no_dataset`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
+`json`, `os`, `re`, `pandas`, `streamlit`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `manage.ai_payload.column_profile`, `ui.components.no_dataset`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
 
 ### def `get_user_taxonomy_dir` (data_insight.py)
 
@@ -1187,7 +1187,7 @@ Renders the Data Quality Dashboard.
 _No module description._
 
 **Imports**:
-`datetime`, `json`, `streamlit`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `core.workspace.safe_filename`, `graph.builders.document.build_document_graph`, `graph.builders.document.filter_by_documents`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `ui.components.no_dataset`
+`datetime`, `json`, `streamlit`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `core.workspace.safe_filename`, `graph.builders.document.build_document_graph`, `graph.builders.document.filter_by_documents`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `ui.components.no_dataset`
 
 ### def `_graph_dir` (document_insight.py)
 
@@ -1580,7 +1580,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `graph.builders.correlation.build_correlation_graph`, `graph.legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `graph.ui.current_theme`, `graph.ui.render_graph`, `graph.ui.render_graph_exports`, `graph.ui.renderer_selector`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
+`json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `graph.builders.correlation.build_correlation_graph`, `ui.graph_legend.render_legend`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
 
 ### class `RenameColumnsComponent` (home.py)
 

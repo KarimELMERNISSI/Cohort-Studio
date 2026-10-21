@@ -44,9 +44,9 @@ from graph.builders.taxonomy import (
     parse_formula_id,
 )
 from graph.model import LayoutHint, RenderOptions
-from graph.ui import current_theme, render_graph, render_graph_exports, renderer_selector
 from manage.ai_payload import column_profile
 from ui.components import no_dataset
+from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.preferences import save_renderer
 
 # Lazy-compatible imports for clustering (module itself is light)

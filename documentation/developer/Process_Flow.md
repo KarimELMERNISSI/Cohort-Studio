@@ -108,7 +108,7 @@ Visualizes relationships between variables using a Knowledge Graph.
 2. **Repair**: `repair_taxonomy_links()` re-links the variables to the formulas that use or produce them.
 3. **Graph Construction**: `graph.builders.taxonomy.build_taxonomy_graph()` maps variables, formulas and categories to
    nodes and edges.
-4. **Rendering**: `graph.ui.render_graph()` renders the interactive graph with the selected engine (Plotly by default).
+4. **Rendering**: `ui.graph_view.render_graph()` renders the interactive graph with the selected engine (Plotly by default).
 
 ### 3.4 Documents (RAG Workflow)
 

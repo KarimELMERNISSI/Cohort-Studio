@@ -26,7 +26,7 @@ with tab_ai:
                 icon=":material/extension:")
 
 with tab_graph, st.container(border=True, width=760):
-    from graph.ui import renderer_selector
+    from ui.graph_view import renderer_selector
 
     st.subheader("Graph rendering engine", icon=":material/hub:", anchor=False)
     # kept for the next session ("auto", the server's default, keeps no preference)

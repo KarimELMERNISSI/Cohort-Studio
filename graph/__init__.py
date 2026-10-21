@@ -6,7 +6,7 @@ Library-agnostic graph rendering layer.
 * :mod:`graph.builders` - pure functions turning domain data into a ``GraphSpec``.
 * :mod:`graph.base` / :mod:`graph.manager` - the renderer contract and backend selection.
 * :mod:`graph.renderers` - backends (Plotly/NetworkX offline default, yFiles opt-in, Graphviz).
-* :mod:`graph.ui` - the Streamlit entry point ``render_graph``.
+* :mod:`ui.graph_view` - the Streamlit entry point ``render_graph`` (in the ui layer, M5b).
 
 Importing this package never imports Streamlit or a rendering library.
 """
