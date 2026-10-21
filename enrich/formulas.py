@@ -255,7 +255,7 @@ def other_rows(formula: str, data: pd.DataFrame | None = None) -> str | None:
             if not (column or character):
                 return "the value of another row"
     if data is not None:
-        text = [name for name in read_formula(formula).names if name in data.columns and _is_text(data[name])]
+        text = [name for name in read_formula(formula).names if name in data.columns and is_text_column(data[name])]
         dates = DataAnalyzer(data[text]).date_cols if text else []
         kept = [name for name in text if name in dates]
         if kept:
@@ -271,7 +271,8 @@ def row_wise(formula: str, data: pd.DataFrame | None = None) -> bool:
     return other_rows(formula, data) is None
 
 
-def _is_text(series: pd.Series) -> bool:
+def is_text_column(series: pd.Series) -> bool:
+    """A column of text, neither numbers, yes/no values nor dates: it compares with text only."""
     return not (
         pd.api.types.is_numeric_dtype(series)
         or pd.api.types.is_bool_dtype(series)
@@ -279,7 +280,7 @@ def _is_text(series: pd.Series) -> bool:
     )
 
 
-def _given(values: pd.Series) -> pd.Series:
+def usable_values(values: pd.Series) -> pd.Series:
     """The rows with a usable value: not missing, and finite for numbers (``fillna`` would put an infinity in)."""
     present = values.notna()
     if pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values):
@@ -302,7 +303,7 @@ class FormulaTrial:
 
     def given(self) -> pd.Series:
         """The rows that get a usable value (none when it cannot be computed)."""
-        return _given(self.values) if self.values is not None else pd.Series(dtype=bool)
+        return usable_values(self.values) if self.values is not None else pd.Series(dtype=bool)
 
     def from_missing(self, data: pd.DataFrame, within: pd.Series | None = None) -> list[tuple[str, int]]:
         """The inputs whose value is missing in rows that still get a value (a comparison or ``np.where`` sends a
@@ -323,7 +324,7 @@ def _absent_literals(formula: str, data: pd.DataFrame) -> list[str]:
 
     def column(node: ast.AST) -> str | None:
         name = quoted.get(node.id, node.id) if isinstance(node, ast.Name) else None
-        return name if name in data.columns and _is_text(data[name]) else None
+        return name if name in data.columns and is_text_column(data[name]) else None
 
     pairs: list[tuple[str, ast.AST]] = []
     for node in ast.walk(tree):
@@ -379,7 +380,7 @@ def try_formula(formula: str, data: pd.DataFrame, *, target: str | None = None) 
     for prefix in ("Error evaluating formula: ", "Invalid formula: "):
         problem = problem.removeprefix(prefix)
     problem = _LONG_QUOTE.sub('"…"', problem)[:200]  # a library can quote a cell: not a long one
-    for name in (name for name in reading.names if _is_text(data[name])):
+    for name in (name for name in reading.names if is_text_column(data[name])):
         counts = data[name].dropna().astype(str).value_counts()
         frequent = counts[counts >= _EXAMPLE_ROWS].index.tolist()[:3]  # never a value that identifies a row
         examples = ", ".join(repr(str(value)[:_EXAMPLE_LENGTH]) for value in frequent)

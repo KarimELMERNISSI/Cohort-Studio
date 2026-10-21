@@ -22,12 +22,12 @@ from pathlib import Path
 # at 67.0 in CI, with the settings module and its tests (M5b step 3); app_pages to 56, enrich to 70 and manage to 74 at
 # 58.4, 72.5 and 76.0, with the one reading of formulas and the trials of the AI engine's suggestions (2026-10-21).
 # enrich to 73 at 75.4 with the formula tests of the reviews' follow-ups (2026-10-21); to 75 at 77.3 with the tests of
-# the row-wise check and of the exact formulas (2026-10-21).
+# the row-wise check and of the exact formulas (2026-10-21); to 78 at 80.9 with the derived variables' check.
 FLOORS: dict[str, float] = {
     "app_pages": 56.0,
     "biostats": 93.0,
     "core": 92.0,
-    "enrich": 75.0,
+    "enrich": 78.0,
     "explore": 75.0,
     "graph": 92.0,
     "ingest": 89.0,

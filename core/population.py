@@ -26,6 +26,8 @@ import numpy as np
 import pandas as pd
 
 from core.criteria import CriterionError, criterion_columns, criterion_mask, rule_kind
+from core.derived import CONFIG_KEY as DERIVED_KEY
+from core.derived import shape_problems as derived_shape_problems
 from core.fingerprint import ids_fingerprint, ids_to_ranges
 
 EXCLUSION, INCLUSION = "exclusion", "inclusion"
@@ -210,7 +212,8 @@ def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
     operator, a threshold without a number, a family entry that is not a rule, a rule of an unknown shape or with
     both a numeric range and an expression. An uploaded configuration with problems is refused.
     """
-    problems: list[str] = []
+    # the derived variables are kept with the criteria (core.derived)
+    problems: list[str] = derived_shape_problems((config or {}).get(DERIVED_KEY))
     families = (config or {}).get("mask_families")
     if families is None:
         return problems

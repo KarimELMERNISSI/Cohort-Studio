@@ -12,6 +12,8 @@ import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
+from core.derived import CONFIG_KEY as DERIVED_KEY
+from core.derived import merge_definitions
 from core.fingerprint import ids_to_ranges
 from core.population import (
     catalogue,
@@ -1622,9 +1624,20 @@ def app():
                         "This configuration was not loaded:\n\n" + "\n".join(f"- {p}" for p in problems)
                     )
                 else:
-                    # Merge the new configuration with the existing one
+                    # Merge the new configuration with the existing one; the derived variables whole, each one
+                    # (the merge below keeps a list the session has, and would mix two definitions)
+                    uploaded = new_config.pop(DERIVED_KEY, None)
                     deep_merge_dicts(st.session_state.config, new_config)
+                    conflicts = []
+                    if uploaded:
+                        merged, conflicts = merge_definitions(st.session_state.config.get(DERIVED_KEY), uploaded)
+                        st.session_state.config[DERIVED_KEY] = merged
                     st.sidebar.success("Configuration loaded and merged successfully!")
+                    if conflicts:
+                        st.sidebar.warning(
+                            "These derived variables keep this session's definition, which differs from the "
+                            "file's: " + ", ".join(as_code(c) for c in conflicts) + "."
+                        )
             except json.JSONDecodeError:
                 st.error("Invalid JSON file. Please upload a valid configuration file.")
             
