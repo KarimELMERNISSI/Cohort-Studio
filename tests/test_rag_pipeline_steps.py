@@ -2,7 +2,7 @@
 Comprehensive Unit Tests for RAG Pipeline Steps.
 
 Covers:
-1. Formula AST parsing, variable extraction, normalization (^ to **), and quoting resilience.
+1. (The reading of formulas is tested in tests/test_formula_reading.py.)
 2. Document knowledge graph node and edge formatting (yFiles map compatibility).
 3. Citation page parsing resilience (int, list, string).
 4. Multi-document graph extraction and merging with entity deduplication.
@@ -16,8 +16,9 @@ from unittest.mock import MagicMock
 import pytest
 
 pytest.importorskip("langchain_core", reason="the AI stack is in the optional 'ai' extra")
+from unittest.mock import patch
+
 from manage.rag.schemas import ProviderConfig, ProviderType, RAGConfig
-from manage.rag_computed_vars import parse_formula_vars
 from manage.rag_documents import DocumentsMixin
 from manage.rag_schemas import (
     ComputedVariableSuggestion,
@@ -36,55 +37,6 @@ from prompts import (
     unify_synonyms,
     wise_enrichment,
 )
-
-
-class TestFormulaParsingAndValidation:
-    """Test AST parsing, variable extraction, and normalization for formulas."""
-
-    def test_parse_simple_arithmetic(self):
-        formula = "weight / (height ** 2)"
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is True
-        assert vars_found == {"weight", "height"}
-
-    def test_parse_caret_power_normalization(self):
-        formula = "weight / (height ^ 2)"
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is True
-        assert vars_found == {"weight", "height"}
-
-    def test_parse_double_double_quoted_variables(self):
-        formula = '""Systolic BP"" - ""Diastolic BP""'
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is True
-        assert vars_found == {"Systolic BP", "Diastolic BP"}
-
-    def test_parse_backtick_quoted_variables(self):
-        formula = "`Heart Rate` / 60 + `Age (yr)` * 0.1"
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is True
-        assert vars_found == {"Heart Rate", "Age (yr)"}
-
-    def test_parse_numpy_mathematical_calls(self):
-        formula = "np.log(creatinine) * 1.5 + np.sqrt(bun)"
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is True
-        assert "creatinine" in vars_found
-        assert "bun" in vars_found
-        assert "np" in vars_found
-
-    def test_parse_syntax_error_resilience(self):
-        formula = "weight / (height ** )"
-        vars_found, valid = parse_formula_vars(formula)
-        assert valid is False
-        assert vars_found == set()
-
-    def test_parse_empty_formula(self):
-        vars_found, valid = parse_formula_vars("")
-        assert valid is False or len(vars_found) == 0
-
-
-from unittest.mock import patch
 
 
 class TestDocumentKnowledgeGraphFormatting:

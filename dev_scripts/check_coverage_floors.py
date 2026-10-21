@@ -19,16 +19,17 @@ from pathlib import Path
 # Measured 2026-10-20 (M5b): app_pages 53.2, biostats 95.0, core 94.3, enrich 69.9, explore 77.0, graph 93.7,
 # ingest 90.7, manage 74.3, monitor 8.3 (it needs tests), prompts 87.0, ui 84.9, utils 63.2 (72.4 overall).
 # app_pages raised to 54 at 56.3 measured, when the smoke test began opening every tab of the lazy pages; utils to 64
-# at 67.0 in CI, with the settings module and its tests (M5b step 3).
+# at 67.0 in CI, with the settings module and its tests (M5b step 3); app_pages to 56, enrich to 70 and manage to 74 at
+# 58.4, 72.5 and 76.0, with the one reading of formulas and the trials of the AI engine's suggestions (2026-10-21).
 FLOORS: dict[str, float] = {
-    "app_pages": 54.0,
+    "app_pages": 56.0,
     "biostats": 93.0,
     "core": 92.0,
-    "enrich": 68.0,
+    "enrich": 70.0,
     "explore": 75.0,
     "graph": 92.0,
     "ingest": 89.0,
-    "manage": 72.0,
+    "manage": 74.0,
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 83.0,

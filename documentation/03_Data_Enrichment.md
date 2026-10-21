@@ -72,7 +72,7 @@ recorded in the trace and kept with saved versions.
 | Feature | Description |
 | --- | --- |
 | **Formula Editor** | Column names, arithmetic, conditions and the usual functions, as in **Create New Variables**. |
-| **AI Imputation Suggestions (RAG)** | With the AI engine on, proposes formulas for the variable from the related columns, each with its reasoning; **Use Formula #N** puts one in the editor. |
+| **AI Imputation Suggestions (RAG)** | With the AI engine on, proposes formulas for the variable from the related columns, each with its reasoning. The engine is told how each column is stored (number, text, date, yes/no; no value is sent). Each formula is tried on your data before you can use it: the option says how many missing values it fills, or why it cannot be computed (a text column compared with a number, say); **Use Formula #N** puts a formula that computes in the editor. |
 
 #### AI Suggestion Modes
 
@@ -150,7 +150,8 @@ Under **Variable Computation**, write the formula with the column names, as in a
 
 The formula language covers arithmetic, comparisons, conditions (`x if condition else y`, `np.where`), the usual
 mathematical functions (`np.log`, `np.exp`, `np.sqrt`, `np.minimum`, `np.maximum`, `round`) and the text and date
-methods of a column (`sex.str.strip()`, `enrol_date.dt.year`); subtracting two dates gives a number of days. Anything
+methods of a column (`sex.str.strip()`, `enrol_date.dt.year`); subtracting two dates gives a number of days. A power
+is written `**`: `^` is refused in a new formula, because it is a bitwise exclusive or (`170 ^ 2` gives 168). Anything
 else is refused before it runs, whether the formula was typed, loaded from a trace or proposed by the AI engine. The
 formula is recorded in the trace, and a replay computes the variable again from it.
 
@@ -171,11 +172,13 @@ dropped, and a variable it cannot find in the dataset is matched again to your c
 Options: the number of suggestions, the variables it may use (with more than 50 columns and no choice, identifiers
 and free-text columns are left out), and whether to keep the formulas that need a variable the dataset lacks.
 
-Each suggestion shows its formula in mathematical notation, a small graph of its inputs (missing ones in red), its
-clinical relevance and its source: *Document* (the file and pages), *Model Knowledge* or *Hybrid*. For a missing
+Each suggestion shows its formula in mathematical notation, a small graph of the variables its formula uses (read as
+the application computes it: those your dataset lacks are marked missing), what it gives on your data (a value for
+how many rows, or why it cannot be computed), its clinical relevance and its source: *Document* (the file and pages), *Model Knowledge* or *Hybrid*. For a missing
 input, **Find Proxy** and **Find Alternative Formula** look for a substitute among your columns. **Apply to Editor**
 copies the name and the formula into the editor, where you check, compute and preview them like a formula of your own;
-nothing is added to the dataset until you confirm it.
+nothing is added to the dataset until you confirm it. A formula the model writes with `` `a name` `` for a column or
+`^` for a power is shown and applied in the application's notation (`""a name""`, `**`).
 
 For example, on the tutorial cohort with a review of the body-surface-area formulae in the library (Redlarski,
 Palkowski and Krawczuk, *Sci Rep* 2016, CC BY 4.0), *BSA* with *Go To Target* proposes the Du Bois, Mosteller,

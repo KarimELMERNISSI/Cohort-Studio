@@ -4,12 +4,12 @@ Computed Variables Mixin for RAGManager.
 Contains all computed variable suggestion and validation methods.
 This is part of the RAGManager class composition pattern.
 """
-import ast
 import hashlib
 import json
 import logging
 import re
 
+from enrich.formulas import formula_from_model, read_formula
 from manage.ai_payload import taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
 
@@ -22,49 +22,27 @@ from .rag_schemas import (
 logger = logging.getLogger(__name__)
 
 
-def parse_formula_vars(formula_str: str) -> tuple[set[str], bool]:
-    """
-    Parses variable identifiers from a formula expression using Python AST.
-    
-    Handles:
-    - Standard variable identifiers (e.g., `weight`, `height`)
-    - Power operator normalization (`^` to `**`)
-    - Escaped column names enclosed in double quotes (e.g., `""Systolic BP""`)
-    - Column names enclosed in backticks (e.g., `` `Diastolic BP` ``)
-    
-    Args:
-        formula_str: Mathematical expression string to parse.
-        
-    Returns:
-        tuple[set[str], bool]: Set of extracted variable names and syntax validity flag.
-    """
-    found: set[str] = set()
-    try:
-        temp_fmt = formula_str.strip()
-        # Normalize power operator if model output ^ instead of **
-        temp_fmt = re.sub(r'(?<=\w)\s*\^\s*(?=\w|\d|\()', ' ** ', temp_fmt)
+def _in_app_notation(suggestion: dict, formula: str) -> str:
+    """The model's formula in the application's notation (enrich.formulas.formula_from_model), kept on the suggestion
+    with what the model wrote, so that its diagram and "Apply to Editor" compute exactly what was checked."""
+    converted = formula_from_model(formula)
+    if converted != formula:
+        suggestion.setdefault("original_formula", formula)
+    suggestion["formula"] = converted
+    return converted
 
-        q_vars: dict[str, str] = {}
-        # Match ""var"" or `var`
-        q_matches = re.findall(r'""([^"]+)""|`([^`]+)`', temp_fmt)
-        idx = 0
-        for m_double, m_backtick in q_matches:
-            match_val = m_double if m_double else m_backtick
-            placeholder = f"__quoted_var_{idx}__"
-            q_vars[placeholder] = match_val
-            if m_double:
-                temp_fmt = temp_fmt.replace(f'""{m_double}""', placeholder)
-            elif m_backtick:
-                temp_fmt = temp_fmt.replace(f'`{m_backtick}`', placeholder)
-            idx += 1
-        
-        tree = ast.parse(temp_fmt, mode='eval')
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                found.add(q_vars.get(node.id, node.id))
-        return found, True
-    except Exception:
-        return set(), False
+
+def _unwrapped(answer: object) -> str:
+    """A formula a model answered, without the code fence or the one pair of quotes it may be wrapped in (never the
+    ``""a name""`` quotes of a column at either end)."""
+    text = str(answer or "").strip()
+    fenced = re.fullmatch(r"```[a-z]*\s*(.*?)\s*```", text, flags=re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    for quote in ('"', "'"):
+        if len(text) > 1 and text[0] == text[-1] == quote and not text.startswith(quote * 2):
+            text = text[1:-1].strip()
+    return text
 
 
 class ComputedVarsMixin:
@@ -263,32 +241,29 @@ class ComputedVarsMixin:
 
         if progress_callback: progress_callback(60, "Validating and aligning variables...")
         validated = []
-        
-        known_globals = {'np', 'pd', 'log', 'exp', 'sqrt', 'abs', 'min', 'max', 'constant'} 
-
-
         total_sugg = len(suggestions)
         for idx, sugg in enumerate(suggestions):
+            current_prog = 60 + int((idx / max(1, total_sugg)) * 25)
             if progress_callback:
-                current_prog = 60 + int((idx / max(1, total_sugg)) * 25)
                 progress_callback(current_prog, f"Validating suggestion {idx+1}/{total_sugg}...")
-
-            formula = sugg.get("formula", "")
-            
-            if not formula.strip() or formula.strip() in columns: 
-                continue 
-
-            found_vars, is_valid_syntax = parse_formula_vars(formula)
-            
-            if not is_valid_syntax:
+            if not isinstance(sugg, dict):
+                continue
+            formula = str(sugg.get("formula") or "")
+            if not formula.strip() or formula.strip() in columns:
                 continue
 
-            missing = [v for v in found_vars if v not in columns and v not in known_globals and v != 'np']
-            
+            # the formula is read as the evaluator will read it (enrich.formulas), in the application's notation; what
+            # it uses decides what is missing, never the model's own list
+            formula = _in_app_notation(sugg, formula)
+            reading = read_formula(formula)
+            if reading.problem:
+                continue
+            missing = [v for v in reading.names if v not in columns]
+
             if missing:
                 if progress_callback:
                     progress_callback(current_prog, f"Aligning variables for suggestion {idx+1}...")
-                
+
                 from prompts import fix_formula_variables
                 fix_query = fix_formula_variables(
                     formula=formula,
@@ -296,32 +271,30 @@ class ComputedVarsMixin:
                     columns=columns
                 )
                 try:
-                    corrected_formula = self.llm.invoke(fix_query).content.strip().strip('"').strip("'")
-                    
-                    found_vars_2, is_valid_2 = parse_formula_vars(corrected_formula)
-                    
-                    if not is_valid_2:
+                    corrected = formula_from_model(_unwrapped(self.llm.invoke(fix_query).content))
+                    reading_2 = read_formula(corrected)
+                    if reading_2.problem:
                         if allow_missing_variables:
                             sugg['missing_variables'] = missing
                             validated.append(sugg)
                         continue
 
-                    missing_2 = [v for v in found_vars_2 if v not in columns and v not in known_globals and v != 'np']
-                    
+                    missing_2 = [v for v in reading_2.names if v not in columns]
                     if not missing_2:
-                        sugg['formula'] = corrected_formula
-                        sugg['original_formula'] = formula
+                        sugg.setdefault('original_formula', formula)
+                        sugg['formula'] = corrected
+                        sugg['missing_variables'] = []
                         validated.append(sugg)
-                    else:
-                        if allow_missing_variables:
-                            sugg['formula'] = corrected_formula
-                            sugg['missing_variables'] = missing_2
-                            validated.append(sugg)
+                    elif allow_missing_variables:
+                        sugg['formula'] = corrected
+                        sugg['missing_variables'] = missing_2
+                        validated.append(sugg)
                 except Exception:
                     if allow_missing_variables:
                         sugg['missing_variables'] = missing
                         validated.append(sugg)
             else:
+                sugg['missing_variables'] = []
                 validated.append(sugg)
 
         if validated:
@@ -378,11 +351,11 @@ class ComputedVarsMixin:
             logger.warning(f"suggest_alternative_formula failed: {e}")
             return {"alternative_found": False}
 
-    def suggest_imputation_formulas(self, target_variable, available_columns, search_hint=None, context_columns=None, context_stats=None, num_suggestions=3):
+    def suggest_imputation_formulas(self, target_variable, available_columns, search_hint=None, context_columns=None, context_stats=None, num_suggestions=3, column_kinds=None):
         """
-        Suggests formulas to impute missing values for a specific target variable 
+        Suggests formulas to impute missing values for a specific target variable
         based on relationships with other available columns.
-        
+
         Parameters:
         - target_variable (str): Name of the variable to impute.
         - available_columns (list): List of all available column names.
@@ -390,6 +363,10 @@ class ComputedVarsMixin:
         - context_columns (list): Optional list of specific columns selected by the user.
         - context_stats (dict): Optional dictionary of statistics for the context columns.
         - num_suggestions (int): Number of suggestions to generate.
+        - column_kinds (dict): Optional, how each column is stored (manage.ai_payload.column_kinds; no value).
+
+        The formulas come back in the application's notation (enrich.formulas.formula_from_model); the page tries
+        them on the data before it offers them.
         """
         if not self.initialized:
             return None, "RAG system not initialized."
@@ -402,8 +379,11 @@ class ComputedVarsMixin:
             columns_scope = available_columns[:100]
             scope_desc = "Available Columns"
             
-        columns_str = ", ".join(columns_scope)
-        
+        # each column with how it is stored (number, text, date, yes/no; manage.ai_payload.column_kinds), so that a
+        # text column is compared with text: no value is sent
+        kinds = column_kinds or {}
+        columns_str = ", ".join(f"{c} ({kinds[c]})" if c in kinds else str(c) for c in columns_scope)
+
         # Prepare context stats string if available
         stats_context = ""
         if context_stats:
@@ -430,8 +410,12 @@ class ComputedVarsMixin:
             
             if not isinstance(parsed, dict) or 'suggestions' not in parsed:
                 parsed = {"suggestions": parsed if isinstance(parsed, list) else []}
-                
-            return parsed.get("suggestions", []), None
+
+            # in the application's notation (enrich.formulas): what the page tries on the data and the editor computes
+            suggestions = [s for s in parsed.get("suggestions", []) if isinstance(s, dict)]
+            for sugg in suggestions:
+                _in_app_notation(sugg, str(sugg.get("formula") or ""))
+            return suggestions, None
             
         except Exception as e:
             logger.warning(f"Failed to suggest imputation formulas: {e}")

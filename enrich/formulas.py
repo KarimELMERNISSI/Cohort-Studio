@@ -10,6 +10,7 @@ import ast
 import datetime as dt
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -62,50 +63,127 @@ def is_number(token):
     
 
 
+# Names a formula may call rather than columns: the whitelisted evaluator's numpy and pandas facades, and functions
+FORMULA_FUNCTIONS = frozenset({"np", "pd", "log", "sqrt", "exp", "abs", "min", "max", "constant"})
+_QUOTED = re.compile(r'""([^"]+)""')  # ""a column with spaces or symbols""
+_BACKTICKED = re.compile(r"`([^`]+)`")
+_QUOTED_OR_CARET = re.compile(r'""[^"]*""|\^')
+_ASSIGNED = re.compile(r"^\s*[A-Za-z_]\w*\s*=(?!=)\s*")  # "bmi = weight / ...": the formula is the right side
+
+
+@dataclass(frozen=True)
+class FormulaReading:
+    """What a formula uses, read as the evaluator reads it (:func:`read_formula`)."""
+
+    names: tuple[str, ...] = ()  # the variables it uses, in the order they first appear
+    problem: str | None = None  # why it cannot be read (then it names no variable)
+    power_caret: bool = False  # it uses ^, which is a bitwise exclusive or here, not a power (write **)
+
+
+def read_formula(formula: str) -> FormulaReading:
+    """
+    The variables a formula uses: a name, or ``""a name""`` for a column with spaces or symbols; the functions it may
+    call are not variables. The one reading of a formula: the evaluator, the AI engine's suggestions and their
+    diagrams use it, so a diagram shows what computing the formula uses.
+    """
+    text = (formula or "").strip()
+    quoted: dict[str, str] = {}
+    for i, match in enumerate(dict.fromkeys(_QUOTED.findall(text))):
+        placeholder = f"__quoted_var_{i}__"
+        quoted[placeholder] = match
+        text = text.replace(f'""{match}""', placeholder)
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError as exc:
+        return FormulaReading(problem=f"Syntax Error: {exc}")
+    found = sorted(
+        (node for node in ast.walk(tree) if isinstance(node, ast.Name)),
+        key=lambda node: (node.lineno, node.col_offset),
+    )
+    names = (quoted.get(node.id, node.id) for node in found)
+    return FormulaReading(
+        names=tuple(dict.fromkeys(name for name in names if name not in FORMULA_FUNCTIONS)),
+        power_caret=any(isinstance(node, ast.BitXor) for node in ast.walk(tree)),
+    )
+
+
+def formula_from_model(formula: str) -> str:
+    """
+    A formula written by a language model, in this application's notation: a leading ``name =`` dropped,
+    `` `a name` `` written ``""a name""``, and ``^`` (a power, as in mathematics) written ``**`` (here ``^`` is a
+    bitwise exclusive or, which gives wrong numbers silently).
+    """
+    text = _ASSIGNED.sub("", (formula or "").strip(), count=1)
+    text = _BACKTICKED.sub(lambda match: f'""{match.group(1)}""', text)
+    return _QUOTED_OR_CARET.sub(lambda match: "**" if match.group(0) == "^" else match.group(0), text)
+
+
+CARET_IS_NOT_A_POWER = (
+    "^ is not a power in a formula: it is a bitwise exclusive or, which gives wrong numbers without an error. "
+    "Write ** for a power, as in weight_kg / (height_cm / 100) ** 2."
+)
+
+
+@dataclass(frozen=True)
+class FormulaTrial:
+    """A formula tried on the data as computing it would (an AI engine's suggestion, before it is offered)."""
+
+    values: pd.Series | None = None  # one value per row
+    problem: str | None = None  # why it cannot be computed, in words
+
+    @property
+    def ok(self) -> bool:
+        return self.problem is None
+
+
+def try_formula(formula: str, data: pd.DataFrame) -> FormulaTrial:
+    """
+    ``formula`` computed on ``data`` by the evaluator of "Compute" and "Apply", or why it cannot be: a syntax the
+    application does not read, ``^``, a name that is not a column, or a computation the data refuse (a column that
+    holds text compared with a number, say: the text columns it uses are named, with some of their values).
+    """
+    reading = read_formula(formula)
+    if reading.problem:
+        return FormulaTrial(problem=reading.problem)
+    if reading.power_caret:
+        return FormulaTrial(problem=CARET_IS_NOT_A_POWER)
+    unknown = [name for name in reading.names if name not in data.columns]
+    if unknown:
+        return FormulaTrial(problem=f"not in the data: {', '.join(unknown)}")
+    ok, result, _ = evaluate_formula_safely(formula, "__trial__", data, return_series=True)
+    if ok:
+        return FormulaTrial(values=result)
+    problem = str(result).split("\n")[0]
+    for prefix in ("Error evaluating formula: ", "Invalid formula: "):
+        problem = problem.removeprefix(prefix)
+    texts = [
+        name
+        for name in reading.names
+        if not (
+            pd.api.types.is_numeric_dtype(data[name])
+            or pd.api.types.is_bool_dtype(data[name])
+            or pd.api.types.is_datetime64_any_dtype(data[name])
+        )
+    ]
+    for name in texts:
+        frequent = data[name].dropna().astype(str).value_counts().index.tolist()[:3]
+        examples = ", ".join(repr(str(value)) for value in frequent)
+        problem += f"; {name} holds text" + (f" (such as {examples})" if examples else "")
+    return FormulaTrial(problem=problem)
+
+
 def validate_and_extract_columns_ast(formula: str, dataset_columns: list) -> tuple[bool, str, list[str], list[str]]:
     """
-    Parses formula using Python AST to safely extract variables and constants 
-    regardless of spacing.
+    Reads the formula (:func:`read_formula`) and checks that every variable it uses is a column of the data: the
+    variables it uses, or why it cannot be computed.
     """
-    formula = formula.strip()
-    used_columns = []
-
-    try:
-        # Handle quoted variables for AST parsing
-        temp_formula = formula
-        quoted_vars = {}
-        # Find ""Variable Name"" pattern
-        quoted_matches = re.findall(r'""([^"]+)""', temp_formula)
-        for i, match in enumerate(quoted_matches):
-            placeholder = f"__quoted_var_{i}__"
-            quoted_vars[placeholder] = match
-            temp_formula = temp_formula.replace(f'""{match}""', placeholder)
-
-        # Parse the string into an AST
-        tree = ast.parse(temp_formula, mode='eval')
-        
-        # Traverse the tree to find variable names (nodes of type ast.Name)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                # Resolve placeholder if it exists
-                var_name = quoted_vars.get(node.id, node.id)
-                
-                # Check if it's a known library alias or function (np, pd, log, etc.)
-                if var_name in ['np', 'pd', 'log', 'sqrt', 'exp', 'abs', 'min', 'max', 'constant']: 
-                    continue
-                
-                # Check if it matches a dataset column
-                if var_name in dataset_columns:
-                    used_columns.append(var_name)
-                else:
-                    # Logic for "quoted" columns if you keep your specific syntax
-                    # or handle mismatched names here
-                    return False, f"Unknown variable: '{var_name}'", [], []
-
-        return True, None, list(set(used_columns)), []
-
-    except SyntaxError as e:
-        return False, f"Syntax Error: {e}", [], []
+    reading = read_formula(formula)
+    if reading.problem:
+        return False, reading.problem, [], []
+    for name in reading.names:
+        if name not in dataset_columns:
+            return False, f"Unknown variable: '{name}'", [], []
+    return True, None, list(reading.names), []
 
 
 # Replace column names in the formula with their corresponding normalized names

@@ -1,4 +1,3 @@
-import ast
 import contextlib
 import io
 import json
@@ -17,22 +16,32 @@ import biostats.reduction as rd
 import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.population import catalogue
+from core.registry import as_code
 from enrich.formulas import (
+    CARET_IS_NOT_A_POWER,
+    FormulaTrial,
     evaluate_formula_safely,
     extract_constant_value,
     far_outside,
+    formula_from_model,
     numeric_summary,
+    read_formula,
+    try_formula,
     validate_and_extract_columns_ast,
     validate_variable_name,
 )
 from enrich.imputation_service import impute_rows
 from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
+from graph.builders.formula import build_formula_graph
+from graph.model import RenderOptions
+from graph.renderers.graphviz import GraphvizGraphRenderer
 from ingest.loaders import UPLOAD_TYPES
-from manage.ai_payload import column_profile
+from manage.ai_payload import column_kinds, column_profile
 from manage.db_manager import DBManager
 from ui.components import error_card, no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
+from ui.graph_view import current_theme, render_graph
 from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
@@ -1205,60 +1214,25 @@ def define_new_variables(main_data):
                         
                         st.markdown(f"**Description:** {sugg.get('description', sugg.get('reason', ''))}")
                         
+                        # The formula as the application reads and computes it (enrich.formulas): its diagram, what it
+                        # gives on the data, and what "Apply to Editor" puts in the editor are the same formula. Earlier
+                        # suggestions of the session are read in the application's notation too.
+                        formula = formula_from_model(sugg.get('formula', ''))
+                        reading = read_formula(formula)
+                        trial = _tried(sugg, formula, main_data)
+
                         # Layout: Visualization (Left) | Formula (Right)
                         col_viz, col_formula = st.columns([1, 4], vertical_alignment="center")
-                        
+
                         with col_viz:
-                            # Generate mini-graph for this specific suggestion
-                            target_name = sugg.get('name', 'Target')
-                            formula = sugg.get('formula', '')
-                            
-                            # Compact graph settings - Adjusted for visibility
-                            dot_code = 'digraph G {\n  rankdir="LR";\n  bgcolor="transparent";\n  ranksep=0.2;\n  nodesep=0.1;\n  node [fontname="Arial", fontsize=9, height=0.25, margin=0.05];\n  edge [arrowsize=0.5, penwidth=0.6];\n'
-                            dot_code += f'  "{target_name}" [shape=box, style=filled, fillcolor="#e1f5fe"];\n'
-                            
-                            try:
-                                # Handle quoted variables for AST parsing
-                                temp_formula = formula
-                                quoted_vars = {}
-                                # Find ""Variable Name"" pattern
-                                quoted_matches = re.findall(r'""([^"]+)""', temp_formula)
-                                for k, match in enumerate(quoted_matches):  # not i: it keys this card's buttons
-                                    placeholder = f"__quoted_var_{k}__"
-                                    quoted_vars[placeholder] = match
-                                    temp_formula = temp_formula.replace(f'""{match}""', placeholder)
-
-                                tree = ast.parse(temp_formula, mode='eval')
-                                inputs = set()
-                                for node in ast.walk(tree):
-                                    if isinstance(node, ast.Name) and node.id != target_name:
-                                        var_name = quoted_vars.get(node.id, node.id)
-                                        inputs.add(var_name)
-                                    elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                                        inputs.add(node.value)
-                                
-                                # Add explicitly missing variables from RAG suggestion
-                                if 'missing_variables' in sugg:
-                                    inputs.update(sugg['missing_variables'])
-
-                                has_inputs = False
-                                for inp in inputs:
-                                    if inp in ['np', 'pd', 'log', 'exp', 'sqrt', 'abs', 'min', 'max', 'constant']: continue
-                                    has_inputs = True
-                                    if inp in main_data.columns:
-                                        dot_code += f'  "{inp}" [shape=ellipse, style=filled, fillcolor="#f0f4c3"];\n'
-                                    else:
-                                        # Use a distinct style for missing inputs as requested
-                                        dot_code += f'  "{inp}" [label="{inp}\\n(Missing)", shape=ellipse, style="dashed,filled", fillcolor="#ffcdd2", color="red", fontcolor="red"];\n'
-                                    dot_code += f'  "{inp}" -> "{target_name}";\n'
-                                
-                                if not has_inputs:
-                                     dot_code += '  "No Inputs" [shape=plaintext];\n'
-                            except Exception:
-                                dot_code += '  "Error" [shape=plaintext];\n'
-                            
-                            dot_code += '}'
-                            st.graphviz_chart(dot_code, width='stretch')
+                            # the variables the formula uses, present in the data or missing: never the model's list
+                            render_graph(
+                                build_formula_graph(
+                                    sugg.get('name', 'Target'), reading.names, main_data.columns, theme=current_theme()
+                                ),
+                                RenderOptions(key=f"suggestion_graph_{i}", show_legend=False),
+                                renderer=GraphvizGraphRenderer(),
+                            )
 
                         with col_formula:
                             if sugg.get('markdown_formula'):
@@ -1277,14 +1251,20 @@ def define_new_variables(main_data):
                                     
                                     st.latex(clean_formula)
                             else:
-                                st.code(sugg.get('formula', ''), language="python")
-                        
+                                st.code(formula, language="python")
+
+                        _show_trial(trial, f"a value for {_count(trial)} of {len(main_data):,} rows")
+
                         with st.expander("View Computation Details"):
                             st.caption("Computation Formula (for interpreter):")
-                            st.code(sugg.get('formula', ''), language="text")
-                            
-                            # Check for missing variables
-                            missing_vars = sugg.get('missing_variables', [])
+                            st.code(formula, language="text")
+
+                            # the variables the formula uses that the data do not have (the model's own list only when
+                            # the formula cannot be read)
+                            if reading.problem is None:
+                                missing_vars = [n for n in reading.names if n not in main_data.columns]
+                            else:
+                                missing_vars = [v for v in (sugg.get('missing_variables') or []) if isinstance(v, str)]
                             if missing_vars:
                                 st.error(f"Missing required variables: {', '.join(missing_vars)}")
                                 
@@ -1351,7 +1331,7 @@ def define_new_variables(main_data):
 
                         if st.button("Apply to Editor", key=f"apply_var_{i}_{sugg.get('name', 'unknown')}", width='stretch'):
                             st.session_state.variable_name_input = sugg.get('name', '')
-                            st.session_state.formula_input = sugg.get('formula', '')
+                            st.session_state.formula_input = formula
                             st.rerun()
                 st.markdown("---")
 
@@ -1409,9 +1389,11 @@ def define_new_variables(main_data):
 
         # Retrieve column names from the formula
         formula_valid, error_msg, used_columns, constants = validate_and_extract_columns_ast(computation_formula, column_names)
-        
+
         if not formula_valid:
             st.error(f"Formula error: {error_msg}")
+        elif read_formula(computation_formula).power_caret:
+            st.error(CARET_IS_NOT_A_POWER)
 
         if used_columns or constants:
             st.markdown("### Source Variables and Constants Preview")
@@ -1444,6 +1426,8 @@ def define_new_variables(main_data):
             st.error(f"Invalid variable name: {name_error}")
         elif not formula_valid:
             st.error(f"Invalid formula: {formula_error}")
+        elif read_formula(computation_formula).power_caret:
+            st.error(CARET_IS_NOT_A_POWER)  # a new formula: a recorded one replays as it was computed
         else:
             try:
                 # Compute the new variable
@@ -1919,6 +1903,27 @@ def save_snapshot(df, step_name, base_dir=None):
 
 
 # Helper to extract statistics for context columns (Guided Mode)
+def _tried(sugg: dict, formula: str, data: pd.DataFrame) -> FormulaTrial:
+    """An AI suggestion's formula tried on the data (enrich.formulas.try_formula), once per formula and data layout:
+    kept on the suggestion, it is not computed again at every rerun."""
+    layout = (formula, tuple(map(str, data.columns)), len(data))
+    if sugg.get("_tried_on") != layout:
+        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, data), layout
+    return sugg["_trial"]
+
+
+def _count(trial: FormulaTrial) -> str:
+    return f"{int(trial.values.notna().sum()):,}" if trial.values is not None else "0"
+
+
+def _show_trial(trial: FormulaTrial, gives: str) -> None:
+    """What a suggestion gives on the data, or why it cannot be computed there (its text as code: it quotes values)."""
+    if trial.ok:
+        st.caption(f":material/check_circle: On your data: {gives}.")
+    else:
+        st.caption(f":material/error: Cannot be computed on your data: {as_code(trial.problem, limit=300)}")
+
+
 def extract_column_stats(df, columns):
     """
     What the AI engine is told about the selected columns for its unit hints: their percentiles, or the frequent
@@ -2092,27 +2097,42 @@ def app():
                                     context_stats = extract_column_stats(main_data, context_cols + [target_var])
                                 
                                 suggestions, error = st.session_state.rag_manager.suggest_imputation_formulas(
-                                    target_variable=target_var, 
+                                    target_variable=target_var,
                                     available_columns=available_cols,
                                     search_hint=search_hint,
                                     context_columns=context_cols,
-                                    context_stats=context_stats
+                                    context_stats=context_stats,
+                                    # how each column is stored (number, text...), so that a text column is compared
+                                    # with text: no value is sent
+                                    column_kinds=column_kinds(main_data, [*available_cols, target_var]),
                                 )
-                                
+
                                 if error:
                                     st.error(f"RAG Error: {error}")
                                 elif suggestions:
                                     st.session_state['imputation_suggestions'] = suggestions
+                                    st.session_state['imputation_suggestions_for'] = target_var
                                 else:
                                     st.warning("No suggestions found.")
-                        
-                        if 'imputation_suggestions' in st.session_state:
-                            for i, sugg in enumerate(st.session_state['imputation_suggestions']):
+
+                        # the suggestions for the variable shown, each tried on the data before it can be used
+                        if st.session_state.get('imputation_suggestions_for', target_var) == target_var:
+                            missing_now = main_data[target_var].isna()
+                            for i, sugg in enumerate(st.session_state.get('imputation_suggestions', [])):
+                                formula = formula_from_model(sugg.get('formula', ''))
+                                trial = _tried(sugg, formula, main_data)
                                 st.markdown(f"**Option {i+1}: {sugg.get('name', 'Formula')}**")
-                                st.code(sugg.get('formula', ''))
+                                st.code(formula)
                                 st.caption(sugg.get('reasoning', ''))
-                                if st.button(f"Use Formula #{i+1}", key=f"use_imp_sugg_{i}"):
-                                    st.session_state['imputation_formula_input'] = sugg.get('formula', '')
+                                fills = (
+                                    int((missing_now & trial.values.notna()).sum()) if trial.values is not None else 0
+                                )
+                                _show_trial(
+                                    trial,
+                                    f"fills {fills:,} of the {int(missing_now.sum()):,} missing values of {target_var}",
+                                )
+                                if st.button(f"Use Formula #{i+1}", key=f"use_imp_sugg_{i}", disabled=not trial.ok):
+                                    st.session_state['imputation_formula_input'] = formula
                                     st.rerun()
 
                 # Formula Input
@@ -2138,8 +2158,13 @@ def app():
 
                 if st.button("Apply Targeted Imputation", type="primary", disabled=not formula_input):
                     try:
-                        # compute formula series
-                        success, result_or_error, _ = evaluate_formula_safely(formula_input, target_var, main_data, return_series=True)
+                        # compute formula series (a new formula: ^ is refused, a recorded one replays as computed)
+                        if read_formula(formula_input).power_caret:
+                            success, result_or_error = False, CARET_IS_NOT_A_POWER
+                        else:
+                            success, result_or_error, _ = evaluate_formula_safely(
+                                formula_input, target_var, main_data, return_series=True
+                            )
                         
                         if success:
                             computed_series = result_or_error

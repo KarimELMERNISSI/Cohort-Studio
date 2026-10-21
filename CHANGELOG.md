@@ -456,6 +456,30 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Qdrant server (they decide where the data go) are never saved: a cloud provider kept from the last session starts
   nothing until you confirm again. A saved choice the server no longer offers is not used, and the page names it.
 
+### AI engine: suggested formulas are read and tried as the application computes them (owner request)
+
+- **The diagram of a suggested variable** (Data > Enrich > Create New Variables > AI Variable Suggestions) is drawn
+  from its formula as the application computes it: each variable the formula uses, present in your data or missing,
+  and the new variable. Before, the page read the formula with a parser of its own and drew "Error" for some
+  suggestions, such as a column written `` `Heart Rate` `` or a list of missing variables the model did not give as a
+  list. The model's own list of missing variables is no longer used: the formula decides.
+- **Each suggestion is tried on your data before you can use it**, by the evaluator of "Compute" and "Apply": a
+  suggested variable says for how many rows it gives a value, an imputation formula how many missing values it fills.
+  One that cannot be computed says why, naming the text columns it uses: on the tutorial cohort,
+  `sbp_baseline + np.where(nyha_class > 2, 5.0, -2.0)` compared `nyha_class` ('I' to 'IV') with a number and failed
+  only after **Use Formula** and **Apply**. Its **Use Formula** button is now disabled.
+- **The imputation suggestions know how each column is stored** (number, text, date, yes/no), so that a text column is
+  compared with text. Like the column names, this sends no value.
+- **A suggested formula is written in the application's notation.** A language model writes `` `a name` `` for a
+  column with spaces and `^` for a power; they become `""a name""` and `**` when the suggestion arrives, and a leading
+  `name =` is dropped. **Apply to Editor** and **Use Formula** then give the editor what the card computed. A
+  formula the model corrected keeps the quotes of a column name at its ends (they were stripped before).
+- **`^` is refused in a new formula, with the hint to write `**`.** In a formula, `^` is a bitwise exclusive or, not a
+  power: `height_cm ^ 2` gave 168 for a height of 170, without an error (whole numbers; with decimals it failed). The
+  editors of Create New Variables and of the targeted imputation refuse it. A formula already recorded in a trace
+  replays as it was computed.
+- One reading of a formula now serves the suggestions, their diagrams and the computation; three disagreed before.
+
 ### AI engine: Gemini Flash-Lite
 
 - **The Gemini chat models now include Flash-Lite**, cheaper and faster for the AI features: `gemini-flash-lite-latest`,
