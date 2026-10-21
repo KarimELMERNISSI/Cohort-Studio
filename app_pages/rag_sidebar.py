@@ -26,7 +26,7 @@ from manage.ai_payload import (
     recipient,
 )
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
-from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
+from manage.rag.providers import AI_PROVIDERS, declared, embedding_providers, server_key
 from manage.vectorstores import (
     VECTOR_STORES,
     IndexManifest,
@@ -50,49 +50,12 @@ from utils.settings import get_settings
 # The choices are kept for the whole session: Streamlit drops the value of a widget whose page is not shown, so a
 # revisit showed Ollama, the first model and an empty consent box, and withdrew the running engine's consent
 PERSIST = "session"
-CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
-PROVIDER_NAMES = {
-    "ollama": "Ollama (open-source, at the address you give)",
-    "gemini": "Google Gemini (cloud)",
-    "openai": "OpenAI (cloud)",
-    "mistral": "Mistral AI (cloud)",
-    "anthropic": "Anthropic Claude (cloud)",
-}
 STOP_NOTICE = (
     "Confirmation withdrawn: the AI engine stopped. Nothing more is sent from this tab; what was already sent stays "
     "with the provider, under its own terms."
 )
-# Claude answers but has no embedding model: these providers can embed the documents for it.
-EMBEDDING_PROVIDERS = ("ollama", "gemini", "openai", "mistral")
-OLLAMA_CHAT_FALLBACK = ["llama3.2:latest", "llama3.1:8b", "mistral:latest", "deepseek-r1:8b", "qwen2.5:7b"]
-OLLAMA_EMBEDDINGS = ["nomic-embed-text:latest", "bge-m3:latest", "all-minilm:latest", "mxbai-embed-large:latest"]
-CLOUD_CATALOG = {
-    "gemini": {
-        "env": "GOOGLE_API_KEY",
-        "label": "Google GenAI API key",
-        # the provider's list: the models that fit the app's uses, Flash-Lite included (cheap and fast)
-        "chat": list(GEMINI_CHAT_MODELS),
-        "embed": ["models/gemini-embedding-2", "models/text-embedding-005", "models/gemini-embedding-001"],
-    },
-    "openai": {
-        "env": "OPENAI_API_KEY",
-        "label": "OpenAI API key",
-        "chat": ["gpt-4o-mini", "gpt-4o", "o3-mini"],
-        "embed": ["text-embedding-3-small", "text-embedding-3-large"],
-    },
-    "mistral": {
-        "env": "MISTRAL_API_KEY",
-        "label": "Mistral API key",
-        "chat": ["mistral-small-latest", "mistral-large-latest", "codestral-latest"],
-        "embed": ["mistral-embed"],
-    },
-    "anthropic": {
-        "env": "ANTHROPIC_API_KEY",
-        "label": "Anthropic API key",
-        "chat": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
-        "embed": [],  # no embedding API: see EMBEDDING_PROVIDERS
-    },
-}
+# The providers, their names, keys and models are declared once (manage.rag.providers.AI_PROVIDERS): this card reads
+# them, in the registry's order
 
 
 def _documents_dir() -> str:
@@ -129,7 +92,7 @@ def _api_key_input(provider: str, label: str, key: str, help_text: str) -> str |
     typed = st.text_input(
         label, value="", type="password", help=help_text, key=key, icon=":material/key:", persist_state=PERSIST
     )
-    if get_settings().ai.api_key(provider):
+    if server_key(provider):
         st.caption("A server-side key is configured; leave this empty to use it.")
     st.session_state.rag_manager.api_key = typed or None
     return typed or None
@@ -179,14 +142,14 @@ def _provider_card() -> dict:
     with st.container(border=True):
         st.subheader("Provider and models", icon=":material/smart_toy:", anchor=False)
         if "rag_provider_select" not in st.session_state:
-            if running.get("provider") in PROVIDER_NAMES:
+            if running.get("provider") in AI_PROVIDERS.names():
                 st.session_state["rag_provider_select"] = running["provider"]  # from the running engine
-            elif prefs.ai_provider in PROVIDER_NAMES:
+            elif prefs.ai_provider in AI_PROVIDERS.names():
                 st.session_state["rag_provider_select"] = prefs.ai_provider  # a saved cloud provider starts nothing
         provider = st.selectbox(
             "AI provider",
-            options=list(PROVIDER_NAMES),
-            format_func=lambda p: PROVIDER_NAMES.get(p, p),
+            options=list(AI_PROVIDERS.names()),
+            format_func=AI_PROVIDERS.display_name,
             index=0,  # local-first default: nothing leaves the server unless a cloud provider is chosen
             key="rag_provider_select",
             help="Ollama runs on this server or your network; the cloud providers need an API key and your "
@@ -195,12 +158,13 @@ def _provider_card() -> dict:
             on_change=preferences.save_from,
             args=("rag_provider_select", "ai_provider"),
         )
-        if prefs.ai_provider and prefs.ai_provider not in PROVIDER_NAMES:
+        if prefs.ai_provider and prefs.ai_provider not in AI_PROVIDERS.names():
             st.caption(
                 f"Your saved AI provider {preferences.shown(prefs.ai_provider)} is not offered here: "
-                f"{PROVIDER_NAMES[provider]} is used."
+                f"{AI_PROVIDERS.display_name(provider)} is used."
             )
         cfg["provider"] = provider
+        info = declared(provider)  # its key, its models (manage.rag.providers)
         if provider == "ollama":
             cfg["base_url"] = st.text_input(
                 "Ollama endpoint",
@@ -211,32 +175,32 @@ def _provider_card() -> dict:
                 persist_state=PERSIST,
             )
             _address_badge(cfg["base_url"])
-            chat_options = _discover_ollama_models(cfg["base_url"]) or OLLAMA_CHAT_FALLBACK
-            embed_options = OLLAMA_EMBEDDINGS
+            chat_options = _discover_ollama_models(cfg["base_url"]) or list(info.chat_models)
+            embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
             chat_help = "Local model for question answering and taxonomy generation."
             embed_help = "Local embedding model (pull it first: 'ollama pull <model>')."
         else:
-            catalog = CLOUD_CATALOG[provider]
             st.badge("Cloud: requires your confirmation", icon=":material/cloud:", color="orange")
             cfg["api_key"] = _api_key_input(
-                provider, catalog["label"], f"rag_{provider}_api_key", f"Required for {PROVIDER_NAMES[provider]} inference."
+                provider, info.key_label or "API key", f"rag_{provider}_api_key", f"Required for {info.display_name} inference."
             )
-            chat_options = list(catalog["chat"])
-            if provider in ("gemini", "anthropic") and cfg["api_key"] and hasattr(
+            chat_options = list(info.chat_models)
+            if info.lists_models and cfg["api_key"] and hasattr(
                 st.session_state.rag_manager, "get_available_models"
             ):
                 for model in _discover_cloud_models(st.session_state.rag_manager, provider, cfg["api_key"]):
                     if model not in chat_options:
                         chat_options.append(model)
-            embed_options = catalog["embed"]
+            embed_options = list(info.embedding_models)
             chat_key, embed_key = f"rag_{provider}_model_select", f"rag_{provider}_embed_select"
             chat_help = "Model used for question answering and taxonomy generation."
             embed_help = "Embedding model used to index your documents."
             if provider == "anthropic":
                 chat_help += " The most capable model is listed first; the app's temperature setting does not apply to Claude."
+            if not info.embeds():  # it answers; another provider embeds the documents
                 embed_options, embed_help = _claude_embedding_block(cfg)
-                embed_key = f"rag_anthropic_{cfg['embedding_provider']}_embed_select"
+                embed_key = f"rag_{provider}_{cfg['embedding_provider']}_embed_select"
         engine_model = running.get("model") if running.get("provider") == provider else None
         embed_owner = cfg.get("embedding_provider") or provider  # Claude's documents are embedded by another provider
         stale = [
@@ -288,14 +252,15 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
         "extracts."
     )
     saved = preferences.current().ai_claude_embedding_provider
-    if "rag_claude_embed_provider" not in st.session_state and saved in EMBEDDING_PROVIDERS:
+    embedders = embedding_providers()  # the providers that embed, local Ollama first
+    if "rag_claude_embed_provider" not in st.session_state and saved in embedders:
         st.session_state["rag_claude_embed_provider"] = saved  # the choice kept from the last session
-    elif saved and saved not in EMBEDDING_PROVIDERS:
+    elif saved and saved not in embedders:
         st.caption(f"Your saved embedding provider {preferences.shown(saved)} is not offered here.")
     embed_provider = st.selectbox(
         "Embedding provider",
-        EMBEDDING_PROVIDERS,
-        format_func=lambda p: PROVIDER_NAMES.get(p, p),
+        embedders,
+        format_func=AI_PROVIDERS.display_name,
         index=0,
         key="rag_claude_embed_provider",
         on_change=preferences.save_from,
@@ -316,21 +281,21 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
             persist_state=PERSIST,
         )
         _address_badge(cfg["embedding_base_url"])
-        return OLLAMA_EMBEDDINGS, "Local embedding model (pull it first: 'ollama pull <model>')."
-    catalog = CLOUD_CATALOG[embed_provider]
+        return list(declared(embed_provider).embedding_models), "Local embedding model (pull it first: 'ollama pull <model>')."
+    info = declared(embed_provider)
     typed = st.text_input(
-        f"{catalog['label']} (embeddings)",
+        f"{info.key_label or 'API key'} (embeddings)",
         value="",
         type="password",
         key=f"rag_claude_{embed_provider}_embed_key",
         icon=":material/key:",
-        help=f"Key for {PROVIDER_NAMES[embed_provider]} embeddings. Never stored; empty uses the server key if configured.",
+        help=f"Key for {info.display_name} embeddings. Never stored; empty uses the server key if configured.",
         persist_state=PERSIST,
     )
-    if get_settings().ai.api_key(embed_provider):
+    if server_key(embed_provider):
         st.caption("A server-side key is configured for the embeddings; leave this empty to use it.")
     cfg["embedding_api_key"] = typed or None
-    return list(catalog["embed"]), f"{PROVIDER_NAMES[embed_provider]} embedding model used to index your documents."
+    return list(info.embedding_models), f"{info.display_name} embedding model used to index your documents."
 
 
 def _recipients(cfg: dict) -> list[str]:
@@ -774,4 +739,4 @@ def render_ai_settings() -> None:
         _engine_card(cfg, consent, adherence, temperature, selected_files, vector)
 
 
-__all__ = ["CLOUD_PROVIDERS", "render_ai_settings"]
+__all__ = ["render_ai_settings"]

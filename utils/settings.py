@@ -94,15 +94,6 @@ class IAMSection(_Names):
     admin_password_file: str | None = Field(None, validation_alias="CMP_ADMIN_PASSWORD_FILE")
 
 
-# the server's key of each cloud provider (manage.rag_manager), by the field that holds it
-_PROVIDER_KEYS = {
-    "gemini": "google_api_key",
-    "openai": "openai_api_key",
-    "mistral": "mistral_api_key",
-    "anthropic": "anthropic_api_key",
-}
-
-
 def _no_credentials(value: str | None) -> str | None:
     """An address without a user name or password: it is shown to every user in Settings, and logged."""
     if value:
@@ -127,11 +118,14 @@ class AISection(_Section):
     mistral_api_key: SecretStr | None = Field(None, validation_alias="MISTRAL_API_KEY")
     anthropic_api_key: SecretStr | None = Field(None, validation_alias="ANTHROPIC_API_KEY")
 
-    def api_key(self, provider: str | None) -> str | None:
-        """The server's key for a cloud provider (gemini, openai, mistral, anthropic), or None."""
-        field = _PROVIDER_KEYS.get((provider or "").strip().lower())
-        secret = getattr(self, field) if field else None
-        return secret.get_secret_value() if secret is not None else None
+    def key(self, variable: str | None) -> str | None:
+        """The server's API key held by the setting ``variable`` (GOOGLE_API_KEY...: each AI provider declares its own,
+        manage.rag.providers), or None; a setting that is not a key gives None."""
+        for name, field in type(self).model_fields.items():
+            if name.endswith("_api_key") and field.validation_alias == variable:
+                secret = getattr(self, name)
+                return secret.get_secret_value() if secret is not None else None
+        return None
 
 
 class VectorStoreSection(_Names):

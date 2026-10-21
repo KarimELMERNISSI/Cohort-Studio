@@ -37,7 +37,7 @@ def test_the_defaults(env: pytest.MonkeyPatch) -> None:
     assert (
         s.iam.admin_password is None and s.iam.better_auth_url == "http://localhost:3000/api/auth"
     )
-    assert s.ai.ollama_base_url == "http://localhost:11434" and s.ai.api_key("gemini") is None
+    assert s.ai.ollama_base_url == "http://localhost:11434" and s.ai.key("GOOGLE_API_KEY") is None
     assert (s.vector_store.engine, s.vector_store.qdrant_url) == ("auto", None)
     assert (s.graph.renderer, s.graph.offline, s.graph.no_fallback) == ("auto", False, False)
     assert (s.statistics.random_seed, s.statistics.mi_max_workers) == (20260101, None)
@@ -78,7 +78,10 @@ def test_keys_are_hidden_when_printed(env: pytest.MonkeyPatch) -> None:
     env.setenv("CMP_ADMIN_PASSWORD", "planted-password-value")
     s = cfg.get_settings()
     assert "planted" not in repr(s) and "planted" not in str(s)
-    assert s.ai.api_key("gemini") == "AIza-planted-secret-value" and s.ai.api_key("ollama") is None
+    assert (
+        s.ai.key("GOOGLE_API_KEY") == "AIza-planted-secret-value"
+        and s.ai.key("OLLAMA_BASE_URL") is None
+    )
 
 
 def test_a_changed_variable_is_read_again(env: pytest.MonkeyPatch) -> None:
@@ -131,7 +134,7 @@ def test_a_streamlit_secrets_file_is_named_not_read(
     warnings = [r.getMessage() for r in caplog.records if "secrets.toml" in r.getMessage()]
     assert len(warnings) == 1 and "the working folder" in warnings[0]
     assert str(tmp_path) not in warnings[0]  # a path names the server's account
-    assert cfg.get_settings().ai.api_key("gemini") is None
+    assert cfg.get_settings().ai.key("GOOGLE_API_KEY") is None
 
 
 def test_the_env_example_lists_exactly_the_settings() -> None:

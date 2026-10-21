@@ -27,6 +27,8 @@ from urllib.parse import urlparse
 
 import pandas as pd
 
+from manage.rag.providers import AI_PROVIDERS, declared
+
 logger = logging.getLogger(__name__)
 
 MIN_COUNT = 5  # a value shared by fewer rows is not sent
@@ -53,14 +55,6 @@ DESCRIPTIVE_KEYS = frozenset(
 )
 # environment switches of the LangChain tracing service, which would receive every prompt
 TRACING_VARIABLES = ("LANGSMITH_TRACING", "LANGSMITH_TRACING_V2", "LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING")
-PROVIDER_LABELS = {
-    "ollama": "Ollama",
-    "gemini": "Google Gemini",
-    "openai": "OpenAI",
-    "mistral": "Mistral AI",
-    "anthropic": "Anthropic Claude",
-}
-LOCAL_PROVIDERS = frozenset({"ollama"})  # they run on this machine or the user's network
 THIS_MACHINE = frozenset({"", "localhost", "127.0.0.1", "::1"})
 PRIVATE_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa", ".localdomain")
 
@@ -200,7 +194,7 @@ def recipient(provider: str | None, base_url: str | None = None) -> str | None:
     """
     if not provider:
         return None
-    if provider not in LOCAL_PROVIDERS:
+    if provider not in local_providers():
         return provider
     return f"{provider}@{host_of(base_url)}" if outside_private_network(base_url) else None
 
@@ -208,8 +202,14 @@ def recipient(provider: str | None, base_url: str | None = None) -> str | None:
 def provider_label(provider: str) -> str:
     """The name of a recipient: "Google Gemini", or "Ollama at <host>" for an Ollama outside the network."""
     name, _, host = provider.partition("@")
-    label = PROVIDER_LABELS.get(name, name)
+    label = declared(name).label if name in AI_PROVIDERS.names() else name
     return f"{label} at {host}" if host else label
+
+
+def local_providers() -> frozenset[str]:
+    """The providers that run on this machine or the user's network, as they declare (manage.rag.providers); every
+    other one, an unknown one included, needs the confirmation."""
+    return frozenset(name for name in AI_PROVIDERS.names() if not declared(name).cloud)
 
 
 def disable_remote_tracing() -> list[str]:
@@ -236,16 +236,15 @@ def disable_remote_tracing() -> list[str]:
 
 
 __all__ = [
-    "LOCAL_PROVIDERS",
     "MIN_COUNT",
     "PERCENTILES",
     "PERCENTILE_KEYS",
-    "PROVIDER_LABELS",
     "column_kinds",
     "column_profile",
     "disable_remote_tracing",
     "frequent_values",
     "host_of",
+    "local_providers",
     "on_this_machine",
     "outside_private_network",
     "provider_label",

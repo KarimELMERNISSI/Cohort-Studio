@@ -37,6 +37,33 @@ AI_PROVIDERS.register("openai", "manage.rag.providers.declarations:OpenAI", extr
 AI_PROVIDERS.register("mistral", "manage.rag.providers.declarations:Mistral", extra="ai")
 AI_PROVIDERS.register("anthropic", "manage.rag.providers.declarations:Claude", extra="ai")
 
+
+def declared(name: str) -> type[BaseAIProvider]:
+    """The declaration of the provider ``name`` (UnknownConnectorError, listing the valid names, when it is not one)."""
+    return AI_PROVIDERS.get(name)
+
+
+def cloud_providers() -> frozenset[str]:
+    """The providers that send data out of the server: the confirmation of each session applies to them."""
+    return frozenset(name for name in AI_PROVIDERS.names() if declared(name).cloud)
+
+
+def embedding_providers() -> tuple[str, ...]:
+    """The providers that can embed documents, in the registry's order: the first (Ollama, local) embeds for one that
+    cannot (Claude) unless another is chosen."""
+    return tuple(name for name in AI_PROVIDERS.names() if declared(name).embeds())
+
+
+def server_key(name: str) -> str | None:
+    """The server's API key for the provider ``name`` (the setting it declares, read by utils.settings), or None."""
+    from utils.settings import get_settings
+
+    canonical = AI_PROVIDERS.canonical(name)
+    if canonical is None or canonical == "auto":
+        return None
+    return get_settings().ai.key(declared(canonical).key_variable)
+
+
 # where each connector is defined, loaded on first use (written out, so the layer test sees the edges)
 _LAZY = {
     "ClaudeChatConnector": "manage.rag.providers.claude",
@@ -66,6 +93,10 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "AI_PROVIDERS",
+    "cloud_providers",
+    "declared",
+    "embedding_providers",
+    "server_key",
     "ClaudeChatConnector",
     "GeminiChatConnector",
     "GeminiEmbeddingConnector",

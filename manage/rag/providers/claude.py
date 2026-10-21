@@ -22,16 +22,12 @@ from utils.logging_config import redact_secrets
 
 from ..base import BaseLLMConnector
 from ..schemas import ProviderConfig
+from .declarations import Claude
 
 logger = logging.getLogger(__name__)
 
-# Most capable first (used when the model list cannot be fetched).
-CLAUDE_MODELS: tuple[str, ...] = (
-    "claude-fable-5-1",
-    "claude-opus-5-5",
-    "claude-sonnet-5-5",
-    "claude-haiku-5-5",
-)
+# Most capable first (used when the model list cannot be fetched): declared with the provider (declarations.Claude)
+CLAUDE_MODELS: tuple[str, ...] = Claude.chat_models
 DEFAULT_MAX_TOKENS = 4096
 
 try:

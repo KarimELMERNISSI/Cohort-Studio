@@ -23,9 +23,9 @@ def test_the_offered_models_include_flash_lite() -> None:
 
 
 def test_the_settings_page_offers_the_provider_list() -> None:
-    from app_pages.rag_sidebar import CLOUD_CATALOG
+    from manage.rag.providers import declared
 
-    assert CLOUD_CATALOG["gemini"]["chat"] == list(GEMINI_CHAT_MODELS)
+    assert declared("gemini").chat_models == GEMINI_CHAT_MODELS  # Settings reads the declaration
 
 
 def test_the_model_list_keeps_the_chat_models_only() -> None:

@@ -66,39 +66,46 @@ def test_each_provider_declares_what_the_application_needs() -> None:
     )  # local first
 
 
-def test_the_declarations_say_what_the_lists_they_replace_said() -> None:
-    """Golden, until the lists are deleted (the next commit): Settings', the RAG manager's, the consent's, the settings'
-    and the factory's lists equal the declarations."""
-    pytest.importorskip(
-        "langchain_core", reason="the pages and the factory need the optional 'ai' group"
-    )
-    from app_pages.rag_sidebar import (
-        CLOUD_CATALOG,
-        CLOUD_PROVIDERS,
-        EMBEDDING_PROVIDERS,
-        OLLAMA_CHAT_FALLBACK,
-        OLLAMA_EMBEDDINGS,
-        PROVIDER_NAMES,
-    )
-    from manage.ai_payload import LOCAL_PROVIDERS, PROVIDER_LABELS
-    from manage.rag.providers.claude import CLAUDE_MODELS
-    from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
-    from manage.rag_manager import CHAT_ONLY_PROVIDERS
-    from manage.rag_manager import CLOUD_PROVIDERS as MANAGER_CLOUD
+def test_the_declarations_keep_what_users_and_settings_rely_on() -> None:
+    """The lists the declarations replaced (golden test of 168ad63), pinned: the defaults are the first of each list,
+    the settings that hold the keys keep their names, and the consent and the embedding fall-back depend on them."""
+    pins = {
+        name: (p.cloud, p.key_variable, p.chat_models[0], p.embedding_models[:1])
+        for name in NAMES
+        for p in [AI_PROVIDERS.get(name)]
+    }
+    assert pins == {
+        "ollama": (False, None, "llama3.2:latest", ("nomic-embed-text:latest",)),
+        "gemini": (True, "GOOGLE_API_KEY", "gemini-3.8-flash", ("models/gemini-embedding-2",)),
+        "openai": (True, "OPENAI_API_KEY", "gpt-4o-mini", ("text-embedding-3-small",)),
+        "mistral": (True, "MISTRAL_API_KEY", "mistral-small-latest", ("mistral-embed",)),
+        "anthropic": (True, "ANTHROPIC_API_KEY", "claude-fable-5-1", ()),
+    }
 
-    declared = {name: AI_PROVIDERS.get(name) for name in NAMES}
-    assert PROVIDER_NAMES == {name: p.display_name for name, p in declared.items()}
-    assert PROVIDER_LABELS == {name: p.label for name, p in declared.items()}
-    assert CLOUD_PROVIDERS == MANAGER_CLOUD == {name for name, p in declared.items() if p.cloud}
-    assert set(LOCAL_PROVIDERS) == {name for name, p in declared.items() if not p.cloud}
-    assert CHAT_ONLY_PROVIDERS == {name for name, p in declared.items() if not p.embeds()}
-    assert tuple(EMBEDDING_PROVIDERS) == tuple(name for name, p in declared.items() if p.embeds())
-    assert tuple(OLLAMA_CHAT_FALLBACK) == declared["ollama"].chat_models
-    assert tuple(OLLAMA_EMBEDDINGS) == declared["ollama"].embedding_models
-    assert tuple(GEMINI_CHAT_MODELS) == declared["gemini"].chat_models
-    assert tuple(CLAUDE_MODELS) == declared["anthropic"].chat_models
-    for name, entry in CLOUD_CATALOG.items():
-        provider = declared[name]
-        assert (entry["env"], entry["label"]) == (provider.key_variable, provider.key_label), name
-        assert tuple(entry["chat"]) == provider.chat_models, name
-        assert tuple(entry["embed"]) == provider.embedding_models, name
+
+def test_the_readers_go_through_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from manage.ai_payload import local_providers, provider_label, recipient
+    from manage.rag.providers import cloud_providers, embedding_providers, server_key
+
+    assert cloud_providers() == {"gemini", "openai", "mistral", "anthropic"}
+    assert local_providers() == {"ollama"}
+    assert embedding_providers() == ("ollama", "gemini", "openai", "mistral")
+    assert provider_label("anthropic") == "Anthropic Claude" and provider_label("zz9") == "zz9"
+    assert recipient("custom") == "custom"  # a provider not declared local needs the confirmation
+    monkeypatch.setenv("MISTRAL_API_KEY", "planted-mistral-key")
+    assert server_key("Mistral") == "planted-mistral-key" and server_key("ollama") is None
+
+
+def test_the_factory_refuses_a_provider_it_does_not_offer() -> None:
+    pytest.importorskip("langchain_core", reason="the connectors need the optional 'ai' group")
+    from manage.rag import ConnectorFactory
+
+    with pytest.raises(
+        ValueError
+    ):  # before, an unknown name became Gemini, a cloud provider nobody chose
+        ConnectorFactory.create_connectors(provider="zz9-cloud")
+    llm, embeddings = ConnectorFactory.create_connectors(provider="anthropic", api_key="k")
+    assert type(llm).__name__ == "ClaudeChatConnector"
+    assert (
+        type(embeddings).__name__ == "OllamaEmbeddingConnector"
+    )  # Claude's documents: local Ollama by default

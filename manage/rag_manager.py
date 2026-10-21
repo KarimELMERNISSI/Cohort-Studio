@@ -19,13 +19,20 @@ import pandas as pd
 from rapidfuzz import process
 
 from manage.ai_payload import (
-    LOCAL_PROVIDERS,
     column_profile,
     frequent_values,
+    local_providers,
     provider_label,
     recipient,
     safe_stats,
     taxonomy_for_prompt,
+)
+from manage.rag.providers import (
+    AI_PROVIDERS,
+    cloud_providers,
+    declared,
+    embedding_providers,
+    server_key,
 )
 
 # Import prompt functions
@@ -45,7 +52,6 @@ from utils.llm_utils import (
     provider_error,
 )
 from utils.logging_config import redact_secrets
-from utils.settings import get_settings
 
 from .rag_computed_vars import ComputedVarsMixin
 from .rag_documents import DocumentsMixin
@@ -55,14 +61,15 @@ from .rag_taxonomy import TaxonomyMixin
 
 logger = logging.getLogger(__name__)
 
-CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
-# Providers that answer but have no embedding API: documents are embedded by another provider.
-CHAT_ONLY_PROVIDERS = {"anthropic"}
-
 
 def _env_api_key(provider: str | None) -> str | None:
-    """Server-configured API key for a cloud provider (utils.settings); used only when the user typed none."""
-    return get_settings().ai.api_key(provider)
+    """Server-configured API key for a cloud provider (the setting it declares); used only when the user typed none."""
+    return server_key(provider or "")
+
+
+def _chat_only(provider: str) -> bool:
+    """A provider that answers but has no embedding API (Claude): another provider embeds the documents."""
+    return provider in AI_PROVIDERS.names() and not declared(provider).embeds()
 
 # Try importing RAG dependencies
 try:
@@ -246,7 +253,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 provider=ProviderType(provider.lower()),
                 api_key=self.api_key or _env_api_key(provider),
                 # the Ollama address of an earlier engine is not a cloud provider's: a key typed for one went there
-                base_url=base_url or (self.base_url if provider.lower() in LOCAL_PROVIDERS else None),
+                base_url=base_url or (self.base_url if provider.lower() in local_providers() else None),
             )
             connector = ConnectorFactory.get_llm_connector(cfg)
             return connector.get_available_models()
@@ -364,9 +371,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         provider_clean = (provider or "gemini").lower()
         effective_key = self.api_key or _env_api_key(provider_clean)
         embed_provider = (
-            embedding_provider or ("ollama" if provider_clean in CHAT_ONLY_PROVIDERS else provider_clean)
+            embedding_provider or (embedding_providers()[0] if _chat_only(provider_clean) else provider_clean)
         ).lower()
-        if embed_provider in CHAT_ONLY_PROVIDERS:
+        if _chat_only(embed_provider):
             return False, f"{embed_provider.capitalize()} has no embedding API: choose another embedding provider."
         separate_embeddings = embed_provider != provider_clean
         embed_key = embedding_api_key or (_env_api_key(embed_provider) if separate_embeddings else effective_key)
@@ -381,9 +388,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 f"These recipients need your explicit confirmation that data may leave this server ({names}). "
                 "Confirm the data-sharing notice in Settings > AI engine first."
             )
-        if provider_clean in CLOUD_PROVIDERS and not effective_key:
+        if provider_clean in cloud_providers() and not effective_key:
             return False, f"{provider_clean.capitalize()} API Key is required."
-        if separate_embeddings and embed_provider in CLOUD_PROVIDERS and not embed_key:
+        if separate_embeddings and embed_provider in cloud_providers() and not embed_key:
             return False, f"{embed_provider.capitalize()} API Key is required for the embeddings."
 
         # The engine is rebuilt from here. The previous connections go first, and a failure or an interruption keeps
@@ -474,7 +481,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     if progress_callback:
                         changed = "The documents changed since the index was built: rebuilding" if existing else "Building"
                         progress_callback(60, f"{changed} the {engine} index...")
-                    cloud = embed_provider in CLOUD_PROVIDERS  # cloud embedding APIs rate-limit bursts
+                    cloud = embed_provider in cloud_providers()  # cloud embedding APIs rate-limit bursts
 
                     def _embedding_progress(done, total):
                         if progress_callback:

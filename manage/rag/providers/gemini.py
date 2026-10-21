@@ -18,6 +18,7 @@ from utils.logging_config import redact_secrets
 
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
+from .declarations import Gemini
 
 logger = logging.getLogger(__name__)
 
@@ -30,21 +31,8 @@ except ImportError:
     genai = None
     types = None
 
-# The chat models offered in Settings, the default first: the models that fit the app's uses (question answering,
-# taxonomies, variable suggestions), with the Flash-Lite versions for cheap and fast answers. Checked against the
-# Gemini API's model list on 2026-10-19 (2.0 and 1.5 are no longer served). A key typed in Settings can add the other
-# chat models it may use, after these.
-GEMINI_CHAT_MODELS = (
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
-    "gemini-pro-latest",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-)
+# The chat models offered in Settings, the default first: declared with the provider (declarations.Gemini)
+GEMINI_CHAT_MODELS = Gemini.chat_models
 # Models the API lists for generateContent that are not chat models: images, speech, robotics, agents...
 NOT_CHAT_MODELS = (
     "image",
