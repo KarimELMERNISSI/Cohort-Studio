@@ -30,12 +30,13 @@ from core.session import restrict_cells, sort_filled
 from core.state import ParseOptions
 from core.steps import DOCUMENT, SNAPSHOT
 from core.steps import ids as step_ids
-from enrich.formulas import evaluate_formula_safely
+from enrich.formulas import evaluate_formula_safely, read_formula
 from enrich.imputation_service import (
     describe_formula_fill,
     describe_imputation,
     fill_with_formula,
     impute_rows,
+    left_missing,
 )
 from enrich.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
@@ -197,6 +198,17 @@ def _enrichment(df, step, index, overrides, warnings):
     ), None
 
 
+def _with_inputs(step: dict[str, Any]) -> dict[str, Any] | None:
+    """A targeted imputation's params with the variables of its formula other than its target ("inputs"), which
+    earlier versions did not record: a value an exact formula computed from a single-imputed one, or from none, is
+    single-imputed (core.session.sort_filled)."""
+    params = step.get("params")
+    if step.get("function") != "targeted_imputation" or not params or "inputs" in params:
+        return params
+    names = read_formula(str(params.get("formula") or "")).names
+    return {**params, "inputs": [n for n in names if n != params.get("target_variable")]}
+
+
 def _scoped_rows(df: pd.DataFrame, step: dict[str, Any], index: int, warnings: list[str]) -> pd.Index | None:
     """The rows an imputation is fitted on and fills: the population recorded with the step, as when it was applied;
     None (every row) when none was recorded, as by earlier versions, or when no criterion was ticked."""
@@ -228,14 +240,18 @@ def _imputation(df, step, index, overrides, warnings, result=None):
 def _targeted_imputation(df, step, index, overrides, warnings, result=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings)
-    target = params["target_variable"]
-    new_df, filled = fill_with_formula(df, target, params["formula"], rows=rows)
+    target, formula = params["target_variable"], params["formula"]
+    # an exact formula fills the rows where every variable of it has a value (not recorded: every row, as before)
+    complete = bool(params.get("complete_inputs"))
+    new_df, filled = fill_with_formula(df, target, formula, rows=rows, complete_inputs=complete)
     recorded = params.get("filled_count")
     if recorded is not None and int(recorded) != filled:
         warnings.append(f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded")
     if result is not None:
         n_rows = None if rows is None else len(rows)
-        description = describe_formula_fill(target, filled, exact=bool(params.get("exact")), n_rows=n_rows)
+        left = left_missing(df, target, formula, rows) if complete else (0, ())
+        exact = bool(params.get("exact"))
+        description = describe_formula_fill(target, filled, exact=exact, n_rows=n_rows, left=left)
         result.records[index] = StepRecord({**params, "filled_count": filled}, description)
     return new_df, None
 
@@ -433,7 +449,7 @@ def apply_steps(
         if current is not None:
             result.single_imputed, result.exact_imputed = sort_filled(
                 str(step.get("function")),
-                step.get("params"),
+                _with_inputs(step),
                 before,
                 current,
                 result.single_imputed,

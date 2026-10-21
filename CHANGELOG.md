@@ -504,6 +504,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The notice covers the imputations by formula:** one that uses other rows whenever the population changed, one of
   each row's own values only when the population gained rows that it left missing. Imputing exactly, then ticking
   criteria, raises no notice.
+- **An exact formula fills only the rows where every one of its variables has a value, and a value it computes from a
+  single-imputed variable counts as single-imputed.** Before, `sbp_baseline + np.where(hba1c_pct >= 6.5, 5.0, -2.0)`
+  answered a missing HbA1c with its "false" branch, and the value was kept as observed (on the tutorial cohort, 47 of
+  the 183 values of `sbp_6m` it filled); a weight computed exactly from an imputed height counted as observed too, so
+  the analyses and the multiple imputation took an estimate for a measurement. The step's description says how many
+  values were left missing, and where which variable has no value. A trace recorded by an earlier version replays with
+  the same values; the cells it computed from a single-imputed variable, or where a variable of the formula had no
+  value, now count as single-imputed. A formula that handles a missing value itself (`x.fillna(0)`,
+  `np.where(x.isna(), a, b)`) makes an assumption, not an exact value: apply it unticked.
 - **The trace records the population with each imputation,** also when no criterion is ticked, and the replay
   evaluates the recorded criteria again and fills the rows they keep (it warns when they keep other rows than when
   the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as

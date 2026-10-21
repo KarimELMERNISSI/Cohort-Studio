@@ -123,9 +123,25 @@ def sort_filled(
     if function not in SINGLE_IMPUTATION_STEPS:
         return single, exact
     filled = filled_cells(before, after)
-    if is_exact_imputation(function, params):
+    if not is_exact_imputation(function, params):
+        return merge_cells(single, filled), exact
+    # exact only where every variable of the formula had a value, not a single-imputed one: a value computed from an
+    # estimate is an estimate, and np.where answers a missing value with its "false" branch (the step records its
+    # formula's variables, "inputs"; earlier versions did not, and every value they filled stays exact)
+    target = str((params or {}).get("target_variable"))
+    inputs = [str(c) for c in (params or {}).get("inputs") or () if str(c) != target]
+    present = [c for c in inputs if c in before.columns]
+    without = before.index[before[present].isna().any(axis=1)] if present else before.index[:0]
+    imputed = [single[c] for c in inputs if c in single]
+    estimated = np.unique(np.concatenate([without.to_numpy(dtype=np.int64), *imputed]))
+    if not len(estimated):
         return single, merge_cells(exact, filled)
-    return merge_cells(single, filled), exact
+    of_estimates = {c: ids[np.isin(ids, estimated)] for c, ids in filled.items()}
+    observed = {c: ids[~np.isin(ids, estimated)] for c, ids in filled.items()}
+    return (
+        merge_cells(single, {c: ids for c, ids in of_estimates.items() if len(ids)}),
+        merge_cells(exact, {c: ids for c, ids in observed.items() if len(ids)}),
+    )
 
 
 def count_cells(

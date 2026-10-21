@@ -36,7 +36,9 @@ from enrich.imputation_service import (
     describe_formula_fill,
     describe_imputation,
     fill_with_formula,
+    formula_inputs,
     impute_rows,
+    left_missing,
 )
 from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
 from graph.builders.formula import build_formula_graph
@@ -2207,7 +2209,9 @@ def app():
                         "a total from its parts. The values are then imputed exactly: the analyses and the multiple "
                         "imputation keep them as observed values, without the single-imputation warning. Leave it "
                         "unticked for an approximation or a proxy: the values are then flagged like any single "
-                        "imputation. A formula that uses other rows (a mean, a quantile, a rank) cannot be exact."
+                        "imputation. A formula that uses other rows (a mean, a quantile, a rank) cannot be exact. "
+                        "An exact formula fills only the rows where every one of its variables has a value, and a "
+                        "value it computes from a single-imputed one counts as single-imputed."
                     ),
                 )
 
@@ -2228,9 +2232,15 @@ def app():
                             st.error(NOT_ROW_WISE.format(reason=other))
                         else:
                             # computed on, and filling, the analysis population (every row when no criterion is
-                            # ticked): the session data changes through the draft only
+                            # ticked): the session data changes through the draft only. An exact formula fills only
+                            # the rows where every variable of it has a value (np.where answers a missing one "false")
                             filled, filled_count = fill_with_formula(
-                                main_data, target_var, formula_input, target_scope.rows
+                                main_data, target_var, formula_input, target_scope.rows, complete_inputs=bool(exact)
+                            )
+                            left = (
+                                left_missing(main_data, target_var, formula_input, target_scope.rows)
+                                if exact
+                                else (0, ())
                             )
                             if filled_count > 0:
                                 st.success(f"Successfully filled {filled_count} missing values in '{target_var}'!")
@@ -2244,18 +2254,28 @@ def app():
                                         "filled_count": int(filled_count),
                                         "exact": bool(exact),
                                         "row_wise": other is None,
+                                        "complete_inputs": bool(exact),
+                                        # a value computed from a single-imputed one is single-imputed
+                                        "inputs": formula_inputs(formula_input, target_var, main_data),
                                     },
                                     describe_formula_fill(
                                         target_var,
                                         filled_count,
                                         exact=bool(exact),
                                         n_rows=len(target_scope.rows) if target_scope.scoped else None,
+                                        left=left,
                                     ),
                                     # also with no criterion ticked: the draft then knows when one is ticked later
                                     population=target_scope.population,
                                     output_dataset_path=snapshot_path,
                                 )
                                 st.rerun()
+                            elif left[0]:
+                                st.warning(
+                                    f"No missing value of {as_code(target_var)} was filled: where it is missing, "
+                                    f"{' or '.join(as_code(c) for c in left[1])} has no value, and an exact formula "
+                                    "needs every one of its variables."
+                                )
                             else:
                                 st.warning("Formula computed successfully but didn't fill any missing values (check data overlap).")
                     except ValueError as e:  # the formula cannot be computed on the data (fill_with_formula)

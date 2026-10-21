@@ -154,6 +154,19 @@ def test_an_exact_formula_is_one_of_each_rows_own_values(enrich: AppTest) -> Non
     assert draft is None or not draft.steps
 
 
+def test_an_exact_formula_fills_the_rows_with_every_variable_recorded(enrich: AppTest) -> None:
+    formula = "sbp_baseline + np.where(hba1c_pct >= 6.5, 5.0, -2.0)"
+    enrich.text_area(key="imputation_formula_input").input(formula).run()
+    enrich.checkbox(key="imputation_exact").check().run()
+    next(b for b in enrich.button if b.label == "Apply Targeted Imputation").click().run()
+    _ok(enrich)
+    step = enrich.session_state["_data_session"].draft.steps[-1]
+    # 47 of the 183 rows have no HbA1c, which np.where would have answered "false"
+    assert step.params["filled_count"] == 136 and step.params["complete_inputs"] is True
+    assert step.params["inputs"] == ["sbp_baseline", "hba1c_pct"]
+    assert step.description.endswith("; 47 left missing, where hba1c_pct has no value")
+
+
 def test_a_new_formula_with_a_caret_is_refused(enrich: AppTest) -> None:
     enrich.text_input(key="variable_name_input").input("bmi_caret").run()
     enrich.text_area(key="formula_input").input("weight_kg / (height_cm / 100) ^ 2").run()

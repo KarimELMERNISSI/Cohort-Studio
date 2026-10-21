@@ -14,7 +14,7 @@ from typing import Any
 import pandas as pd
 
 import enrich.data_imputation as edi
-from enrich.formulas import evaluate_formula_safely
+from enrich.formulas import evaluate_formula_safely, read_formula
 
 logger = logging.getLogger(__name__)
 
@@ -231,23 +231,54 @@ def impute_rows(
 
 
 def fill_with_formula(
-    frame: pd.DataFrame, target: str, formula: str, rows: pd.Index | None = None
+    frame: pd.DataFrame,
+    target: str,
+    formula: str,
+    rows: pd.Index | None = None,
+    *,
+    complete_inputs: bool = False,
 ) -> tuple[pd.DataFrame, int]:
     """
     Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled). With ``rows``
     (the analysis population), the formula is computed on those rows only, so that an aggregate such as a mean sees no
     excluded patient, and fills them only: the excluded rows keep their missing values, as with the global imputation.
-    The page and the replay both fill through here.
+    With ``complete_inputs`` (an exact formula), only the rows where every variable of the formula has a value are
+    filled: a comparison or ``np.where`` answers a missing value with its "false" branch, which is no exact value. The
+    page and the replay both fill through here.
     """
     scope = frame if rows is None else frame.loc[frame.index.intersection(rows)]
     ok, result, _ = evaluate_formula_safely(formula, target, scope, return_series=True)
     if not ok:
         raise ValueError(f"formula for {target}: {result}")
+    values = pd.Series(result, index=scope.index)
+    if complete_inputs:
+        inputs = formula_inputs(formula, target, scope)
+        if inputs:
+            values = values.where(scope[inputs].notna().all(axis=1))
     out = frame.copy()
     before = int(out[target].isna().sum())
     # missing outside the scope: fillna leaves those rows as they are (the whole column, so its type rules apply)
-    out[target] = out[target].fillna(pd.Series(result, index=scope.index).reindex(out.index))
+    out[target] = out[target].fillna(values.reindex(out.index))
     return out, before - int(out[target].isna().sum())
+
+
+def formula_inputs(formula: str, target: str, frame: pd.DataFrame) -> list[str]:
+    """The variables of ``formula`` other than ``target`` (``weight.fillna(...)`` names the variable it fills)."""
+    return [name for name in read_formula(formula).names if name != target and name in frame.columns]
+
+
+def left_missing(
+    frame: pd.DataFrame, target: str, formula: str, rows: pd.Index | None = None
+) -> tuple[int, tuple[str, ...]]:
+    """The missing values of ``target`` an exact formula leaves, because a variable of it has no value in the row, and
+    those variables (counts and names only: the trace's description says them)."""
+    scope = frame if rows is None else frame.loc[frame.index.intersection(rows)]
+    inputs = formula_inputs(formula, target, scope)
+    if not inputs or target not in scope.columns:
+        return 0, ()
+    lacking = scope.loc[scope[target].isna(), inputs].isna()
+    left = lacking.any(axis=1)
+    return int(left.sum()), tuple(str(c) for c in inputs if bool(lacking[c].any()))
 
 
 def describe_imputation(numerical: str, categorical: str, n_rows: int | None = None) -> str:
@@ -256,11 +287,24 @@ def describe_imputation(numerical: str, categorical: str, n_rows: int | None = N
     return f"{text}, fitted on the analysis population of {n_rows:,} rows)" if n_rows is not None else f"{text})"
 
 
-def describe_formula_fill(target: str, filled: int, *, exact: bool, n_rows: int | None = None) -> str:
-    """The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on."""
+def describe_formula_fill(
+    target: str,
+    filled: int,
+    *,
+    exact: bool,
+    n_rows: int | None = None,
+    left: tuple[int, tuple[str, ...]] = (0, ()),
+) -> str:
+    """The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on;
+    ``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`)."""
     values = "value" if filled == 1 else "values"
     text = f"Imputed {filled} {values} in {target} using {'an exact formula' if exact else 'a formula'}"
-    return f"{text}, computed on the analysis population of {n_rows:,} rows" if n_rows is not None else text
+    if n_rows is not None:
+        text += f", computed on the analysis population of {n_rows:,} rows"
+    n_left, lacking = left
+    if n_left:
+        text += f"; {n_left} left missing, where {' or '.join(lacking)} has no value"
+    return text
 
 
 __all__ = [
@@ -269,5 +313,7 @@ __all__ = [
     "describe_formula_fill",
     "describe_imputation",
     "fill_with_formula",
+    "formula_inputs",
     "impute_rows",
+    "left_missing",
 ]

@@ -73,7 +73,11 @@ before the step (reload a version saved before it, or replay the trace up to the
 recorded in the trace and kept with saved versions. A formula that uses other rows (a mean, a quantile, a rank, a
 shifted value, the value of another row, a test against a column, or dates kept as text, whose order of day and month
 is read from the rows) gives estimates: it cannot be exact, and **Apply** refuses it with *Exact formula* ticked, naming
-what uses other rows. Convert dates kept as text on Validate first.
+what uses other rows. Convert dates kept as text on Validate first. An exact formula fills only the rows where every
+one of its variables has a value (`np.where` would answer a missing one with its "false" branch), the step's
+description says how many it left missing, and a value it computes from a single-imputed variable counts as
+single-imputed. A formula that handles a missing value itself (`x.fillna(0)`, `np.where(x.isna(), a, b)`) makes an
+assumption: apply it with *Exact formula* unticked.
 
 | Feature | Description |
 | --- | --- |
