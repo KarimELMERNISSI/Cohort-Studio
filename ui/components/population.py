@@ -15,6 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from core.population import EXCLUSION, catalogue
+from ui.components.text import plain
 
 _FREEZE_CONFIRM = "pop_freeze_confirm"
 
@@ -70,7 +71,7 @@ def render_population_selector(state) -> None:
         if not population.ok:
             st.error(
                 "A ticked criterion cannot be evaluated, so the analyses are stopped: "
-                + "; ".join(population.errors.values())
+                + "; ".join(plain(e, limit=300) for e in population.errors.values())
             )
         families: dict[str, list] = {}
         for criterion in criteria:
@@ -95,11 +96,11 @@ def render_population_selector(state) -> None:
                     " (cannot be evaluated)" if excludes is None else f" ({excludes:,} excluded)"
                 )
                 st.checkbox(
-                    f"{criterion.name}{suffix}",
+                    f"{plain(criterion.name, limit=200)}{suffix}",
                     key=criterion_box,
                     on_change=_on_toggle,
                     args=(criterion.id,),
-                    help=criterion.description or None,
+                    help=plain(criterion.description, limit=1000) or None,
                 )
         st.caption(
             "Criteria are filters: no row is deleted, and every analysis says which population it used."
@@ -119,7 +120,7 @@ def population_banner(*, purpose: str = "analyses") -> None:
     if not population.ok:
         st.error(
             "The analysis population cannot be evaluated: "
-            + "; ".join(population.errors.values())
+            + "; ".join(plain(e, limit=300) for e in population.errors.values())
             + ". Untick the criterion in the sidebar or correct it on Data > Validate.",
             icon=":material/error:",
         )
@@ -173,7 +174,7 @@ def render_population_panel(state) -> None:
         )
         return
     if not population.ok:
-        st.error("; ".join(population.errors.values()))
+        st.error("; ".join(plain(e, limit=300) for e in population.errors.values()))
         return
     st.markdown(f"**{population.label}**")
     from ui.components.flow import current_flow, render_flow

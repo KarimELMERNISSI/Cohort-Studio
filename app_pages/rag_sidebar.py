@@ -42,6 +42,7 @@ from manage.vectorstores import (
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui import preferences
 from ui.components import confirm
+from ui.components.text import plain
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
 from utils.settings import get_settings
@@ -716,13 +717,13 @@ def _engine_card(
                 )
                 status.update(label=msg if success else "Initialisation failed", state="complete" if success else "error")
                 if not success:
-                    st.error(msg)
+                    st.error(plain(msg, limit=500))
         context = getattr(manager, "global_context", None) if manager.initialized else None
         if isinstance(context, dict):
             st.caption("Inferred clinical context")
-            st.markdown(f"**{context.get('domain', 'General medical')}**")
+            st.markdown(f"**{plain(context.get('domain', 'General medical'), limit=200)}**")
             if context.get("context_description"):
-                st.caption(context["context_description"])
+                st.caption(plain(context["context_description"], limit=2000))
 
 
 def render_ai_settings() -> None:

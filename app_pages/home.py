@@ -1,4 +1,5 @@
 # pages/home.py
+import html
 import json
 import time
 from io import BytesIO
@@ -10,12 +11,14 @@ import streamlit as st
 
 import explore.corr_matrix as ecm
 from core.fingerprint import frame_fingerprint
+from core.registry import as_code
 from graph.builders.correlation import build_correlation_graph
 from graph.model import LayoutHint, RenderOptions
 from manage.ai_payload import column_profile
 from manage.db_manager import DBManager
 from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
+from ui.components.text import plain
 from ui.graph_legend import render_legend
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.preferences import save_renderer
@@ -110,7 +113,7 @@ class RenameColumnsComponent:
                         progress_bar.empty()
                         
                         if error:
-                            st.error(f"Error: {error}")
+                            st.error(f"Error: {plain(error, limit=500)}")
                         else:
                                 try:
                                     # Parse JSON if it's a string, though the manager should return a dict or string
@@ -127,7 +130,7 @@ class RenameColumnsComponent:
                                         st.session_state['ai_renaming_suggestions'] = suggestions
                                         st.success("Suggestions received!")
                                     else:
-                                        st.write(suggestions) # Show raw text if not dict
+                                        st.code(str(suggestions)[:5000], language="text")  # as written: never Markdown
                                 except Exception as e:
                                     st.error(f"Error parsing suggestions: {e}")
             else:
@@ -185,20 +188,20 @@ class RenameColumnsComponent:
                 col_current, col_rename, col_info = st.columns([1, 2, 3])
 
                 with col_current:
-                    st.markdown(f"**{col}**")  # Display original column name
+                    st.markdown(f"**{plain(col)}**")  # the column's name, as written in the file
 
                 with col_rename:
                     current_val = st.session_state["rename_dict"].get(col, col)
                     # mirrors rename_dict, which keeps the pending renames: not persisted, or a stale name would
                     # come back after a rename (M5b review)
-                    new_name = st.text_input(f"Rename '{col}' to:", value=current_val, key=f"rename_{col}")
+                    new_name = st.text_input(f"Rename {plain(col)} to:", value=current_val, key=f"rename_{col}")
                     st.session_state["rename_dict"][col] = new_name
                     
                     # Show AI suggestion if available
                     if 'ai_renaming_suggestions' in st.session_state and col in st.session_state['ai_renaming_suggestions']:
                         suggested = st.session_state['ai_renaming_suggestions'][col]
                         if suggested != current_val:
-                            st.caption(f"AI Suggestion: **{suggested}**")
+                            st.caption(f"AI Suggestion: {as_code(suggested)}")
                             st.button("Apply", key=f"apply_ai_{col}", on_click=apply_ai_rename, args=(col, suggested))
 
                 with col_info:
@@ -206,7 +209,9 @@ class RenameColumnsComponent:
                         if col in self.analyzer.categorical_cols or col in self.analyzer.low_cardinality_numeric_cols:
                             top_values = st.session_state["working_df"][col].value_counts().head(5)
                             top_values_str = ", ".join([f"{index} ({count})" for index, count in top_values.items()])
-                            st.markdown(f"<div style='padding:5px; color: #4A4A4A;'>{top_values_str}</div>", unsafe_allow_html=True)
+                            # the values of the file, as written: never HTML a cell could carry (an image the
+                            # browser would fetch)
+                            st.caption(plain(top_values_str, limit=500))
                         elif col in self.analyzer.numeric_cols:
                             # Compute statistics for numerical columns
                             col_data = st.session_state["working_df"][col].dropna()  # Exclude NaN values
@@ -261,8 +266,8 @@ def display_category_box(title, columns):
         st.markdown(
             f"""
             <div style="border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <h4 style="margin: 0; padding: 0; color: #333;">{title} ({len(columns)} column(s))</h4>
-                <p style="margin: 0; color: #666;">{', '.join(columns) if columns is not None else 'No columns found.'}</p>
+                <h4 style="margin: 0; padding: 0; color: #333;">{html.escape(str(title))} ({len(columns)} column(s))</h4>
+                <p style="margin: 0; color: #666;">{html.escape(', '.join(map(str, columns)))}</p>
             </div>
             """,
             unsafe_allow_html=True,

@@ -5,6 +5,7 @@ import re
 import pandas as pd
 import streamlit as st
 
+from core.registry import as_code
 from core.workspace import UserScope
 
 
@@ -46,6 +47,7 @@ from graph.builders.taxonomy import (
 from graph.model import LayoutHint, RenderOptions
 from manage.ai_payload import column_profile
 from ui.components import no_dataset
+from ui.components.text import answer, plain
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.preferences import save_renderer
 
@@ -326,7 +328,7 @@ def app():
                     prog_bar.empty()
                     
                     if error:
-                        st.sidebar.error(f"Enrichment failed: {error}")
+                        st.sidebar.error(f"Enrichment failed: {plain(error, limit=500)}")
                     else:
                         if candidates or formulas:
                             st.session_state["enrichment_candidates"] = candidates
@@ -361,7 +363,7 @@ def app():
                     prog_bar.empty()
                     
                     if error:
-                        st.sidebar.error(f"Error: {error}")
+                        st.sidebar.error(f"Error: {plain(error, limit=500)}")
                     else:
                         st.sidebar.success("Generated!")
                         st.session_state.rag_manager.variable_taxonomy = new_taxonomy
@@ -440,7 +442,7 @@ def app():
                         progress_bar.empty()
                         
                         if error:
-                            st.error(f"Error: {error}")
+                            st.error(f"Error: {plain(error, limit=500)}")
                         else:
                             st.success("Taxonomy generated successfully!")
                             st.session_state.rag_manager.variable_taxonomy = new_taxonomy
@@ -643,17 +645,17 @@ def app():
         else:
             col_sel, col_content = st.columns([1, 3])
             with col_sel:
-                selected_var_name = st.radio("Select Variable", sorted(filtered_vars.keys()), label_visibility="collapsed")
+                selected_var_name = st.radio("Select Variable", sorted(filtered_vars.keys()), format_func=plain, label_visibility="collapsed")
             
             with col_content:
                 if selected_var_name:
                     var_data = filtered_vars[selected_var_name]
-                    st.subheader(f"{var_data.get('standard_name', selected_var_name)}")
-                    st.caption(f"Original Name: `{selected_var_name}`")
-                    st.markdown(f"**Category:** `{var_data.get('category', 'Uncategorized')}`")
+                    st.subheader(plain(var_data.get('standard_name', selected_var_name), limit=200))
+                    st.caption(f"Original Name: {as_code(selected_var_name)}")
+                    st.markdown(f"**Category:** {as_code(var_data.get('category', 'Uncategorized'))}")
                     st.divider()
                     st.markdown("### Definition")
-                    st.info(var_data.get('description', 'No description available.'))
+                    st.info(plain(var_data.get('description', 'No description available.'), limit=2000))
                     
                     c1, c2 = st.columns(2)
                     with c1:
@@ -666,18 +668,18 @@ def app():
                                 f_data = formulas_registry.get(fid, {})
                                 fname = f_data.get('name', fid)
                                 fexpr = f_data.get('expression', '')
-                                st.markdown(f"- **{fname}**")
-                                if fexpr: st.caption(f"  `{fexpr}`")
+                                st.markdown(f"- **{plain(fname, limit=200)}**")
+                                if fexpr: st.caption(as_code(fexpr, limit=500))
                         elif legacy_formulas:
                             for f in legacy_formulas:
-                                st.markdown(f"- {f}")
+                                st.markdown(f"- {plain(f, limit=500)}")
                         else:
                             st.caption("No known formulas.")
                     with c2:
                         st.markdown("### Clinical Usage")
                         usage = var_data.get('clinical_usage', "")
                         if usage:
-                            st.markdown(usage)
+                            st.markdown(answer(usage))
                         else:
                             st.caption("No clinical context.")
 
@@ -756,24 +758,24 @@ def app():
                     node = view.node(sel_id)
                     if node is None:
                         continue
-                    with st.expander(f"Item: {node.label}", expanded=True):
+                    with st.expander(f"Item: {plain(node.label, limit=200)}", expanded=True):
                         if sel_id in taxonomy:
                             data = taxonomy[sel_id]
                             c1, c2 = st.columns(2)
                             with c1:
-                                st.write(f"**Standard Name:** {data.get('standard_name')}")
-                                st.write(f"**Category:** {data.get('category')}")
-                                st.info(data.get('description') or "No description.")
+                                st.write(f"**Standard Name:** {plain(data.get('standard_name'), limit=200)}")
+                                st.write(f"**Category:** {plain(data.get('category'), limit=200)}")
+                                st.info(plain(data.get('description') or "No description.", limit=2000))
                             with c2:
                                 st.write("**Clinical Usage:**")
-                                st.caption(data.get('clinical_usage', 'N/A'))
+                                st.caption(plain(data.get('clinical_usage', 'N/A'), limit=2000))
                                 if data.get('related_formulas'):
                                     st.write("**Formulas:**")
                                     for f in data['related_formulas']:
                                         st.code(f, language="text")
                         elif node.category == "category":
                             st.write("**Type:** Category node")
-                            st.info(f"Groups all variables belonging to '{node.label}' category.")
+                            st.info(f"Groups all variables belonging to {plain(node.label, limit=200)} category.")
                         elif node.category == "formula":
                             st.markdown("#### Formula Details")
                             registry = formulas_registry or {}
@@ -786,7 +788,7 @@ def app():
                             if f_data:
                                 st.markdown("#### Formula Content")
                                 if f_data.get('markdown_formula'):
-                                    st.latex(f_data['markdown_formula'])
+                                    st.latex(str(f_data['markdown_formula']).replace("$", ""))
                                 elif f_data.get('expression'):
                                     st.code(f_data['expression'], language="text")
                                 elif f_data.get('formula'):
@@ -794,23 +796,23 @@ def app():
                                 else:
                                     st.caption("No mathematical expression available.")
 
-                                st.success(f"**Description:** {f_data.get('description', 'No description.')}")
+                                st.success(f"**Description:** {plain(f_data.get('description', 'No description.'), limit=2000)}")
 
                                 c_in, c_out = st.columns(2)
                                 with c_in:
                                     st.markdown("**Inputs**")
                                     for inv in f_data.get('input_variables', []):
-                                        st.markdown(f"- `{inv}`")
+                                        st.markdown(f"- {as_code(inv)}")
                                 with c_out:
                                     st.markdown("**Derived Variable**")
-                                    st.markdown(f"`{f_data.get('output_variable', 'Unknown')}`")
+                                    st.markdown(as_code(f_data.get('output_variable', 'Unknown')))
                             else:
-                                st.info(f"Logic: {node.tooltip or 'No details'}")
+                                st.info(f"Logic: {plain(node.tooltip or 'No details', limit=2000)}")
                         else:
                             st.write(f"**Type:** {CATEGORY_LABELS.get(node.category, node.category)}")
-                            st.write(f"**Name:** {node.label}")
+                            st.write(f"**Name:** {plain(node.label, limit=200)}")
                             if node.tooltip:
-                                st.info(node.tooltip)
+                                st.info(plain(node.tooltip, limit=2000))
 
     # --- TAB 3: FORMULA DETAILS (NEW) ---
     with tab_formulas:
@@ -840,19 +842,19 @@ def app():
                 # Create readable labels
                 f_labels = [f"{f[1].get('name', 'Unknown')} ({f[0]})" for f in filtered_forms]
                 
-                sel_f_idx = st.radio("Select Formula", range(len(filtered_forms)), format_func=lambda x: f_labels[x], label_visibility="collapsed")
+                sel_f_idx = st.radio("Select Formula", range(len(filtered_forms)), format_func=lambda x: plain(f_labels[x], limit=200), label_visibility="collapsed")
                 sel_fid, sel_fdata = filtered_forms[sel_f_idx]
         
         with f_col2:
             if sel_fdata:
-                st.markdown(f"### {sel_fdata.get('name', 'Unnamed Formula')}")
-                st.caption(f"ID: `{sel_fid}`")
+                st.markdown(f"### {plain(sel_fdata.get('name', 'Unnamed Formula'), limit=200)}")
+                st.caption(f"ID: {as_code(sel_fid)}")
                 st.divider()
                 
                 # Math Display
                 st.markdown("#### Formula Content")
                 if sel_fdata.get('markdown_formula'):
-                    st.latex(sel_fdata['markdown_formula'])
+                    st.latex(str(sel_fdata['markdown_formula']).replace("$", ""))
                 elif sel_fdata.get('expression'):
                     st.code(sel_fdata['expression'], language="text")
                 elif sel_fdata.get('formula'):
@@ -860,21 +862,21 @@ def app():
                 else:
                     st.caption("No mathematical expression available.")
                 
-                st.success(f"**Description:** {sel_fdata.get('description', 'No description.')}")
+                st.success(f"**Description:** {plain(sel_fdata.get('description', 'No description.'), limit=2000)}")
                 
                 c_in, c_out = st.columns(2)
                 with c_in:
                     st.markdown("**Inputs**")
                     for inv in sel_fdata.get('input_variables', []):
-                        st.markdown(f"- `{inv}`")
+                        st.markdown(f"- {as_code(inv)}")
                 with c_out:
                     st.markdown("**Derived Variable**")
-                    st.markdown(f"`{sel_fdata.get('output_variable', 'Unknown')}`")
+                    st.markdown(as_code(sel_fdata.get('output_variable', 'Unknown')))
                 
                 if sel_fdata.get('references'):
                     st.markdown("#### References")
                     for ref in sel_fdata['references']:
-                        st.markdown(f"- {ref}")
+                        st.markdown(f"- {answer(ref, limit=1000)}")
             else:
                 st.info("Select a formula from the left panel to view its details.")
     
@@ -1284,8 +1286,8 @@ def app():
                     st.write("### Provide Feedback")
                     for var in vars_to_refine:
                         current_desc = filtered_vars[var].get('description', 'No description')
-                        st.markdown(f"**{var}**: `{current_desc}`")
-                        feedback = st.text_area(f"Feedback for {var}:", key=f"feed_{var}", placeholder="e.g., 'This definition is incorrect...'")
+                        st.markdown(f"**{plain(var)}**: {as_code(current_desc, limit=300)}")
+                        feedback = st.text_area(f"Feedback for {plain(var)}:", key=f"feed_{var}", placeholder="e.g., 'This definition is incorrect...'")
                         if feedback:
                             feedback_dict[var] = feedback
                         st.divider()
@@ -1307,7 +1309,7 @@ def app():
                                 )
                                 
                                 if error:
-                                    st.error(f"Refinement failed: {error}")
+                                    st.error(f"Refinement failed: {plain(error, limit=500)}")
                                 else:
                                     st.success("Taxonomy updated successfully!")
                                     st.session_state.rag_manager.variable_taxonomy = updated_taxonomy
@@ -1385,7 +1387,7 @@ def app():
                         status_container.update(label="Generation Complete!", state="complete", expanded=False)
                             
                         if err:
-                            st.error(err)
+                            st.error(plain(err, limit=500))
                         else:
                             st.session_state['refine_suggestions_text'] = sugg_text
 
@@ -1413,8 +1415,8 @@ def app():
                             with st.container(border=True):
                                 c1, c2 = st.columns([3, 1])
                                 with c1:
-                                    st.markdown(f"**{item.get('name', 'Unknown')}**")
-                                    st.caption(item.get('description', ''))
+                                    st.markdown(f"**{plain(item.get('name', 'Unknown'), limit=200)}**")
+                                    st.caption(plain(item.get('description', ''), limit=1000))
                                     # Formula
                                     f_code = item.get('formula', 'N/A')
                                     st.code(f_code, language='python')
@@ -1426,7 +1428,7 @@ def app():
                                     display_inputs = list(set(ins + active_clues))
                                     
                                     if display_inputs:
-                                        st.write(f"**Inputs:** {', '.join(display_inputs)}")
+                                        st.write(f"**Inputs:** {', '.join(as_code(i) for i in display_inputs)}")
 
                                     # Category
                                     target_cat_pref = st.session_state.get('refine_target_cat', 'Auto (AI)')
@@ -1437,7 +1439,7 @@ def app():
                                         disp_cat = item.get('suggestion_category', 'Generated')
                                         cat_source = "(AI)"
                                     
-                                    st.write(f"**Category:** {disp_cat} {cat_source}")
+                                    st.write(f"**Category:** {plain(disp_cat, limit=200)} {cat_source}")
                                 
                                 with c2:
                                     if st.button("Add to Graph", key=f"add_refine_{idx}"):
@@ -1511,7 +1513,7 @@ def app():
                                         if rag_manager:
                                             rag_manager.variable_taxonomy = st.session_state.offline_taxonomy
                                         
-                                        st.toast(f"Added {new_var_id} to taxonomy!", icon="")
+                                        st.toast(f"Added {plain(new_var_id, limit=120)} to taxonomy!", icon="")
 
                                         # Clear suggestions to reset state?
                                         del st.session_state['refine_suggestions_text']

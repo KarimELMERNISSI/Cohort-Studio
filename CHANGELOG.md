@@ -518,7 +518,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as
   it was computed.
 
-### AI engine: suggested formulas are read and tried as the application computes them (owner request)
+### Privacy: what the AI engine writes, and the cells of a file, are shown as text
+
+- **No answer of the AI engine makes the browser fetch an address.** A language model's answer can carry an image
+  whose address holds part of the conversation, for instance when a PDF it reads tells it to write one; the page would
+  have fetched it. The chat answers and document summaries (Knowledge > Documents) and the clinical usage and
+  references of the variable map (Knowledge > Variable map) keep their paragraphs, lists and code, but no image, no
+  link whose text hides its address, and no colour, badge, icon or formula is drawn from them. The model's other words
+  (names, descriptions, categories, citations, quoted passages, labels, error messages) are shown as written: on the
+  Variable map, Documents, Statistics & correlations, Data > Validate, Data > Enrich, Settings and Admin > AI quality,
+  and in the sidebar's criteria. The quoted passages of a PDF were the most direct path.
+- **The cells and column names of a file are not read as HTML.** The most frequent values of a column (Explore >
+  Statistics & correlations, renaming) were shown as HTML: a cell such as `<img src=…>` would have been fetched. They
+  are text, as are the column names and the AI engine's suggested names there, and the column names in the boxes of
+  variables by type and the criteria's headings on Validate.
+- **A formula drawn by the variable map** can no longer end its formula block and continue as Markdown.
+
+### AI engine: suggested formulas are read and tried as the application computes them
 
 - **The diagram of a suggested variable** (Data > Enrich > Create New Variables > AI Variable Suggestions) is drawn
   from its formula as the application computes it: each variable the formula uses, present in your data or missing,

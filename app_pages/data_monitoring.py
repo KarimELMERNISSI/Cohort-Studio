@@ -1,4 +1,5 @@
 # pages/data_monitoring.py
+import html
 import json
 import os
 from io import BytesIO
@@ -19,11 +20,13 @@ from core.population import (
     family_masks,
     without_row_lists,
 )
+from core.registry import as_code
 from ingest.loaders import UPLOAD_TYPES
 from manage.db_manager import DBManager
 from ui.components import no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
+from ui.components.text import plain
 from ui.state import get_state
 from utils.config_loader import create_empty_config, transform_expression
 from utils.data_analyzer import DataAnalyzer
@@ -920,7 +923,7 @@ def display_mask_family(config):
         with grid[i % cols_per_row]:
             if is_numeric:
                 # Expander for numeric configuration
-                with st.expander(f"{key}", expanded=False):
+                with st.expander(plain(key, limit=200), expanded=False):
                     # Numeric details
                     st.markdown(f"**Type:** <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
 
@@ -943,7 +946,7 @@ def display_mask_family(config):
 
             else:
                 # Expander for non-numeric configuration
-                with st.expander(f"{key}", expanded=False):
+                with st.expander(plain(key, limit=200), expanded=False):
                     # Non-numeric details
                     st.markdown(f"**Type:** <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
 
@@ -985,7 +988,7 @@ def display_mask_family_alt(config):
             st.markdown(
                 f"""
                 <div style="border: {border_color}; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">{'' if is_numeric else ''} {key}</h4>
+                    <h4 style="margin: 0;">{'' if is_numeric else ''} {html.escape(str(key))}</h4>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1256,7 +1259,7 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                         )
                     
                     if error:
-                        st.error(f"AI Error: {error}")
+                        st.error(f"AI Error: {plain(error, limit=500)}")
                     elif not criteria_list:
                         st.warning("No criteria suggested. Try a more specific description.")
                     else:
@@ -1274,23 +1277,23 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                     with st.container():
                         c1, c2 = st.columns([4, 1])
                         with c1:
-                            st.markdown(f"**{item.get('name', 'Unnamed')}**")
+                            st.markdown(f"**{plain(item.get('name', 'Unnamed'), limit=200)}**")
                             st.code(item.get('expression', ''), language="python")
-                            st.caption(f"_{item.get('explanation', '')}_")
+                            st.caption(f"_{plain(item.get('explanation', ''), limit=1000)}_")
 
                         # Validation & Proxy Logic
                         missing_vars = item.get('missing_variables', [])
                         if missing_vars:
-                            st.warning(f"Missing variables: {', '.join(missing_vars)}")
+                            st.warning(f"Missing variables: {', '.join(as_code(v) for v in missing_vars)}")
                             c_fix1, c_fix2 = st.columns([1,1])
                             with c_fix1:
                                 proxy_key = f"proxy_{family_name}_{i}_{missing_vars[0]}"
-                                if st.button(f"Find Proxy for '{missing_vars[0]}'", key=proxy_key):
+                                if st.button(f"Find Proxy for {plain(missing_vars[0], limit=60)}", key=proxy_key):
                                     with st.spinner("Finding proxy..."):
                                         columns = list(st.session_state.data.columns)
                                         res = st.session_state.rag_manager.suggest_proxy_variable(missing_vars[0], columns)
                                         if res.get('proxy_found'):
-                                            st.success(f"Found: {res.get('proxy_name')}")
+                                            st.success(f"Found: {as_code(res.get('proxy_name'))}")
                                             # Auto-fix: Replace in expression
                                             old_var = missing_vars[0]
                                             new_var = res.get('proxy_name')

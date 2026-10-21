@@ -10,10 +10,12 @@ import json
 
 import streamlit as st
 
+from core.registry import as_code
 from core.workspace import UserScope, resolve_within, safe_filename
 from graph.builders.document import build_document_graph, filter_by_documents
 from graph.model import LayoutHint, RenderOptions
 from ui.components import no_dataset
+from ui.components.text import answer, plain
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
 from ui.preferences import save_renderer
 
@@ -140,7 +142,7 @@ def app():
             progress_bar.empty()
             
             if error:
-                st.error(f"Extraction failed: {error}")
+                st.error(f"Extraction failed: {plain(error, limit=500)}")
             else:
                 st.session_state.doc_graph_json = json_res
                 st.session_state.doc_graph_source = selected_docs
@@ -219,8 +221,8 @@ def app():
                     if selected_node_name:
                         node_data = next((n for n in all_nodes if n["id"] == selected_node_name), None)
                         if node_data:
-                            st.markdown(f"**Type:** {node_data.get('type')}")
-                            st.markdown(f"**Description:** {node_data.get('description')}")
+                            st.markdown(f"**Type:** {plain(node_data.get('type'), limit=200)}")
+                            st.markdown(f"**Description:** {plain(node_data.get('description'), limit=2000)}")
                             
                             st.divider()
                             st.caption("Documents & Citations:")
@@ -236,8 +238,8 @@ def app():
                                 
                             for idx, cit in enumerate(citations):
                                 p_val = str(cit.get('page', '?')).lower().replace('page ', '').replace('page', '').strip()
-                                st.markdown(f"**{idx+1}. {cit.get('doc')}** (Page {p_val})")
-                                st.markdown(f"> *{cit.get('text')}*")
+                                st.markdown(f"**{idx+1}. {plain(cit.get('doc'), limit=200)}** (Page {plain(p_val, limit=20)})")
+                                st.markdown(f"> *{plain(cit.get('text'), limit=2000)}*")
                                 st.caption("---")
 
         with tab_formulas:
@@ -248,9 +250,12 @@ def app():
                 st.subheader(f"Found {len(formulas)} Formulas")
                 for f in formulas:
                     p_val = str(f.get('page', '?')).lower().replace('page ', '').replace('page', '').strip()
-                    with st.expander(f"{f.get('name', 'Formula')} ({f.get('doc')}, Page {p_val})"):
+                    with st.expander(
+                        f"{plain(f.get('name', 'Formula'), limit=200)} ({plain(f.get('doc'), limit=200)}, "
+                        f"Page {plain(p_val, limit=20)})"
+                    ):
                         st.code(f.get('expression', 'N/A'))
-                        st.write(f.get('description', ''))
+                        st.write(plain(f.get('description', ''), limit=2000))
  
         with tab_chat:
             st.subheader("Chat with Visible Documents (v1.1)")
@@ -266,21 +271,21 @@ def app():
             # Display Chat
             for msg in st.session_state.doc_chat_history:
                 with st.chat_message(msg["role"]):
-                    st.write(msg["content"])
+                    st.markdown(answer(msg["content"]))
             
             # Input
             if prompt := st.chat_input("Ask about these documents..."):
                 # Add user message
                 st.session_state.doc_chat_history.append({"role": "user", "content": prompt})
                 with st.chat_message("user"):
-                    st.write(prompt)
+                    st.markdown(answer(prompt))
                     
                 # Get response
                 with st.chat_message("assistant"):
                     with st.spinner("Analyzing documents..."):
                         # Use visible docs for context
                         response = rag_manager.chat_with_specific_doc(visible_docs, prompt)
-                        st.write(response)
+                        st.markdown(answer(response))
                         st.session_state.doc_chat_history.append({"role": "assistant", "content": response})
 
         with tab_coverage:
@@ -315,15 +320,18 @@ def app():
                         with st.expander(f"{icon} {col}", expanded=found):
                             if found:
                                 node = match_info["node"]
-                                st.markdown(f"**Matched Concept:** `{node.get('id')}` (Confidence: {match_info.get('confidence',0):.2f})")
-                                st.markdown(f"**Description:** {node.get('description')}")
+                                st.markdown(f"**Matched Concept:** {as_code(node.get('id'))} (Confidence: {match_info.get('confidence',0):.2f})")
+                                st.markdown(f"**Description:** {plain(node.get('description'), limit=2000)}")
                                 
                                 # Show all citations for this node from visible docs
                                 cit_list = node.get("citations", [])
                                 if cit_list:
                                     st.caption("Sources:")
                                     for cit in cit_list:
-                                        st.markdown(f"- **{cit.get('doc')}** (p.{cit.get('page')}): {cit.get('text')}")
+                                        st.markdown(
+                                            f"- **{plain(cit.get('doc'), limit=200)}** "
+                                            f"(p.{plain(cit.get('page'), limit=20)}): {plain(cit.get('text'), limit=1000)}"
+                                        )
                             else:
                                 st.caption("No direct mention found.")
 
@@ -336,29 +344,29 @@ def app():
             else:
                 for s in summaries:
                     with st.container(border=True):
-                        st.markdown(f"### {s.get('doc', 'Unknown Document')}")
-                        st.caption(f"**Title**: {s.get('title', 'N/A')}")
-                        st.caption(f"**Type**: {s.get('doc_type', 'N/A')}")
+                        st.markdown(f"### {plain(s.get('doc', 'Unknown Document'), limit=200)}")
+                        st.caption(f"**Title**: {plain(s.get('title', 'N/A'), limit=300)}")
+                        st.caption(f"**Type**: {plain(s.get('doc_type', 'N/A'), limit=200)}")
                         
                         c1, c2 = st.columns(2)
                         with c1:
                             st.markdown("#### Objective")
-                            st.write(s.get('objective', ''))
+                            st.markdown(answer(s.get('objective', '')))
                             
                             st.markdown("#### Methods")
-                            st.write(s.get('methods', ''))
+                            st.markdown(answer(s.get('methods', '')))
                         
                         with c2:
                             st.markdown("#### Key Findings")
-                            st.write(s.get('key_findings', ''))
+                            st.markdown(answer(s.get('key_findings', '')))
                             
                             st.markdown("#### Clinical Significance")
-                            st.write(s.get('significance', ''))
+                            st.markdown(answer(s.get('significance', '')))
                             
                         if s.get("top_concepts"):
                             st.markdown("**Top Concepts:**")
                             # Simple chips
-                            st.markdown(" ".join([f"`{c}`" for c in s.get("top_concepts", [])]))
+                            st.markdown(" ".join(as_code(c) for c in s.get("top_concepts", [])))
                         
     else:
         st.info("Select a document and click 'Generate Graph' to start.")

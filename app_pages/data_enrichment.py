@@ -1,4 +1,5 @@
 import contextlib
+import html
 import io
 import json
 import logging
@@ -455,8 +456,8 @@ def display_category_box(title, columns):
         st.markdown(
             f"""
             <div style="border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <h4 style="margin: 0; padding: 0; color: #333;">{title} ({len(columns)} column(s))</h4>
-                <p style="margin: 0; color: #666;">{', '.join(columns) if columns is not None else 'No columns found.'}</p>
+                <h4 style="margin: 0; padding: 0; color: #333;">{html.escape(str(title))} ({len(columns)} column(s))</h4>
+                <p style="margin: 0; color: #666;">{html.escape(', '.join(map(str, columns)))}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1165,7 +1166,7 @@ def define_new_variables(main_data):
                     return main_data
 
                 if error:
-                    st.error(f"Error: {error}")
+                    st.error(f"Error: {plain(error, limit=500)}")
                 else:
                         try:
                             # Clean up potential markdown code blocks
@@ -1193,7 +1194,7 @@ def define_new_variables(main_data):
                                 )
                         except Exception as e:
                             st.error(f"Error parsing suggestions: {e}")
-                            st.write(suggestions_text) # Fallback
+                            st.code(str(suggestions_text)[:5000], language="text")  # as written
 
             # Display Domain Analysis
             if st.session_state.get('ai_domain_analysis'):
@@ -1256,7 +1257,7 @@ def define_new_variables(main_data):
                                 
                                 # Heuristic: If it looks like a text explanation rather than a formula, render as markdown
                                 if len(clean_formula.split()) > 10 and not any(op in clean_formula for op in ['=', '\\', '^', '_']):
-                                    st.warning(clean_formula)
+                                    st.warning(plain(clean_formula, limit=1000))
                                 else:
                                     # Ensure full equality display: variable = expression
                                     if '=' not in clean_formula:
@@ -2161,7 +2162,7 @@ def app():
                                 )
 
                                 if error:
-                                    st.error(f"RAG Error: {error}")
+                                    st.error(f"RAG Error: {plain(error, limit=500)}")
                                 elif suggestions:
                                     st.session_state['imputation_suggestions'] = suggestions
                                     st.session_state['imputation_suggestions_for'] = target_var

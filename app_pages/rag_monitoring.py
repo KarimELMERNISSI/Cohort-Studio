@@ -16,6 +16,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from ui.components.text import plain
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -244,7 +246,7 @@ def render_evaluation_details(evaluator):
                     st.error("Hallucination detected!")
                     claims = eval_result.get("hallucination_claims", [])
                     for claim in claims[:3]:
-                        st.write(f"- {claim}")
+                        st.write(f"- {plain(claim, limit=1000)}")
 
 
 def render_embedding_health(evaluator):
@@ -457,7 +459,7 @@ def run_single_evaluation(evaluator, rag, query: str, eval_function: str):
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Evaluation failed: {e!s}")
+        st.error(f"Evaluation failed: {plain(e, limit=500)}")
 
 
 def run_test_suite_with_progress(evaluator, rag, test_cases: list, selected_ids: list):
