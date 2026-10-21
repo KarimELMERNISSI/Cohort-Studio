@@ -101,13 +101,13 @@ def test_a_change_that_no_longer_fits_the_data_can_only_be_discarded(data_root: 
     assert probe["steps"] == ["initial_load", "rename_columns"]
 
 
-def _population_script() -> None:
+def _population_script(kind: str = "imputation") -> None:
     import pandas as pd
     import streamlit as st
 
     from core.population import criterion_id
     from core.state import DatasetRef
-    from enrich.imputation_service import impute_rows
+    from enrich.imputation_service import describe_formula_fill, fill_with_formula, impute_rows
     from ui.components.population import population_banner
     from ui.components.staging import render_draft_banner
     from ui.state import get_state
@@ -125,21 +125,62 @@ def _population_script() -> None:
             pd.DataFrame({"age": [10, 30, 50, 70], "bmi": [None, 20.0, None, 30.0]}),
             DatasetRef(name="d", origin="upload", file_hash="h"),
         )
-        state.set_ticked([adult])
+        # unscoped and freeze: staged with no criterion ticked (the population is recorded all the same)
+        if kind not in ("unscoped", "freeze"):
+            state.set_ticked([adult])
         population = state.population
-        outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
-        state.stage(
-            outcome.frame, "imputation", outcome.params, "Mean imputation", population=population
-        )
-        state.set_ticked([])  # the population changes after the imputation was fitted
+        if kind in (
+            "formula",
+            "two",
+            "freeze",
+        ):  # the mean of the rows used, 25, for each missing bmi
+            formula = "bmi.mean() + 0 * age"
+            filled, n = fill_with_formula(
+                state.working_frame(), "bmi", formula, population.included
+            )
+            scoped = population.n_included if population.criteria else None
+            state.stage(
+                filled,
+                "targeted_imputation",
+                {"target_variable": "bmi", "formula": formula, "filled_count": n, "exact": False},
+                describe_formula_fill("bmi", n, exact=False, n_rows=scoped),
+                population=population,
+            )
+        else:
+            outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
+            state.stage(
+                outcome.frame,
+                "imputation",
+                outcome.params,
+                "Mean imputation",
+                population=population,
+            )
+        if kind == "unscoped":  # a criterion ticked after the imputation was staged
+            state.set_ticked([adult])
+        elif (
+            kind == "freeze"
+        ):  # the population kept as the dataset: the draft was built on older data
+            state.set_ticked([adult])
+            state.freeze_population()
+        else:  # the population changes after the imputation was fitted
+            state.set_ticked([])
+        if kind == "two":  # a second imputation, on the population of the time (every row)
+            outcome = impute_rows(state.working_frame(), None, numerical="Mean")
+            state.stage(
+                outcome.frame, "imputation", outcome.params, "Mean", population=state.population
+            )
     if st.session_state.get("apply_now"):
         st.session_state["apply_now"] = False
         state.commit_staging()
     render_draft_banner()
     population_banner()
+    draft = state.session.draft
+    step = draft.steps[-1] if draft is not None and draft.steps else None
     st.session_state["probe"] = {
         "status": state.staging_status().state,
         "draft_bmi": state.working_frame()["bmi"].tolist(),
+        "params": dict(step.params) if step else None,
+        "description": step.description if step else None,
     }
 
 
@@ -153,9 +194,67 @@ def test_an_imputation_fitted_on_another_population_is_refitted(data_root: Path)
     bmi = probe["draft_bmi"]
     # refitted on every row: the child (excluded before) is imputed too, like the other missing value
     assert not any(math.isnan(v) for v in bmi) and bmi[0] == bmi[2] and bmi[1::2] == [20.0, 30.0]
+    # the trace will record what the refit did
+    params = probe["params"]
+    assert params["rows"] == "all" and params["n_rows_fitted"] == 4
+    assert params["imputed_values"] == {"bmi": 2}
+    assert probe["description"] == "Applied data imputation (Mean / Most_Frequent)"
 
 
-def _applied_script(untick: bool) -> None:
+def test_a_targeted_imputation_on_another_population_is_recomputed(data_root: Path) -> None:
+    at = AppTest.from_function(_population_script, kwargs={"kind": "formula"}, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    probe = at.session_state["probe"]
+    assert probe["status"] == "population_changed" and probe["params"]["filled_count"] == 1
+    assert math.isnan(probe["draft_bmi"][0]) and probe["draft_bmi"][2] == 25.0
+    at.button(key="draft_rebase").click().run()
+    probe = at.session_state["probe"]
+    assert probe["status"] == "ok" and probe["draft_bmi"] == [25.0, 20.0, 25.0, 30.0]
+    # its count, which the replay compares, and its description are those of the recomputation
+    assert probe["params"]["filled_count"] == 2
+    assert probe["description"] == "Imputed 2 values in bmi using a formula"
+
+
+def test_an_imputation_staged_before_a_criterion_was_ticked_is_refitted(data_root: Path) -> None:
+    # biostatistics review: staged with no criterion ticked, it was applied on every row without a word
+    at = AppTest.from_function(_population_script, kwargs={"kind": "unscoped"}, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"]["status"] == "population_changed"
+    at.button(key="draft_rebase").click().run()
+    probe = at.session_state["probe"]
+    # refitted on the adults: the child keeps its missing value, the adult's is filled
+    bmi = probe["draft_bmi"]
+    assert probe["status"] == "ok" and math.isnan(bmi[0]) and not math.isnan(bmi[2])
+    assert bmi[1::2] == [20.0, 30.0]
+
+
+def test_each_imputation_of_the_draft_must_be_on_the_current_population(data_root: Path) -> None:
+    # biostatistics review: the draft remembered the last population only
+    at = AppTest.from_function(_population_script, kwargs={"kind": "two"}, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    # the second imputation is on the current population, the first is not
+    assert at.session_state["probe"]["status"] == "population_changed"
+
+
+def test_a_draft_redone_on_new_data_is_recorded_as_redone(data_root: Path) -> None:
+    # architecture review: the redo kept the first fill's count and population (a second click, a replay warning)
+    at = AppTest.from_function(_population_script, kwargs={"kind": "freeze"}, default_timeout=120)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    probe = at.session_state["probe"]
+    assert probe["status"] == "base_changed" and probe["params"]["filled_count"] == 2
+    at.button(key="draft_rebase").click().run()
+    probe = at.session_state["probe"]
+    # the three adults kept: one missing value left, filled with their mean
+    assert probe["status"] == "ok" and probe["draft_bmi"] == [20.0, 25.0, 30.0]
+    assert probe["params"]["filled_count"] == 1
+    assert probe["description"] == "Imputed 1 value in bmi using a formula"
+
+
+def _applied_script(change: bool, scoped: bool = True) -> None:
     import pandas as pd
     import streamlit as st
 
@@ -166,6 +265,7 @@ def _applied_script(untick: bool) -> None:
     from ui.state import get_state
 
     state = get_state()
+    adult = criterion_id("study_inclusion", "Adult")
     if "seeded" not in st.session_state:
         st.session_state["seeded"] = True
         st.session_state["config"] = {
@@ -177,28 +277,85 @@ def _applied_script(untick: bool) -> None:
             pd.DataFrame({"age": [10, 30, 50, 70], "bmi": [None, 20.0, None, 30.0]}),
             DatasetRef(name="d", origin="upload", file_hash="h"),
         )
-        state.set_ticked([criterion_id("study_inclusion", "Adult")])
+        if scoped:
+            state.set_ticked([adult])
         population = state.population
         outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
         state.stage(
             outcome.frame, "imputation", outcome.params, "Mean imputation", population=population
         )
         state.commit_staging()
-        if untick:  # the analyses now include the child, whose missing value was not imputed
-            state.set_ticked([])
+        # on the adults: the analyses now include the child, whose missing value was not imputed;
+        # on every row: the analyses leave out the child, who informed the imputed values
+        if change:
+            state.set_ticked([] if scoped else [adult])
     population_banner()
 
 
-@pytest.mark.parametrize("untick", [False, True])
+@pytest.mark.parametrize("scoped", [True, False])
+@pytest.mark.parametrize("change", [False, True])
 def test_imputed_values_from_another_population_are_flagged_on_analysis_pages(
-    data_root: Path, untick: bool
+    data_root: Path, change: bool, scoped: bool
 ) -> None:
     at = AppTest.from_function(
-        _applied_script, kwargs={"untick": untick}, default_timeout=120
+        _applied_script, kwargs={"change": change, "scoped": scoped}, default_timeout=120
     ).run()
     assert not at.exception, [str(e.value) for e in at.exception]
-    flagged = any("fitted on other rows" in w.value for w in at.warning)
-    assert flagged is untick
+    flagged = [w.value for w in at.warning if "fitted on other rows" in w.value]
+    assert bool(flagged) is change
+    if flagged and not scoped:  # an imputation on every row names its rows
+        assert "Mean imputation (all 4 rows)" in flagged[0]
+
+
+def _left_out_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.population import criterion_id
+    from core.state import DatasetRef
+    from enrich.imputation_service import describe_formula_fill, fill_with_formula
+    from ui.components.staging import render_draft_banner
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        st.session_state["config"] = {
+            "mask_families": {
+                "study_inclusion": {"operator": "all", "Adult": {"expression": "df['age'] >= 18"}}
+            }
+        }
+        state.set_dataset(
+            pd.DataFrame({"age": [10, 30, 50, 70], "bmi": [None, 20.0, 25.0, 30.0]}),
+            DatasetRef(name="d", origin="upload", file_hash="h"),
+        )
+        population = state.population  # no criterion ticked: the child's bmi is the one missing
+        formula = "18 + 0 * age"
+        filled, n = fill_with_formula(state.working_frame(), "bmi", formula, population.included)
+        state.stage(
+            filled,
+            "targeted_imputation",
+            {"target_variable": "bmi", "formula": formula, "filled_count": n, "exact": True},
+            describe_formula_fill("bmi", n, exact=True),
+            population=population,
+        )
+        state.set_ticked([criterion_id("study_inclusion", "Adult")])
+    render_draft_banner()
+    st.session_state["probe"] = {"status": state.staging_status().state}
+
+
+def test_a_refit_that_changes_nothing_says_what_it_left_out(data_root: Path) -> None:
+    # architecture review: the step was dropped, and the banner said "1 change redone"
+    at = AppTest.from_function(_left_out_script, default_timeout=120).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"]["status"] == "population_changed"
+    at.button(key="draft_rebase").click().run()
+    assert at.session_state["probe"]["status"] == "empty"
+    shown = " ".join(s.value for s in at.success)
+    assert (
+        "The draft is empty: 'Imputed 1 value in bmi using an exact formula' changes nothing on "
+        "the current data." in shown
+    )
 
 
 def _enrich_page_script() -> None:

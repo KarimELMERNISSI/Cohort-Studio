@@ -10,11 +10,12 @@ the top of the page lists them; **Apply to the dataset** makes each one a step o
 
 A draft can only be applied over the data it was built on. If the data change while it is open (a rename on
 Explore, a date conversion on Validate), the banner offers to **redo** the changes on the current data from their
-recorded settings, or to discard the draft. A statistical imputation is fitted on, and fills, the rows of the
-**analysis population** only (the ticked inclusion and exclusion criteria); if the population changes before the draft
-is applied, the banner offers to refit it on the new population. When an applied imputation was fitted on other rows
-than the current population, the analysis pages say so. A targeted formula (below) fits nothing: it uses only the
-values of each row, and fills every row whose inputs are known.
+recorded settings, or to discard the draft. An imputation, statistical or by a formula, is computed on, and fills, the
+rows of the **analysis population** only (the ticked inclusion and exclusion criteria; every row when none is ticked).
+If the population changes before the draft is applied, the banner offers to refit each imputation of the draft on
+the new population, and the step then records the rows and the values of the refit. When an applied statistical
+imputation was fitted on other rows than the current population (on every row, before a criterion was ticked), the
+analysis pages say so.
 
 ---
 
@@ -58,8 +59,10 @@ have fewer cells to estimate and more information to estimate them from.
 Impute the missing values of one variable from the variables that determine it. Choose the variable, write the
 formula in the same language as **Create New Variables** (a missing weight: `bmi * (height_cm / 100) ** 2`), or take an
 AI suggestion, then click **Apply Targeted Imputation**. The formula fills the missing cells only and keeps the
-observed values. It fits nothing: it uses the values of each row, so every row whose inputs are known is filled,
-including the rows outside the analysis population. The step is traced, and a replay fills the same cells again.
+observed values. With criteria ticked in the sidebar, it is computed on the rows of the analysis population and fills
+them only, as the global imputation does: an aggregate such as `bmi.mean()` sees no excluded patient, and the excluded
+rows keep their missing values. The page names the rows used, and each AI suggestion is tried on them. The step is
+traced with the population: a replay evaluates the recorded criteria again and fills the cells of the rows they keep.
 
 Tick **Exact formula** when the other variables determine the value, as for the weight above or a total from its
 parts. The values are then imputed exactly. Nothing is estimated, so the analyses and the multiple imputation keep

@@ -135,8 +135,9 @@ def population_banner(*, purpose: str = "analyses") -> None:
         st.warning(
             "The data contain imputed values fitted on other rows than the current population: "
             + "; ".join(mismatched)
-            + ". Rows outside that population were not imputed. Tick the same criteria again, or redo the "
-            "imputation on the current population (Enrich).",
+            + ". The imputed values depend on the rows the imputation was fitted on, and the rows the population "
+            "gained since were not imputed. Tick the same criteria again, or go back to the data before the "
+            "imputation (Reproduce > Versions & traces, Reproduce to Step) and impute on the current population.",
             icon=":material/warning:",
         )
 

@@ -230,15 +230,44 @@ def impute_rows(
     return ImputationOutcome(frame=out, params=params, columns=columns, mask=mask)
 
 
-def fill_with_formula(frame: pd.DataFrame, target: str, formula: str) -> tuple[pd.DataFrame, int]:
-    """Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled)."""
-    ok, result, _ = evaluate_formula_safely(formula, target, frame, return_series=True)
+def fill_with_formula(
+    frame: pd.DataFrame, target: str, formula: str, rows: pd.Index | None = None
+) -> tuple[pd.DataFrame, int]:
+    """
+    Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled). With ``rows``
+    (the analysis population), the formula is computed on those rows only, so that an aggregate such as a mean sees no
+    excluded patient, and fills them only: the excluded rows keep their missing values, as with the global imputation.
+    The page and the replay both fill through here.
+    """
+    scope = frame if rows is None else frame.loc[frame.index.intersection(rows)]
+    ok, result, _ = evaluate_formula_safely(formula, target, scope, return_series=True)
     if not ok:
         raise ValueError(f"formula for {target}: {result}")
     out = frame.copy()
     before = int(out[target].isna().sum())
-    out[target] = out[target].fillna(result)
+    # missing outside the scope: fillna leaves those rows as they are (the whole column, so its type rules apply)
+    out[target] = out[target].fillna(pd.Series(result, index=scope.index).reindex(out.index))
     return out, before - int(out[target].isna().sum())
 
 
-__all__ = ["ImputationOutcome", "apply_imputer", "fill_with_formula", "impute_rows"]
+def describe_imputation(numerical: str, categorical: str, n_rows: int | None = None) -> str:
+    """The trace's description of a single imputation; ``n_rows``: the analysis population it was fitted on."""
+    text = f"Applied data imputation ({numerical} / {categorical}"
+    return f"{text}, fitted on the analysis population of {n_rows:,} rows)" if n_rows is not None else f"{text})"
+
+
+def describe_formula_fill(target: str, filled: int, *, exact: bool, n_rows: int | None = None) -> str:
+    """The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on."""
+    values = "value" if filled == 1 else "values"
+    text = f"Imputed {filled} {values} in {target} using {'an exact formula' if exact else 'a formula'}"
+    return f"{text}, computed on the analysis population of {n_rows:,} rows" if n_rows is not None else text
+
+
+__all__ = [
+    "ImputationOutcome",
+    "apply_imputer",
+    "describe_formula_fill",
+    "describe_imputation",
+    "fill_with_formula",
+    "impute_rows",
+]

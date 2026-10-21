@@ -162,9 +162,17 @@ class Draft:
     base_fp: str
     frame: pd.DataFrame
     steps: list[PendingStep] = field(default_factory=list)
-    population_fp: str | None = None  # population used by the population-scoped steps
     single_imputed: Cells = field(default_factory=dict)
     exact_imputed: Cells = field(default_factory=dict)
+
+    @property
+    def populations(self) -> set[str]:
+        """The populations the population-scoped steps were computed on (each step's, not the last one's only)."""
+        return {
+            str(p.population["fingerprint"])
+            for p in self.steps
+            if p.population and p.population.get("fingerprint")
+        }
 
 
 @dataclass(frozen=True)
@@ -406,8 +414,6 @@ class DataSession:
         self.draft.exact_imputed = restrict_cells(exact, after)
         self.draft.frame = after
         self.draft.steps.append(step)
-        if block and block.get("fingerprint"):
-            self.draft.population_fp = str(block["fingerprint"])
         return step
 
     def staging_status(self, config: Mapping[str, Any] | None = None) -> StagingStatus:
@@ -419,15 +425,25 @@ class DataSession:
             return StagingStatus(
                 BASE_CHANGED, n, "The dataset changed after this draft was started."
             )
-        if draft.population_fp and config is not None:
-            current = self.population(config)
-            if current.fingerprint != draft.population_fp:
-                return StagingStatus(
-                    POPULATION_CHANGED,
-                    n,
-                    "The analysis population changed after the imputation in this draft was fitted.",
-                )
+        populations = draft.populations
+        # every imputation of the draft, not the last one only: an earlier one may be on another population
+        if (
+            populations
+            and config is not None
+            and populations != {self.population(config).fingerprint}
+        ):
+            return StagingStatus(
+                POPULATION_CHANGED,
+                n,
+                "The analysis population changed after the imputation in this draft was fitted.",
+            )
         return StagingStatus(OK, n)
+
+    @property
+    def working_fp(self) -> str:
+        """The fingerprint of :meth:`working_frame`: the draft's last change, or the dataset's."""
+        draft = self.draft
+        return draft.steps[-1].change.fp_out if draft is not None and draft.steps else self.data_fp
 
     def commit_staging(self, config: Mapping[str, Any] | None = None) -> Change | None:
         """Trace every pending step and make the draft the base; refused when the draft is stale."""

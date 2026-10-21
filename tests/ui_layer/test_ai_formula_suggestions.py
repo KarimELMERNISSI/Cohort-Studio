@@ -11,6 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
 from ui import nav
+from ui.components.population import _family_key
 
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = str(ROOT / "main.py")
@@ -106,6 +107,40 @@ def test_an_imputation_suggestion_that_the_data_refuse_cannot_be_used(enrich: Ap
     assert enrich.session_state["imputation_formula_input"] == (
         "sbp_baseline + np.where(nyha_class == 'III', 5.0, -2.0)"
     )
+    # applied with no criterion ticked: every row, and the population is recorded all the same, so the draft
+    # knows when a criterion is ticked before it is applied
+    next(b for b in enrich.button if b.label == "Apply Targeted Imputation").click().run()
+    _ok(enrich)
+    step = enrich.session_state["_data_session"].draft.steps[-1]
+    assert step.params["filled_count"] == 183
+    assert step.description == "Imputed 183 values in sbp_6m using a formula"
+    assert step.population is not None and step.population["criteria"] == []
+    assert step.population["n_included"] == 1206
+
+
+def test_a_targeted_imputation_is_tried_on_and_fills_the_analysis_population(
+    enrich: AppTest,
+) -> None:
+    # biostatistics review (2026-10-21): as the global imputation, the excluded patients neither inform nor receive
+    for family in ("clinical_anomalies", "study_inclusion"):
+        enrich.checkbox(key=_family_key(family)).check().run()
+        _ok(enrich)
+    assert any("fills, the 928 rows of the analysis population" in i.value for i in enrich.info)
+    captions = " ".join(c.value for c in enrich.caption)
+    assert "On your data: fills 150 of the 150 missing values of `sbp_6m`" in captions
+
+    enrich.button(key="use_imp_sugg_1").click().run()
+    next(b for b in enrich.button if b.label == "Apply Targeted Imputation").click().run()
+    _ok(enrich)
+    session = enrich.session_state["_data_session"]
+    step = session.draft.steps[-1]
+    assert step.function == "targeted_imputation" and step.params["filled_count"] == 150
+    assert step.population and step.population["n_included"] == 928
+    included = session.population(enrich.session_state["config"]).included
+    excluded = session.base.index.difference(included)
+    # the excluded rows keep their missing values
+    kept = session.draft.frame.loc[excluded, "sbp_6m"].isna()
+    assert kept.equals(session.base.loc[excluded, "sbp_6m"].isna())
 
 
 def test_a_new_formula_with_a_caret_is_refused(enrich: AppTest) -> None:

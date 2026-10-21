@@ -471,6 +471,35 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   of constants such as `9 ** 9 ** 8` (it kept the server busy for minutes), an exponent above 1,000, an array of more
   than ten million values (`np.ones`, `np.full`, `np.zeros`), a padding width or a repeated text above 10,000.
 
+### Imputation and the analysis population (results corrected)
+
+- **An imputation by formula** (Data > Enrich > Handle Missing Data > Targeted Imputation) now follows the analysis
+  population, as the global imputation does. With criteria ticked in the sidebar, the formula is computed on the
+  included rows only and fills them only, and the excluded rows keep their missing values. Before, it filled every
+  row: on the tutorial cohort with every criterion ticked, the suggested formula for `sbp_6m` filled 183 values
+  instead of the 150 of the 928 included patients. A formula of each row's own values (a weight from the BMI and the
+  height) gives the included patients the same values as before; one with an aggregate, such as a mean, no longer
+  sees the excluded patients, so its values change. The page names the rows used, the AI suggestions are tried on
+  them, and **Apply** is unavailable while a ticked criterion cannot be evaluated.
+- **The Enrich draft checks the population of every imputation in it.** An imputation added while no criterion was
+  ticked was applied on every row when criteria were ticked before **Apply to the dataset**, and of two imputations
+  on different populations only the last was checked. The draft now asks to refit them on the current population.
+- **A redone or refitted imputation is recorded as what it did** on the current data: the rows it used, the values it
+  filled and its description. Before, it kept those of the first fit: the trace of a refitted imputation named the
+  old population, the replay of a targeted imputation warned that it filled another number of values, and a draft
+  redone after a change of the data asked to be refitted as well.
+- **The analysis pages' notice about imputed values fitted on other rows** than the current population now also names
+  a statistical imputation applied when no criterion was ticked: it was fitted on every row, the patients excluded
+  since included. Its advice now works whatever the change: tick the same criteria again, or go back to the data
+  before the imputation (Reproduce > Versions & traces, Reproduce to Step) and impute on the current population.
+  Before, it advised imputing again, which fills nothing when the population lost rows.
+- **A redo or refit that leaves a change with nothing to do** now names it: the draft keeps only the changes that
+  still change the data, and the message said they had all been redone.
+- **The trace records the population with each imputation,** also when no criterion is ticked, and the replay
+  evaluates the recorded criteria again and fills the rows they keep (it warns when they keep other rows than when
+  the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as
+  it was computed.
+
 ### AI engine: suggested formulas are read and tried as the application computes them (owner request)
 
 - **The diagram of a suggested variable** (Data > Enrich > Create New Variables > AI Variable Suggestions) is drawn

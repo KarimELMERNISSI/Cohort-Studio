@@ -15,7 +15,7 @@ from rapidfuzz import fuzz
 import biostats.reduction as rd
 import enrich.external_data as eed
 from app_pages.enrichment_mi import render_multiple_imputation
-from core.population import catalogue
+from core.population import PopulationResult, catalogue
 from core.registry import as_code
 from enrich.formulas import (
     CARET_IS_NOT_A_POWER,
@@ -30,7 +30,12 @@ from enrich.formulas import (
     validate_and_extract_columns_ast,
     validate_variable_name,
 )
-from enrich.imputation_service import impute_rows
+from enrich.imputation_service import (
+    describe_formula_fill,
+    describe_imputation,
+    fill_with_formula,
+    impute_rows,
+)
 from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
 from graph.builders.formula import build_formula_graph
 from graph.model import RenderOptions
@@ -1913,13 +1918,22 @@ def save_snapshot(df, step_name, base_dir=None):
 
 
 # Helper to extract statistics for context columns (Guided Mode)
-def _tried(sugg: dict, formula: str, data: pd.DataFrame, target: str | None = None) -> FormulaTrial:
-    """An AI suggestion's formula tried on the data (enrich.formulas.try_formula), kept on the suggestion: tried again
-    only for another formula, target or version of the data (a change of the draft is a new frame, under the strict
-    state), not at every rerun."""
-    key = (formula, target, id(data), tuple(map(str, data.columns)), len(data))
+def _tried(
+    sugg: dict,
+    formula: str,
+    data: pd.DataFrame,
+    target: str | None = None,
+    population: PopulationResult | None = None,
+) -> FormulaTrial:
+    """An AI suggestion's formula tried on the data (enrich.formulas.try_formula), on the rows of ``population`` when
+    one is given, kept on the suggestion: tried again only for another formula, target, version of the data or
+    population, not at every rerun. The version is the fingerprint of the Enrich data, which the page receives as a
+    new frame at every run."""
+    rows = None if population is None else population.rows_fingerprint
+    key = (formula, target, get_state().session.working_fp, rows)
     if sugg.get("_tried_on") != key:
-        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, data, target=target), key
+        scope = data if population is None else data.loc[data.index.intersection(population.included)]
+        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, scope, target=target), key
     return sugg["_trial"]
 
 
@@ -2066,11 +2080,26 @@ def app():
             st.info("Use this mode to manually fix specific columns using formulas or AI suggestions.")
             
             main_data = st.session_state['enriched_df']
-            missing_counts = main_data.isnull().sum()
+            # Computed on, and filling, the rows of the analysis population only, as the global imputation: an
+            # aggregate such as a mean sees no excluded patient, and the excluded rows keep their missing values
+            # (enrich.imputation_service.fill_with_formula, which the replay uses too)
+            target_state = get_state()
+            target_scope = target_state.population_scope(main_data)
+            target_population = target_scope.population if target_scope.scoped else None
+            if target_scope.blocked:
+                st.error("The analysis population cannot be evaluated: correct or untick the criterion in the "
+                         "sidebar before imputing.")
+            if target_population is not None:
+                st.info(f"The formula is computed on, and fills, the {len(target_scope.rows):,} rows of the "
+                        f"analysis population ({target_population.label}); the excluded rows keep their missing "
+                        "values.", icon=":material/filter_alt:")
+            in_scope = main_data.loc[target_scope.rows]
+            missing_counts = in_scope.isnull().sum()
             cols_with_missing = missing_counts[missing_counts > 0].index.tolist()
-            
+
             if not cols_with_missing:
-                st.success("No missing values found in the current dataset.")
+                where = "the analysis population" if target_population is not None else "the current dataset"
+                st.success(f"No missing values found in {where}.")
             else:
                 col_target, col_rag = st.columns([1, 2])
                 with col_target:
@@ -2137,12 +2166,14 @@ def app():
 
                         # the suggestions for the variable shown, each tried on the data before it can be used
                         if st.session_state.get('imputation_suggestions_for', target_var) == target_var:
-                            missing_now = main_data[target_var].isna()
+                            missing_now = in_scope[target_var].isna()  # in the analysis population
                             for i, sugg in enumerate(st.session_state.get('imputation_suggestions', [])):
                                 formula = formula_from_model(
                                     sugg.get('formula', ''), targets=[target_var, str(sugg.get('name') or '')]
                                 )
-                                trial = _tried(sugg, formula, main_data, target=target_var)
+                                trial = _tried(
+                                    sugg, formula, main_data, target=target_var, population=target_population
+                                )
                                 st.markdown(f"**Option {i+1}: {plain(sugg.get('name', 'Formula'), limit=120)}**")
                                 st.code(formula)
                                 st.caption(plain(sugg.get('reasoning', ''), limit=1000))
@@ -2151,7 +2182,7 @@ def app():
                                     trial,
                                     f"fills {fills:,} of the {int(missing_now.sum()):,} missing values of "
                                     f"{as_code(target_var)}"
-                                    + _from_missing(trial.from_missing(main_data, within=missing_now)),
+                                    + _from_missing(trial.from_missing(in_scope, within=missing_now)),
                                 )
                                 if st.button(f"Use Formula #{i+1}", key=f"use_imp_sugg_{i}", disabled=not trial.ok):
                                     st.session_state['imputation_formula_input'] = formula
@@ -2178,31 +2209,23 @@ def app():
                     ),
                 )
 
-                if st.button("Apply Targeted Imputation", type="primary", disabled=not formula_input):
+                if st.button(
+                    "Apply Targeted Imputation", type="primary", disabled=not formula_input or target_scope.blocked
+                ):
                     try:
-                        # compute formula series (a new formula: ^ is refused, a recorded one replays as computed)
+                        # a new formula: ^ is refused (a recorded one replays as it was computed)
                         if read_formula(formula_input).power_caret:
-                            success, result_or_error = False, CARET_IS_NOT_A_POWER
+                            st.error(f"Formula Error: {CARET_IS_NOT_A_POWER}")
                         else:
-                            success, result_or_error, _ = evaluate_formula_safely(
-                                formula_input, target_var, main_data, return_series=True
+                            # computed on, and filling, the analysis population (every row when no criterion is
+                            # ticked): the session data changes through the draft only
+                            filled, filled_count = fill_with_formula(
+                                main_data, target_var, formula_input, target_scope.rows
                             )
-                        
-                        if success:
-                            computed_series = result_or_error
-                            filled = main_data.copy()  # the session data changes through the draft only
-                            original_missing = filled[target_var].isnull().sum()
-
-                            # Apply fillna
-                            filled[target_var] = filled[target_var].fillna(computed_series)
-
-                            new_missing = filled[target_var].isnull().sum()
-                            filled_count = original_missing - new_missing
-
                             if filled_count > 0:
                                 st.success(f"Successfully filled {filled_count} missing values in '{target_var}'!")
                                 snapshot_path = save_snapshot(filled, f"impute_{target_var}")
-                                get_state().stage(
+                                target_state.stage(
                                     filled,
                                     "targeted_imputation",
                                     {
@@ -2211,16 +2234,21 @@ def app():
                                         "filled_count": int(filled_count),
                                         "exact": bool(exact),
                                     },
-                                    f"Imputed {filled_count} values in {target_var} using "
-                                    f"{'an exact formula' if exact else 'a formula'}",
-                                    output_dataset_path=snapshot_path
+                                    describe_formula_fill(
+                                        target_var,
+                                        filled_count,
+                                        exact=bool(exact),
+                                        n_rows=len(target_scope.rows) if target_scope.scoped else None,
+                                    ),
+                                    # also with no criterion ticked: the draft then knows when one is ticked later
+                                    population=target_scope.population,
+                                    output_dataset_path=snapshot_path,
                                 )
                                 st.rerun()
                             else:
                                 st.warning("Formula computed successfully but didn't fill any missing values (check data overlap).")
-                        else:
-                            st.error(f"Formula Error: {result_or_error}")
-                            
+                    except ValueError as e:  # the formula cannot be computed on the data (fill_with_formula)
+                        st.error(f"Formula Error: {e}")
                     except Exception as e:
                         st.error(f"Execution Error: {e!s}")
 
@@ -2241,14 +2269,12 @@ def app():
             # The imputation is fitted on, and fills, the rows of the analysis population only: excluded patients
             # neither inform nor receive imputed values (follow-up programme M1)
             state = get_state()
-            population = state.population
-            blocked = population is not None and not population.ok
-            scoped = population is not None and bool(population.criteria) and not blocked
+            scope = state.population_scope(main_data)
+            population, blocked, scoped, rows = scope.population, scope.blocked, scope.scoped, scope.rows
             if blocked:
                 st.error("The analysis population cannot be evaluated: correct or untick the criterion in the "
                          "sidebar before imputing.")
-            rows = main_data.index.intersection(population.included) if scoped else main_data.index
-            if scoped:
+            if scoped and population is not None:
                 st.info(f"Imputation is fitted on, and fills, the {len(rows):,} rows of the analysis population "
                         f"({population.label}); the excluded rows keep their missing values.",
                         icon=":material/filter_alt:")
@@ -2373,10 +2399,10 @@ def app():
                         # Save snapshot
                         snapshot_path = save_snapshot(df_imputed, "imputation")
                         state.stage(df_imputed, "imputation", outcome.params,
-                                    f"Applied data imputation ({numerical_imputation_method} / "
-                                    f"{categorical_imputation_method}"
-                                    + (f", fitted on the analysis population of {len(rows):,} rows)" if scoped else ")"),
-                                    population=population if scoped else None,
+                                    describe_imputation(numerical_imputation_method, categorical_imputation_method,
+                                                        len(rows) if scoped else None),
+                                    # also with no criterion ticked: the draft then knows when one is ticked later
+                                    population=population,
                                     output_dataset_path=snapshot_path)
 
                         # Highlight imputed values
@@ -2416,8 +2442,8 @@ def app():
 
         with st.expander("Variable Computation", expanded=True):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None:
-                main_data = define_new_variables(main_data) #) st.session_state['enriched_df']
-                #st.session_state['enriched_df'] = main_data
+                # the Enrich data as they are now: a tab above may have added a change to the draft in this run
+                main_data = define_new_variables(st.session_state['enriched_df'])
             else:
                 st.warning("No enriched dataset")
             

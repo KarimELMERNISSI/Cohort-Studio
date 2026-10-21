@@ -31,7 +31,12 @@ from core.state import ParseOptions
 from core.steps import DOCUMENT, SNAPSHOT
 from core.steps import ids as step_ids
 from enrich.formulas import evaluate_formula_safely
-from enrich.imputation_service import fill_with_formula, impute_rows
+from enrich.imputation_service import (
+    describe_formula_fill,
+    describe_imputation,
+    fill_with_formula,
+    impute_rows,
+)
 from enrich.transformation_logic import apply_variable_transformation
 from manage.db_manager import DBManager
 from utils.date_parser import smart_parse_dates
@@ -43,6 +48,15 @@ logger = logging.getLogger(__name__)
 SKIPPED_STEPS = step_ids(replay=DOCUMENT)
 # Steps the engine cannot recompute: their snapshot is used when one was recorded
 NOT_REPLAYABLE = step_ids(replay=SNAPSHOT)
+
+
+@dataclass(frozen=True)
+class StepRecord:
+    """What a recomputed step did on the replayed data, in the trace's terms (its settings and description): an
+    imputation's counts and rows depend on the data, so a redone Enrich draft step is recorded with these."""
+
+    params: dict[str, Any]
+    description: str
 
 
 @dataclass
@@ -59,6 +73,7 @@ class ReplayResult:
     mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
     single_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids filled by single imputation
     exact_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids imputed by an exact formula
+    records: dict[int, StepRecord] = field(default_factory=dict)  # step index -> what a recomputed imputation did
 
     @property
     def reproducible(self) -> bool:
@@ -182,10 +197,16 @@ def _enrichment(df, step, index, overrides, warnings):
     ), None
 
 
-def _imputation(df, step, index, overrides, warnings):
-    params = step.get("params", {}) or {}
+def _scoped_rows(df: pd.DataFrame, step: dict[str, Any], index: int, warnings: list[str]) -> pd.Index | None:
+    """The rows an imputation is fitted on and fills: the population recorded with the step, as when it was applied;
+    None (every row) when none was recorded, as by earlier versions, or when no criterion was ticked."""
     block = step.get("population")
-    rows = _population_rows(df, block, index, warnings) if block and block.get("criteria") else None
+    return _population_rows(df, block, index, warnings) if block and block.get("criteria") else None
+
+
+def _imputation(df, step, index, overrides, warnings, result=None):
+    params = step.get("params", {}) or {}
+    rows = _scoped_rows(df, step, index, warnings)
     outcome = impute_rows(
         df,
         rows,
@@ -197,15 +218,25 @@ def _imputation(df, step, index, overrides, warnings):
         remainder_strategy=params.get("remainder_strategy", "passthrough"),
         remainder_threshold=params.get("remainder_threshold", 0.3),
     )
+    if result is not None:
+        methods = (outcome.params["numerical_imputation_method"], outcome.params["categorical_imputation_method"])
+        description = describe_imputation(*methods, None if rows is None else len(rows))
+        result.records[index] = StepRecord(outcome.params, description)
     return outcome.frame, None
 
 
-def _targeted_imputation(df, step, index, overrides, warnings):
+def _targeted_imputation(df, step, index, overrides, warnings, result=None):
     params = step.get("params", {}) or {}
-    new_df, filled = fill_with_formula(df, params["target_variable"], params["formula"])
+    rows = _scoped_rows(df, step, index, warnings)
+    target = params["target_variable"]
+    new_df, filled = fill_with_formula(df, target, params["formula"], rows=rows)
     recorded = params.get("filled_count")
     if recorded is not None and int(recorded) != filled:
         warnings.append(f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded")
+    if result is not None:
+        n_rows = None if rows is None else len(rows)
+        description = describe_formula_fill(target, filled, exact=bool(params.get("exact")), n_rows=n_rows)
+        result.records[index] = StepRecord({**params, "filled_count": filled}, description)
     return new_df, None
 
 
@@ -335,6 +366,8 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
     "outlier_clipping": _outlier_clipping,
     "mi_impute": _mi_impute,
 }
+# The handlers that report on the replay result: the imputed datasets, and what each imputation did (StepRecord)
+_REPORTING = frozenset({"imputation", "targeted_imputation", "mi_impute"})
 
 
 def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: dict[str, str] | None,
@@ -363,8 +396,8 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         warnings.append(f"step {index + 1}: unknown step '{func_name}' skipped")
         logger.warning("Skipping unknown pipeline step: %s", func_name)
         raise _NotReplayable(df)
-    if func_name == "mi_impute":
-        return _mi_impute(df, step, index, overrides, warnings, result)
+    if func_name in _REPORTING:
+        return handler(df, step, index, overrides, warnings, result)
     return handler(df, step, index, overrides, warnings)
 
 
@@ -461,6 +494,7 @@ __all__ = [
     "NOT_REPLAYABLE",
     "SKIPPED_STEPS",
     "ReplayResult",
+    "StepRecord",
     "apply_steps",
     "execute_trace_pipeline",
     "load_source",

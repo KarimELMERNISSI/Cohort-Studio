@@ -24,7 +24,7 @@ import contextlib
 import logging
 import os
 from collections.abc import Iterable, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -32,7 +32,7 @@ import pandas as pd
 import streamlit as st
 
 from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
-from core.population import PopulationResult, catalogue
+from core.population import PopulationResult, catalogue, criteria_from_trace, evaluate_population
 from core.session import (
     EMPTY,
     DataIdentity,
@@ -161,6 +161,16 @@ _VIEWS_KEY = "_data_views"
 
 class UntracedMutationError(RuntimeError):
     """The session data was changed outside AppState (strict mode only)."""
+
+
+@dataclass(frozen=True)
+class PopulationScope:
+    """The rows an imputation of the Enrich draft is computed on and fills (:meth:`AppState.population_scope`)."""
+
+    population: PopulationResult | None  # recorded with the step, also when no criterion is ticked
+    blocked: bool  # a ticked criterion cannot be evaluated: no imputation until it is corrected
+    scoped: bool  # criteria are ticked: the rows are those of the analysis population
+    rows: pd.Index
 
 
 def strict_state() -> bool:
@@ -506,7 +516,8 @@ class AppState:
 
     def rebase_staging(self, *, refit_population: bool = False) -> tuple[bool, str]:
         """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
-        population-scoped imputations on the current population. Only replayable changes can be redone."""
+        population-scoped imputations on the current population. Only replayable changes can be redone; a redone
+        imputation is recorded as what it did on the current data (its rows, counts and description)."""
         from manage.reproduction_manager import apply_steps
 
         session = self.session
@@ -531,44 +542,83 @@ class AppState:
                 "params": dict(pending.params),
                 "description": pending.description,
             }
+            block = None
+            # redo on the population it was fitted on, as it is on the current data; or refit on the
+            # current population (every row when no criterion is ticked)
             if pending.population is not None:
-                if population is None:  # redo on the population it was fitted on
+                if population is None:
                     step["population"] = pending.population
-                elif population.criteria:  # refit on the current population
-                    step["population"] = population.to_trace()
-                    step["params"].update(rows="population", n_rows_fitted=population.n_included)
-                else:  # no criterion ticked any more: refit on every row
-                    step["params"].update(rows="all", n_rows_fitted=population.n_base)
+                    block = self._on_current_data(pending.population)
+                else:
+                    step["population"] = block = population.to_trace()
             result = apply_steps(frame, [step])
             if result.error or result.df is None:
                 return False, result.error or f"'{pending.description}' could not be redone."
+            # an imputation: recorded with the rows it used and the values it filled there
+            record = result.records.get(0)
+            if record is not None:
+                step["params"], step["description"] = record.params, record.description
             frame = result.df
-            redone.append((pending, frame, step.get("population")))
+            redone.append((pending, frame, step, block))
         # the snapshots show the changes on the older data: the replay recomputes the redone changes
         dropped = self._draft_snapshots()
         session.discard_staging()
-        for pending, staged, block in redone:
-            session.stage(
+        left_out = []  # a change that changes nothing on the current data is not kept
+        for pending, staged, step, block in redone:
+            kept = session.stage(
                 staged,
                 pending.function,
-                pending.params,
-                pending.description,
+                step["params"],
+                step["description"],
                 population=block,
                 replayable=pending.replayable,
                 output_dataset_path=None,
             )
+            if kept is None:
+                left_out.append(f"'{pending.description}'")
         self._delete_snapshots(dropped)
         self._install_views()
-        n = len(redone)
-        return True, f"{n} change{'s' if n != 1 else ''} redone on the current data."
+        n = len(redone) - len(left_out)
+        if not n:
+            changes = "changes" if len(left_out) == 1 else "change"
+            return (
+                True,
+                f"The draft is empty: {', '.join(left_out)} {changes} nothing on the current data.",
+            )
+        message = f"{n} change{'s' if n != 1 else ''} redone on the current data."
+        if left_out:
+            message += f" Left out, as they change nothing there: {', '.join(left_out)}."
+        return True, message
+
+    def _on_current_data(self, block: Mapping[str, Any]) -> Mapping[str, Any]:
+        """A recorded population evaluated again, with its criteria, on the current dataset: a draft redone on new
+        data is then not taken for one on another population. The recorded one when it cannot be evaluated."""
+        session = self.session
+        base = session.base
+        assert base is not None
+        evaluated = evaluate_population(base, criteria_from_trace(block), data_fp=session.data_fp)
+        return evaluated.to_trace() if evaluated.ok else block
+
+    def population_scope(self, frame: pd.DataFrame) -> PopulationScope:
+        """The rows of ``frame`` an imputation is computed on and fills: those of the analysis population, every row
+        when no criterion is ticked; none while a ticked criterion cannot be evaluated (``blocked``)."""
+        population = self.population
+        blocked = population is not None and not population.ok
+        scoped = population is not None and bool(population.criteria) and not blocked
+        rows = (
+            frame.index.intersection(population.included)
+            if scoped and population is not None
+            else frame.index
+        )
+        return PopulationScope(population, blocked, scoped, rows)
 
     def imputations_on_other_rows(self) -> list[str]:
-        """Imputations applied in this session that were fitted on other rows than the current population."""
+        """Statistical imputations applied in this session that were fitted on other rows than the current population,
+        every row included, when no criterion was ticked yet."""
         population = self.population
         if population is None or not population.ok:
             return []
         current = population.rows_fingerprint
-        # imputations learnt from the rows (a formula uses each row's own values)
         fitted = step_ids(fills=FITTED)
         out = []
         for step in self.transformation_manager.history:
@@ -579,7 +629,11 @@ class AppState:
                 and block.get("rows_fp")
                 and block["rows_fp"] != current
             ):
-                out.append(f"{step.get('description')} ({block.get('n_included', '?')} rows)")
+                # a step on a population names its rows in its description, one on every row does not
+                every = (
+                    "" if block.get("criteria") else f" (all {block.get('n_included', '?')} rows)"
+                )
+                out.append(f"{step.get('description')}{every}")
         return out
 
     # ------------------------------------------------------------------ the analysis population

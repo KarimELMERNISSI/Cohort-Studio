@@ -44,7 +44,7 @@ REPLAY_MODES = (RECOMPUTE, SNAPSHOT, DOCUMENT)
 
 # How the step fills missing values with one value each
 FITTED = "fitted"  # values learnt from the rows (a statistical imputation)
-FORMULA = "formula"  # values computed from each row's own variables
+FORMULA = "formula"  # values computed by a formula: of each row's own variables, or an aggregate such as a mean
 
 
 @dataclass(frozen=True)
