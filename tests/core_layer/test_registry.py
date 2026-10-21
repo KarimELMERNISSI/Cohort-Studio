@@ -6,7 +6,14 @@ from dataclasses import dataclass
 
 import pytest
 
-from core.registry import Catalogue, UnknownIdError
+from core.registry import (
+    Availability,
+    Catalogue,
+    ConnectorRegistry,
+    UnknownConnectorError,
+    UnknownIdError,
+    as_code,
+)
 
 
 @dataclass(frozen=True)
@@ -62,3 +69,156 @@ def test_an_id_or_alias_is_registered_once(kind: Colour, aliases: tuple[str, ...
     with pytest.raises(ValueError, match="already registered"):
         colours.register(kind, aliases=aliases)
     assert "blue" not in colours and "bleu" not in colours  # nothing was half-registered
+
+
+# --- connector families (M5b step 4) --------------------------------------------------------------------------------
+
+FAKE = """
+from core.registry import Availability
+
+
+class Good:
+    name = "good"
+    display_name = "Good"
+
+    @classmethod
+    def availability(cls):
+        return Availability(True)
+
+
+class Down:
+    name = "down"
+    display_name = "Down"
+
+    @classmethod
+    def availability(cls):
+        return Availability(False, "library too old")
+
+
+class Boom:
+    name = "boom"
+    display_name = "Boom"
+
+    @classmethod
+    def availability(cls):
+        raise RuntimeError("zz9 secret in a broken check")
+"""
+
+
+@pytest.fixture
+def fake(tmp_path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Two fake connector modules on the path: one that loads, one whose package is not installed."""
+    import sys
+
+    module = f"fake_connectors_{tmp_path.name.replace('-', '_')}"
+    (tmp_path / f"{module}.py").write_text(FAKE, encoding="utf-8")
+    (tmp_path / f"{module}_extra.py").write_text("import not_installed_pkg_zz\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    yield module
+    for name in (module, f"{module}_extra"):
+        sys.modules.pop(name, None)
+
+
+def _registry(module: str) -> ConnectorRegistry:
+    registry: ConnectorRegistry = ConnectorRegistry(
+        "graph engine", setting="CMP_GRAPH_RENDERER", auto=("good",)
+    )
+    registry.register("good", f"{module}:Good", aliases=("fine",))
+    registry.register("down", f"{module}:Down", extra="graph-yfiles")
+    registry.register("boom", f"{module}:Boom")
+    registry.register("ext", f"{module}_extra:X", extra="ai")
+    return registry
+
+
+def test_the_names_import_nothing_and_a_class_is_imported_once(fake: str) -> None:
+    import sys
+
+    registry = _registry(fake)
+    assert registry.names() == ("good", "down", "boom", "ext") and registry.valid()[0] == "auto"
+    assert fake not in sys.modules
+    assert registry.get("FINE").name == "good" and fake in sys.modules  # an alias, in any case
+    assert registry.get("good") is registry.get("fine")
+    with pytest.raises(UnknownConnectorError, match="good, down, boom, ext"):
+        registry.get("nope")
+
+
+def test_availability_never_raises_and_names_the_group_to_install(fake: str) -> None:
+    registry = _registry(fake)
+    missing = registry.availability("ext")
+    assert not missing.ok and "not_installed_pkg_zz is not installed" in missing.reason
+    assert missing.extra == "ai" and missing.install_hint == "uv sync --extra ai"
+    broken = registry.availability("boom")
+    assert not broken.ok and "RuntimeError" in broken.reason and "zz9" not in broken.reason
+    assert registry.availability("down") == Availability(False, "library too old", "graph-yfiles")
+    assert registry.availability("good").ok and registry.availability("good").install_hint is None
+    assert not registry.availability("cohere").ok  # unknown: not offered
+
+
+def test_a_module_is_found_without_being_imported(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    assert Availability.of_module("json").ok
+    absent = Availability.of_module("not_installed_pkg_zz", extra="ai")
+    assert not absent.ok and absent.install_hint == "uv sync --extra ai"
+    monkeypatch.setitem(sys.modules, "json", None)  # blocked, as the contract tests block an SDK
+    assert not Availability.of_module("json").ok
+
+
+def test_the_choice_follows_the_session_the_preference_the_setting_then_auto(fake: str) -> None:
+    registry = _registry(fake)
+    assert registry.select(session="good", preference="down", setting="down").source == "session"
+    chosen = registry.select(preference="down", setting="good")
+    assert (chosen.chosen, chosen.source) == ("good", "setting")
+    assert chosen.warnings == (
+        "Your saved graph engine `down` is not available here (library too old)",
+    )
+    stale = registry.select(preference="cohere")
+    assert (stale.chosen, stale.source) == ("good", "auto")
+    assert stale.warnings == ("Your saved graph engine `cohere` is not offered here",)
+    assert stale.reasons == ("the first available of good",)
+    assert (
+        registry.select(session="auto", preference="down").warnings == ()
+    )  # auto, chosen explicitly
+    recommended = registry.select(auto="down", auto_reasons=("recommended here",))
+    assert recommended.chosen == "good"  # the recommendation cannot run here: the family's order
+    assert dict(recommended.alternatives)["ext"].extra == "ai"
+
+
+def test_a_setting_naming_nothing_is_reported_without_its_value(fake: str) -> None:
+    registry = _registry(fake)
+    problem = registry.setting_problem("qdrnt-zz9")
+    assert problem == "CMP_GRAPH_RENDERER is not a graph engine: use auto, good, down, boom or ext"
+    assert registry.setting_problem("FINE") is None and registry.setting_problem(" Auto ") is None
+    assert registry.setting_problem("") is None  # unset
+    with pytest.raises(ValueError, match="use auto, good"):
+        registry.select(setting="nope-zz9")
+
+
+def test_a_family_without_auto(fake: str) -> None:
+    registry: ConnectorRegistry = ConnectorRegistry(
+        "identity provider", setting="CMP_IAM_PROVIDER", auto=None
+    )
+    registry.register("local", f"{fake}:Good", aliases=("default",))
+    assert registry.valid() == ("local",)
+    assert (
+        registry.setting_problem("auto")
+        == "CMP_IAM_PROVIDER is not an identity provider: use local"
+    )
+    assert registry.select(setting="DEFAULT").chosen == "local"
+    assert registry.select().chosen is None  # nothing named: no automatic choice
+
+
+@pytest.mark.parametrize(
+    ("name", "target"),
+    [("good", "x:Y"), ("Upper", "x:Y"), ("auto", "x:Y"), ("other", "module_without_class")],
+)
+def test_a_registration_is_checked(fake: str, name: str, target: str) -> None:
+    registry = _registry(fake)
+    with pytest.raises(ValueError):
+        registry.register(name, target)
+
+
+def test_a_saved_name_is_shown_as_code() -> None:
+    assert (
+        as_code("x`y\n z") == "`xy z`" and as_code("[link](http://e.x)") == "`[link](http://e.x)`"
+    )

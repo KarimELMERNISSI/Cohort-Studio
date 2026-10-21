@@ -1,19 +1,31 @@
 """
 The shared kit of the extension points (architecture review, 2026-10-19). Standard library only.
 
-A catalogue holds the kinds of one extension point side by side (trace steps; later criterion kinds, date formats,
-analysis kinds...), addressed by ids that traces, protocols and results store. Hence its rules:
+Two mechanisms, one shape each.
+
+A **catalogue** holds the kinds of one extension point side by side (trace steps; later criterion kinds, date
+formats, analysis kinds...), addressed by ids that traces, protocols and results store. Hence its rules:
 
 - an id is never renamed: a kind that nothing records any more stays registered, marked legacy, so what was stored
   still reads;
 - an unknown id raises :class:`UnknownIdError`, whose message lists the valid ids;
 - an alias leads to its kind, for a name that was spelt another way.
+
+A **connector registry** holds the implementations of one family of which one is used at a time (graph renderers,
+vector databases, AI providers, identity providers; M5b step 4). Each is registered as ``"module:Class"`` and
+imported only when used; its availability names the optional group to install when it is missing, and never raises.
+The choice is the session's, then the user's saved preference, then the server's setting, then the family's own
+order (``auto``); a stale name falls through with a warning that says why. An unknown name in the server's setting
+stops start-up, with the valid names and never the value.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
-from typing import Protocol
+import importlib
+import importlib.util
+from collections.abc import Callable, Iterable, Iterator
+from dataclasses import dataclass, field
+from typing import Literal, Protocol
 
 
 class Kind(Protocol):
@@ -88,4 +100,227 @@ class Catalogue[K: Kind]:
         return len(self._kinds)
 
 
-__all__ = ["Catalogue", "Kind", "UnknownIdError"]
+# ----------------------------------------------------------------------------------------------- connector families
+
+AUTO = "auto"
+Source = Literal["session", "preference", "setting", "auto"]
+
+
+def as_code(name: object) -> str:
+    """A name in a notice, as code: a saved name is the user's text, and must not become a link or a format."""
+    return "`" + " ".join(str(name).replace("`", "").split()) + "`"
+
+
+@dataclass(frozen=True)
+class Availability:
+    """Whether a connector can run here, why not, and the optional group that provides it."""
+
+    ok: bool
+    reason: str = ""
+    extra: str | None = None
+
+    @property
+    def install_hint(self) -> str | None:
+        return f"uv sync --extra {self.extra}" if self.extra and not self.ok else None
+
+    @classmethod
+    def of_module(cls, module: str, *, extra: str | None = None) -> Availability:
+        """Whether ``module`` is installed, found without importing it (and without a cache: a test may block it)."""
+        try:
+            found = importlib.util.find_spec(module) is not None
+        except ImportError, ValueError:  # a parent package missing, or blocked
+            found = False
+        return cls(True) if found else cls(False, f"{module} is not installed", extra)
+
+
+class Connector(Protocol):
+    """What a registry holds: a class with its registered ``name``, a ``display_name`` and ``availability()``."""
+
+    name: str
+    display_name: str
+
+    @classmethod
+    def availability(cls) -> Availability: ...
+
+
+@dataclass(frozen=True)
+class _Registration:
+    id: str
+    target: str  # "module:Class"
+    extra: str | None = None
+
+
+@dataclass(frozen=True)
+class Selection:
+    """The connector chosen, where the choice came from, why, what was set aside, and every connector's state."""
+
+    family: str
+    chosen: str | None  # None: none is available here
+    source: Source
+    reasons: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()  # whole sentences, names as code
+    alternatives: tuple[tuple[str, Availability], ...] = field(default=())
+
+
+class UnknownConnectorError(UnknownIdError):
+    """A connector the registry does not hold; the message lists the valid names."""
+
+
+class ConnectorRegistry[C: Connector]:
+    """The implementations of one family, imported when used, chosen in a fixed order (see the module docstring)."""
+
+    def __init__(self, family: str, *, setting: str, auto: Iterable[str] | None = ()) -> None:
+        self.family = family  # "graph engine"
+        self.setting = setting  # "CMP_GRAPH_RENDERER"
+        self._auto = (
+            None if auto is None else tuple(auto)
+        )  # None: the family has no "auto" (identity providers)
+        self._catalogue: Catalogue[_Registration] = Catalogue(family)
+        self._classes: dict[str, type[C]] = {}
+
+    def register(
+        self, name: str, target: str, *, extra: str | None = None, aliases: Iterable[str] = ()
+    ) -> None:
+        """Add ``name`` (lower case), implemented by ``target`` = ``"module:Class"``, provided by the group ``extra``."""
+        module, _, attr = target.partition(":")
+        if not module or not attr:
+            raise ValueError(f"{self.family}: {target!r} is not 'module:Class'")
+        names = (name, *aliases)
+        if any(n != n.lower() or n == AUTO for n in names):
+            raise ValueError(
+                f"{self.family}: names are in lower case, and {AUTO!r} is the family's own order"
+            )
+        self._catalogue.register(_Registration(name, target, extra), aliases=aliases)
+
+    def names(self) -> tuple[str, ...]:
+        """The registered names, in registration order: nothing is imported."""
+        return self._catalogue.ids()
+
+    def valid(self) -> tuple[str, ...]:
+        """What the setting accepts: ``auto`` first when the family has it, then the names."""
+        return ((AUTO,) if self._auto is not None else ()) + self.names()
+
+    def canonical(self, name: str | None) -> str | None:
+        """The registered name for a name or an alias in any case, ``auto``, or None when it is unknown."""
+        if not name:
+            return None
+        key = name.strip().lower()
+        if key == AUTO and self._auto is not None:
+            return AUTO
+        found = self._catalogue.find(key)
+        return found.id if found else None
+
+    def get(self, name: str) -> type[C]:
+        """The class of ``name`` (or an alias), imported the first time; UnknownConnectorError when unknown."""
+        canonical = self.canonical(name)
+        registration = self._catalogue.find(canonical) if canonical and canonical != AUTO else None
+        if registration is None:
+            raise UnknownConnectorError(self.family, name, self.names())
+        if registration.id not in self._classes:
+            module, _, attr = registration.target.partition(":")
+            self._classes[registration.id] = getattr(importlib.import_module(module), attr)
+        return self._classes[registration.id]
+
+    def availability(self, name: str) -> Availability:
+        """Whether ``name`` can run here. Never raises: a missing package or a broken check is a reason."""
+        canonical = self.canonical(name)
+        registration = self._catalogue.find(canonical) if canonical and canonical != AUTO else None
+        if registration is None:
+            return Availability(False, "not offered by this version")
+        try:
+            cls = self.get(registration.id)
+        except ImportError as exc:
+            missing = getattr(exc, "name", None) or "a package"
+            return Availability(False, f"{missing} is not installed", registration.extra)
+        except Exception as exc:  # a broken module: reported, never raised
+            return Availability(
+                False, f"it cannot be loaded ({type(exc).__name__})", registration.extra
+            )
+        try:
+            found = cls.availability()
+        except Exception as exc:
+            return Availability(
+                False, f"its check failed ({type(exc).__name__})", registration.extra
+            )
+        if not found.ok and found.extra is None and registration.extra:
+            return Availability(False, found.reason, registration.extra)
+        return found
+
+    def setting_problem(self, value: str | None) -> str | None:
+        """The start-up message for a setting that names nothing: the variable and the valid names, never the value
+        (a mistyped value can be a pasted key or address, and the page shows it before sign-in)."""
+        if not value or not value.strip() or self.canonical(value):
+            return None
+        names = list(self.valid())
+        listed = ", ".join(names[:-1]) + f" or {names[-1]}" if len(names) > 1 else names[0]
+        return f"{self.setting} is not {_article(self.family)} {self.family}: use {listed}"
+
+    def select(
+        self,
+        *,
+        session: str | None = None,
+        preference: str | None = None,
+        setting: str | None = None,
+        auto: str | None = None,
+        auto_reasons: Iterable[str] = (),
+        check: Callable[[str], Availability] | None = None,
+    ) -> Selection:
+        """
+        The connector to use: the session's choice, then the saved preference, then the server's setting, then
+        ``auto`` (a recommendation, then the family's own order). A name that is unknown or cannot run here falls
+        through with a warning; ``auto`` at any level goes straight to the family's order. ``check`` replaces
+        :meth:`availability` (a family may add a rule of its own, such as the offline mode).
+        """
+        if self.setting_problem(setting):
+            raise ValueError(self.setting_problem(setting))  # start-up stops before this
+        check = check or self.availability
+        alternatives = tuple((name, check(name)) for name in self.names())
+        status = dict(alternatives)
+        warnings: list[str] = []
+        for source, raw in (("session", session), ("preference", preference), ("setting", setting)):
+            if not raw or not raw.strip():
+                continue
+            name = self.canonical(raw)
+            if name == AUTO:
+                break
+            if name is None:
+                warnings.append(
+                    f"{_WHOSE[source]} {self.family} {as_code(raw)} is not offered here"
+                )
+                continue
+            if status[name].ok:
+                return Selection(self.family, name, source, (), tuple(warnings), alternatives)  # type: ignore[arg-type]
+            warnings.append(
+                f"{_WHOSE[source]} {self.family} {as_code(name)} is not available here ({status[name].reason})"
+            )
+        order = ((auto,) if auto else ()) + (self._auto or ())
+        for name in order:
+            if name in status and status[name].ok:
+                reasons = (
+                    tuple(auto_reasons)
+                    if name == auto
+                    else (f"the first available of {', '.join(self._auto or ())}",)
+                )
+                return Selection(self.family, name, "auto", reasons, tuple(warnings), alternatives)
+        return Selection(self.family, None, "auto", (), tuple(warnings), alternatives)
+
+
+_WHOSE = {"session": "The chosen", "preference": "Your saved", "setting": "The server's"}
+
+
+def _article(word: str) -> str:
+    return "an" if word[:1].lower() in "aeiou" else "a"
+
+
+__all__ = [
+    "AUTO",
+    "Availability",
+    "Catalogue",
+    "Connector",
+    "ConnectorRegistry",
+    "Kind",
+    "Selection",
+    "UnknownConnectorError",
+    "UnknownIdError",
+    "as_code",
+]

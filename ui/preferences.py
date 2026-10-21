@@ -16,6 +16,7 @@ from typing import Any
 
 import streamlit as st
 
+from core.registry import as_code
 from manage.preferences import Preferences, load_preferences, update_preferences
 from utils.session_scope import get_current_scope
 
@@ -76,7 +77,7 @@ def save_renderer() -> None:
 
 def shown(name: str) -> str:
     """A saved name, as code in a notice: the file is the user's, and its text must not become a link or a format."""
-    return "`" + " ".join(str(name).replace("`", "").split()) + "`"
+    return as_code(name)
 
 
 def renderer_notice() -> str | None:
