@@ -274,6 +274,20 @@ def test_a_class_is_compared_as_text(cohort: pd.DataFrame) -> None:
     )
 
 
+def test_a_class_from_another_cut_off_is_not_asked_about_its_unit(cohort: pd.DataFrame) -> None:
+    classes = cohort.assign(
+        bmi_class=np.where(
+            cohort["bmi"].isna(), None, np.where(cohort["bmi"] >= 25, "overweight", "normal")
+        )
+    )
+    formula = "np.where(weight_kg / (height_cm / 100) ** 2 >= 25.5, 'overweight', 'normal')"
+    check = check_derived(DerivedVariable("bmi_class", formula), classes)
+    assert check.verdict == MOSTLY and check.unit_hint is None
+    assert (check.reason or "").endswith(
+        "rows disagree: entry errors, or another definition (a cut-off)?"
+    )
+
+
 def test_a_date_is_checked_and_never_filled() -> None:
     start = pd.Series(pd.date_range("2024-01-01", periods=120, freq="D"))
     frame = pd.DataFrame({"start": start, "days": np.arange(120.0) % 30 + 1})

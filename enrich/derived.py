@@ -350,7 +350,8 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
     if share >= AGREE_SHARE and kappa >= AGREE_KAPPA:
         verdict, reason = AGREES, None
     elif share >= MOSTLY_SHARE and kappa >= MOSTLY_KAPPA:
-        verdict, reason = MOSTLY, f"{n - agreeing:,} rows disagree: entry errors, or another unit?"
+        other = "another definition (a cut-off)?" if textual else "another unit?"
+        verdict, reason = MOSTLY, f"{n - agreeing:,} rows disagree: entry errors, or {other}"
     else:
         verdict, reason = DISAGREES, None
     # agreeing overall, but not for one level of a text or code variable: the formula is wrong for it
