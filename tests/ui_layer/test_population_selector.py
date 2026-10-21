@@ -132,3 +132,94 @@ def test_imputation_on_enrich_is_fitted_on_the_population_only(app: AppTest) -> 
     step = app.session_state["transformation_manager"].history[-1]
     assert step["function"] == "imputation" and step["population"]["n_included"] == 928
     assert step["params"]["rows"] == "population"
+
+
+def test_a_single_imputation_recomputes_the_declared_derived_variables(app: AppTest) -> None:
+    import numpy as np
+
+    from core.derived import DerivedVariable, with_definitions
+
+    app.checkbox(key=_family_key("clinical_anomalies")).check().run()
+    app.checkbox(key=_family_key("study_inclusion")).check().run()
+    bmi = DerivedVariable(
+        "bmi_kg_m2",
+        "weight_kg / (height_cm / 100) ** 2",
+        inverses={"height_cm": "100 * (weight_kg / bmi_kg_m2) ** 0.5"},
+    )
+    phenotype = DerivedVariable(
+        "hf_phenotype",
+        "np.where(lvef_pct <= 40, 'HFrEF', np.where(lvef_pct <= 49, 'HFmrEF', 'HFpEF'))",
+    )
+    app.session_state["config"] = with_definitions(app.session_state["config"], [bmi, phenotype])
+    app.switch_page(nav.page_path("enrich")).run()
+    _ok(app)
+    assert app.checkbox(key="global_recompute_derived").value  # on by default
+    next(s for s in app.selectbox if s.label == "Numerical Imputation Method").select(
+        "Median"
+    ).run()
+    next(b for b in app.button if b.label == "Apply Imputer").click().run()
+    _ok(app)
+    app.run()
+    app.button(key="draft_apply").click().run()
+    _ok(app)
+
+    session = app.session_state["_data_session"]
+    included = session.population(app.session_state["config"]).included
+    after = session.base.loc[included]
+    assert not after[["bmi_kg_m2", "height_cm"]].isna().any().any()
+    # every BMI follows its formula, the imputed ones too
+    expected = after["weight_kg"] / (after["height_cm"] / 100) ** 2
+    assert np.allclose(after["bmi_kg_m2"], expected, atol=0.05 + 1e-9)
+    history = app.session_state["transformation_manager"].history
+    functions = [s["function"] for s in history]
+    first = functions.index("imputation")
+    imputation = history[first]
+    # the phenotype, complete once filled exactly, informs the imputation as any recorded variable does
+    assert imputation["params"]["set_aside"] == ["bmi_kg_m2"]
+    assert imputation["params"]["derived"]["recompute"] is True
+    assert [b["definition"]["target"] for b in imputation["params"]["derived"]["definitions"]] == [
+        "bmi_kg_m2"
+    ]
+    assert imputation["description"].endswith(
+        "set aside, to be computed from the imputed values: bmi_kg_m2"
+    )
+    # exactly first (34 BMIs, 10 heights), then the imputation, then the 24 BMIs of imputed heights
+    fills = [
+        (s["params"]["target_variable"], s["params"]["filled_count"])
+        for s in history
+        if s["function"] == "targeted_imputation"
+    ]
+    assert fills == [
+        ("bmi_kg_m2", 34),
+        ("height_cm", 10),
+        ("hf_phenotype", 30),
+        ("bmi_kg_m2", 24),
+    ]
+    last = [s for s in history if s["function"] == "targeted_imputation"][-1]
+    assert last["description"].endswith("; all from imputed values, so single-imputed")
+    assert (
+        functions[first - 1] == "targeted_imputation"
+        and functions[first + 1] == "targeted_imputation"
+    )
+
+    def count(cells, column: str) -> int:
+        return int(
+            np.isin(cells.get(column, np.array([], dtype=np.int64)), included.to_numpy()).sum()
+        )
+
+    assert count(session.exact_imputed, "bmi_kg_m2") == 34
+    assert count(session.single_imputed, "bmi_kg_m2") == 24
+    assert count(session.exact_imputed, "height_cm") == 10
+    assert count(session.single_imputed, "height_cm") == 24
+
+    from core.state import ParseOptions
+    from ingest.loaders import read_table
+    from manage.reproduction_manager import run_trace
+    from ui.state import TUTORIAL_COHORT_PATH
+
+    source = read_table(
+        TUTORIAL_COHORT_PATH.read_bytes(), TUTORIAL_COHORT_PATH.name, ParseOptions(dayfirst=True)
+    ).df
+    replay = run_trace(app.session_state["transformation_manager"].get_trace(), source_df=source)
+    assert replay.error is None and replay.divergence is None, replay.warnings
+    assert replay.df["bmi_kg_m2"].equals(session.base["bmi_kg_m2"])

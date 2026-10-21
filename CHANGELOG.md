@@ -580,6 +580,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   no longer taken for the variable's own rounding. A definition's source note is one line of 300 characters at most.
 - **A draft redone on newer data** (Redo my changes) evaluates each change's population on the dataset, as the page
   did, not on the table the earlier changes of the draft had filled.
+- **Global Imputation keeps the derived variables' formulas.** With **Compute the declared derived variables'
+  missing values from the imputed values** (ticked by default when a definition can be used), Apply Imputer first
+  fills what the formulas give exactly, then imputes the rest with each derived variable still missing kept out,
+  neither imputed nor used to impute any other variable, then computes its missing values by its formula from the
+  imputed values; a value computed from an imputed one is single-imputed, and the step's description says so. The
+  three parts reach the draft together or not at all. Imputed as a variable of its own, a BMI no longer followed its
+  formula, and with chained equations it gave the height back its own earlier guess. The page names what stays
+  missing and the rows where a recorded derived variable no longer matches its imputed variables. The option is
+  unavailable with one-hot encoding, scaling or dropped columns. The imputation step records the variables kept out
+  (the replay keeps them out too) and the definitions used or declined; declining them leaves the imputation one that
+  can be redone or refitted. On the tutorial cohort, the 24 BMIs of the patients without a height are computed from
+  their imputed heights.
 - **The tutorial cohort has three variables computed from others** (41 columns): `bmi_kg_m2` from the weight and the
   height, `egfr_ml_min_1_73m2` (CKD-EPI 2021, not reported under 18) and `hf_phenotype` (ESC 2021) from the ejection
   fraction. They hold the values of the hospital record and the laboratory, so each disagrees with its formula

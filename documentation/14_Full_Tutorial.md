@@ -206,8 +206,10 @@ Then:
 - `ldl_mmol_l` is missing completely at random: single imputation (KNN or MICE) is acceptable for exploration.
   The imputation is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients
   keep their missing values. Every result computed on the filled values then shows a warning, because the
-  analyses treat them as observed. If you plan inferential analyses, skip this and use the multiple imputation
-  below for every incomplete variable.
+  analyses treat them as observed. With the derived variables declared, keep **Compute the declared derived
+  variables' missing values from the imputed values** ticked: the BMI, the one still missing, is kept out of the
+  imputation, and its 24 missing values are computed from the imputed heights, single-imputed as those heights are. If you plan inferential analyses, skip
+  this and use the multiple imputation below for every incomplete variable.
 - **Do not impute `sbp_6m`.** Its values are missing because the patient died or left. Analyse the patients who
   have the measurement and say so.
 - For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), use **multiple imputation** on

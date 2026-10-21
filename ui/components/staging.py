@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.derived import decided_on_data
 from core.session import EMPTY, OK, POPULATION_CHANGED
 from ui.components.text import plain
 
@@ -104,7 +105,9 @@ def render_draft_banner() -> None:
         )
         st.markdown(listing)
         # the fills of the declared derived variables are filled again, not redone (AppState.rebase_staging)
-        redoable = all(step.replayable and not step.params.get("derived") for step in steps)
+        redoable = all(
+            step.replayable and not decided_on_data(step.params.get("derived")) for step in steps
+        )
         with st.container(horizontal=True):
             if redoable:
                 st.button(

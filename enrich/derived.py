@@ -655,6 +655,53 @@ def plan_exact_fills(
     return FillPlan(tuple(fills), unused, {name: n for name, n in left.items() if n})
 
 
+def contradicted(
+    definition: DerivedVariable,
+    check: DerivedCheck,
+    frame: pd.DataFrame,
+    imputed: Mapping[str, Any],
+) -> int:
+    """
+    The rows where the variable is recorded but a variable of its formula was imputed (``imputed``: row ids per
+    column), and the formula of the imputed values no longer gives the recorded value within the check's tolerance: a
+    recorded BMI beside an imputed height. An inverse of the definition would have recovered that variable exactly.
+    """
+    target, inputs = definition.target, list(check.inputs)
+    if target not in frame.columns or not inputs or check.verdict == CANNOT:
+        return 0
+    recorded = frame[target].notna().to_numpy() & ~_imputed_rows(frame.index, imputed, [target])
+    rows = frame.index[recorded & _imputed_rows(frame.index, imputed, inputs)]
+    if not len(rows):
+        return 0
+    values = _computed(definition.formula, frame.loc[rows])
+    if values is None:
+        return 0
+    want = frame.loc[rows, target]
+    if check.tolerance is None:  # a text: the same value
+        return int((values.astype(str) != want.astype(str)).sum())
+    bound = check.tolerance_high if check.tolerance_high is not None else check.tolerance
+    gap = (pd.to_numeric(want, errors="coerce") - pd.to_numeric(values, errors="coerce")).abs()
+    return int((gap > bound).sum())
+
+
+def recomputed(
+    definitions: Sequence[DerivedVariable], check: Callable[[DerivedVariable], DerivedCheck]
+) -> list[tuple[DerivedVariable, DerivedCheck]]:
+    """
+    The definitions whose variable an imputation keeps out and computes afterwards from the imputed values: those
+    :func:`plan_exact_fills` fills by their formula (usable, not a date, no text of too many values), in the order it
+    fills them; none when definitions compute each other. One rule for setting aside and recomputing, so that no
+    variable is kept out that nothing computes again.
+    """
+    definitions = list(definitions)
+    order = fill_order(definitions, {d.target: read_formula(d.formula).names for d in definitions})
+    if order is None:
+        return []
+    by_target = {d.target: d for d in definitions}
+    pairs = [(by_target[target], check(by_target[target])) for target in order]
+    return [(definition, found) for definition, found in pairs if not _unused(found)]
+
+
 def fill_steps(
     plan: FillPlan, data: pd.DataFrame, rows: pd.Index | None, run: str
 ) -> list[tuple[pd.DataFrame, dict[str, Any], str]]:
@@ -695,6 +742,7 @@ def fill_steps(
             n_rows=None if rows is None else len(before.index.intersection(rows)),
             left=left_missing(before, fill.target, fill.formula, rows),
             derived_of=fill.definition.target,
+            single=fill.single if fill.exact else 0,
         )
         steps.append((after, params, description))
         before = after
@@ -716,8 +764,10 @@ __all__ = [
     "FillPlan",
     "check_derived",
     "check_inverses",
+    "contradicted",
     "fill_steps",
     "inverse_definition",
     "plan_exact_fills",
+    "recomputed",
     "resolution",
 ]

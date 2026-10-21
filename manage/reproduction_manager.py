@@ -21,6 +21,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 import enrich.external_data as eed
@@ -251,11 +252,15 @@ def _imputation(df, step, index, overrides, warnings, result=None):
         remainder_columns=params.get("remainder_columns", "auto"),
         remainder_strategy=params.get("remainder_strategy", "passthrough"),
         remainder_threshold=params.get("remainder_threshold", 0.3),
+        # derived variables kept out, computed afterwards by the targeted imputations that follow
+        set_aside=params.get("set_aside") or (),
     )
     if result is not None:
         methods = (outcome.params["numerical_imputation_method"], outcome.params["categorical_imputation_method"])
-        description = describe_imputation(*methods, None if rows is None else len(rows))
-        result.records[index] = StepRecord(outcome.params, description)
+        aside = outcome.params.get("set_aside") or ()
+        description = describe_imputation(*methods, None if rows is None else len(rows), aside)
+        kept = {"derived": params["derived"]} if "derived" in params else {}
+        result.records[index] = StepRecord({**outcome.params, **kept}, description)
     return outcome.frame, None
 
 
@@ -287,8 +292,18 @@ def _targeted_imputation(df, step, index, overrides, warnings, result=None):
         derived = params.get("derived")
         definition = derived.get("definition") if isinstance(derived, Mapping) else None
         of = definition.get("target") if isinstance(definition, Mapping) else None
+        single = 0
+        if of is not None and exact:  # the values computed from imputed ones, as the page's description counts them
+            new = new_df.index[df[target].isna() & new_df[target].notna()].to_numpy()
+            estimates = [
+                np.asarray(result.single_imputed[str(c)], dtype=np.int64)
+                for c in params.get("inputs") or ()
+                if str(c) in result.single_imputed
+            ]
+            if estimates:
+                single = int(np.isin(new, np.concatenate(estimates)).sum())
         description = describe_formula_fill(
-            target, filled, exact=exact, n_rows=n_rows, left=left, derived_of=of
+            target, filled, exact=exact, n_rows=n_rows, left=left, derived_of=of, single=single
         )
         result.records[index] = StepRecord({**params, "filled_count": filled}, description)
     return new_df, None

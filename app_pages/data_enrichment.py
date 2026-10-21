@@ -18,6 +18,7 @@ from app_pages.enrichment_derived import render_derived_variables
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.population import PopulationResult, catalogue
 from core.registry import as_code
+from enrich.derived import recomputed
 from enrich.formulas import (
     CARET_IS_NOT_A_POWER,
     NOT_ROW_WISE,
@@ -35,10 +36,8 @@ from enrich.formulas import (
 )
 from enrich.imputation_service import (
     describe_formula_fill,
-    describe_imputation,
     fill_with_formula,
     formula_inputs,
-    impute_rows,
     left_missing,
 )
 from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformation
@@ -2394,40 +2393,85 @@ def app():
                     help="Filter out non-numeric columns having a ratio distinct modalities / non empty rows higher than the fixed threshold"
                 )
 
+            # The declared derived variables (Derived variables tab): kept out of the imputation and computed
+            # afterwards from the imputed values, so that each keeps its formula (enrich.derived.recomputed)
+            usable = [
+                d
+                for d, _ in recomputed(state.derived_variables, state.derived_check)
+                if d.target in main_data.columns
+            ]
+            recompute = False
+            if usable:
+                transformed = bool(cat_encoder or num_scaler or remainder_strategy == "drop")
+                recompute = st.checkbox(
+                    "Compute the declared derived variables' missing values from the imputed values",
+                    value=True,
+                    key="global_recompute_derived",
+                    disabled=transformed,
+                    help="A derived variable imputed as a variable of its own no longer follows its formula (an "
+                    "imputed BMI is not the weight over the height squared); with chained equations or missForest, "
+                    "an imputed BMI used to impute the height also gives it back its own earlier guess. Ticked, what "
+                    "the formulas give exactly is filled first; each derived variable still missing is then kept "
+                    "out of the imputation, neither imputed nor used to impute any other variable, and its missing "
+                    "values are computed by its formula from the imputed values. Its recorded values are kept; they "
+                    "help recover a variable of the formula only through an inverse.",
+                ) and not transformed
+                names = ", ".join(as_code(d.target) for d in usable)
+                st.caption(
+                    f"{names}: their missing values are computed from the imputed values after the imputation; a "
+                    "value computed from an imputed one is single-imputed."
+                    if not transformed
+                    else f"{names}: imputed as the others. Computing them is unavailable with one-hot encoding, "
+                    "scaling or dropped columns: a formula of transformed values would give wrong values."
+                )
+
             # Apply imputation
             if st.button("Apply Imputer", type="primary", disabled=blocked):
                 try:
                     # Define a placeholder for the progress bar
                     progress_placeholder = st.empty()
-                    # Fitted on the analysis population (every row when no criterion is ticked)
-                    outcome = impute_rows(
-                        main_data,
-                        rows if scoped else None,
-                        numerical=numerical_imputation_method,
-                        categorical=categorical_imputation_method,
-                        cat_encoder=cat_encoder,
-                        num_scaler=num_scaler,
-                        remainder_columns=remainder_columns,
-                        remainder_strategy=remainder_strategy,
-                        remainder_threshold=remainder_threshold,
+                    # Fitted on the analysis population (every row when no criterion is ticked); with the derived
+                    # variables recomputed, three parts that reach the draft together or not at all
+                    result = state.impute_single(
+                        {
+                            "numerical": numerical_imputation_method,
+                            "categorical": categorical_imputation_method,
+                            "cat_encoder": cat_encoder,
+                            "num_scaler": num_scaler,
+                            "remainder_columns": remainder_columns,
+                            "remainder_strategy": remainder_strategy,
+                            "remainder_threshold": remainder_threshold,
+                        },
+                        recompute=recompute,
                         progress_placeholder=progress_placeholder,
                     )
-                    df_imputed = outcome.frame
-                    imputed_mask = outcome.mask.reindex(index=df_imputed.index, columns=df_imputed.columns,
-                                                        fill_value=False)
-                    if df_imputed is not None:
+                    df_imputed = result.outcome.frame
+                    imputed_mask = result.outcome.mask.reindex(index=df_imputed.index, columns=df_imputed.columns,
+                                                               fill_value=False)
+                    if result.staged:
                         st.success("Imputation added to the Enrich draft: apply the draft (top of the page) to use "
                                    "it in the analyses.")
-                        
-                        # Save snapshot
-                        snapshot_path = save_snapshot(df_imputed, "imputation")
-                        state.stage(df_imputed, "imputation", outcome.params,
-                                    describe_imputation(numerical_imputation_method, categorical_imputation_method,
-                                                        len(rows) if scoped else None),
-                                    # also with no criterion ticked: the draft then knows when one is ticked later
-                                    population=population,
-                                    output_dataset_path=snapshot_path)
-
+                    else:
+                        st.info("Nothing to impute: the draft is unchanged.")
+                    if recompute:
+                        st.success(
+                            f"Derived variables: {result.exact_first:,} values computed by their formulas before the "
+                            f"imputation, {result.derived:,} from the imputed values after it; all in the draft."
+                        )
+                    if result.left:
+                        st.warning(
+                            "Still missing, as a variable of their formula has no value there even after the "
+                            "imputation (a date or an identifier is not imputed): "
+                            + ", ".join(f"{as_code(name)} {n:,}" for name, n in result.left.items())
+                            + "."
+                        )
+                    if result.contradicted:
+                        st.warning(
+                            "Rows where a recorded derived variable no longer matches its imputed variables: "
+                            + ", ".join(f"{as_code(name)} {n:,}" for name, n in result.contradicted.items())
+                            + ". Declare an inverse of its definition to recover such a variable exactly from it."
+                        )
+                    if result.staged:
                         # Highlight imputed values
                         def highlight_imputed(data, mask):
                             """Apply highlighting to DataFrame based on imputed mask."""
@@ -2438,9 +2482,12 @@ def app():
                         styled_df = df_imputed.style.apply(highlight_imputed, mask=imputed_mask, axis=None)
                         st.write("Preview of Imputed Data:")
                         st.dataframe(styled_df, width="stretch")
-                        #st.write(st.session_state['enriched_df'].info(verbose=True))
                 except Exception as e:
-                    error_card("Imputation failed. Check the columns listed under Advanced settings.", e)
+                    error_card(
+                        "Imputation failed, and nothing of it was added to the draft. Check the columns listed under "
+                        "Advanced settings.",
+                        e,
+                    )
         
         with st.expander("Results", expanded=False):
             if 'enriched_df' in st.session_state and st.session_state['enriched_df'] is not None:

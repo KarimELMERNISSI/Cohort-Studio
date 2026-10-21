@@ -433,3 +433,99 @@ def test_an_infinity_is_filled_only_by_a_step_recorded_before_the_rule() -> None
     # a trace recorded earlier replays as it was computed
     old, n_old = fill_with_formula(frame, "bmi", "w / h ** 2", complete_inputs=True)
     assert n_old == 2 and np.isinf(old.loc[0, "bmi"])
+
+
+# --- the single imputation that sets them aside -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["Mean", "KNN"])
+def test_a_variable_set_aside_is_neither_imputed_nor_used_to_impute(method: str) -> None:
+    from enrich.imputation_service import impute_rows
+
+    frame = _cohort().assign(age=lambda f: np.round(np.linspace(30, 89, len(f)), 0))
+    frame.loc[40:45, "age"] = np.nan
+    aside = impute_rows(frame, None, numerical=method, set_aside=["bmi"])
+    without = impute_rows(frame.drop(columns=["bmi"]), None, numerical=method)
+    others = aside.frame.drop(columns=["bmi"]).reindex(columns=without.frame.columns)
+    pd.testing.assert_frame_equal(others, without.frame)  # the BMI predicted nothing
+    assert aside.frame["bmi"].equals(frame["bmi"]) and aside.params["set_aside"] == ["bmi"]
+    assert "bmi" not in aside.params["imputed_values"]
+    part = impute_rows(frame, frame.index[100:], numerical=method, set_aside=["bmi"])
+    assert part.frame["bmi"].equals(frame["bmi"]) and list(part.frame.columns) == list(
+        frame.columns
+    )
+
+
+def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -> None:
+    from core.session import DataSession
+    from core.state import ParseOptions
+    from enrich.imputation_service import describe_imputation, impute_rows
+    from ingest.loaders import read_table
+    from manage.reproduction_manager import run_trace
+    from manage.transformation_manager import TransformationManager
+
+    source = tmp_path / "anthropometry.csv"
+    _cohort().to_csv(source, index=False)
+    tm = TransformationManager(trace_dir=str(tmp_path / "traces"))
+    tm.initialize_session(source.name)
+    tm.source_dataset = str(source)
+    session = DataSession(trace=tm)
+    options = ParseOptions()
+    session.install(
+        read_table(source.read_bytes(), source.name, options).df,
+        params={"source_path": str(source), "parse_options": options.to_dict()},
+        description="Loaded",
+    )
+
+    def fill(run: str) -> None:
+        frame = session.working_frame()
+        plan = plan_exact_fills(
+            [_bmi()], frame, single=dict(session.draft.single_imputed) if session.draft else None
+        )
+        for filled, params, description in fill_steps(plan, frame, None, run):
+            session.stage(filled, "targeted_imputation", params, description)
+
+    fill("exact")  # 10 BMIs and 8 heights from the recorded values
+    outcome = impute_rows(session.working_frame(), None, numerical="Median", set_aside=["bmi"])
+    session.stage(
+        outcome.frame,
+        "imputation",
+        outcome.params,
+        describe_imputation("Median", "Most_Frequent", None, ["bmi"]),
+    )
+    fill("after")  # the 4 BMIs of the heights the median gave
+    session.commit_staging()
+    base = session.base
+    assert not base["bmi"].isna().any()
+    assert {c: len(ids) for c, ids in session.single_imputed.items()} == {"height_cm": 4, "bmi": 4}
+    assert {c: len(ids) for c, ids in session.exact_imputed.items()} == {"bmi": 10, "height_cm": 8}
+
+    replay = run_trace(tm.get_trace())
+    assert replay.reproducible and not replay.warnings, replay.warnings
+    pd.testing.assert_frame_equal(replay.df, base)
+    imputation = next(r for r in replay.records.values() if "set_aside" in r.params)
+    assert imputation.description.endswith("set aside, to be computed from the imputed values: bmi")
+
+
+def test_only_decisions_on_the_data_keep_a_draft_from_being_redone() -> None:
+    from core.derived import decided_on_data
+
+    fill = record(_bmi(), ["bmi"], {}, {})
+    assert decided_on_data(fill) and decided_on_data({"recompute": True, "definitions": []})
+    # an imputation that only records the choice not to compute them decided nothing on the data
+    assert not decided_on_data({"recompute": False, "definitions": [fill]})
+    assert not decided_on_data(None) and not decided_on_data({})
+
+
+def test_a_recorded_value_its_imputed_variables_no_longer_match_is_counted() -> None:
+    from enrich.derived import contradicted
+
+    frame = _cohort()
+    check = check_derived(_bmi(), frame)
+    rows = frame.index[30:37]  # recorded BMIs whose heights an imputation then gave
+    imputed = frame.copy()
+    imputed.loc[rows, "height_cm"] = 150.0
+    assert contradicted(_bmi(), check, imputed, {"height_cm": rows.to_numpy()}) == 7
+    assert (
+        contradicted(_bmi(), check, frame, {"height_cm": rows.to_numpy()}) == 0
+    )  # the recorded heights match

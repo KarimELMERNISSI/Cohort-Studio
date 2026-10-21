@@ -177,6 +177,24 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 | **Categorical Encoder** | Optionally one-hot encode categorical columns during imputation. |
 | **Numerical Scaler** | Optionally scale numerical columns during imputation. |
 | **Remainder Strategy** | Handle columns not part of the imputation (passthrough, drop). |
+| **Compute the declared derived variables' missing values from the imputed values** | Shown when the Derived variables tab declares a definition the data agree with (or one you accepted); ticked by default. See below. |
+
+**Derived variables.** A derived variable imputed as a variable of its own no longer follows its formula (an imputed
+BMI is not the weight over the height squared); with chained equations or missForest, an imputed BMI used to impute
+the height also gives it back its own earlier guess. With the option ticked, **Apply Imputer** does three things,
+which reach the draft together or not at all:
+1. it first fills what the formulas give exactly, as **Fill exactly** does (a height from the BMI and the weight);
+2. it imputes the rest with each derived variable still missing kept out: neither imputed nor used to impute any other
+   variable (it comes back as it was). A derived variable left complete by the first part informs the others as any
+   recorded variable does;
+3. it computes the missing values of each derived variable kept out, by its formula, from the imputed values; its
+   recorded values are kept. A value computed from an imputed one is single-imputed, as the imputed one is.
+
+A recorded value helps recover a variable of its formula only through an inverse. The page names what is still
+missing (a variable of the formula that is not imputed, such as a date), and the rows where a recorded derived
+variable no longer matches its imputed variables. The option is unavailable with one-hot encoding, scaling or dropped
+columns: a formula of transformed values would give wrong values, and the derived variables are then imputed as the
+others. The trace records the choice, the variables kept out and the definitions used.
 
 After imputation, an **imputation mask** highlights which values were filled, and a **before/after summary** is displayed.
 

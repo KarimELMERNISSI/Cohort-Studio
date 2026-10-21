@@ -8,7 +8,7 @@ imputation of one column. The replay engine calls the same functions.
 """
 
 import logging
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -178,11 +178,14 @@ def impute_rows(
     remainder_strategy: str = "passthrough",
     remainder_threshold: float = 0.3,
     progress_placeholder: Any = None,
+    set_aside: Sequence[str] = (),
 ) -> ImputationOutcome:
     """Impute the missing values of ``rows`` (row ids; every row when None) with an imputer fitted on them.
 
     Rows outside ``rows`` are returned untouched. One-hot encoding, scaling and dropping remainder columns
-    change the columns of the table; they are refused when only part of the rows is imputed.
+    change the columns of the table; they are refused when only part of the rows is imputed. The ``set_aside``
+    columns (declared derived variables, computed afterwards from the imputed values) are neither imputed nor used to
+    impute the others: the imputer never sees them, and they come back as they were.
     """
     index = frame.index if rows is None else pd.Index(rows)
     partial = len(index) != len(frame)
@@ -192,7 +195,8 @@ def impute_rows(
             "One-hot encoding, scaling and dropping remainder columns change the columns of the table: "
             "they can only be used when every row is imputed."
         )
-    subset = frame.loc[index]
+    aside = [str(c) for c in dict.fromkeys(set_aside) if c in frame.columns]
+    subset = frame.loc[index].drop(columns=aside)
     imputed, mask = apply_imputer(
         data=subset,
         numerical_imputation_method=numerical,
@@ -205,7 +209,11 @@ def impute_rows(
         progress_placeholder=progress_placeholder,
     )
     if not partial:
-        out = imputed
+        out = imputed.assign(**{name: frame[name] for name in aside})
+        # with columns set aside, the table keeps its order when the imputer kept its columns (no one-hot encoding):
+        # an imputation with nothing to impute then changes nothing
+        if aside and set(out.columns) == set(frame.columns):
+            out = out[list(frame.columns)]
     else:
         out = frame.copy()
         for col in imputed.columns:
@@ -229,6 +237,8 @@ def impute_rows(
         "n_rows_fitted": int(len(index)),
         "imputed_values": {c: int(mask[c].sum()) for c in columns},
     }
+    if aside:
+        params["set_aside"] = aside
     return ImputationOutcome(frame=out, params=params, columns=columns, mask=mask)
 
 
@@ -306,10 +316,16 @@ def left_missing(
     return int(left.sum()), tuple(str(c) for c in inputs if bool(lacking[c].any()))
 
 
-def describe_imputation(numerical: str, categorical: str, n_rows: int | None = None) -> str:
-    """The trace's description of a single imputation; ``n_rows``: the analysis population it was fitted on."""
+def describe_imputation(
+    numerical: str, categorical: str, n_rows: int | None = None, set_aside: Sequence[str] = ()
+) -> str:
+    """The trace's description of a single imputation; ``n_rows``: the analysis population it was fitted on;
+    ``set_aside``: the derived variables kept out of it, to be computed from the imputed values."""
     text = f"Applied data imputation ({numerical} / {categorical}"
-    return f"{text}, fitted on the analysis population of {n_rows:,} rows)" if n_rows is not None else f"{text})"
+    text = f"{text}, fitted on the analysis population of {n_rows:,} rows)" if n_rows is not None else f"{text})"
+    if set_aside:
+        text += f"; set aside, to be computed from the imputed values: {', '.join(set_aside)}"
+    return text
 
 
 def describe_formula_fill(
@@ -320,10 +336,12 @@ def describe_formula_fill(
     n_rows: int | None = None,
     left: tuple[int, tuple[str, ...]] = (0, ()),
     derived_of: str | None = None,
+    single: int = 0,
 ) -> str:
     """The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on;
     ``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`);
-    ``derived_of``: the declared derived variable whose definition computed it (its own, or an inverse)."""
+    ``derived_of``: the declared derived variable whose definition computed it (its own, or an inverse); ``single``:
+    the values an exact formula computed from imputed ones, single-imputed as they are."""
     values = "value" if filled == 1 else "values"
     text = f"Imputed {filled} {values} in {target} using {'an exact formula' if exact else 'a formula'}"
     if derived_of is not None:
@@ -334,6 +352,12 @@ def describe_formula_fill(
         )
     if n_rows is not None:
         text += f", computed on the analysis population of {n_rows:,} rows"
+    if single:
+        text += (
+            "; all from imputed values, so single-imputed"
+            if single == filled
+            else f"; {single} of them from imputed values, so single-imputed"
+        )
     n_left, lacking = left
     if n_left:
         text += f"; {n_left} left missing, where {' or '.join(lacking)} has no value"

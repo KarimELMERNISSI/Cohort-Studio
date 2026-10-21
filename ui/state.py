@@ -24,15 +24,15 @@ import contextlib
 import hashlib
 import logging
 import os
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 import streamlit as st
 
-from core.derived import DerivedVariable, with_definitions
+from core.derived import DerivedVariable, decided_on_data, record, with_definitions
 from core.derived import from_config as derived_from_config
 from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
 from core.lineage import canonical_json
@@ -179,6 +179,21 @@ class PopulationScope:
     blocked: bool  # a ticked criterion cannot be evaluated: no imputation until it is corrected
     scoped: bool  # criteria are ticked: the rows are those of the analysis population
     rows: pd.Index
+
+
+@dataclass(frozen=True)
+class SingleImputation:
+    """What :meth:`AppState.impute_single` staged: the imputation, and the derived variables' values computed exactly
+    before it and from its imputed values after it."""
+
+    outcome: Any  # enrich.imputation_service.ImputationOutcome
+    staged: bool
+    exact_first: int = 0
+    derived: int = 0
+    # the derived variables kept out still missing (a variable of their formula has no value there), by variable
+    left: Mapping[str, int] = field(default_factory=dict)
+    # rows where a recorded derived variable no longer matches its imputed variables (no inverse recovered them)
+    contradicted: Mapping[str, int] = field(default_factory=dict)
 
 
 def strict_state() -> bool:
@@ -538,7 +553,7 @@ class AppState:
                 False,
                 f"'{blocked[0]}' cannot be redone automatically: discard the draft and redo it.",
             )
-        if any(p.params.get("derived") for p in draft.steps):
+        if any(decided_on_data(p.params.get("derived")) for p in draft.steps):
             return (
                 False,
                 "The draft holds values filled from the declared derived variables, decided on the data it was "
@@ -786,9 +801,111 @@ class AppState:
             raise
         return filled
 
+    @contextlib.contextmanager
+    def draft_savepoint(self) -> Iterator[None]:
+        """Changes staged inside reach the Enrich draft together or not at all: on an error the draft is put back as it
+        was, and the snapshots of the changes taken back are deleted."""
+        mark = self.session.draft_mark()
+        try:
+            yield
+        except Exception:
+            dropped = self.session.rollback_draft(mark)
+            self._delete_snapshots([step.output_dataset_path for step in dropped])
+            self._install_views()
+            raise
+
+    def impute_single(
+        self, settings: Mapping[str, Any], *, recompute: bool, progress_placeholder: Any = None
+    ) -> SingleImputation:
+        """
+        The single imputation of the Enrich page, staged in the draft, fitted on and filling the analysis population
+        (every row when no criterion is ticked); ``settings`` are enrich.imputation_service.impute_rows's. With
+        ``recompute`` and declared derived variables (enrich.derived.recomputed): what their formulas give exactly
+        first, then the imputation with each derived variable still missing kept out, neither imputed nor used to impute
+        the others, then each computed by its formula from the imputed values. A complete one informs the others as any
+        recorded variable does. The parts reach the draft together or not at all.
+        """
+        from enrich.derived import contradicted, recomputed
+        from enrich.imputation_service import describe_imputation, impute_rows
+
+        frame = self.session.working_frame()
+        assert frame is not None
+        scope = self.population_scope(frame)
+        if scope.blocked:
+            raise PopulationError("a ticked criterion cannot be evaluated")
+        pairs = [
+            (d, c)
+            for d, c in recomputed(self.derived_variables, self.derived_check)
+            if d.target in frame.columns
+        ]
+        rows = scope.rows if scope.scoped else None
+        with self.draft_savepoint():
+            exact_first = self.fill_exactly() if recompute and pairs else 0
+            # kept out: what is still missing after the exact fills, which only the imputed values can give
+            missing = self.exact_fill_plan().left if recompute and pairs else {}
+            kept_out = [(d, c) for d, c in pairs if missing.get(d.target)]
+            aside = [d.target for d, _ in kept_out]
+            working = self.session.working_frame()
+            assert working is not None
+            outcome = impute_rows(
+                working,
+                rows,
+                **settings,
+                progress_placeholder=progress_placeholder,
+                set_aside=aside,
+            )
+            params = dict(outcome.params)
+            declined = pairs if not recompute else []
+            if (
+                kept_out or declined
+            ):  # the choice, and the definitions kept out or declined (a record only)
+                params["derived"] = {
+                    "recompute": bool(kept_out),
+                    "definitions": [
+                        record(d, (), check.summary()) for d, check in (kept_out or declined)
+                    ],
+                }
+            snapshot = save_snapshot_to(
+                outcome.frame, "imputation", snapshot_folders(get_current_scope())[2]
+            )
+            staged = self.stage(
+                outcome.frame,
+                "imputation",
+                params,
+                describe_imputation(
+                    str(settings.get("numerical", "Median")),
+                    str(settings.get("categorical", "Most_Frequent")),
+                    None if rows is None else len(rows),
+                    outcome.params.get("set_aside") or (),
+                ),
+                # also with no criterion ticked: the draft then knows when one is ticked later
+                population=scope.population,
+                output_dataset_path=snapshot,
+            )
+            derived = self.fill_exactly() if kept_out else 0
+        # what the formulas could not give, and recorded values their imputed variables no longer match
+        left = self.exact_fill_plan().left if kept_out else {}
+        final = self.session.working_frame()
+        source = self.session.draft if self.session.draft is not None else self.session
+        cells = dict(source.single_imputed)
+        mismatched = (
+            {d.target: contradicted(d, c, final, cells) for d, c in pairs if final is not None}
+            if recompute
+            else {}
+        )
+        return SingleImputation(
+            outcome,
+            staged,
+            exact_first,
+            derived,
+            {name: n for name, n in left.items() if name in aside},
+            {name: n for name, n in mismatched.items() if n},
+        )
+
     def derived_fills_edited(self) -> list[str]:
-        """The variables the Enrich draft filled with a definition that was edited or removed since: the draft keeps
-        the values of the definition it used (its record), which the declared list no longer says."""
+        """The variables the Enrich draft filled, or kept out of an imputation, with a definition that was edited or
+        removed since: the draft keeps the values of the definition it used (its record), which the declared list no
+        longer says."""
         from core.derived import from_record
 
         draft = self.session.draft
@@ -797,16 +914,25 @@ class AppState:
         declared = {d.target: d for d in self.derived_variables}
         edited: list[str] = []
         for step in draft.steps:
-            used, uses, _ = from_record(step.params.get("derived") or {})
-            if used is None:
+            derived = step.params.get("derived")
+            if not decided_on_data(derived):
                 continue
-            now = declared.get(used.target)
-            same = now is not None and now.semantic_hash == used.semantic_hash
-            for name in uses:
-                if name != used.target:
-                    same = same and name in now.inverses and now.inverse_hash(name) == uses[name]
-            if not same and used.target not in edited:
-                edited.append(used.target)
+            blocks = (
+                [derived] if "definition" in derived else list(derived.get("definitions") or [])
+            )
+            for block in blocks:
+                used, uses, _ = from_record(block)
+                if used is None:
+                    continue
+                now = declared.get(used.target)
+                same = now is not None and now.semantic_hash == used.semantic_hash
+                for name in uses:
+                    if name != used.target:
+                        same = (
+                            same and name in now.inverses and now.inverse_hash(name) == uses[name]
+                        )
+                if not same and used.target not in edited:
+                    edited.append(used.target)
         return edited
 
     # ------------------------------------------------------------------ the analysis population

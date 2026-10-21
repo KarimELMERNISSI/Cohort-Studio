@@ -652,3 +652,45 @@ def test_a_draft_filled_exactly_is_filled_again_not_redone(data_root: Path) -> N
     assert not at.exception, [str(e.value) for e in at.exception]
     assert at.session_state["probe"]["status"] == "base_changed"
     assert _labels(at) == ["Discard the draft and restart from the current data"]
+
+
+def _declined_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.population import criterion_id
+    from core.state import DatasetRef
+    from enrich.imputation_service import impute_rows
+    from ui.components.staging import render_draft_banner
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        adult = {"expression": "df['age'] >= 18"}
+        st.session_state["config"] = {
+            "mask_families": {"study_inclusion": {"operator": "all", "Adult": adult}}
+        }
+        state.set_dataset(
+            pd.DataFrame({"age": [10, 30, 50, 70], "bmi": [None, 20.0, None, 30.0]}),
+            DatasetRef(name="d", origin="upload", file_hash="h"),
+        )
+        state.set_ticked([criterion_id("study_inclusion", "Adult")])
+        outcome = impute_rows(state.working_frame(), state.population.included, numerical="Mean")
+        # derived variables declared, their computation declined: a plain imputation
+        params = {**outcome.params, "derived": {"recompute": False, "definitions": []}}
+        state.stage(
+            outcome.frame, "imputation", params, "Mean imputation", population=state.population
+        )
+        state.set_ticked([])  # the population changes after the imputation was fitted
+    render_draft_banner()
+    st.session_state["probe"] = {"status": state.staging_status().state}
+
+
+def test_an_imputation_declining_the_derived_variables_can_be_refitted(data_root: Path) -> None:
+    at = AppTest.from_function(_declined_script, default_timeout=120).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.session_state["probe"]["status"] == "population_changed"
+    assert "Refit on the current population" in _labels(at)
+    at.button(key="draft_rebase").click().run()
+    assert at.session_state["probe"]["status"] == "ok"

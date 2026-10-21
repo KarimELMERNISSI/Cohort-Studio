@@ -22,7 +22,7 @@ what it did to the table: rows and columns in and out, and the fingerprints befo
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -492,6 +492,26 @@ class DataSession:
 
     def discard_staging(self) -> None:
         self.draft = None
+
+    def draft_mark(self) -> tuple[Draft | None, int]:
+        """Where the draft stands now, for :meth:`rollback_draft`: changes staged after it can be taken back together."""
+        draft = self.draft
+        if draft is None:
+            return None, 0
+        copy = replace(
+            draft,
+            steps=list(draft.steps),
+            single_imputed=dict(draft.single_imputed),
+            exact_imputed=dict(draft.exact_imputed),
+        )
+        return copy, len(draft.steps)
+
+    def rollback_draft(self, mark: tuple[Draft | None, int]) -> list[PendingStep]:
+        """The draft as it was at ``mark``; returns the changes taken back (their snapshots are no one's)."""
+        saved, n = mark
+        dropped = list(self.draft.steps[n:]) if self.draft is not None else []
+        self.draft = saved
+        return dropped
 
     # ------------------------------------------------------------------ imputed cells
 

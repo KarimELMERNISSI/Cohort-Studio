@@ -124,6 +124,16 @@ def record(
     }
 
 
+def decided_on_data(derived: Any) -> bool:
+    """A step's ``derived`` block holds decisions made on the data it was recorded on: a fill from a definition (its
+    rounding, whether its values count as observed), or an imputation that kept derived variables out to compute them
+    afterwards. Such a step is done again on other data, never redone as it was. An imputation that only records the
+    user's choice not to recompute (``recompute`` false) decided nothing of the kind."""
+    return isinstance(derived, Mapping) and (
+        "definition" in derived or derived.get("recompute") is True
+    )
+
+
 def from_record(
     block: Mapping[str, Any],
 ) -> tuple[DerivedVariable | None, dict[str, str | None], list[str]]:
@@ -290,6 +300,7 @@ __all__ = [
     "ORIGINS",
     "DerivedVariable",
     "cycles",
+    "decided_on_data",
     "fill_order",
     "from_config",
     "from_record",
