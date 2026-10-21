@@ -16,9 +16,11 @@ from core.derived import KINDS, DerivedVariable, cycles
 from core.registry import as_code
 from enrich.derived import AGREES, CANNOT, DISAGREES, MOSTLY, TOO_FEW, DerivedCheck
 from enrich.formulas import evaluate_formula_safely, read_formula
+from manage.ai_payload import column_kinds, typical_ranges
 from ui.components import help_popover
 from ui.components.text import plain
 from ui.state import get_state
+from utils.data_analyzer import DataAnalyzer
 
 _BADGES = {
     AGREES: (":material/check_circle:", "green"),
@@ -46,6 +48,8 @@ _TARGET, _FORMULA, _KIND, _NOTE = (
 )
 _EDITING = "derived_editing"  # the variable whose definition the form edits
 _NOTICE, _CHANGED = "_derived_notice", "_derived_changed"
+_PROPOSALS, _RANGES = "derived_proposals", "derived_send_ranges"
+_ORDER = {AGREES: 0, MOSTLY: 1, TOO_FEW: 2, DISAGREES: 3, CANNOT: 4}  # the best evidence first
 
 
 def _badge(check: DerivedCheck) -> None:
@@ -355,6 +359,198 @@ def _form(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
                 st.button("Cancel", key="derived_cancel", on_click=_clear_form)
 
 
+def _engine():
+    """The AI engine when it runs (Settings > AI engine), else None."""
+    engine = st.session_state.get("rag_manager")
+    return engine if engine is not None and getattr(engine, "initialized", False) else None
+
+
+def _find(data: pd.DataFrame, engine) -> None:
+    """One request for the whole dataset; its proposals are kept for this version of the data."""
+    columns = [str(c) for c in data.columns]
+    taxonomy = getattr(engine, "variable_taxonomy", None) or {}
+    units = {
+        name: str(entry["unit"])
+        for name, entry in taxonomy.items()
+        if isinstance(entry, dict) and entry.get("unit") and name in columns
+    }
+    dates = DataAnalyzer(data).date_cols
+    send = st.session_state.get(_RANGES, True)
+    ranges = typical_ranges(data, columns, date_columns=dates) if send else {}
+    kinds = column_kinds(data, columns, date_columns=dates)
+    found, error = engine.suggest_derived_variables(
+        columns, column_kinds=kinds, units=units, ranges=ranges
+    )
+    st.session_state[_PROPOSALS] = {
+        "fp": get_state().session.working_fp,
+        "found": list(found),
+        "error": error,
+    }
+
+
+def _adopt(indexes: list[int]) -> None:
+    """The chosen proposals join the list: never one the data disagree with, one per variable, and none that would
+    compute another definition's variable from its own."""
+    state = get_state()
+    stored = st.session_state.get(_PROPOSALS) or {}
+    found: list[DerivedVariable] = list(stored.get("found") or [])
+    added, replaced, refused, taken = [], [], [], set()
+    declared = {d.target for d in state.derived_variables}
+    for i in indexes:
+        if not 0 <= i < len(found):
+            continue
+        proposal = found[i]
+        check = state.derived_check(proposal, slot=f"derived_proposal::{i}")
+        if check.verdict in (DISAGREES, CANNOT):
+            refused.append(f"{proposal.target} ({check.label})")
+        elif proposal.target in taken:
+            refused.append(f"{proposal.target} (one definition per variable)")
+        elif _circle(proposal, state.derived_variables):
+            refused.append(f"{proposal.target} (it would compute another definition's variable)")
+        else:
+            # its inverses join it only when the data agree with them too
+            kept = {
+                name: formula
+                for name, formula in proposal.inverses.items()
+                if state.derived_check(
+                    DerivedVariable(name, formula, origin="ai"),
+                    slot=f"derived_proposal::{i}::{name}",
+                ).verdict
+                == AGREES
+            }
+            refused.extend(
+                f"{name} from {proposal.target}" for name in proposal.inverses if name not in kept
+            )
+            _put(replace(proposal, inverses=kept))
+            (replaced if proposal.target in declared else added).append(i)
+            taken.add(proposal.target)
+    stored["found"] = [p for i, p in enumerate(found) if i not in added and i not in replaced]
+    st.session_state[_PROPOSALS] = stored
+    parts = []
+    if added:
+        parts.append(f"Added: {', '.join(found[i].target for i in added)}.")
+    if replaced:
+        parts.append(f"Replaced your definition of {', '.join(found[i].target for i in replaced)}.")
+    if refused:
+        parts.append(
+            f"Not added, as the data do not agree or it cannot be used: {', '.join(refused)}."
+        )
+    _changed(" ".join(parts) or "Nothing was added.")
+
+
+def _dismiss() -> None:
+    st.session_state.pop(_PROPOSALS, None)
+
+
+def _proposals(definitions: tuple[DerivedVariable, ...]) -> None:
+    """The proposals of the AI engine, each checked against the data, the best evidence first, for the user to
+    choose: nothing is added by itself."""
+    state = get_state()
+    stored = st.session_state.get(_PROPOSALS)
+    if not stored or stored.get("fp") != state.session.working_fp:
+        return
+    if stored.get("error"):
+        st.error(f"The AI engine could not answer: {plain(stored['error'], limit=300)}")
+        return
+    found: list[DerivedVariable] = stored.get("found") or []
+    if not found:
+        st.caption("The AI engine found no derived variable among your columns.")
+        return
+    checks = [state.derived_check(p, slot=f"derived_proposal::{i}") for i, p in enumerate(found)]
+    declared = {d.target for d in definitions}
+    order = sorted(range(len(found)), key=lambda i: (_ORDER[checks[i].verdict], found[i].target))
+    table = pd.DataFrame(
+        [
+            {
+                "add": False,
+                "variable": found[i].target,
+                "formula": found[i].formula,
+                "check": checks[i].label
+                + (" · replaces yours" if found[i].target in declared else ""),
+                "evidence": checks[i].evidence
+                + (
+                    f"; {checks[i].unit_hint}"
+                    if checks[i].unit_hint and checks[i].unit_hint != checks[i].evidence
+                    else ""
+                ),
+                "inverses": "; ".join(f"{k} = {v}" for k, v in found[i].inverses.items()),
+                "source": found[i].note,
+            }
+            for i in order
+        ]
+    )
+    edited = st.data_editor(
+        table,
+        hide_index=True,
+        disabled=["variable", "formula", "check", "evidence", "inverses", "source"],
+        column_config={
+            "add": st.column_config.CheckboxColumn("Add", help="Tick the proposals to add."),
+            "variable": "Variable",
+            "formula": st.column_config.TextColumn("Formula", width="medium"),
+            "check": "Check",
+            "evidence": st.column_config.TextColumn("On your data", width="large"),
+            "inverses": st.column_config.TextColumn(
+                "Inverses", help="Added with it only when the data agree with them too."
+            ),
+            "source": "Source",
+        },
+        key=f"derived_review::{stored['fp']}::{len(found)}",
+        alt="The AI engine's proposals of derived variables, checked against your data",
+    )
+    ticked = [order[j] for j, add in enumerate(edited["add"].tolist()) if add]
+    agreeing = [i for i in order if checks[i].verdict == AGREES and found[i].target not in declared]
+    with st.container(horizontal=True):
+        st.button(
+            f"Add the {len(agreeing)} that agree" if agreeing else "None agrees with your data",
+            type="primary",
+            icon=":material/done_all:",
+            key="derived_adopt_agreeing",
+            disabled=not agreeing,
+            on_click=_adopt,
+            args=(agreeing,),
+        )
+        st.button(
+            "Add the ticked ones",
+            icon=":material/add:",
+            key="derived_adopt_ticked",
+            disabled=not ticked,
+            on_click=_adopt,
+            args=(ticked,),
+        )
+        st.button("Dismiss", icon=":material/close:", key="derived_dismiss", on_click=_dismiss)
+
+
+def _ai_search(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
+    engine = _engine()
+    with st.container(border=True):
+        st.markdown("**Find them with the AI engine**")
+        st.caption(
+            "The AI engine is sent the names of your columns, how each is stored, their units in the variable map "
+            "and, if you tick it, the typical values of each number column (its 5th, 50th and 95th percentiles, "
+            "never the minimum or the maximum, which an outlier would move): no row. Each proposal is then checked "
+            "here, on your data, and added only when you choose it."
+        )
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.checkbox(
+                "Send the typical values of number columns, to help find their units",
+                value=True,
+                key=_RANGES,
+                persist_state="session",  # unticked, it stays so for the session, whatever the page
+            )
+            if st.button(
+                "Find derived variables",
+                icon=":material/auto_awesome:",
+                key="derived_find",
+                disabled=engine is None,
+                help=None
+                if engine is not None
+                else "Start the AI engine in Settings > AI engine first.",
+            ):
+                with st.spinner("The AI engine reads your columns..."):
+                    _find(data, engine)
+        _proposals(definitions)
+
+
 @st.fragment
 def render_derived_variables() -> None:
     state = get_state()
@@ -397,6 +593,7 @@ def render_derived_variables() -> None:
             to_fill = len(check.fillable_rows.intersection(scope.rows)) if check.fills else 0
             with st.expander(_summary(definition, check, to_fill), icon=_BADGES[check.verdict][0]):
                 _details(definition, check, data)
+    _ai_search(data, definitions)
     if st.session_state.pop(_CHANGED, False):
         st.rerun(scope="app")  # the other tabs read the definitions too
 

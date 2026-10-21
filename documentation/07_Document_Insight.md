@@ -35,10 +35,11 @@ text of your documents and the column summaries, and the page shows its host:
 - an address in **http** crosses the network unencrypted, and the page says so.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
-criteria) is a summary of each column, never a row:
+criteria, the derived variables it finds) is a summary of each column, never a row:
 - **every column:** its name and type;
 - **numeric columns:** the 5th, 25th, 50th, 75th and 95th percentiles, never the minimum or the maximum, which can
-  single out one participant;
+  single out one participant, and none for a column of fewer than 21 values (its extreme percentiles would be
+  computed from them);
 - **other columns:** their most frequent values with their counts, only values shared by at least 5 rows;
 - **date columns:** the first and the last year.
 

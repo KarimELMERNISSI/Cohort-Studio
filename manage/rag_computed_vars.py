@@ -7,10 +7,13 @@ This is part of the RAGManager class composition pattern.
 import hashlib
 import json
 import logging
+import unicodedata
 
+from core.derived import KINDS, DerivedVariable
 from enrich.formulas import MAX_FORMULA_LENGTH, formula_from_model, read_formula
 from manage.ai_payload import taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
+from utils.logging_config import redact_secrets
 
 # Import Pydantic schemas for structured output
 from .rag_schemas import (
@@ -49,6 +52,63 @@ def _unwrapped(answer: object) -> str:
         if len(text) > 1 and text[0] == text[-1] == quote and not text.startswith(quote * 2):
             text = text[1:-1].strip()
     return text
+
+
+_MAX_DERIVED_COLUMNS = 200  # columns described to the model when it looks for derived variables
+_MAX_NOTE = 300
+
+
+def _model_text(value: object, limit: int) -> str:
+    """A model's words kept with a definition (its source, its units): one line, no control or bidirectional
+    character, cut. They are shown as text (ui.components.text.plain), never applied."""
+    text = "".join(c for c in " ".join(str(value or "").split()) if unicodedata.category(c) not in ("Cc", "Cf"))
+    return text[:limit]
+
+
+def _derived_formula(answer: object, target: str, columns: set[str]) -> str | None:
+    """A formula of the model for ``target``, in the application's notation, kept only when it reads, names columns
+    the data have, and does not use ``target`` itself."""
+    formula = formula_from_model(_unwrapped(answer), targets=[target])
+    reading = read_formula(formula)
+    if not formula or reading.problem or reading.power_caret or not reading.names:
+        return None
+    if target in reading.names or not set(reading.names) <= columns:
+        return None
+    return formula
+
+
+def _derived_candidate(entry: object, columns: set[str]) -> DerivedVariable | None:
+    """One proposal of the model as a definition (only the keys asked for), or None when it is not one."""
+    if not isinstance(entry, dict):
+        return None
+    target = str(entry.get("target") or "").strip()
+    if target not in columns:
+        return None
+    formula = _derived_formula(entry.get("formula"), target, columns)
+    if formula is None:
+        return None
+    inputs = set(read_formula(formula).names)
+    inverses: dict[str, str] = {}
+    raw = entry.get("inverses")
+    for name, answer in (raw.items() if isinstance(raw, dict) else ()):
+        name = str(name).strip()
+        recovered = _derived_formula(answer, name, columns) if name in inputs else None
+        if recovered is not None and target in read_formula(recovered).names:
+            inverses[name] = recovered
+    kind = str(entry.get("kind") or "").strip().lower()
+    note = "; ".join(
+        part
+        for part in (_model_text(entry.get("source"), 150), _model_text(entry.get("units"), 150))
+        if part
+    )
+    return DerivedVariable(
+        target,
+        formula,
+        inverses=inverses,
+        kind=kind if kind in KINDS else "",
+        origin="ai",
+        note=note[:_MAX_NOTE],
+    )
 
 
 class ComputedVarsMixin:
@@ -428,3 +488,52 @@ class ComputedVarsMixin:
         except Exception as e:
             logger.warning(f"Failed to suggest imputation formulas: {e}")
             return [], str(e)
+
+    def suggest_derived_variables(
+        self,
+        columns: list[str],
+        column_kinds: dict[str, str] | None = None,
+        units: dict[str, str] | None = None,
+        ranges: dict[str, str] | None = None,
+        max_candidates: int = 15,
+    ) -> tuple[list[DerivedVariable], str | None]:
+        """
+        The derived variables the model recognises among ``columns``: definitions that compute one column from others
+        of the same row, with their inverses (core.derived, origin "ai"), in the application's notation. Sent: the
+        column names, how each is stored, the variable map's units and, when given, each number column's typical
+        values (manage.ai_payload.typical_ranges); never a row. A proposal that cannot be read, names a column the
+        data do not have or uses the column it computes is dropped here; the page checks the others against the data
+        before it offers them, and adds none by itself.
+        """
+        if not self.initialized:
+            return [], "RAG system not initialized."
+        names = [str(c) for c in columns][:_MAX_DERIVED_COLUMNS]
+        kinds, units, ranges = column_kinds or {}, units or {}, ranges or {}
+        lines = []
+        for name in names:
+            parts = [kinds[name]] if kinds.get(name) else []
+            if units.get(name):
+                parts.append(f"unit {' '.join(str(units[name]).split())[:40]}")
+            if ranges.get(name):
+                parts.append(f"typical values {ranges[name]}")
+            shown = " ".join(name.split())  # one line per column, whatever its name holds
+            lines.append(f"- {shown}" + (f" ({'; '.join(parts)})" if parts else ""))
+        from prompts import derived_variables
+
+        try:
+            response = self.llm.invoke(derived_variables("\n".join(lines), max_candidates))
+        except Exception as exc:
+            logger.warning("The derived variables could not be suggested (%s)", type(exc).__name__)
+            return [], redact_secrets(str(exc))
+        if failure := provider_error(response.content):
+            return [], failure
+        parsed = parse_json_safe(self._clean_json_response(response.content), default={"candidates": []})
+        entries = parsed.get("candidates") if isinstance(parsed, dict) else parsed
+        found: list[DerivedVariable] = []
+        for entry in (entries if isinstance(entries, list) else [])[: 2 * max_candidates]:
+            candidate = _derived_candidate(entry, set(names))
+            if candidate is not None and all(
+                (c.target, c.formula) != (candidate.target, candidate.formula) for c in found
+            ):
+                found.append(candidate)
+        return found[:max_candidates], None

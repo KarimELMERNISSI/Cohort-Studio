@@ -157,3 +157,92 @@ def test_the_enrich_page_opens_its_missing_data_tabs_with_the_derived_variables(
     derived = labels.index("Derived variables")
     assert derived + 1 == labels.index("Targeted Imputation (Custom Formula)")
     assert any("No derived variable is declared" in c.value for c in at.caption)
+
+
+class _Engine:
+    """An AI engine that is running, with the variable map's units; it keeps what it is sent."""
+
+    initialized = True
+    variable_taxonomy = {"weight_kg": {"unit": "kg"}}
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    def suggest_derived_variables(
+        self, columns, column_kinds=None, units=None, ranges=None, max_candidates=15
+    ):
+        from core.derived import DerivedVariable
+
+        self.sent.append({"columns": list(columns), "units": units, "ranges": ranges})
+        return [
+            DerivedVariable("bmi", "weight_kg / height_cm ** 2", origin="ai"),  # cm, not m
+            DerivedVariable("bmi", BMI, inverses={"weight_kg": WEIGHT}, origin="ai", note="WHO"),
+            DerivedVariable("height_cm", "weight_kg * 2", origin="ai"),
+        ], None
+
+
+def test_without_the_ai_engine_the_search_says_how_to_start_it(data_root: Path) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120).run()
+    _ok(at)
+    assert at.button(key="derived_find").disabled
+
+
+def test_the_ai_engine_proposes_the_whole_list_and_the_ones_that_agree_are_added_at_once(
+    data_root: Path,
+) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120)
+    engine = _Engine()
+    at.session_state["rag_manager"] = engine
+    at.run()
+    at.button(key="derived_find").click().run()
+    _ok(at)
+    sent = engine.sent[0]
+    # names, units and quantiles: the BMI's typical values, never a row
+    assert sent["units"] == {"weight_kg": "kg"} and set(sent["ranges"]) == {
+        "weight_kg",
+        "height_cm",
+        "bmi",
+    }
+    assert at.button(key="derived_adopt_agreeing").label == "Add the 1 that agree"
+    at.button(key="derived_adopt_agreeing").click().run()
+    _ok(at)
+    assert _declared(at) == {
+        "bmi": {"formula": BMI, "inverses": {"weight_kg": WEIGHT}, "origin": "ai", "note": "WHO"}
+    }
+    labels = [e.label for e in at.expander if e.label.startswith("bmi")]
+    assert labels == ["bmi · agrees · 10 to fill · from the AI engine"]
+    # the two others stay proposed, the BMI in cm now one that would replace yours
+    assert at.button(key="derived_adopt_agreeing").disabled
+    at.button(key="derived_dismiss").click().run()
+    _ok(at)
+    assert not at.button(key="derived_find").disabled
+
+
+def test_the_typical_values_are_sent_only_when_ticked(data_root: Path) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120)
+    engine = _Engine()
+    at.session_state["rag_manager"] = engine
+    at.run()
+    at.checkbox(key="derived_send_ranges").uncheck().run()
+    at.button(key="derived_find").click().run()
+    _ok(at)
+    assert engine.sent[0]["ranges"] == {}
+
+
+class _EngineWithAWrongInverse(_Engine):
+    def suggest_derived_variables(
+        self, columns, column_kinds=None, units=None, ranges=None, max_candidates=15
+    ):
+        from core.derived import DerivedVariable
+
+        return [DerivedVariable("bmi", BMI, inverses={"weight_kg": "bmi * 2"}, origin="ai")], None
+
+
+def test_an_inverse_the_data_disagree_with_does_not_come_along(data_root: Path) -> None:
+    at = AppTest.from_function(_tab_script, default_timeout=120)
+    at.session_state["rag_manager"] = _EngineWithAWrongInverse()
+    at.run()
+    at.button(key="derived_find").click().run()
+    at.button(key="derived_adopt_agreeing").click().run()
+    _ok(at)
+    assert _declared(at) == {"bmi": {"formula": BMI, "origin": "ai"}}

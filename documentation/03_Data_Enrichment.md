@@ -77,6 +77,17 @@ variable of its formula are recorded, and compared with the recorded value.
   criterion on Data > Validate can exclude from the analysis population. They are shown, never saved.
 - Agreeing with your data says nothing of the published reference: name it in the source.
 
+**Find them with the AI engine** (with the engine running, Settings > AI engine): one request for the whole dataset.
+The engine is sent the names of your columns, how each is stored, their units in the variable map and, unless you
+untick it (for the session), the typical values of each number column to two digits: its 5th, 50th and 95th
+percentiles, never the minimum or the maximum, which an outlier would move, and none for a column of fewer than 21
+values. No row is sent. It answers with the definitions it recognises, every published
+variant and unit version as its own proposal (CKD-EPI 2009 and 2021, a creatinine in mg/dL or µmol/L), with their
+inverses. Each proposal is checked here, on your data, and listed with the best evidence first: **Add the N that
+agree** adds those the data agree with, and the others are ticked one by one; one the data disagree with is never
+added, nor an inverse they disagree with, and a proposal for a variable you declared says it would replace your
+definition.
+
 Each definition can have **inverses**: a formula that fills a missing variable of it from the others, a weight from
 the BMI and the height. Each inverse is checked like a definition. **Edit** a definition to change its formula, kind
 or source: its inverses are kept. Two definitions that would compute each other are refused: declare one as the

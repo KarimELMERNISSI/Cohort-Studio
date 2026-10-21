@@ -13,6 +13,7 @@ from .anomaly_criteria import anomaly_criteria_prompt as anomaly_criteria_prompt
 from .column_renaming import column_renaming
 from .context_analysis import context_analysis
 from .contextualize_variables import contextualize_variables
+from .derived_variables import derived_variables
 from .document_graph import document_graph
 
 # Evaluation prompts
@@ -53,6 +54,7 @@ __all__ = [
     "theoretical_formulas",
     "map_formulas",
     "imputation_formulas",
+    "derived_variables",
     "fix_formula_variables",
     "markdown_formula",
     "refine_taxonomy",

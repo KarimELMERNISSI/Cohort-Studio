@@ -533,6 +533,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Inverses**: a definition can say how to recover each variable of its formula from the others (a weight from the
   BMI and the height), each checked in the same way. A definition can be edited, its inverses kept; two definitions
   that would compute each other are refused (add one as the other's inverse).
+- **Find them with the AI engine**: one request for the whole dataset, instead of one variable at a time. The engine
+  is sent the column names, how each is stored, the variable map's units and, unless unticked (for the whole
+  session), each number column's typical values to two digits (5th, 50th and 95th percentiles, never the minimum or
+  the maximum); no row. It proposes the definitions it recognises, every published variant as its own proposal, with
+  their inverses; each is checked here against your data and listed with the best evidence first. **Add the N that
+  agree** adds those at once and the others are ticked one by one; one the data disagree with is never added, nor an
+  inverse they disagree with, and replacing one of your definitions says so.
+- **No percentile of a small column is sent to the AI engine**, by this or any other AI feature: with fewer than 21
+  values, the 5th and 95th percentiles are interpolated with the minimum and the maximum, which can single out one
+  participant (a creatinine of 2,500 among 15 values went out as "60.7 to 801.1").
 - **The definitions are kept with the criteria**, in the configuration downloaded and uploaded on Data > Validate. An
   upload adds the definitions the session does not have, each whole; a variable defined in both keeps the session's,
   and the upload names it.

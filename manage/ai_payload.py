@@ -34,6 +34,9 @@ logger = logging.getLogger(__name__)
 MIN_COUNT = 5  # a value shared by fewer rows is not sent
 TOP_VALUES = 5
 PERCENTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
+# below this many values, the 5th and 95th percentiles are interpolated with the minimum and the maximum, which
+# can single out one participant: no percentile is sent
+MIN_QUANTILE_ROWS = 21
 FEW_LEVELS = 10  # a numeric column with this many distinct values or fewer is described by its values
 PERCENTILE_KEYS = tuple(f"p{round(q * 100)}" for q in PERCENTILES)
 # the keys of a taxonomy entry that describe the variable, not its values: only these reach a prompt (an imported or
@@ -91,7 +94,7 @@ def column_profile(
             info["top_values"] = _frequent_values(series)
         elif pd.api.types.is_numeric_dtype(series):
             info["type"] = "Numeric"
-            if not series.empty:
+            if len(series) >= MIN_QUANTILE_ROWS:
                 quantiles = series.astype(float).quantile(list(PERCENTILES))
                 info["stats"] = {f"p{round(q * 100)}": round(float(v), 6) for q, v in quantiles.items()}
         else:
@@ -99,6 +102,30 @@ def column_profile(
             info["top_values"] = _frequent_values(series)
         profiles.append(info)
     return profiles
+
+
+def _two_digits(value: float) -> str:
+    """A value to two significant digits, written plainly (120, 0.95, 2,500): enough to tell a unit."""
+    rounded = float(f"{value:.2g}")
+    return f"{int(rounded):,}" if rounded.is_integer() else f"{rounded:g}"
+
+
+def typical_ranges(
+    df: pd.DataFrame, columns: Iterable[str] | None = None, *, date_columns: Iterable[str] = ()
+) -> dict[str, str]:
+    """
+    The typical values of each number column, from the summary of :func:`column_profile` (its 5th, 50th and 95th
+    percentiles, never the minimum or the maximum, and none for a column of fewer than 21 values), to two
+    significant digits: "52 to 98 (median 75)", a clue to the column's unit. ``date_columns`` (a date kept as a
+    number) give none.
+    """
+    out: dict[str, str] = {}
+    for info in column_profile(df, columns, date_columns=date_columns):
+        stats = info.get("stats") or {}
+        if {"p5", "p50", "p95"} <= stats.keys():
+            low, mid, high = (_two_digits(stats[k]) for k in ("p5", "p50", "p95"))
+            out[info["name"]] = f"{low} to {high} (median {mid})"
+    return out
 
 
 def column_kinds(
@@ -241,6 +268,7 @@ def disable_remote_tracing() -> list[str]:
 
 __all__ = [
     "MIN_COUNT",
+    "MIN_QUANTILE_ROWS",
     "PERCENTILES",
     "PERCENTILE_KEYS",
     "column_kinds",
@@ -255,4 +283,5 @@ __all__ = [
     "recipient",
     "safe_stats",
     "taxonomy_for_prompt",
+    "typical_ranges",
 ]
