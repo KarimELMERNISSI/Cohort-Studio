@@ -118,7 +118,8 @@ jobs:
         shell: bash
         env:
           COLUMNS: "240"
-        run: uv run pytest -m "not integration and not slow" -q -rs 2>&1 | tee pytest.log
+        # -rfEs: failures and errors in the summary too (the step below annotates them; -rs alone listed skips only)
+        run: uv run pytest -m "not integration and not slow" -q -rfEs 2>&1 | tee pytest.log
 
       - name: Failed tests
         if: failure()
