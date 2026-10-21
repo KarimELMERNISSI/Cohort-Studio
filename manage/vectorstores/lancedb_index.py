@@ -12,6 +12,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from core.registry import Availability
+
 from .base import BaseVectorIndex, ChunkRow, Hit, VectorEngine, VectorStoreError
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,9 @@ def _sql_literal(value: str) -> str:
 
 class LanceDBIndex(BaseVectorIndex):
     engine = VectorEngine.LANCEDB
+    name = "lancedb"
+    display_name = "LanceDB"
+    summary = "Embedded and serverless; vectors stored on disk in the columnar Lance format."
 
     def __init__(self, directory: Path) -> None:
         super().__init__(directory)
@@ -33,12 +38,8 @@ class LanceDBIndex(BaseVectorIndex):
         self._db: Any = None
 
     @classmethod
-    def availability(cls) -> tuple[bool, str]:
-        try:
-            import lancedb  # noqa: F401
-        except ImportError as exc:  # pragma: no cover - dependency of the project
-            return False, f"lancedb is not installed ({exc})."
-        return True, "LanceDB is available."
+    def availability(cls) -> Availability:
+        return Availability.of_module("lancedb", extra="ai")
 
     @property
     def location(self) -> str:

@@ -30,6 +30,7 @@ from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
 from manage.vectorstores import (
     ENGINE_SUMMARIES,
     ENGINE_TITLES,
+    VECTOR_STORES,
     IndexManifest,
     MachineProfile,
     VectorEngine,
@@ -40,7 +41,6 @@ from manage.vectorstores import (
     recommend,
     resolve_engine,
 )
-from manage.vectorstores.lancedb_index import LanceDBIndex
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui import preferences
 from ui.components import confirm
@@ -573,11 +573,8 @@ def _engine_usable(name: str | None) -> tuple[bool, str]:
     """Whether this server can run the vector database ``name`` (kept from the last session), and why not."""
     if not name:
         return False, ""
-    try:
-        engine = VectorEngine(name)
-    except ValueError:
-        return False, "not an engine of this version"
-    return (LanceDBIndex if engine is VectorEngine.LANCEDB else QdrantIndex).availability()
+    found = VECTOR_STORES.availability(name)
+    return found.ok, found.reason
 
 
 def _vector_card(selected_files: list[str] | None) -> dict:

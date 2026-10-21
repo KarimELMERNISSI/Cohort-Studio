@@ -235,13 +235,13 @@ def open_index(
     engine = VectorEngine(engine)
     engine_dir = Path(base_dir) / engine.value
     if engine is VectorEngine.LANCEDB:
-        ok, why = LanceDBIndex.availability()
-        if not ok:
-            raise VectorStoreError(why)
+        found = LanceDBIndex.availability()
+        if not found.ok:
+            raise VectorStoreError(f"{found.reason} ({found.install_hint})")
         return LanceDBIndex(engine_dir)
-    ok, why = QdrantIndex.availability()
-    if not ok:
-        raise VectorStoreError(why)
+    found = QdrantIndex.availability()
+    if not found.ok:
+        raise VectorStoreError(f"{found.reason} ({found.install_hint})")
     if qdrant_url:
         return QdrantIndex(
             engine_dir, url=qdrant_url, api_key=qdrant_api_key, collection=user_collection(username)

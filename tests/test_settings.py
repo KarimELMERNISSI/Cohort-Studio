@@ -248,7 +248,7 @@ def test_the_redaction_covers_a_key_as_set_and_as_used(env: pytest.MonkeyPatch) 
 
 
 def test_the_qdrant_key_is_never_printed() -> None:
-    pytest.importorskip("langchain_core", reason="the vector stores are in the optional 'ai' extra")
+    # the package needs no optional group for its settings: this runs in the install without them too
     from manage.vectorstores import VectorStoreSettings
 
     assert "planted" not in repr(VectorStoreSettings(qdrant_api_key="planted-qdrant-key"))

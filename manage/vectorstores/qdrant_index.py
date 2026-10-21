@@ -22,6 +22,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from core.registry import Availability
+
 from .base import BaseVectorIndex, ChunkRow, Hit, VectorEngine, VectorStoreError
 
 LOCAL_COLLECTION = "chunks"
@@ -66,6 +68,9 @@ def user_collection(username: str | None) -> str:
 
 class QdrantIndex(BaseVectorIndex):
     engine = VectorEngine.QDRANT
+    name = "qdrant"
+    display_name = "Qdrant"
+    summary = "Embedded in-memory for small libraries, or a Qdrant server for several users and large libraries."
 
     def __init__(
         self,
@@ -85,12 +90,8 @@ class QdrantIndex(BaseVectorIndex):
         self.collection = collection
 
     @classmethod
-    def availability(cls) -> tuple[bool, str]:
-        try:
-            import qdrant_client  # noqa: F401
-        except ImportError as exc:  # pragma: no cover - dependency of the project
-            return False, f"qdrant-client is not installed ({exc})."
-        return True, "Qdrant client is available."
+    def availability(cls) -> Availability:
+        return Availability.of_module("qdrant_client", extra="ai")
 
     @property
     def mode(self) -> str:

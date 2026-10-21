@@ -18,6 +18,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
+from core.registry import Availability
+
 MANIFEST_NAME = "manifest.json"
 MANIFEST_VERSION = 1
 
@@ -105,17 +107,23 @@ def index_matches(manifest: IndexManifest | None, documents: Iterable[str]) -> b
 
 
 class BaseVectorIndex(ABC):
-    """Storage of chunks in one engine. Implementations: :mod:`.lancedb_index`, :mod:`.qdrant_index`."""
+    """Storage of chunks in one engine, a connector of :data:`manage.vectorstores.VECTOR_STORES`. Implementations:
+    :mod:`.lancedb_index`, :mod:`.qdrant_index`."""
 
     engine: ClassVar[VectorEngine]
+    name: ClassVar[
+        str
+    ]  # the registered name, stored in preferences and index manifests: never renamed
+    display_name: ClassVar[str]
+    summary: ClassVar[str]  # one sentence for Settings
 
     def __init__(self, manifest_dir: Path) -> None:
         self.manifest_dir = manifest_dir
 
     @classmethod
     @abstractmethod
-    def availability(cls) -> tuple[bool, str]:
-        """Whether the engine's client library can be used, and why not."""
+    def availability(cls) -> Availability:
+        """Whether the engine's client library is installed, found without importing it; never raises."""
 
     @property
     @abstractmethod
