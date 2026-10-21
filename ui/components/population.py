@@ -133,11 +133,12 @@ def population_banner(*, purpose: str = "analyses") -> None:
     mismatched = state.imputations_on_other_rows()
     if mismatched:
         st.warning(
-            "The data contain imputed values fitted on other rows than the current population: "
+            "The data contain imputed values computed on other rows than the current population: "
             + "; ".join(mismatched)
-            + ". The imputed values depend on the rows the imputation was fitted on, and the rows the population "
-            "gained since were not imputed. Tick the same criteria again, or go back to the data before the "
-            "imputation (Reproduce > Versions & traces, Reproduce to Step) and impute on the current population.",
+            + ". A statistical imputation, or a formula of other rows such as a mean, depends on the rows it was "
+            "computed on, and the rows the population gained since were not imputed. Tick the same criteria again, "
+            "or go back to the data before the imputation (Reproduce > Versions & traces, Reproduce to Step) and "
+            "impute on the current population.",
             icon=":material/warning:",
         )
 

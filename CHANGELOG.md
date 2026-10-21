@@ -495,6 +495,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Before, it advised imputing again, which fills nothing when the population lost rows.
 - **A redo or refit that leaves a change with nothing to do** now names it: the draft keeps only the changes that
   still change the data, and the message said they had all been redone.
+- **"Exact formula" is refused for a formula that uses other rows:** an aggregate such as a mean, a quantile or a
+  rank, a running or shifted value, the value of another row, a test against a column (`a.isin(b)`), or dates kept as
+  text, whose order of day and month is read from the rows (convert them on Validate first). Its values are estimates,
+  which the analyses and the multiple imputation kept as observed values. The refusal names what uses other rows; the
+  page reads the formula itself to tell, and each function a formula may use is classified. A mean across columns
+  written out, `np.nanmean([sbp_1, sbp_2], axis=0)`, is a value of each row.
+- **The notice covers the imputations by formula:** one that uses other rows whenever the population changed, one of
+  each row's own values only when the population gained rows that it left missing. Imputing exactly, then ticking
+  criteria, raises no notice.
 - **The trace records the population with each imputation,** also when no criterion is ticked, and the replay
   evaluates the recorded criteria again and fills the rows they keep (it warns when they keep other rows than when
   the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as

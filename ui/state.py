@@ -42,7 +42,7 @@ from core.session import (
     StagingStatus,
 )
 from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
-from core.steps import FITTED
+from core.steps import FITTED, FORMULA
 from core.steps import ids as step_ids
 from manage.snapshots import delete_unreferenced
 from utils.data_analyzer import DataAnalyzer
@@ -613,27 +613,37 @@ class AppState:
         return PopulationScope(population, blocked, scoped, rows)
 
     def imputations_on_other_rows(self) -> list[str]:
-        """Statistical imputations applied in this session that were fitted on other rows than the current population,
-        every row included, when no criterion was ticked yet."""
+        """
+        Imputations applied in this session that were computed on other rows than the current population (every row,
+        when no criterion was ticked yet). A statistical imputation, or a formula of other rows (a mean), depends on
+        the rows it was computed on; a formula of each row's own values only matters for the rows the population gained
+        since and left missing.
+        """
         population = self.population
         if population is None or not population.ok:
             return []
         current = population.rows_fingerprint
-        fitted = step_ids(fills=FITTED)
+        fitted, formulas = step_ids(fills=FITTED), step_ids(fills=FORMULA)
+        base = self.session.base
         out = []
         for step in self.transformation_manager.history:
             block = step.get("population") if isinstance(step, dict) else None
-            if (
-                step.get("function") in fitted
-                and block
-                and block.get("rows_fp")
-                and block["rows_fp"] != current
-            ):
-                # a step on a population names its rows in its description, one on every row does not
-                every = (
-                    "" if block.get("criteria") else f" (all {block.get('n_included', '?')} rows)"
-                )
-                out.append(f"{step.get('description')}{every}")
+            function = step.get("function")
+            params = step.get("params") or {}
+            if not (block and block.get("rows_fp") and block["rows_fp"] != current):
+                continue
+            if function in formulas and params.get("row_wise"):
+                recorded = block.get("included")  # the row ids, written when there are not too many
+                if recorded is not None and base is not None:
+                    gained = population.included.difference(ranges_to_ids(recorded))
+                    target = params.get("target_variable")
+                    if target not in base.columns or not base.loc[gained, target].isna().any():
+                        continue  # each row's own values, and no row gained since is left missing
+            elif function not in fitted and function not in formulas:
+                continue
+            # a step on a population names its rows in its description, one on every row does not
+            every = "" if block.get("criteria") else f" (all {block.get('n_included', '?')} rows)"
+            out.append(f"{step.get('description')}{every}")
         return out
 
     # ------------------------------------------------------------------ the analysis population

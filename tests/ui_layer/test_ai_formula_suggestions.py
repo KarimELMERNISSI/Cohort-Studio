@@ -112,7 +112,7 @@ def test_an_imputation_suggestion_that_the_data_refuse_cannot_be_used(enrich: Ap
     next(b for b in enrich.button if b.label == "Apply Targeted Imputation").click().run()
     _ok(enrich)
     step = enrich.session_state["_data_session"].draft.steps[-1]
-    assert step.params["filled_count"] == 183
+    assert step.params["filled_count"] == 183 and step.params["row_wise"] is True
     assert step.description == "Imputed 183 values in sbp_6m using a formula"
     assert step.population is not None and step.population["criteria"] == []
     assert step.population["n_included"] == 1206
@@ -141,6 +141,17 @@ def test_a_targeted_imputation_is_tried_on_and_fills_the_analysis_population(
     # the excluded rows keep their missing values
     kept = session.draft.frame.loc[excluded, "sbp_6m"].isna()
     assert kept.equals(session.base.loc[excluded, "sbp_6m"].isna())
+
+
+def test_an_exact_formula_is_one_of_each_rows_own_values(enrich: AppTest) -> None:
+    # biostatistics review (2026-10-21): an aggregate ticked "Exact" was kept as observed values
+    enrich.text_area(key="imputation_formula_input").input("sbp_baseline.mean() + 0 * age").run()
+    enrich.checkbox(key="imputation_exact").check().run()
+    next(b for b in enrich.button if b.label == "Apply Targeted Imputation").click().run()
+    _ok(enrich)
+    assert any("This one also uses other rows" in e.value for e in enrich.error)
+    draft = enrich.session_state["_data_session"].draft
+    assert draft is None or not draft.steps
 
 
 def test_a_new_formula_with_a_caret_is_refused(enrich: AppTest) -> None:

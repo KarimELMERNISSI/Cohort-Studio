@@ -13,9 +13,9 @@ Explore, a date conversion on Validate), the banner offers to **redo** the chang
 recorded settings, or to discard the draft. An imputation, statistical or by a formula, is computed on, and fills, the
 rows of the **analysis population** only (the ticked inclusion and exclusion criteria; every row when none is ticked).
 If the population changes before the draft is applied, the banner offers to refit each imputation of the draft on
-the new population, and the step then records the rows and the values of the refit. When an applied statistical
-imputation was fitted on other rows than the current population (on every row, before a criterion was ticked), the
-analysis pages say so.
+the new population, and the step then records the rows and the values of the refit. When an applied imputation was
+computed on other rows than the current population (on every row, before a criterion was ticked), the analysis pages
+say so: for a formula of each row's own values, only when the population gained rows that it left missing.
 
 ---
 
@@ -70,7 +70,10 @@ them as observed values, without the single-imputation warning, and the study do
 exact formula. Leave it unticked for an approximation or a proxy: the filled cells are then remembered like any single
 imputation, the results that use them say so, and the multiple-imputation panel advises imputing the data as they were
 before the step (reload a version saved before it, or replay the trace up to the step before it). The choice is
-recorded in the trace and kept with saved versions.
+recorded in the trace and kept with saved versions. A formula that uses other rows (a mean, a quantile, a rank, a
+shifted value, the value of another row, a test against a column, or dates kept as text, whose order of day and month
+is read from the rows) gives estimates: it cannot be exact, and **Apply** refuses it with *Exact formula* ticked, naming
+what uses other rows. Convert dates kept as text on Validate first.
 
 | Feature | Description |
 | --- | --- |

@@ -164,6 +164,112 @@ CARET_IS_NOT_A_POWER = (
     "write (a) != (b), with the parentheses."
 )
 
+# The functions and methods of the evaluator (core.expressions) whose values depend on other rows than the row computed:
+# aggregates, quantiles, ranks, running and shifted values. Every function the evaluator offers is classified (the test
+# lists the others): one added there is added here when it reads other rows.
+OF_OTHER_ROWS = frozenset(
+    {
+        "all",
+        "any",
+        "count",
+        "cummax",
+        "cummin",
+        "cumsum",
+        "diff",
+        "max",
+        "mean",
+        "median",
+        "min",
+        "nanmax",
+        "nanmean",
+        "nanmedian",
+        "nanmin",
+        "nanpercentile",
+        "nanstd",
+        "nansum",
+        "nunique",
+        "pct_change",
+        "percentile",
+        "qcut",
+        "quantile",
+        "rank",
+        "shift",
+        "std",
+        "sum",
+        "var",
+    }
+)
+_OF_OTHER_ROWS_CALLED = frozenset({"len", "max", "min"})  # len(x), max(x): of the whole column, called by their name
+
+NOT_ROW_WISE = (
+    "An exact formula gives each row its value from that row's own variables. This one also uses other rows "
+    "({reason}), so its values are estimates: untick Exact formula to impute them as such."
+)
+
+
+def _written_out(node: ast.AST) -> bool:
+    return isinstance(node, ast.List | ast.Tuple | ast.Set)
+
+
+def _argument(call: ast.Call, position: int, keyword: str) -> ast.AST | None:
+    if len(call.args) > position:
+        return call.args[position]
+    return next((k.value for k in call.keywords if k.arg == keyword), None)
+
+
+def _across_columns(call: ast.Call) -> bool:
+    """``np.nanmean([a, b], axis=0)``: across the columns written in the list, row by row."""
+    axis = _argument(call, 1, "axis")
+    return bool(call.args) and _written_out(call.args[0]) and isinstance(axis, ast.Constant) and axis.value == 0
+
+
+def other_rows(formula: str, data: pd.DataFrame | None = None) -> str | None:
+    """
+    What makes ``formula`` use other rows than the row it computes, in words, or None when it gives each row a value of
+    that row's own variables only, as an exact formula does (a weight from the BMI and the height). Other rows are used
+    by an aggregate (a mean, a maximum, a quantile), a rank, a running or shifted value, a value taken from another row
+    (``x[0]``) or a test against a column (``a.isin(b)``): the values are then estimates, and change with the rows the
+    formula is computed on. Given the ``data``, so are dates kept as text, whose order of day and month the evaluator
+    reads from the rows. A formula that cannot be read is not of each row's own values.
+    """
+    tree, _, problem = _parsed(formula)
+    if tree is None:
+        return problem or "it cannot be read"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                numpy = isinstance(func.value, ast.Name) and func.value.id == "np"
+                if func.attr in OF_OTHER_ROWS and not (numpy and _across_columns(node)):
+                    return f"{func.attr}()"
+                if func.attr == "cut" and not _written_out(_argument(node, 1, "bins") or ast.Constant(None)):
+                    return "cut() with a number of bins"
+                if func.attr == "isin" and not (node.args and _written_out(node.args[0])):
+                    return "isin() with a column"
+            elif isinstance(func, ast.Name) and func.id in _OF_OTHER_ROWS_CALLED:
+                return f"{func.id}()"
+        elif isinstance(node, ast.Subscript):
+            value = node.value
+            column = isinstance(value, ast.Name) and value.id in DEFAULT_POLICY.frame_names  # df["a column"]
+            character = isinstance(value, ast.Attribute) and value.attr == "str"  # x.str[0]
+            if not (column or character):
+                return "the value of another row"
+    if data is not None:
+        text = [name for name in read_formula(formula).names if name in data.columns and _is_text(data[name])]
+        dates = DataAnalyzer(data[text]).date_cols if text else []
+        kept = [name for name in text if name in dates]
+        if kept:
+            return (
+                f"the dates of {kept[0]} are kept as text, and the order of their day and month is read from the rows: "
+                "convert them to dates on Validate first"
+            )
+    return None
+
+
+def row_wise(formula: str, data: pd.DataFrame | None = None) -> bool:
+    """Whether ``formula`` gives each row a value of that row's own variables only (:func:`other_rows`)."""
+    return other_rows(formula, data) is None
+
 
 def _is_text(series: pd.Series) -> bool:
     return not (

@@ -254,13 +254,14 @@ def test_a_draft_redone_on_new_data_is_recorded_as_redone(data_root: Path) -> No
     assert probe["description"] == "Imputed 1 value in bmi using a formula"
 
 
-def _applied_script(change: bool, scoped: bool = True) -> None:
+def _applied_script(change: bool, scoped: bool = True, kind: str = "statistical") -> None:
     import pandas as pd
     import streamlit as st
 
     from core.population import criterion_id
     from core.state import DatasetRef
-    from enrich.imputation_service import impute_rows
+    from enrich.formulas import row_wise
+    from enrich.imputation_service import fill_with_formula, impute_rows
     from ui.components.population import population_banner
     from ui.state import get_state
 
@@ -280,31 +281,43 @@ def _applied_script(change: bool, scoped: bool = True) -> None:
         if scoped:
             state.set_ticked([adult])
         population = state.population
-        outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
-        state.stage(
-            outcome.frame, "imputation", outcome.params, "Mean imputation", population=population
-        )
+        if kind == "statistical":
+            outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
+            state.stage(
+                outcome.frame, "imputation", outcome.params, "Imputation", population=population
+            )
+        else:  # a formula of each row's own values, or one of other rows (a mean)
+            formula = "age / 2" if kind == "row-wise" else "bmi.mean() + 0 * age"
+            filled, n = fill_with_formula(
+                state.working_frame(), "bmi", formula, population.included
+            )
+            params = {"target_variable": "bmi", "formula": formula, "row_wise": row_wise(formula)}
+            state.stage(filled, "targeted_imputation", params, "Imputation", population=population)
         state.commit_staging()
         # on the adults: the analyses now include the child, whose missing value was not imputed;
-        # on every row: the analyses leave out the child, who informed the imputed values
+        # on every row: the analyses leave out the child, who was among the rows computed on
         if change:
             state.set_ticked([] if scoped else [adult])
     population_banner()
 
 
+@pytest.mark.parametrize("kind", ["statistical", "aggregate", "row-wise"])
 @pytest.mark.parametrize("scoped", [True, False])
 @pytest.mark.parametrize("change", [False, True])
 def test_imputed_values_from_another_population_are_flagged_on_analysis_pages(
-    data_root: Path, change: bool, scoped: bool
+    data_root: Path, change: bool, scoped: bool, kind: str
 ) -> None:
     at = AppTest.from_function(
-        _applied_script, kwargs={"change": change, "scoped": scoped}, default_timeout=120
+        _applied_script,
+        kwargs={"change": change, "scoped": scoped, "kind": kind},
+        default_timeout=120,
     ).run()
     assert not at.exception, [str(e.value) for e in at.exception]
-    flagged = [w.value for w in at.warning if "fitted on other rows" in w.value]
-    assert bool(flagged) is change
+    flagged = [w.value for w in at.warning if "computed on other rows" in w.value]
+    # a formula of each row's own values matters only for rows gained since, which it did not fill
+    assert bool(flagged) is (change and not (kind == "row-wise" and not scoped))
     if flagged and not scoped:  # an imputation on every row names its rows
-        assert "Mean imputation (all 4 rows)" in flagged[0]
+        assert "Imputation (all 4 rows)" in flagged[0]
 
 
 def _left_out_script() -> None:

@@ -19,12 +19,14 @@ from core.population import PopulationResult, catalogue
 from core.registry import as_code
 from enrich.formulas import (
     CARET_IS_NOT_A_POWER,
+    NOT_ROW_WISE,
     FormulaTrial,
     evaluate_formula_safely,
     extract_constant_value,
     far_outside,
     formula_from_model,
     numeric_summary,
+    other_rows,
     read_formula,
     try_formula,
     validate_and_extract_columns_ast,
@@ -2205,7 +2207,7 @@ def app():
                         "a total from its parts. The values are then imputed exactly: the analyses and the multiple "
                         "imputation keep them as observed values, without the single-imputation warning. Leave it "
                         "unticked for an approximation or a proxy: the values are then flagged like any single "
-                        "imputation."
+                        "imputation. A formula that uses other rows (a mean, a quantile, a rank) cannot be exact."
                     ),
                 )
 
@@ -2213,9 +2215,17 @@ def app():
                     "Apply Targeted Imputation", type="primary", disabled=not formula_input or target_scope.blocked
                 ):
                     try:
+                        reading = read_formula(formula_input)
+                        # a formula of each row's own values, or of other rows too (an aggregate): recorded, as
+                        # the notice about imputations on other rows needs it
+                        other = other_rows(formula_input, in_scope)
+                        if reading.problem:
+                            st.error(f"Formula Error: {reading.problem}")
                         # a new formula: ^ is refused (a recorded one replays as it was computed)
-                        if read_formula(formula_input).power_caret:
+                        elif reading.power_caret:
                             st.error(f"Formula Error: {CARET_IS_NOT_A_POWER}")
+                        elif exact and other:
+                            st.error(NOT_ROW_WISE.format(reason=other))
                         else:
                             # computed on, and filling, the analysis population (every row when no criterion is
                             # ticked): the session data changes through the draft only
@@ -2233,6 +2243,7 @@ def app():
                                         "formula": formula_input,
                                         "filled_count": int(filled_count),
                                         "exact": bool(exact),
+                                        "row_wise": other is None,
                                     },
                                     describe_formula_fill(
                                         target_var,
