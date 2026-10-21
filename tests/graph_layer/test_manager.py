@@ -76,9 +76,8 @@ def test_the_choice_follows_the_session_the_preference_then_the_configuration() 
     assert (chosen.chosen, chosen.source) == ("graphviz", "session")
     stale = manager.select(session="cohere")
     assert stale.chosen == "graphviz" and "`cohere` is not offered here" in stale.warnings[0]
-    assert (
-        manager.get("auto").name == "graphviz"
-    )  # the session's "auto" leaves the configuration in charge
+    # the session's "auto" leaves the configuration in charge, in the manager and in the kit alike
+    assert manager.get("auto").name == manager.select(session="auto").chosen == "graphviz"
 
 
 def test_set_renderer_injection_and_get_override() -> None:

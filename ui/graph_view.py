@@ -15,7 +15,7 @@ from collections.abc import Callable
 
 import streamlit as st
 
-from core.registry import AUTO
+from core.registry import AUTO, as_code
 from graph.base import BaseGraphRenderer
 from graph.manager import get_graph_renderer_manager
 from graph.model import GraphSpec, RenderOptions, SelectionResult
@@ -67,11 +67,14 @@ def render_graph(
         st.info("Nothing to draw: the graph has no nodes for the current filters.")
         return SelectionResult(renderer=chosen.name)
 
+    drawn = chosen
     try:
         result = chosen.render(spec, resolved)
     except Exception as exc:
-        logger.exception("Graph rendering failed (renderer=%s, kind=%s)", chosen.name, spec.kind)
-        st.error(f"The graph engine '{chosen.display_name}' could not render this graph: {exc}")
+        _failed("Graph rendering failed", chosen, spec, exc)
+        st.error(
+            f"The graph engine '{chosen.display_name}' could not render this graph: {_brief(exc)}"
+        )
         if not manager.config.fallback_on_error:
             return SelectionResult(renderer=chosen.name)
         try:
@@ -82,18 +85,33 @@ def render_graph(
             result = fallback.render(
                 spec, resolved.model_copy(update={"key": f"{resolved.key}__fallback"})
             )
+            drawn = fallback
         except Exception as exc2:
-            logger.exception("Fallback graph rendering failed")
-            st.error(f"The fallback engine failed as well: {exc2}")
+            _failed("Fallback graph rendering failed", chosen, spec, exc2)
+            st.error(f"The fallback engine failed as well: {_brief(exc2)}")
             return SelectionResult(renderer=chosen.name)
 
-    caps = chosen.capabilities
+    caps = drawn.capabilities  # the engine that drew, after a fallback too
     if caps.requires_internet and manager.config.show_license_notice:
         st.caption(
-            f"Rendered with {chosen.display_name}. {caps.license_note} "
+            f"Rendered with {drawn.display_name}. {caps.license_note} "
             "See About > Third-party components for details, or switch to the offline engine in the sidebar."
         )
     return result
+
+
+def _failed(what: str, renderer: BaseGraphRenderer, spec: GraphSpec, exc: Exception) -> None:
+    """The server log gets the engine and the kind of error only: a library's message can quote the graph's labels,
+    which are the user's data (the details, at the debug level an administrator turns on)."""
+    logger.warning(
+        "%s (renderer=%s, kind=%s): %s", what, renderer.name, spec.kind, type(exc).__name__
+    )
+    logger.debug("%s", what, exc_info=exc)
+
+
+def _brief(exc: Exception) -> str:
+    """A library's error on the page: as code (it can quote the graph's labels), and cut."""
+    return as_code(exc, limit=200)
 
 
 def renderer_selector(
@@ -109,12 +127,16 @@ def renderer_selector(
     """
     manager = get_graph_renderer_manager()
     target = container if container is not None else st
-    engines = manager.select().alternatives  # every engine, and whether it can draw here
-    labels: dict[str, str] = {AUTO: "Automatic (offline first)"}
-    for name, found in engines:
+    # no session choice: the server's setting when it names an engine that can draw here, else offline first
+    server = manager.select()
+    default = "Automatic (offline first)"
+    if manager.config.renderer != AUTO and server.chosen:
+        default = f"Server default: {GRAPH_RENDERERS.display_name(server.chosen)}"
+    labels: dict[str, str] = {AUTO: default}
+    for name, found in server.alternatives:  # every engine, and whether it can draw here
         display = GRAPH_RENDERERS.display_name(name)
         labels[name] = display if found.ok else f"{display} (unavailable: {found.reason})"
-    choices = [AUTO] + [name for name, found in engines if found.ok]
+    choices = [AUTO] + [name for name, found in server.alternatives if found.ok]
     current = st.session_state.get(key) or AUTO
     index = choices.index(current) if current in choices else 0
     chosen = target.selectbox(
@@ -122,8 +144,9 @@ def renderer_selector(
         options=choices,
         index=index,
         format_func=lambda value: labels.get(value, value),
-        help="Automatic picks the offline Plotly engine. The yFiles engine needs internet access "
-        "(it loads its runtime from yworks.com) and reports anonymised usage data to yWorks.",
+        help="The default is the engine the administrator set (CMP_GRAPH_RENDERER), else the offline Plotly "
+        "engine. The yFiles engine needs internet access (it loads its runtime from yworks.com) and reports "
+        "anonymised usage data to yWorks.",
         key=f"{key}__selectbox",
         on_change=on_change,
     )

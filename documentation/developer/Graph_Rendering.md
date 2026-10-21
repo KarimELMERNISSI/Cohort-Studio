@@ -29,15 +29,16 @@ domain data ──► graph.builders.*  ──► GraphSpec ──► ui.graph_v
 
 ## The contract: "the connector translates the information for the library"
 
-`BaseGraphRenderer.translate(spec, options)` is a **pure** function that converts the semantic
-model into the library's own primitives (yFiles `Node`/`Edge`/mapping callables and `show()`
-arguments; a Plotly `Figure`; a DOT string). `render()` only calls the library and normalises what
-comes back into a `SelectionResult`. Because translation has no side effects, each adapter is
-unit-tested without a browser (`tests/graph_layer/test_renderer_*.py`); the yFiles test even
-replays the translated payload through the library's own mapping engine.
+`BaseGraphRenderer.translate(spec, options)` converts the semantic model, with no side effects, into
+the library's own primitives (yFiles `Node`/`Edge`/mapping callables and `show()` arguments; a
+Plotly `Figure`; a DOT string). `render()` only calls the library and normalises what comes back
+into a `SelectionResult`. Because translation has no side effects, each adapter is unit-tested
+without a browser (`tests/graph_layer/test_renderer_*.py`); the yFiles test even replays the
+translated payload through the library's own mapping engine.
 
-A renderer may load its library, and through it Streamlit, inside `translate()` and `render()` only:
-the yFiles primitives come from its Streamlit component. `availability()` finds the library without
+A renderer loads its library inside `translate()` and `render()` only, and Streamlit inside
+`render()` only, except that the yFiles primitives come from a Streamlit component, which
+`translate()` may load (the layer test's rule R3). `availability()` finds the library without
 importing it (`Availability.of_module`) and never raises, so listing the engines loads none of them;
 the yFiles adapter checks the component's API when drawing, where a mismatch is a `RenderError` with
 the fallback.
@@ -69,13 +70,15 @@ trace. Selection uses `st.plotly_chart(on_select="rerun")`.
 |---|---|
 | `CMP_GRAPH_RENDERER=auto` (default) | Plotly (offline). yFiles is **never** chosen automatically. |
 | `CMP_GRAPH_RENDERER=yfiles` | yFiles when installed (`uv sync --extra graph-yfiles`); falls back to Plotly otherwise. |
-| `CMP_GRAPH_RENDERER=plotly` / `graphviz` | Force a backend. |
+| `CMP_GRAPH_RENDERER=plotly` / `graphviz` | The server's default engine (a user's own choice comes first). |
 | `CMP_OFFLINE=1` | Refuse any backend with `requires_internet=True` (yFiles). |
-| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`), kept for the user's next session. |
+| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`), kept for the user's next session. Its first option is the server's default: "Automatic (offline first)", or "Server default: <engine>" when `CMP_GRAPH_RENDERER` names one. |
 
 The choice is the session's selector, then the user's saved preference, then `CMP_GRAPH_RENDERER`,
-then the automatic order (Plotly, then Graphviz). A choice that cannot draw here falls through to the
-next one, and Settings says which engine is used instead and why.
+then the automatic order (Plotly, then Graphviz); "automatic" at a level leaves the choice to the
+next one. A choice that cannot draw here falls through to the next one. Settings names a saved engine
+that cannot draw here and the engine used instead; a server setting that cannot draw is written to
+the log (one that names no engine with the valid names, never its value).
 
 yFiles is distributed under the yWorks *yFiles Streamlit Component Free License*: it loads its
 runtime from yworks.com at render time (internet required), reports anonymised graph-structure

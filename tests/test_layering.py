@@ -21,7 +21,7 @@ storage) are not ordered yet.
 - **R1** Imports go strictly down; two groups on the same layer do not import each other.
 - **R2** No import cycles. The one exception is the MI engine and its worker module, by design.
 - **R3** Nothing below ui reaches Streamlit, through any chain of imports. Graph renderers import it inside their
-  ``render`` method only.
+  ``render`` method only, and a Streamlit component package (yFiles) inside ``translate`` too.
 - **R4** The AI providers' SDKs are imported only in ``manage/rag/providers``.
 - **R5** The headless entry points (``manage_users``; ``manage.replay`` from M8) reach neither Streamlit nor the
   packages of the ``ai`` extra.
@@ -99,8 +99,8 @@ ENTRY_POINTS = ("main", "manage_users")  # above every layer
 HEADLESS = ("manage_users", "manage.replay")  # R5; manage.replay arrives with M8
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
-# Streamlit inside their translate and render methods only (R3): a renderer draws through Streamlit, and the yFiles
-# primitives it translates into come from a Streamlit component
+# Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws
+# through Streamlit, and the yFiles primitives it translates into come from a Streamlit component (see _drawing)
 RENDERERS = "graph.renderers"
 MODULE_NAME = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+")  # a dotted name in a string
 
@@ -199,6 +199,14 @@ def _streamlit(name: str) -> bool:
     return "streamlit" in name.split(".")[0]
 
 
+def _drawing(function: str | None, target: str) -> bool:
+    """A renderer's import allowed by R3: Streamlit in ``render``; a Streamlit component package (whose objects the
+    renderer translates into, as yFiles' are) in ``translate`` too, never Streamlit itself."""
+    if function == "render":
+        return _streamlit(target)
+    return function == "translate" and _streamlit(target) and target.split(".")[0] != "streamlit"
+
+
 def _ai(name: str) -> bool:
     return _matches(name, AI_PACKAGES)
 
@@ -225,7 +233,7 @@ def graph() -> tuple[
 ]:
     """
     (first-party imports, other imports, modules named in strings) of each module; an import carries whether it is
-    lazy (inside a function). A renderer's Streamlit imports inside its translate and render methods are left out (R3).
+    lazy (inside a function). A renderer's drawing imports are left out (R3, :func:`_drawing`).
     """
     mods = modules()
     first: dict[str, set[tuple[str, bool]]] = {m: set() for m in mods}
@@ -269,7 +277,7 @@ def graph() -> tuple[
             else:
                 continue
             for target in targets:
-                if renderer and function in ("translate", "render") and _streamlit(target):
+                if renderer and _drawing(function, target):
                     continue  # allowed by design (see RENDERERS)
                 resolved = _resolve(target)
                 if resolved is None:

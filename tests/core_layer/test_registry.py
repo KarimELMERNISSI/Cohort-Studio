@@ -138,8 +138,12 @@ def test_the_names_import_nothing_and_a_class_is_imported_once(fake: str) -> Non
     assert fake not in sys.modules
     assert registry.get("FINE").name == "good" and fake in sys.modules  # an alias, in any case
     assert registry.get("good") is registry.get("fine")
-    with pytest.raises(UnknownConnectorError, match="good, down, boom, ext"):
-        registry.get("nope")
+    with pytest.raises(UnknownConnectorError, match="use good, down, boom or ext") as refused:
+        registry.get("nope-zz9")
+    assert (
+        "zz9" not in str(refused.value) and refused.value.unknown is None
+    )  # a setting's value is never repeated
+    assert registry.target("FINE") == f"{fake}:Good"
 
 
 def test_availability_never_raises_and_names_the_group_to_install(fake: str) -> None:
@@ -149,26 +153,37 @@ def test_availability_never_raises_and_names_the_group_to_install(fake: str) -> 
     assert missing.extra == "ai" and missing.install_hint == "uv sync --extra ai"
     broken = registry.availability("boom")
     assert not broken.ok and "RuntimeError" in broken.reason and "zz9" not in broken.reason
-    assert registry.availability("down") == Availability(False, "library too old", "graph-yfiles")
+    # the class's own refusal names its group itself: installing may not help (a server that does not answer)
+    assert registry.availability("down") == Availability(False, "library too old")
     assert registry.availability("good").ok and registry.availability("good").install_hint is None
     assert not registry.availability("cohere").ok  # unknown: not offered
+    registry.register("typo", f"{fake}_mistyped:Good", extra="ai")
+    typo = registry.availability("typo")  # the registration names no module: nothing to install
+    assert not typo.ok and "registration error" in typo.reason and typo.install_hint is None
 
 
 def test_a_connector_that_cannot_load_is_shown_by_its_name(fake: str) -> None:
     registry = _registry(fake)
     assert registry.display_name("FINE") == "Good"
     assert registry.display_name("ext") == "ext"  # its module needs a package that is not installed
-    assert registry.display_name("cohere") == "cohere"
+    assert (
+        registry.display_name("co[here](http://e.x)") == "`co[here](http://e.x)`"
+    )  # unknown: as code
 
 
-def test_a_module_is_found_without_being_imported(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_module_is_found_without_being_imported(
+    fake: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import sys
 
-    assert Availability.of_module("json").ok
+    assert Availability.of_module(fake).ok and fake not in sys.modules
     absent = Availability.of_module("not_installed_pkg_zz", extra="ai")
     assert not absent.ok and absent.install_hint == "uv sync --extra ai"
-    monkeypatch.setitem(sys.modules, "json", None)  # blocked, as the contract tests block an SDK
-    assert not Availability.of_module("json").ok
+    assert not Availability.of_module(
+        "not_installed_pkg_zz.sub"
+    ).ok  # its parent is looked up first
+    monkeypatch.setitem(sys.modules, fake, None)  # blocked, as the contract tests block an SDK
+    assert not Availability.of_module(fake).ok
 
 
 def test_the_choice_follows_the_session_the_preference_the_setting_then_auto(fake: str) -> None:
@@ -179,16 +194,31 @@ def test_the_choice_follows_the_session_the_preference_the_setting_then_auto(fak
     assert chosen.warnings == (
         "Your saved graph engine `down` is not available here (library too old)",
     )
+    assert chosen.reasons == ("the server's setting (CMP_GRAPH_RENDERER)",)
     stale = registry.select(preference="cohere")
     assert (stale.chosen, stale.source) == ("good", "auto")
     assert stale.warnings == ("Your saved graph engine `cohere` is not offered here",)
     assert stale.reasons == ("the first available of good",)
-    assert (
-        registry.select(session="auto", preference="down").warnings == ()
-    )  # auto, chosen explicitly
+    # "auto" at a level is no choice there: the next level decides (the session's "automatic" = the server's default)
+    deferred = registry.select(session="auto", preference="fine", setting="down")
+    assert (deferred.chosen, deferred.source, deferred.reasons) == (
+        "good",
+        "preference",
+        ("your saved choice",),
+    )
+    assert registry.select(session="good").reasons == ("chosen for this session",)
     recommended = registry.select(auto="down", auto_reasons=("recommended here",))
-    assert recommended.chosen == "good"  # the recommendation cannot run here: the family's order
+    assert (
+        recommended.chosen == "good"
+    )  # the recommendation cannot run here: the family's order, and why
+    assert recommended.warnings == (
+        "The recommended graph engine `down` is not available here (library too old)",
+    )
     assert dict(recommended.alternatives)["ext"].extra == "ai"
+    failing = registry.select(
+        session="good", check=lambda name: 1 / 0
+    )  # a family's rule that fails: a reason
+    assert failing.chosen is None and "its check failed (ZeroDivisionError)" in failing.warnings[0]
 
 
 def test_a_setting_naming_nothing_is_reported_without_its_value(fake: str) -> None:
@@ -229,3 +259,8 @@ def test_a_saved_name_is_shown_as_code() -> None:
     assert (
         as_code("x`y\n z") == "`xy z`" and as_code("[link](http://e.x)") == "`[link](http://e.x)`"
     )
+    # bidirectional overrides and zero-width characters cannot reorder or hide part of the sentence
+    assert as_code("ab‮cd​ef") == "`abcdef`"
+    assert as_code("```") == "`?`"  # nothing left to show
+    long = as_code("x" * 300)
+    assert len(long) == 66 and long.endswith("…`")  # cut at 64 characters

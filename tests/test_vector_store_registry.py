@@ -2,7 +2,6 @@
 neither the engines nor the AI stack (it runs without the optional 'ai' group)."""
 
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
@@ -11,8 +10,6 @@ import pytest
 from core.registry import Availability
 from manage.vectorstores import VECTOR_STORES
 from tests import connector_contract as contract
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_the_stored_names_never_change() -> None:
@@ -26,6 +23,7 @@ def test_the_registry_keeps_the_connector_contract(monkeypatch: pytest.MonkeyPat
     contract.check_classes(VECTOR_STORES)
     contract.check_precedence(VECTOR_STORES)
     contract.check_unknown_setting(VECTOR_STORES)
+    contract.check_unknown_names(VECTOR_STORES)
 
 
 @pytest.mark.parametrize(("name", "module"), [("lancedb", "lancedb"), ("qdrant", "qdrant_client")])
@@ -107,17 +105,10 @@ def test_an_engine_that_cannot_run_names_the_group_to_install(
 
 
 def test_the_registry_loads_neither_the_engines_nor_the_ai_stack() -> None:
-    code = (
-        "import sys\n"
-        "from manage.vectorstores import VECTOR_STORES\n"
-        "[VECTOR_STORES.availability(name) for name in VECTOR_STORES.names()]\n"
-        "print(sorted(m for m in ('langchain_core', 'lancedb', 'qdrant_client', 'streamlit') if m in sys.modules))\n"
+    contract.check_light(
+        "manage.vectorstores:VECTOR_STORES",
+        never_loaded=("langchain_core", "lancedb", "qdrant_client", "streamlit"),
     )
-    done = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, cwd=ROOT, timeout=120
-    )
-    assert done.returncode == 0, done.stderr[-2000:]
-    assert done.stdout.strip().splitlines()[-1] == "[]"
 
 
 def test_the_package_names_load_when_first_used() -> None:

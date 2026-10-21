@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.registry import AUTO, Availability, Selection
 from graph.base import BaseGraphRenderer
@@ -29,6 +29,9 @@ OFFLINE = Availability(False, "disabled in offline mode (CMP_OFFLINE=1)")
 
 
 class GraphConfig(BaseModel):
+    # a refused name is not repeated in the error: it can come from a setting, where it can be a pasted key
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     renderer: str = Field(default=AUTO, description="A registered engine, or auto (offline first).")
     offline: bool = Field(
         default=False, description="Never choose a renderer that needs internet access."
@@ -43,6 +46,8 @@ class GraphConfig(BaseModel):
     @field_validator("renderer")
     @classmethod
     def _registered(cls, value: str) -> str:
+        if not value or not value.strip():
+            return AUTO  # unset, as in the settings
         name = GRAPH_RENDERERS.canonical(value)
         if name is None:
             raise ValueError(GRAPH_RENDERERS.setting_problem(value))
@@ -112,9 +117,13 @@ class GraphRendererManager:
         return self._renderer
 
     def get(self, override: str | None = None) -> BaseGraphRenderer:
-        """The configured renderer, or the session's choice ``override`` when it can draw here."""
-        if override is None or override.strip().lower() in ("", AUTO, "default"):
+        """The configured renderer, or the session's choice ``override`` when it can draw here (``auto``: no choice,
+        the configured one)."""
+        name = GRAPH_RENDERERS.canonical(override)
+        if not override or name == AUTO:
             return self.renderer
+        if self._renderer is not None and self._renderer.name == name:
+            return self._renderer  # the cached one: nothing to choose again
         selection = self.select(session=override)
         if self._renderer is not None and self._renderer.name == selection.chosen:
             return self._renderer

@@ -1,18 +1,13 @@
 """The graph engines as a connector family (M5b): the registry keeps the connector contract, and the manager adds the
 offline mode."""
 
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
 
 from core.registry import Availability
+from graph.base import RendererCapabilities
 from graph.manager import GraphConfig, GraphRendererManager
 from graph.renderers import GRAPH_RENDERERS, OFFLINE_DEFAULT
 from tests import connector_contract as contract
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_the_stored_names_never_change() -> None:
@@ -26,6 +21,15 @@ def test_the_registry_keeps_the_connector_contract(monkeypatch: pytest.MonkeyPat
     contract.check_classes(GRAPH_RENDERERS)
     contract.check_precedence(GRAPH_RENDERERS)
     contract.check_unknown_setting(GRAPH_RENDERERS)
+    contract.check_unknown_names(GRAPH_RENDERERS)
+
+
+def test_each_engine_declares_what_it_can_do() -> None:
+    # read from the class, without drawing: the offline mode and the notices depend on it
+    for name in GRAPH_RENDERERS.names():
+        assert isinstance(GRAPH_RENDERERS.get(name).capabilities, RendererCapabilities), name
+    assert GRAPH_RENDERERS.get("yfiles").capabilities.requires_internet
+    assert not GRAPH_RENDERERS.get(OFFLINE_DEFAULT).capabilities.requires_internet
 
 
 def test_a_missing_yfiles_names_its_group(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -45,20 +49,13 @@ def test_the_automatic_order_is_offline_first() -> None:
     assert GRAPH_RENDERERS.select(check=only("yfiles")).chosen is None  # yFiles only when chosen
 
 
-def test_checking_the_engines_loads_neither_streamlit_nor_the_yfiles_component() -> None:
-    """The yFiles component imports Streamlit: its check finds it without importing it (R3)."""
-    code = (
-        "import sys\n"
-        "from graph.manager import GraphConfig, GraphRendererManager\n"
-        "manager = GraphRendererManager(GraphConfig())\n"
-        "[manager.availability(name) for name in ('plotly', 'yfiles', 'graphviz')]\n"
-        "print(sorted(m for m in ('streamlit', 'yfiles_graphs_for_streamlit') if m in sys.modules))\n"
+def test_listing_the_engines_loads_none_of_their_libraries() -> None:
+    """The yFiles component imports Streamlit: its check finds it without importing it (R3), and the drawing libraries
+    are loaded only to draw."""
+    contract.check_light(
+        "graph.renderers:GRAPH_RENDERERS",
+        never_loaded=("streamlit", "yfiles_graphs_for_streamlit", "plotly", "networkx"),
     )
-    done = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, cwd=ROOT, timeout=120
-    )
-    assert done.returncode == 0, done.stderr[-2000:]
-    assert done.stdout.strip().splitlines()[-1] == "[]"
 
 
 def test_the_offline_mode_refuses_an_engine_that_needs_internet(
@@ -82,5 +79,18 @@ def test_the_fallback_is_the_offline_engine_never_the_one_that_failed() -> None:
 
 def test_a_configuration_names_a_registered_engine() -> None:
     assert GraphConfig(renderer=" YFiles ").renderer == "yfiles"
-    with pytest.raises(ValueError, match="use auto, plotly, yfiles or graphviz"):
-        GraphConfig(renderer="nonsense")
+    assert GraphConfig(renderer=" ").renderer == "auto"  # unset
+    with pytest.raises(ValueError, match="use auto, plotly, yfiles or graphviz") as refused:
+        GraphConfig(renderer="zz9-nonsense")
+    assert "zz9" not in str(
+        refused.value
+    )  # pydantic would repeat the input: it can be a pasted key
+
+
+def test_the_sessions_automatic_choice_is_the_servers_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(GRAPH_RENDERERS, "availability", lambda name: Availability(True))
+    manager = GraphRendererManager(GraphConfig(renderer="graphviz"))
+    assert manager.get("auto").name == manager.select(session="auto").chosen == "graphviz"
+    assert manager.select(session="auto").source == "setting"

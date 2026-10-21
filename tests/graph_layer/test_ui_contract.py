@@ -34,7 +34,7 @@ def _render_with(spec_json: str, rtype: str) -> None:
     st.write(f"rendered-by:{result.renderer}")
 
 
-def _render_with_fallback(spec_json: str) -> None:
+def _render_with_fallback(spec_json: str, internet: bool = False) -> None:
     import streamlit as st
 
     from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
@@ -55,9 +55,9 @@ def _render_with_fallback(spec_json: str) -> None:
             supports_hierarchical=False,
             supports_drag=False,
             supports_html_export=False,
-            requires_internet=False,
-            telemetry=False,
-            license_note="test",
+            requires_internet=internet,
+            telemetry=internet,
+            license_note="sends usage data to the planet Zz9",
         )
 
         def translate(self, spec, options):
@@ -115,6 +115,37 @@ def test_render_graph_isolates_failures_and_falls_back() -> None:
     assert any("Falling back" in i.value for i in at.info)
     texts = [m.value for m in at.markdown]
     assert any("rendered-by:plotly" in t for t in texts) and any("after-graph" in t for t in texts)
+
+
+def test_after_a_fallback_the_page_speaks_of_the_engine_that_drew() -> None:
+    # the failed engine needs internet: its licence notice must not appear under a graph that Plotly drew
+    at = AppTest.from_function(
+        _render_with_fallback,
+        kwargs={"spec_json": _corr_spec().to_json(), "internet": True},
+        default_timeout=60,
+    ).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    # the library's text, as code
+    assert any("could not render this graph: `boom`" in e.value for e in at.error)
+    assert not any("Zz9" in c.value for c in at.caption)
+
+
+def _selector(renderer: str) -> None:
+    from graph.manager import GraphConfig, get_graph_renderer_manager
+    from ui.graph_view import renderer_selector
+
+    get_graph_renderer_manager(GraphConfig(renderer=renderer))
+    renderer_selector()
+
+
+@pytest.mark.parametrize(
+    ("renderer", "first"),
+    [("auto", "Automatic (offline first)"), ("graphviz", "Server default: Graphviz (static)")],
+)
+def test_the_selectors_first_option_names_what_the_server_uses(renderer: str, first: str) -> None:
+    at = AppTest.from_function(_selector, kwargs={"renderer": renderer}, default_timeout=60).run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert at.selectbox[0].options[0] == first
 
 
 def test_render_graph_handles_empty_spec() -> None:
