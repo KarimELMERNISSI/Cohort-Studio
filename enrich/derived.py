@@ -279,8 +279,11 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
     if not inputs:
         return _cannot(definition, "the formula uses no variable")
     other = other_rows(formula, data)
-    if other:
-        return _cannot(definition, f"it uses other rows ({other})")
+    if other:  # dates kept as text say so themselves
+        return _cannot(
+            definition,
+            other if other.startswith("the dates of") else f"it uses other rows ({other})",
+        )
     # the formula's columns only: each evaluation profiles the columns it is given
     data = data[list(dict.fromkeys([target, *inputs]))]
     trial = try_formula(formula, data, target=target)
@@ -344,15 +347,16 @@ def check_derived(definition: DerivedVariable, data: pd.DataFrame) -> DerivedChe
     )
     kappa = (share - chance) / (1 - chance) if chance < 1 else 0.0
 
-    level_reason = _level_disagreeing(rows, inputs, agree)
-    if level_reason:
-        verdict, reason = DISAGREES, level_reason
-    elif share >= AGREE_SHARE and kappa >= AGREE_KAPPA:
+    if share >= AGREE_SHARE and kappa >= AGREE_KAPPA:
         verdict, reason = AGREES, None
     elif share >= MOSTLY_SHARE and kappa >= MOSTLY_KAPPA:
         verdict, reason = MOSTLY, f"{n - agreeing:,} rows disagree: entry errors, or another unit?"
     else:
         verdict, reason = DISAGREES, None
+    # agreeing overall, but not for one level of a text or code variable: the formula is wrong for it
+    level_reason = None if verdict == DISAGREES else _level_disagreeing(rows, inputs, agree)
+    if level_reason:
+        verdict, reason = DISAGREES, level_reason
     hint = None if verdict == AGREES or textual else _unit_hint(want[~agree], got[~agree])
     if not textual and _multiple_of_one(definition, rows, inputs, got):
         warnings.append(

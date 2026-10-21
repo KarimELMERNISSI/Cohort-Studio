@@ -47,12 +47,42 @@ Work in this order:
 
 | The missing value | Approach | Tab |
 | --- | --- | --- |
+| belongs to a variable computed from others: a BMI, a total from its items, a unit conversion | **Declare it** with its formula: the formula is checked against your data | Derived variables |
 | is determined by other variables: a weight from the BMI and the height, a total from its parts, a unit conversion | **Exact imputation** by a formula, with *Exact formula* ticked: nothing is estimated | Targeted Imputation |
 | is only needed to draw, reduce or cluster the data | **Single imputation**: mean or median, KNN, chained equations, missForest | Global Imputation |
 | enters an estimate, a test or a model | **Multiple imputation**, pooled with Rubin's rules | Multiple imputation (for inference) |
 
 Impute exactly first: the values an exact formula fills are then observed data for the statistical imputations, which
 have fewer cells to estimate and more information to estimate them from.
+
+### Derived variables
+
+Optional. Declare the variables your data compute from others in the same row: a BMI from the weight and the height,
+a total from its items, a unit conversion. With no definition, nothing changes.
+
+**Add a definition**: choose the variable, write its formula in the language of **Create New Variables**, and say,
+if you wish, what kind of definition it is and its source (the reference, the units it assumes). Before you add it,
+the formula is checked against your data, on this machine: it is computed on the rows where the variable and every
+variable of its formula are recorded, and compared with the recorded value.
+
+- Within the precision the variable is recorded with (±0.05 for a BMI recorded to 0.1) when nine rows in ten agree
+  within it: the variable was then computed from the recorded values, and the other rows disagree. Otherwise within
+  what rounding the formula's variables moves it.
+- **Agrees**: 99% of these rows give the recorded value, beyond chance. **Mostly agrees**: 90%. **Disagrees**:
+  fewer, or one group of a text or code variable disagrees (a factor wrong for women only). **Too few rows to check**:
+  under 60 rows, or the variable takes one value nearly everywhere. A definition the data mostly agree with, or cannot
+  check, is used only once you tick *Use it all the same*; one the data disagree with is never used.
+- When a constant factor explains the disagreement (10,000 for a height in cm instead of m, 88.4 for a creatinine in
+  mg/dL instead of µmol/L), the check says so. The rows that disagree can be shown: often entry errors, which a
+  criterion on Data > Validate can exclude from the analysis population. They are shown, never saved.
+- Agreeing with your data says nothing of the published reference: name it in the source.
+
+Each definition can have **inverses**: a formula that fills a missing variable of it from the others, a weight from
+the BMI and the height. Each inverse is checked like a definition. **Edit** a definition to change its formula, kind
+or source: its inverses are kept. Two definitions that would compute each other are refused: declare one as the
+other's inverse. The definitions are kept with the study's
+criteria: the configuration downloaded from Data > Validate holds them, and uploading it adds those the session does
+not have (a variable defined in both keeps the session's definition, which the upload names).
 
 ### Targeted Imputation
 

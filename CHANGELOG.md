@@ -518,6 +518,25 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the step was recorded). An imputation recorded by an earlier version without a population replays on every row, as
   it was computed.
 
+### Derived variables, declared and checked against the data
+
+- **Data > Enrich > Handle Missing Data > Derived variables**, a new first tab, optional: declare the variables your
+  data compute from others in the same row (a BMI from the weight and the height, a total from its items, a unit
+  conversion). With no definition, nothing changes.
+- **Each definition is checked against your data, on this machine, before it is added**: computed on the rows where
+  the variable and every variable of its formula are recorded, and compared with the recorded value, within the
+  precision the variable is recorded with. It agrees (99% of those rows, beyond chance), mostly agrees (90%),
+  disagrees (also when it disagrees for one group, as a factor wrong for women only), or has too few rows to check
+  (under 60). A constant factor that explains a disagreement is named (10,000 for a height in cm instead of m), and
+  the rows that disagree can be shown, never saved: often entry errors. A definition the data mostly agree with, or
+  cannot check, is used only once accepted; one they disagree with never.
+- **Inverses**: a definition can say how to recover each variable of its formula from the others (a weight from the
+  BMI and the height), each checked in the same way. A definition can be edited, its inverses kept; two definitions
+  that would compute each other are refused (add one as the other's inverse).
+- **The definitions are kept with the criteria**, in the configuration downloaded and uploaded on Data > Validate. An
+  upload adds the definitions the session does not have, each whole; a variable defined in both keeps the session's,
+  and the upload names it.
+
 ### Privacy: what the AI engine writes, and the cells of a file, are shown as text
 
 - **No answer of the AI engine makes the browser fetch an address.** A language model's answer can carry an image

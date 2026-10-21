@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import pandas as pd
 import streamlit as st
 
+from core.derived import DerivedVariable, with_definitions
+from core.derived import from_config as derived_from_config
 from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
 from core.population import PopulationResult, catalogue, criteria_from_trace, evaluate_population
 from core.session import (
@@ -52,6 +54,7 @@ from utils.session_scope import get_current_scope
 from utils.settings import get_settings
 
 if TYPE_CHECKING:
+    from enrich.derived import DerivedCheck
     from explore.data_quality_auditor import DataQualityAuditor
 
 logger = logging.getLogger(__name__)
@@ -645,6 +648,43 @@ class AppState:
             every = "" if block.get("criteria") else f" (all {block.get('n_included', '?')} rows)"
             out.append(f"{step.get('description')}{every}")
         return out
+
+    # ------------------------------------------------------------------ derived variables
+
+    @property
+    def derived_variables(self) -> tuple[DerivedVariable, ...]:
+        """The derived variables declared with the study's configuration (core.derived)."""
+        return derived_from_config(self.config)
+
+    def set_derived_variables(self, definitions: Iterable[DerivedVariable]) -> None:
+        """Declare these derived variables instead (the configuration is replaced, never changed in place)."""
+        st.session_state["config"] = with_definitions(self.config, definitions)
+
+    def derived_check(
+        self, definition: DerivedVariable, *, slot: str | None = None
+    ) -> DerivedCheck:
+        """
+        The definition checked against the Enrich data (enrich.derived), kept until those data or what the check reads
+        change (its variable, formula, tolerance and kind; not its source or its acceptance). One slot per variable by
+        default, so that editing one definition does not check the others again; ``slot`` for another use (a preview).
+        """
+        from enrich.derived import check_derived
+
+        session = self.session
+        frame = session.working_frame()
+        assert frame is not None
+        read = (definition.target, definition.formula, definition.tolerance, definition.kind)
+        check = session.memo(
+            slot or f"derived_check::{definition.target}",
+            (session.working_fp, read),
+            lambda: check_derived(definition, frame),
+        )
+        return replace(check, definition=definition)  # its acceptance as it is now
+
+    def derived_inverse_check(self, definition: DerivedVariable, name: str) -> DerivedCheck:
+        """The inverse of ``definition`` that recovers ``name``, checked as a definition of its own."""
+        inverse = DerivedVariable(name, definition.inverses[name], origin=definition.origin)
+        return self.derived_check(inverse, slot=f"derived_inverse::{definition.target}::{name}")
 
     # ------------------------------------------------------------------ the analysis population
 

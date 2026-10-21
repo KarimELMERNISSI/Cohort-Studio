@@ -290,3 +290,25 @@ def test_a_copy_of_one_variable_is_flagged(cohort: pd.DataFrame) -> None:
     assert check.verdict == AGREES and any("multiple of weight_kg" in w for w in check.warnings)
     conversion = DerivedVariable("weight_copy", "weight_kg * 1", kind="conversion")
     assert not check_derived(conversion, copied).warnings
+
+
+def test_a_formula_wrong_everywhere_is_not_blamed_on_one_level() -> None:
+    frame = pd.DataFrame(
+        {"status": ["Current", "Former", "Never"] * 40, "smoker": ["Yes", "No", "No"] * 40}
+    )
+    # 'current' for 'Current': "No" everywhere, wrong for the current smokers and right for the others
+    check = check_derived(
+        DerivedVariable("smoker", "np.where(status == 'current', 'Yes', 'No')"), frame
+    )
+    assert check.verdict == DISAGREES and not (check.reason or "").startswith("it disagrees where")
+    fixed = DerivedVariable("smoker", "np.where(status == 'Current', 'Yes', 'No')")
+    assert check_derived(fixed, frame).verdict == AGREES
+
+
+def test_dates_kept_as_text_are_converted_first() -> None:
+    frame = pd.DataFrame(
+        {"start": ["01/02/2024", "15/03/2024"] * 40, "end": ["03/02/2024", "20/03/2024"] * 40}
+    ).assign(days=[2, 5] * 40)
+    check = check_derived(DerivedVariable("days", "end - start"), frame)
+    assert check.verdict == CANNOT and (check.reason or "").startswith("the dates of")
+    assert "convert them to dates on Validate first" in (check.reason or "")

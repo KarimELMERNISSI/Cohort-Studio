@@ -15,6 +15,7 @@ from rapidfuzz import fuzz
 
 import biostats.reduction as rd
 import enrich.external_data as eed
+from app_pages.enrichment_derived import render_derived_variables
 from app_pages.enrichment_mi import render_multiple_imputation
 from core.population import PopulationResult, catalogue
 from core.registry import as_code
@@ -2071,11 +2072,15 @@ def app():
                 no_dataset()
             return
 
-        tab_targeted, tab_global, tab_multiple = st.tabs([
+        # in the order of the handbook: the variables other variables determine, then exact, then statistical
+        tab_derived, tab_targeted, tab_global, tab_multiple = st.tabs([
+            "Derived variables",
             "Targeted Imputation (Custom Formula)",
             "Global Imputation (single imputation)",
             "Multiple imputation (for inference)",
         ])
+        with tab_derived:
+            render_derived_variables()
         with tab_multiple:
             render_multiple_imputation()
         
