@@ -96,22 +96,20 @@ class GraphvizGraphRenderer(BaseGraphRenderer):
     name = "graphviz"
     display_name = "Graphviz (static)"
 
-    @property
-    def capabilities(self) -> RendererCapabilities:
-        return RendererCapabilities(
-            supports_selection=False,
-            supports_edge_selection=False,
-            supports_heat=False,
-            supports_node_shapes=True,
-            supports_edge_labels=True,
-            supports_mixed_direction=True,
-            supports_hierarchical=True,
-            supports_drag=False,
-            supports_html_export=False,
-            requires_internet=False,
-            telemetry=False,
-            license_note="Graphviz DOT rendered by Streamlit's bundled viz.js (MIT); no telemetry.",
-        )
+    capabilities = RendererCapabilities(
+        supports_selection=False,
+        supports_edge_selection=False,
+        supports_heat=False,
+        supports_node_shapes=True,
+        supports_edge_labels=True,
+        supports_mixed_direction=True,
+        supports_hierarchical=True,
+        supports_drag=False,
+        supports_html_export=False,
+        requires_internet=False,
+        telemetry=False,
+        license_note="Graphviz DOT rendered by Streamlit's bundled viz.js (MIT); no telemetry.",
+    )
 
     def translate(self, spec: GraphSpec, options: RenderOptions) -> str:
         return to_dot(spec, options)

@@ -50,12 +50,10 @@ def seed_session() -> None:
         from graph.manager import get_graph_renderer_manager
         from ui.graph_view import RENDERER_OVERRIDE_KEY
 
-        available = {
-            rtype.value for rtype, ok, _ in get_graph_renderer_manager().available_renderers() if ok
-        }
+        kept = get_graph_renderer_manager().select(preference=prefs.graph_renderer)
         # an engine this server cannot run (yFiles offline, say) stays unused
-        if prefs.graph_renderer in available and RENDERER_OVERRIDE_KEY not in ss:
-            ss[RENDERER_OVERRIDE_KEY] = prefs.graph_renderer
+        if kept.source == "preference" and RENDERER_OVERRIDE_KEY not in ss:
+            ss[RENDERER_OVERRIDE_KEY] = kept.chosen
 
 
 def save(**changes: Any) -> None:
@@ -87,17 +85,11 @@ def renderer_notice() -> str | None:
         return None
     from graph.manager import get_graph_renderer_manager
 
-    for rtype, ok, reason in get_graph_renderer_manager().available_renderers():
-        if rtype.value == saved:
-            if ok:
-                return None
-            return (
-                f"Your saved graph engine {shown(saved)} is not available here ({reason}): the automatic engine "
-                "is used."
-            )
-    return (
-        f"Your saved graph engine {shown(saved)} is not offered here: the automatic engine is used."
-    )
+    kept = get_graph_renderer_manager().select(preference=saved)
+    if kept.source == "preference" or not kept.warnings:
+        return None
+    used = f"{shown(kept.chosen)} is used" if kept.chosen else "no graph engine can draw here"
+    return f"{kept.warnings[0]}: {used}."  # the first is about the saved engine (no session choice is given)
 
 
 def save_from(key: str, name: str, *, provider: str | None = None, auto: str | None = None) -> None:

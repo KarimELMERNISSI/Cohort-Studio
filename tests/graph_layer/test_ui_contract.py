@@ -6,8 +6,8 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from graph.builders.correlation import build_correlation_graph
-from graph.manager import GraphConfig, GraphRendererManager, GraphRendererType
 from graph.model import GraphSpec, RenderOptions
+from graph.renderers import GRAPH_RENDERERS
 from graph.renderers.graphviz import GraphvizGraphRenderer, to_dot
 
 
@@ -45,23 +45,20 @@ def _render_with_fallback(spec_json: str) -> None:
     class Exploding(BaseGraphRenderer):
         name = "exploding"
         display_name = "Exploding"
-
-        @property
-        def capabilities(self) -> RendererCapabilities:
-            return RendererCapabilities(
-                supports_selection=False,
-                supports_edge_selection=False,
-                supports_heat=False,
-                supports_node_shapes=False,
-                supports_edge_labels=False,
-                supports_mixed_direction=False,
-                supports_hierarchical=False,
-                supports_drag=False,
-                supports_html_export=False,
-                requires_internet=False,
-                telemetry=False,
-                license_note="test",
-            )
+        capabilities = RendererCapabilities(
+            supports_selection=False,
+            supports_edge_selection=False,
+            supports_heat=False,
+            supports_node_shapes=False,
+            supports_edge_labels=False,
+            supports_mixed_direction=False,
+            supports_hierarchical=False,
+            supports_drag=False,
+            supports_html_export=False,
+            requires_internet=False,
+            telemetry=False,
+            license_note="test",
+        )
 
         def translate(self, spec, options):
             raise RenderError("boom")
@@ -87,18 +84,18 @@ def _render_empty() -> None:
     st.write(f"empty:{result.is_empty}")
 
 
-@pytest.mark.parametrize("rtype", [r for r in GraphRendererType if r is not GraphRendererType.AUTO])
-def test_each_available_renderer_renders_headlessly(rtype: GraphRendererType) -> None:
-    cls = GraphRendererManager(GraphConfig()).registry().get(rtype)
-    if cls is None or not cls.availability()[0]:
-        pytest.skip(f"{rtype.value} not available")
+@pytest.mark.parametrize("name", GRAPH_RENDERERS.names())
+def test_each_available_renderer_renders_headlessly(name: str) -> None:
+    found = GRAPH_RENDERERS.availability(name)
+    if not found.ok:
+        pytest.skip(f"{name} not available: {found.reason}")
     at = AppTest.from_function(
         _render_with,
-        kwargs={"spec_json": _corr_spec().to_json(), "rtype": rtype.value},
+        kwargs={"spec_json": _corr_spec().to_json(), "rtype": name},
         default_timeout=60,
     ).run()
     assert not at.exception, [str(e.value) for e in at.exception]
-    assert any(f"rendered-by:{rtype.value}" in m.value for m in at.markdown)
+    assert any(f"rendered-by:{name}" in m.value for m in at.markdown)
 
 
 def test_graphviz_translation_is_deterministic_dot() -> None:

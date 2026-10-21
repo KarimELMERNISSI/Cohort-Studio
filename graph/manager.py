@@ -1,9 +1,10 @@
 """
-Graph renderer manager and registry.
+Graph renderer manager.
 
-Resolves which rendering backend to use from configuration (environment variables ``CMP_GRAPH_RENDERER``
-and ``CMP_OFFLINE``, or an explicit :class:`GraphConfig`), instantiates it lazily and exposes
-``set_renderer`` / ``reset_renderer`` for tests and custom backends. The structure mirrors
+Chooses the rendering backend through the family's registry (:data:`graph.renderers.GRAPH_RENDERERS`): the session's
+choice, then the user's saved preference, then the configuration (environment variables ``CMP_GRAPH_RENDERER`` and
+``CMP_OFFLINE``, or an explicit :class:`GraphConfig`), then the offline-first order. It instantiates the renderer
+lazily and exposes ``set_renderer`` / ``reset_renderer`` for tests and custom backends. The structure mirrors
 ``manage.iam.manager.IAMManager``.
 
 Default policy (owner decision, October 2026): the offline Plotly/NetworkX renderer is the default;
@@ -13,27 +14,22 @@ because its free license loads a runtime from yworks.com and reports anonymised 
 
 from __future__ import annotations
 
-import importlib
 import logging
-from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from core.registry import AUTO, Availability, Selection
 from graph.base import BaseGraphRenderer
+from graph.renderers import GRAPH_RENDERERS, OFFLINE_DEFAULT
 from utils.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-
-class GraphRendererType(StrEnum):
-    AUTO = "auto"
-    PLOTLY = "plotly"
-    YFILES = "yfiles"
-    GRAPHVIZ = "graphviz"
+OFFLINE = Availability(False, "disabled in offline mode (CMP_OFFLINE=1)")
 
 
 class GraphConfig(BaseModel):
-    renderer: GraphRendererType = GraphRendererType.AUTO
+    renderer: str = Field(default=AUTO, description="A registered engine, or auto (offline first).")
     offline: bool = Field(
         default=False, description="Never choose a renderer that needs internet access."
     )
@@ -44,18 +40,13 @@ class GraphConfig(BaseModel):
         default=True, description="Show the third-party notice for proprietary renderers."
     )
 
-
-_REGISTRY_SPEC: dict[GraphRendererType, tuple[str, str]] = {
-    GraphRendererType.PLOTLY: ("graph.renderers.plotly", "PlotlyGraphRenderer"),
-    GraphRendererType.YFILES: ("graph.renderers.yfiles", "YFilesGraphRenderer"),
-    GraphRendererType.GRAPHVIZ: ("graph.renderers.graphviz", "GraphvizGraphRenderer"),
-}
-
-# Preference order when AUTO is requested or a fallback is needed (offline-first).
-_AUTO_PREFERENCE: tuple[GraphRendererType, ...] = (
-    GraphRendererType.PLOTLY,
-    GraphRendererType.GRAPHVIZ,
-)
+    @field_validator("renderer")
+    @classmethod
+    def _registered(cls, value: str) -> str:
+        name = GRAPH_RENDERERS.canonical(value)
+        if name is None:
+            raise ValueError(GRAPH_RENDERERS.setting_problem(value))
+        return name
 
 
 class GraphRendererManager:
@@ -64,21 +55,17 @@ class GraphRendererManager:
     def __init__(self, config: GraphConfig | None = None) -> None:
         self._config = config or self._resolve_config_from_env()
         self._renderer: BaseGraphRenderer | None = None
-        self._classes: dict[GraphRendererType, type[BaseGraphRenderer]] = {}
 
     # ----------------------------------------------------------------- configuration
     @classmethod
     def _resolve_config_from_env(cls, settings: Settings | None = None) -> GraphConfig:
         """The renderer's configuration (utils.settings; the current settings by default)."""
         graph = (settings or get_settings()).graph
-        raw = graph.renderer or "auto"
-        try:
-            renderer = GraphRendererType(raw)
-        except ValueError:
-            logger.warning("Unknown CMP_GRAPH_RENDERER=%r; using auto", raw)
-            renderer = GraphRendererType.AUTO
+        problem = GRAPH_RENDERERS.setting_problem(graph.renderer)
+        if problem:  # never the value: it can be a pasted key or address
+            logger.warning("%s; the automatic engine is used", problem)
         return GraphConfig(
-            renderer=renderer,
+            renderer=AUTO if problem else graph.renderer or AUTO,
             offline=graph.offline,
             fallback_on_error=not graph.no_fallback,
         )
@@ -87,80 +74,58 @@ class GraphRendererManager:
     def config(self) -> GraphConfig:
         return self._config
 
-    # ----------------------------------------------------------------- registry
-    def registry(self) -> dict[GraphRendererType, type[BaseGraphRenderer]]:
-        """Renderer classes, imported lazily so importing ``graph`` never imports a UI library."""
-        for rtype, (module_name, class_name) in _REGISTRY_SPEC.items():
-            if rtype in self._classes:
-                continue
-            try:
-                module = importlib.import_module(module_name)
-                self._classes[rtype] = getattr(module, class_name)
-            except Exception as exc:  # missing optional dependency or broken backend
-                logger.info("Graph renderer %s unavailable: %s", rtype.value, exc)
-        return dict(self._classes)
+    # ----------------------------------------------------------------- choice
+    def availability(self, name: str) -> Availability:
+        """Whether the engine ``name`` can draw here: installed, compatible, and allowed by the offline mode."""
+        found = GRAPH_RENDERERS.availability(name)
+        if (
+            found.ok
+            and self._config.offline
+            and GRAPH_RENDERERS.get(name).capabilities.requires_internet
+        ):
+            return OFFLINE
+        return found
 
-    def available_renderers(self) -> list[tuple[GraphRendererType, bool, str]]:
-        """``(type, available, reason)`` for every known renderer, honouring offline mode."""
-        result: list[tuple[GraphRendererType, bool, str]] = []
-        classes = self.registry()
-        for rtype in _REGISTRY_SPEC:
-            cls = classes.get(rtype)
-            if cls is None:
-                result.append((rtype, False, "backend not installed"))
-                continue
-            ok, reason = cls.availability()
-            if ok and self._config.offline and cls.capabilities.fget(cls).requires_internet:  # type: ignore[union-attr]
-                ok, reason = False, "disabled in offline mode (CMP_OFFLINE=1)"
-            result.append((rtype, ok, reason))
-        return result
-
-    def _instantiate(self, rtype: GraphRendererType) -> BaseGraphRenderer | None:
-        cls = self.registry().get(rtype)
-        if cls is None:
-            return None
-        ok, reason = cls.availability()
-        if not ok:
-            logger.warning("Graph renderer %s requested but unavailable: %s", rtype.value, reason)
-            return None
-        instance = cls()
-        if self._config.offline and instance.capabilities.requires_internet:
-            logger.warning(
-                "Graph renderer %s needs internet access; refused in offline mode", rtype.value
-            )
-            return None
-        return instance
-
-    def _build_renderer(self, rtype: GraphRendererType) -> BaseGraphRenderer:
-        candidates: list[GraphRendererType] = []
-        if rtype != GraphRendererType.AUTO:
-            candidates.append(rtype)
-        candidates.extend(r for r in _AUTO_PREFERENCE if r not in candidates)
-        for candidate in candidates:
-            instance = self._instantiate(candidate)
-            if instance is not None:
-                if candidate != rtype and rtype != GraphRendererType.AUTO:
-                    logger.warning("Falling back to graph renderer %s", candidate.value)
-                return instance
-        raise RuntimeError(
-            "No graph renderer is available (plotly and networkx are required for the default renderer)."
+    def select(self, *, session: str | None = None, preference: str | None = None) -> Selection:
+        """The engine to use: the session's choice, the saved preference, the configuration, then offline first."""
+        return GRAPH_RENDERERS.select(
+            session=session,
+            preference=preference,
+            setting=self._config.renderer,
+            check=self.availability,
         )
+
+    def _build(self, selection: Selection) -> BaseGraphRenderer:
+        for warning in selection.warnings:
+            logger.warning("%s", warning)
+        if selection.chosen is None:
+            raise RuntimeError(
+                "No graph renderer is available (plotly and networkx are required for the default renderer)."
+            )
+        return GRAPH_RENDERERS.get(selection.chosen)()
 
     # ----------------------------------------------------------------- access
     @property
     def renderer(self) -> BaseGraphRenderer:
         if self._renderer is None:
-            self._renderer = self._build_renderer(self._config.renderer)
+            self._renderer = self._build(self.select())
         return self._renderer
 
-    def get(self, override: GraphRendererType | str | None = None) -> BaseGraphRenderer:
-        """The configured renderer, or a specific one when ``override`` is given (with fallback)."""
-        if override is None or str(override).lower() in ("", "auto", "default"):
+    def get(self, override: str | None = None) -> BaseGraphRenderer:
+        """The configured renderer, or the session's choice ``override`` when it can draw here."""
+        if override is None or override.strip().lower() in ("", AUTO, "default"):
             return self.renderer
-        rtype = GraphRendererType(str(override).lower())
-        if self._renderer is not None and self._renderer.name == rtype.value:
+        selection = self.select(session=override)
+        if self._renderer is not None and self._renderer.name == selection.chosen:
             return self._renderer
-        return self._build_renderer(rtype)
+        return self._build(selection)
+
+    def fallback(self, failed: str) -> BaseGraphRenderer | None:
+        """The built-in offline engine, for a drawing that failed (None when it is the one that failed, or cannot
+        draw here)."""
+        if failed == OFFLINE_DEFAULT or not self.availability(OFFLINE_DEFAULT).ok:
+            return None
+        return GRAPH_RENDERERS.get(OFFLINE_DEFAULT)()
 
     def set_renderer(self, renderer: BaseGraphRenderer) -> None:
         """Inject a custom or mock renderer."""
@@ -184,4 +149,4 @@ def get_graph_renderer_manager(config: GraphConfig | None = None) -> GraphRender
     return _GLOBAL_MANAGER
 
 
-__all__ = ["GraphConfig", "GraphRendererManager", "GraphRendererType", "get_graph_renderer_manager"]
+__all__ = ["GraphConfig", "GraphRendererManager", "get_graph_renderer_manager"]

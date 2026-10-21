@@ -5,7 +5,7 @@ A renderer turns a :class:`~graph.model.GraphSpec` into a drawing produced by a 
 The contract separates *translation* (pure: semantic model -> library primitives, testable without
 a browser) from *rendering* (Streamlit side effects), which is what makes the rendering library
 swappable: adding a new backend means implementing this class in one module and registering it in
-:mod:`graph.manager`.
+:mod:`graph.renderers` (a connector family on :mod:`core.registry`).
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
+from core.registry import Availability
 from graph.model import GraphSpec, RenderOptions, SelectionResult
 
 
@@ -46,20 +47,18 @@ class BaseGraphRenderer(ABC):
 
     name: ClassVar[str] = "base"
     display_name: ClassVar[str] = "Base renderer"
-
-    @property
-    @abstractmethod
-    def capabilities(self) -> RendererCapabilities:
-        """Static description of the renderer's abilities and constraints."""
+    # what the renderer can do, read from the class without drawing (the offline mode, the notices)
+    capabilities: ClassVar[RendererCapabilities]
 
     @classmethod
-    def availability(cls) -> tuple[bool, str]:
-        """Whether the backing library is importable and compatible; ``(ok, reason)``."""
-        return True, ""
+    def availability(cls) -> Availability:
+        """Whether the backing library is installed and compatible, found without importing it; never raises."""
+        return Availability(True)
 
     @abstractmethod
     def translate(self, spec: GraphSpec, options: RenderOptions) -> Any:
-        """Translate the semantic model into the library's own payload (no side effects)."""
+        """Translate the semantic model into the library's own payload (no side effects; it may load the library,
+        and only here and in ``render``)."""
 
     @abstractmethod
     def render(self, spec: GraphSpec, options: RenderOptions) -> SelectionResult:

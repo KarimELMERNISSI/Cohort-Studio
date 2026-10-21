@@ -13,6 +13,10 @@ the 2.x API that this adapter encapsulates:
 * Mapping errors are swallowed into ``widget._error``; the adapter re-raises them as
   :class:`~graph.base.RenderError` so the UI can fall back to the offline renderer.
 
+The component imports Streamlit, so it is loaded only to translate and to draw (R3): the availability check finds it
+and reads its version without importing it, and the API this adapter needs is checked when drawing, where a mismatch
+is a :class:`~graph.base.RenderError` with the explained fallback.
+
 License: yWorks "yFiles Streamlit Component Free License"; the component loads its runtime from
 yworks.com at render time (internet required) and reports anonymised graph-structure usage data.
 Install with the optional extra ``graph-yfiles``.
@@ -26,6 +30,7 @@ import inspect
 from collections.abc import Callable
 from typing import Any, NamedTuple
 
+from core.registry import Availability
 from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
 from graph.model import (
     GraphKind,
@@ -93,54 +98,56 @@ def _member(enum_cls: Any, name: str, fallback: str) -> Any:
     return getattr(enum_cls, name, getattr(enum_cls, fallback))
 
 
+def _api_problems(y: Any) -> list[str]:
+    """What the installed component lacks of the 2.x API this adapter uses (none when it matches)."""
+    problems: list[str] = []
+    layouts = {member.value for member in getattr(y, "Layout", [])}
+    if "hierarchical" not in layouts:
+        problems.append("Layout.HIERARCHICAL missing")
+    try:
+        params = inspect.signature(y.StreamlitGraphWidget.show).parameters
+        problems.extend(f"show() lacks '{p}'" for p in REQUIRED_SHOW_PARAMS if p not in params)
+    except Exception as exc:  # pragma: no cover - defensive
+        problems.append(f"cannot inspect show(): {exc}")
+    fields = getattr(getattr(y, "LabelStyle", None), "__dataclass_fields__", {})
+    problems.extend(f"LabelStyle lacks '{f}'" for f in REQUIRED_LABEL_FIELDS if f not in fields)
+    return problems
+
+
 class YFilesGraphRenderer(BaseGraphRenderer):
     name = "yfiles"
     display_name = "yFiles (interactive, needs internet)"
-
-    @property
-    def capabilities(self) -> RendererCapabilities:
-        return RendererCapabilities(
-            supports_selection=True,
-            supports_edge_selection=True,
-            supports_heat=True,
-            supports_node_shapes=True,
-            supports_edge_labels=True,
-            supports_mixed_direction=True,
-            supports_hierarchical=True,
-            supports_drag=True,
-            supports_html_export=False,
-            requires_internet=True,
-            telemetry=True,
-            license_note=LICENSE_NOTE,
-        )
+    capabilities = RendererCapabilities(
+        supports_selection=True,
+        supports_edge_selection=True,
+        supports_heat=True,
+        supports_node_shapes=True,
+        supports_edge_labels=True,
+        supports_mixed_direction=True,
+        supports_hierarchical=True,
+        supports_drag=True,
+        supports_html_export=False,
+        requires_internet=True,
+        telemetry=True,
+        license_note=LICENSE_NOTE,
+    )
 
     @classmethod
-    def availability(cls) -> tuple[bool, str]:
+    def availability(cls) -> Availability:
+        """Installed, in the major version this adapter targets; found without importing it (it imports Streamlit)."""
+        found = Availability.of_module("yfiles_graphs_for_streamlit", extra="graph-yfiles")
+        if not found.ok:
+            return found
         try:
-            y = importlib.import_module("yfiles_graphs_for_streamlit")
-        except ImportError:
-            return (
-                False,
-                "yfiles-graphs-for-streamlit is not installed (uv sync --extra graph-yfiles)",
+            version = importlib.metadata.version("yfiles-graphs-for-streamlit")
+            major = int(version.split(".")[0])
+        except importlib.metadata.PackageNotFoundError, ValueError:
+            return Availability(False, "its package metadata is missing", "graph-yfiles")
+        if major != 2:
+            return Availability(
+                False, f"version {version} is installed and this adapter needs 2.x", "graph-yfiles"
             )
-        problems: list[str] = []
-        try:
-            major = int(importlib.metadata.version("yfiles-graphs-for-streamlit").split(".")[0])
-            if major != 2:
-                problems.append(f"unsupported major version {major} (adapter targets 2.x)")
-        except importlib.metadata.PackageNotFoundError:
-            problems.append("package metadata not found")
-        layouts = {member.value for member in getattr(y, "Layout", [])}
-        if "hierarchical" not in layouts:
-            problems.append("Layout.HIERARCHICAL missing")
-        try:
-            params = inspect.signature(y.StreamlitGraphWidget.show).parameters
-            problems.extend(f"show() lacks '{p}'" for p in REQUIRED_SHOW_PARAMS if p not in params)
-        except Exception as exc:  # pragma: no cover - defensive
-            problems.append(f"cannot inspect show(): {exc}")
-        fields = getattr(getattr(y, "LabelStyle", None), "__dataclass_fields__", {})
-        problems.extend(f"LabelStyle lacks '{f}'" for f in REQUIRED_LABEL_FIELDS if f not in fields)
-        return (not problems, "; ".join(problems))
+        return Availability(True)
 
     # ------------------------------------------------------------------ translate
     def translate(self, spec: GraphSpec, options: RenderOptions) -> YFilesPayload:
@@ -257,6 +264,11 @@ class YFilesGraphRenderer(BaseGraphRenderer):
     def render(self, spec: GraphSpec, options: RenderOptions) -> SelectionResult:
         try:
             y = importlib.import_module("yfiles_graphs_for_streamlit")
+            problems = _api_problems(y)
+            if problems:
+                raise RenderError(
+                    f"the installed yFiles component does not match this adapter: {'; '.join(problems)}"
+                )
             payload = self.translate(spec, options)
             widget = y.StreamlitGraphWidget(
                 nodes=payload.nodes, edges=payload.edges, **payload.mappings

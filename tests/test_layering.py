@@ -99,7 +99,9 @@ ENTRY_POINTS = ("main", "manage_users")  # above every layer
 HEADLESS = ("manage_users", "manage.replay")  # R5; manage.replay arrives with M8
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
-RENDERERS = "graph.renderers"  # Streamlit inside their render method only (R3)
+# Streamlit inside their translate and render methods only (R3): a renderer draws through Streamlit, and the yFiles
+# primitives it translates into come from a Streamlit component
+RENDERERS = "graph.renderers"
 MODULE_NAME = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+")  # a dotted name in a string
 
 # --- today's exceptions (they can only shrink) ------------------------------------------------------------------
@@ -119,10 +121,6 @@ KNOWN_UPWARD = {
 CYCLES_BY_DESIGN = [{"biostats.mi.engine", "biostats.mi.parallel"}]
 # R3, (module below ui, the import through which it reaches Streamlit)
 KNOWN_STREAMLIT = {
-    # the yFiles renderer imports its Streamlit component outside render, and the renderer registry names it
-    # (M5b, connectors on one kit)
-    ("graph.renderers.yfiles", "yfiles_graphs_for_streamlit"),
-    ("graph.manager", "graph.renderers.yfiles"),
     # through utils.session_scope: the services take the scope explicitly (M5b, composition root)
     ("manage.db_manager", "utils.session_scope"),
     ("manage.rag_manager", "utils.session_scope"),
@@ -227,7 +225,7 @@ def graph() -> tuple[
 ]:
     """
     (first-party imports, other imports, modules named in strings) of each module; an import carries whether it is
-    lazy (inside a function). A renderer's Streamlit imports inside its render method are left out (R3).
+    lazy (inside a function). A renderer's Streamlit imports inside its translate and render methods are left out (R3).
     """
     mods = modules()
     first: dict[str, set[tuple[str, bool]]] = {m: set() for m in mods}
@@ -271,8 +269,8 @@ def graph() -> tuple[
             else:
                 continue
             for target in targets:
-                if renderer and function == "render" and _streamlit(target):
-                    continue  # allowed by design: a renderer draws through Streamlit
+                if renderer and function in ("translate", "render") and _streamlit(target):
+                    continue  # allowed by design (see RENDERERS)
                 resolved = _resolve(target)
                 if resolved is None:
                     other[name].add((target, lazy))

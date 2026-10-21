@@ -21,8 +21,9 @@ domain data ──► graph.builders.*  ──► GraphSpec ──► ui.graph_v
 | `graph/palette.py` | Colour tokens, style rules per graph kind, legend entries. The **only** place colours live. | no |
 | `graph/builders/` | `build_correlation_graph`, `build_taxonomy_graph`, `build_document_graph` (+ `merge_document_graphs`, `filter_by_documents`). Deterministic ids and ordering. | no |
 | `graph/base.py` | `BaseGraphRenderer` contract (`capabilities`, `availability()`, `translate()`, `render()`, `export_html()`). | no |
-| `graph/manager.py` | Backend selection from `CMP_GRAPH_RENDERER` / `CMP_OFFLINE`, lazy registry, `set_renderer()` for tests. | no |
-| `graph/renderers/` | `plotly.py` (offline default), `yfiles.py` (opt-in, proprietary), `graphviz.py` (static). | yes (inside `render`) |
+| `graph/manager.py` | Backend selection (session choice, saved preference, `CMP_GRAPH_RENDERER`, offline-first order) with the offline rule (`CMP_OFFLINE`), the fallback engine, `set_renderer()` for tests. | no |
+| `graph/renderers/__init__.py` | `GRAPH_RENDERERS`, the registry of the engines (a connector family on `core/registry.py`): names, lazy `"module:Class"` targets, optional groups, the automatic order. | no |
+| `graph/renderers/` | `plotly.py` (offline default), `yfiles.py` (opt-in, proprietary), `graphviz.py` (static). | yes (inside `translate` and `render` only) |
 | `ui/graph_legend.py`, `ui/graph_view.py` | `render_legend`, `render_graph`, `renderer_selector`, `render_graph_exports`. | yes |
 | `explore/correlation_strength.py` | The one correlation-strength threshold table (Schober 2018) used by the builder, the Excel export and the UI. | no |
 
@@ -34,6 +35,12 @@ arguments; a Plotly `Figure`; a DOT string). `render()` only calls the library a
 comes back into a `SelectionResult`. Because translation has no side effects, each adapter is
 unit-tested without a browser (`tests/graph_layer/test_renderer_*.py`); the yFiles test even
 replays the translated payload through the library's own mapping engine.
+
+A renderer may load its library, and through it Streamlit, inside `translate()` and `render()` only:
+the yFiles primitives come from its Streamlit component. `availability()` finds the library without
+importing it (`Availability.of_module`) and never raises, so listing the engines loads none of them;
+the yFiles adapter checks the component's API when drawing, where a mismatch is a `RenderError` with
+the fallback.
 
 ### Semantic model → yFiles 2.x
 
@@ -64,7 +71,11 @@ trace. Selection uses `st.plotly_chart(on_select="rerun")`.
 | `CMP_GRAPH_RENDERER=yfiles` | yFiles when installed (`uv sync --extra graph-yfiles`); falls back to Plotly otherwise. |
 | `CMP_GRAPH_RENDERER=plotly` / `graphviz` | Force a backend. |
 | `CMP_OFFLINE=1` | Refuse any backend with `requires_internet=True` (yFiles). |
-| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`). |
+| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`), kept for the user's next session. |
+
+The choice is the session's selector, then the user's saved preference, then `CMP_GRAPH_RENDERER`,
+then the automatic order (Plotly, then Graphviz). A choice that cannot draw here falls through to the
+next one, and Settings says which engine is used instead and why.
 
 yFiles is distributed under the yWorks *yFiles Streamlit Component Free License*: it loads its
 runtime from yworks.com at render time (internet required), reports anonymised graph-structure
@@ -75,11 +86,15 @@ to the Plotly and Graphviz backends only.
 ## Adding a renderer
 
 1. Create `graph/renderers/<name>.py` with a class deriving from `BaseGraphRenderer`: set `name`,
-   `display_name`, implement `capabilities`, `availability()`, `translate()`, `render()`.
-2. Register it in `graph/manager.py` (`GraphRendererType`, `_REGISTRY_SPEC`, and `_AUTO_PREFERENCE`
-   if it may be chosen automatically).
-3. Add a translation test under `tests/graph_layer/`; the contract test
-   (`test_ui_contract.py`) picks the backend up automatically.
+   `display_name` and `capabilities` as class attributes; implement `availability()` (find the library
+   with `Availability.of_module`, without importing it), `translate()` and `render()`.
+2. Register it in `graph/renderers/__init__.py`:
+   `GRAPH_RENDERERS.register("<name>", "graph.renderers.<name>:<Class>", extra="<optional group>")`,
+   and add it to the automatic order there if it may be chosen automatically. The name is stored in
+   users' preferences and settings: never rename it.
+3. Add the name to the stored names in `tests/graph_layer/test_renderer_registry.py`, and a
+   translation test under `tests/graph_layer/`; the contract tests (`test_renderer_registry.py`,
+   `test_ui_contract.py`) pick the backend up automatically.
 4. Document licence and network requirements in `capabilities.license_note`.
 
 ## Adding a graph kind

@@ -25,7 +25,7 @@ import importlib
 import importlib.util
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import ClassVar, Literal, Protocol
 
 
 class Kind(Protocol):
@@ -136,8 +136,8 @@ class Availability:
 class Connector(Protocol):
     """What a registry holds: a class with its registered ``name``, a ``display_name`` and ``availability()``."""
 
-    name: str
-    display_name: str
+    name: ClassVar[str]
+    display_name: ClassVar[str]
 
     @classmethod
     def availability(cls) -> Availability: ...
@@ -245,6 +245,13 @@ class ConnectorRegistry[C: Connector]:
         if not found.ok and found.extra is None and registration.extra:
             return Availability(False, found.reason, registration.extra)
         return found
+
+    def display_name(self, name: str) -> str:
+        """The connector's name to display, or its registered name when its class cannot be loaded here."""
+        try:
+            return self.get(name).display_name
+        except Exception:  # an unknown name, or a module that needs a package this install lacks
+            return self.canonical(name) or name
 
     def setting_problem(self, value: str | None) -> str | None:
         """The start-up message for a setting that names nothing: the variable and the valid names, never the value

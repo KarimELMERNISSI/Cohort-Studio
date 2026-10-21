@@ -2,13 +2,16 @@
 mapping engine without a browser, and the installed library is checked for the API this adapter needs."""
 
 import copy
+import importlib.metadata
 
 import pytest
 
+from graph.base import RenderError
 from graph.model import GraphSpec, LayoutHint, RenderOptions
 
 yfiles = pytest.importorskip("yfiles_graphs_for_streamlit")
 
+import graph.renderers.yfiles as adapter
 from graph.renderers.yfiles import YFilesGraphRenderer
 
 
@@ -30,13 +33,29 @@ def _apply(payload):
 
 
 def test_installed_library_matches_adapter_expectations() -> None:
-    ok, reason = YFilesGraphRenderer.availability()
-    assert ok, reason
+    found = YFilesGraphRenderer.availability()
+    assert found.ok, found.reason
+    assert adapter._api_problems(yfiles) == []
     assert "hierarchical" in {m.value for m in yfiles.Layout}
 
 
+def test_another_major_version_is_refused_with_its_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "3.0.1")
+    found = YFilesGraphRenderer.availability()
+    assert not found.ok and "3.0.1" in found.reason and "2.x" in found.reason
+    assert found.install_hint == "uv sync --extra graph-yfiles"
+
+
+def test_an_api_mismatch_is_a_render_error_so_the_page_falls_back(
+    monkeypatch: pytest.MonkeyPatch, taxonomy_spec: GraphSpec
+) -> None:
+    monkeypatch.setattr(adapter, "_api_problems", lambda y: ["show() lacks 'key'"])
+    with pytest.raises(RenderError, match=r"does not match this adapter: show\(\) lacks 'key'"):
+        YFilesGraphRenderer().render(taxonomy_spec, RenderOptions(key="k"))
+
+
 def test_capabilities_declare_internet_and_telemetry() -> None:
-    caps = YFilesGraphRenderer().capabilities
+    caps = YFilesGraphRenderer.capabilities  # read from the class, without drawing
     assert caps.requires_internet and caps.telemetry and caps.supports_drag
 
 

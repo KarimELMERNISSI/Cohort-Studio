@@ -10,8 +10,8 @@ from graph.renderers.plotly import PlotlyGraphRenderer, compute_positions
 
 
 def _renderer() -> PlotlyGraphRenderer:
-    ok, reason = PlotlyGraphRenderer.availability()
-    assert ok, reason
+    found = PlotlyGraphRenderer.availability()
+    assert found.ok, found.reason
     return PlotlyGraphRenderer()
 
 

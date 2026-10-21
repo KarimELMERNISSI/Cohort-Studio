@@ -1,6 +1,6 @@
 """
-Streamlit entry points for graph rendering (in the ui layer since M5b: the graph package below it has no Streamlit
-outside a renderer's ``render``).
+Streamlit entry points for graph rendering (in the ui layer since M5b: the graph package below it loads Streamlit
+only inside a renderer's ``translate`` and ``render``).
 
 Pages call :func:`render_graph` with a :class:`~graph.model.GraphSpec` and
 :class:`~graph.model.RenderOptions`; the active backend is chosen by :mod:`graph.manager`
@@ -15,9 +15,11 @@ from collections.abc import Callable
 
 import streamlit as st
 
+from core.registry import AUTO
 from graph.base import BaseGraphRenderer
-from graph.manager import GraphRendererType, get_graph_renderer_manager
+from graph.manager import get_graph_renderer_manager
 from graph.model import GraphSpec, RenderOptions, SelectionResult
+from graph.renderers import GRAPH_RENDERERS
 from ui.graph_legend import render_legend
 
 logger = logging.getLogger(__name__)
@@ -70,11 +72,13 @@ def render_graph(
     except Exception as exc:
         logger.exception("Graph rendering failed (renderer=%s, kind=%s)", chosen.name, spec.kind)
         st.error(f"The graph engine '{chosen.display_name}' could not render this graph: {exc}")
-        if not manager.config.fallback_on_error or chosen.name == GraphRendererType.PLOTLY.value:
+        if not manager.config.fallback_on_error:
             return SelectionResult(renderer=chosen.name)
         try:
-            fallback = manager.get(GraphRendererType.PLOTLY)
-            st.info("Falling back to the built-in offline Plotly engine.")
+            fallback = manager.fallback(chosen.name)
+            if fallback is None:  # the offline engine itself failed, or cannot draw here
+                return SelectionResult(renderer=chosen.name)
+            st.info(f"Falling back to the built-in offline engine, {fallback.display_name}.")
             result = fallback.render(
                 spec, resolved.model_copy(update={"key": f"{resolved.key}__fallback"})
             )
@@ -105,15 +109,13 @@ def renderer_selector(
     """
     manager = get_graph_renderer_manager()
     target = container if container is not None else st
-    entries = manager.available_renderers()
-    labels: dict[str, str] = {"auto": "Automatic (offline first)"}
-    classes = manager.registry()
-    for rtype, ok, reason in entries:
-        cls = classes.get(rtype)
-        display = cls.display_name if cls is not None else rtype.value
-        labels[rtype.value] = display if ok else f"{display} (unavailable: {reason})"
-    choices = ["auto"] + [rtype.value for rtype, ok, _ in entries if ok]
-    current = st.session_state.get(key) or "auto"
+    engines = manager.select().alternatives  # every engine, and whether it can draw here
+    labels: dict[str, str] = {AUTO: "Automatic (offline first)"}
+    for name, found in engines:
+        display = GRAPH_RENDERERS.display_name(name)
+        labels[name] = display if found.ok else f"{display} (unavailable: {found.reason})"
+    choices = [AUTO] + [name for name, found in engines if found.ok]
+    current = st.session_state.get(key) or AUTO
     index = choices.index(current) if current in choices else 0
     chosen = target.selectbox(
         label,
@@ -125,7 +127,7 @@ def renderer_selector(
         key=f"{key}__selectbox",
         on_change=on_change,
     )
-    st.session_state[key] = None if chosen == "auto" else chosen
+    st.session_state[key] = None if chosen == AUTO else chosen
 
 
 def render_graph_exports(

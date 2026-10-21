@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 from typing import Any, NamedTuple
 
+from core.registry import Availability
 from graph.base import BaseGraphRenderer, RendererCapabilities, RenderError
 from graph.model import (
     GraphKind,
@@ -160,31 +161,28 @@ class PlotlyGraphRenderer(BaseGraphRenderer):
     name = "plotly"
     display_name = "Plotly (offline)"
 
-    @property
-    def capabilities(self) -> RendererCapabilities:
-        return RendererCapabilities(
-            supports_selection=True,
-            supports_edge_selection=True,
-            supports_heat=True,
-            supports_node_shapes=True,
-            supports_edge_labels=True,
-            supports_mixed_direction=True,
-            supports_hierarchical=True,
-            supports_drag=False,
-            supports_html_export=True,
-            requires_internet=False,
-            telemetry=False,
-            license_note="plotly (MIT) and networkx (BSD-3); rendered locally, no telemetry.",
-        )
+    capabilities = RendererCapabilities(
+        supports_selection=True,
+        supports_edge_selection=True,
+        supports_heat=True,
+        supports_node_shapes=True,
+        supports_edge_labels=True,
+        supports_mixed_direction=True,
+        supports_hierarchical=True,
+        supports_drag=False,
+        supports_html_export=True,
+        requires_internet=False,
+        telemetry=False,
+        license_note="plotly (MIT) and networkx (BSD-3); rendered locally, no telemetry.",
+    )
 
     @classmethod
-    def availability(cls) -> tuple[bool, str]:
-        try:
-            import networkx  # noqa: F401
-            import plotly.graph_objects  # noqa: F401
-        except ImportError as exc:
-            return False, f"plotly/networkx not installed: {exc}"
-        return True, ""
+    def availability(cls) -> Availability:
+        for module in ("plotly", "networkx"):  # core dependencies, found without importing them
+            found = Availability.of_module(module)
+            if not found.ok:
+                return found
+        return Availability(True)
 
     # ------------------------------------------------------------------ translate
     def translate(self, spec: GraphSpec, options: RenderOptions) -> PlotlyPayload:

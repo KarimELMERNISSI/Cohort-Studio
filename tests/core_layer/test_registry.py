@@ -154,6 +154,13 @@ def test_availability_never_raises_and_names_the_group_to_install(fake: str) -> 
     assert not registry.availability("cohere").ok  # unknown: not offered
 
 
+def test_a_connector_that_cannot_load_is_shown_by_its_name(fake: str) -> None:
+    registry = _registry(fake)
+    assert registry.display_name("FINE") == "Good"
+    assert registry.display_name("ext") == "ext"  # its module needs a package that is not installed
+    assert registry.display_name("cohere") == "cohere"
+
+
 def test_a_module_is_found_without_being_imported(monkeypatch: pytest.MonkeyPatch) -> None:
     import sys
 
