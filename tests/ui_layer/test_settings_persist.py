@@ -312,7 +312,7 @@ def test_a_saved_choice_this_server_cannot_use_is_named(
     later = _new_session()
     captions = " ".join(c.value for c in later.caption)
     assert "`cohere` is not offered here" in captions
-    assert "`chroma` is not available here" in captions
+    assert "`chroma` is not offered here" in captions
     assert later.selectbox(key="rag_provider_select").value == "ollama"
     from ui.graph_view import RENDERER_OVERRIDE_KEY
 

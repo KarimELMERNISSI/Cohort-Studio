@@ -29,8 +29,6 @@ if TYPE_CHECKING:
     from .document_index import DocumentIndex, IndexRetriever
     from .selection import (
         AUTO,
-        ENGINE_SUMMARIES,
-        ENGINE_TITLES,
         MachineProfile,
         Recommendation,
         VectorStoreSettings,
@@ -40,7 +38,7 @@ if TYPE_CHECKING:
         probe_machine,
         qdrant_embedded_warnings,
         recommend,
-        resolve_engine,
+        select_engine,
     )
 
 # The names are stored in the users' preferences, the index manifests and CMP_VECTOR_STORE: they never change.
@@ -70,8 +68,6 @@ _LAZY = {
     **dict.fromkeys(
         (
             "AUTO",
-            "ENGINE_SUMMARIES",
-            "ENGINE_TITLES",
             "MachineProfile",
             "Recommendation",
             "VectorStoreSettings",
@@ -81,7 +77,7 @@ _LAZY = {
             "probe_machine",
             "qdrant_embedded_warnings",
             "recommend",
-            "resolve_engine",
+            "select_engine",
         ),
         "manage.vectorstores.selection",
     ),
@@ -103,8 +99,6 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "AUTO",
-    "ENGINE_SUMMARIES",
-    "ENGINE_TITLES",
     "VECTOR_STORES",
     "BaseVectorIndex",
     "ChunkRow",
@@ -124,5 +118,5 @@ __all__ = [
     "probe_machine",
     "qdrant_embedded_warnings",
     "recommend",
-    "resolve_engine",
+    "select_engine",
 ]

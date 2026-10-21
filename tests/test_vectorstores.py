@@ -17,15 +17,13 @@ from manage.vectorstores import (
     MachineProfile,
     VectorEngine,
     VectorStoreError,
-    VectorStoreSettings,
     estimate_chunks,
     index_matches,
     open_index,
     qdrant_embedded_warnings,
     recommend,
-    resolve_engine,
 )
-from manage.vectorstores.qdrant_index import release_clients, user_collection
+from manage.vectorstores.qdrant_index import release_clients
 
 DIM = 64
 
@@ -168,24 +166,6 @@ def test_recommendation_follows_machine_and_library() -> None:
         "quarter of the free memory" in w for w in big
     )
     assert estimate_chunks([2_500_000]) == 1_000
-
-
-def test_engine_resolution_and_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    rec = recommend(MachineProfile(8, 16.0, 8.0, 100.0), chunks=10)
-    monkeypatch.setenv("CMP_VECTOR_STORE", "qdrant")
-    monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant:6333")
-    settings = VectorStoreSettings.from_env()
-    assert settings.engine == "qdrant" and settings.qdrant_url == "http://qdrant:6333"
-    assert resolve_engine(None, settings, rec) is VectorEngine.QDRANT  # server default
-    assert (
-        resolve_engine("lancedb", settings, rec) is VectorEngine.LANCEDB
-    )  # the user's choice wins
-    assert (
-        resolve_engine(None, VectorStoreSettings(), rec) is VectorEngine.LANCEDB
-    )  # auto: the recommendation
-    monkeypatch.setenv("CMP_VECTOR_STORE", "chroma")
-    assert VectorStoreSettings.from_env().engine == "auto"  # unknown engines fall back to auto
-    assert user_collection("Dr. Alice-Smith") == "cmp_dr_alice_smith_chunks"
 
 
 def test_an_index_is_reused_only_when_it_holds_the_same_documents() -> None:

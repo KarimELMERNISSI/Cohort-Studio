@@ -41,6 +41,17 @@ class LanceDBIndex(BaseVectorIndex):
     def availability(cls) -> Availability:
         return Availability.of_module("lancedb", extra="ai")
 
+    @classmethod
+    def open(
+        cls,
+        directory: Path,
+        *,
+        username: str | None = None,
+        url: str | None = None,
+        api_key: str | None = None,
+    ) -> LanceDBIndex:
+        return cls(directory)  # embedded only: no server
+
     @property
     def location(self) -> str:
         return str(self.directory)

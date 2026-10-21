@@ -10,6 +10,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code.
 """
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -52,6 +53,8 @@ from .rag_documents import DocumentsMixin
 # Import mixins
 from .rag_taxonomy import TaxonomyMixin
 
+logger = logging.getLogger(__name__)
+
 CLOUD_PROVIDERS = {"gemini", "openai", "mistral", "anthropic"}
 # Providers that answer but have no embedding API: documents are embedded by another provider.
 CHAT_ONLY_PROVIDERS = {"anthropic"}
@@ -82,7 +85,7 @@ try:
         open_index,
         probe_machine,
         recommend,
-        resolve_engine,
+        select_engine,
     )
     RAG_AVAILABLE = True
 except ImportError as e:
@@ -443,14 +446,20 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             url = qdrant_url or settings.qdrant_url
             api_key = qdrant_api_key or settings.qdrant_api_key
             advice = recommend(probe_machine(base_dir), chunks=len(texts), qdrant_server=bool(url))
-            engine = resolve_engine(vector_engine, settings, advice)
+            chosen = select_engine(session=vector_engine, settings=settings, advice=advice)
+            for warning in chosen.warnings:
+                logger.warning("%s", warning)
+            if chosen.chosen is None:
+                reasons = "; ".join(f"{name}: {found.reason}" for name, found in chosen.alternatives)
+                return False, f"No vector database can be used here ({reasons}). Install them with uv sync --extra ai."
+            engine = chosen.chosen
             embedding_label = f"{embed_provider}:{embedding_model}"
             try:
                 backend = open_index(
                     engine,
                     base_dir=base_dir,
                     username=_scope.username if _scope else None,
-                    qdrant_url=url if engine is VectorEngine.QDRANT else None,
+                    qdrant_url=url if engine == VectorEngine.QDRANT else None,
                     qdrant_api_key=api_key,
                 )
                 index = DocumentIndex(backend, embeddings)
@@ -459,12 +468,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 library = sorted({os.path.basename(str(t.metadata.get("source", ""))) for t in texts})
                 existing = use_existing_db and backend.exists() and index.count() > 0
                 if existing and index_matches(index.manifest, library):
-                    if progress_callback: progress_callback(60, f"Loading the existing {engine.value} index...")
+                    if progress_callback: progress_callback(60, f"Loading the existing {engine} index...")
                     index.check_compatible(embedding_label)
                 else:
                     if progress_callback:
                         changed = "The documents changed since the index was built: rebuilding" if existing else "Building"
-                        progress_callback(60, f"{changed} the {engine.value} index...")
+                        progress_callback(60, f"{changed} the {engine} index...")
                     cloud = embed_provider in CLOUD_PROVIDERS  # cloud embedding APIs rate-limit bursts
 
                     def _embedding_progress(done, total):
@@ -482,9 +491,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             except VectorStoreError as e:
                 return False, redact_secrets(str(e))
             except Exception as e:  # a provider's error can quote the key it refused
-                return False, redact_secrets(f"Vector database error ({engine.value}): {e}")
+                return False, redact_secrets(f"Vector database error ({engine}): {e}")
             self.vector_store = index
-            self.vector_engine = engine.value
+            self.vector_engine = engine
 
             # 4. Analyze Global Context
             if progress_callback: progress_callback(95, "Setting up LLM chains...")
@@ -497,7 +506,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             self._update_internal_state(adherence_score)
 
             message = (
-                f"RAG System Initialized Successfully ({provider_clean.upper()}, {engine.value} index). "
+                f"RAG System Initialized Successfully ({provider_clean.upper()}, {engine} index). "
                 f"Processed {len(documents)} pages and {len(texts)} chunks; the index holds {index.count()} chunks."
             )
             self.initialized = True

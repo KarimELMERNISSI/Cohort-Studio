@@ -1,12 +1,14 @@
 """The vector databases as a connector family (M5b): the registry keeps the connector contract, and reading it loads
 neither the engines nor the AI stack (it runs without the optional 'ai' group)."""
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from core.registry import Availability
 from manage.vectorstores import VECTOR_STORES
 from tests import connector_contract as contract
 
@@ -34,25 +36,74 @@ def test_a_missing_client_names_its_group(
     assert VECTOR_STORES.availability(name).extra == "ai"
 
 
-def test_the_registry_says_what_the_lists_it_replaces_said() -> None:
-    # golden: the engines' own titles and summaries equal the lists of selection.py, deleted in the next commit
-    from manage.vectorstores.selection import ENGINE_SUMMARIES, ENGINE_TITLES
-
-    names = VECTOR_STORES.names()
-    assert {e.value: title for e, title in ENGINE_TITLES.items()} == {
-        n: VECTOR_STORES.display_name(n) for n in names
-    }
-    assert {e.value: summary for e, summary in ENGINE_SUMMARIES.items()} == {
-        n: VECTOR_STORES.get(n).summary for n in names
-    }
-
-
 def test_each_engine_says_what_it_is() -> None:
-    for name in VECTOR_STORES.names():
-        engine = VECTOR_STORES.get(name)
-        assert engine.display_name and engine.summary.endswith("."), name
-    assert VECTOR_STORES.display_name("lancedb") == "LanceDB"
-    assert VECTOR_STORES.display_name("qdrant") == "Qdrant"
+    # the titles and summaries of the lists they replace (ENGINE_TITLES, ENGINE_SUMMARIES; golden test of 7333f49)
+    assert {name: VECTOR_STORES.display_name(name) for name in VECTOR_STORES.names()} == {
+        "lancedb": "LanceDB",
+        "qdrant": "Qdrant",
+    }
+    assert VECTOR_STORES.get("lancedb").summary.startswith("Embedded and serverless")
+    assert VECTOR_STORES.get("qdrant").summary.startswith("Embedded in-memory for small libraries")
+
+
+def test_the_engine_follows_the_session_the_preference_the_setting_then_the_recommendation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manage.vectorstores import MachineProfile, VectorStoreSettings, recommend, select_engine
+
+    monkeypatch.setattr(VECTOR_STORES, "availability", lambda name: Availability(True))
+    laptop = recommend(MachineProfile(8, 16.0, 8.0, 100.0), chunks=10)  # LanceDB, with its reasons
+    server = VectorStoreSettings(engine="qdrant")
+
+    def pick(**choices):
+        chosen = select_engine(advice=laptop, **choices)
+        return chosen.chosen, chosen.source
+
+    assert pick(settings=server) == ("qdrant", "setting")
+    assert pick(settings=server, preference="lancedb") == ("lancedb", "preference")
+    assert pick(settings=server, preference="lancedb", session="qdrant") == ("qdrant", "session")
+    automatic = select_engine(settings=VectorStoreSettings(), advice=laptop)
+    assert (automatic.chosen, automatic.reasons) == ("lancedb", laptop.reasons)
+    stale = select_engine(settings=VectorStoreSettings(), preference="chroma", advice=laptop)
+    assert stale.chosen == "lancedb" and "`chroma` is not offered here" in stale.warnings[0]
+
+
+def test_an_unknown_setting_counts_as_auto_until_start_up_refuses_it(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from manage.vectorstores import VectorStoreSettings
+
+    monkeypatch.setenv("CMP_VECTOR_STORE", " Qdrant ")
+    monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant:6333")
+    server = VectorStoreSettings.from_env()
+    assert (server.engine, server.qdrant_url) == ("qdrant", "http://qdrant:6333")
+    monkeypatch.setenv("CMP_VECTOR_STORE", "zz9-chroma")
+    with caplog.at_level(logging.WARNING, logger="manage.vectorstores.selection"):
+        assert VectorStoreSettings.from_env().engine == "auto"
+    assert "CMP_VECTOR_STORE is not a vector database" in caplog.text and "zz9" not in caplog.text
+
+
+def test_each_engine_opens_its_own_index(tmp_path: Path) -> None:
+    from manage.vectorstores.qdrant_index import user_collection
+
+    lance = VECTOR_STORES.get("lancedb").open(tmp_path / "lancedb", url="http://ignored:1")
+    assert lance.location == str(tmp_path / "lancedb")  # embedded only: an address does not apply
+    qdrant = VECTOR_STORES.get("qdrant")
+    embedded = qdrant.open(tmp_path / "qdrant")
+    assert embedded.mode == "embedded" and embedded.location == str(tmp_path / "qdrant" / "storage")
+    shared = qdrant.open(tmp_path / "qdrant", url="http://qdrant:6333", username="Dr. Alice-Smith")
+    assert shared.mode == "server" and shared.collection == user_collection("Dr. Alice-Smith")
+    assert user_collection("Dr. Alice-Smith") == "cmp_dr_alice_smith_chunks"
+
+
+def test_an_engine_that_cannot_run_names_the_group_to_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from manage.vectorstores import VectorStoreError, open_index
+
+    monkeypatch.setitem(sys.modules, "lancedb", None)
+    with pytest.raises(VectorStoreError, match=r"LanceDB cannot be used: .*uv sync --extra ai"):
+        open_index("lancedb", base_dir=tmp_path)
 
 
 def test_the_registry_loads_neither_the_engines_nor_the_ai_stack() -> None:

@@ -111,9 +111,8 @@ class BaseVectorIndex(ABC):
     :mod:`.lancedb_index`, :mod:`.qdrant_index`."""
 
     engine: ClassVar[VectorEngine]
-    name: ClassVar[
-        str
-    ]  # the registered name, stored in preferences and index manifests: never renamed
+    # the registered name, stored in the preferences and the index manifests: never renamed
+    name: ClassVar[str]
     display_name: ClassVar[str]
     summary: ClassVar[str]  # one sentence for Settings
 
@@ -124,6 +123,19 @@ class BaseVectorIndex(ABC):
     @abstractmethod
     def availability(cls) -> Availability:
         """Whether the engine's client library is installed, found without importing it; never raises."""
+
+    @classmethod
+    @abstractmethod
+    def open(
+        cls,
+        directory: Path,
+        *,
+        username: str | None = None,
+        url: str | None = None,
+        api_key: str | None = None,
+    ) -> BaseVectorIndex:
+        """The engine's index in ``directory``, or on its server when it has one and ``url`` is given (the user's own
+        collection there)."""
 
     @property
     @abstractmethod

@@ -6,12 +6,15 @@ Choosing and opening a vector database for the user's machine and needs.
 - :func:`probe_machine` measures CPU cores, memory and free disk without extra dependencies.
 - :func:`recommend` turns the machine, the size of the document library and the presence of a
   Qdrant server into a recommendation with its reasons and warnings (pure, unit-tested).
+- :func:`select_engine` chooses the engine: the session's choice, the saved preference, the server's setting, then
+  the recommendation (through the registry, :data:`manage.vectorstores.VECTOR_STORES`).
 - :func:`open_index` opens the selected engine in the user's workspace.
 """
 
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
 import platform
 import shutil
@@ -19,21 +22,15 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from core.registry import AUTO, Selection
+from manage.vectorstores import VECTOR_STORES
 from utils.settings import Settings, get_settings
 
 from .base import BaseVectorIndex, VectorEngine, VectorStoreError
-from .lancedb_index import ANN_THRESHOLD, LanceDBIndex
-from .qdrant_index import QdrantIndex, user_collection
+from .lancedb_index import ANN_THRESHOLD
 
-AUTO = "auto"
-ENGINE_TITLES = {
-    VectorEngine.LANCEDB: "LanceDB",
-    VectorEngine.QDRANT: "Qdrant",
-}
-ENGINE_SUMMARIES = {
-    VectorEngine.LANCEDB: "Embedded and serverless; vectors stored on disk in the columnar Lance format.",
-    VectorEngine.QDRANT: "Embedded in-memory for small libraries, or a Qdrant server for several users and large libraries.",
-}
+logger = logging.getLogger(__name__)
+
 EMBEDDED_QDRANT_LIMIT = (
     20_000  # chunks: local mode keeps every vector in memory, brute-force search
 )
@@ -54,8 +51,11 @@ class VectorStoreSettings:
         """The vector store's settings (utils.settings; the current ones by default)."""
         section = (settings or get_settings()).vector_store
         engine = section.engine or AUTO
-        if engine not in {AUTO, *(e.value for e in VectorEngine)}:
-            engine = AUTO  # an unknown name stops start-up from step 4 on (connectors on one kit)
+        problem = VECTOR_STORES.setting_problem(engine)
+        # start-up stops on it from M5b's last step; the log names the variable, never the value (a pasted key?)
+        if problem:
+            logger.warning("%s; the recommended engine is used", problem)
+            engine = AUTO
         key = section.qdrant_api_key
         return cls(
             engine=engine,
@@ -210,50 +210,51 @@ def qdrant_embedded_warnings(
     return notes
 
 
-def resolve_engine(
-    choice: str | None, settings: VectorStoreSettings, recommendation: Recommendation
-) -> VectorEngine:
-    """The user's choice, else the server default, else the recommendation."""
-    for value in (choice, settings.engine):
-        if value and value != AUTO:
-            try:
-                return VectorEngine(value)
-            except ValueError:
-                continue
-    return recommendation.engine
+def select_engine(
+    *,
+    session: str | None = None,
+    preference: str | None = None,
+    settings: VectorStoreSettings,
+    advice: Recommendation,
+) -> Selection:
+    """
+    The engine to use: the session's choice, then the saved preference, then the server's setting, then the engine
+    recommended for this machine (with its reasons), then the family's order. A choice that cannot run here falls
+    through, and the selection says why.
+    """
+    return VECTOR_STORES.select(
+        session=session,
+        preference=preference,
+        setting=settings.engine,
+        auto=advice.engine.value,
+        auto_reasons=advice.reasons,
+    )
 
 
 def open_index(
-    engine: VectorEngine | str,
+    engine: str,
     *,
     base_dir: Path,
     username: str | None = None,
     qdrant_url: str | None = None,
     qdrant_api_key: str | None = None,
 ) -> BaseVectorIndex:
-    """Open the engine's index in ``base_dir/<engine>`` (Qdrant on a server when a URL is given)."""
-    engine = VectorEngine(engine)
-    engine_dir = Path(base_dir) / engine.value
-    if engine is VectorEngine.LANCEDB:
-        found = LanceDBIndex.availability()
-        if not found.ok:
-            raise VectorStoreError(f"{found.reason} ({found.install_hint})")
-        return LanceDBIndex(engine_dir)
-    found = QdrantIndex.availability()
+    """Open the engine's index in ``base_dir/<engine>`` (on a server when the engine has one and a URL is given)."""
+    cls = VECTOR_STORES.get(engine)
+    found = VECTOR_STORES.availability(cls.name)
     if not found.ok:
-        raise VectorStoreError(f"{found.reason} ({found.install_hint})")
-    if qdrant_url:
-        return QdrantIndex(
-            engine_dir, url=qdrant_url, api_key=qdrant_api_key, collection=user_collection(username)
+        raise VectorStoreError(
+            f"{cls.display_name} cannot be used: {found.reason}"
+            + (f" ({found.install_hint})" if found.install_hint else "")
         )
-    return QdrantIndex(engine_dir, path=engine_dir / "storage")
+    return cls.open(
+        Path(base_dir) / cls.name, username=username, url=qdrant_url, api_key=qdrant_api_key
+    )
 
 
 __all__ = [
     "AUTO",
     "EMBEDDED_QDRANT_LIMIT",
-    "ENGINE_SUMMARIES",
-    "ENGINE_TITLES",
     "MachineProfile",
     "Recommendation",
     "VectorStoreSettings",
@@ -263,5 +264,5 @@ __all__ = [
     "probe_machine",
     "qdrant_embedded_warnings",
     "recommend",
-    "resolve_engine",
+    "select_engine",
 ]

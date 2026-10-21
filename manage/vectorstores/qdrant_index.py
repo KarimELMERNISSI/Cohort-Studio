@@ -93,6 +93,19 @@ class QdrantIndex(BaseVectorIndex):
     def availability(cls) -> Availability:
         return Availability.of_module("qdrant_client", extra="ai")
 
+    @classmethod
+    def open(
+        cls,
+        directory: Path,
+        *,
+        username: str | None = None,
+        url: str | None = None,
+        api_key: str | None = None,
+    ) -> QdrantIndex:
+        if url:  # a server shared by every session: one collection per user
+            return cls(directory, url=url, api_key=api_key, collection=user_collection(username))
+        return cls(directory, path=directory / "storage")
+
     @property
     def mode(self) -> str:
         return "server" if self.url else "embedded"

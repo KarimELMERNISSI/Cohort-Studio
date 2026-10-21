@@ -28,8 +28,6 @@ from manage.ai_payload import (
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.rag.providers.gemini import GEMINI_CHAT_MODELS
 from manage.vectorstores import (
-    ENGINE_SUMMARIES,
-    ENGINE_TITLES,
     VECTOR_STORES,
     IndexManifest,
     MachineProfile,
@@ -39,7 +37,7 @@ from manage.vectorstores import (
     probe_machine,
     qdrant_embedded_warnings,
     recommend,
-    resolve_engine,
+    select_engine,
 )
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui import preferences
@@ -569,21 +567,13 @@ def _vectors_dir() -> Path:
     return scope.vectors_dir() if scope else Path(get_vectors_dir())
 
 
-def _engine_usable(name: str | None) -> tuple[bool, str]:
-    """Whether this server can run the vector database ``name`` (kept from the last session), and why not."""
-    if not name:
-        return False, ""
-    found = VECTOR_STORES.availability(name)
-    return found.ok, found.reason
-
-
 def _vector_card(selected_files: list[str] | None) -> dict:
     """Choice of the vector database for this machine and library; returns the engine settings."""
     settings = VectorStoreSettings.from_env()
     base_dir = _vectors_dir()
     docs_dir = Path(_documents_dir())
     sizes = [(docs_dir / f).stat().st_size for f in (selected_files or []) if (docs_dir / f).exists()]
-    built = [m for m in (IndexManifest.load(base_dir / e.value) for e in VectorEngine) if m is not None]
+    built = [m for m in (IndexManifest.load(base_dir / name) for name in VECTOR_STORES.names()) if m is not None]
     chunks = max([m.chunks for m in built], default=0) or estimate_chunks(sizes)
     dim = built[0].dim if built else 768
     machine = _machine(str(base_dir))
@@ -593,30 +583,28 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
         saved = preferences.current().vector_store
-        usable, why = _engine_usable(saved)
-        default = resolve_engine(saved if usable else None, settings, advice)
+        # the saved engine when it can run here, else the server's, else the one recommended for this machine
+        kept = select_engine(preference=saved, settings=settings, advice=advice)
+        default = kept.chosen or advice.engine.value
         choice = st.segmented_control(
             "Engine",
-            options=[e.value for e in VectorEngine],
-            format_func=lambda v: ENGINE_TITLES[VectorEngine(v)],
-            default=default.value,
+            options=list(VECTOR_STORES.names()),
+            format_func=VECTOR_STORES.display_name,
+            default=default,
             key="rag_vector_engine",
             help="Where the chunks of your documents and their vectors are stored and searched.",
             persist_state=PERSIST,
             on_change=preferences.save_from,
             args=("rag_vector_engine", "vector_store"),
         )
-        engine = VectorEngine(choice or default.value)
-        if saved and not usable:
-            st.caption(
-                f"Your saved vector database {preferences.shown(saved)} is not available here ({why}): "
-                f"{ENGINE_TITLES[default]} is used."
-            )
-        st.caption(ENGINE_SUMMARIES[engine])
-        if engine is advice.engine:
+        engine = choice or default
+        if saved and kept.source != "preference" and kept.warnings:
+            st.caption(f"{kept.warnings[0]}: {VECTOR_STORES.display_name(default)} is used.")
+        st.caption(VECTOR_STORES.get(engine).summary)
+        if engine == advice.engine:
             st.badge("Recommended for this machine", icon=":material/recommend:", color="green")
         else:
-            st.badge(f"Recommended here: {ENGINE_TITLES[advice.engine]}", icon=":material/info:", color="gray")
+            st.badge(f"Recommended here: {VECTOR_STORES.display_name(advice.engine)}", icon=":material/info:", color="gray")
         with st.expander("Why, and this machine"):
             for reason in advice.reasons:
                 st.markdown(f"- {reason}")
@@ -628,7 +616,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             st.caption(f"{machine.cpu_count} CPU cores · {memory} · {disk} · library: ~{chunks:,} chunks ({source}).")
 
         qdrant_url = qdrant_key = None
-        if engine is VectorEngine.QDRANT:
+        if engine == VectorEngine.QDRANT:
             server_url = st.text_input(
                 "Qdrant server URL",
                 key="rag_qdrant_url",
@@ -659,7 +647,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         for warning in advice.warnings:
             st.warning(warning, icon=":material/storage:")
 
-        manifest = IndexManifest.load(base_dir / engine.value)
+        manifest = IndexManifest.load(base_dir / engine)
         if manifest is not None:
             st.caption(
                 f":material/inventory_2: Index: {manifest.chunks:,} chunks from {len(manifest.documents)} document(s), "
@@ -685,7 +673,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                     lambda: shutil.rmtree(legacy, ignore_errors=True),
                     confirm_label="Remove",
                 )
-    return {"vector_engine": engine.value, "qdrant_url": qdrant_url, "qdrant_api_key": qdrant_key}
+    return {"vector_engine": engine, "qdrant_url": qdrant_url, "qdrant_api_key": qdrant_key}
 
 
 def _engine_card(
@@ -700,7 +688,7 @@ def _engine_card(
     with st.container(border=True):
         st.subheader("AI engine", icon=":material/bolt:", anchor=False)
         if manager.initialized:
-            engine_name = ENGINE_TITLES.get(VectorEngine(manager.vector_engine)) if getattr(manager, "vector_engine", None) else None
+            engine_name = VECTOR_STORES.display_name(manager.vector_engine) if getattr(manager, "vector_engine", None) else None
             st.badge(f"Active · {engine_name} index" if engine_name else "Active", icon=":material/check_circle:", color="green")
         elif getattr(manager, "stop_reason", None):
             st.badge("Stopped", icon=":material/block:", color="red")
