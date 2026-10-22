@@ -259,15 +259,17 @@ def app(mi=None):
             persist_state="page", key="epi_analysis_mode",
             help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
         )
-        transformation = "None (Raw Data)"
-        if mi is None:
-            transformation = st.selectbox(
+        transformation = (
+            st.selectbox(
                 "Transform numeric variables",
                 ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
                 persist_state="page", key="epi_transformation",
                 width=300,
                 help=HELP["transform"],
             )
+            if mi is None
+            else "None (Raw Data)"  # with imputed data, no transformation is offered
+        )
         guidance_toggle()
     if mi is not None:
         from biostats.mi import not_poolable

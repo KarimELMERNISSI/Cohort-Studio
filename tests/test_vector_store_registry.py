@@ -112,7 +112,7 @@ def test_the_registry_loads_neither_the_engines_nor_the_ai_stack() -> None:
 
 
 def test_the_package_names_load_when_first_used() -> None:
-    import manage.vectorstores as package
+    from manage import vectorstores as package
 
     assert package.VectorStoreSettings.__name__ == "VectorStoreSettings"
     assert "VectorStoreSettings" in dir(package)

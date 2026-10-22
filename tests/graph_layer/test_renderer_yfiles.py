@@ -11,7 +11,7 @@ from graph.model import GraphSpec, LayoutHint, RenderOptions
 
 yfiles = pytest.importorskip("yfiles_graphs_for_streamlit")
 
-import graph.renderers.yfiles as adapter
+from graph.renderers import yfiles as adapter
 from graph.renderers.yfiles import YFilesGraphRenderer
 
 

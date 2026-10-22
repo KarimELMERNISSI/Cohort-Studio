@@ -267,10 +267,10 @@ class _Files:
 def _gemini(generate_content, files: _Files):
     """A Gemini chat connector whose client is a fake."""
     pytest.importorskip("google.genai", reason="the Gemini SDK is in the optional 'ai' extra")
-    from manage.rag.providers.gemini import GeminiChatConnector
+    from manage.rag.providers import gemini
     from manage.rag.schemas import ProviderConfig
 
-    connector = GeminiChatConnector(
+    connector = gemini.GeminiChatConnector(
         config=ProviderConfig(provider="gemini", model_name="models/gemini-flash-lite-latest")
     )
     connector.client = SimpleNamespace(
@@ -322,7 +322,7 @@ def test_gemini_reads_the_pdf_file_and_google_is_asked_to_delete_it(tmp_path) ->
 def test_google_is_asked_to_delete_the_pdf_whatever_happens(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import manage.rag.providers.gemini as gemini
+    from manage.rag.providers import gemini
 
     def overloaded(**kwargs):
         raise RuntimeError("model overloaded")
@@ -352,7 +352,7 @@ def test_google_is_asked_to_delete_the_pdf_whatever_happens(
 
 
 def test_a_file_ready_at_the_last_check_is_read(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import manage.rag.providers.gemini as gemini
+    from manage.rag.providers import gemini
 
     clock = iter([0.0, 1.0, 299.0, 301.0])  # the deadline, then one check before it
     monkeypatch.setattr(gemini.time, "monotonic", lambda: next(clock))

@@ -33,18 +33,26 @@ class Kind(Protocol):
     """What a catalogue holds: anything with an ``id`` (a frozen dataclass per kind)."""
 
     @property
-    def id(self) -> str: ...
+    def id(self) -> str:
+        """The kind's id, stored in traces, protocols and results: never renamed."""
 
 
 class UnknownIdError(LookupError):
     """An id that the catalogue does not hold; the message lists the valid ids."""
 
-    def __init__(self, catalogue: str, unknown: str, valid: Iterable[str]) -> None:
+    def __init__(
+        self,
+        catalogue: str,
+        unknown: str | None,
+        valid: Iterable[str],
+        *,
+        message: str | None = None,
+    ) -> None:
         self.catalogue = catalogue
         self.unknown = unknown
         self.valid = tuple(valid)
         super().__init__(
-            f"unknown {catalogue} {unknown!r}: the valid ids are {', '.join(self.valid)}"
+            message or f"unknown {catalogue} {unknown!r}: the valid ids are {', '.join(self.valid)}"
         )
 
     def __str__(self) -> str:
@@ -156,7 +164,8 @@ class Connector(Protocol):
     display_name: ClassVar[str]
 
     @classmethod
-    def availability(cls) -> Availability: ...
+    def availability(cls) -> Availability:
+        """Whether it can run here, never raising, and why not."""
 
 
 @dataclass(frozen=True)
@@ -186,11 +195,12 @@ class UnknownConnectorError(UnknownIdError):
     """
 
     def __init__(self, family: str, valid: Iterable[str]) -> None:
-        self.catalogue = family
-        self.unknown = None
-        self.valid = tuple(valid)
-        LookupError.__init__(
-            self, f"not {_article(family)} {family} of this version: use {_listed(self.valid)}"
+        names = tuple(valid)
+        super().__init__(
+            family,
+            None,  # never the name asked for
+            names,
+            message=f"not {_article(family)} {family} of this version: use {_listed(names)}",
         )
 
 

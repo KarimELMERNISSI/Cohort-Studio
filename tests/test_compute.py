@@ -24,10 +24,13 @@ def test_a_failed_or_interrupted_run_gives_its_workers_back() -> None:
     class Rerun(BaseException):  # a click reruns the page: Streamlit raises a BaseException
         pass
 
+    def fail(error: type[BaseException]) -> None:
+        raise error
+
     budget = WorkerBudget(4)
     for error in (RuntimeError, Rerun):
         with pytest.raises(error), budget.lease(4):
-            raise error
+            fail(error)
         assert budget.free == 4
 
 
@@ -51,7 +54,7 @@ def test_concurrent_sessions_never_exceed_the_budget() -> None:
 
 def test_the_budget_comes_from_the_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     """CMP_MI_MAX_WORKERS is validated with the other settings (tests/test_settings.py); unset, processors - 1."""
-    import manage.compute as compute
+    from manage import compute
 
     monkeypatch.setattr(compute, "_budget", None)
     monkeypatch.setenv(SETTING, "3")

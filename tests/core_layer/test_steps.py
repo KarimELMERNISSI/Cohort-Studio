@@ -134,7 +134,7 @@ def test_the_trace_report_titles_every_step() -> None:
 def test_the_replay_handles_every_kind_by_its_declared_mode() -> None:
     import inspect
 
-    import manage.reproduction_manager as rm
+    from manage import reproduction_manager as rm
 
     assert set(rm._HANDLED) == steps.ids(replay=RECOMPUTE)
     # the handlers given the replay result (what each imputation did): handled kinds that take it

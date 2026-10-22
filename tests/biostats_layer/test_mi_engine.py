@@ -319,8 +319,9 @@ def test_an_interrupted_parallel_run_stops_its_worker_process(
 
 def _alive(pid: int) -> bool:
     if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
+        import ctypes.wintypes
+
+        wintypes = ctypes.wintypes
 
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.OpenProcess.restype = wintypes.HANDLE

@@ -229,7 +229,7 @@ _load_lock = (
 _warned = False
 
 
-def _secrets_toml(app_folder: Path | None) -> list[str]:
+def _unread_streamlit_files(app_folder: Path | None) -> list[str]:
     """Where a Streamlit secrets file exists, named without its path (the path names the server's account)."""
     places = {"the working folder": Path.cwd()}
     try:
@@ -265,7 +265,7 @@ def load_settings(env_file: str | Path | None = None) -> Settings:
                 _loaded.add(str(path))
         if not _warned:
             _warned = True
-            for place in _secrets_toml(app_folder):
+            for place in _unread_streamlit_files(app_folder):
                 logger.warning(
                     "A .streamlit/secrets.toml exists in %s and is not read ([secrets] files = [] in "
                     ".streamlit/config.toml): the settings come from the environment and .env only. Move its "

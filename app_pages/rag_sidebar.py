@@ -361,12 +361,17 @@ def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
 def _notice(recipients: list[str], cfg: dict) -> str:
     embedding = recipients[1] if len(recipients) > 1 else None
     lines = [
-        "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and 95th "
-        "percentiles of numeric columns (never the minimum or the maximum); the most frequent values of the other "
-        "columns with their counts, only values shared by at least 5 rows; the first and last year of date columns.",
+        (
+            "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and 95th "
+            "percentiles of numeric columns (never the minimum or the maximum); the most frequent values of the "
+            "other columns with their counts, only values shared by at least 5 rows; the first and last year of date "
+            "columns."
+        ),
         "- **No row of your dataset.**",
-        "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index, and your "
-        "chat messages.",
+        (
+            "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index, and "
+            "your chat messages."
+        ),
     ]
     provider = cfg["provider"]
     if provider in file_readers():  # its connector's read_document

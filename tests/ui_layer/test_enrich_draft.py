@@ -415,11 +415,13 @@ def _snapshots_script(action: str) -> None:
 
     from core.state import DatasetRef
     from ui.state import get_state
-    from utils.data_paths import get_traces_dir
+
+    # the script runs apart from this module's own import (AppTest)
+    from utils import data_paths as dp
 
     state = get_state()
     # no user is signed in: the snapshots folder of the data folder (save_snapshot)
-    folder = Path(get_traces_dir()) / "snapshots"
+    folder = Path(dp.get_traces_dir()) / "snapshots"
     folder.mkdir(exist_ok=True)
 
     def snapshot(name: str, frame: pd.DataFrame) -> str:
@@ -481,7 +483,7 @@ def _snapshots_script(action: str) -> None:
                 output_dataset_path=snapshot("x", staged),
             )
         except RuntimeError:
-            pass
+            pass  # the change fails, as planted: what matters is the snapshots it leaves
     st.session_state["probe"] = {
         "left": sorted(p.name for p in folder.glob("*.parquet")),
         "traced": [s.get("output_dataset_path") for s in state.transformation_manager.history],

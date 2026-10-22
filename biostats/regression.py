@@ -245,4 +245,10 @@ def count_regression(
     )
 
 
-__all__ = ["RegressionResult", "count_regression", "logistic_regression"]
+__all__ = [
+    "APPARENT_AUC",
+    "APPARENT_AUC_NOTE",
+    "RegressionResult",
+    "count_regression",
+    "logistic_regression",
+]

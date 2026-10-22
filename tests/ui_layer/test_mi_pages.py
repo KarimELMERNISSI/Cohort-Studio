@@ -256,8 +256,8 @@ def test_the_page_imputes_with_the_workers_the_budget_grants(
     app: AppTest, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Each session asked for cpu_count - 1 processes; the server's budget now grants what is free."""
-    import biostats.mi as mi_package
     import manage.compute as compute
+    from biostats import mi as mi_package
 
     original = mi_package.impute
     asked: list[int] = []
