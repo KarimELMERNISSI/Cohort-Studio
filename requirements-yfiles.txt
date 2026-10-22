@@ -6,7 +6,7 @@ altair==6.3.0
     #   streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==1.13.0
+anthropic==1.15.0
     # via cohortstudio
 anyio==4.15.1
     # via
@@ -30,7 +30,7 @@ autograd-gamma==0.5.0
     # via lifelines
 bcrypt==5.0.0
     # via cohortstudio
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
@@ -75,7 +75,7 @@ formulaic==1.2.2
     #   statsmodels
 google-auth==2.62.0
     # via google-genai
-google-genai==2.30.0
+google-genai==2.31.0
     # via cohortstudio
 grpcio==1.84.0
     # via qdrant-client
@@ -145,7 +145,7 @@ lance-namespace-urllib3-client==0.13.0
     # via lance-namespace
 lancedb==0.40.0
     # via cohortstudio
-langchain-core==1.6.10
+langchain-core==1.6.12
     # via
     #   cohortstudio
     #   langchain-text-splitters
@@ -153,7 +153,7 @@ langchain-protocol==0.0.19
     # via langchain-core
 langchain-text-splitters==1.1.3
     # via cohortstudio
-langsmith==0.14.8
+langsmith==0.14.12
     # via langchain-core
 lifelines==0.30.0
     # via cohortstudio
@@ -210,6 +210,8 @@ openai==3.35.1
     # via cohortstudio
 openpyxl==3.1.5
     # via cohortstudio
+opentelemetry-api==1.45.1
+    # via anthropic
 orjson==3.13.0 ; platform_python_implementation != 'PyPy'
     # via langsmith
 packaging==26.3
@@ -235,7 +237,7 @@ pandas==3.0.6
     #   streamlit
 patsy==1.0.3
     # via statsmodels
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   cohortstudio
     #   matplotlib
@@ -275,7 +277,7 @@ pydantic==2.14.1
     #   qdrant-client
 pydantic-core==2.50.1
     # via pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.16.0
     # via cohortstudio
 pydeck==0.9.3
     # via streamlit
@@ -283,7 +285,7 @@ pynndescent==0.6.0
     # via umap-learn
 pyparsing==3.3.3
     # via matplotlib
-pypdf==6.20.1
+pypdf==6.21.1
     # via cohortstudio
 python-dateutil==2.9.0.post0
     # via
@@ -357,7 +359,7 @@ starlette==1.8.0
     # via streamlit
 statsmodels==0.15.0
     # via cohortstudio
-streamlit==1.66.0
+streamlit==1.66.1
     # via
     #   cohortstudio
     #   yfiles-graphs-for-streamlit
@@ -391,9 +393,11 @@ typing-extensions==4.16.0
     #   langchain-protocol
     #   langsmith
     #   openai
+    #   opentelemetry-api
     #   prince
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   python-docx
     #   streamlit
     #   typing-inspection
