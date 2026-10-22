@@ -28,12 +28,22 @@ class TestRAGSchemas:
     """Tests for Pydantic configuration schemas."""
 
     def test_provider_config_defaults(self):
-        cfg = ProviderConfig()
-        assert cfg.provider == ProviderType.GEMINI
-        assert cfg.model_name == "gemini-3.8-flash"
-        assert cfg.embedding_model == "models/gemini-embedding-2"
+        cfg = ProviderConfig()  # local, as the application: no longer Google Gemini, a cloud provider nobody chose
+        assert cfg.provider == ProviderType.OLLAMA
+        assert cfg.model_name == "llama3.2:latest"
+        assert cfg.embedding_model == "nomic-embed-text:latest"
         assert cfg.temperature == 0.3
         assert cfg.max_retries == 3
+
+    def test_a_provider_s_configuration_takes_its_own_models(self):
+        gemini = ProviderConfig(provider=ProviderType.GEMINI)  # not the fields' defaults, Ollama's names
+        assert (gemini.model_name, gemini.embedding_model) == (
+            "gemini-3.8-flash",
+            "models/gemini-embedding-2",
+        )
+        assert ProviderConfig(provider="custom").model_name == "gpt-4o-mini"  # OpenAI's protocol
+        given = ProviderConfig(provider="gemini", model_name="gemini-2.5-pro")
+        assert given.model_name == "gemini-2.5-pro"
 
     def test_base_url_sanitization(self):
         cfg = ProviderConfig(

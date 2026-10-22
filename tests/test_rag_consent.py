@@ -449,3 +449,22 @@ def test_claude_never_uploads_the_pdf(tmp_path) -> None:
     (tmp_path / "paper.pdf").write_bytes(b"%PDF-1.4")
     manager.extract_custom_graph_from_doc("paper.pdf")
     assert uploads == [] and read == []  # the text path (or nothing, when no text could be read)
+
+
+def test_an_engine_without_a_provider_uses_the_server_s_and_sends_nothing(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RAGManager() was Google Gemini's, a cloud provider nobody chose: it is the server's (CMP_AI_PROVIDER), local
+    Ollama by default, and a cloud one named there still needs the session's confirmation."""
+    from utils import settings as cfg
+
+    monkeypatch.delenv("CMP_AI_PROVIDER", raising=False)
+    cfg.reset_settings()
+    assert rm.RAGManager(documents_dir=str(tmp_path)).provider == "ollama"
+    monkeypatch.setenv("CMP_AI_PROVIDER", "gemini")
+    cfg.reset_settings()
+    manager = rm.RAGManager(documents_dir=str(tmp_path))
+    assert manager.provider == "gemini" and manager.confirmed == set()
+    ok, message = manager.initialize_system()  # its declared models, once confirmed
+    assert not ok and "explicit confirmation" in message
+    cfg.reset_settings()

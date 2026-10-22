@@ -38,6 +38,7 @@ def test_the_defaults(env: pytest.MonkeyPatch) -> None:
         s.iam.admin_password is None and s.iam.better_auth_url == "http://localhost:3000/api/auth"
     )
     assert s.ai.ollama_base_url == "http://localhost:11434" and s.ai.key("GOOGLE_API_KEY") is None
+    assert s.ai.provider == "auto"  # local Ollama (manage.rag.providers.default_provider)
     assert (s.vector_store.engine, s.vector_store.qdrant_url) == ("auto", None)
     assert (s.graph.renderer, s.graph.offline, s.graph.no_fallback) == ("auto", False, False)
     assert (s.statistics.random_seed, s.statistics.mi_max_workers) == (20260101, None)
@@ -48,11 +49,13 @@ def test_values_are_read_as_their_readers_read_them(env: pytest.MonkeyPatch) -> 
     env.setenv("CMP_IAM_CACHE_TTL", " 12 ")  # spaces around
     env.setenv("CMP_OFFLINE", "yes")
     env.setenv("CMP_GRAPH_RENDERER", " Plotly ")  # names compared in lower case
+    env.setenv("CMP_AI_PROVIDER", " Gemini ")
     env.setenv("CMP_LOG_LEVEL", "debug")
     env.setenv("CMP_QDRANT_URL", "")  # empty: unset
     s = cfg.get_settings()
     assert (s.iam.cache_ttl, s.graph.offline, s.graph.renderer) == (12, True, "plotly")
     assert s.logging.level == "DEBUG" and s.vector_store.qdrant_url is None
+    assert s.ai.provider == "gemini"
 
 
 def test_every_wrong_value_is_named_without_its_value(env: pytest.MonkeyPatch) -> None:

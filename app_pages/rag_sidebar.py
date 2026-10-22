@@ -29,6 +29,7 @@ from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.rag.providers import (
     AI_PROVIDERS,
     declared,
+    default_provider,
     embedding_providers,
     file_readers,
     server_key,
@@ -153,6 +154,8 @@ def _provider_card() -> dict:
                 st.session_state["rag_provider_select"] = running["provider"]  # from the running engine
             elif prefs.ai_provider in AI_PROVIDERS.names():
                 st.session_state["rag_provider_select"] = prefs.ai_provider  # a saved cloud provider starts nothing
+            else:  # the server's setting, CMP_AI_PROVIDER (local Ollama by default): a cloud one starts nothing either
+                st.session_state["rag_provider_select"] = default_provider()
         provider = st.selectbox(
             "AI provider",
             options=list(AI_PROVIDERS.names()),
@@ -189,8 +192,14 @@ def _provider_card() -> dict:
             embed_help = "Local embedding model (pull it first: 'ollama pull <model>')."
         else:
             st.badge("Cloud: requires your confirmation", icon=":material/cloud:", color="orange")
+            key_help = f"Required for {info.display_name} inference."
+            if info.lists_models:  # _discover_cloud_models: the typed key, before any confirmation
+                key_help += (
+                    f" Typing a key asks {provider_label(provider)} which models it may use: the key is sent, none "
+                    "of your data."
+                )
             cfg["api_key"] = _api_key_input(
-                provider, info.key_label or "API key", f"rag_{provider}_api_key", f"Required for {info.display_name} inference."
+                provider, info.key_label or "API key", f"rag_{provider}_api_key", key_help
             )
             chat_options = list(info.chat_models)
             if info.lists_models and cfg["api_key"] and hasattr(

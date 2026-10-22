@@ -12,18 +12,15 @@ import logging
 from typing import Any
 
 from .base import BaseEmbeddingConnector, BaseLLMConnector
-from .providers import declared, embedding_providers
+from .providers import declared_for, default_models, embedder_for
 from .providers.declarations import BaseAIProvider
 from .schemas import ProviderConfig, ProviderType
 
 logger = logging.getLogger(__name__)
 
-CUSTOM_PROTOCOL = "openai"  # a custom endpoint (ProviderType.CUSTOM) speaks OpenAI's protocol
-
 
 def _declared(provider: ProviderType | str) -> type[BaseAIProvider]:
-    name = provider.value if isinstance(provider, ProviderType) else str(provider)
-    return declared(CUSTOM_PROTOCOL if name == ProviderType.CUSTOM.value else name)
+    return declared_for(provider.value if isinstance(provider, ProviderType) else str(provider))
 
 
 def _connector(target: str) -> Any:
@@ -80,17 +77,13 @@ class ConnectorFactory:
         """
         ptype = ProviderType(provider.lower())  # a provider this version does not offer: ValueError
         answering = _declared(ptype)
-        if embedding_provider:
-            embedder = _declared(embedding_provider.lower())
-        elif answering.embeds():
-            embedder = answering
-        else:
-            embedder = declared(embedding_providers()[0])
+        embedder = embedder_for(ptype.value, embedding_provider)
+        chat_default, embedding_default = default_models(ptype.value, embedding_provider)
 
         config = ProviderConfig(
             provider=ptype,
-            model_name=model_name or answering.chat_models[0],
-            embedding_model=embedding_model or (embedder.embedding_models or ("",))[0],
+            model_name=model_name or chat_default,
+            embedding_model=embedding_model or embedding_default,
             api_key=api_key,
             base_url=base_url,
             temperature=temperature,

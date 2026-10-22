@@ -6,8 +6,12 @@ ensuring validation, serialization, and support for multi-provider configuration
 """
 
 from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from .providers import default_models
+from .providers.declarations import Ollama
 
 
 class ProviderType(str, Enum):
@@ -35,16 +39,17 @@ class ProviderConfig(BaseModel):
         max_retries: Maximum number of retry attempts upon transient network failures.
         extra_headers: Optional HTTP headers for custom gateways.
     """
+    # local by default, as the application: nothing leaves the server unless a cloud provider is chosen
     provider: ProviderType = Field(
-        default=ProviderType.GEMINI,
+        default=ProviderType.OLLAMA,
         description="The AI provider backend to use."
     )
     model_name: str = Field(
-        default="gemini-3.8-flash",
+        default=Ollama.chat_models[0],
         description="Model identifier for text generation."
     )
     embedding_model: str = Field(
-        default="models/gemini-embedding-2",
+        default=Ollama.embedding_models[0],
         description="Model identifier for vector embeddings."
     )
     api_key: str | None = Field(
@@ -76,6 +81,24 @@ class ProviderConfig(BaseModel):
         default_factory=dict,
         description="Custom HTTP headers."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _declared_models(cls, data: Any) -> Any:
+        """A provider's configuration without models takes those it declares first (manage.rag.providers.default_models;
+        a custom endpoint, OpenAI's): a Gemini configuration never holds the fields' defaults, Ollama's names."""
+        if not isinstance(data, dict) or data.get("provider") in (None, ""):
+            return data
+        name = str(getattr(data["provider"], "value", data["provider"])).strip().lower()
+        try:
+            chat, embedding = default_models(name)
+        except LookupError:  # not a provider: the field refuses it
+            return data
+        return {
+            **data,
+            "model_name": data.get("model_name") or chat,
+            "embedding_model": data.get("embedding_model") or embedding or Ollama.embedding_models[0],
+        }
 
     @field_validator("base_url")
     @classmethod

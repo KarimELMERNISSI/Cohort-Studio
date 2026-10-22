@@ -13,6 +13,9 @@ from typing import ClassVar
 
 from core.registry import Availability
 
+# a custom endpoint (ProviderType.CUSTOM) speaks OpenAI's protocol: OpenAI's declaration serves it
+CUSTOM_PROTOCOL = "openai"
+
 
 class BaseAIProvider:
     """One AI provider, a connector of :data:`manage.rag.providers.AI_PROVIDERS`."""
@@ -152,4 +155,4 @@ class Claude(BaseAIProvider):
     chat_connector = "manage.rag.providers.claude:ClaudeChatConnector"  # no embedding API
 
 
-__all__ = ["BaseAIProvider", "Claude", "Gemini", "Mistral", "Ollama", "OpenAI"]
+__all__ = ["CUSTOM_PROTOCOL", "BaseAIProvider", "Claude", "Gemini", "Mistral", "Ollama", "OpenAI"]

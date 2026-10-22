@@ -96,6 +96,74 @@ def test_the_readers_go_through_the_registry(monkeypatch: pytest.MonkeyPatch) ->
     assert server_key("Mistral") == "planted-mistral-key" and server_key("ollama") is None
 
 
+def test_the_server_s_provider_is_a_preselection(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """CMP_AI_PROVIDER: local Ollama by default; a provider named in any case; a value that names none, or a provider
+    that cannot run here, gives the local default and says why, never with the value (a pasted key?)."""
+    import logging
+
+    from manage.rag.providers import default_provider, provider_setting, select_provider
+    from utils import settings as cfg
+
+    def server(value: str | None) -> None:
+        if value is None:
+            monkeypatch.delenv("CMP_AI_PROVIDER", raising=False)
+        else:
+            monkeypatch.setenv("CMP_AI_PROVIDER", value)
+        cfg.reset_settings()
+
+    # the setting as the selection reads it, whatever is installed
+    server(None)
+    assert provider_setting() == "auto"
+    server(" Mistral ")
+    assert provider_setting() == "mistral"
+    server("sk-pasted-by-mistake")
+    with caplog.at_level(logging.WARNING):
+        assert provider_setting() == "auto"
+    assert "CMP_AI_PROVIDER is not an AI provider" in caplog.text and "sk-pasted" not in caplog.text
+    # the choice, every provider able to run (the minimal install has none)
+    monkeypatch.setattr(AI_PROVIDERS, "availability", lambda name: Availability(True))
+    server(None)
+    assert default_provider() == "ollama"
+    server(" Mistral ")
+    assert default_provider() == "mistral"
+    chosen = select_provider(preference="gemini")
+    assert (chosen.chosen, chosen.source) == ("gemini", "preference")
+    assert select_provider(session="anthropic", preference="gemini").chosen == "anthropic"
+    # a provider that cannot run here: the local default, said
+    caplog.clear()
+    monkeypatch.setattr(
+        AI_PROVIDERS,
+        "availability",
+        lambda name: Availability(name == "ollama", "openai is not installed", "ai"),
+    )
+    with caplog.at_level(logging.WARNING):
+        assert default_provider() == "ollama"
+    assert "`mistral` is not available here" in caplog.text
+    # none can run here: Ollama named all the same, never a cloud provider nobody chose
+    monkeypatch.setattr(
+        AI_PROVIDERS, "availability", lambda name: Availability(False, "not installed", "ai")
+    )
+    assert default_provider() == "ollama"
+    cfg.reset_settings()
+
+
+def test_the_default_models_are_declared_in_one_place() -> None:
+    """The factory, the engine (which names the index after the embedding model) and a provider's configuration read
+    the same defaults: the first models each provider declares; a custom endpoint, OpenAI's."""
+    from manage.rag.providers import default_models
+
+    assert default_models("ollama") == ("llama3.2:latest", "nomic-embed-text:latest")
+    assert default_models("gemini") == ("gemini-3.8-flash", "models/gemini-embedding-2")
+    # Claude has no embedding API: local Ollama embeds for it, unless another provider is given
+    assert default_models("anthropic") == ("claude-fable-5-1", "nomic-embed-text:latest")
+    assert default_models("anthropic", "openai") == ("claude-fable-5-1", "text-embedding-3-small")
+    assert default_models("custom") == ("gpt-4o-mini", "text-embedding-3-small")
+    with pytest.raises(LookupError):
+        default_models("cohere")
+
+
 def test_a_connector_reads_files_exactly_when_its_provider_declares_it() -> None:
     """``sends_files`` routes Document insight and writes the consent notice: the chat connector of a provider that
     declares it reads files (read_document), and no other does (the base one raises, so nothing is sent)."""

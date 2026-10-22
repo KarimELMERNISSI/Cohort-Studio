@@ -255,7 +255,9 @@ def test_a_saved_cloud_provider_starts_nothing_and_no_secret_is_saved(
     assert (
         later.checkbox(key="rag_consent::gemini").value is False
     )  # confirmed again in each session
-    assert later.session_state["rag_manager"].cloud_consent is False
+    assert (
+        later.session_state["rag_manager"].confirmed == set()
+    )  # no recipient confirmed by an earlier session
 
 
 def test_a_saved_model_no_longer_offered_is_named_and_kept(
@@ -334,3 +336,42 @@ def test_the_saved_vector_database_and_claude_embedding_provider_come_back(
     assert later.selectbox(key="rag_provider_select").value == "anthropic"
     assert later.selectbox(key="rag_claude_embed_provider").value == "gemini"
     assert later.segmented_control(key="rag_vector_engine").value == "qdrant"
+
+
+@pytest.mark.parametrize(
+    ("provider", "key_variable"),
+    [
+        ("mistral", "MISTRAL_API_KEY"),
+        ("gemini", "GOOGLE_API_KEY"),  # these two list models with a key: not with the server's
+        ("anthropic", "ANTHROPIC_API_KEY"),
+    ],
+)
+def test_the_server_s_provider_is_preselected_and_starts_nothing(
+    provider: str, key_variable: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CMP_AI_PROVIDER preselects the provider of a user who chose none; a cloud one is not confirmed by it, and nothing
+    is asked of it, with the server's key planted: no model list, no connector."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    from manage.rag.factory import ConnectorFactory
+    from manage.rag_manager import RAGManager
+
+    asked: list[str] = []
+    monkeypatch.setattr(
+        RAGManager, "get_available_models", lambda self, *a, **k: asked.append("models") or []
+    )
+    monkeypatch.setattr(
+        ConnectorFactory, "get_llm_connector", classmethod(lambda cls, cfg: asked.append("chat"))
+    )
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    monkeypatch.setitem(os.environ, "CMP_IAM_PROVIDER", "local")
+    monkeypatch.setenv("CMP_AI_PROVIDER", provider)
+    monkeypatch.setenv(key_variable, "PLANTED-SERVER-KEY-0123456789")
+    at = _new_session("server_choice_user")
+    assert at.selectbox(key="rag_provider_select").value == provider
+    consent = next(c for c in at.checkbox if (c.key or "").startswith("rag_consent::"))
+    assert provider in consent.key and consent.value is False
+    assert at.session_state["rag_manager"].confirmed == set() and asked == []
+    # a user's own choice wins over the server's
+    at.selectbox(key="rag_provider_select").select("ollama").run()
+    later = _new_session("server_choice_user")
+    assert later.selectbox(key="rag_provider_select").value == "ollama"

@@ -31,6 +31,8 @@ from manage.rag.providers import (
     AI_PROVIDERS,
     cloud_providers,
     declared,
+    default_models,
+    default_provider,
     embedding_providers,
     server_key,
 )
@@ -135,7 +137,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         - suggest_alternative_formula
     """
     
-    def __init__(self, documents_dir=None, api_key=None, provider="gemini", base_url=None):
+    def __init__(self, documents_dir=None, api_key=None, provider=None, base_url=None):
         if documents_dir is None:
             # Per-user document library (audit E4); the legacy shared folder is used outside a session.
             from utils.session_scope import get_current_scope
@@ -144,7 +146,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             documents_dir = str(scope.documents_dir()) if scope else "DOCUMENTS"
         self.documents_dir = documents_dir
         self.api_key = api_key
-        self.provider = provider
+        # the server's provider (CMP_AI_PROVIDER, local Ollama by default) until an engine starts with another; it
+        # sends nothing before then
+        self.provider = provider or default_provider()
         self.base_url = base_url
         self.client = None
         self.llm = None
@@ -246,8 +250,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         """Check if RAG dependencies are available."""
         return RAG_AVAILABLE
 
-    def get_available_models(self, provider: str = "gemini", base_url: str = None):
-        """Get list of available models for the specified provider."""
+    def get_available_models(self, provider: str | None = None, base_url: str = None):
+        """Get list of available models for the specified provider (the engine's own by default)."""
+        provider = provider or self.provider
         try:
             cfg = ProviderConfig(
                 provider=ProviderType(provider.lower()),
@@ -339,15 +344,15 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
     def initialize_system(
         self,
-        model_name="gemini-3.8-flash",
+        model_name=None,
         adherence_score=0.5,
         temperature=0.3,
         dataset_columns=None,
         use_existing_db=False,
         progress_callback=None,
         selected_files=None,
-        embedding_model="models/gemini-embedding-2",
-        provider="gemini",
+        embedding_model=None,
+        provider=None,
         base_url=None,
         vector_engine=None,
         qdrant_url=None,
@@ -364,11 +369,14 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         ``vector_engine`` is "lancedb" or "qdrant" (None: the server default ``CMP_VECTOR_STORE``, else
         the engine recommended for this machine); ``qdrant_url`` selects a Qdrant server instead of
         the embedded mode (default ``CMP_QDRANT_URL``).
+
+        Without a ``provider``, the engine's own (the server's ``CMP_AI_PROVIDER``, local Ollama by default); without
+        a model, the first its provider declares.
         """
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
-        
-        provider_clean = (provider or "gemini").lower()
+
+        provider_clean = (provider or self.provider).lower()
         effective_key = self.api_key or _env_api_key(provider_clean)
         embed_provider = (
             embedding_provider or (embedding_providers()[0] if _chat_only(provider_clean) else provider_clean)
@@ -376,6 +384,16 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         if _chat_only(embed_provider):
             return False, f"{embed_provider.capitalize()} has no embedding API: choose another embedding provider."
         separate_embeddings = embed_provider != provider_clean
+        # the declared defaults, as the factory takes them: the index is named after the embedding model, so it is
+        # known here
+        try:
+            chat_default, embedding_default = default_models(
+                provider_clean, embed_provider if separate_embeddings else None
+            )
+        except LookupError:  # a provider this version does not offer: the factory refuses it with the valid names
+            chat_default = embedding_default = None
+        model_name = model_name or chat_default
+        embedding_model = embedding_model or embedding_default
         embed_key = embedding_api_key or (_env_api_key(embed_provider) if separate_embeddings else effective_key)
         # every recipient outside this machine and the private network needs the confirmation, as the exact set of
         # one box: the embedding provider receives the documents and every search text (an allow-list of local

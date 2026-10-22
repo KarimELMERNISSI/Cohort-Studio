@@ -105,7 +105,10 @@ def _no_credentials(value: str | None) -> str | None:
     return value
 
 
-class AISection(_Section):
+class AISection(_Names):
+    # the provider Settings preselects (manage.rag.providers.default_provider): a cloud one receives no data until the
+    # session confirms. Not printed: a mistyped value can be a pasted key, which the log redaction does not know
+    provider: str = Field("auto", validation_alias="CMP_AI_PROVIDER", repr=False)
     ollama_base_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
 
     @field_validator("ollama_base_url")

@@ -24,7 +24,9 @@ need an API key and your explicit confirmation that data may be sent to them: Go
 **embedding provider** that indexes your documents. Keep **Ollama** there to index the whole library with your
 Ollama service; for a question, only the passages retrieved are then sent to Claude. **Document insight** sends
 Claude the text of the document whose graph it extracts, never the file. The temperature slider does not apply to
-Claude.
+Claude. A server can preselect another provider for the users who chose none (`CMP_AI_PROVIDER`); a cloud provider
+preselected this way receives none of your data until you confirm it, as when you choose it. Typing a key for Gemini
+or Claude asks the provider which models the key may use: the key is sent, none of your data.
 
 Nothing leaves the server with an Ollama on this machine. An Ollama on another machine receives the prompts, the
 text of your documents and the column summaries, and the page shows its host:

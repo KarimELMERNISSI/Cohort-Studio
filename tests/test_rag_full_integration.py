@@ -16,7 +16,7 @@ def test_rag_integration():
     if not api_key:
         pytest.skip("GOOGLE_API_KEY not configured for integration test")
 
-    rag = RAGManager(api_key=api_key)
+    rag = RAGManager(api_key=api_key, provider="gemini")  # the server's is local Ollama
     assert rag.is_available()
 
     models = rag.get_available_models()

@@ -180,5 +180,6 @@ with right:
             st.badge(f"Active: {ai['provider']}", icon=":material/check_circle:", color="green")
         else:
             st.badge("Off", icon=":material/radio_button_unchecked:", color="gray")
-            st.caption("Optional. Ollama on this machine by default: then no data leaves the server.")
+            st.caption("Optional. Nothing is sent before an engine starts in Settings; with Ollama on this machine, no "
+                       "data leaves the server.")
         page_link("settings", "Configure in Settings", icon=":material/settings:")

@@ -27,8 +27,9 @@ The **Start** page shows the workflow as a diagram. Three core steps take you fr
 | Learn from your documents | any time (AI engine) | index literature, protocols or data dictionaries; chat with them; extract a knowledge graph that informs the variable map and enrichment suggestions | Knowledge > Documents |
 | Report and reproduce | at the end, or any time | saved versions, the trace of every step, step-by-step replay and the Word report | Reproduce > Versions & traces |
 
-The AI engine is optional and local by default (Settings > AI engine); without it, every core step and the
-enrichment path still work.
+The AI engine is optional and local by default (Settings > AI engine; a server can preselect a cloud provider,
+which receives none of your data until you confirm it); without it, every core step and the enrichment path still
+work.
 
 Your choices in Settings are kept for your next session, in your workspace on the server (`preferences.json`): the AI
 provider and its models, the provider that embeds your documents for Claude, the vector database, the graph engine

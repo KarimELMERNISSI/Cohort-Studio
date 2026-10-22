@@ -334,6 +334,14 @@ in each session); a choice the server no longer offers is not used, and the page
 it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on one
 `DATA_ROOT`: the last write wins).
 
+**Which connector is used.** The graph and vector-database families (`core/registry.py`
+`ConnectorRegistry.select`) take the session's choice, then the saved preference, then the server's setting
+(`CMP_GRAPH_RENDERER`, `CMP_VECTOR_STORE`), then `auto`; a name that cannot run here falls through, and the selection
+says why. The AI card starts from the running engine, then the saved provider, then the server's (`CMP_AI_PROVIDER`,
+`manage.rag.providers.default_provider`: Ollama at `OLLAMA_BASE_URL` by default; a setting set aside is logged with
+the reason). A cloud provider preselected so receives none of the user's data until the session confirms it, and an
+engine started without a provider uses its own: the server's until an engine has started with another.
+
 **An unknown identity provider stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
 `better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`), in any case. Any other value raises
 `IAMConfigurationError`, and the app shows it instead of starting with local accounts in place of the provider meant.
