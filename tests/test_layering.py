@@ -132,10 +132,9 @@ KNOWN_STREAMLIT = {
     ("utils.analysis_utils", "app_pages.analysis_config"),
     ("utils.statistics_utils", "app_pages.statistics_guides"),
 }
-# R4, modules outside manage/rag/providers that import a provider SDK
-KNOWN_SDK = {
-    "manage.rag_documents",  # Gemini's file upload of the document graph: moves into its provider (M5b, AI providers)
-}
+# R4, modules outside manage/rag/providers that import a provider SDK: none (Gemini's file upload of the document
+# graph moved into its connector, read_document)
+KNOWN_SDK: set[str] = set()
 
 
 # --- the import graph ----------------------------------------------------------------------------------------------

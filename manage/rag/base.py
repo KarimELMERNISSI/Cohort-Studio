@@ -7,6 +7,7 @@ and evaluation components.
 """
 
 from abc import abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
@@ -55,6 +56,23 @@ class BaseLLMConnector(BaseChatModel):
         Default fallback returns the configured model.
         """
         return [self.config.model_name]
+
+    def read_document(
+        self,
+        path: str,
+        prompt: str,
+        progress: Callable[[int, str], None] | None = None,
+        *,
+        as_json: bool = False,
+        temperature: float | None = None,
+    ) -> str:
+        """
+        The model's answer to ``prompt`` about the document at ``path``, sent to the provider as a file. Only a
+        provider that declares ``sends_files`` (manage.rag.providers.declarations) implements it: the others are given
+        the document's text, which the consent notice says. ``progress`` receives a percentage and a message. Raises
+        on any failure: never returns an error as text, as a chat answer does.
+        """
+        raise NotImplementedError(f"{self._llm_type} is given the text of a document, not the file")
 
 
 class BaseEmbeddingConnector(Embeddings):

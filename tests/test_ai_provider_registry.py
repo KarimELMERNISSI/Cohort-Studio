@@ -96,6 +96,24 @@ def test_the_readers_go_through_the_registry(monkeypatch: pytest.MonkeyPatch) ->
     assert server_key("Mistral") == "planted-mistral-key" and server_key("ollama") is None
 
 
+def test_a_connector_reads_files_exactly_when_its_provider_declares_it() -> None:
+    """``sends_files`` routes Document insight and writes the consent notice: the chat connector of a provider that
+    declares it reads files (read_document), and no other does (the base one raises, so nothing is sent)."""
+    pytest.importorskip("langchain_core", reason="the connectors need the optional 'ai' group")
+    import importlib
+
+    from manage.rag.base import BaseLLMConnector
+    from manage.rag.providers import file_readers
+
+    for name in NAMES:
+        declaration = AI_PROVIDERS.get(name)
+        module, cls = declaration.chat_connector.split(":")
+        connector = getattr(importlib.import_module(module), cls)
+        reads = connector.read_document is not BaseLLMConnector.read_document
+        assert reads == declaration.sends_files, name
+    assert file_readers() == {"gemini"}
+
+
 def test_the_factory_refuses_a_provider_it_does_not_offer() -> None:
     pytest.importorskip("langchain_core", reason="the connectors need the optional 'ai' group")
     from manage.rag import ConnectorFactory

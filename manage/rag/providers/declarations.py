@@ -29,6 +29,9 @@ class BaseAIProvider:
         tuple[str, ...]
     ] = ()  # none: it answers, and another provider embeds
     lists_models: ClassVar[bool] = False  # its server or a key can list more chat models
+    # Document insight sends it the PDF file itself (its chat connector's read_document), which the consent notice
+    # says; the others are sent the PDF's text, as with every other use
+    sends_files: ClassVar[bool] = False
     chat_connector: ClassVar[str]  # "module:Class"
     embedding_connector: ClassVar[str | None] = None
 
@@ -98,6 +101,7 @@ class Gemini(BaseAIProvider):
         "models/gemini-embedding-001",
     )
     lists_models = True
+    sends_files = True  # its file API, then a request to delete the file
     chat_connector = "manage.rag.providers.gemini:GeminiChatConnector"
     embedding_connector = "manage.rag.providers.gemini:GeminiEmbeddingConnector"
 

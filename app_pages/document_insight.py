@@ -108,6 +108,7 @@ def app():
                 else:
                     st.session_state.doc_graph_json = payload.get("graph")
                     st.session_state.doc_graph_source = payload.get("meta", {}).get("source_docs", [])
+                    st.session_state.doc_graph_skipped = []
                     st.success(f"Loaded '{selected_load}'!")
                     st.rerun()
     
@@ -137,21 +138,31 @@ def app():
             def update_progress(p, t):
                 progress_bar.progress(p, text=t)
                 
-            json_res, error = rag_manager.extract_merged_graph_from_docs(selected_docs, progress_callback=update_progress)
-            
+            # the documents left out of the graph, with the reason: shown under it after the rerun
+            skipped: list[tuple[str, str]] = []
+            json_res, error = rag_manager.extract_merged_graph_from_docs(
+                selected_docs, progress_callback=update_progress, skipped=skipped
+            )
+
             progress_bar.empty()
-            
+
             if error:
                 st.error(f"Extraction failed: {plain(error, limit=500)}")
             else:
                 st.session_state.doc_graph_json = json_res
                 st.session_state.doc_graph_source = selected_docs
-                st.success(f"Graph merged from {len(selected_docs)} documents!")
+                st.session_state.doc_graph_skipped = skipped
                 st.rerun()
 
     # Reset if document changed and graph exists for old one?
     if st.session_state.doc_graph_json and set(st.session_state.doc_graph_source) != set(selected_docs):
         st.warning(f"Displaying graph for **{len(st.session_state.doc_graph_source)} docs**. Click 'Generate Graph' to update.")
+    skipped = st.session_state.get("doc_graph_skipped") or []
+    if st.session_state.doc_graph_json and skipped:
+        st.warning(
+            "Left out of the graph: "
+            + "; ".join(f"{plain(doc, limit=80)} ({plain(reason, limit=200)})" for doc, reason in skipped)
+        )
         
     # --- PERSISTENCE: SAVE ---
     if st.session_state.doc_graph_json:

@@ -5,7 +5,9 @@ Contains all document processing, knowledge graph extraction and chat methods.
 This is part of the RAGManager class composition pattern.
 """
 import os
-import time
+
+from manage.rag.providers import file_readers
+from utils.logging_config import redact_secrets
 
 
 class DocumentsMixin:
@@ -28,8 +30,8 @@ class DocumentsMixin:
 
     def extract_custom_graph_from_doc(self, file_name, progress_callback=None):
         """
-        Extract a Knowledge Graph of key entities and relationships from a specific document.
-        Supports both Gemini File API and universal text-based LLM extraction (Ollama, OpenAI, Mistral).
+        Extract a Knowledge Graph of key entities and relationships from a specific document: sent as a file to a
+        provider that declares ``sends_files`` (its connector's read_document), as its text to the others.
         """
         if not self.initialized:
             return None, "RAG System not initialized."
@@ -42,64 +44,13 @@ class DocumentsMixin:
         prompt_text = document_graph()
 
         try:
-            # Check if Gemini File API is available on the client
-            # Gemini's file API, chosen by the provider: Anthropic's client has a files API too, and the PDF went
-            # to Anthropic and stayed there, though only the passages of a question are meant to reach Claude
-            has_gemini_file_api = (
-                getattr(self, "provider", None) == "gemini"
-                and getattr(getattr(self, "llm", None), "client", None) is not None
-                and hasattr(self.llm.client, "files")
-            )
-
-            if has_gemini_file_api:
-                from google.genai import types
-                if progress_callback: progress_callback(10, f"Uploading {file_name} to Gemini...")
-                
-                client = self.llm.client
-                with open(file_path, "rb"):
-                    uploaded_file = client.files.upload(file=file_path)
-                
-                try:
-                    while uploaded_file.state.name == "PROCESSING":
-                        if progress_callback: progress_callback(20, "Processing file...")
-                        time.sleep(2)
-                        uploaded_file = client.files.get(name=uploaded_file.name)
-                    
-                    if uploaded_file.state.name == "FAILED":
-                        return None, "File processing failed by Google."
-                    
-                    if progress_callback: progress_callback(40, "Generating Knowledge Graph (Deep Analysis)...")
-                
-                    clean_model = getattr(self.llm, "model_name", "gemini-3.8-flash")
-                    clean_model = clean_model.removeprefix("models/")
-
-                    response = client.models.generate_content(
-                        model=clean_model,
-                        contents=[
-                            types.Content(
-                                role="user",
-                                parts=[
-                                    types.Part.from_uri(
-                                        file_uri=uploaded_file.uri,
-                                        mime_type=uploaded_file.mime_type
-                                    ),
-                                    types.Part.from_text(text=prompt_text)
-                                ]
-                            )
-                        ],
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.2
-                        )
-                    )
-                finally:
-                    # the PDF file itself was sent: Google is asked to delete it however the extraction ends
-                    try:
-                        client.files.delete(name=uploaded_file.name)
-                    except Exception:
-                        pass  # best effort: the provider also expires uploaded files on its own
-
-                json_str = response.text
+            # The provider declares whether it is sent the PDF file itself (Gemini's file API, then a request to delete
+            # it) or its text: never a files API the client merely has (Anthropic's has one, and a PDF uploaded there
+            # stayed, though only the passages of a question are meant to reach Claude)
+            if getattr(self, "provider", None) in file_readers():
+                json_str = self.llm.read_document(
+                    file_path, prompt_text, progress_callback, as_json=True, temperature=0.2
+                )
             else:
                 # Universal provider-agnostic text extraction (Ollama, OpenAI, Mistral)
                 if progress_callback: progress_callback(20, f"Reading {file_name}...")
@@ -130,31 +81,44 @@ class DocumentsMixin:
                  
             return parsed_data, None
             
-        except Exception as e:
-            return None, str(e)
+        except Exception as e:  # a provider's message: without the keys it can quote
+            return None, redact_secrets(str(e))
 
 
-    def extract_merged_graph_from_docs(self, doc_list, progress_callback=None):
+    def extract_merged_graph_from_docs(self, doc_list, progress_callback=None, skipped=None):
         """
         Extracts and merges graphs from multiple documents.
         Entities are unified across documents and relation endpoints are remapped to the merged
-        entities (graph.builders.document.merge_document_graphs). Returns (merged_json, error).
+        entities (graph.builders.document.merge_document_graphs). Returns (merged_json, error): an error when no
+        document gave a graph. ``skipped``, a list, receives each document left out of the graph with the reason.
         """
         from graph.builders.document import merge_document_graphs
 
         if not doc_list:
             return None, "No documents specified."
 
-        per_document = []
+        per_document, failed = [], []
         total = len(doc_list)
         for idx, doc in enumerate(doc_list):
+            start, span = idx * 100 // total, max(1, 100 // total)
             if progress_callback:
-                progress_callback(int((idx / total) * 100), f"Processing {doc}...")
-            g_json, err = self.extract_custom_graph_from_doc(doc)
+                progress_callback(start, f"Processing {doc}...")
+
+            def step(percent, message, doc=doc, start=start, span=span):
+                # each document's progress, within its share of the bar
+                if progress_callback:
+                    progress_callback(min(99, start + percent * span // 100), f"{doc}: {message}")
+
+            g_json, err = self.extract_custom_graph_from_doc(doc, progress_callback=step)
             if err or not isinstance(g_json, dict):
+                failed.append((doc, err or "no graph was returned"))
                 continue
             per_document.append((doc, g_json))
 
+        if skipped is not None:
+            skipped.extend(failed)
+        if not per_document:
+            return None, "No graph could be extracted: " + "; ".join(f"{doc}: {err}" for doc, err in failed)
         merged = merge_document_graphs(per_document)
         return merged.to_json_dict(), None
 

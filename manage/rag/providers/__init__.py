@@ -48,6 +48,12 @@ def cloud_providers() -> frozenset[str]:
     return frozenset(name for name in AI_PROVIDERS.names() if declared(name).cloud)
 
 
+def file_readers() -> frozenset[str]:
+    """The providers that Document insight sends the PDF file itself (their chat connector's read_document); the
+    others are sent its text. The graph extraction and the consent notice both read this."""
+    return frozenset(name for name in AI_PROVIDERS.names() if declared(name).sends_files)
+
+
 def embedding_providers() -> tuple[str, ...]:
     """The providers that can embed documents, in the registry's order: the first (Ollama, local) embeds for one that
     cannot (Claude) unless another is chosen."""
@@ -96,6 +102,7 @@ __all__ = [
     "cloud_providers",
     "declared",
     "embedding_providers",
+    "file_readers",
     "server_key",
     "ClaudeChatConnector",
     "GeminiChatConnector",

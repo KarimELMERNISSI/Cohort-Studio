@@ -6,8 +6,11 @@ temperature controls, and embedding integration.
 """
 
 import logging
+import mimetypes
 import random
+import secrets
 import time
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
@@ -49,6 +52,8 @@ NOT_CHAT_MODELS = (
     "antigravity",
     "deep-research",
 )
+# How long Google may take to process an uploaded file before read_document gives up, and how often it is asked
+_PROCESSING_SECONDS, _POLL_SECONDS = 300.0, 2.0
 
 
 def is_chat_model(name: str, actions: list[str] | None) -> bool:
@@ -164,6 +169,74 @@ class GeminiChatConnector(BaseLLMConnector):
         return ChatResult(generations=[ChatGeneration(
             message=AIMessage(content=f"API Error (Gemini): {redact_secrets(error_str)}")
         )])
+
+    def read_document(
+        self,
+        path: str,
+        prompt: str,
+        progress: Callable[[int, str], None] | None = None,
+        *,
+        as_json: bool = False,
+        temperature: float | None = None,
+    ) -> str:
+        """
+        The model's answer to ``prompt`` about the document at ``path``, uploaded to Google's file API from an open
+        file under a name chosen here (Google is sent neither the file's name nor its path), then Google is asked to
+        delete it however the answer ends, a failed upload included (Google also expires uploaded files on its own).
+        Raises on any failure; gives up when Google is still processing the file after five minutes.
+        """
+        if not GEMINI_AVAILABLE or not self.client:
+            raise RuntimeError("the Google GenAI SDK is not installed or the API key is missing")
+        client = self.client
+        # known before the upload, so that the file can be deleted even when the upload fails after Google stored it
+        name = secrets.token_hex(16)
+        mime_type = mimetypes.guess_type(path)[0] or "application/pdf"
+        if progress:
+            progress(10, "Uploading the file to Google Gemini...")
+        try:
+            with open(path, "rb") as stream:  # from a stream, the SDK sends no file name
+                uploaded = client.files.upload(
+                    file=stream, config=types.UploadFileConfig(name=name, mime_type=mime_type)
+                )
+            deadline = time.monotonic() + _PROCESSING_SECONDS
+            while uploaded.state.name == "PROCESSING":
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Google was still processing the file after five minutes.")
+                if progress:
+                    progress(20, "Google is processing the file...")
+                time.sleep(_POLL_SECONDS)
+                uploaded = client.files.get(name=uploaded.name)
+            if uploaded.state.name == "FAILED":
+                raise RuntimeError("File processing failed by Google.")
+            if progress:
+                progress(40, "Waiting for the model's answer...")
+            response = client.models.generate_content(
+                model=self.config.model_name.removeprefix("models/"),
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_uri(file_uri=uploaded.uri, mime_type=uploaded.mime_type),
+                            types.Part.from_text(text=prompt),
+                        ],
+                    )
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json" if as_json else None,
+                    temperature=self.config.temperature if temperature is None else temperature,
+                ),
+            )
+        finally:
+            # the file itself was sent: Google is asked to delete it however the answer ends
+            try:
+                client.files.delete(name=f"files/{name}")
+            except Exception as exc:  # Google also expires uploaded files on its own
+                logger.warning(
+                    "Google could not be asked to delete the uploaded file files/%s (%s)",
+                    name,
+                    type(exc).__name__,
+                )
+        return response.text or ""
 
 
 class GeminiEmbeddingConnector(BaseEmbeddingConnector):
