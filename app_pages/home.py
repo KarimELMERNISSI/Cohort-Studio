@@ -516,6 +516,17 @@ def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns
 
     return numerical_stats, categorical_stats, date_stats
 
+
+def _date_stats_for_excel(stats: pd.DataFrame) -> pd.DataFrame:
+    """The date statistics as a workbook holds them: the duration in days, since Excel has no duration type (it
+    became an unlabelled number)."""
+    if "Duration" not in stats:
+        return stats
+    days = pd.to_timedelta(stats["Duration"], errors="coerce").dt.total_seconds() / 86400
+    out = stats.copy()
+    out.insert(out.columns.get_loc("Duration"), "Duration (days)", days.round(2))
+    return out.drop(columns="Duration")
+
 # Bounded: each entry is a whole workbook, and the cache is shared by the sessions of the server
 @st.cache_data(show_spinner="Generating Correlation Excel file...", max_entries=8, ttl=3600)
 def _cached_corr_excel_bytes(data, targets, predictors, group_column, method):
@@ -974,6 +985,24 @@ def app():
                                         "Min Date": st.column_config.DateColumn("Min Date"),
                                         "Max Date": st.column_config.DateColumn("Max Date"),
                                     }
+                        )
+                        # as the quantitative statistics: the table, or one sheet per group
+                        if selected_group_quant == "None":
+                            date_excel = to_excel(_date_stats_for_excel(current_date_stats))
+                            date_file, date_key = "Date Statistics.xlsx", "date_download_ungrouped"
+                        else:
+                            date_excel = to_excel_sheets({
+                                group: _date_stats_for_excel(stats)
+                                for group, stats in date_stats_dict.items() if not stats.empty
+                            })
+                            date_file = f"Date_Statistics_by_{selected_group_quant}.xlsx"
+                            date_key = "date_download_grouped"
+                        st.download_button(
+                            label="Download as Excel",
+                            data=date_excel,
+                            file_name=date_file,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=date_key
                         )
 
                     # Call the function to display the guide

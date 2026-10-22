@@ -10,6 +10,33 @@ from typing import Any
 import pandas as pd
 
 
+def _excel_ready(df: Any) -> Any:
+    """``df`` (a frame or a series) as a workbook can hold it: a date with a time zone is written as the time shown,
+    since Excel holds no time zone (it refused the whole file). Columns are taken by position: a frame can repeat a
+    name."""
+    if isinstance(df, pd.Series):
+        aware = isinstance(df.dtype, pd.DatetimeTZDtype)
+        aware_index = isinstance(df.index.dtype, pd.DatetimeTZDtype)
+        if not aware and not aware_index:
+            return df
+        out = df.dt.tz_localize(None) if aware else df.copy()
+        if aware_index:
+            out.index = out.index.tz_localize(None)
+        return out
+    if not isinstance(df, pd.DataFrame):
+        return df
+    aware = [i for i, dtype in enumerate(df.dtypes) if isinstance(dtype, pd.DatetimeTZDtype)]
+    aware_index = isinstance(df.index.dtype, pd.DatetimeTZDtype)
+    if not aware and not aware_index:
+        return df
+    out = df.copy()
+    for i in aware:
+        out.isetitem(i, out.iloc[:, i].dt.tz_localize(None))
+    if aware_index:
+        out.index = out.index.tz_localize(None)
+    return out
+
+
 def to_excel(df, index: bool = True, sheet_name: str = "Sheet1") -> bytes:
     """Excel bytes for a download button (the one implementation used by every page)."""
     output = BytesIO()
@@ -17,7 +44,7 @@ def to_excel(df, index: bool = True, sheet_name: str = "Sheet1") -> bytes:
         if df is None or getattr(df, "empty", False):
             pd.DataFrame({"Status": ["No data available"]}).to_excel(writer, index=False, sheet_name=sheet_name)
         else:
-            df.to_excel(writer, index=index, sheet_name=sheet_name)
+            _excel_ready(df).to_excel(writer, index=index, sheet_name=sheet_name)
     return output.getvalue()
 
 
@@ -42,7 +69,7 @@ def to_excel_sheets(dataframes_dict: dict[str, pd.DataFrame]) -> bytes:
             safe_name = re.sub(r'[\/\\?*:[\]]', '_', str(sheet_name))[:31].strip()
             if not safe_name:
                 safe_name = "Sheet"
-            df.to_excel(writer, sheet_name=safe_name, index=True)
+            _excel_ready(df).to_excel(writer, sheet_name=safe_name, index=True)
     return output.getvalue()
 
 

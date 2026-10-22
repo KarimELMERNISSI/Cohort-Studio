@@ -162,3 +162,30 @@ class TestExportUtils:
         assert image_opts["width"] == 1400
         assert image_opts["height"] == 900
         assert image_opts["scale"] == 3
+
+
+def test_a_date_with_a_time_zone_is_written_as_the_time_shown() -> None:
+    """Excel holds no time zone: such a column, or index, made the whole download fail."""
+    shown = pd.to_datetime(["2026-03-29 01:30", "2026-10-26 02:30"]).tz_localize("Europe/Luxembourg")
+    df = pd.DataFrame({"visit": shown, "n": [1, 2]}, index=shown.rename("day"))
+    back = pd.read_excel(BytesIO(to_excel(df)), index_col=0)
+    assert list(back["visit"].dt.strftime("%Y-%m-%d %H:%M")) == ["2026-03-29 01:30", "2026-10-26 02:30"]
+    assert list(back.index.strftime("%H:%M")) == ["01:30", "02:30"]
+    sheets = pd.read_excel(BytesIO(to_excel_sheets({"A": df})), sheet_name="A", index_col=0)
+    assert list(sheets["visit"].dt.strftime("%H:%M")) == ["01:30", "02:30"]
+    assert df["visit"].dt.tz is not None  # the frame shown is not changed
+
+
+def test_a_series_and_a_repeated_column_name_are_written_as_they_were() -> None:
+    """Validate downloads such frames: a check that took columns by name failed inside the writer, which then
+    refused the file ("At least one sheet must be visible")."""
+    repeated = pd.DataFrame([[1, 2]], columns=["flag", "flag"])
+    back = pd.read_excel(BytesIO(to_excel(repeated)), index_col=0)
+    assert list(back.iloc[0]) == [1, 2]
+    aware = pd.Series(pd.to_datetime(["2026-03-29 01:30"]).tz_localize("Europe/Luxembourg"), name="visit")
+    with_dates = pd.DataFrame([[aware.iloc[0], aware.iloc[0]]], columns=["d", "d"])
+    back = pd.read_excel(BytesIO(to_excel(with_dates)), index_col=0)
+    assert [v.strftime("%H:%M") for v in back.iloc[0]] == ["01:30", "01:30"]
+    back = pd.read_excel(BytesIO(to_excel(aware)), index_col=0)
+    assert back.iloc[0, 0].strftime("%H:%M") == "01:30"
+    assert to_excel(pd.Series([1, 2], name="x"))  # a plain series, as before

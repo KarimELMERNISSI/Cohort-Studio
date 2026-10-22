@@ -354,3 +354,30 @@ def test_a_column_renamed_and_renamed_back_is_not_renamed_again(app: AppTest) ->
     _ok(app)
     columns = app.session_state["_data_session"].base.columns
     assert "age" in columns and "age_years" not in columns
+
+
+def test_the_date_statistics_can_be_downloaded_as_excel(app: AppTest) -> None:
+    """The quantitative and qualitative tables had their Excel download, the date table none."""
+    from io import BytesIO
+
+    import pandas as pd
+
+    from app_pages import home
+
+    app.session_state[home.TAB_KEY] = "Dataset Statistics"
+    app.switch_page(nav.page_path("explore")).run()
+    _ok(app)
+    assert any(m.value == "#### Date Statistics" for m in app.markdown)
+    keys = [b.key for b in app.get("download_button")]
+    assert "date_download_ungrouped" in keys
+    stats = pd.DataFrame(
+        {"Min Date": pd.to_datetime(["2020-01-03"]), "Duration": pd.to_timedelta(["1214 days"])},
+        index=pd.Index(["enrol_date"], name="Feature"),
+    )
+    workbook = pd.read_excel(BytesIO(home.to_excel(home._date_stats_for_excel(stats))), index_col=0)
+    assert list(workbook.columns) == ["Min Date", "Duration (days)"] and workbook.iloc[0, 1] == 1214
+    # grouped: one sheet per group, as the quantitative statistics
+    app.selectbox(key="select_group_quant").select("arm").run()
+    _ok(app)
+    assert "date_download_grouped" in [b.key for b in app.get("download_button")]
+    app.selectbox(key="select_group_quant").select("None").run()
