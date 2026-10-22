@@ -40,7 +40,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | anyio | 4.15.1 | MIT |
 | attrs | 26.1.0 | MIT |
 | bcrypt | 5.0.0 | Apache |
-| certifi | 2026.7.22 | MPL-2.0 |
+| certifi | 2026.10.19 | MPL-2.0 |
 | charset-normalizer | 3.5.2 | MIT |
 | click | 8.5.0 | BSD-3-Clause |
 | cloudpickle | 3.1.2 | BSD |
@@ -70,7 +70,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | pandas | 3.0.6 | BSD |
 | patsy | 1.0.3 | BSD |
-| pillow | 12.3.0 | MIT-CMU |
+| pillow | 13.0.0 | MIT-CMU |
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pyarrow | 26.0.0 | Apache-2.0 |
@@ -94,7 +94,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | six | 1.17.0 | MIT |
 | starlette | 1.8.0 | BSD-3-Clause |
 | statsmodels | 0.15.0 | BSD-3-Clause |
-| streamlit | 1.66.0 | Apache-2.0 |
+| streamlit | 1.66.1 | Apache-2.0 |
 | tabulate | 0.10.0 | MIT |
 | threadpoolctl | 3.7.0 | BSD-3-Clause |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
@@ -202,4 +202,4 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pytest-mock | 3.17.0 | MIT |
 | python-discovery | 1.6.2 | MIT |
 | ruff | 0.17.1 | MIT |
-| virtualenv | 21.14.7 | MIT |
+| virtualenv | 21.14.12 | MIT |

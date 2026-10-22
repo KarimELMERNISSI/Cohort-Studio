@@ -30,7 +30,7 @@ autograd-gamma==0.5.0
     # via lifelines
 bcrypt==5.0.0
     # via cohortstudio
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
@@ -237,7 +237,7 @@ pandas==3.0.6
     #   streamlit
 patsy==1.0.3
     # via statsmodels
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   cohortstudio
     #   matplotlib
@@ -359,7 +359,7 @@ starlette==1.8.0
     # via streamlit
 statsmodels==0.15.0
     # via cohortstudio
-streamlit==1.66.0
+streamlit==1.66.1
     # via cohortstudio
 tabulate==0.10.0
     # via cohortstudio

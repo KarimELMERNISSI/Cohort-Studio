@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 dependencies = [
     # Web & UI
     "streamlit>=1.65.0",
-    "pillow>=12.0.0",
+    "pillow>=13.0.0",  # 12.x has 24 known vulnerabilities, fixed in 13.0.0
 
     # Data Processing & Storage
     "pandas>=3.0.0",
