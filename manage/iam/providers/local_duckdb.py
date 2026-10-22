@@ -21,7 +21,7 @@ from utils.logging_config import single_line
 from utils.settings import get_settings
 
 from ..base import BaseIAMProvider
-from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
+from ..schemas import AuthResult, IAMConfig, UserCredentials, UserProfile, UserRole
 
 # the CMP_MAX_FAILED_LOGINS and CMP_LOCKOUT_MINUTES settings, read once; tests patch these attributes
 MAX_FAILED_LOGINS = get_settings().iam.max_failed_logins
@@ -47,6 +47,13 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
     """
     Local embedded IAM backend using DuckDB and bcrypt.
     """
+
+    name = "local"
+    display_name = "local accounts (this server)"
+
+    @classmethod
+    def from_config(cls, config: IAMConfig) -> "LocalDuckDBIAMProvider":
+        return cls(db_path=config.duckdb_path)
 
     def __init__(self, db_path: str | None = None) -> None:
         """

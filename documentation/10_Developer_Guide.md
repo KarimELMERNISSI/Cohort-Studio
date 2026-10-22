@@ -8,7 +8,7 @@ This guide covers the architecture, design patterns, and key subsystems of Cohor
 
 ```text
 ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│  Streamlit   │───│   App Pages      │───│  Backend         │
+│  Streamlit   │────│   App Pages      │────│  Backend         │
 │  Frontend    │    │  (app_pages/)    │    │  Managers        │
 │              │    │                  │    │  (manage/)       │
 └──────────────┘    └──────────────────┘    └──────────────────┘
@@ -58,13 +58,13 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
 
 ### Vector databases
 
-| Engine | Mode | Where vectors live | Suits |
-| --- | --- | --- | --- |
-| LanceDB (default) | embedded | `<workspace>/vectors/lancedb/`, columnar Lance files on disk | one machine, any library size; low memory; exact search below 50 000 chunks, an IVF index above |
-| Qdrant | embedded | `<workspace>/vectors/qdrant/storage/`, every vector in memory | small and medium libraries (up to ~20 000 chunks); one process per folder (the client is shared per folder) |
-| Qdrant | server | a Qdrant service (`CMP_QDRANT_URL`, optional `CMP_QDRANT_API_KEY`), one collection per user | several users, very large libraries, concurrent sessions; HNSW search and payload indexes |
+| Engine            | Mode     | Where vectors live                                                                          | Suits                                                                                                       |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| LanceDB (default) | embedded | `<workspace>/vectors/lancedb/`, columnar Lance files on disk                                | one machine, any library size; low memory; exact search below 50 000 chunks, an IVF index above             |
+| Qdrant            | embedded | `<workspace>/vectors/qdrant/storage/`, every vector in memory                               | small and medium libraries (up to ~20 000 chunks); one process per folder (the client is shared per folder) |
+| Qdrant            | server   | a Qdrant service (`CMP_QDRANT_URL`, optional `CMP_QDRANT_API_KEY`), one collection per user | several users, very large libraries, concurrent sessions; HNSW search and payload indexes                   |
 
-- **Choice** — Settings > AI engine > *Vector database*. The default comes from `CMP_VECTOR_STORE` (`auto`, `lancedb`
+- **Choice** — Settings > AI engine > _Vector database_. The default comes from `CMP_VECTOR_STORE` (`auto`, `lancedb`
   or `qdrant`); `auto` follows `manage.vectorstores.recommend()`, which weighs the machine (CPU cores, memory, free
   disk, probed without extra dependencies), the size of the library (from the current index, else estimated from the
   PDF sizes) and whether a Qdrant server is configured, and explains its choice.
@@ -85,14 +85,15 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
 Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Delete)
 ```
 
-| State | Description |
-| --- | --- |
-| **Pending** | Account created but not yet activated. Cannot log in. |
-| **Active** | Admin-approved. Full access to the application. |
-| **Deactivated** | Admin-disabled. Cannot log in until reactivated. |
-| **Deleted** | Permanently removed from the database. |
+| State           | Description                                           |
+| --------------- | ----------------------------------------------------- |
+| **Pending**     | Account created but not yet activated. Cannot log in. |
+| **Active**      | Admin-approved. Full access to the application.       |
+| **Deactivated** | Admin-disabled. Cannot log in until reactivated.      |
+| **Deleted**     | Permanently removed from the database.                |
 
 ### Implementation
+
 - Passwords are hashed with **bcrypt** before storage.
 - User records are stored in `users.duckdb` (shared data folder) by the local IAM provider (`manage/iam/providers/local_duckdb.py`), opened through `db_manager.py`.
 - The `is_active` field controls login eligibility.
@@ -116,15 +117,15 @@ Per-user isolation is enforced by `core/workspace.py`:
 
 `manage/rag_schemas.py` defines Pydantic models for structured LLM responses:
 
-| Schema | Purpose |
-| --- | --- |
-| `TheoreticalConcept`, `TheoreticalConceptList` | A medical concept or score with its standard formula and required inputs. |
-| `ComputedVariableSuggestion`, `SuggestionResponse` | AI-suggested computed variables mapped to dataset columns. |
-| `ProxyVariable` | A proxy for a missing variable. |
-| `AlternativeFormula` | An alternative formula that avoids a missing variable. |
-| `ExpandedTerm` | The full standard name of an abbreviated term. |
-| `FormulaCorrection` | A corrected formula and the changes made. |
-| `MarkdownFormulas` | LaTeX versions of formulas. |
+| Schema                                             | Purpose                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `TheoreticalConcept`, `TheoreticalConceptList`     | A medical concept or score with its standard formula and required inputs. |
+| `ComputedVariableSuggestion`, `SuggestionResponse` | AI-suggested computed variables mapped to dataset columns.                |
+| `ProxyVariable`                                    | A proxy for a missing variable.                                           |
+| `AlternativeFormula`                               | An alternative formula that avoids a missing variable.                    |
+| `ExpandedTerm`                                     | The full standard name of an abbreviated term.                            |
+| `FormulaCorrection`                                | A corrected formula and the changes made.                                 |
+| `MarkdownFormulas`                                 | LaTeX versions of formulas.                                               |
 
 Only the proxy-variable and alternative-formula suggestions are validated against their schema
 (`validate_and_parse()` in `manage/rag_computed_vars.py`). The other responses (taxonomy, documents, suggestions)
@@ -158,12 +159,12 @@ Robust JSON parsing pipeline for LLM responses:
 
 Classifies DataFrame columns into semantic types:
 
-| Type | Description |
-| --- | --- |
-| `numeric_cols` | Continuous numerical columns (float/int, high cardinality). |
-| `categorical_cols` | String/object columns. |
-| `binary_cols` | Columns with exactly 2 unique values. |
-| `date_cols` | Datetime columns. |
+| Type                           | Description                                                         |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `numeric_cols`                 | Continuous numerical columns (float/int, high cardinality).         |
+| `categorical_cols`             | String/object columns.                                              |
+| `binary_cols`                  | Columns with exactly 2 unique values.                               |
+| `date_cols`                    | Datetime columns.                                                   |
 | `low_cardinality_numeric_cols` | Numerical columns with few unique values (may be coded categories). |
 
 Pages do not build one themselves: `AppState.analyzer()` (the analysis rows) or `AppState.analyzer("base")` (every
@@ -171,10 +172,12 @@ row) returns a new analyzer each call, built from a column profile that is compu
 (`DataSession.memo`). The Validate dashboard's quality audit is kept the same way (`AppState.quality_audit`).
 
 ### `utils/statistics_utils.py`
+
 - Normality tests (Shapiro-Wilk, D'Agostino).
 - Test selection guidelines based on sample size and distribution.
 
 ### `utils/visualization_utils.py`
+
 - Plotly chart generators with statistical overlays.
 - Palette generation (`generate_palette()`, cached with `@functools.cache`).
 
@@ -198,6 +201,7 @@ Manages the recording of analysis steps:
 ### TraceDocumenter
 
 Generates `.docx` reports from trace JSON files using `python-docx`:
+
 - Session metadata header.
 - Step-by-step table with function, parameters, and description.
 - Downloadable via Streamlit's file download button.
@@ -211,20 +215,21 @@ recorded fingerprint. Recorded paths are resolved inside the user's workspace (`
 
 Every kind of step is registered once, in the `STEPS` catalogue (built on `core/registry.py`). Each kind declares:
 
-| Field | Meaning |
-| --- | --- |
-| `id` | the name stored in traces: never renamed |
-| `title` | the heading of the step in the trace report |
-| `category` | the part of the workflow whose page records it (`load`, `validate`, `enrich`, `population`, `analyse`, `report`, `other`) |
-| `replay` | `recompute` (redone from its parameters), `snapshot` (the recorded table is used) or `document` (nothing to redo) |
+| Field          | Meaning                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | the name stored in traces: never renamed                                                                                      |
+| `title`        | the heading of the step in the trace report                                                                                   |
+| `category`     | the part of the workflow whose page records it (`load`, `validate`, `enrich`, `population`, `analyse`, `report`, `other`)     |
+| `replay`       | `recompute` (redone from its parameters), `snapshot` (the recorded table is used) or `document` (nothing to redo)             |
 | `changes_data` | whether it changes the values or the rows (renaming or retyping columns does not); a step with fingerprints is judged by them |
-| `flow` | the noun of its box in the participant flow ("After the merge") |
-| `fills` | `fitted` or `formula` for a step that fills missing values with one value each |
+| `flow`         | the noun of its box in the participant flow ("After the merge")                                                               |
+| `fills`        | `fitted` or `formula` for a step that fills missing values with one value each                                                |
 
 The replay, the trace report, the workflow progress, the participant flow, the study dossier and the imputation
 bookkeeping read the catalogue.
 
 To add a kind of step:
+
 1. Register a `StepKind` in `core/steps.py`.
 2. If the replay recomputes it, add its handler to `_HANDLED` in `manage/reproduction_manager.py`.
 3. Never rename an id; register a kind that nothing records any more with `legacy=True`, so old traces still read.
@@ -240,12 +245,12 @@ writes is registered, that the report titles every kind, and that the replay han
 The `rag_monitoring.py` module renders the **Admin > AI quality** page. Scores come from an LLM acting as judge
 (`manage/rag_evaluator.py`), on a 0-10 scale:
 
-| Tab | Description |
-| --- | --- |
-| **Quality Overview** | Average context relevance, faithfulness and answer relevance, JSON success rate, a 7-day trend, scores per function, and a warning when the hallucination rate exceeds 10%. |
-| **Evaluation Details** | The recent evaluations with their scores, the judge's reasoning and detected hallucinations. |
-| **Embedding Health** | The retrieval test suite (queries and expected concepts) and a form to add test cases. It shows no embedding statistics; what the index holds (chunks, documents, embedding model and dimensions) is shown in Settings > AI engine > *Vector database*. |
-| **Run Evaluation** | Evaluate one query against a chosen function, or run the test suite (a test passes with an overall score of at least 5 and at least half of the expected concepts in the answer); export the results as JSON. Without an initialised AI engine, only a demo evaluation with fixed scores is available. |
+| Tab                    | Description                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Quality Overview**   | Average context relevance, faithfulness and answer relevance, JSON success rate, a 7-day trend, scores per function, and a warning when the hallucination rate exceeds 10%.                                                                                                                            |
+| **Evaluation Details** | The recent evaluations with their scores, the judge's reasoning and detected hallucinations.                                                                                                                                                                                                           |
+| **Embedding Health**   | The retrieval test suite (queries and expected concepts) and a form to add test cases. It shows no embedding statistics; what the index holds (chunks, documents, embedding model and dimensions) is shown in Settings > AI engine > _Vector database_.                                                |
+| **Run Evaluation**     | Evaluate one query against a chosen function, or run the test suite (a test passes with an overall score of at least 5 and at least half of the expected concepts in the answer); export the results as JSON. Without an initialised AI engine, only a demo evaluation with fixed scores is available. |
 
 This is primarily a developer and admin tool for diagnosing RAG performance issues.
 
@@ -256,14 +261,14 @@ This is primarily a developer and admin tool for diagnosing RAG performance issu
 ### Study configuration (JSON)
 
 The study configuration lives in the session (`st.session_state.config`). It starts from
-`utils.config_loader.create_empty_config()` and is uploaded on **Data > Validate** (sidebar, *Load Existing
-Config*), which merges it into the session without overwriting existing rules. The Validate page reads
+`utils.config_loader.create_empty_config()` and is uploaded on **Data > Validate** (sidebar, _Load Existing
+Config_), which merges it into the session without overwriting existing rules. The Validate page reads
 `mask_families` only:
 
-| Family | Operator | A rule that matches... | Result column |
-| --- | --- | --- | --- |
+| Family               | Operator       | A rule that matches...      | Result column                        |
+| -------------------- | -------------- | --------------------------- | ------------------------------------ |
 | `clinical_anomalies` | `any` (forced) | flags the row as an anomaly | `clinical_anomalies_any` (+ `_list`) |
-| `study_inclusion` | `all` (forced) | keeps the row in the study | `study_inclusion_all` (+ `_list`) |
+| `study_inclusion`    | `all` (forced) | keeps the row in the study  | `study_inclusion_all` (+ `_list`)    |
 
 Each rule is a key of its family (the rule name) with one of two shapes:
 
@@ -272,8 +277,8 @@ Each rule is a key of its family (the rule name) with one of two shapes:
   functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`, `.str.*`, `.dt.*`,
   `pd.to_datetime(..., dayfirst=True)`, ...).
 - **Numeric rule:** `{"numeric": true, "lower_bound": x, "upper_bound": y, "strategy": "include" | "exclude"}`.
-  The rule name must be the column name. With both bounds, *include* matches values inside the range and
-  *exclude* values outside it, so use *exclude* with the plausible range for anomalies and *include* with the
+  The rule name must be the column name. With both bounds, _include_ matches values inside the range and
+  _exclude_ values outside it, so use _exclude_ with the plausible range for anomalies and _include_ with the
   eligible range for inclusion. NaN never matches. Avoid leaving `strategy` empty when both bounds are set.
 
 A rule has exactly one shape. `core.criteria.rule_kind` decides it, and it is the only place that does: the
@@ -286,6 +291,7 @@ keys at family level other than `operator`. Operators are read without regard to
 
 `core.population.configuration_problems` lists what makes a configuration ambiguous or unusable, and an uploaded
 file with problems is not loaded:
+
 - an unknown operator, or a threshold that is not a whole number;
 - a family entry that is not a rule;
 - a numeric rule without bounds or with an unknown strategy;
@@ -345,6 +351,9 @@ engine started without a provider uses its own: the server's until an engine has
 **An unknown identity provider stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
 `better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`), in any case. Any other value raises
 `IAMConfigurationError`, and the app shows it instead of starting with local accounts in place of the provider meant.
+The identity providers are a connector family chosen by this setting only (`manage.iam.providers.IAM_PROVIDERS`, no
+automatic choice, no user's choice): each declares its `name` and `display_name` and builds itself from the
+configuration (`from_config`), and is loaded when used. A custom provider is installed with `IAMManager.set_provider`.
 
 ---
 

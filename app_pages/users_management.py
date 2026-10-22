@@ -12,11 +12,7 @@ import streamlit as st
 
 from manage.iam import IAMProviderType, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role
-
-PROVIDER_LABELS = {
-    IAMProviderType.LOCAL: "local accounts (this server)",
-    IAMProviderType.BETTER_AUTH: "Better Auth (managed through its admin API)",
-}
+from manage.iam.providers import IAM_PROVIDERS
 
 
 def app():
@@ -36,7 +32,9 @@ def app():
     if provider == IAMProviderType.DISABLED:
         st.info("Sign-in is disabled on this server (CMP_IAM_PROVIDER=disabled): there are no accounts to manage.")
         return
-    st.caption(f"Accounts of the identity provider: {PROVIDER_LABELS.get(provider, provider.value)}.")
+    # the provider that runs: a custom one installed with set_provider names itself
+    shown = type(db.provider).display_name or IAM_PROVIDERS.display_name(provider.value)
+    st.caption(f"Accounts of the identity provider: {shown}.")
 
     # Fetch all users with status
     users = db.get_all_users_with_status()

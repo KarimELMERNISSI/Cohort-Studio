@@ -197,12 +197,21 @@ class UnknownConnectorError(UnknownIdError):
 class ConnectorRegistry[C: Connector]:
     """The implementations of one family, imported when used, chosen in a fixed order (see the module docstring)."""
 
-    def __init__(self, family: str, *, setting: str, auto: Iterable[str] | None = ()) -> None:
+    def __init__(
+        self,
+        family: str,
+        *,
+        setting: str,
+        auto: Iterable[str] | None = (),
+        setting_only: bool = False,
+    ) -> None:
         self.family = family  # "graph engine"
         self.setting = setting  # "CMP_GRAPH_RENDERER"
         self._auto = (
             None if auto is None else tuple(auto)
         )  # None: the family has no "auto" (identity providers)
+        # the deployment's setting alone chooses (identity providers): a session or a saved preference never does
+        self.setting_only = setting_only
         self._catalogue: Catalogue[_Registration] = Catalogue(family)
         self._classes: dict[str, type[C]] = {}
 
@@ -333,6 +342,8 @@ class ConnectorRegistry[C: Connector]:
         "automatic" is the server's default). ``check`` replaces :meth:`availability` (a family may add a rule of its
         own, such as the offline mode), guarded the same way.
         """
+        if self.setting_only and (session is not None or preference is not None):
+            raise ValueError(f"the {self.family} is chosen by {self.setting} only")
         if self.setting_problem(setting):
             raise ValueError(self.setting_problem(setting))  # start-up stops before this
         alternatives = tuple((name, self._checked(check, name)) for name in self.names())

@@ -162,7 +162,6 @@ exclude = [
     "manage/dossier.py",
     "manage/flow_figure.py",
     "manage/iam/authz.py",
-    "manage/iam/base.py",
     "manage/iam/manager.py",
     "manage/iam/providers/better_auth.py",
     "manage/iam/providers/local_duckdb.py",

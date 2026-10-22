@@ -13,7 +13,7 @@ import time
 import requests
 
 from ..base import BaseIAMProvider
-from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
+from ..schemas import AuthResult, IAMConfig, UserCredentials, UserProfile, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,17 @@ class BetterAuthIAMProvider(BaseIAMProvider):
     Includes an in-memory TTL cache to ensure that Streamlit rerun cycles do not
     degrade performance with repeated synchronous network requests.
     """
+
+    name = "better_auth"
+    display_name = "Better Auth (managed through its admin API)"
+
+    @classmethod
+    def from_config(cls, config: IAMConfig) -> "BetterAuthIAMProvider":
+        return cls(
+            base_url=config.better_auth_url,
+            api_key=config.better_auth_api_key,
+            cache_ttl_seconds=config.session_cache_ttl_seconds,
+        )
 
     def __init__(
         self,

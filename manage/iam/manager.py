@@ -15,9 +15,7 @@ from utils.settings import Settings, get_settings
 
 from . import setup_token
 from .base import BaseIAMProvider
-from .providers.better_auth import BetterAuthIAMProvider
-from .providers.disabled import DisabledIAMProvider
-from .providers.local_duckdb import LocalDuckDBIAMProvider
+from .providers import IAM_PROVIDERS
 from .schemas import (
     AuthResult,
     IAMConfig,
@@ -28,19 +26,6 @@ from .schemas import (
 )
 
 logger = logging.getLogger(__name__)
-
-# The values CMP_IAM_PROVIDER accepts (read without regard to case); anything else stops start-up
-PROVIDER_ALIASES: dict[str, IAMProviderType] = {
-    "local": IAMProviderType.LOCAL,
-    "better_auth": IAMProviderType.BETTER_AUTH,
-    "betterauth": IAMProviderType.BETTER_AUTH,
-    "better-auth": IAMProviderType.BETTER_AUTH,
-    "remote": IAMProviderType.BETTER_AUTH,
-    "disabled": IAMProviderType.DISABLED,
-    "none": IAMProviderType.DISABLED,
-    "off": IAMProviderType.DISABLED,
-    "bypass": IAMProviderType.DISABLED,
-}
 
 
 class IAMConfigurationError(ValueError):
@@ -67,12 +52,11 @@ class IAMManager:
         so a server meant to sign users in elsewhere ran with its own accounts instead.
         """
         iam = (settings or get_settings()).iam
-        raw_type = iam.provider or "local"
-        provider_type = PROVIDER_ALIASES.get(raw_type)
-        if provider_type is None:
-            raise IAMConfigurationError(
-                "CMP_IAM_PROVIDER is not an identity provider: use local, better_auth or disabled."
-            )
+        raw_type = (iam.provider or "").strip() or "local"
+        name = IAM_PROVIDERS.canonical(raw_type)  # the registered names and their aliases, in any case
+        if name is None:  # the variable and the valid names, never the value (a pasted key?)
+            raise IAMConfigurationError(f"{IAM_PROVIDERS.setting_problem(raw_type)}.")
+        provider_type = IAMProviderType(name)
 
         key = iam.better_auth_api_key
         return IAMConfig(
@@ -87,22 +71,13 @@ class IAMManager:
         """Construct the designated provider instance."""
         p_type = config.provider_type
         logger.info(f"Instantiating IAM provider: {p_type.value}")
-
-        if p_type == IAMProviderType.BETTER_AUTH:
-            return BetterAuthIAMProvider(
-                base_url=config.better_auth_url,
-                api_key=config.better_auth_api_key,
-                cache_ttl_seconds=config.session_cache_ttl_seconds,
+        if p_type.value not in IAM_PROVIDERS.names():
+            # CUSTOM gave local accounts in its place: a custom provider is installed with IAMManager.set_provider
+            raise IAMConfigurationError(
+                f"the identity provider {p_type.value!r} cannot be built from the configuration; install a custom "
+                "provider with IAMManager.set_provider."
             )
-        elif p_type == IAMProviderType.DISABLED:
-            return DisabledIAMProvider()
-        elif p_type == IAMProviderType.LOCAL:
-            return LocalDuckDBIAMProvider(db_path=config.duckdb_path)
-        # CUSTOM gave local accounts in its place: a custom provider is installed with IAMManager.set_provider
-        raise IAMConfigurationError(
-            f"the identity provider {p_type.value!r} cannot be built from the configuration; install a custom "
-            "provider with IAMManager.set_provider."
-        )
+        return IAM_PROVIDERS.get(p_type.value).from_config(config)
 
     @property
     def provider(self) -> BaseIAMProvider:

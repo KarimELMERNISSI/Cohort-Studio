@@ -7,17 +7,36 @@ or disabled authentication.
 """
 
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
-from .schemas import AuthResult, UserCredentials, UserProfile, UserRole
+from core.registry import Availability
+
+from .schemas import AuthResult, IAMConfig, UserCredentials, UserProfile, UserRole
 
 
 class BaseIAMProvider(ABC):
     """
     Abstract Base Class for IAM Providers.
-    
+
     Subclasses implement credential verification, user provisioning, role
     management, and session token resolution against specific backends.
     """
+
+    # its name in CMP_IAM_PROVIDER (manage.iam.providers.IAM_PROVIDERS), stored in deployments: never renamed
+    name: ClassVar[str] = ""
+    display_name: ClassVar[str] = ""  # in sentences: the Users page
+
+    @classmethod
+    def from_config(cls, config: IAMConfig) -> "BaseIAMProvider":
+        """The provider the configuration describes (IAMManager builds the configured one so). A provider not
+        registered in IAM_PROVIDERS is installed with IAMManager.set_provider instead."""
+        raise NotImplementedError(f"{cls.__name__} is installed with IAMManager.set_provider")
+
+    @classmethod
+    def availability(cls) -> Availability:
+        """Whether it can run here: its libraries are the application's own (a Better Auth service that does not
+        answer is said at sign-in)."""
+        return Availability(True)
 
     @property
     @abstractmethod

@@ -7,13 +7,20 @@ a pre-authorized administrator session without gating the application.
 """
 
 from ..base import BaseIAMProvider
-from ..schemas import AuthResult, UserCredentials, UserProfile, UserRole
+from ..schemas import AuthResult, IAMConfig, UserCredentials, UserProfile, UserRole
 
 
 class DisabledIAMProvider(BaseIAMProvider):
     """
     Bypass provider that allows unrestricted access as a local researcher.
     """
+
+    name = "disabled"
+    display_name = "no sign-in (disabled)"
+
+    @classmethod
+    def from_config(cls, config: IAMConfig) -> "DisabledIAMProvider":
+        return cls()
 
     def __init__(self, default_username: str = "local_researcher") -> None:
         self.default_username = default_username
