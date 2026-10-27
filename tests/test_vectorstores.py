@@ -100,16 +100,18 @@ def test_build_count_and_manifest(index: DocumentIndex) -> None:
 def test_search_finds_the_nearest_chunks(index: DocumentIndex) -> None:
     index.build(CHUNKS, embedding_label="fake:words")
     docs = index.similarity_search("kidney function eGFR creatinine", k=2)
-    assert {d.metadata["source"] for d in docs} == {"b/kidney.pdf"}
+    assert {d.metadata["source"] for d in docs} == {"kidney.pdf"}  # stored by name, never by path
     assert docs[0].metadata["page"] in (4, 5) and 0 < docs[0].metadata["score"] <= 1.0
 
 
 def test_filter_by_document_including_quotes_and_legacy_filter(index: DocumentIndex) -> None:
     index.build(CHUNKS, embedding_label="fake:words")
     only_bp = index.similarity_search("kidney", k=5, sources=["c/it's bp.pdf"])
-    assert only_bp and {d.metadata["source"] for d in only_bp} == {"c/it's bp.pdf"}
+    assert only_bp and {d.metadata["source"] for d in only_bp} == {"it's bp.pdf"}
     legacy = index.similarity_search("obesity", k=5, filter={"source": {"$in": ["a/bmi.pdf"]}})
-    assert {d.metadata["source"] for d in legacy} == {"a/bmi.pdf"}
+    assert {d.metadata["source"] for d in legacy} == {"bmi.pdf"}
+    by_name = index.similarity_search("obesity", k=5, sources=["bmi.pdf"])
+    assert {d.metadata["source"] for d in by_name} == {"bmi.pdf"}
 
 
 def test_mmr_and_retriever(index: DocumentIndex) -> None:
@@ -120,7 +122,47 @@ def test_mmr_and_retriever(index: DocumentIndex) -> None:
         search_type="mmr", search_kwargs={"k": 2, "fetch_k": 6, "sources": ["a/bmi.pdf"]}
     )
     docs = retriever.invoke("body mass index obesity")
-    assert len(docs) == 2 and all(d.metadata["source"] == "a/bmi.pdf" for d in docs)
+    assert len(docs) == 2 and all(d.metadata["source"] == "bmi.pdf" for d in docs)
+
+
+def test_the_index_stores_no_folder_of_a_document(index: DocumentIndex) -> None:
+    """A Qdrant server receives the index: a chunk names its document, never the folder it is in on the server."""
+    folder = "/srv/cohortstudio/data/users/alice/documents"
+    chunks = [
+        Document(c.page_content, metadata={**c.metadata, "source": f"{folder}/{c.metadata['source'].split('/')[-1]}"})
+        for c in CHUNKS
+    ]
+    index.build(chunks, embedding_label="fake:words")
+    stored = index.similarity_search("kidney blood pressure obesity", k=len(CHUNKS))
+    assert len(stored) == len(CHUNKS)
+    assert not any("alice" in str(d.metadata) for d in stored)
+    assert {d.metadata["source"] for d in stored} == {"bmi.pdf", "kidney.pdf", "it's bp.pdf"}
+    # a filter still names a document by its path, as Document insight does
+    kidney = index.similarity_search("eGFR", k=5, sources=[f"{folder}/kidney.pdf"])
+    assert {d.metadata["source"] for d in kidney} == {"kidney.pdf"}
+
+
+def test_an_index_built_by_an_earlier_version_is_still_filtered_by_path(index: DocumentIndex) -> None:
+    """Its chunks hold the path (a rebuild drops it): a filter by path still finds them."""
+    from manage.vectorstores.base import ChunkRow
+
+    embeddings = WordHashEmbeddings()
+    index.backend.reset(DIM)
+    index.backend.add(
+        [
+            ChunkRow(
+                id=f"old-{i}",
+                text=c.page_content,
+                vector=embeddings.embed_query(c.page_content),
+                source=f"/srv/data/{c.metadata['source']}",
+                page=int(c.metadata["page"]),
+                metadata={**c.metadata, "source": f"/srv/data/{c.metadata['source']}"},
+            )
+            for i, c in enumerate(CHUNKS)
+        ]
+    )
+    old = index.similarity_search("eGFR kidney", k=5, sources=["/srv/data/b/kidney.pdf"])
+    assert old and {d.metadata["source"] for d in old} == {"/srv/data/b/kidney.pdf"}
 
 
 def test_reopen_reuse_and_embedding_mismatch(index: DocumentIndex, tmp_path: Path) -> None:

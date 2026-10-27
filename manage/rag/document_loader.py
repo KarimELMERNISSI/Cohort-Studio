@@ -58,7 +58,9 @@ class PDFDocumentLoader:
                     cleaned_text = text.strip()
                     if cleaned_text:
                         metadata = {
-                            "source": str(path.resolve()),
+                            # the file's name: the index and every prompt name a passage by it, never by its path
+                            # on the server, which names the user's account and the server's folders
+                            "source": path.name,
                             "file_name": path.name,
                             "page": page_idx,
                             "total_pages": total_pages,

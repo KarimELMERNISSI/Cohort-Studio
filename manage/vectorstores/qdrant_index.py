@@ -3,14 +3,17 @@ Qdrant engine, in two modes.
 
 - **Server** (``CMP_QDRANT_URL``, optional ``CMP_QDRANT_API_KEY``): a Qdrant service shared by every
   session, with HNSW approximate search, payload indexes and concurrent access. One collection
-  per user (``cmp_<user>_chunks``). Best for several users or very large libraries.
+  per user, named at random (``cmp_<32 hexadecimal digits>``), never after the account: the server
+  may belong to someone else (Qdrant Cloud). Best for several users or very large libraries.
 - **Embedded** (no URL): Qdrant's local mode in the user's workspace. Every vector is held in
   memory and a folder can be opened by one client only, so the client is shared per folder in this
   process. Suited to small and medium libraries (tens of thousands of chunks).
 
-Every rebuild writes a new collection (``<base>_<id>``) and then drops the previous one; the active
-name is kept in ``collection.txt`` next to the manifest. Embedded Qdrant on Windows can reload a
-deleted collection's files when the same name is recreated, so names are never reused.
+Every rebuild writes a new collection and then drops the previous one; the active name is kept in
+``collection.txt`` next to the manifest, in the user's workspace. Embedded Qdrant on Windows can
+reload a deleted collection's files when the same name is recreated, so names are never reused.
+Earlier versions named a server collection after the account (``cmp_<user>_chunks``, then
+``cmp_<user>_chunks_<id>``): such an index is still read, and the next rebuild deletes it.
 """
 
 from __future__ import annotations
@@ -61,7 +64,8 @@ def release_clients() -> None:
 
 
 def user_collection(username: str | None) -> str:
-    """Collection of a user on a shared Qdrant server."""
+    """The name earlier versions gave a user's collection on a server, after the account: kept to find an index built
+    then (:attr:`QdrantIndex.named_after_account`), which the next rebuild replaces."""
     safe = re.sub(r"[^a-z0-9_]+", "_", (username or "shared").lower()).strip("_") or "shared"
     return f"cmp_{safe}_chunks"
 
@@ -110,6 +114,22 @@ class QdrantIndex(BaseVectorIndex):
     def mode(self) -> str:
         return "server" if self.url else "embedded"
 
+    def _generation_name(self) -> str:
+        """The name of a new collection: at random on a server (never the account), ``chunks_<id>`` embedded."""
+        if self.url:
+            return f"cmp_{uuid.uuid4().hex}"
+        return f"{self.collection}_{uuid.uuid4().hex[:8]}"
+
+    @property
+    def named_after_account(self) -> bool:
+        """Whether the index in use on a server was built by an earlier version, under the account's name (read from
+        the workspace: no request is made)."""
+        built = (self.manifest_dir / POINTER_NAME).exists() or self.manifest() is not None
+        if self.mode != "server" or not built:
+            return False
+        active = self.active_collection
+        return active == self.collection or active.startswith(f"{self.collection}_")
+
     @property
     def location(self) -> str:
         return f"{self.url} ({self.active_collection})" if self.url else str(self.path)
@@ -152,8 +172,9 @@ class QdrantIndex(BaseVectorIndex):
         from qdrant_client import models
 
         client = self._client()
+        # the collection in use, one named after the account included: deleted once the new one exists
         previous = self.active_collection
-        name = f"{self.collection}_{uuid.uuid4().hex[:8]}"
+        name = self._generation_name()
         client.create_collection(
             name,
             vectors_config=models.VectorParams(size=int(dim), distance=models.Distance.COSINE),

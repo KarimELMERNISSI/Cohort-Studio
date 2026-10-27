@@ -117,3 +117,24 @@ def test_the_package_names_load_when_first_used() -> None:
     assert "VectorStoreSettings" in dir(package)
     with pytest.raises(AttributeError, match="no attribute 'Nope'"):
         package.Nope
+
+
+def test_a_server_collection_is_never_named_after_the_account(tmp_path: Path) -> None:
+    """The server may belong to someone else (Qdrant Cloud): a new collection's name says nothing of the user. One
+    named after the account by an earlier version is recognised (the next rebuild deletes it); no request is made."""
+    import re
+
+    from manage.vectorstores.qdrant_index import POINTER_NAME, QdrantIndex, user_collection
+
+    server = QdrantIndex(
+        tmp_path, url="https://qdrant.example.org:6333", collection=user_collection("alice")
+    )
+    names = {server._generation_name() for _ in range(3)}
+    assert len(names) == 3 and all(re.fullmatch(r"cmp_[0-9a-f]{32}", name) for name in names)
+    assert not server.named_after_account  # nothing built yet
+    (tmp_path / POINTER_NAME).write_text("cmp_alice_chunks_ab12cd34", encoding="utf-8")
+    assert server.named_after_account
+    (tmp_path / POINTER_NAME).write_text(names.pop(), encoding="utf-8")
+    assert not server.named_after_account
+    embedded = QdrantIndex(tmp_path / "local", path=tmp_path / "local" / "storage")
+    assert embedded._generation_name().startswith("chunks_") and not embedded.named_after_account

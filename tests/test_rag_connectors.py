@@ -151,3 +151,19 @@ class TestPDFDocumentLoader:
         loader = PDFDocumentLoader(txt_file)
         docs = loader.load()
         assert docs == []
+
+    def test_a_page_names_its_file_never_its_folder(self, tmp_path, monkeypatch):
+        """The source travels with every passage, to the index (a Qdrant server) and the prompts: the folder names the
+        user's account and the server's layout."""
+        from types import SimpleNamespace
+
+        import manage.rag.document_loader as loader_module
+
+        pdf = tmp_path / "users" / "alice" / "documents" / "Smith_J.pdf"
+        pdf.parent.mkdir(parents=True)
+        pdf.write_bytes(b"%PDF-1.4")
+        page = SimpleNamespace(extract_text=lambda: "eGFR falls with age.")
+        monkeypatch.setattr(loader_module, "PdfReader", lambda path: SimpleNamespace(pages=[page]))
+        docs = PDFDocumentLoader(pdf.parent).load_single_pdf(str(pdf))
+        assert [d.metadata["source"] for d in docs] == ["Smith_J.pdf"]
+        assert "alice" not in str(docs[0].metadata)

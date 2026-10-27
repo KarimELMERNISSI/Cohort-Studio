@@ -625,14 +625,22 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                     help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY when configured.",
                     persist_state=PERSIST,
                 ) or settings.qdrant_api_key
+                scope = get_current_scope()
+                server = QdrantIndex(
+                    base_dir / "qdrant", url=qdrant_url, api_key=qdrant_key,
+                    collection=user_collection(scope.username if scope else None),
+                )
                 if st.button("Test the connection", key="rag_qdrant_ping", icon=":material/network_check:"):
-                    scope = get_current_scope()
-                    probe = QdrantIndex(
-                        base_dir / "qdrant", url=qdrant_url, api_key=qdrant_key,
-                        collection=user_collection(scope.username if scope else None),
-                    )
-                    ok, message = probe.ping()
+                    ok, message = server.ping()
                     (st.success if ok else st.error)(message)
+                if server.named_after_account:  # read from the workspace: no request is made
+                    st.info(
+                        "Your index on the Qdrant server was built by an earlier version: its collection is named "
+                        "after your account, and each passage gives the folder of its PDF on this server. Rebuild it "
+                        "(**Initialise / reindex** without reusing the index): the new one holds neither, and the "
+                        "old one is deleted.",
+                        icon=":material/history:",
+                    )
             else:
                 for note in qdrant_embedded_warnings(machine, chunks=chunks, dim=dim):
                     st.caption(f":orange[:material/warning:] {note}")

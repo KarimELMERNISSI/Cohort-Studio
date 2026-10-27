@@ -6,6 +6,10 @@ model. It exposes the LangChain vector-store calls the application uses (``simil
 ``max_marginal_relevance_search``, ``as_retriever``), so the RAG code is identical whatever the
 engine. Filtering by document is expressed as a list of sources; the legacy Chroma filter
 (``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted.
+
+A chunk is stored under its document's name, never its path on the server: a Qdrant server receives the index, and
+the path names the user's account and the server's folders. A filter matches a document by its path (as an index built
+by an earlier version stored it) and by its name.
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
 from pydantic import ConfigDict
+
+from manage.ai_payload import document_name
 
 from .base import BaseVectorIndex, ChunkRow, Hit, IndexManifest, VectorStoreError
 
@@ -40,6 +46,21 @@ def _sources_from_filter(filter_: Any) -> list[str] | None:
     if isinstance(value, (list, tuple)):
         return [str(v) for v in value]
     return None
+
+
+def _matching(sources: list[str] | None) -> list[str] | None:
+    """The sources a filter matches: each as given, and by its document's name."""
+    if not sources:
+        return sources
+    return sorted({*sources, *(document_name({"source": source}) for source in sources)})
+
+
+def _named(document: Document) -> Document:
+    """The chunk as the index stores it: its source is its document's name, never a path."""
+    metadata = dict(document.metadata or {})
+    if metadata.get("source"):
+        metadata["source"] = document_name(metadata)
+    return Document(page_content=document.page_content, metadata=metadata)
 
 
 def _page(value: Any) -> int:
@@ -118,7 +139,7 @@ class DocumentIndex:
         total = len(chunks)
         dim: int | None = None
         for start in range(0, total, batch_size):
-            batch = list(chunks[start : start + batch_size])
+            batch = [_named(chunk) for chunk in chunks[start : start + batch_size]]
             vectors = self._embed([c.page_content for c in batch], retries, start)
             if dim is None:
                 dim = len(vectors[0])
@@ -174,7 +195,7 @@ class DocumentIndex:
     def similarity_search(
         self, query: str, k: int = 4, sources: list[str] | None = None, **kwargs: Any
     ) -> list[Document]:
-        sources = sources or _sources_from_filter(kwargs.get("filter"))
+        sources = _matching(sources or _sources_from_filter(kwargs.get("filter")))
         vector = self.embeddings.embed_query(query)
         return [_to_document(h) for h in self.backend.query(vector, k, sources)]
 
@@ -188,7 +209,7 @@ class DocumentIndex:
         **kwargs: Any,
     ) -> list[Document]:
         """Relevant and diverse chunks: the ``k`` best of the ``fetch_k`` nearest, penalising near-duplicates."""
-        sources = sources or _sources_from_filter(kwargs.get("filter"))
+        sources = _matching(sources or _sources_from_filter(kwargs.get("filter")))
         vector = self.embeddings.embed_query(query)
         hits = self.backend.query(vector, max(fetch_k, k), sources)
         candidates = [h for h in hits if h.vector is not None]

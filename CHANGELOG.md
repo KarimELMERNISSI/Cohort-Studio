@@ -209,6 +209,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - The chat, the questions about chosen documents (Document insight) and the search for formulas sent each passage
     of a PDF with the PDF's path on the server, which named the user's account and the server's folders. They now
     send the PDF's name only, and the notice says that each passage goes with it.
+  - A Qdrant server (Settings > AI engine > Vector database), which can be Qdrant Cloud, stored with every passage
+    the PDF's path on the server, in a collection named after the account. The index now names each passage by its
+    PDF's name only, and a new collection gets a random name. An index built by an earlier version is still used;
+    the card says so, and rebuilding it deletes the old collection.
   - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
     there. The file API is now used with Gemini only; the other providers receive the document's text.
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own
