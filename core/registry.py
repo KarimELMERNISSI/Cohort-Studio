@@ -130,7 +130,11 @@ def as_code(name: object, *, limit: int = 64) -> str:
 
 @dataclass(frozen=True)
 class Availability:
-    """Whether a connector can run here, why not, and the optional group that provides it."""
+    """
+    Whether a connector can run here, why not, and the optional group that provides it. The reason is shown to every
+    signed-in user (Settings) and logged: it names a package or a rule, never an address, a path, a setting's value or
+    an exception's message.
+    """
 
     ok: bool
     reason: str = ""
@@ -383,13 +387,16 @@ class ConnectorRegistry[C: Connector]:
         order = ((auto,) if auto else ()) + (self._auto or ())
         for name in order:
             if name in status and status[name].ok:
-                reasons = (
-                    tuple(auto_reasons)
-                    if name == auto
-                    else (f"the first available of {', '.join(self._auto or ())}",)
-                )
+                reasons = tuple(auto_reasons) if name == auto else (self._default_reason(),)
                 return Selection(self.family, name, "auto", reasons, tuple(warnings), alternatives)
         return Selection(self.family, None, "auto", (), tuple(warnings), alternatives)
+
+    def _default_reason(self) -> str:
+        """Why the family's own order chose (Settings shows it): the default, or the first of several that can run."""
+        names = [self.display_name(name) for name in self._auto or ()]
+        if len(names) < 2:
+            return f"the default {self.family}"
+        return f"the first of {', '.join(names[:-1])} and {names[-1]} that can run here"
 
 
 _WHOSE = {"session": "The chosen", "preference": "Your saved", "setting": "The server's"}

@@ -72,7 +72,7 @@ trace. Selection uses `st.plotly_chart(on_select="rerun")`.
 | `CMP_GRAPH_RENDERER=yfiles` | yFiles when installed (`uv sync --extra graph-yfiles`); falls back to Plotly otherwise. |
 | `CMP_GRAPH_RENDERER=plotly` / `graphviz` | The server's default engine (a user's own choice comes first). |
 | `CMP_OFFLINE=1` | Refuse any backend with `requires_internet=True` (yFiles). |
-| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`), kept for the user's next session. Its first option is the server's default: "Automatic (offline first)", or "Server default: <engine>" when `CMP_GRAPH_RENDERER` names one. |
+| In-app "Graph engine" selector | Session-wide override (`ui.graph_view.renderer_selector`, on `ui.components.connector_selector`), kept for the user's next session. Its first option is the server's default: "Automatic: <engine>", or "Server default: <engine>" when `CMP_GRAPH_RENDERER` names one. Only the engines that can draw here are offered; on Settings it says why the engine is used, and lists the engines that cannot draw here with the group to install. |
 
 The choice is the session's selector, then the user's saved preference, then `CMP_GRAPH_RENDERER`,
 then the automatic order (Plotly, then Graphviz); "automatic" at a level leaves the choice to the

@@ -11,15 +11,16 @@ renders. Nothing here knows about yFiles or Plotly specifics.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 
 import streamlit as st
 
-from core.registry import AUTO, as_code
+from core.registry import AUTO, Selection, as_code
 from graph.base import BaseGraphRenderer
 from graph.manager import get_graph_renderer_manager
 from graph.model import GraphSpec, RenderOptions, SelectionResult
 from graph.renderers import GRAPH_RENDERERS
+from ui import preferences
+from ui.components.connector_selector import connector_selector
 from ui.graph_legend import render_legend
 
 logger = logging.getLogger(__name__)
@@ -44,11 +45,16 @@ def _resolve_theme(options: RenderOptions) -> RenderOptions:
 
 
 def active_renderer(renderer: BaseGraphRenderer | None = None) -> BaseGraphRenderer:
-    """The renderer that :func:`render_graph` will use (explicit > session override > configuration)."""
+    """The renderer that :func:`render_graph` will use (explicit > the session's choice > the saved one >
+    configuration)."""
     if renderer is not None:
         return renderer
     manager = get_graph_renderer_manager()
-    return manager.get(st.session_state.get(RENDERER_OVERRIDE_KEY))
+    if RENDERER_OVERRIDE_KEY in st.session_state:  # set by the engine selector
+        return manager.get(st.session_state[RENDERER_OVERRIDE_KEY])
+    # no selector shown yet in this session: the saved engine when it can draw here (the name is not logged)
+    kept = manager.select(preference=preferences.current().graph_renderer)
+    return manager.get(kept.chosen if kept.source == "preference" else None)
 
 
 def render_graph(
@@ -114,43 +120,33 @@ def _brief(exc: Exception) -> str:
     return as_code(exc, limit=200)
 
 
-def renderer_selector(
-    *,
-    container=None,
-    key: str = RENDERER_OVERRIDE_KEY,
-    label: str = "Graph engine",
-    on_change: Callable[[], None] | None = None,
-) -> None:
+def renderer_selector(*, container=None, explain: bool = False) -> Selection:
     """
-    Selectbox listing the available renderers; the choice applies to the whole session. ``on_change`` runs when the
-    user changes it (Settings keeps it for the next session; graph imports nothing from ui).
+    The graph engine of the whole session, offered on Settings and beside each graph; the engine chosen is kept for
+    the next session. A page that draws with the session's engine shows it first: it brings back the saved choice.
+    With ``explain`` (Settings), why the engine is used and which engines cannot draw here.
     """
     manager = get_graph_renderer_manager()
-    target = container if container is not None else st
-    # no session choice: the server's setting when it names an engine that can draw here, else offline first
-    server = manager.select()
-    default = "Automatic (offline first)"
-    if manager.config.renderer != AUTO and server.chosen:
-        default = f"Server default: {GRAPH_RENDERERS.display_name(server.chosen)}"
-    labels: dict[str, str] = {AUTO: default}
-    for name, found in server.alternatives:  # every engine, and whether it can draw here
-        display = GRAPH_RENDERERS.display_name(name)
-        labels[name] = display if found.ok else f"{display} (unavailable: {found.reason})"
-    choices = [AUTO] + [name for name, found in server.alternatives if found.ok]
-    current = st.session_state.get(key) or AUTO
-    index = choices.index(current) if current in choices else 0
-    chosen = target.selectbox(
-        label,
-        options=choices,
-        index=index,
-        format_func=lambda value: labels.get(value, value),
-        help="The default is the engine the administrator set (CMP_GRAPH_RENDERER), else the offline Plotly "
+    key = f"{RENDERER_OVERRIDE_KEY}__selectbox"
+    selection = connector_selector(
+        GRAPH_RENDERERS,
+        key=key,
+        label="Graph engine",
+        preference=preferences.current().graph_renderer,
+        preference_name="graph_renderer",
+        setting=manager.config.renderer,
+        seed=st.session_state.get(RENDERER_OVERRIDE_KEY),  # chosen on another page
+        check=manager.availability,  # the offline mode turns yFiles off
+        help_text="The default is the engine the administrator set (CMP_GRAPH_RENDERER), else the offline Plotly "
         "engine. The yFiles engine needs internet access (it loads its runtime from yworks.com) and reports "
         "anonymised usage data to yWorks.",
-        key=f"{key}__selectbox",
-        on_change=on_change,
+        explain=explain,
+        container=container,
     )
-    st.session_state[key] = None if chosen == AUTO else chosen
+    # what render_graph draws with (active_renderer): None is the server's default
+    automatic = st.session_state.get(key) == AUTO
+    st.session_state[RENDERER_OVERRIDE_KEY] = None if automatic else selection.chosen
+    return selection
 
 
 def render_graph_exports(

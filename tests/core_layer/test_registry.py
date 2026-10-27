@@ -198,7 +198,7 @@ def test_the_choice_follows_the_session_the_preference_the_setting_then_auto(fak
     stale = registry.select(preference="cohere")
     assert (stale.chosen, stale.source) == ("good", "auto")
     assert stale.warnings == ("Your saved graph engine `cohere` is not offered here",)
-    assert stale.reasons == ("the first available of good",)
+    assert stale.reasons == ("the default graph engine",)
     # "auto" at a level is no choice there: the next level decides (the session's "automatic" = the server's default)
     deferred = registry.select(session="auto", preference="fine", setting="down")
     assert (deferred.chosen, deferred.source, deferred.reasons) == (
@@ -219,6 +219,16 @@ def test_the_choice_follows_the_session_the_preference_the_setting_then_auto(fak
         session="good", check=lambda name: 1 / 0
     )  # a family's rule that fails: a reason
     assert failing.chosen is None and "its check failed (ZeroDivisionError)" in failing.warnings[0]
+
+
+def test_the_family_s_own_order_is_explained_with_the_display_names(fake: str) -> None:
+    # Settings shows the reasons: the names a user knows, not the registered ones
+    registry: ConnectorRegistry = ConnectorRegistry(
+        "graph engine", setting="CMP_GRAPH_RENDERER", auto=("down", "boom", "good")
+    )
+    for name, target in (("good", "Good"), ("down", "Down"), ("boom", "Boom")):
+        registry.register(name, f"{fake}:{target}")
+    assert registry.select().reasons == ("the first of Down, Boom and Good that can run here",)
 
 
 def test_a_setting_naming_nothing_is_reported_without_its_value(fake: str) -> None:

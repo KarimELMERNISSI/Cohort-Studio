@@ -81,15 +81,16 @@ class GraphRendererManager:
 
     # ----------------------------------------------------------------- choice
     def availability(self, name: str) -> Availability:
-        """Whether the engine ``name`` can draw here: installed, compatible, and allowed by the offline mode."""
-        found = GRAPH_RENDERERS.availability(name)
-        if (
-            found.ok
-            and self._config.offline
-            and GRAPH_RENDERERS.get(name).capabilities.requires_internet
-        ):
-            return OFFLINE
-        return found
+        """Whether the engine ``name`` can draw here: allowed by the offline mode, installed, and compatible. The
+        offline mode is asked first: installing an engine that needs internet access would not make it usable."""
+        if self._config.offline:
+            try:  # an engine's module loads without its library (R3): its needs are known all the same
+                online = GRAPH_RENDERERS.get(name).capabilities.requires_internet
+            except Exception:  # not loadable here: the registry says why
+                online = False
+            if online:
+                return OFFLINE
+        return GRAPH_RENDERERS.availability(name)
 
     def select(self, *, session: str | None = None, preference: str | None = None) -> Selection:
         """The engine to use: the session's choice, the saved preference, the configuration, then offline first."""

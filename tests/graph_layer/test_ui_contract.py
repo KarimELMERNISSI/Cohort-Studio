@@ -140,7 +140,7 @@ def _selector(renderer: str) -> None:
 
 @pytest.mark.parametrize(
     ("renderer", "first"),
-    [("auto", "Automatic (offline first)"), ("graphviz", "Server default: Graphviz (static)")],
+    [("auto", "Automatic: Plotly (offline)"), ("graphviz", "Server default: Graphviz (static)")],
 )
 def test_the_selectors_first_option_names_what_the_server_uses(renderer: str, first: str) -> None:
     at = AppTest.from_function(_selector, kwargs={"renderer": renderer}, default_timeout=60).run()
@@ -152,3 +152,68 @@ def test_render_graph_handles_empty_spec() -> None:
     at = AppTest.from_function(_render_empty, default_timeout=60).run()
     assert not at.exception, [str(e.value) for e in at.exception]
     assert any("Nothing to draw" in i.value for i in at.info)
+
+
+def _engine_used(renderer: str, offline: bool, selector: bool) -> None:
+    import streamlit as st
+
+    from graph.manager import GraphConfig, get_graph_renderer_manager
+    from ui.graph_view import active_renderer, renderer_selector
+
+    get_graph_renderer_manager(GraphConfig(renderer=renderer, offline=offline))
+    if selector:
+        renderer_selector()
+    st.write(f"drawn-with:{active_renderer().name}")
+
+
+def _graph_session(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, saved: str | None, **kwargs
+) -> AppTest:
+    """A session of a signed-in user whose saved graph engine is ``saved``."""
+    import json
+
+    import utils.data_paths as dp
+
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    if saved is not None:
+        folder = tmp_path / "users" / "graph_user"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "preferences.json").write_text(json.dumps({"graph_renderer": saved}), "utf-8")
+    at = AppTest.from_function(_engine_used, kwargs=kwargs, default_timeout=60)
+    at.session_state["username"] = "graph_user"
+    at.session_state["user_role"] = "researcher"
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    return at
+
+
+def _drawn_with(at: AppTest) -> str:
+    return next(m.value for m in at.markdown if m.value.startswith("drawn-with:")).split(":")[1]
+
+
+@pytest.mark.parametrize(
+    ("saved", "offline", "engine"),
+    [("graphviz", False, "graphviz"), ("yfiles", True, "plotly"), (None, False, "plotly")],
+)
+def test_the_saved_engine_draws_before_any_selector_is_shown(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, saved: str | None, offline: bool, engine: str
+) -> None:
+    """A page that draws without the selector uses the saved engine, when it can draw here (yFiles cannot offline)."""
+    at = _graph_session(
+        tmp_path, monkeypatch, saved, renderer="auto", offline=offline, selector=False
+    )
+    assert _drawn_with(at) == engine
+
+
+def test_the_selector_tells_the_graphs_which_engine_to_use(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The session's engine is a name, or None for the server's default (what render_graph reads)."""
+    from ui.graph_view import RENDERER_OVERRIDE_KEY
+
+    at = _graph_session(
+        tmp_path, monkeypatch, "graphviz", renderer="auto", offline=False, selector=True
+    )
+    assert at.session_state[RENDERER_OVERRIDE_KEY] == "graphviz" and _drawn_with(at) == "graphviz"
+    at.selectbox(key=f"{RENDERER_OVERRIDE_KEY}__selectbox").select("auto").run()
+    assert at.session_state[RENDERER_OVERRIDE_KEY] is None and _drawn_with(at) == "plotly"

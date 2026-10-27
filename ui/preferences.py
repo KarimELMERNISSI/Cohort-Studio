@@ -2,9 +2,10 @@
 The user's preferences in the session (M5b, step 3): the choices of Settings, kept for the next session.
 
 ``seed_session()`` runs after sign-in, once per user: it fills the keys the session has not set yet with the choices
-kept in the user's file (manage.preferences). The Settings page saves a choice from the control's ``on_change``
-callback, which seeding never fires. A choice that is no longer offered (a model the provider no longer lists, an
-engine this server cannot run) is not used: the page says which, and the file keeps it until the user chooses again.
+kept in the user's file (manage.preferences); a connector's control seeds itself from them
+(``ui.components.connector_selector``). The Settings page saves a choice from the control's ``on_change`` callback,
+which seeding never fires. A choice that is no longer offered (a model the provider no longer lists, an engine this
+server cannot run) is not used: the page says which, and the file keeps it until the user chooses again.
 
 The order of a choice is the session's (the control, or the running engine), then the preference, then the server's
 setting, then the default. No key, password or consent is ever saved (audit E6).
@@ -46,14 +47,6 @@ def seed_session() -> None:
     prefs = current()
     if prefs.import_dayfirst is not None and "import_default_dayfirst" not in ss:
         ss["import_default_dayfirst"] = prefs.import_dayfirst
-    if prefs.graph_renderer:
-        from graph.manager import get_graph_renderer_manager
-        from ui.graph_view import RENDERER_OVERRIDE_KEY
-
-        kept = get_graph_renderer_manager().select(preference=prefs.graph_renderer)
-        # an engine this server cannot run (yFiles offline, say) stays unused
-        if kept.source == "preference" and RENDERER_OVERRIDE_KEY not in ss:
-            ss[RENDERER_OVERRIDE_KEY] = kept.chosen
 
 
 def save(**changes: Any) -> None:
@@ -66,30 +59,9 @@ def save(**changes: Any) -> None:
         st.session_state[PREFERENCES_KEY] = saved
 
 
-def save_renderer() -> None:
-    """The ``on_change`` of every graph engine selector: the engine chosen is kept for the next session."""
-    from ui.graph_view import RENDERER_OVERRIDE_KEY
-
-    save_from(f"{RENDERER_OVERRIDE_KEY}__selectbox", "graph_renderer", auto="auto")
-
-
 def shown(name: str) -> str:
     """A saved name, as code in a notice: the file is the user's, and its text must not become a link or a format."""
     return as_code(name)
-
-
-def renderer_notice() -> str | None:
-    """Why the graph engine kept from the last session is not used on this server, or None."""
-    saved = current().graph_renderer
-    if not saved:
-        return None
-    from graph.manager import get_graph_renderer_manager
-
-    kept = get_graph_renderer_manager().select(preference=saved)
-    if kept.source == "preference" or not kept.warnings:
-        return None
-    used = f"{shown(kept.chosen)} is used" if kept.chosen else "no graph engine can draw here"
-    return f"{kept.warnings[0]}: {used}."  # the first is about the saved engine (no session choice is given)
 
 
 def save_from(key: str, name: str, *, provider: str | None = None, auto: str | None = None) -> None:
@@ -107,10 +79,8 @@ __all__ = [
     "PREFERENCES_KEY",
     "SEEDED_KEY",
     "current",
-    "renderer_notice",
     "save",
     "shown",
     "save_from",
-    "save_renderer",
     "seed_session",
 ]

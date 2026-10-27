@@ -338,6 +338,7 @@ def test_the_saved_vector_database_and_claude_embedding_provider_come_back(
     assert later.segmented_control(key="rag_vector_engine").value == "qdrant"
 
 
+@pytest.mark.parametrize("source", ["setting", "saved"])
 @pytest.mark.parametrize(
     ("provider", "key_variable"),
     [
@@ -346,11 +347,11 @@ def test_the_saved_vector_database_and_claude_embedding_provider_come_back(
         ("anthropic", "ANTHROPIC_API_KEY"),
     ],
 )
-def test_the_server_s_provider_is_preselected_and_starts_nothing(
-    provider: str, key_variable: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_preselected_cloud_provider_starts_nothing(
+    provider: str, key_variable: str, source: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """CMP_AI_PROVIDER preselects the provider of a user who chose none; a cloud one is not confirmed by it, and nothing
-    is asked of it, with the server's key planted: no model list, no connector."""
+    """CMP_AI_PROVIDER, or the user's saved choice, preselects a cloud provider; it is not confirmed by it, and nothing
+    is asked of it, with the server's key planted: no model list, no connector. The visit saves nothing."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
     from manage.rag.factory import ConnectorFactory
     from manage.rag_manager import RAGManager
@@ -364,10 +365,15 @@ def test_the_server_s_provider_is_preselected_and_starts_nothing(
     )
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     monkeypatch.setitem(os.environ, "CMP_IAM_PROVIDER", "local")
-    monkeypatch.setenv("CMP_AI_PROVIDER", provider)
+    if source == "setting":
+        monkeypatch.setenv("CMP_AI_PROVIDER", provider)
+    else:
+        _prefs(tmp_path, f'{{"ai_provider": "{provider}"}}', "server_choice_user")
+    before = _saved(tmp_path, "server_choice_user")
     monkeypatch.setenv(key_variable, "PLANTED-SERVER-KEY-0123456789")
     at = _new_session("server_choice_user")
     assert at.selectbox(key="rag_provider_select").value == provider
+    assert _saved(tmp_path, "server_choice_user") == before  # preselecting is not choosing
     consent = next(c for c in at.checkbox if (c.key or "").startswith("rag_consent::"))
     assert provider in consent.key and consent.value is False
     assert at.session_state["rag_manager"].confirmed == set() and asked == []

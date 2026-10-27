@@ -21,7 +21,6 @@ from ui.components import confirm, no_dataset
 from ui.components.text import plain
 from ui.graph_legend import render_legend
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
-from ui.preferences import save_renderer
 from ui.progress import mark_step
 from ui.state import get_state
 from utils.export_utils import to_excel, to_excel_sheets
@@ -1253,7 +1252,7 @@ def app():
                                              "indirectly) at the chosen minimum strength."
                                     )
                                 with col_engine:
-                                    renderer_selector(container=col_engine, on_change=save_renderer)
+                                    renderer_selector(container=col_engine)
 
                                 focus_node = None if focus_variable == "None" else focus_variable
 

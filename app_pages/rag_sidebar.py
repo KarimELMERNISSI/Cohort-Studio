@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import streamlit as st
 
+from core.registry import Selection
 from core.workspace import remove_pdf, safe_filename
 from manage.ai_payload import (
     host_of,
@@ -32,6 +33,7 @@ from manage.rag.providers import (
     default_provider,
     embedding_providers,
     file_readers,
+    provider_setting,
     server_key,
 )
 from manage.vectorstores import (
@@ -44,11 +46,11 @@ from manage.vectorstores import (
     probe_machine,
     qdrant_embedded_warnings,
     recommend,
-    select_engine,
 )
 from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
 from ui import preferences
 from ui.components import confirm
+from ui.components.connector_selector import connector_selector, explain_choice
 from ui.components.text import plain
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
@@ -149,30 +151,22 @@ def _provider_card() -> dict:
     prefs = preferences.current()  # the choices kept from the last session (never a key or a consent)
     with st.container(border=True):
         st.subheader("Provider and models", icon=":material/smart_toy:", anchor=False)
-        if "rag_provider_select" not in st.session_state:
-            if running.get("provider") in AI_PROVIDERS.names():
-                st.session_state["rag_provider_select"] = running["provider"]  # from the running engine
-            elif prefs.ai_provider in AI_PROVIDERS.names():
-                st.session_state["rag_provider_select"] = prefs.ai_provider  # a saved cloud provider starts nothing
-            else:  # the server's setting, CMP_AI_PROVIDER (local Ollama by default): a cloud one starts nothing either
-                st.session_state["rag_provider_select"] = default_provider()
-        provider = st.selectbox(
-            "AI provider",
-            options=list(AI_PROVIDERS.names()),
-            format_func=AI_PROVIDERS.display_name,
-            index=0,  # local-first default: nothing leaves the server unless a cloud provider is chosen
+        # the running engine's, then the saved one, then CMP_AI_PROVIDER (local Ollama by default): a cloud provider
+        # chosen so is only preselected, and receives nothing until the session confirms it (the consent card)
+        chosen = connector_selector(
+            AI_PROVIDERS,
             key="rag_provider_select",
-            help="Ollama runs on this server or your network; the cloud providers need an API key and your "
+            label="AI provider",
+            preference=prefs.ai_provider,
+            preference_name="ai_provider",
+            setting=provider_setting(),
+            seed=running.get("provider"),
+            offer_auto=False,
+            persist=PERSIST,
+            help_text="Ollama runs on this server or your network; the cloud providers need an API key and your "
             "confirmation that data may be sent to them.",
-            persist_state=PERSIST,
-            on_change=preferences.save_from,
-            args=("rag_provider_select", "ai_provider"),
         )
-        if prefs.ai_provider and prefs.ai_provider not in AI_PROVIDERS.names():
-            st.caption(
-                f"Your saved AI provider {preferences.shown(prefs.ai_provider)} is not offered here: "
-                f"{AI_PROVIDERS.display_name(provider)} is used."
-            )
+        provider = chosen.chosen or default_provider()  # none can run here: named all the same
         cfg["provider"] = provider
         info = declared(provider)  # its key, its models (manage.rag.providers)
         if provider == "ollama":
@@ -574,38 +568,42 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         st.session_state.setdefault("rag_qdrant_url", settings.qdrant_url or "")
         server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
-        saved = preferences.current().vector_store
         # the saved engine when it can run here, else the server's, else the one recommended for this machine
-        kept = select_engine(preference=saved, settings=settings, advice=advice)
-        default = kept.chosen or advice.engine.value
-        choice = st.segmented_control(
-            "Engine",
-            options=list(VECTOR_STORES.names()),
-            format_func=VECTOR_STORES.display_name,
-            default=default,
+        chosen = connector_selector(
+            VECTOR_STORES,
             key="rag_vector_engine",
-            help="Where the chunks of your documents and their vectors are stored and searched.",
-            persist_state=PERSIST,
-            on_change=preferences.save_from,
-            args=("rag_vector_engine", "vector_store"),
+            label="Engine",
+            preference=preferences.current().vector_store,
+            preference_name="vector_store",
+            setting=settings.engine,
+            offer_auto=False,
+            auto=advice.engine.value,
+            auto_reasons=advice.reasons,
+            widget="segmented",
+            persist=PERSIST,
+            help_text="Where the chunks of your documents and their vectors are stored and searched.",
+            explain=False,  # below the engine's summary
         )
-        engine = choice or default
-        if saved and kept.source != "preference" and kept.warnings:
-            st.caption(f"{kept.warnings[0]}: {VECTOR_STORES.display_name(default)} is used.")
+        engine = chosen.chosen or advice.engine.value
         st.caption(VECTOR_STORES.get(engine).summary)
         if engine == advice.engine:
             st.badge("Recommended for this machine", icon=":material/recommend:", color="green")
         else:
             st.badge(f"Recommended here: {VECTOR_STORES.display_name(advice.engine)}", icon=":material/info:", color="gray")
-        with st.expander("Why, and this machine"):
-            for reason in advice.reasons:
-                st.markdown(f"- {reason}")
+
+        def this_machine(selection: Selection) -> None:
+            if selection.reasons != advice.reasons:  # chosen for another reason: the recommendation, and why
+                st.markdown(f"Recommended for this machine: {VECTOR_STORES.display_name(advice.engine)}.")
+                for reason in advice.reasons:
+                    st.markdown(f"- {reason}")
             memory = f"{machine.memory_gb:.0f} GB memory" if machine.memory_gb else "memory unknown"
             if machine.available_gb:
                 memory += f" ({machine.available_gb:.1f} GB free)"
             disk = f"{machine.disk_free_gb:,.0f} GB free disk" if machine.disk_free_gb is not None else "free disk unknown"
             source = "current index" if built else "rough estimate from the PDF sizes"
             st.caption(f"{machine.cpu_count} CPU cores · {memory} · {disk} · library: ~{chunks:,} chunks ({source}).")
+
+        explain_choice(VECTOR_STORES, chosen, details=this_machine)
 
         qdrant_url = qdrant_key = None
         if engine == VectorEngine.QDRANT:

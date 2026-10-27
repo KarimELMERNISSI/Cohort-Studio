@@ -51,6 +51,21 @@ def test_offline_mode_never_picks_an_internet_renderer() -> None:
     assert all(found.ok for name, found in manager.select().alternatives if name != "yfiles")
 
 
+def test_offline_an_internet_engine_is_refused_before_its_install_is_suggested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Settings lists what cannot draw here with the group to install: installing yFiles would not help offline."""
+    import sys
+
+    from graph.manager import OFFLINE
+
+    monkeypatch.setitem(sys.modules, "yfiles_graphs_for_streamlit", None)  # not installed
+    online = GraphRendererManager(GraphConfig())
+    assert online.availability("yfiles").install_hint == "uv sync --extra graph-yfiles"
+    offline = GraphRendererManager(GraphConfig(offline=True))
+    assert offline.availability("yfiles") == OFFLINE and OFFLINE.install_hint is None
+
+
 def test_environment_configuration(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

@@ -17,7 +17,6 @@ from graph.model import LayoutHint, RenderOptions
 from ui.components import no_dataset
 from ui.components.text import answer, plain
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
-from ui.preferences import save_renderer
 
 
 def _graph_dir(username):
@@ -200,7 +199,7 @@ def app():
                 selected_entity = st.session_state.get("doc_graph_selected_node", None)
                 c_focus, c_engine = st.columns(2)
                 focus_mode = c_focus.toggle("Focus on Selected Entity", value=False, key="doc_graph_focus_mode")
-                renderer_selector(container=c_engine, on_change=save_renderer)
+                renderer_selector(container=c_engine)
                 target_node = selected_entity if (focus_mode and selected_entity) else None
 
                 spec = build_document_graph(filtered_graph, focus=target_node, theme=current_theme())

@@ -49,7 +49,6 @@ from manage.ai_payload import column_profile
 from ui.components import no_dataset
 from ui.components.text import answer, plain
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
-from ui.preferences import save_renderer
 
 # Lazy-compatible imports for clustering (module itself is light)
 from utils.clustering_utils import (
@@ -713,7 +712,7 @@ def app():
                 "Edge types", edge_options, default=edge_options,
                 format_func=lambda c: RELATION_LABELS.get(c, c), key="kg_edge_types",
             )
-            renderer_selector(container=c_f3, on_change=save_renderer)
+            renderer_selector(container=c_f3)
             view = spec.filter(node_categories=sel_node_cats, edge_categories=sel_edge_cats)
 
         if not view.nodes:

@@ -23,6 +23,7 @@ from pathlib import Path
 # 58.4, 72.5 and 76.0, with the one reading of formulas and the trials of the AI engine's suggestions (2026-10-21).
 # enrich to 73 at 75.4 with the formula tests of the reviews' follow-ups (2026-10-21); to 75 at 77.3 with the tests of
 # the row-wise check and of the exact formulas (2026-10-21); to 78 at 80.9 with the derived variables' check.
+# ui to 85 at 87.0 with the connector choice control and its tests (M5b step 4, 2026-10-27).
 FLOORS: dict[str, float] = {
     "app_pages": 58.0,
     "biostats": 93.0,
@@ -34,7 +35,7 @@ FLOORS: dict[str, float] = {
     "manage": 74.0,
     "monitor": 6.0,
     "prompts": 85.0,
-    "ui": 83.0,
+    "ui": 85.0,
     "utils": 64.0,
 }
 MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised
