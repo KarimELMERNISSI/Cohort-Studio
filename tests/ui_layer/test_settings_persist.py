@@ -415,3 +415,29 @@ def test_a_qdrant_server_outside_the_network_gets_its_own_confirmation(
     ).run()  # no scheme: the client uses http
     assert any("uses http" in c.value for c in app.caption)
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
+
+
+def test_settings_moves_an_earlier_server_index_and_names_an_unrecorded_one(
+    app: AppTest, tmp_path: Path
+) -> None:
+    """Whatever the engine shown, Settings moves an earlier version's server index to its server's folder (no request
+    is made), and names a collection an earlier version left on a server it did not record."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    from manage.vectorstores.base import IndexManifest
+    from manage.vectorstores.qdrant_index import POINTER_NAME, server_folder
+
+    directory = tmp_path / "users" / "persist_user" / "vectors" / "qdrant"
+    url, legacy = "https://a.example.org:6333", "cmp_persist_user_chunks_ab12cd34"
+    IndexManifest(
+        engine="qdrant", embedding="ollama:old", dim=8, chunks=2, location=f"{url} ({legacy})"
+    ).save(directory)
+    (directory / POINTER_NAME).write_text(legacy, encoding="utf-8")
+    app.run()
+    assert (server_folder(directory, url) / "manifest.json").exists()
+    assert not (directory / "manifest.json").exists() and not (directory / POINTER_NAME).exists()
+    (directory / POINTER_NAME).write_text(
+        "cmp_persist_user_chunks_ff00ff00", encoding="utf-8"
+    )  # no manifest
+    app.run()
+    assert any("cmp_persist_user_chunks_ff00ff00" in c.value for c in app.caption)
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]

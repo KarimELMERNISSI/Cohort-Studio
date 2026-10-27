@@ -249,3 +249,21 @@ def test_no_server_index_is_assumed_without_a_trace_in_the_workspace(tmp_path: P
     ).save(directory)
     opened = QdrantIndex.open(directory, username="admin", url="https://shared.example.org:6333")
     assert opened.active_collection == NO_INDEX and not opened.named_after_account
+
+
+def test_an_address_is_kept_as_the_client_reads_it(tmp_path: Path) -> None:
+    """The client gives an address without a scheme https when a key is given, and port 6333 when none is given: the
+    spellings of one server share its folder, and the badge says whether the connection is encrypted."""
+    from manage.vectorstores.qdrant_index import explicit_address, server_folder
+
+    assert explicit_address("a.example.org:6333", "KEY") == "https://a.example.org:6333"
+    assert explicit_address("a.example.org:6333", None) == "http://a.example.org:6333"
+    assert explicit_address("https://a.example.org", "KEY") == "https://a.example.org"
+    assert explicit_address("", "KEY") == ""
+    spellings = (
+        "https://a.example.org",
+        "https://A.example.org:6333/",
+        explicit_address("a.example.org", "KEY"),
+    )
+    folders = {server_folder(tmp_path, url) for url in spellings}
+    assert len(folders) == 1 and server_folder(tmp_path, "http://a.example.org:6333") not in folders

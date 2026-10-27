@@ -49,6 +49,7 @@ LOCAL_COLLECTION = "chunks"
 POINTER_NAME = "collection.txt"  # in each place's folder: the collection in use
 SERVERS = "servers"  # the folder of the servers' folders, in the engine's
 SERVER_PREFIX = "cmp_"  # every collection on a server, of every version
+DEFAULT_PORT = 6333  # the client's, for an address that gives none
 # a name no collection has (a new one's is a random UUID's): this workspace has built nothing on the server
 NO_INDEX = SERVER_PREFIX + "0" * 32
 _CLIENTS: dict[tuple[str, str, str], Any] = {}
@@ -80,13 +81,28 @@ def _read(pointer: Path) -> str:
         return ""
 
 
+def explicit_address(url: str | None, api_key: str | None = None) -> str | None:
+    """
+    An address with the scheme the client gives one written without (https with an API key, http without), so that
+    the address badge, the server's folder and the recipient read the server the client connects to.
+    """
+    text = (url or "").strip()
+    if not text or "//" in text:
+        return text or url
+    return f"{'https' if api_key else 'http'}://{text}"
+
+
 def _server_key(url: str) -> str:
-    """An address as the client reads it (http when no scheme is given, the host in lower case, the port, the path
-    without a final slash): two spellings of one server share one folder."""
+    """An address as the client reads it (http when no scheme is given, the host in lower case, port 6333 when none
+    is given, the path without a final slash): two spellings of one server share one folder."""
     text = url.strip().replace("\\", "/")
     parts = urlparse(text if "//" in text else f"http://{text}")
-    port = f":{parts.port}" if parts.port else ""
-    return f"{(parts.scheme or 'http').lower()}://{(parts.hostname or '').lower()}{port}{parts.path.rstrip('/')}"
+    host, port, path = (
+        (parts.hostname or "").lower(),
+        parts.port or DEFAULT_PORT,
+        parts.path.rstrip("/"),
+    )
+    return f"{(parts.scheme or 'http').lower()}://{host}:{port}{path}"
 
 
 def server_folder(directory: Path, url: str) -> Path:
@@ -105,7 +121,7 @@ def _built_on_server(manifest: IndexManifest | None) -> tuple[str, str] | None:
     return url, collection
 
 
-def _adopt_earlier_index(directory: Path) -> None:
+def adopt_earlier_index(directory: Path) -> None:
     """
     An earlier version kept one manifest and one pointer for every place, in ``directory``, both written by the last
     build. One built on a server moves to that server's folder (the manifest names the server), so that a build
@@ -123,6 +139,17 @@ def _adopt_earlier_index(directory: Path) -> None:
     (directory / MANIFEST_NAME).unlink(missing_ok=True)
     if _read(directory / POINTER_NAME).startswith(SERVER_PREFIX):
         (directory / POINTER_NAME).unlink(missing_ok=True)
+
+
+def unrecorded_collection(directory: Path) -> str | None:
+    """
+    A server collection an earlier version's pointer names without the manifest that names its server (a build that
+    stopped half-way): which server holds it cannot be known, so it can only be reported.
+    """
+    name = _read(directory / POINTER_NAME)
+    return (
+        name if name.startswith(SERVER_PREFIX) and IndexManifest.load(directory) is None else None
+    )
 
 
 def release_clients() -> None:
@@ -179,7 +206,7 @@ class QdrantIndex(BaseVectorIndex):
         url: str | None = None,
         api_key: str | None = None,
     ) -> QdrantIndex:
-        _adopt_earlier_index(directory)  # the workspace only: no request is made
+        adopt_earlier_index(directory)  # the workspace only: no request is made
         if url:  # a server shared by every session: one collection per user, its manifest in the server's folder
             return cls(
                 server_folder(directory, url),
@@ -357,7 +384,10 @@ __all__ = [
     "LOCAL_COLLECTION",
     "NO_INDEX",
     "QdrantIndex",
+    "adopt_earlier_index",
+    "explicit_address",
     "release_clients",
     "server_folder",
+    "unrecorded_collection",
     "user_collection",
 ]

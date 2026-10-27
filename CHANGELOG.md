@@ -226,7 +226,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     longer loses it.
   - The administrator's Qdrant key (`CMP_QDRANT_API_KEY`) was attached to any Qdrant address a user typed, a
     connection test included; it now goes to the server's own address (`CMP_QDRANT_URL`) only. An emptied Qdrant
-    address means the embedded Qdrant, as the field says: the administrator's server was used.
+    address means the embedded Qdrant, as the field says: the administrator's server was used. An address written
+    without a scheme or a port is read as the client reads it (https with a key, port 6333), so the card no longer
+    calls such a connection unencrypted, and its spellings share one index. A collection an earlier version left on
+    a server without recording which one is named on the card.
   - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
     there. The file API is now used with Gemini only; the other providers receive the document's text.
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own

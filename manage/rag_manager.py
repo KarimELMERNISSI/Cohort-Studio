@@ -107,6 +107,7 @@ try:
         recommend,
         select_engine,
     )
+    from manage.vectorstores.qdrant_index import explicit_address
     RAG_AVAILABLE = True
 except ImportError as e:
     RAG_AVAILABLE = False
@@ -437,7 +438,10 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             reasons = "; ".join(f"{name}: {found.reason}" for name, found in chosen.alternatives)
             return False, f"No vector database can be used here ({reasons}). Install them with uv sync --extra ai."
         engine = chosen.chosen
-        store_url = server if engine == VectorEngine.QDRANT else None
+        # the server's key goes to its own address only, never to one a user typed; an address written without a
+        # scheme is the one the client reads (https with a key)
+        store_key = qdrant_api_key or store_settings.key_for(server)
+        store_url = explicit_address(server, store_key) if engine == VectorEngine.QDRANT else None
         needed = self.recipients_of(provider_clean, base_url, embed_provider, own_embedding_url, store_url)
         if not self.is_confirmed(needed):
             names = " and ".join(provider_label(r) for r in sorted(needed))
@@ -501,9 +505,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 embedding_base_url=embedding_base_url if separate_embeddings else None,
             )
             
-            # 4. Vector database (engine-agnostic: manage.vectorstores), chosen above. The server's key goes to its
-            # own address only, never to one a user typed
-            api_key = qdrant_api_key or store_settings.key_for(store_url)
+            # 4. Vector database (engine-agnostic: manage.vectorstores), chosen above
             embedding_label = f"{embed_provider}:{embedding_model}"
             try:
                 backend = open_index(
@@ -511,7 +513,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                     base_dir=base_dir,
                     username=scope.username if scope else None,
                     qdrant_url=store_url,
-                    qdrant_api_key=api_key,
+                    qdrant_api_key=store_key,
                 )
                 index = DocumentIndex(backend, embeddings)
                 # the documents of this initialisation; an index built from other ones (a document added to or

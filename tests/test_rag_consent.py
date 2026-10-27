@@ -663,3 +663,23 @@ def test_the_running_engine_names_each_recipient_by_its_role() -> None:
     assert order == ["anthropic", "openai", "qdrant@abc.cloud.qdrant.io"] and embedding == "openai"
     names = _names(order, embedding)
     assert f"{provider_label('openai')} (embeddings)" in names and names.endswith("Qdrant at abc.cloud.qdrant.io")
+
+
+def test_an_address_without_a_scheme_is_opened_as_the_client_reads_it(monkeypatch, tmp_path) -> None:
+    """With a key, the client reaches an address written without a scheme over https: the engine names it so."""
+    _fake_connectors(monkeypatch, tmp_path)
+    opened = _stand_in(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    manager.confirm("qdrant@abc.cloud.qdrant.io")
+    ok, message = manager.initialize_system(
+        provider="ollama",
+        model_name="m",
+        embedding_model="e",
+        vector_engine="qdrant",
+        qdrant_url="abc.cloud.qdrant.io:6333",
+        qdrant_api_key="TYPED-KEY",
+    )
+    assert ok, message
+    assert opened == ["https://abc.cloud.qdrant.io:6333"] and manager.qdrant_url == opened[0]

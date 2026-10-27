@@ -48,7 +48,13 @@ from manage.vectorstores import (
     qdrant_embedded_warnings,
     recommend,
 )
-from manage.vectorstores.qdrant_index import QdrantIndex, server_folder
+from manage.vectorstores.qdrant_index import (
+    QdrantIndex,
+    adopt_earlier_index,
+    explicit_address,
+    server_folder,
+    unrecorded_collection,
+)
 from ui import preferences
 from ui.components import confirm
 from ui.components.connector_selector import connector_selector, explain_choice
@@ -598,6 +604,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
     """Choice of the vector database for this machine and library; returns the engine settings."""
     settings = VectorStoreSettings.from_env()
     base_dir = _vectors_dir()
+    adopt_earlier_index(base_dir / "qdrant")  # an earlier version's server index, to its server's folder
     docs_dir = Path(_documents_dir())
     sizes = [(docs_dir / f).stat().st_size for f in (selected_files or []) if (docs_dir / f).exists()]
     built = [m for m in (IndexManifest.load(base_dir / name) for name in VECTOR_STORES.names()) if m is not None]
@@ -658,14 +665,15 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                 persist_state=PERSIST,
             ).strip()
             qdrant_url = server_url  # empty: embedded, as the field says (never the server's setting then)
-            if qdrant_url:
-                _address_badge(qdrant_url, "the passages of your PDFs and the API key")
+            if server_url:
                 qdrant_key = st.text_input(
                     "Qdrant API key", value="", type="password", key="rag_qdrant_api_key", icon=":material/key:",
                     help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY for the server's own "
                     "address (CMP_QDRANT_URL) only.",
                     persist_state=PERSIST,
-                ) or settings.key_for(qdrant_url)  # the server's key never goes to an address a user typed
+                ) or settings.key_for(server_url)  # the server's key never goes to an address a user typed
+                qdrant_url = explicit_address(server_url, qdrant_key)  # the scheme the client gives one without
+                _address_badge(qdrant_url, "the passages of your PDFs and the API key")
                 scope = get_current_scope()
                 # its own folder in the workspace (an earlier version's index moved there): no request is made
                 server = QdrantIndex.open(
@@ -691,6 +699,11 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                     st.caption(f":orange[:material/warning:] {note}")
         for warning in advice.warnings:
             st.warning(warning, icon=":material/storage:")
+        if leftover := unrecorded_collection(base_dir / "qdrant"):
+            st.caption(
+                f"An earlier version left a collection named after your account, {preferences.shown(leftover)}, "
+                "on a Qdrant server it did not record: delete it there if it still exists."
+            )
 
         # the index of the place in use: a Qdrant server's is kept in a folder of its own
         on_server = engine == VectorEngine.QDRANT and qdrant_url
