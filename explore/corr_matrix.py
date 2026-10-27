@@ -275,33 +275,6 @@ def plotly_corr_mat(
     return fig
 
 
-
-def get_yfiles_network_data(data, targets, predictors, method="pearson", threshold_category="Weak", correlation_matrix=None, focus_node=None):
-    """Deprecated: use :func:`graph.builders.correlation.build_correlation_graph`.
-
-    Kept for backward compatibility; returns plain-dict nodes/edges in the historical shape
-    (``{"id", "properties"}`` / ``{"start", "end", "id", "properties"}``).
-    """
-    warnings.warn(
-        "get_yfiles_network_data is deprecated; use graph.builders.correlation.build_correlation_graph",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    from graph.builders.correlation import build_correlation_graph, to_legacy_dicts
-
-    if correlation_matrix is None:
-        unique_cols = list(dict.fromkeys(list(targets) + list(predictors)))
-        data_filtered = data[unique_cols].select_dtypes(include=[np.number]) if unique_cols else pd.DataFrame()
-        if data_filtered.empty:
-            return [], []
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=Warning)
-            correlation_matrix = data_filtered.corr(method=method)
-
-    spec = build_correlation_graph(correlation_matrix, method=method, min_strength=threshold_category, focus=focus_node)
-    return to_legacy_dicts(spec)
-
-
 def add_correlation_strength_table(writer, method, sheet_name='Correlation Strength Info'):
     """
     Add the correlation strength information table to a new sheet in the Excel file,

@@ -107,10 +107,6 @@ MODULE_NAME = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+")  # a dotted n
 # --- today's exceptions (they can only shrink) ------------------------------------------------------------------
 # R1, (importer, imported): upward imports
 KNOWN_UPWARD = {
-    # dead shims, deleted with the composition root (M5b)
-    ("explore.corr_matrix", "graph.builders.correlation"),
-    ("utils.analysis_utils", "app_pages.analysis_config"),
-    ("utils.statistics_utils", "app_pages.statistics_guides"),
     # services that ask the Streamlit session for the user: they take the scope explicitly (M5b)
     ("manage.db_manager", "utils.session_scope"),
     ("manage.rag_manager", "utils.session_scope"),
@@ -128,9 +124,6 @@ KNOWN_STREAMLIT = {
     ("manage.reproduction_manager", "utils.path_utils"),
     ("manage.transformation_manager", "utils.session_scope"),
     ("utils.path_utils", "utils.session_scope"),
-    # through the dead shims of the pages (M5b, composition root)
-    ("utils.analysis_utils", "app_pages.analysis_config"),
-    ("utils.statistics_utils", "app_pages.statistics_guides"),
 }
 # R4, modules outside manage/rag/providers that import a provider SDK: none (Gemini's file upload of the document
 # graph moved into its connector, read_document)

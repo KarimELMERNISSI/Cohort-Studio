@@ -11,13 +11,6 @@ from biostats.posthoc import default_method, pairwise_comparisons
 logger = logging.getLogger(__name__)
 
 
-def render_analysis_configuration(*args, **kwargs):
-    """Compatibility shim: the widgets live in :mod:`app_pages.analysis_config`."""
-    from app_pages.analysis_config import render_analysis_configuration as _render
-
-    return _render(*args, **kwargs)
-
-
 def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test="Auto-Detect",
                      *, exposure_ref=None, event_level=None, design="unknown"):
     """

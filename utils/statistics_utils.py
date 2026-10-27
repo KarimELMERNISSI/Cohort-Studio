@@ -107,10 +107,3 @@ def normality_test(column, method='dagostino'):
     
     except Exception:
         return np.nan
-
-
-def show_test_guidelines():
-    """Compatibility shim: the guide widgets live in :mod:`app_pages.statistics_guides`."""
-    from app_pages.statistics_guides import show_test_guidelines as _show
-
-    return _show()

@@ -121,7 +121,6 @@ exclude = [
     "app_pages/rag_monitoring.py",
     "app_pages/rag_sidebar.py",
     "app_pages/reproduce_analysis.py",
-    "app_pages/statistics_guides.py",
     "app_pages/study_dossier.py",
     "app_pages/users_management.py",
     "app_pages/views/ai_quality.py",

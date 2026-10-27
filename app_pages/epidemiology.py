@@ -12,6 +12,7 @@ from statsmodels.stats.power import TTestIndPower
 import app_pages.group_figures as gf
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
+from app_pages.analysis_config import render_analysis_configuration
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
 from app_pages.analysis_extras import run_paired_and_rates, run_reliability
 from app_pages.analysis_guidance_ui import (
@@ -362,7 +363,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
     st.markdown("Compare variables between groups using statistical tests (T-test, ANOVA, Chi-Square, etc.).")
     
     # --- Configuration ---
-    config = au.render_analysis_configuration(
+    config = render_analysis_configuration(
         df, 
         analyzer.numeric_cols, 
         analyzer.categorical_cols, 

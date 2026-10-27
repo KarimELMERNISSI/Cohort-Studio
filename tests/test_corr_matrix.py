@@ -162,33 +162,3 @@ class TestHeatmapColourScale:
         )
         trace = self._heatmap(fig)
         assert (trace.zmin, trace.zmid, trace.zmax) == (-1, 0, 1)
-
-
-class TestYFilesNetworkData:
-    """Tests for get_yfiles_network_data function."""
-
-    def test_get_yfiles_network_data_empty(self) -> None:
-        """Empty dataframe or empty precalculated matrix returns empty nodes and edges."""
-        nodes, edges = ecm.get_yfiles_network_data(
-            data=pd.DataFrame(),
-            targets=[],
-            predictors=[],
-            method="pearson",
-            threshold_category="Moderate",
-            correlation_matrix=pd.DataFrame()
-        )
-        assert nodes == []
-        assert edges == []
-
-    def test_get_yfiles_network_data_valid(self, clinical_df: pd.DataFrame) -> None:
-        """Generates valid node and edge structures for non-empty clinical data."""
-        cols = ["age", "bmi", "systolic_bp"]
-        nodes, edges = ecm.get_yfiles_network_data(
-            data=clinical_df,
-            targets=cols,
-            predictors=cols,
-            method="pearson",
-            threshold_category="Negligible"
-        )
-        assert len(nodes) == 3
-        assert isinstance(edges, list)

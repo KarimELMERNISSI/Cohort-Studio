@@ -1005,7 +1005,6 @@ def app():
                         )
 
                     # Call the function to display the guide
-                    #show_test_guidelines()
 
 
                 st.subheader("Qualitative Data Statistics")
