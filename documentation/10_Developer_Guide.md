@@ -209,7 +209,8 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 ### Replay (`manage/reproduction_manager.py`)
 
 `run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
-recorded fingerprint. Recorded paths are resolved inside the user's workspace (`utils/path_utils.resolve_path`).
+recorded fingerprint. It reads the files a trace names through the resolver it is given (`manage/paths.PathResolver`):
+the user's workspace in the app, only the named files for a command line; given none, it reads no file.
 
 ### Kinds of trace step (`core/steps.py`)
 

@@ -8,7 +8,7 @@ the trace left its copy behind: a draft discarded, redone on newer data or dropp
 and a change that changed nothing. :func:`delete_unreferenced` deletes those copies.
 
 A file is deleted only when it is a ``.parquet`` file directly in the snapshots folder and no trace of the workspace
-names it. The replay also finds a file by its name alone (``utils.path_utils.resolve_path``), so a trace that names a
+names it. The replay also finds a file by its name alone (:class:`manage.paths.PathResolver`), so a trace that names a
 file of the same name in any folder keeps it. When a trace cannot be read, nothing is deleted.
 """
 

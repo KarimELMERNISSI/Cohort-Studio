@@ -24,6 +24,7 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     from core.state import ParseOptions
     from enrich.imputation_service import impute_rows
     from ingest.loaders import read_table
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
     from manage.transformation_manager import TransformationManager
 
@@ -66,7 +67,7 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     # the excluded rows are untouched: their missing values are still missing
     assert session.base.loc[excluded].isna().equals(original.loc[excluded].isna())
 
-    replay = run_trace(tm.get_trace())
+    replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.error is None and replay.reproducible and replay.divergence is None
     replayed = evaluate_population(replay.df, active_criteria(config, session.ticked))
     assert frame_fingerprint(replay.df.loc[replayed.included]) == frame_fingerprint(analysed)

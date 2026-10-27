@@ -61,6 +61,7 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
     from core.state import ParseOptions
     from enrich.imputation_service import fill_with_formula
     from ingest.loaders import read_table
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
     from manage.transformation_manager import TransformationManager
 
@@ -102,7 +103,7 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
     kept = session.base.loc[excluded, "sbp_6m"].isna()
     assert kept.equals(original.loc[excluded, "sbp_6m"].isna())
 
-    replay = run_trace(tm.get_trace())
+    replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.error is None and not replay.warnings, replay.warnings
     assert replay.df["sbp_6m"].isna().sum() == session.base["sbp_6m"].isna().sum()
     assert verify_trace(tm.get_trace()).ok
@@ -125,6 +126,7 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> N
     from core.state import ParseOptions
     from enrich.imputation_service import fill_with_formula
     from ingest.loaders import read_table
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
     from manage.transformation_manager import TransformationManager
 
@@ -180,6 +182,6 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> N
         and session.base["bmi_x2"].tolist()[1] == 320.0
     )
 
-    replay = run_trace(tm.get_trace())
+    replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.reproducible and not replay.warnings, replay.warnings
     assert replay.df["bmi_x2"].tolist()[1] == 320.0 and not replay.population_frames

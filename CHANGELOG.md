@@ -257,6 +257,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Admin > Users manages the accounts of the configured identity provider.** It always managed the local accounts,
   so under Better Auth its activations, deletions and password resets reached nobody who signs in. The page now names
   the provider, and says there is nothing to manage when sign-in is disabled.
+- **A replayed trace reads the user's own files only.**
+  - A trace can be uploaded, and the replay loaded a saved version it named by joining the name onto the datasets
+    folder: a name such as `../../<user>/datasets/<version>` read another user's version. A saved version is now
+    looked for in the user's datasets folder only, and a file chosen on the Reproduce page must lie in the user's
+    workspace, as the paths a trace records already had to.
+  - A signed-in user whose name cannot become a folder name (longer than 64 characters, or without a letter or digit
+    a folder name keeps) has no workspace: their replay could read any file of the server, and now reads none.
+  - A network path (`\\server\share\...`) in a trace, or typed on the Reproduce page, made a Windows server connect
+    to that share to check it, sending the server account's credentials. Such a path is now refused before anything
+    is opened, unless the data folder is on that share.
+  - The Reproduce page no longer checks whether the statistics files an older trace names exist: nothing records them
+    any more, and the check told whether any file of the server existed.
 
 ### Usability
 

@@ -361,6 +361,7 @@ def test_the_steps_replay_to_the_same_cells(tmp_path) -> None:
     from core.session import DataSession
     from core.state import ParseOptions
     from ingest.loaders import read_table
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
     from manage.transformation_manager import TransformationManager
 
@@ -392,7 +393,7 @@ def test_the_steps_replay_to_the_same_cells(tmp_path) -> None:
     session.commit_staging()
     assert {c: len(ids) for c, ids in session.exact_imputed.items()} == {"bmi": 10, "height_cm": 8}
 
-    replay = run_trace(tm.get_trace())
+    replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.reproducible and not replay.warnings, replay.warnings
     pd.testing.assert_frame_equal(replay.df, session.base)
     assert {c: len(ids) for c, ids in replay.exact_imputed.items()} == {"bmi": 10, "height_cm": 8}
@@ -461,6 +462,7 @@ def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -
     from core.state import ParseOptions
     from enrich.imputation_service import describe_imputation, impute_rows
     from ingest.loaders import read_table
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
     from manage.transformation_manager import TransformationManager
 
@@ -500,7 +502,7 @@ def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -
     assert {c: len(ids) for c, ids in session.single_imputed.items()} == {"height_cm": 4, "bmi": 4}
     assert {c: len(ids) for c, ids in session.exact_imputed.items()} == {"bmi": 10, "height_cm": 8}
 
-    replay = run_trace(tm.get_trace())
+    replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.reproducible and not replay.warnings, replay.warnings
     pd.testing.assert_frame_equal(replay.df, base)
     imputation = next(r for r in replay.records.values() if "set_aside" in r.params)

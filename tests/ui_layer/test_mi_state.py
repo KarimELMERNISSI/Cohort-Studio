@@ -47,11 +47,12 @@ def _script() -> None:
         )
         state.set_mi(impute(state.analysis_frame(), spec))
     elif action == "replay":
+        from manage.paths import PathResolver
         from manage.reproduction_manager import run_trace
 
         trace = state.transformation_manager.get_trace()
         steps = [s["function"] for s in trace["steps"]]
-        result = run_trace(trace)
+        result = run_trace(trace, paths=PathResolver.unconfined())  # no user: the data folder
         index = steps.index("mi_impute")
         ss["replay"] = {
             "steps": steps,

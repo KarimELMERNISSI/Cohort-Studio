@@ -113,9 +113,10 @@ def _record(tmp_path: Path, main: pd.DataFrame, enrichment: pd.DataFrame, path: 
 
 def _replays(tm, session) -> None:
     from core.fingerprint import frame_fingerprint
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
 
-    result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)))
+    result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)), paths=PathResolver.unconfined())
     assert result.error is None and result.reproducible, result.warnings
     assert frame_fingerprint(result.df) == session.data_fp
 

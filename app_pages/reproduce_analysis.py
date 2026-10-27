@@ -8,6 +8,7 @@ import streamlit as st
 from core.lineage import verify_trace
 from core.workspace import safe_filename
 from ingest.loaders import UPLOAD_TYPES
+from manage.paths import PathResolver, normalize_path
 from manage.reproduction_manager import run_trace
 
 # Import necessary modules for reproduction logic
@@ -15,7 +16,6 @@ from manage.trace_documenter import TraceDocumenter
 from ui.progress import current_trace_session, mark_step
 from ui.state import get_state
 from utils.data_paths import get_traces_dir, get_uploads_dir
-from utils.path_utils import normalize_path, resolve_path
 from utils.session_scope import get_current_scope
 
 
@@ -34,6 +34,11 @@ def _artifacts_dir() -> str:
     path = str(scope.artifacts_dir()) if scope else os.path.join(get_traces_dir(), "artifacts")
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def _resolver() -> PathResolver:
+    """Where the files a trace names are looked for: the user's workspace (manage.paths)."""
+    return PathResolver(scope=get_current_scope())
 
 
 def _resolve_user_path(text: str | None) -> str | None:
@@ -180,7 +185,7 @@ def app():
         
         # Check source
         source_dataset = trace_data.get('source_dataset')
-        if source_dataset and not resolve_path(source_dataset):
+        if source_dataset and not _resolver().resolve(source_dataset):
              missing_files_map[source_dataset] = {'type': 'source', 'path': source_dataset, 'description': 'Source Dataset'}
 
         # Check enrichment steps
@@ -188,7 +193,7 @@ def app():
         for i, step in enumerate(steps):
              if step['function'] == 'enrichment':
                  enrich_path = step['params'].get('enrichment_file_path')
-                 if enrich_path and not resolve_path(enrich_path):
+                 if enrich_path and not _resolver().resolve(enrich_path):
                       if enrich_path not in missing_files_map:
                           missing_files_map[enrich_path] = {'type': 'enrichment', 'path': enrich_path, 'description': f"Enrichment File (Step {i+1})"}
                       else:
@@ -493,17 +498,8 @@ def app():
                     # Show available data links (Artifacts)
                     artifacts = []
                     # recorded relative to the workspace since M5: looked up there
-                    if step.get('output_dataset_path') and resolve_path(step.get('output_dataset_path')):
+                    if step.get('output_dataset_path') and _resolver().resolve(step.get('output_dataset_path')):
                         artifacts.append(f"Snapshot: `{os.path.basename(step.get('output_dataset_path'))}`")
-                    
-                    if step.get('stats_cat_path') and os.path.exists(step.get('stats_cat_path')):
-                        artifacts.append("Categorical Stats")
-                    
-                    if step.get('stats_num_path') and os.path.exists(step.get('stats_num_path')):
-                        artifacts.append("Numerical Stats")
-                        
-                    if step.get('corr_matrix_path') and os.path.exists(step.get('corr_matrix_path')):
-                        artifacts.append("Correlation Matrix")
                     
                     if artifacts:
                         st.markdown(" | ".join(artifacts))
@@ -525,13 +521,13 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     
     # 1. Fast Mode: Try to load snapshot
     snapshot_path = target_step.get('output_dataset_path')
-    resolved_snapshot = resolve_path(snapshot_path) if snapshot_path else None
+    resolved_snapshot = _resolver().resolve(snapshot_path) if snapshot_path else None
     
     if rerun_mode == "Fast (Use Snapshots)" and resolved_snapshot:
         try:
             with st.spinner(f"Loading snapshot for Step {target_step_index+1}..."):
                 # Determine file type
-                path = resolve_path(target_step.get('output_dataset_path'))
+                path = _resolver().resolve(target_step.get('output_dataset_path'))
                 if not path:
                     st.warning(f"Snapshot not found: {target_step.get('output_dataset_path')}")
                     raise FileNotFoundError("Snapshot not found")
@@ -555,13 +551,13 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     # 2. Full replay through the single engine (manage.reproduction_manager, audit E10)
     overrides = dict(st.session_state.get('resolved_paths', {}))
     source_dataset = trace_data.get('source_dataset')
-    # a trace is user-supplied JSON: its paths are looked up in the workspace only (resolve_path), never as typed
-    if (not source_dataset or resolve_path(str(source_dataset)) is None) and steps:
+    # a trace is user-supplied JSON: its paths are looked up in the workspace only (manage.paths), never as typed
+    if (not source_dataset or _resolver().resolve(str(source_dataset)) is None) and steps:
         first_step = steps[0]
         candidate_path = (first_step.get('params') or {}).get('source_path') if first_step.get('function') == 'initial_load' else None
-        if candidate_path and resolve_path(candidate_path):
+        if candidate_path and _resolver().resolve(candidate_path):
             source_dataset = candidate_path
-    resolved_source = resolve_path(source_dataset) if source_dataset else None
+    resolved_source = _resolver().resolve(source_dataset) if source_dataset else None
     if source_dataset and not resolved_source:
         st.warning(f"Could not find source dataset at: `{source_dataset}`")
         st.info("The file path differs on this machine. Locate the file inside your workspace or upload it.")
@@ -590,7 +586,8 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
         progress_bar.progress(min(max(int(pct), 0), 100) / 100, text=msg)
 
     with st.spinner(f"Replaying analysis up to Step {target_step_index + 1}..."):
-        result = run_trace(trace_data, upto=target_step_index, path_overrides=overrides, progress_callback=_on_progress)
+        result = run_trace(trace_data, upto=target_step_index, paths=_resolver().with_named(overrides),
+                           progress_callback=_on_progress)
     progress_bar.empty()
 
     if result.missing_file is not None:

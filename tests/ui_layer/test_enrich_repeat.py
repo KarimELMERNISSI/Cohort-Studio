@@ -58,16 +58,16 @@ def test_the_choice_survives_a_transformation_and_twice_replays(enrich: AppTest)
     data = at.session_state["data"]
     assert {"age_Z-Score_Standardization", "age_Z-Score_Standardization_1"} <= set(data.columns)
 
+    from core.workspace import UserScope
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
 
     trace = at.session_state["transformation_manager"].get_trace()
     functions = [s["function"] for s in trace["steps"]]
     assert functions.count("variable_transformation") == 2
-    # the trace holds the source's path inside the workspace; outside the app session, say where it is
-    source = trace["source_dataset"]
-    workspace = Path(dp.DATA_ROOT) / "users" / "repeat_user"
+    # the trace holds the source's path inside the workspace, where the user's resolver finds it
     replay = run_trace(
         json.loads(json.dumps(trace)),  # as written to and read from the trace file
-        path_overrides={source: str(workspace / source)},
+        paths=PathResolver(scope=UserScope.for_user("repeat_user")),
     )
     assert replay.error is None and replay.reproducible, replay.warnings

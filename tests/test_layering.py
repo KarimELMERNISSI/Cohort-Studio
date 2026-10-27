@@ -90,7 +90,6 @@ UTILS_GROUPS = {
     "utils.llm_utils": "manage",
     "utils.miss_forest": "enrich",
     "utils.multipage": "ingest",
-    "utils.path_utils": "manage",
     "utils.session_scope": "ui",  # reads the Streamlit session: moves to ui (M5b, composition root)
     "utils.statistics_utils": "explore",
     "utils.visualization_utils": "explore",
@@ -111,7 +110,6 @@ KNOWN_UPWARD = {
     ("manage.db_manager", "utils.session_scope"),
     ("manage.rag_manager", "utils.session_scope"),
     ("manage.transformation_manager", "utils.session_scope"),
-    ("utils.path_utils", "utils.session_scope"),
 }
 # R2: the cycles allowed, by design
 CYCLES_BY_DESIGN = [{"biostats.mi.engine", "biostats.mi.parallel"}]
@@ -120,10 +118,7 @@ KNOWN_STREAMLIT = {
     # through utils.session_scope: the services take the scope explicitly (M5b, composition root)
     ("manage.db_manager", "utils.session_scope"),
     ("manage.rag_manager", "utils.session_scope"),
-    ("manage.reproduction_manager", "manage.db_manager"),
-    ("manage.reproduction_manager", "utils.path_utils"),
     ("manage.transformation_manager", "utils.session_scope"),
-    ("utils.path_utils", "utils.session_scope"),
 }
 # R4, modules outside manage/rag/providers that import a provider SDK: none (Gemini's file upload of the document
 # graph moved into its connector, read_document)

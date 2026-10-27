@@ -118,9 +118,11 @@ def _record(tmp_path: Path, steps: list[dict]):
 
 
 def _replay(tm):
+    from manage.paths import PathResolver
     from manage.reproduction_manager import run_trace
 
-    return run_trace(json.loads(json.dumps(tm.get_trace())))  # as written to and read from the trace file
+    # as written to and read from the trace file
+    return run_trace(json.loads(json.dumps(tm.get_trace())), paths=PathResolver.unconfined())
 
 
 @pytest.mark.parametrize("name", list(CONFIGS))

@@ -76,14 +76,29 @@ def file_name_of(source: object) -> str:
     return ntpath.basename(str(source or ""))
 
 
+def network_share(path: str | Path) -> str:
+    """
+    The network share or device a Windows path names (``\\\\server\\share``, ``//server/share``, ``\\\\?\\UNC\\...``,
+    ``\\\\.\\pipe\\...``), normalised; "" for a local path, and always on Linux, where such a path is local. Opening it
+    connects to that server, which then receives the account's credentials.
+    """
+    drive = os.path.splitdrive(str(path))[0]
+    return os.path.normcase(drive) if drive[:2] in ("\\\\", "//") else ""
+
+
 def resolve_within(base: Path, candidate: str | Path) -> Path:
     """Resolve ``candidate`` (absolute or relative to ``base``) and require it to stay inside ``base``.
 
     Written as normalise-then-check-the-prefix (``os.path.realpath``, then ``startswith``), the form that code
-    scanning (CodeQL) recognises as confining a path chosen by the user.
+    scanning (CodeQL) recognises as confining a path chosen by the user. A path on another network share is refused
+    before it is opened (:func:`network_share`): ``realpath`` would connect to it.
     """
     root = os.path.realpath(base)
-    path = os.path.realpath(os.path.join(root, candidate))  # an absolute candidate replaces root
+    joined = os.path.join(root, candidate)  # an absolute candidate replaces root
+    share = network_share(joined)
+    if share and share != network_share(root):
+        raise ValueError(f"'{candidate}' is outside the allowed directory {root}.")
+    path = os.path.realpath(joined)
     if path == root:
         return Path(root)
     inside = root if root.endswith(os.sep) else root + os.sep  # a drive root already ends with one
@@ -205,6 +220,7 @@ __all__ = [
     "UserScope",
     "all_user_scopes",
     "data_root",
+    "network_share",
     "resolve_within",
     "safe_dirname",
     "safe_filename",

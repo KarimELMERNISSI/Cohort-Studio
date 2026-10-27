@@ -539,6 +539,7 @@ class AppState:
         """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
         population-scoped imputations on the current population. Only replayable changes can be redone; a redone
         imputation is recorded as what it did on the current data (its rows, counts and description)."""
+        from manage.paths import PathResolver
         from manage.reproduction_manager import apply_steps
 
         session = self.session
@@ -580,7 +581,12 @@ class AppState:
                     else population.to_trace()
                 )
                 step["population"] = block
-            result = apply_steps(frame, [step], frames={session.data_fp: session.base})
+            result = apply_steps(
+                frame,
+                [step],
+                frames={session.data_fp: session.base},
+                paths=PathResolver(scope=get_current_scope()),
+            )
             if result.error or result.df is None:
                 return False, result.error or f"'{pending.description}' could not be redone."
             # an imputation: recorded with the rows it used and the values it filled there
@@ -1264,7 +1270,7 @@ class AppState:
         """
         How a file is written in the trace: relative to the user's workspace (or to the data folder outside a
         session), never as the server's absolute path, which names the account. A trace is shared; the replay
-        resolves the relative path inside the workspace again (utils.path_utils.resolve_path). A path outside both
+        resolves the relative path inside the workspace again (manage.paths.PathResolver). A path outside both
         is kept as given.
         """
         if not path:

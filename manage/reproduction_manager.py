@@ -2,8 +2,9 @@
 Reproduction engine: replays a transformation trace headlessly (no Streamlit).
 
 One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
-source dataset (or a pre-loaded frame) up to an optional step index, resolving file paths through
-the user's workspace and the ``path_overrides`` chosen in the UI. :func:`execute_trace_pipeline`
+source dataset (or a pre-loaded frame) up to an optional step index. It reads the files a trace names
+through the resolver it is given (:class:`manage.paths.PathResolver`: the user's workspace and the files
+chosen in the UI, or a command line's files); given none, it reads no file. :func:`execute_trace_pipeline`
 keeps the historical ``(df, error)`` signature.
 
 Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
@@ -42,9 +43,8 @@ from enrich.imputation_service import (
     left_missing,
 )
 from enrich.transformation_logic import apply_variable_transformation
-from manage.db_manager import DBManager
+from manage.paths import PathResolver, read_version
 from utils.date_parser import smart_parse_dates
-from utils.path_utils import resolve_path
 
 logger = logging.getLogger(__name__)
 
@@ -97,29 +97,33 @@ class _NotReplayable(Exception):
     """A step the engine cannot recompute; carries the frame to continue from."""
 
 
-def _resolve(path: str | None, overrides: dict[str, str] | None) -> str | None:
-    if not path:
-        return None
-    if overrides:
-        candidate = overrides.get(path)
-        if candidate and os.path.exists(candidate):
-            return candidate
-    return resolve_path(path)
+def _resolve(path: str | None, paths: PathResolver | None) -> str | None:
+    """The file a recorded path stands for; None without a resolver (a replay given none reads no file)."""
+    return paths.resolve(path) if paths is not None and path else None
 
 
-def _read_any(path: str, parse_options: ParseOptions | None = None) -> pd.DataFrame | None:
-    """Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are DuckDB dataset names."""
+def _version(name: str, paths: PathResolver | None) -> pd.DataFrame | None:
+    """A saved version a trace names, from the datasets folder only (PathResolver.dataset)."""
+    found = paths.dataset(name) if paths is not None else None
+    return read_version(found) if found else None
+
+
+def _read_any(
+    path: str, parse_options: ParseOptions | None = None, paths: PathResolver | None = None
+) -> pd.DataFrame | None:
+    """Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions."""
     from ingest.loaders import file_kind, read_path
 
     try:
         file_kind(path)
     except ValueError:
-        df, _ = DBManager().load_dataset(os.path.splitext(os.path.basename(path))[0])
-        return df
+        return _version(os.path.splitext(os.path.basename(path))[0], paths)
     return read_path(path, parse_options).df
 
 
-def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | None = None) -> tuple[pd.DataFrame | None, str | None]:
+def load_source(
+    trace_data: dict[str, Any], paths: PathResolver | None = None
+) -> tuple[pd.DataFrame | None, str | None]:
     """The source dataset of a trace: the recorded artifact (newer traces) or the original path/name."""
     source = trace_data.get("source_dataset")
     steps = trace_data.get("steps", [])
@@ -127,21 +131,21 @@ def load_source(trace_data: dict[str, Any], path_overrides: dict[str, str] | Non
     if steps and steps[0].get("function") == "initial_load":
         params = steps[0].get("params", {}) or {}
         # a trace is user-supplied JSON: its paths are looked up in the workspace only (_resolve), never as typed
-        if (not source or _resolve(str(source), path_overrides) is None) and params.get("source_path"):
+        if (not source or _resolve(str(source), paths) is None) and params.get("source_path"):
             source = params["source_path"]
         if params.get("parse_options"):
             parse_options = ParseOptions.from_dict(params["parse_options"])
     if not source:
         return None, "Trace missing 'source_dataset' field."
-    resolved = _resolve(str(source), path_overrides)
+    resolved = _resolve(str(source), paths)
     if resolved is None:
-        if not os.path.splitext(str(source))[1]:  # a saved dataset name rather than a file
-            df, _ = DBManager().load_dataset(str(source))
+        if not os.path.splitext(str(source))[1]:  # a saved version's name rather than a file
+            df = _version(str(source), paths)
             if df is not None:
                 return ensure_row_ids(df), None
         return None, f"Source file not found: {source}"
     try:
-        df = _read_any(resolved, parse_options)
+        df = _read_any(resolved, parse_options, paths)
     except Exception as exc:
         return None, f"Failed to load source dataset ({source}): {exc}"
     if df is None:
@@ -177,23 +181,23 @@ def _population_rows(
     return result.included if frame is df else df.index.intersection(result.included)
 
 
-def _snapshot(step: dict[str, Any], overrides: dict[str, str] | None) -> pd.DataFrame | None:
-    path = _resolve(step.get("output_dataset_path"), overrides)
+def _snapshot(step: dict[str, Any], paths: PathResolver | None) -> pd.DataFrame | None:
+    path = _resolve(step.get("output_dataset_path"), paths)
     if path and path.endswith(".parquet") and os.path.exists(path):
         return ensure_row_ids(pd.read_parquet(path))
     return None
 
 
-def _enrichment(df, step, index, overrides, warnings):
+def _enrichment(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
     enrichment_file_path = params.get("enrichment_file_path")
-    resolved = _resolve(enrichment_file_path, overrides)
+    resolved = _resolve(enrichment_file_path, paths)
     if not resolved:
         return df, str(enrichment_file_path)
     # read as the page read it (the sheet, merge key, separator and decimal recorded with the step), then the date
     # keys parsed as the page parsed them
     recorded = params.get("parse_options")
-    enrichment_df = _read_any(resolved, ParseOptions.from_dict(recorded) if recorded else None)
+    enrichment_df = _read_any(resolved, ParseOptions.from_dict(recorded) if recorded else None, paths)
     if enrichment_df is None:
         raise ValueError(f"could not read enrichment file {resolved}")
     enrichment_df = eed.align_date_keys(df, enrichment_df)
@@ -241,7 +245,7 @@ def _scoped_rows(
     return _population_rows(df, block, index, warnings, result.population_frames if result else None)
 
 
-def _imputation(df, step, index, overrides, warnings, result=None):
+def _imputation(df, step, index, paths, warnings, result=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings, result)
     outcome = impute_rows(
@@ -266,7 +270,7 @@ def _imputation(df, step, index, overrides, warnings, result=None):
     return outcome.frame, None
 
 
-def _targeted_imputation(df, step, index, overrides, warnings, result=None):
+def _targeted_imputation(df, step, index, paths, warnings, result=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings, result)
     target, formula = params["target_variable"], params["formula"]
@@ -311,7 +315,7 @@ def _targeted_imputation(df, step, index, overrides, warnings, result=None):
     return new_df, None
 
 
-def _variable_transformation(df, step, index, overrides, warnings):
+def _variable_transformation(df, step, index, paths, warnings):
     result_df = apply_variable_transformation(df, step.get("params", {}) or {})
     if result_df is None:
         warnings.append(f"step {index + 1}: variable transformation returned no data")
@@ -319,7 +323,7 @@ def _variable_transformation(df, step, index, overrides, warnings):
     return pd.concat([df, result_df], axis=1), None
 
 
-def _variable_computation(df, step, index, overrides, warnings):
+def _variable_computation(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
     success, msg, new_df = evaluate_formula_safely(params.get("formula"), params.get("variable_name"), df)
     if not success:
@@ -327,7 +331,7 @@ def _variable_computation(df, step, index, overrides, warnings):
     return new_df, None
 
 
-def _data_type_conversion(df, step, index, overrides, warnings):
+def _data_type_conversion(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
     new_df = df.copy()
     new_type = params.get("new_type")
@@ -341,7 +345,7 @@ def _data_type_conversion(df, step, index, overrides, warnings):
     return new_df, None
 
 
-def _missing_value_handling(df, step, index, overrides, warnings):
+def _missing_value_handling(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
     new_df = df.copy()
     strategy = params.get("strategy")
@@ -362,11 +366,11 @@ def _missing_value_handling(df, step, index, overrides, warnings):
     return new_df, None
 
 
-def _rename_columns(df, step, index, overrides, warnings):
+def _rename_columns(df, step, index, paths, warnings):
     return df.rename(columns=(step.get("params", {}) or {}).get("mapping", {}) or {}), None
 
 
-def _apply_filter(df, step, index, overrides, warnings):
+def _apply_filter(df, step, index, paths, warnings):
     kept = (step.get("params", {}) or {}).get("kept_index")
     if kept is None:
         warnings.append(f"step {index + 1}: filter recorded without the kept rows; it was not replayed")
@@ -374,12 +378,12 @@ def _apply_filter(df, step, index, overrides, warnings):
     return df[df.index.isin(kept)], None
 
 
-def _population_definition(df, step, index, overrides, warnings):
+def _population_definition(df, step, index, paths, warnings):
     _population_rows(df, step.get("population") or {}, index, warnings)  # verification only
     return df, None
 
 
-def _mi_impute(df, step, index, overrides, warnings, result=None):
+def _mi_impute(df, step, index, paths, warnings, result=None):
     """Re-run a multiple imputation on its population and check the imputed cells against the recorded hash."""
     import numpy
     import sklearn
@@ -416,7 +420,7 @@ def _mi_impute(df, step, index, overrides, warnings, result=None):
     return df, None
 
 
-def _freeze_population(df, step, index, overrides, warnings):
+def _freeze_population(df, step, index, paths, warnings):
     block = step.get("population") or {}
     if block.get("criteria"):
         rows = _population_rows(df, block, index, warnings)
@@ -427,7 +431,7 @@ def _freeze_population(df, step, index, overrides, warnings):
     return df.loc[df.index.intersection(rows)], None
 
 
-def _outlier_clipping(df, step, index, overrides, warnings):
+def _outlier_clipping(df, step, index, paths, warnings):
     new_df = df.copy()
     for col, (low, high) in ((step.get("params", {}) or {}).get("bounds") or {}).items():
         new_df[col] = new_df[col].clip(lower=low, upper=high)
@@ -453,7 +457,7 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
 _REPORTING = frozenset({"imputation", "targeted_imputation", "mi_impute"})
 
 
-def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: dict[str, str] | None,
+def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, paths: PathResolver | None,
                 warnings: list[str], result: ReplayResult | None = None) -> tuple[pd.DataFrame, str | None]:
     """Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo."""
     func_name = str(step.get("function"))
@@ -462,14 +466,14 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         return df, None
 
     if func_name in NOT_REPLAYABLE or step.get("replayable") is False:
-        snapshot = _snapshot(step, overrides)
+        snapshot = _snapshot(step, paths)
         if snapshot is not None:
             warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed: its recorded snapshot was used")
             return snapshot, None
         handler = _HANDLED.get(func_name)
         if handler is not None:  # recorded in part only (e.g. a filter that also clipped values)
             warnings.append(f"step {index + 1} ({func_name}) was replayed only in part: it was not fully recorded")
-            partial, _ = handler(df, step, index, overrides, warnings)
+            partial, _ = handler(df, step, index, paths, warnings)
             raise _NotReplayable(partial)
         warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed and has no snapshot: skipped")
         raise _NotReplayable(df)
@@ -480,20 +484,21 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, overrides: d
         logger.warning("Skipping unknown pipeline step: %s", func_name)
         raise _NotReplayable(df)
     if func_name in _REPORTING:
-        return handler(df, step, index, overrides, warnings, result)
-    return handler(df, step, index, overrides, warnings)
+        return handler(df, step, index, paths, warnings, result)
+    return handler(df, step, index, paths, warnings)
 
 
 def apply_steps(
     df: pd.DataFrame,
     steps: list[dict[str, Any]],
     *,
-    path_overrides: dict[str, str] | None = None,
+    paths: PathResolver | None = None,
     start: int = 0,
     progress_callback: Callable[[int, str], None] | None = None,
     frames: Mapping[str, pd.DataFrame] | None = None,
 ) -> ReplayResult:
-    """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints. ``frames``:
+    """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
+    the files the steps name (none read without it). ``frames``:
     tables a step's population may name by fingerprint although the replay does not pass through them (a draft
     redone one change at a time names the dataset it was built on)."""
     current = ensure_row_ids(df)
@@ -512,7 +517,7 @@ def apply_steps(
         replayed = True
         before = current
         try:
-            current, missing = _apply_step(current, step, i, path_overrides, result.warnings, result)
+            current, missing = _apply_step(current, step, i, paths, result.warnings, result)
         except _NotReplayable as skipped:
             current, missing, replayed = skipped.args[0], None, False
             result.not_replayable.append(i)
@@ -563,7 +568,7 @@ def run_trace(
     *,
     upto: int | None = None,
     source_df: pd.DataFrame | None = None,
-    path_overrides: dict[str, str] | None = None,
+    paths: PathResolver | None = None,
     progress_callback: Callable[[int, str], None] | None = None,
 ) -> ReplayResult:
     """Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame."""
@@ -572,18 +577,20 @@ def run_trace(
         steps = steps[: upto + 1]
 
     if source_df is None:
-        source_df, error = load_source(trace_data, path_overrides)
+        source_df, error = load_source(trace_data, paths)
         if error:
             return ReplayResult(df=None, error=error)
-    return apply_steps(source_df, steps, path_overrides=path_overrides, progress_callback=progress_callback)
+    return apply_steps(source_df, steps, paths=paths, progress_callback=progress_callback)
 
 
 def execute_trace_pipeline(
     trace_data: dict[str, Any],
     progress_callback: Callable[[int, str], None] | None = None,
+    *,
+    paths: PathResolver | None = None,
 ) -> tuple[pd.DataFrame | None, str | None]:
     """Historical signature: ``(result_dataframe, error_message)``."""
-    result = run_trace(trace_data, progress_callback=progress_callback)
+    result = run_trace(trace_data, paths=paths, progress_callback=progress_callback)
     return result.df, result.error
 
 

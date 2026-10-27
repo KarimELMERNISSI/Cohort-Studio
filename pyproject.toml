@@ -232,7 +232,6 @@ exclude = [
     "tests/test_iam_framework.py",
     "tests/test_imputation_columns.py",
     "tests/test_outlier_consistency.py",
-    "tests/test_path_resolution.py",
     "tests/test_quality_gates.py",
     "tests/test_quality_score.py",
     "tests/test_rag_connectors.py",
@@ -263,7 +262,6 @@ exclude = [
     "utils/miss_forest/missforest.py",
     "utils/multipage.py",
     "utils/optional.py",
-    "utils/path_utils.py",
     "utils/statistics_utils.py",
     "utils/visualization_utils.py",
 ]

@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from manage.paths import PathResolver
 from manage.reproduction_manager import apply_steps, execute_trace_pipeline
 
 
@@ -49,14 +50,14 @@ class TestReproductionPipelineExecution:
     def test_missing_source_dataset_field(self) -> None:
         """Trace missing 'source_dataset' returns error."""
         trace: dict[str, Any] = {"steps": []}
-        df, err = execute_trace_pipeline(trace)
+        df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
         assert df is None
         assert "missing 'source_dataset'" in err.lower()
 
     def test_nonexistent_source_file(self) -> None:
         """Trace referencing a nonexistent file returns error."""
         trace = {"source_dataset": "nonexistent_file_xyz_123.csv", "steps": []}
-        df, err = execute_trace_pipeline(trace)
+        df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
         assert df is None
         assert "not found" in err.lower()
 
@@ -71,7 +72,7 @@ class TestReproductionPipelineExecution:
         def on_progress(pct: int, msg: str) -> None:
             progress_calls.append((pct, msg))
 
-        df, err = execute_trace_pipeline(trace, progress_callback=on_progress)
+        df, err = execute_trace_pipeline(trace, progress_callback=on_progress, paths=PathResolver.unconfined())
         assert err is None
         assert df is not None
         assert df.shape == (5, 4)
@@ -98,7 +99,7 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        df, err = execute_trace_pipeline(trace)
+        df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
         assert err is None
         assert df is not None
         assert "smoking_status" in df.columns
@@ -120,7 +121,7 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        df, err = execute_trace_pipeline(trace)
+        df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
         assert df is None
         assert "could not find enrichment file" in err.lower()
 
@@ -137,7 +138,7 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        df, err = execute_trace_pipeline(trace)
+        df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
         assert err is None
         assert df is not None
         assert df.shape == (5, 4)
@@ -164,7 +165,7 @@ class TestReproductionPipelineExecution:
                 "log_systolic": [4.78, 4.94, 4.90, 4.70, 5.07]
             })
 
-            df, err = execute_trace_pipeline(trace)
+            df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
             assert err is None
             assert df is not None
             assert "log_systolic" in df.columns
@@ -183,7 +184,7 @@ class TestReproductionPipelineExecution:
         }
 
         with patch("manage.reproduction_manager.impute_rows", side_effect=ValueError("Corrupt imputation matrix")):
-            df, err = execute_trace_pipeline(trace)
+            df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
             assert df is None
             assert "error during step 1" in err.lower()
             assert "corrupt imputation matrix" in err.lower()
@@ -223,7 +224,7 @@ class TestReplayVerification:
         session.stage(filled, "targeted_imputation", {"target_variable": "age", "formula": "weight / 2", "filled_count": n}, "Imputed age")
         session.commit_staging()
 
-        result = run_trace(tm.get_trace())
+        result = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
         assert result.reproducible and result.verified_steps == 3 and not result.warnings
         assert frame_fingerprint(result.df) == session.data_fp
 
@@ -236,7 +237,7 @@ class TestReplayVerification:
         session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
         trace = copy.deepcopy(tm.get_trace())
         trace["steps"][1]["params"]["mapping"] = {"w": "other"}  # the recorded table had "weight"
-        result = run_trace(trace)
+        result = run_trace(trace, paths=PathResolver.unconfined())
         assert result.divergence is not None and result.divergence[0] == 1
         assert not result.reproducible and "differs" in " ".join(result.warnings)
 
@@ -246,7 +247,7 @@ class TestReplayVerification:
         tm, session = self._recorded(tmp_path)
         session.stage(session.working_frame().fillna(0), "multiple_imputation", {"m": 5}, "MI adopted", replayable=False)
         session.commit_staging()
-        result = run_trace(tm.get_trace())
+        result = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
         assert result.not_replayable == [1] and not result.reproducible
         assert result.error is None and "cannot be recomputed" in " ".join(result.warnings)
 
