@@ -12,22 +12,24 @@ Statistics that reach a prompt by another way (a variable taxonomy imported from
 this rule) pass through allow-lists: :func:`safe_stats` keeps the percentiles only, and :func:`taxonomy_for_prompt`
 drops the keys of a taxonomy that hold values of the data.
 
-The module also names the recipients of the data (:func:`recipient`, :func:`provider_label`): the cloud providers,
-and an Ollama outside this machine and the private network, which need the user's confirmation.
+The module also names the recipients of the data (:func:`recipient`, :func:`store_recipient`, :func:`provider_label`):
+the cloud providers, and an Ollama or a Qdrant server outside this machine and the private network, which need the
+user's confirmation.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import logging
-import ntpath
 import os
+import socket
 from collections.abc import Iterable, Mapping
 from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
 
+from core.workspace import file_name_of
 from manage.rag.providers import AI_PROVIDERS, declared
 
 logger = logging.getLogger(__name__)
@@ -198,14 +200,24 @@ def document_name(metadata: Mapping[str, Any] | None) -> str:
     The document a passage comes from, as a prompt names it: the file's name, never its path on the server, which
     names the user's account and the server's folders. Both separators are read: an index can move between systems.
     """
-    source = str((metadata or {}).get("source") or "")
-    return ntpath.basename(source) or "Unknown"  # a folder is never named
+    return file_name_of((metadata or {}).get("source")) or "Unknown"  # a folder is never named
 
 
 def host_of(url: str | None) -> str:
-    """The host of a service address ("" when there is none)."""
-    url = (url or "").strip()
+    """The host of a service address ("" when there is none), as an HTTP client reads it: a backslash counts as a
+    slash, so a name and an "@" before it cannot hide the host the client connects to."""
+    url = (url or "").strip().replace("\\", "/")
     return urlparse(url if "//" in url else f"//{url}").hostname or ""
+
+
+def _numeric_address(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """The address a numeric host stands for, as the system's resolver reads it without a lookup (134744072 and
+    0x08.0x08.0x08.0x08 are 8.8.8.8), or None for a name."""
+    try:
+        found = socket.getaddrinfo(host, None, flags=socket.AI_NUMERICHOST)
+    except OSError, UnicodeError, ValueError:
+        return None
+    return ipaddress.ip_address(str(found[0][4][0]).split("%")[0]) if found else None
 
 
 def on_this_machine(url: str | None) -> bool:
@@ -221,9 +233,8 @@ def outside_private_network(url: str | None) -> bool:
     host = host_of(url).lower()
     if host in THIS_MACHINE:
         return False
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
+    address = _numeric_address(host)
+    if address is None:
         return "." in host and not host.endswith(PRIVATE_SUFFIXES)
     return not (address.is_private or address.is_loopback or address.is_link_local)
 
@@ -240,10 +251,23 @@ def recipient(provider: str | None, base_url: str | None = None) -> str | None:
     return f"{provider}@{host_of(base_url)}" if outside_private_network(base_url) else None
 
 
+QDRANT = "qdrant"  # the vector database whose server can receive the documents (manage.vectorstores, not imported)
+_STORE_LABELS = {QDRANT: "Qdrant"}
+
+
+def store_recipient(url: str | None) -> str | None:
+    """
+    A Qdrant server outside this machine and the private network ("qdrant@<host>"), which needs the confirmation as
+    an Ollama there does: it keeps the text of every indexed PDF and receives the vector of every search. None for
+    embedded Qdrant (no address) and a server on this machine or the private network.
+    """
+    return f"{QDRANT}@{host_of(url)}" if url and outside_private_network(url) else None
+
+
 def provider_label(provider: str) -> str:
-    """The name of a recipient: "Google Gemini", or "Ollama at <host>" for an Ollama outside the network."""
+    """The name of a recipient: "Google Gemini", or "Ollama at <host>" and "Qdrant at <host>" outside the network."""
     name, _, host = provider.partition("@")
-    label = declared(name).label if name in AI_PROVIDERS.names() else name
+    label = declared(name).label if name in AI_PROVIDERS.names() else _STORE_LABELS.get(name, name)
     return f"{label} at {host}" if host else label
 
 
@@ -292,6 +316,7 @@ __all__ = [
     "outside_private_network",
     "provider_label",
     "recipient",
+    "store_recipient",
     "safe_stats",
     "taxonomy_for_prompt",
     "typical_ranges",

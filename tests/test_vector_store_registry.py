@@ -138,3 +138,114 @@ def test_a_server_collection_is_never_named_after_the_account(tmp_path: Path) ->
     assert not server.named_after_account
     embedded = QdrantIndex(tmp_path / "local", path=tmp_path / "local" / "storage")
     assert embedded._generation_name().startswith("chunks_") and not embedded.named_after_account
+
+
+def test_the_server_s_key_goes_to_its_own_address_only() -> None:
+    """CMP_QDRANT_API_KEY was attached to any address a user typed (a connection test sent it there)."""
+    from manage.vectorstores import VectorStoreSettings
+
+    server = VectorStoreSettings(
+        qdrant_url="https://admin.cloud.qdrant.io:6333/", qdrant_api_key="ADMIN-KEY"
+    )
+    assert server.key_for("https://ADMIN.cloud.qdrant.io:6333") == "ADMIN-KEY"
+    assert (
+        server.key_for("https://attacker.example.org:6333") is None and server.key_for(None) is None
+    )
+    # None asked: the server's address; an emptied field: embedded
+    assert server.server_for(None) == "https://admin.cloud.qdrant.io:6333/"
+    assert server.server_for("") is None and server.server_for(" http://q:6333 ") == "http://q:6333"
+
+
+class _FakeServer:
+    """The calls a Qdrant server receives from reset(), recorded."""
+
+    def __init__(self, collections: list[str]) -> None:
+        self.collections = set(collections)
+        self.asked: list[str] = []
+        self.deleted: list[str] = []
+
+    def collection_exists(self, name: str) -> bool:
+        self.asked.append(name)
+        return name in self.collections
+
+    def create_collection(self, name: str, vectors_config) -> None:
+        self.collections.add(name)
+
+    def create_payload_index(self, *args, **kwargs) -> None:
+        pass
+
+    def delete_collection(self, name: str) -> None:
+        self.collections.discard(name)
+        self.deleted.append(name)
+
+
+def test_an_earlier_index_moves_to_its_server_and_only_its_rebuild_deletes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An earlier version kept one manifest and one pointer for every place. Opening the engine moves a server's to
+    that server's folder: another server is never asked about it, an embedded build keeps it, and a rebuild on its
+    server (however its address is spelt) deletes the collection named after the account."""
+    import re
+
+    pytest.importorskip("qdrant_client", reason="the Qdrant engine is in the optional 'ai' extra")
+    from manage.vectorstores import qdrant_index as qi
+    from manage.vectorstores.base import IndexManifest
+
+    first, other = "https://a.example.org:6333", "https://b.example.org:6333"
+    legacy = "cmp_alice_chunks_ab12cd34"
+    directory = tmp_path / "qdrant"
+    IndexManifest(
+        engine="qdrant", embedding="ollama:old", dim=8, chunks=2, location=f"{first} ({legacy})"
+    ).save(directory)
+    (directory / qi.POINTER_NAME).write_text(legacy, encoding="utf-8")
+    servers = {
+        qi._server_key(first): _FakeServer([legacy]),
+        qi._server_key(other): _FakeServer([]),
+        "embedded": _FakeServer([]),
+    }
+    monkeypatch.setattr(
+        qi,
+        "_client",
+        lambda *, path=None, url=None, api_key=None: servers[
+            "embedded" if path else qi._server_key(url)
+        ],
+    )
+
+    elsewhere = qi.QdrantIndex.open(directory, username="alice", url=other)
+    assert not elsewhere.named_after_account and elsewhere.manifest() is None
+    elsewhere.reset(8)
+    assert (
+        legacy not in servers[qi._server_key(other)].asked
+    )  # never asked about another server's index
+    qi.QdrantIndex.open(directory, username="alice").reset(8)  # an embedded build keeps it known
+    back = qi.QdrantIndex.open(
+        directory, username="alice", url="https://A.example.org:6333/"
+    )  # another spelling
+    assert back.named_after_account and back.manifest().embedding == "ollama:old"
+    back.reset(8)
+    assert servers[qi._server_key(first)].deleted == [legacy]
+    assert (
+        re.fullmatch(r"cmp_[0-9a-f]{32}", back.active_collection) and not back.named_after_account
+    )
+    assert qi.server_folder(directory, first) != qi.server_folder(
+        directory, "a.example.org:6333"
+    )  # http
+
+
+def test_no_server_index_is_assumed_without_a_trace_in_the_workspace(tmp_path: Path) -> None:
+    """Two installations can share a server and a user name, and the embedded index's manifest is not a server's:
+    without this server's own trace, the old base name (another installation's index, perhaps) is never taken for
+    this one's."""
+    from manage.vectorstores.base import IndexManifest
+    from manage.vectorstores.qdrant_index import NO_INDEX, QdrantIndex, user_collection
+
+    server = QdrantIndex(
+        tmp_path, url="https://shared.example.org:6333", collection=user_collection("admin")
+    )
+    assert not server.named_after_account and server.active_collection != user_collection("admin")
+    directory = tmp_path / "qdrant"
+    IndexManifest(
+        engine="qdrant", embedding="e", dim=8, chunks=1, location=str(directory / "storage")
+    ).save(directory)
+    opened = QdrantIndex.open(directory, username="admin", url="https://shared.example.org:6333")
+    assert opened.active_collection == NO_INDEX and not opened.named_after_account

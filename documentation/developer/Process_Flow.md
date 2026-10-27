@@ -123,7 +123,8 @@ Implements Retrieval-Augmented Generation to query scientific documents.
     * Chunks text.
     * Generates embeddings with the chosen provider (local Ollama by default).
     * Stores the vectors in the vector database (`manage/vectorstores/`): LanceDB or embedded Qdrant in the user's
-      workspace, or a Qdrant server (one collection per user).
+      workspace, or a Qdrant server (one collection per user, named at random; each chunk names its PDF, never its
+      path, and a server outside the private network needs the session's confirmation).
 3. **Retrieval**: the `DocumentIndex` finds relevant chunks (`similarity_search()`, or an MMR retriever filtered by
    document, as in `chat_with_specific_doc()`).
 4. **Generation**: the chat model of the chosen provider answers from the retrieved chunks. The knowledge graph,

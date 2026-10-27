@@ -8,8 +8,8 @@ engine. Filtering by document is expressed as a list of sources; the legacy Chro
 (``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted.
 
 A chunk is stored under its document's name, never its path on the server: a Qdrant server receives the index, and
-the path names the user's account and the server's folders. A filter matches a document by its path (as an index built
-by an earlier version stored it) and by its name.
+the path names the user's account and the server's folders. A filter sent to a server names documents only; a local
+index built by an earlier version, which stored paths, is matched by path too (the paths stay on this machine).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
 from pydantic import ConfigDict
 
-from manage.ai_payload import document_name
+from core.workspace import file_name_of
 
 from .base import BaseVectorIndex, ChunkRow, Hit, IndexManifest, VectorStoreError
 
@@ -48,18 +48,26 @@ def _sources_from_filter(filter_: Any) -> list[str] | None:
     return None
 
 
-def _matching(sources: list[str] | None) -> list[str] | None:
-    """The sources a filter matches: each as given, and by its document's name."""
+def _matching(sources: list[str] | None, *, remote: bool = False) -> list[str] | None:
+    """
+    The sources a filter matches: by the document's name, and on this machine also as given (a local index built by
+    an earlier version stored paths). A server is sent names only: an index there named after the account, the only
+    kind that held paths, is never reused.
+    """
     if not sources:
         return sources
-    return sorted({*sources, *(document_name({"source": source}) for source in sources)})
+    names = {name for source in sources if (name := file_name_of(source))}
+    if remote:
+        # documents were asked for: none named is none found (no name holds a slash), never all of them
+        return sorted(names) or ["/"]
+    return sorted({*sources, *names})
 
 
 def _named(document: Document) -> Document:
     """The chunk as the index stores it: its source is its document's name, never a path."""
     metadata = dict(document.metadata or {})
     if metadata.get("source"):
-        metadata["source"] = document_name(metadata)
+        metadata["source"] = file_name_of(metadata["source"]) or "Unknown"
     return Document(page_content=document.page_content, metadata=metadata)
 
 
@@ -195,7 +203,9 @@ class DocumentIndex:
     def similarity_search(
         self, query: str, k: int = 4, sources: list[str] | None = None, **kwargs: Any
     ) -> list[Document]:
-        sources = _matching(sources or _sources_from_filter(kwargs.get("filter")))
+        sources = _matching(
+            sources or _sources_from_filter(kwargs.get("filter")), remote=self.backend.remote
+        )
         vector = self.embeddings.embed_query(query)
         return [_to_document(h) for h in self.backend.query(vector, k, sources)]
 
@@ -209,7 +219,9 @@ class DocumentIndex:
         **kwargs: Any,
     ) -> list[Document]:
         """Relevant and diverse chunks: the ``k`` best of the ``fetch_k`` nearest, penalising near-duplicates."""
-        sources = _matching(sources or _sources_from_filter(kwargs.get("filter")))
+        sources = _matching(
+            sources or _sources_from_filter(kwargs.get("filter")), remote=self.backend.remote
+        )
         vector = self.embeddings.embed_query(query)
         hits = self.backend.query(vector, max(fetch_k, k), sources)
         candidates = [h for h in hits if h.vector is not None]

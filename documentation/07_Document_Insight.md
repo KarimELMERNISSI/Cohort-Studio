@@ -57,10 +57,11 @@ you extract, 35,000 characters at most, whether the PDF is indexed or not. A PDF
 column names and hints). The **Data sharing** card of Settings lists all of this and names every recipient.
 
 **The confirmation.** The box names the recipients it confirms: with Claude and a cloud embedding provider, both,
-together. A provider confirmed as Claude's embedding provider is not confirmed to answer on its own, which sends it
-more (column summaries, descriptions, criteria): its own box asks again. The confirmation is yours, for this browser
-tab only: another tab asks again. It does not replace the approvals of your data-protection framework, and what
-was already sent stays with the provider, under its own terms.
+together; with a Qdrant server outside your network (below), that server too. A provider confirmed as Claude's
+embedding provider is not confirmed to answer on its own, which sends it more (column summaries, descriptions,
+criteria): its own box asks again. The confirmation is yours, for this browser tab only: another tab asks again. It
+does not replace the approvals of your data-protection framework, and what was already sent stays with each
+recipient, under its own terms.
 
 - **Untick it** to withdraw it: every confirmation that names one of these recipients goes, and an engine that
   uses one of them stops at once, so nothing more is sent from this tab. Only your ticking or unticking counts:
@@ -70,8 +71,17 @@ was already sent stays with the provider, under its own terms.
 - Your documents stay indexed: tick the box again, then **Initialise / reindex** reuses the index.
 
 The prompts are never sent to a tracing service: at start-up the app switches LangChain's tracing (LangSmith) off,
-both its environment variables and LangSmith's own switch, whatever `.env` says. A **Qdrant server** (rather than
-the embedded Qdrant) stores the text of the indexed passages and keeps it after the engine stops.
+both its environment variables and LangSmith's own switch, whatever `.env` says.
+
+A **Qdrant server** (rather than the embedded Qdrant) stores the text of the indexed passages, each with its PDF's
+name (never the folder it is in), and keeps them after the engine stops; it also receives the vector of each search.
+Its collection gets a random name, never your account's, and a search sends it the names of the PDFs only. On this
+machine or your network it needs no confirmation, as for an Ollama there; **outside your network** (Qdrant Cloud, say)
+it needs your confirmation, in the same box as the AI provider, and nothing reaches it before (**Test the connection**
+asks it for its list of collections, with the key you typed, and nothing else). The administrator's key
+(`CMP_QDRANT_API_KEY`) goes to the administrator's server only, and an empty address means the embedded Qdrant. An
+index that an earlier version built on a server is named after your account and gives the folder of each PDF: it is
+never reused, the card says so, and the next **Initialise / reindex** rebuilds it, which deletes the old one.
 
 ### Choosing the vector database
 

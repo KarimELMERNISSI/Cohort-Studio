@@ -114,3 +114,43 @@ def test_remote_tracing_of_the_prompts_is_switched_off(monkeypatch, variable: st
     monkeypatch.setenv("LANGSMITH_TRACING_V2", "true")  # read first by LangSmith: its global switch still wins
     langsmith_utils.get_env_var.cache_clear()
     assert not langsmith_utils.tracing_is_enabled()
+
+
+@pytest.mark.parametrize(
+    ("url", "found"),
+    [
+        ("https://abc.eu-central.aws.cloud.qdrant.io:6333", "qdrant@abc.eu-central.aws.cloud.qdrant.io"),
+        ("http://qdrant:6333", None),  # a Docker service on the private network
+        ("http://localhost:6333", None),
+        ("http://192.168.1.20:6333", None),
+        (None, None),  # embedded in the workspace
+    ],
+)
+def test_a_qdrant_server_outside_the_network_is_a_recipient(url: str | None, found: str | None) -> None:
+    from manage.ai_payload import provider_label, store_recipient
+
+    assert store_recipient(url) == found
+    if found:
+        assert provider_label(found) == "Qdrant at abc.eu-central.aws.cloud.qdrant.io"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://evil.example.com" + chr(92) + "@localhost:6333",  # a backslash: the client goes to evil.example.com
+        "http://134744072:6333",  # 8.8.8.8, as the resolver reads it
+    ],
+)
+def test_an_address_is_read_as_the_client_connects_to_it(url: str) -> None:
+    """Each passed a public server for a local one, so an Ollama or a Qdrant server there skipped the confirmation."""
+    from manage.ai_payload import outside_private_network, recipient, store_recipient
+
+    assert outside_private_network(url)
+    assert store_recipient(url) is not None and recipient("ollama", url) is not None
+
+
+def test_the_vector_database_named_here_is_the_registry_s() -> None:
+    from manage.ai_payload import QDRANT
+    from manage.vectorstores.base import VectorEngine
+
+    assert VectorEngine.QDRANT.value == QDRANT

@@ -10,27 +10,47 @@ Qdrant engine, in two modes.
   process. Suited to small and medium libraries (tens of thousands of chunks).
 
 Every rebuild writes a new collection and then drops the previous one; the active name is kept in
-``collection.txt`` next to the manifest, in the user's workspace. Embedded Qdrant on Windows can
-reload a deleted collection's files when the same name is recreated, so names are never reused.
-Earlier versions named a server collection after the account (``cmp_<user>_chunks``, then
-``cmp_<user>_chunks_<id>``): such an index is still read, and the next rebuild deletes it.
+the user's workspace, in ``collection.txt`` next to the index's manifest. Each place has its own
+folder for both: the embedded index the engine's folder, each server ``servers/<key>`` (the key is a
+hash of its address as the client reads it), so that building in one place never loses, nor is
+taken for, the index of another. Embedded Qdrant on Windows can reload a deleted collection's files
+when the same name is recreated, so names are never reused.
+
+Earlier versions kept one manifest and one pointer for every place, and named a server collection
+after the account (``cmp_<user>_chunks``, then ``cmp_<user>_chunks_<id>``). Opening the engine moves
+such an index's manifest and pointer to its server's folder (the manifest names the server); it is
+never reused there, and the next rebuild on its server deletes it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import threading
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from core.registry import Availability
 
-from .base import BaseVectorIndex, ChunkRow, Hit, VectorEngine, VectorStoreError
+from .base import (
+    MANIFEST_NAME,
+    BaseVectorIndex,
+    ChunkRow,
+    Hit,
+    IndexManifest,
+    VectorEngine,
+    VectorStoreError,
+)
 
 LOCAL_COLLECTION = "chunks"
-POINTER_NAME = "collection.txt"
+POINTER_NAME = "collection.txt"  # in each place's folder: the collection in use
+SERVERS = "servers"  # the folder of the servers' folders, in the engine's
+SERVER_PREFIX = "cmp_"  # every collection on a server, of every version
+# a name no collection has (a new one's is a random UUID's): this workspace has built nothing on the server
+NO_INDEX = SERVER_PREFIX + "0" * 32
 _CLIENTS: dict[tuple[str, str, str], Any] = {}
 _LOCK = threading.Lock()
 
@@ -50,6 +70,59 @@ def _client(*, path: Path | None = None, url: str | None = None, api_key: str | 
                 client = QdrantClient(url=url, api_key=api_key or None, timeout=10)
             _CLIENTS[key] = client
         return client
+
+
+def _read(pointer: Path) -> str:
+    """The collection a pointer file names ("" when there is none)."""
+    try:
+        return pointer.read_text(encoding="utf-8").strip() if pointer.exists() else ""
+    except OSError:
+        return ""
+
+
+def _server_key(url: str) -> str:
+    """An address as the client reads it (http when no scheme is given, the host in lower case, the port, the path
+    without a final slash): two spellings of one server share one folder."""
+    text = url.strip().replace("\\", "/")
+    parts = urlparse(text if "//" in text else f"http://{text}")
+    port = f":{parts.port}" if parts.port else ""
+    return f"{(parts.scheme or 'http').lower()}://{(parts.hostname or '').lower()}{port}{parts.path.rstrip('/')}"
+
+
+def server_folder(directory: Path, url: str) -> Path:
+    """The folder that keeps the manifest and the collection's name of one server's index, in the engine's folder."""
+    return directory / SERVERS / hashlib.sha256(_server_key(url).encode("utf-8")).hexdigest()[:16]
+
+
+def _built_on_server(manifest: IndexManifest | None) -> tuple[str, str] | None:
+    """The server and the collection a manifest's index was built on, read from its location ("<url> (<name>)"); None
+    for an embedded index."""
+    location = manifest.location if manifest is not None else ""
+    url, separator, rest = location.rpartition(" (")
+    collection = rest[:-1] if rest.endswith(")") else ""
+    if not separator or not url or not collection.startswith(SERVER_PREFIX):
+        return None
+    return url, collection
+
+
+def _adopt_earlier_index(directory: Path) -> None:
+    """
+    An earlier version kept one manifest and one pointer for every place, in ``directory``, both written by the last
+    build. One built on a server moves to that server's folder (the manifest names the server), so that a build
+    elsewhere neither loses it nor is taken for it. Reads and writes the workspace only.
+    """
+    manifest = IndexManifest.load(directory)
+    built = _built_on_server(manifest)
+    if manifest is None or built is None:
+        return
+    url, collection = built
+    target = server_folder(directory, url)
+    if not (target / MANIFEST_NAME).exists():
+        manifest.save(target)
+        (target / POINTER_NAME).write_text(collection, encoding="utf-8")
+    (directory / MANIFEST_NAME).unlink(missing_ok=True)
+    if _read(directory / POINTER_NAME).startswith(SERVER_PREFIX):
+        (directory / POINTER_NAME).unlink(missing_ok=True)
 
 
 def release_clients() -> None:
@@ -106,8 +179,14 @@ class QdrantIndex(BaseVectorIndex):
         url: str | None = None,
         api_key: str | None = None,
     ) -> QdrantIndex:
-        if url:  # a server shared by every session: one collection per user
-            return cls(directory, url=url, api_key=api_key, collection=user_collection(username))
+        _adopt_earlier_index(directory)  # the workspace only: no request is made
+        if url:  # a server shared by every session: one collection per user, its manifest in the server's folder
+            return cls(
+                server_folder(directory, url),
+                url=url,
+                api_key=api_key,
+                collection=user_collection(username),
+            )
         return cls(directory, path=directory / "storage")
 
     @property
@@ -121,11 +200,24 @@ class QdrantIndex(BaseVectorIndex):
         return f"{self.collection}_{uuid.uuid4().hex[:8]}"
 
     @property
+    def remote(self) -> bool:
+        return self.mode == "server"
+
+    @property
+    def _pointer(self) -> Path:
+        """The file naming the collection in use, in this place's folder."""
+        return self.manifest_dir / POINTER_NAME
+
+    def _pointed(self) -> str:
+        """The collection the pointer names ("" when none; embedded, never a server's, as an earlier version wrote)."""
+        name = _read(self._pointer)
+        return "" if not self.url and name.startswith(SERVER_PREFIX) else name
+
+    @property
     def named_after_account(self) -> bool:
         """Whether the index in use on a server was built by an earlier version, under the account's name (read from
-        the workspace: no request is made)."""
-        built = (self.manifest_dir / POINTER_NAME).exists() or self.manifest() is not None
-        if self.mode != "server" or not built:
+        the workspace: no request is made). It is never reused: its rebuild deletes it."""
+        if not self.url or not (self._pointed() or self.manifest() is not None):
             return False
         active = self.active_collection
         return active == self.collection or active.startswith(f"{self.collection}_")
@@ -152,13 +244,17 @@ class QdrantIndex(BaseVectorIndex):
 
     @property
     def active_collection(self) -> str:
-        """Collection holding the current index (the base name for indexes built before generations)."""
-        pointer = self.manifest_dir / POINTER_NAME
-        try:
-            name = pointer.read_text(encoding="utf-8").strip() if pointer.exists() else ""
-        except OSError:
-            name = ""
-        return name or self.collection
+        """
+        Collection holding the current index: the one the pointer names; else the base name of the earliest indexes
+        (before generations), on a server only when this workspace built one there (two installations can share a
+        server and a user name); else ``NO_INDEX``.
+        """
+        pointed = self._pointed()
+        if pointed:
+            return pointed
+        if self.url and self.manifest() is None:
+            return NO_INDEX
+        return self.collection
 
     def exists(self) -> bool:
         try:
@@ -184,7 +280,7 @@ class QdrantIndex(BaseVectorIndex):
                 name, field_name="source", field_schema=models.PayloadSchemaType.KEYWORD
             )
         self.manifest_dir.mkdir(parents=True, exist_ok=True)
-        (self.manifest_dir / POINTER_NAME).write_text(name, encoding="utf-8")
+        self._pointer.write_text(name, encoding="utf-8")
         if previous != name and client.collection_exists(previous):
             client.delete_collection(previous)
 
@@ -257,4 +353,11 @@ class QdrantIndex(BaseVectorIndex):
         return int(self._client().count(self.active_collection, exact=True).count)
 
 
-__all__ = ["LOCAL_COLLECTION", "QdrantIndex", "release_clients", "user_collection"]
+__all__ = [
+    "LOCAL_COLLECTION",
+    "NO_INDEX",
+    "QdrantIndex",
+    "release_clients",
+    "server_folder",
+    "user_collection",
+]

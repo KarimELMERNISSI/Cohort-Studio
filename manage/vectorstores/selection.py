@@ -58,6 +58,24 @@ class VectorStoreSettings:
             qdrant_api_key=key.get_secret_value() if key is not None else None,
         )
 
+    def server_for(self, asked: str | None) -> str | None:
+        """The Qdrant server to use: the address asked for, None for embedded (an empty one), or the server's
+        (CMP_QDRANT_URL) when none is asked for."""
+        if asked is None:
+            return self.qdrant_url
+        return asked.strip() or None
+
+    def key_for(self, url: str | None) -> str | None:
+        """The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only: it is never sent to an
+        address a user typed."""
+        if url and self.qdrant_url and _same_address(url, self.qdrant_url):
+            return self.qdrant_api_key
+        return None
+
+
+def _same_address(first: str, second: str) -> bool:
+    return first.strip().rstrip("/").lower() == second.strip().rstrip("/").lower()
+
 
 @dataclass(frozen=True)
 class MachineProfile:

@@ -142,6 +142,11 @@ class BaseVectorIndex(ABC):
     def location(self) -> str:
         """Where the vectors live (folder or server), for display and the manifest."""
 
+    @property
+    def remote(self) -> bool:
+        """Whether the index lives on a server: what it is sent leaves this process (a search's filter included)."""
+        return False
+
     @abstractmethod
     def exists(self) -> bool:
         """An index (possibly empty) is present."""

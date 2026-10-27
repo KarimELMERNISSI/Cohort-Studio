@@ -12,6 +12,7 @@ session state.
 
 from __future__ import annotations
 
+import ntpath
 import os
 import re
 from dataclasses import dataclass
@@ -64,6 +65,15 @@ def safe_filename(name: str | None, default: str = "file") -> str:
     raw = Path(str(name or "")).name  # drop any directory part
     value = re.sub(r"[^A-Za-z0-9 _.()-]+", "_", raw).strip().strip(".")
     return value or default
+
+
+def file_name_of(source: object) -> str:
+    """
+    The file's name in a path written on any system (both separators are read: an index can move between systems),
+    "" for none or a folder. What leaves the server names a file by it, never by the folders it is in, which name the
+    user's account and the server's layout.
+    """
+    return ntpath.basename(str(source or ""))
 
 
 def resolve_within(base: Path, candidate: str | Path) -> Path:

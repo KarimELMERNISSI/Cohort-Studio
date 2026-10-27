@@ -24,6 +24,7 @@ from pathlib import Path
 # enrich to 73 at 75.4 with the formula tests of the reviews' follow-ups (2026-10-21); to 75 at 77.3 with the tests of
 # the row-wise check and of the exact formulas (2026-10-21); to 78 at 80.9 with the derived variables' check.
 # ui to 85 at 87.0 with the connector choice control and its tests (M5b step 4, 2026-10-27).
+# manage to 76 at 78.4 with the tests of the Qdrant server's confirmation and folders (2026-10-27).
 FLOORS: dict[str, float] = {
     "app_pages": 58.0,
     "biostats": 93.0,
@@ -32,7 +33,7 @@ FLOORS: dict[str, float] = {
     "explore": 75.0,
     "graph": 92.0,
     "ingest": 89.0,
-    "manage": 74.0,
+    "manage": 76.0,
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 85.0,

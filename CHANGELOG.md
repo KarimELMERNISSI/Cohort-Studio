@@ -192,6 +192,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     confirmed as Claude's embedding provider is not confirmed to answer on its own. A confirmation given for one
     provider was shown as given for the next one chosen in the list. Ollama is exempt on this machine and the
     private network; an Ollama at a public address needs the confirmation too.
+  - **So does a Qdrant server outside the private network** (Qdrant Cloud, say): it keeps the text of every indexed
+    PDF and receives the vector of every search, and it was used without a confirmation. It is now named in the
+    same box as the AI provider, the notice says what it receives (no column summary, no chat message), and
+    nothing reaches it, not even the index's creation, before the box is ticked (the connection test asks it for its
+    list of collections, with the key typed, and nothing else). A Qdrant server on this machine or the private
+    network is exempt.
+  - **An address is read as the client connects to it.** An address written to look local, with a backslash before
+    an `@` or a host written as a number (134744072 is 8.8.8.8), no longer skips the confirmation of an Ollama or a
+    Qdrant server outside the network.
   - Only ticking or unticking the box counts: looking at another configuration changes nothing.
   - A refused, failed or interrupted start keeps no connection, and no longer relabels the engine that runs, which
     a later withdrawal could then miss.
@@ -211,8 +220,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     send the PDF's name only, and the notice says that each passage goes with it.
   - A Qdrant server (Settings > AI engine > Vector database), which can be Qdrant Cloud, stored with every passage
     the PDF's path on the server, in a collection named after the account. The index now names each passage by its
-    PDF's name only, and a new collection gets a random name. An index built by an earlier version is still used;
-    the card says so, and rebuilding it deletes the old collection.
+    PDF's name only, searches send it names only, and a new collection gets a random name. An index an earlier
+    version built on a server is never reused: the card says so, and the next initialisation rebuilds it, which
+    deletes the old collection. Each server's index is kept track of on its own, so building elsewhere first no
+    longer loses it.
+  - The administrator's Qdrant key (`CMP_QDRANT_API_KEY`) was attached to any Qdrant address a user typed, a
+    connection test included; it now goes to the server's own address (`CMP_QDRANT_URL`) only. An emptied Qdrant
+    address means the embedded Qdrant, as the field says: the administrator's server was used.
   - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
     there. The file API is now used with Gemini only; the other providers receive the document's text.
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own

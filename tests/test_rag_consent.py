@@ -527,3 +527,139 @@ def test_an_engine_without_a_provider_uses_the_server_s_and_sends_nothing(
     ok, message = manager.initialize_system()  # its declared models, once confirmed
     assert not ok and "explicit confirmation" in message
     cfg.reset_settings()
+
+
+CLOUD_QDRANT = "https://abc.cloud.qdrant.io:6333"
+
+
+def test_a_qdrant_server_outside_the_network_needs_the_confirmation(monkeypatch, tmp_path) -> None:
+    """It keeps the text of every indexed PDF and receives the vector of every search: nothing reaches it, not even
+    the index's creation, until the session confirms it; unticking stops the engine that uses it."""
+    from manage.vectorstores import VECTOR_STORES
+
+    _fake_connectors(monkeypatch, tmp_path)
+    opened: list[str] = []
+
+    def stand_in(engine, **kwargs):  # an embedded index in place of the server, recorded
+        opened.append(kwargs.get("qdrant_url"))
+        return VECTOR_STORES.get("lancedb").open(tmp_path / "lance")
+
+    monkeypatch.setattr(rm, "open_index", stand_in)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+
+    def start():
+        return manager.initialize_system(
+            provider="ollama", model_name="m", embedding_model="e", vector_engine="qdrant", qdrant_url=CLOUD_QDRANT
+        )
+
+    ok, message = start()
+    assert not ok and "Qdrant at abc.cloud.qdrant.io" in message and opened == []
+    assert rm.RAGManager.recipients_of("ollama", qdrant_url=CLOUD_QDRANT) == {"qdrant@abc.cloud.qdrant.io"}
+    manager.confirm("qdrant@abc.cloud.qdrant.io")
+    ok, message = start()
+    assert ok, message
+    assert opened == [CLOUD_QDRANT] and manager.recipients() == {"qdrant@abc.cloud.qdrant.io"}
+    assert manager.cloud_consent and manager.uses_cloud()
+    assert manager.withdraw_consent("qdrant@abc.cloud.qdrant.io") and not manager.initialized
+
+
+def test_lancedb_asked_for_never_falls_to_an_unconfirmed_qdrant_server(monkeypatch, tmp_path) -> None:
+    from core.registry import Availability
+    from manage.vectorstores import VECTOR_STORES
+
+    _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        VECTOR_STORES, "availability", lambda name: Availability(name != "lancedb", "not installed")
+    )
+    monkeypatch.setattr(rm, "open_index", lambda *a, **k: pytest.fail("the server was opened"))
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    ok, message = manager.initialize_system(
+        provider="ollama", model_name="m", embedding_model="e", vector_engine="lancedb", qdrant_url=CLOUD_QDRANT
+    )
+    assert not ok and "explicit confirmation" in message and "Qdrant at abc.cloud.qdrant.io" in message
+
+
+def test_the_notice_says_what_a_qdrant_server_receives_and_nothing_else() -> None:
+    from app_pages.rag_sidebar import _names, _notice, _recipients, _roles
+
+    local = {"provider": "ollama", "base_url": "http://localhost:11434"}
+    server = {"vector_engine": "qdrant", "qdrant_url": CLOUD_QDRANT}
+    assert _recipients(local, server) == ["qdrant@abc.cloud.qdrant.io"]
+    assert _recipients(local, {"vector_engine": "qdrant", "qdrant_url": "http://qdrant:6333"}) == []
+    assert _recipients(local, {"vector_engine": "lancedb", "qdrant_url": CLOUD_QDRANT}) == []
+    notice = _notice(["qdrant@abc.cloud.qdrant.io"], local, server)
+    assert "Qdrant at abc.cloud.qdrant.io, your vector database:" in notice
+    assert "summary of each column" not in notice and "chat messages" not in notice  # it receives neither
+    gemini = {"provider": "gemini"}
+    both = _recipients(gemini, server)
+    assert both == ["gemini", "qdrant@abc.cloud.qdrant.io"]
+    assert _names(both, _roles(gemini, server)[1]) == "Google Gemini and Qdrant at abc.cloud.qdrant.io"
+    notice = _notice(both, gemini, server)
+    assert "summary of each column" in notice and "your vector database" in notice
+    assert "for the embeddings" not in notice  # Qdrant is not taken for an embedding provider
+
+
+def _stand_in(monkeypatch, tmp_path) -> list[str | None]:
+    """An embedded LanceDB index in place of the one chosen; records the Qdrant address it was opened with."""
+    from manage.vectorstores import VECTOR_STORES
+
+    opened: list[str | None] = []
+
+    def stand_in(engine, **kwargs):
+        opened.append(kwargs.get("qdrant_url"))
+        return VECTOR_STORES.get("lancedb").open(tmp_path / "lance")
+
+    monkeypatch.setattr(rm, "open_index", stand_in)
+    return opened
+
+
+@pytest.mark.parametrize(
+    ("asked", "env"),
+    [
+        ("", {"CMP_QDRANT_URL": CLOUD_QDRANT}),  # the field emptied: embedded, as it says
+        (None, {"CMP_QDRANT_URL": CLOUD_QDRANT, "CMP_VECTOR_STORE": "lancedb"}),
+    ],
+)
+def test_the_engine_uses_the_server_the_settings_show(monkeypatch, tmp_path, asked, env) -> None:
+    """The confirmation names the server the engine will use, chosen before anything is sent: an emptied address is
+    embedded Qdrant, and LanceDB set by the server needs no confirmation for a server it never contacts."""
+    _fake_connectors(monkeypatch, tmp_path)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    opened = _stand_in(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    engine = "qdrant" if asked == "" else None
+    ok, message = manager.initialize_system(
+        provider="ollama", model_name="m", embedding_model="e", vector_engine=engine, qdrant_url=asked
+    )
+    assert ok, message
+    assert opened == [None] and manager.recipients() == frozenset() and manager.qdrant_url is None
+
+
+def test_the_running_engine_names_each_recipient_by_its_role() -> None:
+    from app_pages.rag_sidebar import _engine_recipients, _names
+    from manage.ai_payload import provider_label
+
+    gemini = SimpleNamespace(
+        provider="gemini", base_url=None, embedding_provider="gemini", embedding_base_url=None, qdrant_url=CLOUD_QDRANT
+    )
+    order, embedding = _engine_recipients(gemini)
+    assert order == ["gemini", "qdrant@abc.cloud.qdrant.io"] and embedding is None
+    assert "(embeddings)" not in _names(order, embedding)
+    claude = SimpleNamespace(
+        provider="anthropic",
+        base_url=None,
+        embedding_provider="openai",
+        embedding_base_url=None,
+        qdrant_url=CLOUD_QDRANT,
+    )
+    order, embedding = _engine_recipients(claude)
+    assert order == ["anthropic", "openai", "qdrant@abc.cloud.qdrant.io"] and embedding == "openai"
+    names = _names(order, embedding)
+    assert f"{provider_label('openai')} (embeddings)" in names and names.endswith("Qdrant at abc.cloud.qdrant.io")

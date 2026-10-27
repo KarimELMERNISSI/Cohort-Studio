@@ -26,6 +26,7 @@ from manage.ai_payload import (
     provider_label,
     recipient,
     safe_stats,
+    store_recipient,
     taxonomy_for_prompt,
 )
 from manage.rag.providers import (
@@ -164,6 +165,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.llm = None
         self.vector_store = None  # manage.vectorstores.DocumentIndex once initialised
         self.vector_engine: str | None = None  # "lancedb" | "qdrant"
+        self.qdrant_url: str | None = None  # the Qdrant server the index is kept on (None: embedded, or LanceDB)
         self.qa_chain = None
         self.initialized = False
         self.global_context = "General Medical Domain"
@@ -192,17 +194,25 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         base_url: str | None = None,
         embedding_provider: str | None = None,
         embedding_base_url: str | None = None,
+        qdrant_url: str | None = None,
     ) -> frozenset[str]:
         """
-        The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, and
-        an Ollama outside the private network ("ollama@<host>").
+        The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, an
+        Ollama outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
+        ("qdrant@<host>").
         """
-        found = {recipient(provider, base_url), recipient(embedding_provider, embedding_base_url or base_url)}
+        found = {
+            recipient(provider, base_url),
+            recipient(embedding_provider, embedding_base_url or base_url),
+            store_recipient(qdrant_url),
+        }
         return frozenset(r for r in found if r)
 
     def recipients(self) -> frozenset[str]:
-        """The recipients the engine sends data to, for answers and for embeddings."""
-        return self.recipients_of(self.provider, self.base_url, self.embedding_provider, self.embedding_base_url)
+        """The recipients the engine sends data to: for answers, for embeddings, and the index's Qdrant server."""
+        return self.recipients_of(
+            self.provider, self.base_url, self.embedding_provider, self.embedding_base_url, self.qdrant_url
+        )
 
     def uses_cloud(self) -> bool:
         """Whether data leaves this machine and the private network."""
@@ -409,7 +419,26 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # one box: the embedding provider receives the documents and every search text (an allow-list of local
         # providers: an unknown provider needs it too, and so does an Ollama outside the private network)
         own_embedding_url = embedding_base_url if separate_embeddings else None
-        needed = self.recipients_of(provider_clean, base_url, embed_provider, own_embedding_url)
+        # the vector database is chosen first: a Qdrant server keeps the text of every indexed PDF and receives the
+        # vector of every search, so the one chosen is a recipient too (the recommendation depends on a server being
+        # configured, not on the library's size: no document is read for it)
+        from utils.data_paths import get_vectors_dir
+        from utils.session_scope import get_current_scope
+
+        scope = get_current_scope()
+        base_dir = scope.vectors_dir() if scope else Path(get_vectors_dir())  # per-user indexes
+        store_settings = VectorStoreSettings.from_env()
+        server = store_settings.server_for(qdrant_url)  # "": embedded; None asked: the server's setting
+        advice = recommend(probe_machine(base_dir), chunks=0, qdrant_server=bool(server))
+        chosen = select_engine(session=vector_engine, settings=store_settings, advice=advice)
+        for warning in chosen.warnings:
+            logger.warning("%s", warning)
+        if chosen.chosen is None:
+            reasons = "; ".join(f"{name}: {found.reason}" for name, found in chosen.alternatives)
+            return False, f"No vector database can be used here ({reasons}). Install them with uv sync --extra ai."
+        engine = chosen.chosen
+        store_url = server if engine == VectorEngine.QDRANT else None
+        needed = self.recipients_of(provider_clean, base_url, embed_provider, own_embedding_url, store_url)
         if not self.is_confirmed(needed):
             names = " and ".join(provider_label(r) for r in sorted(needed))
             return False, (
@@ -427,6 +456,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self._drop_connections()
         self.provider, self.base_url, self.embedding_provider = provider_clean, base_url, embed_provider
         self.embedding_base_url = own_embedding_url
+        self.qdrant_url = store_url
         succeeded = False
         try:
             # 1. Load Documents using native PDFDocumentLoader
@@ -471,30 +501,16 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 embedding_base_url=embedding_base_url if separate_embeddings else None,
             )
             
-            # 4. Vector database (engine-agnostic: manage.vectorstores)
-            from utils.data_paths import get_vectors_dir
-            from utils.session_scope import get_current_scope
-
-            _scope = get_current_scope()
-            base_dir = _scope.vectors_dir() if _scope else Path(get_vectors_dir())  # per-user indexes
-            settings = VectorStoreSettings.from_env()
-            url = qdrant_url or settings.qdrant_url
-            api_key = qdrant_api_key or settings.qdrant_api_key
-            advice = recommend(probe_machine(base_dir), chunks=len(texts), qdrant_server=bool(url))
-            chosen = select_engine(session=vector_engine, settings=settings, advice=advice)
-            for warning in chosen.warnings:
-                logger.warning("%s", warning)
-            if chosen.chosen is None:
-                reasons = "; ".join(f"{name}: {found.reason}" for name, found in chosen.alternatives)
-                return False, f"No vector database can be used here ({reasons}). Install them with uv sync --extra ai."
-            engine = chosen.chosen
+            # 4. Vector database (engine-agnostic: manage.vectorstores), chosen above. The server's key goes to its
+            # own address only, never to one a user typed
+            api_key = qdrant_api_key or store_settings.key_for(store_url)
             embedding_label = f"{embed_provider}:{embedding_model}"
             try:
                 backend = open_index(
                     engine,
                     base_dir=base_dir,
-                    username=_scope.username if _scope else None,
-                    qdrant_url=url if engine == VectorEngine.QDRANT else None,
+                    username=scope.username if scope else None,
+                    qdrant_url=store_url,
                     qdrant_api_key=api_key,
                 )
                 index = DocumentIndex(backend, embeddings)
@@ -502,12 +518,21 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
                 # removed from the library, another selection) is rebuilt instead of reused
                 library = sorted({os.path.basename(str(t.metadata.get("source", ""))) for t in texts})
                 existing = use_existing_db and backend.exists() and index.count() > 0
-                if existing and index_matches(index.manifest, library):
+                # an index an earlier version built on a server under the account's name, with the paths of the PDFs:
+                # never reused, and its rebuild deletes it
+                renamed = bool(getattr(backend, "named_after_account", False))
+                if existing and not renamed and index_matches(index.manifest, library):
                     if progress_callback: progress_callback(60, f"Loading the existing {engine} index...")
                     index.check_compatible(embedding_label)
                 else:
                     if progress_callback:
-                        changed = "The documents changed since the index was built: rebuilding" if existing else "Building"
+                        changed = (
+                            "The index on the server was named after your account: rebuilding it under a new name"
+                            if existing and renamed
+                            else "The documents changed since the index was built: rebuilding"
+                            if existing
+                            else "Building"
+                        )
                         progress_callback(60, f"{changed} the {engine} index...")
                     cloud = embed_provider in cloud_providers()  # cloud embedding APIs rate-limit bursts
 

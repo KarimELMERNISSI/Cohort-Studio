@@ -25,6 +25,7 @@ from manage.ai_payload import (
     outside_private_network,
     provider_label,
     recipient,
+    store_recipient,
 )
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.rag.providers import (
@@ -47,7 +48,7 @@ from manage.vectorstores import (
     qdrant_embedded_warnings,
     recommend,
 )
-from manage.vectorstores.qdrant_index import QdrantIndex, user_collection
+from manage.vectorstores.qdrant_index import QdrantIndex, server_folder
 from ui import preferences
 from ui.components import confirm
 from ui.components.connector_selector import connector_selector, explain_choice
@@ -129,8 +130,8 @@ def _running() -> dict:
     }
 
 
-def _address_badge(url: str) -> None:
-    """Where an Ollama address sends the prompts and the documents."""
+def _address_badge(url: str, carried: str = "the prompts and documents") -> None:
+    """Where an address (an Ollama's, a Qdrant server's) sends the data."""
     host = host_of(url) or "this machine"
     if on_this_machine(url):
         st.badge("Local: no data leaves this server", icon=":material/lock:", color="green")
@@ -138,8 +139,10 @@ def _address_badge(url: str) -> None:
         st.badge(f"Outside your network: data goes to {host}", icon=":material/public:", color="red")
     else:
         st.badge(f"Your network: data goes to {host}", icon=":material/lan:", color="orange")
-    if not on_this_machine(url) and urlparse(url.strip()).scheme == "http":
-        st.caption("This address uses http: the prompts and documents cross the network unencrypted.")
+    text = url.strip()
+    scheme = urlparse(text).scheme.lower() if "//" in text else ""  # none given: the client uses http
+    if not on_this_machine(url) and scheme in ("", "http"):
+        st.caption(f"This address uses http: {carried} cross the network unencrypted.")
 
 
 # ----------------------------------------------------------------------------- cards
@@ -308,17 +311,24 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     return list(info.embedding_models), f"{info.display_name} embedding model used to index your documents."
 
 
-def _recipients(cfg: dict) -> list[str]:
+def _roles(cfg: dict, vector: dict | None = None) -> tuple[str | None, str | None, str | None]:
     """
-    The recipients of a configuration that need the confirmation: its cloud provider, the embedding provider of
-    Claude when it is another cloud provider (it receives the documents and every search text), and an Ollama
-    outside the private network.
+    The recipients that need the confirmation, by role: the chat provider when it is a cloud one or an Ollama outside
+    the private network; the embedding provider of Claude when it is another such recipient (it receives the
+    documents and every search text); the Qdrant server outside the private network that keeps the index.
     """
     chat = recipient(cfg["provider"], cfg.get("base_url"))
     embedding = recipient(
         cfg.get("embedding_provider") or cfg["provider"], cfg.get("embedding_base_url") or cfg.get("base_url")
     )
-    return list(dict.fromkeys(r for r in (chat, embedding) if r))
+    on_qdrant = bool(vector) and vector.get("vector_engine") == VectorEngine.QDRANT
+    store = store_recipient(vector.get("qdrant_url")) if on_qdrant else None
+    return chat, (embedding if embedding != chat else None), store
+
+
+def _recipients(cfg: dict, vector: dict | None = None) -> list[str]:
+    """The recipients of a configuration that need the confirmation, as one box confirms them together."""
+    return [r for r in _roles(cfg, vector) if r]
 
 
 def _names(recipients: list[str], embedding: str | None = None) -> str:
@@ -352,53 +362,74 @@ def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
             st.session_state[other] = False
 
 
-def _notice(recipients: list[str], cfg: dict) -> str:
-    embedding = recipients[1] if len(recipients) > 1 else None
-    lines = [
-        (
-            "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and 95th "
-            "percentiles of numeric columns (never the minimum or the maximum); the most frequent values of the "
-            "other columns with their counts, only values shared by at least 5 rows; the first and last year of date "
-            "columns."
-        ),
-        "- **No row of your dataset.**",
-        (
-            "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index (each "
-            "passage with its PDF's name), the names of the PDFs you ask Document insight about, and your chat "
-            "messages; never the folder a PDF is in."
-        ),
-    ]
-    provider = cfg["provider"]
-    if provider in file_readers():  # its connector's read_document
-        lines.append(
-            "- **Document insight:** the PDF file itself while its graph is extracted, with the details it holds "
-            f"(such as its title and author) but not its file name; the app then asks {provider_label(provider)} to "
-            "delete it."
-        )
-    else:  # manage.rag_documents: the first 30 pages that have text, cut at 35,000 characters
-        lines.append(
-            "- **Document insight:** the text of the first 30 pages that have text of each PDF whose graph you "
-            "extract, 35,000 characters at most, whether the PDF is indexed or not."
-        )
-    if embedding:
+def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str:
+    """What the recipients of one box receive, each for its role (a Qdrant server receives no column summary)."""
+    _chat, embedding, store = _roles(cfg, vector)
+    lines = []
+    if any(r not in (embedding, store) for r in recipients):  # the provider that answers
+        lines += [
+            (
+                "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and "
+                "95th percentiles of numeric columns (never the minimum or the maximum); the most frequent values of "
+                "the other columns with their counts, only values shared by at least 5 rows; the first and last year "
+                "of date columns."
+            ),
+            "- **No row of your dataset.**",
+            (
+                "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index "
+                "(each passage with its PDF's name), the names of the PDFs you ask Document insight about, and your "
+                "chat messages; never the folder a PDF is in."
+            ),
+        ]
+        provider = cfg["provider"]
+        if provider in file_readers():  # its connector's read_document
+            lines.append(
+                "- **Document insight:** the PDF file itself while its graph is extracted, with the details it holds "
+                f"(such as its title and author) but not its file name; the app then asks {provider_label(provider)} "
+                "to delete it."
+            )
+        else:  # manage.rag_documents: the first 30 pages that have text, cut at 35,000 characters
+            lines.append(
+                "- **Document insight:** the text of the first 30 pages that have text of each PDF whose graph you "
+                "extract, 35,000 characters at most, whether the PDF is indexed or not."
+            )
+    if embedding in recipients:
         lines.append(
             f"- **{provider_label(embedding)}, for the embeddings:** the text of the PDFs you index and every "
             "search text (your questions, column names and hints)."
         )
+    if store in recipients:
+        lines.append(
+            f"- **{provider_label(store)}, your vector database:** the text of the PDFs you index (each passage with "
+            "its PDF's name, never the folder it is in) and its vectors, kept there until the index is rebuilt on "
+            "that server, and the vector of each search."
+        )
     return (
         "\n".join(lines)
-        + "\n\nThis confirmation is yours, for this browser tab only. What was already sent stays with the provider, "
-        "under its own terms. It does not replace the approvals of your data-protection framework: do not give it "
-        "for identifiable patient data unless your approval covers it."
+        + "\n\nThis confirmation is yours, for this browser tab only. What was already sent stays with each "
+        "recipient, under its own terms. It does not replace the approvals of your data-protection framework: do not "
+        "give it for identifiable patient data unless your approval covers it."
     )
+
+
+def _engine_recipients(manager) -> tuple[list[str], str | None]:
+    """The recipients the running engine sends data to, by role as it uses them (never by position: a Qdrant server
+    is no embedding provider), and its embedding provider among them."""
+    cfg = {
+        "provider": manager.provider,
+        "base_url": manager.base_url,
+        "embedding_provider": manager.embedding_provider,
+        "embedding_base_url": manager.embedding_base_url,
+    }
+    chat, embedding, store = _roles(cfg, {"vector_engine": VectorEngine.QDRANT, "qdrant_url": manager.qdrant_url})
+    return [r for r in (chat, embedding, store) if r], embedding
 
 
 def _running_engine(manager) -> None:
     """Where the running engine sends data, whatever provider is selected below, and how to stop it at once."""
     if not manager.initialized or not manager.recipients():
         return
-    order = sorted(manager.recipients(), key=lambda r: r.partition("@")[0] != manager.provider)
-    embedding = order[1] if len(order) > 1 else None
+    order, embedding = _engine_recipients(manager)
     st.info(f"The AI engine runs with {_names(order, embedding)}: your data goes there.", icon=":material/cloud_sync:")
     if st.button("Withdraw the confirmation and stop", key="rag_withdraw_stop", icon=":material/block:"):
         withdrawn = manager.recipients()
@@ -410,11 +441,12 @@ def _running_engine(manager) -> None:
         st.rerun()
 
 
-def _consent_card(cfg: dict) -> bool:
+def _consent_card(cfg: dict, vector: dict | None = None) -> bool:
     """
     Explicit, session-scoped confirmation before any data is sent outside this machine and the private network
-    (audit E6). One box per set of recipients, naming each (with Claude, a cloud embedding provider too); ticking or
-    unticking it is what counts, and unticking stops an engine that sends data to one of them.
+    (audit E6). One box per set of recipients, naming each (with Claude, a cloud embedding provider too; a Qdrant
+    server there that keeps the index); ticking or unticking it is what counts, and unticking stops an engine that
+    sends data to one of them.
     """
     manager = st.session_state.rag_manager
     with st.container(border=True):
@@ -422,22 +454,29 @@ def _consent_card(cfg: dict) -> bool:
         if notice := st.session_state.pop("rag_stop_notice", None):
             st.toast(notice, icon=":material/block:")
         _running_engine(manager)
-        recipients = _recipients(cfg)
+        recipients = _recipients(cfg, vector)
         if not recipients:
             # choosing a local provider changes nothing for a cloud engine that runs until another starts
             url = cfg.get("embedding_base_url") or cfg.get("base_url") or ""
+            on_qdrant = (vector or {}).get("vector_engine") == VectorEngine.QDRANT
+            store = (vector or {}).get("qdrant_url") if on_qdrant else None
+            elsewhere = bool(store) and not on_this_machine(store)  # a Qdrant server on the private network
             if on_this_machine(url):
-                st.caption("The local provider keeps every prompt, document and dataset excerpt on this server.")
+                kept = "every prompt and dataset excerpt" if elsewhere else "every prompt, document and dataset excerpt"
+                st.caption(f"The local provider keeps {kept} on this server.")
             else:
                 st.caption(
                     f"Ollama at {host_of(url)}, on your network, receives the prompts, the text of your documents "
                     "and the column summaries."
                 )
+            if elsewhere:
+                st.caption(f"The index of your documents is kept on the Qdrant server at {host_of(store)}, on your network.")
             return True
-        embedding = recipients[1] if len(recipients) > 1 else None
-        names = _names(recipients, embedding)
+        names = _names(recipients, _roles(cfg, vector)[1])
         st.warning(
-            _notice(recipients, cfg), title=f"What leaves this server with {names}", icon=":material/cloud_upload:"
+            _notice(recipients, cfg, vector),
+            title=f"What leaves this server with {names}",
+            icon=":material/cloud_upload:",
         )
         key = _consent_key(recipients)
         if key not in st.session_state and manager.is_confirmed(frozenset(recipients)):
@@ -618,19 +657,25 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                 icon=":material/dns:",
                 persist_state=PERSIST,
             ).strip()
-            qdrant_url = server_url or None
+            qdrant_url = server_url  # empty: embedded, as the field says (never the server's setting then)
             if qdrant_url:
+                _address_badge(qdrant_url, "the passages of your PDFs and the API key")
                 qdrant_key = st.text_input(
                     "Qdrant API key", value="", type="password", key="rag_qdrant_api_key", icon=":material/key:",
-                    help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY when configured.",
+                    help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY for the server's own "
+                    "address (CMP_QDRANT_URL) only.",
                     persist_state=PERSIST,
-                ) or settings.qdrant_api_key
+                ) or settings.key_for(qdrant_url)  # the server's key never goes to an address a user typed
                 scope = get_current_scope()
-                server = QdrantIndex(
-                    base_dir / "qdrant", url=qdrant_url, api_key=qdrant_key,
-                    collection=user_collection(scope.username if scope else None),
+                # its own folder in the workspace (an earlier version's index moved there): no request is made
+                server = QdrantIndex.open(
+                    base_dir / "qdrant", username=scope.username if scope else None, url=qdrant_url,
+                    api_key=qdrant_key,
                 )
-                if st.button("Test the connection", key="rag_qdrant_ping", icon=":material/network_check:"):
+                if st.button(
+                    "Test the connection", key="rag_qdrant_ping", icon=":material/network_check:",
+                    help="Asks the server for its list of collections, with the key above: none of your data.",
+                ):
                     ok, message = server.ping()
                     (st.success if ok else st.error)(message)
                 if server.named_after_account:  # read from the workspace: no request is made
@@ -647,7 +692,9 @@ def _vector_card(selected_files: list[str] | None) -> dict:
         for warning in advice.warnings:
             st.warning(warning, icon=":material/storage:")
 
-        manifest = IndexManifest.load(base_dir / engine)
+        # the index of the place in use: a Qdrant server's is kept in a folder of its own
+        on_server = engine == VectorEngine.QDRANT and qdrant_url
+        manifest = IndexManifest.load(server_folder(base_dir / engine, qdrant_url) if on_server else base_dir / engine)
         if manifest is not None:
             st.caption(
                 f":material/inventory_2: Index: {manifest.chunks:,} chunks from {len(manifest.documents)} document(s), "
@@ -766,11 +813,14 @@ def render_ai_settings() -> None:
     left, right = st.columns([3, 2], gap="large")
     with left:
         cfg = _provider_card()
-        consent = _consent_card(cfg)
+        consent_slot = st.container()  # filled once the vector database is known: a Qdrant server is a recipient
         selected_files = _library_card()
     with right:
         adherence, temperature = _retrieval_card()
         vector = _vector_card(selected_files)
+    with consent_slot:
+        consent = _consent_card(cfg, vector)
+    with right:
         _engine_card(cfg, consent, adherence, temperature, selected_files, vector)
 
 

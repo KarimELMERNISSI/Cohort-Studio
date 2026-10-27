@@ -216,3 +216,49 @@ def test_an_index_is_reused_only_when_it_holds_the_same_documents() -> None:
     assert not index_matches(manifest, ["a.pdf"])  # a document was removed from the library
     assert not index_matches(manifest, ["a.pdf", "b.pdf", "c.pdf"])  # one was added
     assert not index_matches(None, ["a.pdf"])  # no index yet
+
+
+def test_a_server_is_sent_document_names_only(index: DocumentIndex, monkeypatch) -> None:
+    """A filter goes to the server with the search: it names documents, never the folder they are in."""
+    index.build(CHUNKS, embedding_label="fake:words")
+    sent: list[list[str] | None] = []
+    query = index.backend.query
+    monkeypatch.setattr(
+        index.backend, "query", lambda vector, k, sources=None: sent.append(sources) or query(vector, k, sources)
+    )
+    monkeypatch.setattr(type(index.backend), "remote", property(lambda self: True))
+    docs = index.similarity_search("eGFR", k=5, sources=["/srv/data/users/alice/documents/kidney.pdf"])
+    assert sent == [["kidney.pdf"]] and {d.metadata["source"] for d in docs} == {"kidney.pdf"}
+
+
+def test_a_server_filter_naming_no_file_finds_nothing(index: DocumentIndex, monkeypatch) -> None:
+    """Documents were asked for and none is named: nothing is found, never the whole library."""
+    index.build(CHUNKS, embedding_label="fake:words")
+    monkeypatch.setattr(type(index.backend), "remote", property(lambda self: True))
+    assert index.similarity_search("eGFR", k=5, sources=["/srv/data/"]) == []
+
+
+def test_each_place_keeps_its_own_manifest(tmp_path: Path, monkeypatch) -> None:
+    """A Qdrant server's index and the embedded one are described apart: going back to a server never reuses its
+    index under another place's manifest (another model's vectors, other documents)."""
+    from qdrant_client import QdrantClient
+
+    from manage.vectorstores import qdrant_index as qi
+
+    clients: dict[str, QdrantClient] = {}
+    monkeypatch.setattr(
+        qi,
+        "_client",
+        lambda *, path=None, url=None, api_key=None: clients.setdefault(
+            str(path or url), QdrantClient(location=":memory:")
+        ),
+    )
+    directory = tmp_path / "vectors" / "qdrant"
+    server = "https://a.example.org:6333"
+    on_server = DocumentIndex(qi.QdrantIndex.open(directory, username="alice", url=server), WordHashEmbeddings())
+    on_server.build(CHUNKS[:2], embedding_label="fake:A", documents=["bmi.pdf"])
+    embedded = DocumentIndex(qi.QdrantIndex.open(directory, username="alice"), WordHashEmbeddings())
+    embedded.build(CHUNKS, embedding_label="fake:B", documents=["bmi.pdf", "kidney.pdf", "it's bp.pdf"])
+    again = qi.QdrantIndex.open(directory, username="alice", url=server)
+    assert (again.manifest().embedding, again.manifest().chunks) == ("fake:A", 2)
+    assert (embedded.manifest.embedding, embedded.manifest.chunks) == ("fake:B", len(CHUNKS))

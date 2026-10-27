@@ -381,3 +381,37 @@ def test_a_preselected_cloud_provider_starts_nothing(
     at.selectbox(key="rag_provider_select").select("ollama").run()
     later = _new_session("server_choice_user")
     assert later.selectbox(key="rag_provider_select").value == "ollama"
+
+
+def test_a_qdrant_server_outside_the_network_gets_its_own_confirmation(
+    app: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The data-sharing card is drawn above the vector database's: it names the server typed there, at once. Showing
+    the page asks the server nothing (the connection test alone does, when clicked)."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    pytest.importorskip("qdrant_client", reason="the Qdrant engine is in the optional 'ai' extra")
+    from manage.vectorstores import qdrant_index
+
+    monkeypatch.setattr(
+        qdrant_index, "_client", lambda **kwargs: pytest.fail("Settings asked the Qdrant server")
+    )
+    app.segmented_control(key="rag_vector_engine").set_value("qdrant").run()
+    app.text_input(key="rag_qdrant_url").input("https://abc.cloud.qdrant.io:6333").run()
+    box = next(c for c in app.checkbox if (c.key or "").startswith("rag_consent::"))
+    assert box.key == "rag_consent::qdrant@abc.cloud.qdrant.io" and box.value is False
+    assert "Qdrant at abc.cloud.qdrant.io" in box.label
+    assert any("your vector database" in w.value for w in app.warning)
+    app.text_input(key="rag_qdrant_url").input("http://qdrant:6333").run()  # on the private network
+    assert not any((c.key or "").startswith("rag_consent::") for c in app.checkbox)
+    assert any(
+        "kept on the Qdrant server at qdrant, on your network" in c.value for c in app.caption
+    )
+    assert not any(
+        "every prompt, document" in c.value for c in app.caption
+    )  # the documents are not all here
+    assert any("uses http" in c.value for c in app.caption)
+    app.text_input(key="rag_qdrant_url").input(
+        "qdrant.lan:6333"
+    ).run()  # no scheme: the client uses http
+    assert any("uses http" in c.value for c in app.caption)
+    assert not app.exception, [str(e.value)[:300] for e in app.exception]
