@@ -33,7 +33,7 @@
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-0ea5e9.svg)](https://karimelmernissi.github.io/Cohort-Studio/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23436094.svg)](https://doi.org/10.5281/zenodo.23436094)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.23436094-blue.svg)](https://doi.org/10.5281/zenodo.23436094)
 
 </div>
 
