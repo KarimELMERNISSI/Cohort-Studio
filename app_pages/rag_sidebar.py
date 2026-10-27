@@ -59,6 +59,7 @@ from ui import preferences
 from ui.components import confirm
 from ui.components.connector_selector import connector_selector, explain_choice
 from ui.components.text import plain
+from ui.services import ai_engine
 from utils.data_paths import get_vectors_dir
 from utils.session_scope import get_current_scope
 from utils.settings import get_settings
@@ -116,13 +117,7 @@ def _api_key_input(provider: str, label: str, key: str, help_text: str) -> str |
 
 
 def _ensure_manager() -> None:
-    from manage.rag_manager import RAGManager
-
-    if "rag_manager" not in st.session_state:
-        st.session_state.rag_manager = RAGManager()
-    elif st.session_state.rag_manager.__class__ is not RAGManager:  # hot-reload safety
-        old_key = getattr(st.session_state.rag_manager, "api_key", None)
-        st.session_state.rag_manager = RAGManager(api_key=old_key)
+    ai_engine()  # built on first use, and again after a code change (ui.services)
 
 
 def _running() -> dict:

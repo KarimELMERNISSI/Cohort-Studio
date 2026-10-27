@@ -49,6 +49,7 @@ from manage.ai_payload import column_profile
 from ui.components import no_dataset
 from ui.components.text import answer, plain
 from ui.graph_view import current_theme, render_graph, render_graph_exports, renderer_selector
+from ui.services import drop_ai_engine
 
 # Lazy-compatible imports for clustering (module itself is light)
 from utils.clustering_utils import (
@@ -170,7 +171,7 @@ def app():
     # HOTFIX: Check for stale instance (missing new method)
     if rag_manager and not hasattr(rag_manager, 'enrich_variable_taxonomy'):
         st.warning("Detecting updated code... Re-initializing AI system.")
-        st.session_state.pop('rag_manager', None)
+        drop_ai_engine("the AI engine was reloaded after a code change")
         rag_manager = None
         st.rerun()
 

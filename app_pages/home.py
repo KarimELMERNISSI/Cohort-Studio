@@ -15,8 +15,6 @@ from core.registry import as_code
 from graph.builders.correlation import build_correlation_graph
 from graph.model import LayoutHint, RenderOptions
 from manage.ai_payload import column_profile
-from manage.db_manager import DBManager
-from manage.rag_manager import RAGManager
 from ui.components import confirm, no_dataset
 from ui.components.text import plain
 from ui.graph_legend import render_legend
@@ -757,13 +755,8 @@ TAB_KEY = "home_tab"
 
 
 def app():
-    # Initialize DB Manager
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = DBManager()
-
-    # Initialize RAG Manager
-    if 'rag_manager' not in st.session_state:
-        st.session_state.rag_manager = RAGManager()
+    # the session's dataset store (AppState builds it); the AI engine is built by Settings, when used
+    get_state().db_manager
 
     # RAG Configuration Sidebar - MOVED TO GLOBAL SIDEBAR (utils/multipage.py -> app_pages/rag_sidebar.py)
     # with st.sidebar.expander("RAG & AI Settings", expanded=False):

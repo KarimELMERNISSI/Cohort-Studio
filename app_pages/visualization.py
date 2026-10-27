@@ -12,7 +12,6 @@ from scipy import stats
 import utils.export_utils as eu
 import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
-from manage.db_manager import DBManager
 from ui.components import no_dataset
 from ui.state import get_state
 
@@ -33,10 +32,6 @@ def hover_columns_input(df: pd.DataFrame) -> list[str] | None:
 
 
 def app():
-    # Initialize DB Manager
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = DBManager()
-
     # Dataset versions are managed from the shell sidebar (ui/shell.py); nothing is auto-loaded.
     if st.session_state.get("data") is None:
         no_dataset()

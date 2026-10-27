@@ -118,9 +118,30 @@ def test_trace_steps_are_written_by_app_state_only() -> None:
     assert not hits, hits
 
 
-def test_pages_use_the_session_trace() -> None:
-    """A page never starts a trace of its own: the session has one (AppState.transformation_manager)."""
-    assert not _count(r"TransformationManager\(", "app_pages")
+def test_pages_never_build_services() -> None:
+    """A page never builds a service of its own: the session has its dataset store, its trace (AppState) and its AI
+    engine (ui.services), built once (M5b step 5)."""
+    assert not _count(r"\b(DBManager|TransformationManager|RAGManager)\(", "app_pages")
+
+
+_SERVICE_KEYS = "db_manager|transformation_manager|rag_manager"
+_SERVICE_WRITE = (
+    rf"""session_state\[\s*["']({_SERVICE_KEYS})["']\s*\]\s*=(?!=)"""
+    rf"""|session_state\.({_SERVICE_KEYS})\s*=(?!=)"""
+    rf"""|session_state\.(pop|setdefault)\(\s*["']({_SERVICE_KEYS})["']"""
+    rf"""|del\s+st\.session_state\[\s*["']({_SERVICE_KEYS})["']"""
+)
+
+
+def test_only_the_services_write_their_keys() -> None:
+    """The session's services are kept under fixed keys, which the services modules alone write: a page that replaced
+    the AI engine left the running one, with its connections, out of reach of a withdrawn consent."""
+    hits = [
+        hit
+        for hit in _count(_SERVICE_WRITE, *SOURCE_DIRS, exclude=("ui/services.py", "ui/state.py"))
+        if not _is_comment(hit)
+    ]
+    assert not hits, hits
 
 
 def _is_comment(hit: str) -> bool:

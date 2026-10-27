@@ -248,11 +248,9 @@ class AppState:
 
     @property
     def rag_manager(self):
-        if "rag_manager" not in st.session_state:
-            from manage.rag_manager import RAGManager
+        from ui.services import ai_engine
 
-            st.session_state["rag_manager"] = RAGManager()
-        return st.session_state["rag_manager"]
+        return ai_engine()
 
     @property
     def username(self) -> str | None:

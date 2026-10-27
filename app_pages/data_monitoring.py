@@ -24,7 +24,6 @@ from core.population import (
 )
 from core.registry import as_code
 from ingest.loaders import UPLOAD_TYPES
-from manage.db_manager import DBManager
 from ui.components import no_dataset
 from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
@@ -1596,10 +1595,6 @@ def app():
     if 'config' not in st.session_state:
         st.session_state.config = create_empty_config()
 
-    # Initialize DB Manager
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = DBManager()
-    
     # Sidebar options
     action = st.sidebar.radio(
         "Action",

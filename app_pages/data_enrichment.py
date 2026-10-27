@@ -46,7 +46,6 @@ from graph.model import RenderOptions
 from graph.renderers.graphviz import GraphvizGraphRenderer
 from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_kinds, column_profile
-from manage.db_manager import DBManager
 from manage.snapshots import folders as snapshot_folders
 from manage.snapshots import save as save_snapshot_to
 from ui.components import error_card, linked_tabs, no_dataset
@@ -1962,17 +1961,10 @@ def app():
     4. Dataset Versioning and Persistence
     """
 
-    # Initialize DB Manager
-    if 'db_manager' not in st.session_state:
-        st.session_state.db_manager = DBManager()
-
-    # The transformation trace belongs to the session (AppState)
-    get_state().transformation_manager
-
-    # Initialize RAG Manager if not present
-    if 'rag_manager' not in st.session_state:
-        from manage.rag_manager import RAGManager
-        st.session_state.rag_manager = RAGManager()
+    # The session's dataset store and trace (AppState builds them); the AI engine is built by Settings, when used
+    state = get_state()
+    state.db_manager
+    state.transformation_manager
 
     # Dataset versions are managed from the shell sidebar (ui/shell.py).
 
