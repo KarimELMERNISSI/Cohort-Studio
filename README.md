@@ -56,8 +56,8 @@ The Start page draws this workflow: three core steps from a raw file to results,
 1. **Plain files and per-user workspaces**: each saved version is a complete Parquet file (`name_v1`, `name_v2`, …) written with pyarrow, with a lineage file next to it; DuckDB holds the user accounts and the statistics cache. Every account works in its own workspace.
 2. **Statistics** (`biostats`, in the data and statistics engine): Welch-first group comparisons with effect sizes and confidence intervals ($\text{Hedges' } g$, rank-biserial $r$, $\eta^2$, $\omega^2$), ANCOVA (one outcome, several covariates) with a test of parallel slopes, 2x2 measures with the Haldane-Anscombe correction, Little's MCAR test, diagnostic accuracy (ROC, PPV, NPV, likelihood ratios), survival and regression models, and multiple imputation. Normality and variance checks are diagnostics, never gates.
 3. **Data quality**: a score across completeness, uniqueness, consistency, uniformity, statistical validity (IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN) and the clinical anomaly rules you declare.
-4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions, and new variables proposed from the columns of your dataset (standard indices and scores, each with its source and a formula checked against your columns). Cloud providers need an explicit consent; the suggestions come from the language model and are not checked against a terminology.
-5. **Analysis Population, Recorded Lineage & Verified Replay**: Inclusion and exclusion criteria are filters you tick in the sidebar; every page analyses the same population, every result says which population and data it was computed on, and a result computed on other data is not shown as current. Every change of the data goes through one write path and is one step of a hash-chained (tamper-evident) JSON trace that records what it did to the table. The headless engine (`run_trace`) replays the trace, checks every step against the fingerprint recorded for it, and says when the replayed table is exactly the analysed one; a multiple imputation is re-run and its imputed cells are checked; the few steps it cannot recompute (the single imputation adopted from the former multiple-imputation panel) are listed. A Microsoft Word (`.docx`) report documents the trace, and a Word **study dossier** gathers the provenance, the participant flow (STROBE item 13), the data handling, the missing data (with the multiple-imputation items of Sterne et al. 2009) and the results you add to it. Neither is an electronically signed record, and neither certifies compliance with a reporting guideline.
+4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions, and new variables proposed from the columns of your dataset (standard indices and scores, each with its source and a formula checked against your columns). Cloud providers, and an Ollama or a Qdrant server outside your network, need an explicit consent; the suggestions come from the language model and are not checked against a terminology.
+5. **Analysis Population, Recorded Lineage & Checked Replay**: Inclusion and exclusion criteria are filters you tick in the sidebar; every page analyses the same population, every result says which population and data it was computed on, and a result computed on other data is not shown as current. Every change of the data goes through one write path and is one step of a hash-chained (tamper-evident) JSON trace that records what it did to the table. The headless engine (`run_trace`) replays the trace, checks every step against the fingerprint recorded for it, and says when the replayed table is exactly the analysed one; a multiple imputation is re-run and its imputed cells are checked; the few steps it cannot recompute (the single imputation adopted from the former multiple-imputation panel) are listed. A Microsoft Word (`.docx`) report documents the trace, and a Word **study dossier** gathers the provenance, the participant flow (STROBE item 13), the data handling, the missing data (with the multiple-imputation items of Sterne et al. 2009) and the results you add to it. Neither is an electronically signed record, and neither certifies compliance with a reporting guideline.
 
 ---
 
@@ -68,13 +68,14 @@ The Start page draws this workflow: three core steps from a raw file to results,
 | **Storage**              | Parquet versions (`name_v1`, `name_v2`, …) with a lineage file, in a workspace per user                      |
 | **Analysis population**  | Inclusion, anomaly and outlier criteria ticked in the sidebar; participant flow (STROBE item 13)             |
 | **Statistics**           | Welch-first comparisons with effect sizes, 2x2 measures, survival and regression, diagnostic accuracy, agreement |
-| **Missing data**         | Little's MCAR test; exact imputation by formula first, then single imputation for exploration or multiple imputation pooled with Rubin's rules |
+| **Missing data**         | Little's MCAR test; declared derived variables (a BMI from the weight and the height) checked against the data, filled exactly and recomputed from their imputed inputs; single imputation for exploration or multiple imputation pooled with Rubin's rules |
 | **Outliers**             | IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN                                      |
 | **Clinical anomaly rules** | Bounds and expressions declared in the study configuration                                                 |
-| **Reproducibility**      | Hash-chained trace (tamper-evident, not signed), verified replay, Word report and study dossier             |
-| **AI (optional)**        | Local Ollama by default; Gemini, OpenAI, Mistral and Claude after an explicit consent                        |
-| **Knowledge graphs**     | Offline Plotly/NetworkX engine by default; the proprietary yFiles engine is optional                         |
+| **Reproducibility**      | Hash-chained trace (tamper-evident, not signed), a replay that checks every step, Word report and study dossier |
+| **AI (optional)**        | Local Ollama by default; Gemini, OpenAI, Mistral and Claude, and an Ollama or Qdrant server outside your network, after an explicit consent |
+| **Knowledge graphs**     | Offline Plotly/NetworkX engine by default, or a static Graphviz one; the proprietary yFiles engine is optional |
 | **Deployment**           | Local (uv or pip), Docker or Docker Compose; offline with the default graph engine and a local LLM          |
+| **Configuration**        | One settings object, read from the environment and `.env` and checked at start-up; a wrong setting stops it, named without its value |
 | **Licence**              | Apache 2.0                                                                                                  |
 
 ---
@@ -110,21 +111,54 @@ The Start page draws this workflow: three core steps from a raw file to results,
 
 ```mermaid
 flowchart TB
-    UI["<b>Interface</b><br/>app_pages, ui: Streamlit pages, state facade, population selector, result cards"]
-    SVC["<b>Services</b><br/>manage: traces, replay, Word report and study dossier, accounts (IAM)<br/>enrich, explore, monitor, graph"]
-    subgraph CORE["Data and statistics engine"]
-        STATS["<b>Statistics</b><br/>biostats<br/>tests and effect sizes,<br/>regression and survival models,<br/>multiple imputation, pooling"]
-        IMPORT["<b>File import</b><br/>ingest<br/>CSV, Excel and Parquet,<br/>with a parse report"]
-        SESSION["<b>Data session</b><br/>core<br/>analysis population,<br/>fingerprints and lineage,<br/>participant flow"]
+    subgraph INTERFACE["Interface"]
+        PAGES["<b>app_pages</b><br/>the pages: inputs, a service call, a result card"]
+        UI["<b>ui</b><br/>shell and navigation, AppState (the one writer of the data),<br/>components, the user's saved choices"]
+    end
+    subgraph SERVICES["Services"]
+        MANAGE["<b>manage</b><br/>traces and replay, Word report and study dossier, accounts,<br/>AI engine and vector databases, start-up checks"]
+        GRAPH["<b>graph</b><br/>graph model, builders, renderers"]
+    end
+    subgraph WORK["Data work"]
+        EXPLORE["<b>explore · monitor</b><br/>quality audit, correlations, outliers"]
+        ENRICH["<b>enrich</b><br/>formulas, derived variables,<br/>transformations, imputation"]
+        INGEST["<b>ingest</b><br/>CSV, Excel and Parquet,<br/>with a parse report"]
+    end
+    subgraph ENGINE["Data and statistics engine"]
+        CORE["<b>core</b><br/>data session, analysis population, criteria,<br/>lineage and fingerprints, trace steps, connector kit"]
+        STATS["<b>biostats</b><br/>tests and effect sizes, models,<br/>multiple imputation and pooling"]
     end
     DATA["<b>Storage</b><br/>Parquet versions with lineage files · JSON traces · DuckDB accounts and statistics cache · per-user workspaces"]
-    AI["<b>AI engine</b> (optional ai group)<br/>manage.rag_manager · manage.rag.providers: Ollama, Gemini, OpenAI, Mistral, Claude<br/>manage.vectorstores: LanceDB, Qdrant"]
-    UI --> SVC --> CORE --> DATA
-    SVC -.-> AI
+    INTERFACE --> SERVICES --> WORK --> ENGINE
+    SERVICES --> DATA
 ```
 
-The data and statistics engine is plain Python: it imports no Streamlit, and `core` imports nothing above it, which
-`tests/test_layering.py` checks. It can therefore be used and tested without the interface.
+Each package sits on a layer, and imports only go down; every layer may use `utils` (settings, logging, optional
+groups, paths). [`test_layering.py`](tests/test_layering.py) places every module on its layer and checks, on each
+push, that:
+
+- no two modules import each other, directly or through others (one cycle exists by design: the multiple-imputation
+  engine and its worker process);
+- nothing below the interface reaches Streamlit, by any chain of imports, so the engine, the data work and the
+  services run without it;
+- `biostats` imports no other package of the application, so the statistics can be used and tested on their own;
+- the libraries of the AI providers are imported in one package only.
+
+The few exceptions left are listed in the test, and the list can only shrink.
+
+**Connectors.** Four families share one shape ([`core/registry.py`](core/registry.py)): the identity providers
+(local accounts, a Better Auth sidecar, or no sign-in), the AI providers (Ollama, Gemini, OpenAI, Mistral, Claude),
+the vector databases (LanceDB, Qdrant) and the graph engines (Plotly, Graphviz, yFiles). Each implementation is a
+class that says whether it can run here, and why not, and is loaded only when used. The identity provider is the
+server's choice; for the others, the session's choice comes first, then the user's saved choice, the server's
+setting and a default. Settings says why a connector is used and lists those that cannot run here, with the group to
+install. One contract test per family checks the same rules for each, and a new connector is one module and one
+registration, with no change to the code that uses the family.
+
+**Settings and catalogues.** Every setting the application reads is a field of one object
+([`utils/settings.py`](utils/settings.py)), read from the environment and `.env` and checked at start-up. Each kind
+of trace step is declared once ([`core/steps.py`](core/steps.py)), with its label, whether it changes the data and how
+the replay handles it.
 
 ---
 
@@ -146,8 +180,8 @@ The data and statistics engine is plain Python: it imports no Streamlit, and `co
 - **Missingness Diagnostics**: Little's MCAR test on EM estimates of the mean and covariance (Little 1988) and a full-family scan of missingness-versus-observed dependencies with adjusted p-values.
 - **ANCOVA**: Treatment comparisons of one outcome adjusted for continuous baseline covariates, with a test of homogeneity of regression slopes.
 - **Survival & regression**: Kaplan-Meier curves with pointwise Greenwood intervals, log-rank test, Cox proportional hazards (Efron ties, Grambsch-Therneau check with the optional `survival` extra), logistic regression (odds ratios, DeLong AUC) and Poisson / negative-binomial regression with person-time offsets.
-- **Paired, rates & stratified**: paired t and Wilcoxon signed-rank, one-sample tests, exact McNemar, incidence rates with exact Poisson intervals and rate ratios, Mantel-Haenszel odds and risk ratios with the Breslow-Day test, standardised mortality ratios, Cohen's kappa and intraclass correlations.
-- **Multiple imputation (for inference)**: chained equations like R `mice` (predictive mean matching, Bayesian normal regression, logistic and polytomous regression with augmentation, random-forest donors), m independent chains with diagnostics (traces, R-hat, observed against imputed values), fitted on the analysis population. The Survival & regression and Analyze pages pool their analyses over the imputed datasets with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 tests of several parameters, log, logit and cloglog scales) and show the complete-case analysis next to them; an analysis without a pooling rule says why. Pooling matches R `mice` 3.19 and `mitml` 0.4.5 on reference datasets. The imputation is saved with a version, exported for R (`mice` long) and Stata (`flong`), replayed and checked, and comes with a methods paragraph (Sterne et al. 2009).
+- **Paired, rates & stratified**: paired t and Wilcoxon signed-rank, one-sample tests, exact McNemar, incidence rates with exact Poisson intervals and rate ratios with the exact conditional interval (as R's `poisson.test`), Mantel-Haenszel odds and risk ratios with the Breslow-Day test, standardised mortality ratios, Cohen's kappa and intraclass correlations.
+- **Multiple imputation (for inference)**: chained equations like R `mice` (predictive mean matching, Bayesian normal regression, logistic and polytomous regression with augmentation, random-forest donors), m independent chains with diagnostics (traces, R-hat, observed against imputed values), fitted on the analysis population. The Survival & regression and Analyze pages pool their analyses over the imputed datasets with Rubin's rules (Barnard-Rubin degrees of freedom, D1/D2 tests of several parameters, log, logit and cloglog scales; three groups or more compared as Welch's ANOVA does, without assuming equal variances) and show the complete-case analysis next to them; an analysis without a pooling rule says why. Pooling matches R `mice` 3.19 and `mitml` 0.4.5 on reference datasets. The imputation is saved with a version, exported for R (`mice` long) and Stata (`flong`), replayed and checked, and comes with a methods paragraph (Sterne et al. 2009).
 - **Diagnostic Test Accuracy**: Sensitivity, Specificity, Positive/Negative Predictive Values (PPV/NPV), Diagnostic Odds Ratio, Youden's Index, Likelihood Ratios (LR+, LR-), and ROC AUC.
 - **Multiple Testing Corrections**: Holm (the default) and Bonferroni for the family-wise error rate, Benjamini-Hochberg for the false discovery rate.
 
@@ -161,7 +195,8 @@ The data and statistics engine is plain Python: it imports no Streamlit, and `co
 
 ### 4. Advanced Data Enrichment
 
-- **Derived Variables**: A formula editor on the column names (`weight_kg / (height_cm / 100) ** 2`) offers the matching columns as you type, checks the formula, and previews the new variable with its statistics on the analysis population, and the values far outside the others, before it is added. Formulas run in a whitelisted expression language, and a replay recomputes them from the trace.
+- **Variables by formula**: A formula editor on the column names (`weight_kg / (height_cm / 100) ** 2`) offers the matching columns as you type, checks the formula, and previews the new variable with its statistics on the analysis population, and the values far outside the others, before it is added. Formulas run in a whitelisted expression language, and a replay recomputes them from the trace.
+- **Declared derived variables** (optional): the variables your data compute from others in the same row (a BMI from the weight and the height, a total from its items, a unit conversion), typed or found by the AI engine in one request for the whole dataset. Each definition is checked against the rows where it and its variables are recorded before it is added, fills the missing values its inputs give exactly, is kept out of the imputation model and is recomputed from the imputed inputs (single and multiple imputation); the trace and the dossier record the definitions used.
 - **Imputation, in order**: values that other variables determine are imputed first by an exact formula (targeted imputation, typed or suggested by the AI engine; marked exact, they count as observed, without the single-imputation warning), which leaves the statistical imputation fewer cells to estimate; then global single imputation for exploration (mean/median, KNN, chained equations via IterativeImputer, tree-based missForest with LightGBM) or multiple imputation for inference. Single imputation does not propagate the imputation uncertainty, so standard errors and p-values computed on singly-imputed data are too small: the filled cells are remembered (also in saved versions and replays), and every result that uses them says so. Use multiple imputation for inference.
 - **Dimensionality Reduction**: t-SNE; Principal Component Analysis (PCA), Factor Analysis of Mixed Data (FAMD) and UMAP with the optional `ml` group.
 - **Transformations**: one-hot, label and ordinal encoding; min-max normalisation, z-score standardisation and log(x+1); row-wise statistics across columns (mean, median, sum, minimum, maximum, standard deviation).
@@ -169,11 +204,11 @@ The data and statistics engine is plain Python: it imports no Streamlit, and `co
 
 ### 5. AI Assistant (optional `ai` group)
 
-- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your server), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit consent in Settings > AI engine.
+- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your server), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit consent in Settings > AI engine. The server's default is set by `CMP_AI_PROVIDER` (local Ollama unless set), and Settings offers only the providers that can run here.
 - **Column-Name Suggestions**: The language model suggests clearer, standardised names for raw columns. The suggestions are not checked against a terminology: UMLS, LOINC and SNOMED CT are not loaded.
 - **Variable Suggestions**: From the columns of your dataset, the variable map and your indexed documents, the engine proposes new variables (BMI, eGFR, clinical scores), for a concept you name or by scanning the dataset. Each formula is checked against your columns and shown with its source (a document and its pages, or the model's knowledge); for a missing input, it can look for a proxy or an alternative formula. A suggestion goes to the formula editor, where you preview it before anything is added.
-- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant (selectable for your machine).
-- **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
+- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant, in your workspace or on a Qdrant server (a server outside your network needs the same consent as a cloud provider). What is sent anywhere names each passage by its PDF, never by its folder on the server.
+- **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, a static Graphviz engine, and the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
 
 Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area formulae indexed (Redlarski et al., *Sci Rep* 2016), the engine proposes formulas mapped onto the height and weight columns, each citing the review. **Apply to Editor** puts one in the formula editor, which computes and previews it before anything is added:
 
@@ -188,6 +223,7 @@ Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area f
 - **Analysis Population**: Inclusion, anomaly and outlier criteria are ticked or unticked in the sidebar and filter every analysis without deleting rows; Validate shows the participant flow (rows in, excluded and out per family, per-criterion counts and reasons). Imputation on Enrich is fitted on the population rows only.
 - **Integrity**: Trace steps are chained by SHA-256 hashes (tamper-evident, not signed); saved versions carry a lineage file (fingerprint, parent trace, population) checked when they are loaded.
 - **Replay Modes**: Fast replay loads the snapshot recorded with each step; Full replay recomputes every step from the source file. Paths are resolved inside the user's workspace, on Windows and Linux.
+- **Trace download**: Reproduce > Versions & traces downloads a trace as recorded (JSON), so that its chain can be checked elsewhere.
 - **Word Trace Report**: Export a Microsoft Word (`.docx`) report of the recorded steps and their parameters (not an electronically signed record).
 - **Participant flow (STROBE item 13)**: a diagram from the records read in the file, through the rows removed by recorded steps and each family of criteria (with the criteria behind each exclusion), to the analysis population and the N of each analysis; click a box for its criteria and their definitions (Validate > Analysis population, Reproduce > Study dossier).
 - **Study dossier**: add any result to the dossier with the button under it; Reproduce > Study dossier downloads a Word document with the provenance, the participant flow, the data handling, the missing data and multiple imputation, the results with what they were computed on, and the references. Results computed on other data or another population are left out, or kept and marked.
@@ -204,6 +240,7 @@ Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area f
 - **Provider Contract**: `BaseIAMProvider` (`manage/iam/base.py`) defines sign-in, account creation, session checks and roles. The application uses two roles, administrator and researcher.
 - **Default Provider**: local accounts in DuckDB with bcrypt hashing and login lockout (`LocalDuckDBIAMProvider`); the first administrator comes from `.env` or from a one-time setup token.
 - **Other Providers**: a Better Auth sidecar adapter (password sign-in and session checks over HTTP), and a mode without sign-in for a single local user (`CMP_IAM_PROVIDER=disabled`).
+- **Choice**: the server's setting `CMP_IAM_PROVIDER` (`local`, `better_auth` or `disabled`); any other value stops start-up instead of falling back to local accounts. Admin > Users manages the accounts of the provider in use.
 
 ---
 
@@ -314,14 +351,32 @@ DATA_ROOT=./data
 CMP_ADMIN_USERNAME=admin
 CMP_ADMIN_PASSWORD=choose-a-long-passphrase
 
+# Identity provider: local (default) | better_auth | disabled (no sign-in, one local user)
+CMP_IAM_PROVIDER=local
+
 # AI providers: Ollama is the default and keeps data on the server. Cloud providers are opt-in
 # and require an explicit confirmation in the app before any data is sent.
+CMP_AI_PROVIDER=auto
 OLLAMA_BASE_URL=http://localhost:11434
 GOOGLE_API_KEY=
 OPENAI_API_KEY=
 MISTRAL_API_KEY=
 ANTHROPIC_API_KEY=
+
+# Vector database: auto (recommended for the machine) | lancedb | qdrant; a Qdrant server (empty: embedded)
+CMP_VECTOR_STORE=auto
+CMP_QDRANT_URL=
+
+# Graph engine: auto (offline Plotly) | plotly | graphviz | yfiles; 1 = never an engine that needs internet
+CMP_GRAPH_RENDERER=auto
+CMP_OFFLINE=0
 ```
+
+The application reads its settings from the environment and `.env` only (a `.streamlit/secrets.toml` is not read)
+and checks every one at start-up: a wrong value, or a connector name this version does not offer, stops start-up
+with the variable's name, never its value. The choices each user makes in Settings (the AI provider and its models,
+the vector database, the graph engine, the day-first reading of dates) are kept in their workspace for the next
+session; a key, a password, an address or a consent never is.
 
 ### Administrator accounts and user management
 
@@ -338,7 +393,7 @@ The application keeps what it stores under `DATA_ROOT`, one workspace per user: 
 
 ## Verification & Test Suite
 
-More than 800 automated tests cover the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, Parquet persistence, lineage and replay, the graph connector, the AI connectors, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite on every push:
+More than 1,500 automated tests cover the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, Parquet persistence, lineage and replay, the connector families, what leaves the server for an AI provider, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite on every push:
 
 ```bash
 # Install the development tools (pytest, ruff, pyright) and every optional group once
@@ -363,6 +418,9 @@ CI fails when the line coverage of the non-test code falls below 70 %, or a pack
 | The ticked criteria drive the imputation, and a replay reproduces the analysed table | [`test_pipeline_integrity.py`](tests/test_pipeline_integrity.py) |
 | Imports go down the layers, without cycles; nothing below the interface reaches Streamlit; the engine loads no interface, plotting or AI package | [`test_layering.py`](tests/test_layering.py) |
 | Each account works in its own workspace, paths cannot leave it, and expressions run in a whitelisted sandbox | [`test_workspace.py`](tests/core_layer/test_workspace.py), [`test_safe_eval.py`](tests/core_layer/test_safe_eval.py) |
+| Each connector family keeps one contract: availability found without a network call, the group to install named, the order of choice, unknown names refused | [`connector_contract.py`](tests/connector_contract.py) |
+| A wrong setting stops start-up, named without its value | [`test_startup_config.py`](tests/test_startup_config.py), [`test_settings.py`](tests/test_settings.py) |
+| No row, no extreme value and no folder of the server goes to an AI provider, and nothing goes before the consent | [`test_ai_payload.py`](tests/test_ai_payload.py), [`test_rag_consent.py`](tests/test_rag_consent.py) |
 | The coverage floors, overall and per package | [`ci.yml`](.github/workflows/ci.yml), [`check_coverage_floors.py`](dev_scripts/check_coverage_floors.py) |
 
 ---
@@ -387,6 +445,7 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 - [**13_Audit_Report_2026-10.md**](documentation/13_Audit_Report_2026-10.md): The October 2026 audit and the follow-up programme (M0 to M4).
 - [**14_Full_Tutorial.md**](documentation/14_Full_Tutorial.md): From a raw file to a reproducible report, step by step on the tutorial cohort.
 - [**Tutorials.md**](documentation/Tutorials.md): Shorter walkthroughs of each page.
+- [**developer/**](documentation/developer/): The configuration reference, the graph rendering connector, the process flow and the module reference generated from the code.
 
 ---
 
