@@ -20,6 +20,7 @@ from rapidfuzz import process
 
 from manage.ai_payload import (
     column_profile,
+    document_name,
     frequent_values,
     local_providers,
     provider_label,
@@ -62,6 +63,15 @@ from .rag_documents import DocumentsMixin
 from .rag_taxonomy import TaxonomyMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _passages(docs) -> str:
+    """The passages the chat answers from, each with its document's name (never its path on the server) and page."""
+    return "\n\n".join(
+        f"Document: {document_name(d.metadata)} | Page: {d.metadata.get('page', 'N/A')}\n"
+        f"Content: {d.page_content}\n----------------"
+        for d in docs
+    )
 
 
 def _env_api_key(provider: str | None) -> str | None:
@@ -612,12 +622,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             search_kwargs={"k": 8, "fetch_k": 20}
         )
 
-        def format_docs(docs):
-            return "\n\n".join(f"Document: {d.metadata.get('source', 'Unknown')} | Page: {d.metadata.get('page', 'N/A')}\nContent: {d.page_content}\n----------------" for d in docs)
-
         self.qa_chain = (
             {
-                "context": (lambda x: x["input"]) | retriever | format_docs,
+                "context": (lambda x: x["input"]) | retriever | _passages,
                 "input": lambda x: x["input"]
             }
             | prompt

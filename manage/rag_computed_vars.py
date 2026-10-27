@@ -11,7 +11,7 @@ import unicodedata
 
 from core.derived import KINDS, DerivedVariable
 from enrich.formulas import MAX_FORMULA_LENGTH, formula_from_model, read_formula
-from manage.ai_payload import taxonomy_for_prompt
+from manage.ai_payload import document_name, taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
 from utils.logging_config import redact_secrets
 
@@ -22,6 +22,11 @@ from .rag_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _passages(docs) -> str:
+    """The passages a formula search reads, each with its document's name (never its path on the server)."""
+    return "\n\n".join(f"SOURCE: {document_name(d.metadata)} | CONTENT: {d.page_content}" for d in docs)
 
 
 def _in_app_notation(suggestion: dict, formula: str, *targets: str) -> str:
@@ -159,7 +164,7 @@ class ComputedVarsMixin:
             
         try:
             docs = self.vector_store.similarity_search(retrieval_query, k=5)
-            context_text = "\n\n".join([f"SOURCE: {d.metadata.get('source')} | CONTENT: {d.page_content}" for d in docs])
+            context_text = _passages(docs)
         except Exception:
             context_text = ""
 

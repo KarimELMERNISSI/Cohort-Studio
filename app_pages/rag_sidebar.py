@@ -363,20 +363,22 @@ def _notice(recipients: list[str], cfg: dict) -> str:
         ),
         "- **No row of your dataset.**",
         (
-            "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index, and "
-            "your chat messages."
+            "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index (each "
+            "passage with its PDF's name), the names of the PDFs you ask Document insight about, and your chat "
+            "messages; never the folder a PDF is in."
         ),
     ]
     provider = cfg["provider"]
     if provider in file_readers():  # its connector's read_document
         lines.append(
-            "- **Document insight:** the PDF file itself, not its name, while its graph is extracted; the app then "
-            f"asks {provider_label(provider)} to delete it."
+            "- **Document insight:** the PDF file itself while its graph is extracted, with the details it holds "
+            f"(such as its title and author) but not its file name; the app then asks {provider_label(provider)} to "
+            "delete it."
         )
-    else:  # manage.rag_documents: the text of the first 30 pages, cut at 35,000 characters
+    else:  # manage.rag_documents: the first 30 pages that have text, cut at 35,000 characters
         lines.append(
-            "- **Document insight:** the text of the first 30 pages of each PDF whose graph you extract, 35,000 "
-            "characters at most, whether the PDF is indexed or not."
+            "- **Document insight:** the text of the first 30 pages that have text of each PDF whose graph you "
+            "extract, 35,000 characters at most, whether the PDF is indexed or not."
         )
     if embedding:
         lines.append(

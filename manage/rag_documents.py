@@ -6,8 +6,15 @@ This is part of the RAGManager class composition pattern.
 """
 import os
 
+from manage.ai_payload import document_name
 from manage.rag.providers import file_readers
 from utils.logging_config import redact_secrets
+
+
+def _passages(docs) -> str:
+    """The passages a question about chosen documents is answered from, each with its document's name (never its
+    path on the server)."""
+    return "\n\n".join(f"[Source: {document_name(d.metadata)}] {d.page_content}" for d in docs)
 
 
 class DocumentsMixin:
@@ -200,11 +207,8 @@ class DocumentsMixin:
         If the answer is not in the context, say "I cannot find this information in the documents."
         """)
         
-        def format_docs(docs):
-            return "\n\n".join(f"[Source: {d.metadata.get('source','Unknown')}] {d.page_content}" for d in docs)
-
         chain = (
-            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            {"context": retriever | _passages, "question": RunnablePassthrough()}
             | prompt
             | self.llm
             | StrOutputParser()

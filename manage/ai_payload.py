@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import ntpath
 import os
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -192,6 +193,15 @@ def taxonomy_for_prompt(taxonomy: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def document_name(metadata: Mapping[str, Any] | None) -> str:
+    """
+    The document a passage comes from, as a prompt names it: the file's name, never its path on the server, which
+    names the user's account and the server's folders. Both separators are read: an index can move between systems.
+    """
+    source = str((metadata or {}).get("source") or "")
+    return ntpath.basename(source) or "Unknown"  # a folder is never named
+
+
 def host_of(url: str | None) -> str:
     """The host of a service address ("" when there is none)."""
     url = (url or "").strip()
@@ -274,6 +284,7 @@ __all__ = [
     "column_kinds",
     "column_profile",
     "disable_remote_tracing",
+    "document_name",
     "frequent_values",
     "host_of",
     "local_providers",

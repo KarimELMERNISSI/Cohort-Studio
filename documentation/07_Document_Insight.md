@@ -45,12 +45,14 @@ criteria, the derived variables it finds) is a summary of each column, never a r
 - **other columns:** their most frequent values with their counts, only values shared by at least 5 rows;
 - **date columns:** the first and the last year.
 
-Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them.
-With Google Gemini, **Document insight** sends the PDF file itself, under a name the app chooses (never the file's
-name nor its path), while its graph is extracted; the app then asks Google to delete it, also when the extraction
-fails or Google is still processing the file after five minutes (that PDF is then left out of the graph). The other
-providers are sent the text of the first 30 pages of each PDF whose graph you extract, 35,000 characters at most,
-whether the PDF is indexed or not. A PDF left out of the graph is named under it, with the reason. A cloud
+Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them; a
+passage of a PDF goes with the PDF's name, and a question in Document insight with the names of the PDFs it is about,
+never the folder a PDF is in on the server. With Google Gemini, **Document
+insight** sends the PDF file itself, under a name the app chooses (never the file's name nor its path, but with the
+details the PDF holds, such as its title and author), while its graph is extracted; the app then asks Google to delete
+it, also when the extraction fails or Google is still processing the file after five minutes (that PDF is then left
+out of the graph). The other providers are sent the text of the first 30 pages that have text of each PDF whose graph
+you extract, 35,000 characters at most, whether the PDF is indexed or not. A PDF left out of the graph is named under it, with the reason. A cloud
 **embedding provider** of Claude receives the text of the PDFs you index and every search text (your questions,
 column names and hints). The **Data sharing** card of Settings lists all of this and names every recipient.
 

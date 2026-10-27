@@ -387,17 +387,76 @@ def test_the_graph_extraction_sends_the_file_only_to_a_provider_that_declares_it
 def test_the_consent_notice_says_what_document_insight_sends_each_provider() -> None:
     from app_pages.rag_sidebar import _notice
 
+    gemini = _notice(["gemini"], {"provider": "gemini"})
     assert (
-        "the PDF file itself, not its name, while its graph is extracted; the app then asks Google Gemini to "
-        "delete it" in _notice(["gemini"], {"provider": "gemini"})
+        "the PDF file itself while its graph is extracted, with the details it holds (such as its title and "
+        "author) but not its file name; the app then asks Google Gemini to delete it" in gemini
     )
-    for provider in ("openai", "mistral", "anthropic", "ollama"):
+    for provider in ("gemini", "openai", "mistral", "anthropic", "ollama"):
         notice = _notice([provider], {"provider": provider})
+        assert "each passage with its PDF's name), the names of the PDFs you ask Document insight about" in notice
+        assert "never the folder a PDF is in" in notice
+        if provider == "gemini":
+            continue
         assert "the PDF file itself" not in notice
         assert (
-            "the text of the first 30 pages of each PDF whose graph you extract, 35,000 characters at most, "
-            "whether the PDF is indexed or not" in notice
+            "the text of the first 30 pages that have text of each PDF whose graph you extract, 35,000 characters at "
+            "most, whether the PDF is indexed or not" in notice
         )
+
+
+def test_the_passages_sent_name_their_document_never_its_path() -> None:
+    """The chat, the questions about chosen documents and the search for formulas sent each passage with its path on
+    the server, which named the user's account and the server's folders."""
+    from manage import rag_computed_vars, rag_documents
+
+    docs = [
+        SimpleNamespace(
+            metadata={"source": r"C:\srv\data\users\alice\documents\Smith_J.pdf", "page": 3},
+            page_content="eGFR falls with age.",
+        )
+    ]
+    for passages in (rm._passages, rag_documents._passages, rag_computed_vars._passages):
+        sent = passages(docs)
+        assert "Smith_J.pdf" in sent and "eGFR falls with age." in sent
+        assert "alice" not in sent and "srv" not in sent and "documents" not in sent
+
+
+def test_no_prompt_holds_the_folder_of_a_pdf(monkeypatch, tmp_path) -> None:
+    """What the engine's chains send the model, recorded: the chat, a question about chosen documents and the search
+    for formulas name each PDF, and none holds any part of the folder the PDFs are kept in."""
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+    from tests.test_vectorstores import WordHashEmbeddings
+
+    sent: list[str] = []
+
+    class Recording(FakeListChatModel):
+        def _call(self, messages, stop=None, run_manager=None, **kwargs):
+            sent.append("\n".join(str(m.content) for m in messages))
+            return super()._call(messages, stop, run_manager, **kwargs)
+
+    _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        rm.ConnectorFactory,
+        "create_connectors",
+        classmethod(lambda cls, **kwargs: (Recording(responses=["{}"] * 20), WordHashEmbeddings())),
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    manager.confirm(*rm.RAGManager.recipients_of("ollama", None, "ollama"))
+    ok, message = _start(manager, "ollama")
+    assert ok, message
+
+    manager.qa_chain.invoke({"input": "How is kidney function estimated from creatinine?"})
+    chat = sent[-1]
+    manager.chat_with_specific_doc(["kidney.pdf"], "How is kidney function estimated?")
+    question = sent[-1]
+    manager.suggest_computed_variables(["creatinine", "age"], search_hint="kidney function")
+    assert "kidney.pdf" in chat and "kidney.pdf" in question
+    assert any("SOURCE: kidney.pdf" in prompt for prompt in sent)  # the formula search read a passage
+    assert not any(tmp_path.name in prompt or str(docs) in prompt for prompt in sent)
 
 
 def test_the_documents_left_out_of_a_graph_are_named_with_the_reason(tmp_path) -> None:

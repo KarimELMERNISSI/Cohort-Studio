@@ -13,10 +13,29 @@ from manage.ai_payload import (
     TRACING_VARIABLES,
     column_profile,
     disable_remote_tracing,
+    document_name,
     frequent_values,
     safe_stats,
     taxonomy_for_prompt,
 )
+
+
+@pytest.mark.parametrize(
+    ("source", "name"),
+    [
+        (r"C:\data\users\alice\documents\Smith_J_discharge.pdf", "Smith_J_discharge.pdf"),
+        ("/srv/cohortstudio/data/users/alice/documents/guide.pdf", "guide.pdf"),  # read on any system
+        ("guide.pdf", "guide.pdf"),
+        ("C:\\data\\users\\alice\\", "Unknown"),  # a folder is never named
+        ("", "Unknown"),
+        (None, "Unknown"),
+    ],
+)
+def test_a_passage_names_its_document_never_its_path(source: str | None, name: str) -> None:
+    """A prompt names a passage's document by the file's name: the path names the user's account and the server's
+    folders."""
+    assert document_name({"source": source, "page": 2}) == name
+    assert document_name(None) == "Unknown"
 
 
 def _cohort() -> pd.DataFrame:

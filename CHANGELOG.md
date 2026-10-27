@@ -203,8 +203,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     longer carries the file's name: the app sends it from an open file under a name it chooses (the PDF's own
     details, such as its title and author, travel with the file). A PDF that Google is still processing after five
     minutes is left out of the graph (the extraction waited without limit).
-  - The notice says what Document insight sends the other providers: the text of the first 30 pages of each PDF
-    whose graph is extracted, 35,000 characters at most, indexed or not. It said "the text of indexed PDFs".
+  - The notice says what Document insight sends the other providers: the text of the first 30 pages that have text
+    of each PDF whose graph is extracted, 35,000 characters at most, indexed or not. It said "the text of indexed
+    PDFs".
+  - The chat, the questions about chosen documents (Document insight) and the search for formulas sent each passage
+    of a PDF with the PDF's path on the server, which named the user's account and the server's folders. They now
+    send the PDF's name only, and the notice says that each passage goes with it.
   - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
     there. The file API is now used with Gemini only; the other providers receive the document's text.
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own
