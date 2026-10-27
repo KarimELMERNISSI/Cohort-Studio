@@ -88,6 +88,28 @@ Returns:
 
 ---
 
+## derived_variables.py
+
+_Prompt for finding the derived variables of a dataset: the columns computed from other columns of the same row._
+
+### def `derived_variables` (derived_variables.py)
+
+- **Arguments**: `columns_text: str, max_candidates: int`
+
+- **Returns**: `str`
+
+Asks for the definitions that compute a column from other columns, row by row, with their inverses.
+
+Args:
+    columns_text: one line per column: its name, how it is stored, its unit when the variable map has one, and
+        its typical values (5th to 95th percentiles) when the user lets them be sent
+    max_candidates: the most candidates to return
+
+Returns:
+    The prompt; the answer is checked against the data before anything is offered.
+
+---
+
 ## document_graph.py
 
 _Prompt for extracting knowledge graph from documents._

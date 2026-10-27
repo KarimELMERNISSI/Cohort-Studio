@@ -198,6 +198,342 @@ Returns:
 
 ---
 
+## derived.py
+
+_The check of a declared derived variable against the data (core.derived declares it). On the rows where the variable
+and every variable of its formula have a value, the formula is computed here, by the evaluator of every formula, and
+compared with the recorded value. Nothing is estimated and nothing leaves the machine; the disagreeing rows are kept
+for the page to show, never written anywhere.
+
+A definition the data disagree with, or one that cannot be checked, is never used to fill or impute unless the user
+accepts it; agreeing with the data says nothing of the published reference, which a definition's note names._
+
+**Imports**:
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `dataclasses.replace`, `typing.Any`, `numpy`, `pandas`, `biostats.mi.spec.DERIVED`, `core.derived.DerivedVariable`, `core.derived.fill_order`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.is_text_column`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.usable_values`, `utils.data_analyzer.DataAnalyzer`
+
+### class `DerivedCheck` (derived.py)
+
+What the data say of a definition (:func:`check_derived`): counts, never values, except the rows kept for the
+page to show (``disagreeing``) and to fill (``fillable_rows``).
+
+**Methods:**
+
+- **label**(`self`) -> `str`
+  > No description available.
+
+- **summary**(`self`) -> `dict[ComplexType]`
+  > The check in numbers, as a step that used the definition records it: never its words (a reason can name a
+  > value of the data, "where sex = F").
+
+- **fillable**(`self`) -> `int`
+  > No description available.
+
+- **usable**(`self`) -> `bool`
+  > It may fill and impute: the data agree with it, or the user accepted it although they mostly agree or
+  > cannot check it.
+
+- **evidence**(`self`) -> `str`
+  > The check in words: 'gives the recorded value in 368 of 371 rows where bmi, weight_kg and height_cm are
+  > recorded (±0.05)'.
+
+- **describe**(`self, name: Callable[ComplexType]`) -> `str`
+  > :attr:`evidence`, each variable written by ``name`` (core.registry.as_code where markdown renders it).
+
+### class `ExactFill` (derived.py)
+
+The missing values of one variable computed by a declared definition (its formula, or an inverse of it): one
+targeted imputation of the Enrich draft. ``target`` is the variable filled, the definition's own or a variable of
+its formula; ``decimals`` rounds the values as the variable is recorded (None: a text, or no precision found);
+``levels`` limits the fill to the values a text or code variable took in the rows checked ({}: no limit).
+
+**Methods:**
+
+- **inverse**(`self`) -> `bool`
+  > No description available.
+
+### class `FillPlan` (derived.py)
+
+What filling exactly would do: the fills in order, why a declared definition fills nothing (by variable), the
+values each variable would still miss in the rows filled (by variable), and why nothing can be filled.
+
+**Methods:**
+
+- **filled**(`self`) -> `int`
+  > No description available.
+
+### def `resolution` (derived.py)
+
+- **Arguments**: `values: pd.Series`
+
+- **Returns**: `float`
+
+The precision a column is recorded with: the coarsest power of ten that divides at least 99% of its values (0.1
+for a weight recorded to 100 g, 1 for an age in years). 0 when none does (a value computed to full precision), and
+for scores and counts (at most twenty distinct whole numbers), which carry no rounding.
+
+### def `_levels` (derived.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `bool`
+
+A variable checked level by level: text, yes/no, or codes (at most ten distinct whole numbers).
+
+### def `_is_date` (derived.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_computed` (derived.py)
+
+- **Arguments**: `formula: str, frame: pd.DataFrame`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_floor` (derived.py)
+
+- **Arguments**: `values: np.ndarray`
+
+- **Returns**: `np.ndarray`
+
+No description available.
+
+### def `_propagated` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, rows: pd.DataFrame, inputs: list[str], values: np.ndarray`
+
+- **Returns**: `np.ndarray`
+
+Per row: half the variable's recording unit, plus what rounding each input to its own unit moves the formula, up
+or down, whichever moves it more (a BMI to 0.1 from a weight to 0.1 kg and a height to 1 cm: about 0.21; a curved
+formula moves more one way).
+
+### def `_unit_hint` (derived.py)
+
+- **Arguments**: `recorded: np.ndarray, values: np.ndarray`
+
+- **Returns**: `ComplexType`
+
+A constant factor between the recorded values and the formula's in most disagreeing rows: another unit.
+
+### def `_agree` (derived.py)
+
+- **Arguments**: `recorded: np.ndarray, values: np.ndarray, tau: ComplexType`
+
+- **Returns**: `np.ndarray`
+
+No description available.
+
+### def `_cannot` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, reason: str`
+
+- **Returns**: `DerivedCheck`
+
+No description available.
+
+### def `_multiple_of_one` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, rows: pd.DataFrame, inputs: list[str], got: np.ndarray`
+
+- **Returns**: `bool`
+
+The formula is a constant times its one variable: a copy or a unit conversion, which agrees by construction.
+
+### def `_level_disagreeing` (derived.py)
+
+- **Arguments**: `rows: pd.DataFrame, inputs: list[str], agree: np.ndarray`
+
+- **Returns**: `ComplexType`
+
+The first level of a text or code variable whose rows give the recorded value less often than 90%: the formula
+is wrong for it (a factor for women only), however well the others agree. The variable, and the reason, which names
+the level.
+
+### def `_imputed_rows` (derived.py)
+
+- **Arguments**: `index: pd.Index, imputed: ComplexType, names: list[str]`
+
+- **Returns**: `np.ndarray`
+
+The rows where an imputation filled one of ``names`` (row ids per column, as the session keeps them).
+
+### def `check_derived` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, data: pd.DataFrame`
+
+- **Returns**: `DerivedCheck`
+
+The definition checked against ``data`` (the Enrich data, every row: nothing is filled here). ``imputed``: the
+cells an imputation filled (row ids per column), which are not compared: a value an exact formula filled agrees by
+construction, and would add to the evidence.
+
+It cannot be used when its formula cannot be read or computed, uses the variable it computes, uses other rows (a
+mean, a rank: its values are no row's own) or names a variable the data do not have. It cannot be checked on fewer
+than 60 rows with every variable recorded, or when the variable takes one value nearly everywhere (a fit by chance).
+Otherwise the formula gives the recorded value within the precision the variable is recorded with, or, failing
+that, within what rounding the formula's variables moves it: it agrees (99% of the rows at least, beyond chance),
+mostly agrees (90%), or disagrees, also when one level of a text or code variable disagrees (a factor wrong for
+women only).
+
+### def `inverse_definition` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, name: str`
+
+- **Returns**: `DerivedVariable`
+
+The inverse of ``definition`` that recovers ``name``, as a definition of its own (checked like one).
+
+### def `check_inverses` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, data: pd.DataFrame`
+
+- **Returns**: `dict[ComplexType]`
+
+Each inverse of the definition checked as a definition of its own (its variable, its formula): the tolerance
+declared for the definition is in its variable's unit, not theirs.
+
+### def `_decimals` (derived.py)
+
+- **Arguments**: `recorded: pd.Series, unit: float`
+
+- **Returns**: `ComplexType`
+
+The decimals a variable is written with: those of its recording unit (1 for 0.1, 0 for 1, -1 for 10); 0 for
+whole numbers (a score: its unit of 0 means no rounding slack, not full precision); None for a text or a variable
+recorded to full precision.
+
+### def `_exact` (derived.py)
+
+- **Arguments**: `check: DerivedCheck, recorded: pd.Series, unit: float`
+
+- **Returns**: `bool`
+
+The values count as observed when the data agree with the formula (an accepted definition only mostly agrees, or
+could not be checked: its values are estimates) and either the variable was computed from the recorded values (it
+agrees within its own rounding) or rounding its formula's variables moves it, in 95% of the rows, by at most the
+variable's own precision or 5% of its standard deviation: a height from a BMI to 0.1 and a weight to 0.1 kg moves
+by about 0.2 cm. A declared tolerance is never the variable's own rounding.
+
+### def `_unused` (derived.py)
+
+- **Arguments**: `check: DerivedCheck`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_fill` (derived.py)
+
+- **Arguments**: `frame: pd.DataFrame, fill: ExactFill, rows: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+One fill, as its step records it and the replay computes it (manage.reproduction_manager).
+
+### def `plan_exact_fills` (derived.py)
+
+- **Arguments**: `definitions: Sequence[DerivedVariable], data: pd.DataFrame, rows: ComplexType`
+
+- **Returns**: `FillPlan`
+
+The missing values the declared definitions compute in ``data``, within ``rows`` (the analysis population; every
+row when None): each formula, then its inverses, in the order the definitions depend on each other (a variable's
+exact formulas before its others), and again while a fill gives another formula a value. A definition fills when
+the data agree with it, or the user accepted it; an inverse when the data agree with it; a date never. A value is
+filled where every variable of its formula has a finite value, and a text or code variable takes a value the check
+saw in at least LEVEL_ROWS rows; it is rounded as the variable is written. It counts as observed when
+:func:`_exact` holds for its own formula and no variable of it was single-imputed in its row, as the session sorts
+imputed cells (core.session.sort_filled). ``imputed``: every imputed cell (left out of the checks); ``single``: the
+single-imputed ones (row ids per column). ``check`` and ``inverse_check`` give the checks (the page's, kept); by
+default they are computed here.
+
+### def `contradicted` (derived.py)
+
+- **Arguments**: `definition: DerivedVariable, check: DerivedCheck, frame: pd.DataFrame, imputed: Mapping[ComplexType]`
+
+- **Returns**: `int`
+
+The rows where the variable is recorded but a variable of its formula was imputed (``imputed``: row ids per
+column), and the formula of the imputed values no longer gives the recorded value within the check's tolerance: a
+recorded BMI beside an imputed height. An inverse of the definition would have recovered that variable exactly.
+
+### def `recomputed` (derived.py)
+
+- **Arguments**: `definitions: Sequence[DerivedVariable], check: Callable[ComplexType]`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+The definitions whose variable an imputation keeps out and computes afterwards from the imputed values: those
+:func:`plan_exact_fills` fills by their formula (usable, not a date, no text of too many values), in the order it
+fills them; none when definitions compute each other. One rule for setting aside and recomputing, so that no
+variable is kept out that nothing computes again.
+
+### def `derivation_steps` (derived.py)
+
+- **Arguments**: `definitions: Sequence[DerivedVariable], check: Callable[ComplexType], data: pd.DataFrame`
+
+- **Returns**: `list[dict[ComplexType]]`
+
+What a multiple imputation computes instead of imputing, as its step records it and the replay repeats it: each
+declared derived variable :func:`recomputed` keeps out that has missing values in ``data``, in fill order, with its
+formula and the variables it reads, the rounding of its recorded values, the values of a text or code variable its
+check saw when the data hold another, and its record (core.derived.record).
+
+### def `derive` (derived.py)
+
+- **Arguments**: `mi: Any, steps: Sequence[Mapping[ComplexType]]`
+
+- **Returns**: `tuple[ComplexType]`
+
+``mi`` (biostats.mi.MIData) with the missing values of each derived variable of ``steps`` (:func:`derivation_steps`,
+as recorded) computed in every completed dataset by its formula from the imputed values, in their order (a variable
+computed earlier is there for a later formula), rounded and limited as recorded; method "derived". A row whose
+formula gives no value in every imputation stays missing: they are returned, by variable.
+
+### def `_mismatched` (derived.py)
+
+- **Arguments**: `mi: Any, records: Sequence[Mapping[ComplexType]]`
+
+- **Returns**: `dict[ComplexType]`
+
+For each definition of ``records`` (core.derived.record), the rows where its variable is recorded but a variable of
+its formula was imputed, and the formula of the imputed values gives another value in at least one imputed dataset
+(beyond the check's tolerance): a recorded BMI beside an imputed height. An inverse filled exactly first avoids it.
+
+### def `impute_and_derive` (derived.py)
+
+- **Arguments**: `frame: pd.DataFrame, spec: Any, steps: Sequence[Mapping[ComplexType]]`
+
+- **Returns**: `Any`
+
+A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec) with declared derived variables
+(IMPUTE_THEN_DERIVE): each is left out of the chains, so neither imputed nor a predictor of any variable, then
+computed in every completed dataset from the imputed values (:func:`derive`). The imputation keeps how
+(``info["derived"]``: the approach, the steps, the values left missing and, for the definitions of ``watch``, the
+recorded values their imputed variables no longer match; or the records of ``declined`` definitions the user chose
+to impute instead), which the trace, a saved version, the diagnostics and the methods paragraph read. The page and
+the replay both run through here, so that they compute the same cells.
+
+### def `fill_steps` (derived.py)
+
+- **Arguments**: `plan: FillPlan, data: pd.DataFrame, rows: ComplexType, run: str`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+The plan as steps of the Enrich draft, one targeted imputation per fill: the table once filled (computed again
+here by the call the replay makes), the step's parameters and its description. The parameters hold what the replay
+repeats rather than decides again (the formula computed, whether the values count as observed, their rounding,
+the levels a fill is limited to) and, as a record only, the definition used (core.derived.record): the replay never
+reads the declared list.
+
+---
+
 ## external_data.py
 
 _No module description._
@@ -291,7 +627,27 @@ give days, and evaluates it through the whitelisted evaluator (``core.expression
 it as well, so a derived variable is recomputed exactly as it was created._
 
 **Imports**:
-`ast`, `datetime`, `logging`, `re`, `typing.Any`, `numpy`, `pandas`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.logging_config.single_line`
+`ast`, `datetime`, `logging`, `re`, `collections.abc.Iterable`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `core.expressions.DEFAULT_POLICY`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.logging_config.single_line`
+
+### class `FormulaReading` (formulas.py)
+
+What a formula uses, read as the evaluator reads it (:func:`read_formula`).
+
+### class `FormulaTrial` (formulas.py)
+
+A formula tried on the data as computing it would (an AI engine's suggestion, before it is offered).
+
+**Methods:**
+
+- **ok**(`self`) -> `bool`
+  > No description available.
+
+- **given**(`self`) -> `pd.Series`
+  > The rows that get a usable value (none when it cannot be computed).
+
+- **from_missing**(`self, data: pd.DataFrame, within: ComplexType`) -> `list[tuple[ComplexType]]`
+  > The inputs whose value is missing in rows that still get a value (a comparison or ``np.where`` sends a
+  > missing value to its "false" branch), with how many such rows, among ``within`` when it is given.
 
 ### def `validate_variable_name` (formulas.py)
 
@@ -319,34 +675,135 @@ token : str
 bool
     True if the token can be converted to a float, False otherwise.
 
+### def `_parsed` (formulas.py)
+
+- **Arguments**: `formula: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+The formula's tree, its ``""quoted""`` names by the placeholders that stand for them in the tree, or why it
+cannot be read.
+
+### def `_functions` (formulas.py)
+
+- **Arguments**: `tree: ast.Expression`
+
+- **Returns**: `set[int]`
+
+The ids of the Name nodes a formula calls (``round(x)``), as opposed to the variables it uses.
+
+### def `read_formula` (formulas.py)
+
+- **Arguments**: `formula: str`
+
+- **Returns**: `FormulaReading`
+
+The variables a formula uses: a name, or ``""a name""`` for a column with spaces or symbols. ``np`` and ``pd``,
+and the functions of the evaluator (``round``, ``abs``, ``min``... when called) are not variables; another function
+called by its bare name (``sqrt``) is refused with the hint ``np.sqrt``. The one reading of a formula: the
+evaluator, the AI engine's suggestions and their diagrams use it, so a diagram shows what computing it uses.
+
+### def `formula_from_model` (formulas.py)
+
+- **Arguments**: `formula: str`
+
+- **Returns**: `str`
+
+A formula written by a language model, in this application's notation: ``name =`` dropped when it starts the
+formula and names one of ``targets`` (the variable it computes: ``sex = 'F'`` stays refused, it is no formula),
+`` `a name` `` written ``""a name""``, and ``^`` (a power, as in mathematics) written ``**`` outside text literals
+(here ``^`` is a bitwise exclusive or, which gives wrong numbers silently).
+
+### def `_written_out` (formulas.py)
+
+- **Arguments**: `node: ast.AST`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_argument` (formulas.py)
+
+- **Arguments**: `call: ast.Call, position: int, keyword: str`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_across_columns` (formulas.py)
+
+- **Arguments**: `call: ast.Call`
+
+- **Returns**: `bool`
+
+``np.nanmean([a, b], axis=0)``: across the columns written in the list, row by row.
+
+### def `other_rows` (formulas.py)
+
+- **Arguments**: `formula: str, data: ComplexType`
+
+- **Returns**: `ComplexType`
+
+What makes ``formula`` use other rows than the row it computes, in words, or None when it gives each row a value of
+that row's own variables only, as an exact formula does (a weight from the BMI and the height). Other rows are used
+by an aggregate (a mean, a maximum, a quantile), a rank, a running or shifted value, a value taken from another row
+(``x[0]``) or a test against a column (``a.isin(b)``): the values are then estimates, and change with the rows the
+formula is computed on. Given the ``data``, so are dates kept as text, whose order of day and month the evaluator
+reads from the rows. A formula that cannot be read is not of each row's own values.
+
+### def `row_wise` (formulas.py)
+
+- **Arguments**: `formula: str, data: ComplexType`
+
+- **Returns**: `bool`
+
+Whether ``formula`` gives each row a value of that row's own variables only (:func:`other_rows`).
+
+### def `is_text_column` (formulas.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `bool`
+
+A column of text, neither numbers, yes/no values nor dates: it compares with text only.
+
+### def `usable_values` (formulas.py)
+
+- **Arguments**: `values: pd.Series`
+
+- **Returns**: `pd.Series`
+
+The rows with a usable value: not missing, and finite for numbers (``fillna`` would put an infinity in).
+
+### def `_absent_literals` (formulas.py)
+
+- **Arguments**: `formula: str, data: pd.DataFrame`
+
+- **Returns**: `list[str]`
+
+The texts a formula compares a text column with (``==``, ``!=``, ``.isin``) that occur in no row of it: the
+comparison then gives the same answer everywhere, which no error reveals.
+
+### def `try_formula` (formulas.py)
+
+- **Arguments**: `formula: str, data: pd.DataFrame`
+
+- **Returns**: `FormulaTrial`
+
+``formula`` computed on ``data`` by the evaluator of "Compute" and "Apply", or why it cannot be: a syntax the
+application does not read, ``^``, a name that is not a column, or a computation the data refuse (a column that
+holds text compared with a number, say: the text columns it uses are named, with values held by several rows).
+With a ``target`` that holds numbers (an imputation), a result that is not numbers is refused too: filling the
+column with yes/no values or text would change its type. Nothing is sent anywhere: the trial runs here.
+
 ### def `validate_and_extract_columns_ast` (formulas.py)
 
 - **Arguments**: `formula: str, dataset_columns: list`
 
 - **Returns**: `tuple[ComplexType]`
 
-Parses formula using Python AST to safely extract variables and constants
-regardless of spacing.
-
-### def `normalize_formula` (formulas.py)
-
-- **Arguments**: `formula: str, column_mapping: dict`
-
-- **Returns**: `str`
-
-Replace column names in the formula with normalized names (e.g., var_1, var_2).
-
-**Parameters**:
-
-formula : str
-    The computation formula to be normalized.
-column_mapping : dict
-    A mapping of original column names to normalized names.
-
-**Returns**:
-
-str
-    The formula with normalized column names.
+Reads the formula (:func:`read_formula`) and checks that every variable it uses is a column of the data: the
+variables it uses, or why it cannot be computed.
 
 ### def `extract_constant_value` (formulas.py)
 
@@ -356,28 +813,13 @@ str
 
 Extract the value from a constant token like constant(val1) -> val1
 
-### def `create_variables_dict` (formulas.py)
+### def `_names_in_literals` (formulas.py)
 
-- **Arguments**: `dataset: pd.DataFrame, identified_columns: list[str], constant_tokens: list[str]`
+- **Arguments**: `tree: ast.Expression, columns: list[str]`
 
-- **Returns**: `dict[ComplexType]`
+- **Returns**: `bool`
 
-Create a dictionary mapping variable names to their corresponding Series
-for both regular columns and constants.
-
-**Parameters**:
-
-dataset : pd.DataFrame
-    The input dataset
-identified_columns : List[str]
-    List of valid column names used in the formula
-constant_tokens : List[str]
-    List of constant tokens found in the formula
-
-**Returns**:
-
-Dict[str, pd.Series]:
-    Dictionary mapping variable names to their Series
+Whether a text literal of the formula holds one of its columns' names (the old renaming changed that text).
 
 ### def `evaluate_formula_safely` (formulas.py)
 
@@ -441,7 +883,7 @@ excluded patients neither inform nor receive imputed values; ``fill_with_formula
 imputation of one column. The replay engine calls the same functions._
 
 **Imports**:
-`logging`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `pandas`, `enrich.data_imputation`, `enrich.formulas.evaluate_formula_safely`
+`logging`, `collections.abc.Collection`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.data_imputation`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.formulas.usable_values`
 
 ### class `ImputationOutcome` (imputation_service.py)
 
@@ -506,15 +948,71 @@ Returns:
 Impute the missing values of ``rows`` (row ids; every row when None) with an imputer fitted on them.
 
 Rows outside ``rows`` are returned untouched. One-hot encoding, scaling and dropping remainder columns
-change the columns of the table; they are refused when only part of the rows is imputed.
+change the columns of the table; they are refused when only part of the rows is imputed. The ``set_aside``
+columns (declared derived variables, computed afterwards from the imputed values) are neither imputed nor used to
+impute the others: the imputer never sees them, and they come back as they were.
+
+### def `round_half_away` (imputation_service.py)
+
+- **Arguments**: `values: pd.Series, decimals: int`
+
+- **Returns**: `pd.Series`
+
+Rounded as records are (Excel, SAS, SPSS, Stata), half away from zero, not to the even neighbour as ``round`` does:
+2.5 gives 3. A value stored a hair below its written half (2.675 as 2.67499...) rounds as written.
 
 ### def `fill_with_formula` (imputation_service.py)
 
-- **Arguments**: `frame: pd.DataFrame, target: str, formula: str`
+- **Arguments**: `frame: pd.DataFrame, target: str, formula: str, rows: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
-Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled).
+Fill the missing values of ``target`` with a formula of the other columns; returns (table, filled). With ``rows``
+(the analysis population), the formula is computed on those rows only, so that an aggregate such as a mean sees no
+excluded patient, and fills them only: the excluded rows keep their missing values, as with the global imputation.
+With ``complete_inputs`` (an exact formula), only the rows where every variable of the formula has a value are
+filled: a comparison or ``np.where`` answers a missing value with its "false" branch, which is no exact value. With
+``finite_only``, an infinity (a division by zero) is no value either; a step recorded without it fills one, as it
+did. ``decimals`` rounds the filled values as the variable is recorded; ``levels`` fills only the rows whose text or
+code variables take one of these values (those a derived variable's check saw). The page and the replay both fill
+through here.
+
+### def `formula_inputs` (imputation_service.py)
+
+- **Arguments**: `formula: str, target: str, frame: pd.DataFrame`
+
+- **Returns**: `list[str]`
+
+The variables of ``formula`` other than ``target`` (``weight.fillna(...)`` names the variable it fills).
+
+### def `left_missing` (imputation_service.py)
+
+- **Arguments**: `frame: pd.DataFrame, target: str, formula: str, rows: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The missing values of ``target`` an exact formula leaves, because a variable of it has no value in the row, and
+those variables (counts and names only: the trace's description says them).
+
+### def `describe_imputation` (imputation_service.py)
+
+- **Arguments**: `numerical: str, categorical: str, n_rows: ComplexType, set_aside: Sequence[str]`
+
+- **Returns**: `str`
+
+The trace's description of a single imputation; ``n_rows``: the analysis population it was fitted on;
+``set_aside``: the derived variables kept out of it, to be computed from the imputed values.
+
+### def `describe_formula_fill` (imputation_service.py)
+
+- **Arguments**: `target: str, filled: int`
+
+- **Returns**: `str`
+
+The trace's description of a targeted imputation; ``n_rows``: the analysis population it was computed on;
+``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`);
+``derived_of``: the declared derived variable whose definition computed it (its own, or an inverse); ``single``:
+the values an exact formula computed from imputed ones, single-imputed as they are.
 
 ---
 

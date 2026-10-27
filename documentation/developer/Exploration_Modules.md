@@ -270,7 +270,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.population.family_masks`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_masks`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -287,7 +287,7 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 **Methods:**
 
-- **__init__**(`self, df: pd.DataFrame, config: ComplexType`) -> `None`
+- **__init__**(`self, df: pd.DataFrame, config: ComplexType, imputed: ComplexType`) -> `None`
   > No description available.
 
 - **compute_completeness**(`self`) -> `float`
@@ -358,6 +358,14 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 - **generate_advice**(`self`) -> `None`
   > Generates actionable advice based on metrics.
+
+- **derived_advice**(`self`) -> `ComplexType`
+  > The declared derived variables (Enrich > Handle Missing Data > Derived variables) against the data, every row:
+  > the recorded values their formula does not give, and the missing values it can compute ("computational
+  > conformance", Kahn et al. 2016). Variable names (as code: a name can come from an uploaded file), counts and the
+  > check's tolerance, never a row's value nor a check's reason (it can quote one); none when nothing is declared
+  > or there is nothing to say. Shown on screen only: an export would need the study package's disclosure rule
+  > (k = 5 for each count and difference).
 
 ### def `_details` (data_quality_auditor.py)
 

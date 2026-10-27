@@ -486,6 +486,10 @@ Categorizes columns into:
   > Args:
   >     df: pandas DataFrame to analyze
 
+- **from_profile**(`cls, df: pd.DataFrame, profile: DatasetProfile`) -> `DataAnalyzer`
+  > An analyzer of ``df`` from the profile of the same data, without analysing it again (M5b: the
+  > profile is kept until the data changes, AppState.analyzer).
+
 - **refresh**(`self, df: pd.DataFrame`) -> `None`
   > Refresh the column metadata based on the latest DataFrame state.
   >
@@ -534,11 +538,11 @@ This allows Docker deployments to use mounted volumes while keeping local develo
 Usage:
     from utils.data_paths import get_datasets_dir, get_vectors_dir
 
-Environment Variables:
+Settings (utils.settings):
     DATA_ROOT: Base directory for all data storage (default: "./data")_
 
 **Imports**:
-`os`
+`os`, `utils.settings.get_settings`
 
 ### def `get_data_root` (data_paths.py)
 
@@ -863,6 +867,16 @@ Functions for exporting DataFrames to various formats (Excel, etc.)_
 **Imports**:
 `re`, `io.BytesIO`, `typing.Any`, `pandas`
 
+### def `_excel_ready` (export_utils.py)
+
+- **Arguments**: `df: Any`
+
+- **Returns**: `Any`
+
+``df`` (a frame or a series) as a workbook can hold it: a date with a time zone is written as the time shown,
+since Excel holds no time zone (it refused the whole file). Columns are taken by position: a frame can repeat a
+name.
+
 ### def `to_excel` (export_utils.py)
 
 - **Arguments**: `df, index: bool, sheet_name: str`
@@ -1106,7 +1120,7 @@ Every record is written without API keys (:func:`redact_secrets`): a provider's 
 as Google does for a suspended key ("Consumer 'api_key:...' has been suspended")._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `re`
+`__future__.annotations`, `logging`, `re`, `utils.settings.get_settings`, `utils.settings.secret_values`
 
 ### class `RedactSecrets` (logging_config.py)
 
@@ -1124,7 +1138,8 @@ Rewrites each record without API keys, its traceback included.
 - **Returns**: `str`
 
 The text without API keys: the values of the configured secrets (variables named ``*API_KEY``,
-``*_SECRET`` or ``*_PASSWORD``), Google, OpenAI and Anthropic keys, and the value of an ``api_key: ...``,
+``*_SECRET`` or ``*_PASSWORD``, as set and without their surrounding spaces), Google, OpenAI and Anthropic keys,
+the credentials of an address (``http://user:password@host``), and the value of an ``api_key: ...``,
 ``x-api-key: ...`` or ``Authorization: ...`` field.
 
 ### def `single_line` (logging_config.py)
@@ -1605,6 +1620,161 @@ _The current user's storage scope, derived from the Streamlit session (None outs
 - **Returns**: `ComplexType`
 
 Scope of the signed-in user, or ``None`` when there is no Streamlit session or no user.
+
+---
+
+## settings.py
+
+_The application's settings: one validated object, read from the environment (M5b, step 3).
+
+Every setting the application reads is a field here, under the name of its environment variable, which does not
+change. ``load_settings()`` runs first in ``main.py`` and ``manage_users.py``: it loads ``.env`` into the environment
+(a variable already set wins), so that every part of the process sees the same values, the log redaction and the
+worker process of a parallel imputation included; then it validates every setting, and stops start-up with the name
+of each wrong one, never its value.
+
+``get_settings()`` returns the settings of the current environment. It validates again only when one of their
+variables has changed, so that a test that sets one sees it at once. Secrets are ``SecretStr``: printed, they show
+``**********``. ``core`` and ``biostats`` never read settings: they receive values as parameters._
+
+**Imports**:
+`__future__.annotations`, `logging`, `os`, `re`, `threading`, `dataclasses.dataclass`, `pathlib.Path`, `typing.Literal`, `urllib.parse.urlparse`, `pydantic.Field`, `pydantic.SecretStr`, `pydantic.ValidationError`, `pydantic.field_validator`, `pydantic_settings.BaseSettings`, `pydantic_settings.SettingsConfigDict`
+
+### class `SettingsError` (settings.py)
+
+Settings that cannot be used. The message names each wrong variable, never its value.
+
+### class `_Section` (settings.py)
+
+One group of settings, each field read from the environment variable named by its alias.
+
+**Methods:**
+
+- **_strip**(`cls, value: object, info`) -> `object`
+  > No description available.
+
+### class `_Names` (settings.py)
+
+A section whose engine and provider names are compared in lower case, as their readers did.
+
+**Methods:**
+
+- **_lower**(`cls, value: object, info`) -> `object`
+  > No description available.
+
+### class `PathsSection` (settings.py)
+
+No description available.
+
+### class `LoggingSection` (settings.py)
+
+No description available.
+
+**Methods:**
+
+- **_upper**(`cls, value: object`) -> `object`
+  > No description available.
+
+### class `IAMSection` (settings.py)
+
+No description available.
+
+### class `AISection` (settings.py)
+
+No description available.
+
+**Methods:**
+
+- **_address**(`cls, value: str`) -> `str`
+  > No description available.
+
+- **key**(`self, variable: ComplexType`) -> `ComplexType`
+  > The server's API key held by the setting ``variable`` (GOOGLE_API_KEY...: each AI provider declares its own,
+  > manage.rag.providers), or None; a setting that is not a key gives None.
+
+### class `VectorStoreSection` (settings.py)
+
+No description available.
+
+**Methods:**
+
+- **_address**(`cls, value: ComplexType`) -> `ComplexType`
+  > No description available.
+
+### class `GraphSection` (settings.py)
+
+No description available.
+
+### class `StatisticsSection` (settings.py)
+
+No description available.
+
+### class `DevelopmentSection` (settings.py)
+
+No description available.
+
+### class `Settings` (settings.py)
+
+No description available.
+
+### def `_no_credentials` (settings.py)
+
+- **Arguments**: `value: ComplexType`
+
+- **Returns**: `ComplexType`
+
+An address without a user name or password: it is shown to every user in Settings, and logged.
+
+### def `_validate` (settings.py)
+
+- **Arguments**: ``
+
+- **Returns**: `Settings`
+
+No description available.
+
+### def `get_settings` (settings.py)
+
+- **Arguments**: ``
+
+- **Returns**: `Settings`
+
+The settings of the current environment, validated again only when one of their variables has changed.
+
+### def `_unread_streamlit_files` (settings.py)
+
+- **Arguments**: `app_folder: ComplexType`
+
+- **Returns**: `list[str]`
+
+Where a Streamlit secrets file exists, named without its path (the path names the server's account).
+
+### def `load_settings` (settings.py)
+
+- **Arguments**: `env_file: ComplexType`
+
+- **Returns**: `Settings`
+
+Start-up: load ``env_file`` (a ``.env``) into the environment, once per process, a variable already set winning;
+warn, once, about a ``.streamlit/secrets.toml``, which is not read (the settings have one source); then validate
+every setting. Raises SettingsError naming each wrong variable, never its value.
+
+### def `secret_values` (settings.py)
+
+- **Arguments**: `min_length: int`
+
+- **Returns**: `list[str]`
+
+The values of the secret variables of the environment (names ending in API_KEY, _SECRET or _PASSWORD), for the
+log redaction: read as they are, never validated, so that a wrong setting cannot stop the redaction.
+
+### def `reset_settings` (settings.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Forget the settings and the .env files already loaded (tests).
 
 ---
 
