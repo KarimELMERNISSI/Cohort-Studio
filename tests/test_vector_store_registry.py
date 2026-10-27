@@ -1,7 +1,6 @@
 """The vector databases as a connector family (M5b): the registry keeps the connector contract, and reading it loads
 neither the engines nor the AI stack (it runs without the optional 'ai' group)."""
 
-import logging
 import sys
 from pathlib import Path
 
@@ -66,19 +65,19 @@ def test_the_engine_follows_the_session_the_preference_the_setting_then_the_reco
     assert stale.chosen == "lancedb" and "`chroma` is not offered here" in stale.warnings[0]
 
 
-def test_an_unknown_setting_counts_as_auto_until_start_up_refuses_it(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_an_unknown_setting_is_refused_without_its_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """It counted as auto; start-up stops on it first (manage.connectors)."""
     from manage.vectorstores import VectorStoreSettings
+    from utils.settings import SettingsError
 
     monkeypatch.setenv("CMP_VECTOR_STORE", " Qdrant ")
     monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant:6333")
     server = VectorStoreSettings.from_env()
     assert (server.engine, server.qdrant_url) == ("qdrant", "http://qdrant:6333")
     monkeypatch.setenv("CMP_VECTOR_STORE", "zz9-chroma")
-    with caplog.at_level(logging.WARNING, logger="manage.vectorstores.selection"):
-        assert VectorStoreSettings.from_env().engine == "auto"
-    assert "CMP_VECTOR_STORE is not a vector database" in caplog.text and "zz9" not in caplog.text
+    with pytest.raises(SettingsError, match="CMP_VECTOR_STORE is not a vector database") as refused:
+        VectorStoreSettings.from_env()
+    assert "zz9" not in str(refused.value)
 
 
 def test_each_engine_opens_its_own_index(tmp_path: Path) -> None:

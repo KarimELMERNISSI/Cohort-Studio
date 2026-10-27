@@ -324,12 +324,13 @@ environment (`tests/test_layering.py` checks every module, with a short list of 
 **When `.env` is read.** `main.py` and `manage_users.py` call `load_settings()` first: it loads the `.env` next to
 them (once per process; a variable already set in the environment wins, which is how Docker passes them), then
 validates every setting. A wrong one stops start-up with the variable's name and what is expected, never its value.
-The tests never read `.env`: `tests/conftest.py` turns `load_dotenv` into a no-op, and `tests/test_startup_config.py`
+`main.py` then checks the connector settings (`manage.connectors.check_connector_settings`, below). The tests never
+read `.env`: `tests/conftest.py` turns `load_dotenv` into a no-op, and `tests/test_startup_config.py`
 checks the loading in a subprocess. `st.secrets` is not read; a `.streamlit/secrets.toml` is logged at start-up.
 
-**API keys.** Cloud providers read the server's key from the settings (`get_settings().ai.api_key(provider)`:
-`GOOGLE_API_KEY`, `OPENAI_API_KEY`, `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). A key typed in Settings > AI engine is
-kept for the session only.
+**API keys.** Cloud providers read the server's key from the settings: `manage.rag.providers.server_key(provider)`
+reads `get_settings().ai.key(variable)` for the variable the provider declares (`GOOGLE_API_KEY`, `OPENAI_API_KEY`,
+`MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). A key typed in Settings > AI engine is kept for the session only.
 
 **Preferences.** The user's choices in Settings (the AI provider and models, the vector database, the graph engine,
 the day-first default) are kept for the next session in `<workspace>/preferences.json` (`manage/preferences.py`,
@@ -340,17 +341,24 @@ in each session); a choice the server no longer offers is not used, and the page
 it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on one
 `DATA_ROOT`: the last write wins).
 
-**Which connector is used.** The graph and vector-database families (`core/registry.py`
-`ConnectorRegistry.select`) take the session's choice, then the saved preference, then the server's setting
-(`CMP_GRAPH_RENDERER`, `CMP_VECTOR_STORE`), then `auto`; a name that cannot run here falls through, and the selection
-says why. The AI card starts from the running engine, then the saved provider, then the server's (`CMP_AI_PROVIDER`,
-`manage.rag.providers.default_provider`: Ollama at `OLLAMA_BASE_URL` by default; a setting set aside is logged with
-the reason). A cloud provider preselected so receives none of the user's data until the session confirms it, and an
-engine started without a provider uses its own: the server's until an engine has started with another.
+**Which connector is used.** The AI provider, the vector database and the graph engine are chosen with one control,
+`ui.components.connector_selector`, on the kit (`core/registry.py` `ConnectorRegistry.select`): the session's choice
+(for the AI provider, first the engine that runs), then the saved preference, then the server's setting
+(`CMP_AI_PROVIDER`, `CMP_VECTOR_STORE`, `CMP_GRAPH_RENDERER`), then `auto` (Ollama at `OLLAMA_BASE_URL`; the
+recommendation for this machine; Plotly, then Graphviz). It offers only what can run here, and a name that cannot run
+here falls through. On Settings it says why the connector used was chosen, which saved choice or setting was set
+aside, and what cannot run here with the group to install (`explain_choice`). A cloud provider preselected so
+receives none of the user's data until the session confirms it, and an engine started without a provider uses the
+server's (`manage.rag.providers.default_provider`).
 
-**An unknown identity provider stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
-`better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`), in any case. Any other value raises
-`IAMConfigurationError`, and the app shows it instead of starting with local accounts in place of the provider meant.
+**An unknown connector name stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
+`better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`); `CMP_AI_PROVIDER`, `CMP_VECTOR_STORE` and
+`CMP_GRAPH_RENDERER` accept `auto` and their registered names; all in any case, an empty value meaning the default.
+`main.py` checks the four right after loading the settings (`manage.connectors.check_connector_settings`, which asks
+each registry for its names only): any other value stops start-up with the variable and the valid names, never the
+value, instead of an identity provider or an engine other than the one meant. `manage_users.py` does not import that
+module (its lazy names lead to the AI packages: rule R5); there the identity manager refuses an unknown provider
+(`IAMConfigurationError`, printed as one line).
 The identity providers are a connector family chosen by this setting only (`manage.iam.providers.IAM_PROVIDERS`, no
 automatic choice, no user's choice): each declares its `name` and `display_name` and builds itself from the
 configuration (`from_config`), and is loaded when used. A custom provider is installed with `IAMManager.set_provider`.

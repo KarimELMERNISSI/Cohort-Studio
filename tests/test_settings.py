@@ -79,6 +79,14 @@ def test_every_wrong_value_is_named_without_its_value(env: pytest.MonkeyPatch) -
 def test_keys_are_hidden_when_printed(env: pytest.MonkeyPatch) -> None:
     env.setenv("GOOGLE_API_KEY", "AIza-planted-secret-value")
     env.setenv("CMP_ADMIN_PASSWORD", "planted-password-value")
+    # a connector's name can be a key pasted in the wrong variable: start-up refuses it, and it is never printed
+    for variable in (
+        "CMP_IAM_PROVIDER",
+        "CMP_AI_PROVIDER",
+        "CMP_VECTOR_STORE",
+        "CMP_GRAPH_RENDERER",
+    ):
+        env.setenv(variable, f"sk-planted-{variable.lower()}")
     s = cfg.get_settings()
     assert "planted" not in repr(s) and "planted" not in str(s)
     assert (

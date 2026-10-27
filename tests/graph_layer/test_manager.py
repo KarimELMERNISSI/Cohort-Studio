@@ -1,7 +1,5 @@
 """Renderer selection policy: offline Plotly by default, yFiles opt-in, safe fallbacks."""
 
-import logging
-
 import pytest
 
 from graph.base import BaseGraphRenderer, RendererCapabilities
@@ -66,21 +64,30 @@ def test_offline_an_internet_engine_is_refused_before_its_install_is_suggested(
     assert offline.availability("yfiles") == OFFLINE and OFFLINE.install_hint is None
 
 
-def test_environment_configuration(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    # until start-up refuses it (M5b), a name that is not an engine gives the automatic one, and the log never shows
-    # the value (it can be a pasted key or address)
-    monkeypatch.setenv("CMP_GRAPH_RENDERER", "zz9-nonsense")
+def test_environment_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CMP_GRAPH_RENDERER", "graphviz")
     monkeypatch.setenv("CMP_OFFLINE", "yes")
-    with caplog.at_level(logging.WARNING, logger="graph.manager"):
-        manager = GraphRendererManager()
-    assert manager.config.renderer == "auto" and manager.config.offline is True
-    assert "CMP_GRAPH_RENDERER is not a graph engine" in caplog.text and "zz9" not in caplog.text
+    manager = GraphRendererManager()
+    assert manager.config.renderer == "graphviz" and manager.config.offline is True
     monkeypatch.setenv("CMP_GRAPH_RENDERER", "Plotly")
     monkeypatch.delenv("CMP_OFFLINE")
     manager.reset_renderer()
     assert manager.config.renderer == "plotly" and manager.renderer.name == "plotly"
+
+
+def test_a_setting_that_names_no_engine_is_refused_without_its_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It gave the automatic engine; start-up stops on it first (manage.connectors). The value is never repeated:
+    it can be a pasted key or address."""
+    from utils.settings import SettingsError
+
+    monkeypatch.setenv("CMP_GRAPH_RENDERER", "zz9-nonsense")
+    with pytest.raises(
+        SettingsError, match="CMP_GRAPH_RENDERER is not a graph engine: use auto,"
+    ) as refused:
+        GraphRendererManager()
+    assert "zz9" not in str(refused.value)
 
 
 def test_the_choice_follows_the_session_the_preference_then_the_configuration() -> None:

@@ -90,16 +90,15 @@ def default_models(provider: str, embedding_provider: str | None = None) -> tupl
 
 
 def provider_setting(settings: Settings | None = None) -> str:
-    """CMP_AI_PROVIDER as the selection reads it: its value, or "auto" when it names no provider, which is logged with
-    the variable and the valid names, never the value (a mistyped value can be a pasted key). Start-up stops on it
-    from M5b's last step."""
-    from utils.settings import get_settings
+    """CMP_AI_PROVIDER as the selection reads it ("auto" when unset). A value that names no provider raises
+    SettingsError with the variable and the valid names, never the value (a mistyped value can be a pasted key);
+    start-up stops on it first (manage.connectors)."""
+    from utils.settings import SettingsError, get_settings
 
     value = (settings or get_settings()).ai.provider
     problem = AI_PROVIDERS.setting_problem(value)
     if problem:
-        logger.warning("%s; the local default is used", problem)
-        return "auto"
+        raise SettingsError(f"{problem}.")
     return value or "auto"
 
 

@@ -118,3 +118,117 @@ def test_an_empty_setting_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CMP_IAM_CACHE_TTL", "")
     config = IAMManager._resolve_config_from_env()
     assert config.provider_type == IAMProviderType.LOCAL and config.session_cache_ttl_seconds == 300
+
+
+def _page_text(node) -> str:
+    """Everything an AppTest element or block holds, its children included."""
+    return str(getattr(node, "proto", "")) + "".join(
+        _page_text(child) for child in getattr(node, "children", {}).values()
+    )
+
+
+def test_a_connector_setting_that_names_nothing_stops_the_app(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unknown graph engine or vector database counted as auto (M5b step 4). Start-up now stops and lists the
+    valid names, never the value (a mistyped value can be a pasted key or address), on the page and in the log."""
+    from streamlit.testing.v1 import AppTest
+
+    from utils.settings import reset_settings
+
+    monkeypatch.setenv("CMP_IAM_PROVIDER", "https://admin:zz9@sso.example.org")
+    monkeypatch.setenv("CMP_GRAPH_RENDERER", "plotlyy-zz9")
+    monkeypatch.setenv("CMP_VECTOR_STORE", "chroma-zz9")
+    monkeypatch.setenv("CMP_AI_PROVIDER", "sk-zz9-pasted-key")
+    reset_settings()
+    at = AppTest.from_file(str(ROOT / "main.py"), default_timeout=120).run()
+    assert not at.exception and len(at.error) == 1
+    shown = at.error[0].value
+    assert "cannot start" in shown and "name nothing this version offers" in shown
+    variables = ("CMP_IAM_PROVIDER", "CMP_AI_PROVIDER", "CMP_VECTOR_STORE", "CMP_GRAPH_RENDERER")
+    assert all(name in shown for name in variables)
+    assert all(name in shown for name in ("local", "ollama", "lancedb", "plotly"))  # what to write instead
+    page = _page_text(at.main) + _page_text(at.sidebar)
+    assert "cannot start" in page and "zz9" not in page  # every element read, none holds the value
+    assert not at.text_input  # no sign-in form
+    logged = capsys.readouterr().err  # the server log, where the page is not seen
+    assert "cannot start" in logged and "CMP_GRAPH_RENDERER" in logged and "zz9" not in logged
+    reset_settings()
+
+
+def test_the_command_line_names_an_unknown_identity_provider_without_its_value(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    app.mkdir()
+    shutil.copy(ROOT / "manage_users.py", app / "manage_users.py")  # no .env next to it: the developer's is not read
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(ROOT),
+        "CMP_IAM_PROVIDER": "sk-zz9-pasted-key",
+        "DATA_ROOT": str(tmp_path / "data"),
+    }
+    out = subprocess.run(
+        [sys.executable, str(app / "manage_users.py"), "list"],
+        capture_output=True, text=True, env=env, cwd=tmp_path, timeout=300,
+    )
+    assert out.returncode != 0
+    assert out.stderr.startswith("Error: ") and "CMP_IAM_PROVIDER" in out.stderr
+    assert "zz9" not in out.stderr + out.stdout and "Traceback" not in out.stderr
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("CMP_GRAPH_RENDERER", " PLOTLY "),
+        ("CMP_GRAPH_RENDERER", "Auto"),
+        ("CMP_VECTOR_STORE", "Qdrant"),
+        ("CMP_AI_PROVIDER", "Anthropic"),
+        ("CMP_IAM_PROVIDER", "Better-Auth"),  # an alias
+        ("CMP_IAM_PROVIDER", "off"),
+        ("CMP_AI_PROVIDER", ""),  # unset
+    ],
+)
+def test_every_accepted_spelling_passes(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str
+) -> None:
+    from manage.connectors import check_connector_settings, connector_setting_problems
+    from utils.settings import get_settings
+
+    monkeypatch.setenv(variable, value)
+    settings = get_settings()
+    assert connector_setting_problems(settings) == [] and check_connector_settings(settings) is settings
+
+
+@pytest.mark.parametrize(
+    ("variable", "message"),
+    [
+        ("CMP_IAM_PROVIDER", "CMP_IAM_PROVIDER is not an identity provider: use local, better_auth or disabled"),
+        ("CMP_AI_PROVIDER", "CMP_AI_PROVIDER is not an AI provider: use auto, ollama, gemini, openai, mistral or anthropic"),
+        ("CMP_VECTOR_STORE", "CMP_VECTOR_STORE is not a vector database: use auto, lancedb or qdrant"),
+        ("CMP_GRAPH_RENDERER", "CMP_GRAPH_RENDERER is not a graph engine: use auto, plotly, yfiles or graphviz"),
+    ],
+)
+def test_each_wrong_connector_setting_is_named_with_the_valid_names(
+    monkeypatch: pytest.MonkeyPatch, variable: str, message: str
+) -> None:
+    from manage.connectors import check_connector_settings
+    from utils.settings import SettingsError, get_settings
+
+    monkeypatch.setenv(variable, "https://user:zz9@example.org")  # an address pasted in the wrong variable
+    with pytest.raises(SettingsError) as refused:
+        check_connector_settings(get_settings())
+    assert str(refused.value) == f"These settings name nothing this version offers: {message}."
+
+
+def test_the_check_imports_no_connector_library(tmp_path: Path) -> None:
+    """It asks the registries for their names: main.py runs it before anything else, on every install."""
+    probe = (
+        "import sys, manage.connectors; "
+        "print(sorted(m for m in ('streamlit', 'langchain_core', 'lancedb', 'qdrant_client', 'google.genai', "
+        "'anthropic', 'openai', 'duckdb', 'bcrypt', 'requests', 'plotly', 'networkx', 'graphviz', "
+        "'yfiles_graphs_for_streamlit') if m in sys.modules))"
+    )
+    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, env=env, cwd=tmp_path, check=True, timeout=300
+    )
+    assert out.stdout.strip() == "[]"

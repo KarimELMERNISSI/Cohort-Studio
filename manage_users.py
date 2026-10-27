@@ -29,7 +29,7 @@ try:
 except SettingsError as exc:
     sys.exit(f"Error: {exc}")
 
-from manage.iam import UserRole, get_iam_manager
+from manage.iam import IAMConfigurationError, UserRole, get_iam_manager
 from manage.iam.authz import validate_password, validate_username
 
 
@@ -146,7 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except IAMConfigurationError as exc:  # an unknown CMP_IAM_PROVIDER: the valid names, never the value
+        _fail(str(exc))
 
 
 if __name__ == "__main__":

@@ -99,8 +99,9 @@ def test_the_readers_go_through_the_registry(monkeypatch: pytest.MonkeyPatch) ->
 def test_the_server_s_provider_is_a_preselection(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """CMP_AI_PROVIDER: local Ollama by default; a provider named in any case; a value that names none, or a provider
-    that cannot run here, gives the local default and says why, never with the value (a pasted key?)."""
+    """CMP_AI_PROVIDER: local Ollama by default; a provider named in any case; a value that names none is refused
+    (start-up stops on it first), and a provider that cannot run here gives the local default and says why, never
+    with the value (a pasted key?)."""
     import logging
 
     from manage.rag.providers import default_provider, provider_setting, select_provider
@@ -119,9 +120,9 @@ def test_the_server_s_provider_is_a_preselection(
     server(" Mistral ")
     assert provider_setting() == "mistral"
     server("sk-pasted-by-mistake")
-    with caplog.at_level(logging.WARNING):
-        assert provider_setting() == "auto"
-    assert "CMP_AI_PROVIDER is not an AI provider" in caplog.text and "sk-pasted" not in caplog.text
+    with pytest.raises(cfg.SettingsError, match="CMP_AI_PROVIDER is not an AI provider") as refused:
+        provider_setting()
+    assert "sk-pasted" not in str(refused.value)
     # the choice, every provider able to run (the minimal install has none)
     monkeypatch.setattr(AI_PROVIDERS, "availability", lambda name: Availability(True))
     server(None)

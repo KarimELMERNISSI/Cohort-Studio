@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from core.registry import AUTO, Availability, Selection
 from graph.base import BaseGraphRenderer
 from graph.renderers import GRAPH_RENDERERS, OFFLINE_DEFAULT
-from utils.settings import Settings, get_settings
+from utils.settings import Settings, SettingsError, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +67,10 @@ class GraphRendererManager:
         """The renderer's configuration (utils.settings; the current settings by default)."""
         graph = (settings or get_settings()).graph
         problem = GRAPH_RENDERERS.setting_problem(graph.renderer)
-        if problem:  # never the value: it can be a pasted key or address
-            logger.warning("%s; the automatic engine is used", problem)
+        if problem:  # start-up stops on it first (manage.connectors); never the value: it can be a pasted key
+            raise SettingsError(f"{problem}.")
         return GraphConfig(
-            renderer=AUTO if problem else graph.renderer or AUTO,
+            renderer=graph.renderer or AUTO,
             offline=graph.offline,
             fallback_on_error=not graph.no_fallback,
         )

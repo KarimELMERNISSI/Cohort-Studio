@@ -77,8 +77,9 @@ trace. Selection uses `st.plotly_chart(on_select="rerun")`.
 The choice is the session's selector, then the user's saved preference, then `CMP_GRAPH_RENDERER`,
 then the automatic order (Plotly, then Graphviz); "automatic" at a level leaves the choice to the
 next one. A choice that cannot draw here falls through to the next one. Settings names a saved engine
-that cannot draw here and the engine used instead; a server setting that cannot draw is written to
-the log (one that names no engine with the valid names, never its value).
+or a server setting that cannot draw here, and the engine used instead. A `CMP_GRAPH_RENDERER` that
+names no engine stops start-up (`manage.connectors.check_connector_settings`), with the variable and
+the valid names, never its value.
 
 yFiles is distributed under the yWorks *yFiles Streamlit Component Free License*: it loads its
 runtime from yworks.com at render time (internet required), reports anonymised graph-structure

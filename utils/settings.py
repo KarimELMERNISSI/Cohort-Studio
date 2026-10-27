@@ -79,8 +79,9 @@ class LoggingSection(_Section):
 
 
 class IAMSection(_Names):
-    # the provider's name is checked by manage.iam (an unknown one stops start-up)
-    provider: str = Field("local", validation_alias="CMP_IAM_PROVIDER")
+    # an unknown provider stops start-up (manage.connectors, manage.iam). Not printed: a mistyped value can be a
+    # pasted key, which the log redaction does not know (so for every connector's name)
+    provider: str = Field("local", validation_alias="CMP_IAM_PROVIDER", repr=False)
     better_auth_url: str = Field(
         "http://localhost:3000/api/auth", validation_alias="CMP_BETTER_AUTH_URL"
     )
@@ -132,7 +133,7 @@ class AISection(_Names):
 
 
 class VectorStoreSection(_Names):
-    engine: str = Field("auto", validation_alias="CMP_VECTOR_STORE")
+    engine: str = Field("auto", validation_alias="CMP_VECTOR_STORE", repr=False)
     qdrant_url: str | None = Field(None, validation_alias="CMP_QDRANT_URL")
     qdrant_api_key: SecretStr | None = Field(None, validation_alias="CMP_QDRANT_API_KEY")
 
@@ -143,7 +144,7 @@ class VectorStoreSection(_Names):
 
 
 class GraphSection(_Names):
-    renderer: str = Field("auto", validation_alias="CMP_GRAPH_RENDERER")
+    renderer: str = Field("auto", validation_alias="CMP_GRAPH_RENDERER", repr=False)
     offline: bool = Field(False, validation_alias="CMP_OFFLINE")
     no_fallback: bool = Field(False, validation_alias="CMP_GRAPH_NO_FALLBACK")
 

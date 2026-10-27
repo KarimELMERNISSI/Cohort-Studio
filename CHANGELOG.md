@@ -199,7 +199,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Smaller leaks closed.**
   - Listing a cloud provider's models could send the typed key to the Ollama address of an earlier engine.
   - Google Gemini's graph extraction uploads the PDF file itself. The notice now says so, and Google is asked to
-    delete the file even when the extraction fails.
+    delete the file however the extraction ends, also when the upload fails after Google stored it. The upload no
+    longer carries the file's name: the app sends it from an open file under a name it chooses (the PDF's own
+    details, such as its title and author, travel with the file). A PDF that Google is still processing after five
+    minutes is left out of the graph (the extraction waited without limit).
+  - The notice says what Document insight sends the other providers: the text of the first 30 pages of each PDF
+    whose graph is extracted, 35,000 characters at most, indexed or not. It said "the text of indexed PDFs".
   - With Claude, the graph extraction uploaded each PDF to Anthropic (whose client has a files API too) and left it
     there. The file API is now used with Gemini only; the other providers receive the document's text.
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own
@@ -457,6 +462,73 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   from the defaults. API keys, the confirmation that data may leave the server and the addresses of an Ollama or
   Qdrant server (they decide where the data go) are never saved: a cloud provider kept from the last session starts
   nothing until you confirm again. A saved choice the server no longer offers is not used, and the page names it.
+
+### Connectors: the AI providers, vector databases, graph engines and identity providers share one shape (M5b)
+
+- **An unknown graph engine or vector database stops start-up**, as an unknown `CMP_IAM_PROVIDER` (see
+  "Configuration and identity") and the new `CMP_AI_PROVIDER` do: a `CMP_GRAPH_RENDERER` or `CMP_VECTOR_STORE` this
+  version does not offer stops start-up with the variable and the valid names, never the value (a mistyped value can
+  be a pasted key or address). Names are read in any case, with the spellings already accepted, and an empty value
+  means the default.
+  - Before, an unknown vector database counted as `auto` without a word, and an unknown graph engine as `auto` with
+    its value written to the server log: if you ever set one wrongly, look in older logs for a key pasted by mistake.
+  - **Check your `.env` when you update.** The server itself still starts, and Docker's health check stays green: the
+    application shows the message instead of the sign-in page, and writes it to the server log (`docker compose
+    logs`) when a page is opened.
+- **New setting `CMP_AI_PROVIDER`** (`auto` by default, meaning Ollama at `OLLAMA_BASE_URL`; or `ollama`, `gemini`,
+  `openai`, `mistral`, `anthropic`): the AI provider Settings preselects for a user who chose none. The user's own
+  choice wins. A cloud provider named there receives none of the user's data until the session confirms it. An engine
+  started without a provider now uses the server's, with the models that provider declares first (it was Google
+  Gemini, a cloud provider nobody chose).
+- **One choice control in Settings** for the AI provider, the vector database and the graph engine.
+  - It offers only what can run on this server, and says which one is used and why: your choice for this session,
+    your saved choice, the server's setting, the default, or the recommendation for this machine.
+  - It names a saved choice or a server setting that was set aside, until you choose again, and lists what cannot
+    run here with the reason and the group to install.
+  - An AI provider whose library is not installed is no longer offered (it was, and failed when the engine started).
+  - The vector database control can no longer be emptied.
+  - The graph engine's first option names the engine it gives: "Automatic: Plotly (offline)", or "Server default:
+    <engine>" when `CMP_GRAPH_RENDERER` names one (it said "offline first" even when the server's yFiles drew).
+- **A choice that cannot run here gives way to the next one, and the page says why**: the session's choice, then the
+  saved one, the server's setting, the recommendation for this machine, then the default order. "Automatic" at any
+  level leaves the choice to the next one, so the session's "automatic" is the server's default. A saved name matches
+  in any case; a name shown in a notice drops control and invisible characters and is cut at 64 characters.
+- **Graph engines.**
+  - The availability checks no longer import Plotly, NetworkX or yFiles: a broken install is listed, and fails only
+    when drawing. A yFiles 2.x that lacks part of the API is now offered; drawing with it shows an error, then falls
+    back to Plotly (with `CMP_GRAPH_NO_FALLBACK`, only the error). Before, it was listed as unavailable.
+  - Offline (`CMP_OFFLINE=1`), an engine that needs internet access is reported as disabled by the offline mode, not
+    as one to install.
+  - After a failed drawing the fallback is Plotly only, and the notice names it. The licence caption names the engine
+    that drew: it showed yFiles' usage-data notice under a graph that Plotly drew.
+  - A drawing error is shown as code and cut. The server log gets the engine and the type of error only (a library's
+    message can quote the graph's labels), with the details at the debug level.
+- **Vector databases.** The server's setting and the machine's recommendation are used only when their engine can run
+  here; otherwise the next one is used, and the card says why. A saved engine this version does not offer is named
+  as "not offered here". When no engine can run, initialising the engine says so, with the reasons and the install
+  command.
+- **AI providers.**
+  - The providers are declared in one place, each with its chat and embedding models, its key and whether it is a
+    cloud provider; Settings and the engine read it. The default models are worked out in one place: Claude's engine
+    no longer gives Ollama Gemini's embedding model, and a custom endpoint's index names its model.
+  - Document insight names each PDF left out of the graph, with the reason. When none gives a graph, it says why,
+    instead of showing an empty one and saying the graph was merged from every document.
+  - The key field of Gemini and Claude says that a typed key asks the provider which models it may use: the key is
+    sent, none of your data. The Start page's AI card no longer promises Ollama on this machine.
+- **Identity providers** are a connector family too, still chosen by `CMP_IAM_PROVIDER` only. Importing the identity
+  package no longer loads DuckDB, bcrypt or requests.
+- **For developers.** `core/registry.py` holds the connector kit: `ConnectorRegistry`, `Selection` and `Availability`.
+  - A family is a `Base*` class with `name`, `display_name` and `availability()`, registered lazily as
+    `"module:Class"`, with one contract test per family (`tests/connector_contract.py`).
+  - `ui.components.connector_selector` is the one choice control, and `manage.connectors.check_connector_settings`
+    the start-up check.
+  - Moved: `graph.ui` and `graph.legend` are now `ui.graph_view` and `ui.graph_legend`.
+  - Removed: `GraphRendererType` (`GraphConfig.renderer` is a checked name), the graph manager's `registry()` and
+    `available_renderers()` (the registry `GRAPH_RENDERERS` and `availability()`), and
+    `manage.vectorstores.ENGINE_TITLES`, `ENGINE_SUMMARIES` and `resolve_engine` (`VECTOR_STORES.display_name`, each
+    engine's `summary`, `select_engine`).
+  - `ConnectorFactory.create_connectors` raises `ValueError` on an unknown provider; it built Gemini's connectors.
+  - A renderer's `capabilities` is a class attribute, and `availability()` returns an `Availability`.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

@@ -14,7 +14,6 @@ Choosing and opening a vector database for the user's machine and needs.
 from __future__ import annotations
 
 import ctypes
-import logging
 import os
 import platform
 import shutil
@@ -24,12 +23,10 @@ from pathlib import Path
 
 from core.registry import AUTO, Selection
 from manage.vectorstores import VECTOR_STORES
-from utils.settings import Settings, get_settings
+from utils.settings import Settings, SettingsError, get_settings
 
 from .base import BaseVectorIndex, VectorEngine, VectorStoreError
 from .lancedb_index import ANN_THRESHOLD
-
-logger = logging.getLogger(__name__)
 
 EMBEDDED_QDRANT_LIMIT = (
     20_000  # chunks: local mode keeps every vector in memory, brute-force search
@@ -52,10 +49,8 @@ class VectorStoreSettings:
         section = (settings or get_settings()).vector_store
         engine = section.engine or AUTO
         problem = VECTOR_STORES.setting_problem(engine)
-        # start-up stops on it from M5b's last step; the log names the variable, never the value (a pasted key?)
-        if problem:
-            logger.warning("%s; the recommended engine is used", problem)
-            engine = AUTO
+        if problem:  # start-up stops on it first (manage.connectors); never the value: it can be a pasted key
+            raise SettingsError(f"{problem}.")
         key = section.qdrant_api_key
         return cls(
             engine=engine,

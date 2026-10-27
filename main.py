@@ -7,14 +7,17 @@ from utils.settings import SettingsError, load_settings
 # .env first, then every setting validated, before any module reads the configuration (identity provider, data
 # folder, logging, AI keys); a variable already set in the environment wins, which is how Docker passes them
 try:
-    load_settings(Path(__file__).with_name(".env"))
+    settings = load_settings(Path(__file__).with_name(".env"))
+    from manage.connectors import check_connector_settings  # reads no setting when imported
+
+    check_connector_settings(settings)  # each CMP_* connector setting names a connector of this version
 except SettingsError as exc:  # stopped before a module reads the wrong value; the message never shows a value
     import sys
 
     import streamlit as st
 
     # .env is read once per server process: a correction applies after a restart
-    message = f"CohortStudio cannot start: {exc} Correct it in the environment or .env, then restart the application."
+    message = f"CohortStudio cannot start: {exc} Correct the environment or .env, then restart the application."
     print(message, file=sys.stderr)  # the server log (docker compose logs), where the page is not seen
     st.error(message, icon=":material/gpp_bad:")
     st.stop()
