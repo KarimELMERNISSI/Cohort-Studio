@@ -35,6 +35,8 @@ from core.criteria import (
     shared_definition,
 )
 from core.derived import CONFIG_KEY as DERIVED_KEY
+from core.derived import KINDS as DERIVED_KINDS
+from core.derived import ORIGINS as DERIVED_ORIGINS
 from core.derived import DerivedVariable
 from core.derived import shape_problems as derived_shape_problems
 from core.fingerprint import ids_fingerprint, ids_to_ranges
@@ -269,6 +271,17 @@ def _shared_derived(target: str, definition: Any) -> dict[str, Any] | None:
     return shared
 
 
+def _derived_trimmed(definition: Mapping[str, Any]) -> bool:
+    """Whether a derived variable is shared without something it holds besides its note: a key core.derived does not
+    read, or a kind or an origin it does not know (read as none)."""
+    known = ("formula", "inverses", "kind", "origin", "note", "tolerance", "accepted")
+    return (
+        bool(set(definition) - set(known))
+        or definition.get("kind") not in (None, *DERIVED_KINDS)
+        or definition.get("origin") not in (None, *DERIVED_ORIGINS)
+    )
+
+
 def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfiguration:
     """
     A copy of the configuration to share with someone else, and what it leaves out.
@@ -314,6 +327,8 @@ def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfigu
             kept_derived[target] = rebuilt
             if definition.get("note"):
                 left["notes"].append(str(target))
+            if _derived_trimmed(definition):
+                left["trimmed"].append(f"{DERIVED_KEY}: {target}")
         shared[DERIVED_KEY] = kept_derived
     settings = tuple(
         str(key)

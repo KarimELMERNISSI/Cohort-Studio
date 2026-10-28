@@ -336,23 +336,27 @@ METHOD_WORDS: dict[str, Callable[[Mapping[str, Any]], str]] = {
 _UNIVARIATE = ("zscore", "iqr", "quantile")  # a value of any one column flags the row
 
 
-def _listed(columns: list[str], univariate: bool) -> str:
-    """The columns a method flagged rows on: one of them is enough for a univariate method, all together otherwise."""
+def _listed(columns: list[str], method: str) -> str:
+    """
+    The columns a method flagged rows on: one of them is enough for a univariate method, a multivariate one reads them
+    together, and of a method this version does not know, nothing is said but the columns.
+    """
     if len(columns) == 1:
         return columns[0]
-    if univariate:
+    if method in _UNIVARIATE:
         return f"any of {', '.join(columns)}"
-    return f"{', '.join(columns[:-1])} and {columns[-1]} together"
+    if method in METHOD_WORDS:
+        return f"{', '.join(columns[:-1])} and {columns[-1]} together"
+    return ", ".join(columns)
 
 
 def _row_ids_text(name: str, definition: Mapping[str, Any]) -> str:
     # the univariate outlier rules are frozen as rows too: how the rows were flagged, and on which columns
     ranges = definition.get("row_ids") or []
     n = sum(int(b) - int(a) + 1 for a, b in ranges if int(a) <= int(b))  # a reversed range: none
-    if n <= 1:
-        rows = "the 1 listed row" if n else "no listed row"
-    else:
-        rows = f"one of the {n:,} listed rows"  # the criterion: "excluded when one of the 5 listed rows"
+    if n == 0:  # "excluded when no listed row" read as "excluded when not listed"
+        return "never met (no listed row)"
+    rows = "the 1 listed row" if n == 1 else f"one of the {n:,} listed rows"
     method = definition.get("method")
     if not method:
         return rows
@@ -368,7 +372,7 @@ def _row_ids_text(name: str, definition: Mapping[str, Any]) -> str:
         [c for c in recorded if isinstance(c, str)] if isinstance(recorded, (list, tuple)) else []
     )
     if columns:
-        how += f" on {_listed(columns, str(method) in _UNIVARIATE)}"
+        how += f" on {_listed(columns, str(method))}"
     return f"{rows} (flagged {how})"
 
 
@@ -749,11 +753,14 @@ def shared_definition(name: str, definition: Any) -> dict[str, Any] | None:
     """
     A rule as a configuration shared with someone else holds it: the keys its kind holds and no other, each only with
     a value its kind reads there (a loaded file can hold anything, row ids too), and the rules it combines likewise.
-    None, and the rule is left out whole, when it lists rows of this dataset (holds_row_list), cannot be read, or holds
-    another value under one of its keys.
+    None, and the rule is left out whole, when it lists rows of this dataset (holds_row_list), cannot be read, holds
+    another value under one of its keys, or fails the checks of a loaded file (criterion_problems: a bound written
+    "row 4512" is a text, as "18" is): the copy never relies on those checks having run.
     """
     try:
-        return None if holds_row_list(definition) else _shared(name, definition)
+        if holds_row_list(definition) or criterion_problems(name, definition):
+            return None
+        return _shared(name, definition)
     except Exception:  # cannot be read, nested past reach, or a kind's own function failed
         return None
 

@@ -423,7 +423,7 @@ def test_a_row_list_never_reaches_a_shared_rule() -> None:
 
 def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rules nested twenty deep are each read once when looking for a row list (walking the members twice doubled
-    the work at each level of a loaded file), and once more to share them."""
+    the work at each level of a loaded file), and once in each pass of sharing them."""
     import core.criteria as criteria
 
     calls: list[str] = []
@@ -439,7 +439,7 @@ def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.Monke
         rule = {"threshold": 1, "members": {"inner": rule}}
     assert not holds_row_list(rule) and len(calls) == 21
     calls.clear()
-    assert shared_definition("deep", rule) == rule and len(calls) == 42
+    assert shared_definition("deep", rule) == rule and len(calls) == 63  # row lists, checks, copy
 
 
 def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(

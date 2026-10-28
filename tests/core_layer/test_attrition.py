@@ -205,7 +205,13 @@ EXPRESSION_X = {"expression": "df['x'] > 1"}
         ),
         # a reversed range lists no row, as the mask reads it
         ({"row_ids": [[2, 4], [9, 5]]}, "one of the 3 listed rows"),
-        ({"row_ids": [[5, 2]]}, "no listed row"),
+        # none listed: never met ("excluded when no listed row" read as "excluded when not listed")
+        ({"row_ids": [[5, 2]]}, "never met (no listed row)"),
+        # of a method this version does not know, nothing is said but its columns
+        (
+            {"row_ids": [[2, 4]], "method": "Dr Smith's review", "columns": ["x", "y"]},
+            "one of the 3 listed rows (flagged by an unrecognised method on x, y)",
+        ),
         # only the names of columns: a loaded file can list anything there
         (
             {"row_ids": [[2, 4]], "method": "zscore", "columns": [73196451, "sbp"]},
@@ -277,6 +283,9 @@ def test_a_criterion_says_what_it_does() -> None:
     assert criterion_line("age", EXCLUSION, adult) == "age: excluded when age >= 18"
     assert criterion_line("age", "", adult) == "age: age >= 18"  # a role that was not recorded
     assert criterion_line("frozen", EXCLUSION, {"bounds": {}}) == "frozen: never met (no bound)"
+    assert (
+        criterion_line("listed", INCLUSION, {"row_ids": []}) == "listed: never met (no listed row)"
+    )
     assert criterion_line("age", INCLUSION, {"numeric": True}).startswith(
         "age: cannot be evaluated"
     )

@@ -138,6 +138,20 @@ def test_a_configuration_for_sharing_lists_no_row() -> None:
             "odd_values": {
                 "operator": "any",
                 "flag as a number": {"numeric": SENTINEL_ID, "column": "age", "lower_bound": 18},
+                # texts where a number or a strategy is read: loaded, these fail its checks
+                "bound in words": {
+                    "numeric": True,
+                    "column": "age",
+                    "lower_bound": f"row {SENTINEL_ID}",
+                },
+                "strategy in words": {
+                    "numeric": True,
+                    "column": "age",
+                    "lower_bound": 18,
+                    "strategy": f"row {SENTINEL_ID}",
+                },
+                "bounds in words": {"bounds": {"age": [f"row {SENTINEL_ID}", None]}},
+                "threshold in words": {"threshold": f"row {SENTINEL_ID}", "members": {"old": old}},
                 "high": {"expression": "df['sbp'] > 180"},
             },
             "odd_operator": {"operator": {"threshold": [SENTINEL_ID]}, "old": old},
@@ -182,10 +196,19 @@ def test_a_configuration_for_sharing_lists_no_row() -> None:
     assert shared.families == ("warning_signs",)
     assert shared.unreadable == (
         "odd_values: flag as a number",
+        "odd_values: bound in words",
+        "odd_values: strategy in words",
+        "odd_values: bounds in words",
+        "odd_values: threshold in words",
         "odd_operator",
         "derived_variables: odd",
     )
-    assert shared.trimmed == ("hand_written: old", "hand_written: the operator")
+    # the derived variable "bmi" is shared without the kind and origin it cannot be read with
+    assert shared.trimmed == (
+        "hand_written: old",
+        "hand_written: the operator",
+        "derived_variables: bmi",
+    )
     assert configuration_problems(shared.config) == []  # the file loads
     assert str(SENTINEL_ID) in json.dumps(config)  # the session's configuration is unchanged
 

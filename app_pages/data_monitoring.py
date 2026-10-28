@@ -1218,8 +1218,8 @@ def left_out_text(shared: SharedConfiguration) -> str:
     if shared.with_rows:
         parts.append(f"the rules that list rows of this dataset ({names(shared.with_rows)})")
     if shared.families:
-        parts.append(f"whole, the families counted \"at least k of\" their rules when one of these rules is left out "
-                     f"({names(shared.families)})")
+        parts.append(f"whole, the families counted \"at least k of\" their rules, since one of their rules lists rows or "
+                     f"cannot be read ({names(shared.families)})")
     if shared.unreadable:
         parts.append(f"what cannot be read as written ({names(shared.unreadable)})")
     if shared.notes:

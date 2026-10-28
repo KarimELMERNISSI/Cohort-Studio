@@ -693,8 +693,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   **Download for Sharing** now writes `config_for_sharing.json`, beside the whole `config.json`.
   - It holds the description, the criteria and the derived variables without their notes.
   - Each rule keeps only the keys its kind reads, each with a value of the type read there; a rule holding
-    another value there, or that cannot be read, is left out whole. A family's operator and each derived variable
-    are read the same way: the copy never relies on the check of a loaded file.
+    another value there, that cannot be read, or that fails the checks of a loaded file, is left out whole. A
+    family's operator and each derived variable are read the same way: the copy never relies on those checks
+    having run.
   - A rule that lists rows (outliers frozen as rows by any method, also inside a rule "at least k of") is left out.
     A family counted "at least k of" goes whole when one of its rules is left out: "at least 2 of" the rules left
     would select other rows.
