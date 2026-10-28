@@ -12,9 +12,9 @@ of silently keeping or dropping rows. The Validate checks and the quality dashbo
 
 Each kind of criterion is one :class:`CriterionKind` in the catalogue :data:`CRITERION_KINDS`: how a definition of
 that kind is recognised, evaluated, described and checked. :func:`rule_kind` alone decides a rule's kind; the free
-functions below (the mask, the columns, the words, the upload checks, the row lists) read it, and nothing else
-branches on a rule's keys. A stored definition is never rewritten: its fingerprint keys the population memos and is
-written in every population block of a trace.
+functions below (the mask, the columns, the words, the upload checks, the row lists, the copy for sharing) read it,
+and nothing else in core decides a kind from a rule's keys. A stored definition is never rewritten: its fingerprint
+keys the population memos and is written in every population block of a trace.
 """
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ import copy
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -102,10 +103,13 @@ def _whole(value: Any) -> bool:
 # ------------------------------------------------------------------------------------------------------ the catalogue
 
 # How a kind treats a missing value; tests/core_layer/test_criterion_kinds.py checks each kind against its own.
-NEVER = "never"  # a missing value never fires it
-ASKED = "asked"  # an expression: as it asks (.isna() fires on a missing value, > and == do not)
-NOT_READ = "not read"  # it reads no value: listed rows fire whatever their values
-MEMBERS = "members"  # as the rules it combines
+Missing = Literal["never", "asked", "not read", "members"]
+NEVER: Missing = "never"  # a missing value never fires it
+ASKED: Missing = (
+    "asked"  # an expression: as it asks (.isna() fires on a missing value, > and == do not)
+)
+NOT_READ: Missing = "not read"  # it reads no value: listed rows fire whatever their values
+MEMBERS: Missing = "members"  # as the rules it combines
 
 
 def _no_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -150,6 +154,11 @@ class CriterionKind:
     """
     One kind of criterion. The free functions of this module are the interface: pages and services never call a
     kind's functions, which take the rule's name (a numeric rule reads the column named like it) and its definition.
+    A kind that combines rules gives its own checks and columns: the free functions add those of its rules, so it can
+    be written in a module of its own, which must not import this one.
+
+    Its id is stored with every rule of its kind, so what a kind selects never changes under the same id: a changed
+    selection is a kind of its own, under a new id, and the old one stays registered, marked legacy.
     """
 
     # stored, never renamed; the five kinds of M5 are implied by their keys
@@ -158,14 +167,15 @@ class CriterionKind:
     label: str
     # the rows where it fires, on df.index
     mask: Callable[[pd.DataFrame, str, Mapping[str, Any]], pd.Series]
-    # the columns the mask reads
+    # the columns it reads (listed rows: those they were flagged on); the free function adds its rules'
     columns: Callable[[str, Mapping[str, Any]], tuple[str, ...]]
     # what makes it fire, in words: the flow and the dossier
     describe: Callable[[str, Mapping[str, Any]], str]
     # whether a definition is of this kind, from its keys: it may raise CriterionError for a definition of this kind
     # that cannot be read (a numeric range with an expression); None for a kind that a definition names
     recognise: Callable[[str, Mapping[str, Any]], bool] | None = None
-    # what makes a definition unusable on any table: a configuration holding it is refused when loaded
+    # what makes a definition unusable on any table: a configuration holding it is refused when loaded; the free
+    # function adds its rules' problems
     problems: Callable[[str, Mapping[str, Any]], list[str]] = _no_problems
     # the key under which it keeps the rules it combines, {name: definition}; None when it combines none
     members_key: str | None = None
@@ -175,7 +185,12 @@ class CriterionKind:
     # it lists row ids of this dataset: left out of a configuration shared with someone else
     lists_rows: bool = False
     # how it treats a missing value: NEVER, ASKED, NOT_READ or MEMBERS
-    missing: str = NEVER
+    missing: Missing = NEVER
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "keys", MappingProxyType(dict(self.keys))
+        )  # read only, as the rest
 
 
 CRITERION_KINDS: Catalogue[CriterionKind] = Catalogue("criterion kind")
@@ -194,12 +209,6 @@ def _threshold_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) 
         index=df.index,
     )
     return fired.sum(axis=1) >= int(k)
-
-
-def _threshold_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]:
-    members = definition.get("members") or {}
-    found = [c for member, spec in members.items() for c in criterion_columns(str(member), spec)]
-    return tuple(dict.fromkeys(found))
 
 
 def _threshold_text(name: str, definition: Mapping[str, Any]) -> str:
@@ -225,11 +234,6 @@ def _threshold_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
         problems.append(
             f"rule '{name}': a threshold rule needs its rules, as {{\"members\": {{name: rule}}}}"
         )
-        return problems
-    for member, spec in members.items():
-        problems += [
-            f"rule '{name}': {problem}" for problem in criterion_problems(str(member), spec)
-        ]
     return problems
 
 
@@ -238,7 +242,7 @@ CRITERION_KINDS.register(
         "threshold",
         "At least k rules",
         mask=_threshold_mask,
-        columns=_threshold_columns,
+        columns=lambda name, definition: (),  # its rules'
         describe=_threshold_text,
         recognise=lambda name, definition: "threshold" in definition,
         problems=_threshold_problems,
@@ -642,9 +646,16 @@ def _kind_or_none(definition: Mapping[str, Any]) -> CriterionKind | None:
 
 
 def criterion_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]:
-    """The columns a criterion reads (empty when they cannot be determined: never an error, whatever the definition)."""
+    """
+    The columns a criterion reads, those of the rules it combines included (empty when they cannot be determined:
+    never an error, whatever the definition).
+    """
     try:
-        return rule_kind(name, definition).columns(name, definition)
+        kind = rule_kind(name, definition)
+        found = list(kind.columns(name, definition))
+        for member, spec in _members(kind, definition).items():
+            found += criterion_columns(str(member), spec)
+        return tuple(dict.fromkeys(found))
     except Exception:
         return ()
 
@@ -652,7 +663,8 @@ def criterion_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ..
 def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
     """Rows of ``df`` on which the criterion fires (boolean Series on ``df.index``).
 
-    Supported definitions (the study configuration format), recognised by :func:`rule_kind`:
+    The kinds are those of :data:`CRITERION_KINDS`, read by :func:`rule_kind`; the five of M5 (the study
+    configuration format) are:
 
     - ``{"expression": "df['age'] > 110"}``: a whitelisted boolean expression;
     - ``{"numeric": true, "lower_bound": a, "upper_bound": b, "strategy": "include" | "exclude"}``: a range
@@ -683,13 +695,10 @@ def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
     if it were sound ("age <= None", or a threshold rule with a member that cannot be read).
     """
     try:
-        kind = rule_kind(name, definition)
-        problems = kind.problems(name, definition)
-        return (
-            f"cannot be evaluated: {'; '.join(problems)}"
-            if problems
-            else kind.describe(name, definition)
-        )
+        problems = criterion_problems(name, definition)
+        if problems:
+            return f"cannot be evaluated: {'; '.join(problems)}"
+        return rule_kind(name, definition).describe(name, definition)
     except Exception as exc:
         return f"cannot be evaluated: {exc}"
 
@@ -702,16 +711,17 @@ def criterion_problems(name: str, definition: Any) -> list[str]:
     """
     try:
         kind = rule_kind(name, definition)
+        problems = list(kind.problems(name, definition))
     except CriterionError as exc:
         return [str(exc)]
-    except (
-        Exception
-    ) as exc:  # a kind's recogniser failed: never an error in the upload check itself
+    # a kind's own function failed: never an error in the upload check itself
+    except Exception as exc:
         return [f"criterion '{name}': {exc}"]
-    try:
-        return kind.problems(name, definition)
-    except Exception as exc:  # never an error in the upload check itself
-        return [f"criterion '{name}': {exc}"]
+    for member, spec in _members(kind, definition).items():
+        problems += [
+            f"rule '{name}': {problem}" for problem in criterion_problems(str(member), spec)
+        ]
+    return problems
 
 
 def _members(kind: CriterionKind, definition: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -721,8 +731,11 @@ def _members(kind: CriterionKind, definition: Mapping[str, Any]) -> Mapping[str,
 
 def combined_rules(definition: Any) -> Mapping[str, Any]:
     """The rules a rule combines, by name (a threshold rule's members): none for a rule that cannot be read."""
-    kind = _kind_or_none(definition) if isinstance(definition, Mapping) else None
-    return _members(kind, definition) if kind is not None else {}
+    try:
+        kind = _kind_or_none(definition) if isinstance(definition, Mapping) else None
+        return _members(kind, definition) if kind is not None else {}
+    except Exception:  # a kind's own function failed
+        return {}
 
 
 def holds_row_list(definition: Any) -> bool:

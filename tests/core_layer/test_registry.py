@@ -46,6 +46,15 @@ def test_a_legacy_kind_still_reads_but_is_not_offered() -> None:
     assert colours.ids(legacy=False) == ("red", "green")
 
 
+def test_a_copy_registers_more_without_changing_the_catalogue() -> None:
+    colours = _colours()
+    copy = colours.copy()
+    copy.register(Colour("blue", "Blue"), aliases=("bleu",))
+    assert copy.ids() == ("red", "green", "mauve", "blue") and copy.get("bleu").id == "blue"
+    assert copy.is_legacy("mauve") and copy.get("rouge").id == "red"
+    assert colours.ids() == ("red", "green", "mauve") and "bleu" not in colours
+
+
 def test_an_unknown_id_names_the_valid_ones() -> None:
     with pytest.raises(UnknownIdError) as raised:
         _colours().get("blue")

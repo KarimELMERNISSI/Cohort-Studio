@@ -108,6 +108,14 @@ class Catalogue[K: Kind]:
     def __len__(self) -> int:
         return len(self._kinds)
 
+    def copy(self) -> Catalogue[K]:
+        """The same kinds in a catalogue of its own, to register more without changing this one (a test's kind)."""
+        other: Catalogue[K] = Catalogue(self.name)
+        other._kinds = dict(self._kinds)
+        other._legacy = set(self._legacy)
+        other._aliases = dict(self._aliases)
+        return other
+
 
 # ----------------------------------------------------------------------------------------------- connector families
 

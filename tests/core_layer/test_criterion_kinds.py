@@ -36,6 +36,7 @@ from core.criteria import (
     describe_definition,
     holds_row_list,
     is_scalar,
+    is_text,
     rule_kind,
     shared_definition,
 )
@@ -50,9 +51,11 @@ from tests.core_layer.test_criteria_golden import EDGE
 
 TUTORIAL = Path(__file__).resolve().parents[2] / "assets" / "tutorial"
 
+# the five kinds of M5, read from their keys in this order (a kind registered later is read by the "kind" stated)
+READ_BY_KEYS = ("threshold", "row_ids", "bounds", "numeric", "expression")
 # the ids that traces, configurations and dossiers store: never removed, never renamed (a kind that nothing writes any
-# more is registered legacy=True); the five kinds of M5, read from their keys in this order
-STORED = ("threshold", "row_ids", "bounds", "numeric", "expression")
+# more is registered legacy=True); a kind registered later joins them
+STORED = READ_BY_KEYS
 
 OLD = {"numeric": False, "expression": "df['age'] > 80"}
 HIGH_SBP = {"numeric": True, "upper_bound": 180, "strategy": "exclude"}  # a rule named "sbp"
@@ -109,6 +112,22 @@ EXAMPLES: dict[str, list[tuple[str, dict[str, Any]]]] = {
         ("young or high", {"expression": "(df['age'] < 18) | (df['sbp'] >= 180)"}),
         ("age unknown", {"expression": "df['age'].isna()"}),  # asks for missing values
     ],
+}
+
+# the rows each example selects on _frame(), in the order of EXAMPLES
+ROWS: dict[str, list[list[int]]] = {
+    "threshold": [[4, 6], [0, 1, 6]],
+    "row_ids": [[2, 3, 9], [0]],
+    "bounds": [[0, 1, 4, 6, 8], [0, 1]],
+    "numeric": [
+        [2, 3, 4, 8, 9],
+        [0, 1, 5, 6],
+        [2, 3, 4, 5, 6, 8, 9],
+        [0, 1],
+        [1, 4, 6],
+        [0, 1, 2, 5, 6, 7, 9],
+    ],
+    "expression": [[5, 6], [1, 4, 6, 9], [0, 1, 4, 6], [7]],
 }
 
 # definitions of a kind that fail on any table: refused when loaded, and never evaluated (an expression is checked
@@ -256,7 +275,7 @@ def test_no_stored_kind_is_ever_removed() -> None:
 
 def test_the_five_kinds_of_m5_are_read_by_their_keys_in_a_fixed_order() -> None:
     """The order decides a rule that holds the keys of two kinds ("threshold" and "row_ids" is a threshold rule)."""
-    assert [k.id for k in CRITERION_KINDS if k.recognise is not None] == list(STORED)
+    assert [k.id for k in CRITERION_KINDS if k.recognise is not None] == list(READ_BY_KEYS)
     assert (
         rule_kind("both", {"threshold": 1, "members": {"old": OLD}, "row_ids": [[0, 0]]}).id
         == "threshold"
@@ -270,7 +289,14 @@ def test_every_kind_has_a_label_examples_a_read_back_and_a_way_with_missing_valu
     labels = [k.label for k in CRITERION_KINDS]
     assert all(labels) and len(set(labels)) == len(labels)
     assert {k.missing for k in CRITERION_KINDS} <= {NEVER, ASKED, NOT_READ, MEMBERS}
-    assert set(MALFORMED) <= ids
+    # every kind but the expression has upload checks, and examples they refuse (an expression is checked when it is
+    # evaluated)
+    assert set(MALFORMED) | {"expression"} == ids and all(MALFORMED.values())
+    # what each example selects is pinned: a stored id never changes what it selects
+    assert set(ROWS) == ids and all(len(ROWS[i]) == len(EXAMPLES[i]) for i in ids)
+    # a registered kind is read only, its keys too
+    with pytest.raises(TypeError):
+        CRITERION_KINDS.get("numeric").keys["row_ids"] = is_text  # type: ignore[index]
 
 
 @pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
@@ -313,6 +339,14 @@ def test_a_kind_holds_the_keys_its_definitions_are_written_with(
 
 
 @pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
+def test_each_kind_selects_the_rows_pinned(kind: str, name: str, definition: dict) -> None:
+    """A replay evaluates a stored definition with this version's code: what its kind selects is fixed by its id."""
+    df = _frame()
+    i = next(i for i, case in enumerate(EXAMPLES[kind]) if case == (name, definition))
+    assert _rows(df, criterion_mask(df, name, definition)) == ROWS[kind][i]
+
+
+@pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
 def test_the_words_read_back_select_the_rows_of_the_mask(
     kind: str, name: str, definition: dict
 ) -> None:
@@ -339,10 +373,13 @@ def test_each_kind_treats_a_missing_value_as_it_declares(
         everything_blank = df.assign(**dict.fromkeys(df.columns, np.nan))
         assert after.equals(before)
         assert criterion_mask(everything_blank, name, definition).equals(before)
-    elif declared.missing == MEMBERS:  # as the rules it combines
-        members = combined_rules(definition)
-        fired = pd.concat([criterion_mask(blank, m, spec) for m, spec in members.items()], axis=1)
-        assert after.equals(fired.sum(axis=1) >= int(definition["threshold"]))
+    elif (
+        declared.missing == MEMBERS
+    ):  # as the rules it combines: a row they all read the same reads the same
+        unchanged = pd.Series(True, index=df.index)
+        for member, spec in combined_rules(definition).items():
+            unchanged &= criterion_mask(blank, member, spec) == criterion_mask(df, member, spec)
+        assert unchanged.any() and after.loc[unchanged].equals(before.loc[unchanged])
     elif declared.missing == ASKED and ".isna()" in definition["expression"]:
         assert after.all()  # it asks for missing values
     else:  # NEVER, and an expression that does not ask: a row with every column blank never fires
@@ -445,8 +482,14 @@ def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.Monke
 def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A kind registered later is read for row lists by what it declares, not by the keys of the five."""
-    monkeypatch.setattr(CRITERION_KINDS, "_kinds", dict(CRITERION_KINDS._kinds))
+    """
+    A kind registered later, in a module of its own, is read by what it declares: its row lists, and the rules it
+    combines, whose checks and columns the free functions add (such a module cannot import core.criteria).
+    """
+    import core.criteria as criteria
+
+    kinds = CRITERION_KINDS.copy()  # the test's kinds go with it
+    monkeypatch.setattr(criteria, "CRITERION_KINDS", kinds)
 
     def nothing(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
         return pd.Series(False, index=df.index)
@@ -467,9 +510,9 @@ def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
             raise RuntimeError("the kind's own check failed")
         return False
 
-    CRITERION_KINDS.register(kind("sample", lists_rows=True))
-    CRITERION_KINDS.register(kind("group", members_key="rules", keys={"group": is_scalar}))
-    CRITERION_KINDS.register(
+    kinds.register(kind("sample", lists_rows=True))
+    kinds.register(kind("group", members_key="rules", keys={"group": is_scalar}))
+    kinds.register(
         CriterionKind("broken", "Broken", nothing, kind("x").columns, kind("x").describe, broken)
     )
     assert holds_row_list({"sample": "rows 4 to 9"})
@@ -480,9 +523,20 @@ def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
         "group": True,
         "rules": {"a": OLD},
     }
+    # their checks and columns are added to its own
+    young = {"numeric": True, "column": "age", "upper_bound": "ten"}
+    assert criterion_problems("g", {"group": True, "rules": {"young": young}}) == [
+        "rule 'g': rule 'young': the bound 'ten' is not a number"
+    ]
+    assert criterion_columns("g", {"group": True, "rules": {"a": OLD, "b": HIGH_SBP}}) == (
+        "age",
+        "b",
+    )
     # an error in a kind's own function never stops a page, and the rule is never shared
     assert holds_row_list({"broken": 1}) and shared_definition("b", {"broken": 1}) is None
     assert criterion_problems("b", {"broken": 1}) == ["criterion 'b': the kind's own check failed"]
+    assert combined_rules({"broken": 1}) == {}
+    assert "sample" not in CRITERION_KINDS  # the kinds of the application are unchanged
 
 
 def test_the_flow_and_the_dossier_give_the_words() -> None:
