@@ -119,7 +119,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
 | google-auth | 2.62.0 | Apache |
-| google-genai | 2.31.0 | Apache-2.0 |
+| google-genai | 2.33.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -134,20 +134,20 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
 | lancedb | 0.40.0 | Apache |
-| langchain-core | 1.6.12 | MIT |
-| langchain-protocol | 0.0.19 | MIT |
+| langchain-core | 1.7.0 | MIT |
+| langchain-protocol | 0.0.20 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.12 | MIT |
-| openai | 3.35.1 | Apache-2.0 |
+| openai | 3.37.0 | Apache-2.0 |
 | opentelemetry-api | 1.45.1 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.4 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.11 | BSD-3-Clause |
-| pypdf | 6.21.1 | BSD-3-Clause |
+| pypdf | 6.21.2 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
-| qdrant-client | 1.19.1 | Apache |
+| qdrant-client | 1.20.0 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
 | sniffio | 1.3.1 | Apache / MIT |
 | tenacity | 9.1.4 | Apache |
@@ -163,7 +163,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lightgbm | 4.7.0 | MIT |
 | llvmlite | 0.50.0 | BSD-2-Clause AND Apache-2.0 WITH LLVM-exception |
 | numba | 0.68.0 | BSD |
-| prince | 0.21.0 | MIT |
+| prince | 0.23.0 | MIT |
 | pynndescent | 0.6.0 | BSD-2-Clause |
 | umap-learn | 0.5.12 | BSD |
 
@@ -201,5 +201,5 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pytest-cov | 7.1.0 | MIT |
 | pytest-mock | 3.17.0 | MIT |
 | python-discovery | 1.6.2 | MIT |
-| ruff | 0.17.1 | MIT |
+| ruff | 0.17.2 | MIT |
 | virtualenv | 21.14.12 | MIT |
