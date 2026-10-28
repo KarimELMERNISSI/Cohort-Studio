@@ -107,3 +107,22 @@ def test_validates_upload_names_the_criteria_that_keep_the_sessions_definition()
     }  # added when the session lacks them
     assert len(notices) == 1 and "study_inclusion: age" in notices[0]
     assert configuration_problems(config) == []
+
+
+def test_validates_upload_names_the_criteria_then_the_derived_variables_that_differ() -> None:
+    from app_pages.data_monitoring import _merge_uploaded
+
+    bmi = "df['weight_kg'] / (df['height_cm'] / 100) ** 2"
+    config = {
+        "mask_families": {"study_inclusion": {"operator": "all", "age": NUMERIC_AGE}},
+        "derived_variables": {"bmi_kg_m2": {"formula": bmi}},
+    }
+    uploaded = {
+        "mask_families": {"study_inclusion": {"operator": "all", "age": EXPRESSION_AGE}},
+        "derived_variables": {"bmi_kg_m2": {"formula": "df['weight_kg'] / df['height_cm'] ** 2"}},
+    }
+    notices = _merge_uploaded(config, uploaded)
+    assert config["derived_variables"]["bmi_kg_m2"]["formula"] == bmi
+    assert len(notices) == 2
+    assert "criteria" in notices[0] and "study_inclusion: age" in notices[0]
+    assert "derived variables" in notices[1] and "bmi_kg_m2" in notices[1]

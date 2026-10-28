@@ -1657,6 +1657,8 @@ def app():
                         st.sidebar.warning(notice)
             except json.JSONDecodeError:
                 st.error("Invalid JSON file. Please upload a valid configuration file.")
+            except Exception as exc:  # a file this version cannot read is refused, never an error page
+                st.sidebar.error(f"This configuration was not loaded ({type(exc).__name__}).")
             
     
     # Every row of the dataset (validation ignores the analysis population); a copy: the checks below add

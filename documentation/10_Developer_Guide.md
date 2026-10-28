@@ -295,8 +295,15 @@ file with problems is not loaded:
 
 - an unknown operator, or a threshold that is not a whole number;
 - a family entry that is not a rule;
-- a numeric rule without bounds or with an unknown strategy;
+- what makes a rule of each shape fail on any table (`core.criteria.criterion_problems`): a numeric rule without
+  bounds, with a bound `float()` cannot read or an unknown strategy; bounds that are not `[lower, upper]` pairs;
+  row ranges that are not `[first, last]` pairs; a threshold rule without a number or its rules, or with a member
+  that has a problem. What evaluates today (a bound written `"18"`, a threshold of 2.5) still loads;
 - a rule of an unknown shape, or with both shapes.
+
+`criterion_mask` raises `CriterionError` and nothing else, `criterion_columns` returns `()` and
+`describe_definition` says "cannot be evaluated" for any definition: a malformed rule never stops a page. A listed
+range is clipped to the table's row ids before it is expanded.
 
 Ticked criteria define the analysis population (`core/population.py`). A family with the `any` operator is an
 exclusion family (`clinical_anomalies`, and `outliers`, which the Handle Outliers tab fills with frozen row ids):

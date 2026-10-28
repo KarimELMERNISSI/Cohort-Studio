@@ -651,6 +651,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   while the page said the configuration was loaded. A rule the session holds now keeps the session's definition
   whole, and the page names the rules (and operators) whose definition in the file differs, as it already did for
   the derived variables.
+- **A malformed rule is refused when a configuration is loaded, and never stops a page.** A bound written
+  `"18 years"`, frozen bounds or listed rows of the wrong shape, or a threshold rule written `"two"` passed the check,
+  then raised an error the pages did not expect: the sidebar counts every criterion before each page, so every page
+  failed until the session ended. Such a rule is now refused by name when the file is loaded; one already in a
+  session reads "cannot be evaluated". A listed range is clipped to the table before it is expanded: `[[0,
+  1000000000]]` made the server allocate gigabytes. What evaluates today (a bound written `"18"`) still loads.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

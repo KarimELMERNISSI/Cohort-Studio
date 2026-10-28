@@ -104,8 +104,13 @@ brackets.
   - an unknown family operator (operators are read without regard to case, so `All` is `all`);
   - a threshold that is not a whole number;
   - a family entry that is not a rule;
-  - a numeric rule without bounds or with an unknown strategy;
+  - a numeric rule without bounds, with a bound that is not a number (`"18 years"`), or with an unknown strategy;
+  - frozen bounds that are not `[lower, upper]` pairs of numbers (or `null`), listed rows that are not
+    `[first, last]` pairs of row numbers, and a threshold rule without its rules or with a malformed one;
   - a rule that holds both a numeric range and an expression.
+
+  A rule like these that is already in the session (loaded before this check) is shown as one that cannot be
+  evaluated: the pages still open.
 - The **Analysis population** tab draws the participant flow (STROBE item 13): the records read in the file,
   the rows removed by recorded steps, the rows excluded by each family of criteria and the analysis population.
   Click a box, or choose it in the menu under the diagram, to see the criteria behind an exclusion, the rows

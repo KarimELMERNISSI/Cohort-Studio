@@ -26,7 +26,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from core.criteria import CriterionError, criterion_columns, criterion_mask, rule_kind
+from core.criteria import (
+    CriterionError,
+    criterion_columns,
+    criterion_mask,
+    criterion_problems,
+)
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import shape_problems as derived_shape_problems
 from core.fingerprint import ids_fingerprint, ids_to_ranges
@@ -270,23 +275,11 @@ def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
                     f"family '{family}': '{name}' is not a rule (only rules and \"operator\" belong in a family)"
                 )
                 continue
-            try:
-                kind = rule_kind(str(name), spec)
-            except CriterionError as exc:
-                problems.append(f"family '{family}': {exc}")
-                continue
-            if (
-                kind == "numeric"
-                and spec.get("lower_bound") is None
-                and spec.get("upper_bound") is None
-            ):
-                problems.append(
-                    f"family '{family}': rule '{name}' has neither a lower nor an upper bound"
-                )
-            if kind == "numeric" and spec.get("strategy") not in (None, "include", "exclude"):
-                problems.append(
-                    f"family '{family}': rule '{name}': the strategy must be include or exclude, not {spec.get('strategy')!r}"
-                )
+            # each shape's own checks: what fails on any table (a bound in words, a range of three numbers, a
+            # threshold rule without its rules) passed this check, then stopped every page once loaded
+            problems += [
+                f"family '{family}': {problem}" for problem in criterion_problems(str(name), spec)
+            ]
     return problems
 
 

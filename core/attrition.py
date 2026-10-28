@@ -127,7 +127,15 @@ def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
 
 
 def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
-    """A criterion's definition in words (what makes it fire), read with :func:`core.criteria.rule_kind`."""
+    """A criterion's definition in words (what makes it fire), read with :func:`core.criteria.rule_kind`. Never an
+    error, whatever the definition: a malformed one reads "cannot be evaluated" and why."""
+    try:
+        return _describe(name, definition)
+    except Exception as exc:
+        return f"cannot be evaluated: {exc}"
+
+
+def _describe(name: str, definition: Mapping[str, Any]) -> str:
     try:
         kind = rule_kind(name, definition)
     except CriterionError as exc:
