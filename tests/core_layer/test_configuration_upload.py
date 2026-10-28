@@ -150,3 +150,21 @@ def test_a_family_the_session_holds_without_rules_takes_the_files() -> None:
     )
     assert merged["study_inclusion"] == {"operator": "all", "age": NUMERIC_AGE}
     assert differing == []
+
+
+def test_why_a_file_is_refused_shows_its_text_as_written() -> None:
+    """A rule's name, a value or a kind the file states is the file's text: an image written there was drawn, and
+    fetched by the browser."""
+    from app_pages.data_monitoring import refusal_text
+
+    config = {
+        "mask_families": {
+            "checks": {
+                "![x](https://example.org/a.png)": {"numeric": True, "lower_bound": "18 years"}
+            }
+        }
+    }
+    text = refusal_text(configuration_problems(config))
+    assert text.startswith("This configuration was not loaded:")
+    assert "![x](" not in text and "](https" not in text  # no image, no link
+    assert "18 years" in text

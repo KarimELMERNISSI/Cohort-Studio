@@ -49,8 +49,11 @@ def test_rules_are_written_through_their_kinds() -> None:
     """
     Every rule the application writes comes from a writer of core/criteria.py, whose definitions read as their kind
     (M5b step 6): the keys of a range and of listed rows appear nowhere else, and no other dict holds both "numeric"
-    and "expression" (a rule holding both was refused, after the page had said it was added).
+    and "expression" (a rule holding both was refused, after the page had said it was added), written as a literal or
+    with dict(). This reads the spelling; the tests of the pages that write rules check what they wrote
+    (tests/ui_layer/test_criteria_forms.py, test_outlier_rules.py, test_ai_criteria_add.py).
     """
+    shapes = {"lower_bound", "upper_bound", "row_ids"}
     keys = _count(r"""["'](lower_bound|upper_bound|row_ids)["']""", *SOURCE_DIRS, exclude=("core/criteria.py",))
     assert not keys, keys
     both = []
@@ -61,8 +64,12 @@ def test_rules_are_written_through_their_kinds() -> None:
         for node in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Dict):
                 written = {k.value for k in node.keys if isinstance(k, ast.Constant)}
-                if {"numeric", "expression"} <= written:
-                    both.append(f"{rel}:{node.lineno}")
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "dict":
+                written = {k.arg for k in node.keywords if k.arg}
+            else:
+                continue
+            if {"numeric", "expression"} <= written or written & shapes:
+                both.append(f"{rel}:{node.lineno}")
     assert not both, both
 
 

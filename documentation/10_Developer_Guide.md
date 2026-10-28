@@ -301,13 +301,16 @@ say so, and how such expressions should read a missing value is an open decision
 
 `core.criteria.rule_kind` is the only place that decides a rule's kind:
 
-1. a `"kind"` that names a kind registered without a recogniser (from M6: `date_order`, then M9's `concept`): that
-   kind;
-2. otherwise the five kinds above, from their keys and in their order, whatever `"kind"` says;
+1. the five kinds above, from their keys and in their order, whatever `"kind"` says: a definition that reads today
+   reads the same once a kind it names is registered, so that its recorded population still replays;
+2. otherwise a `"kind"` that names a kind registered without a recogniser (from M6: `date_order`, then M9's
+   `concept`): that kind;
 3. nothing read: refused, with the kind it states when it states one. An older version refuses a newer file, and says
    which kind it does not know.
 
-A rule holding both a numeric range and an expression is refused rather than read one way or the other.
+A rule holding both a numeric range and an expression is refused rather than read one way or the other. `"kind"`
+inside a definition is the catalogue's key; a criterion's `"kind"` in a population block of a trace is its role,
+exclusion or inclusion.
 
 **The interface.** Pages and services never call a kind's functions. They call the free functions of `core.criteria`,
 which read the kind:
@@ -351,7 +354,8 @@ M6's `date_order` and M9's `concept` are one registration each.
 3. Add a writer that states the kind (`{"kind": "date_order", ...}`), used by every page that writes the rule.
 4. Give it examples, the rows each selects (`ROWS`), a read-back of its words and malformed examples in
    `tests/core_layer/test_criterion_kinds.py`, which fails until they are there. Its definitions hold none of the keys
-   of the five.
+   of the five. A test that registers a kind of its own does so in `CRITERION_KINDS.copy()`, patched over the
+   catalogue for that test.
 
 #### The population
 

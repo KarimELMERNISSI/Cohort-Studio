@@ -56,6 +56,10 @@ def _later_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
 @pytest.fixture
 def date_order(monkeypatch: pytest.MonkeyPatch) -> CriterionKind:
     """A kind that definitions state, registered for one test in a copy of the catalogue."""
+    return _register(monkeypatch)
+
+
+def _register(monkeypatch: pytest.MonkeyPatch) -> CriterionKind:
     import core.criteria as criteria
 
     kinds = CRITERION_KINDS.copy()
@@ -142,6 +146,8 @@ def test_without_its_registration_a_stated_kind_is_refused_and_named() -> None:
         ({"kind": "lab", "numeric": True, "lower_bound": 18}, "numeric"),
         ({"kind": "expression", "bounds": {"age": [18, 90]}}, "bounds"),
         ({"kind": ["date_order"], "expression": "df['age'] > 80"}, "expression"),
+        # a kind registered later, named by a definition that holds the keys of the five: read by its keys
+        ({"kind": "date_order", "numeric": False, "expression": "df['age'] > 80"}, "expression"),
     ],
 )
 def test_the_five_kinds_of_m5_are_read_by_their_keys_whatever_kind_says(
@@ -156,3 +162,21 @@ def test_a_kind_that_is_not_a_text_is_refused_without_a_type_error(stated: Any) 
     with pytest.raises(CriterionError, match="unknown kind"):
         rule_kind("x", {"kind": stated})
     assert criterion_problems("x", {"kind": stated})
+
+
+def test_a_recorded_population_replays_once_the_kind_it_names_is_registered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No definition that reads today reads otherwise later (decision 1): one holding the keys of the five and naming
+    a kind that is not registered yet is recorded as one of the five, and replays as recorded once the kind is
+    registered. Reading the stated kind first made it a date order, and its block no longer replayed."""
+    definition = {"kind": "date_order", "numeric": False, "expression": "df['age'] > 80"}
+    df = _frame()
+    (criterion,) = catalogue(_config(definition))
+    recorded = evaluate_population(df, [criterion])
+    block = json.loads(json.dumps(recorded.to_trace()))
+    _register(monkeypatch)  # a later version registers the kind
+    (replayed,) = criteria_from_trace(block)
+    again = evaluate_population(df, [replayed])
+    assert again.ok and list(again.included) == list(recorded.included) == [0, 1, 2]
+    assert again.rows_fingerprint == block["rows_fp"]

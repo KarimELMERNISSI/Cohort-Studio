@@ -22,7 +22,8 @@ def criterion_cards(
     A box for each rule of ``members``, a family's rules (its "operator" is not a rule), closed unless ``expanded``, so
     that a long list stays short: its title gives the rule's name and its kind; opened, it gives what makes the rule
     fire and the user's description. A rule whose kind cannot be read says why. Every text is shown as written
-    (plain): a name or a description is the user's text, never Markdown.
+    (plain): a name or a description is the user's text, never Markdown. Not to be called inside an expander: the
+    boxes are expanders, and Streamlit advises against nesting them.
     """
     rules = [(str(name), spec) for name, spec in members.items() if name != "operator"]
     if not rules:

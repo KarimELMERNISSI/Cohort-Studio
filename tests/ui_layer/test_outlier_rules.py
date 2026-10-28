@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
 from core.criteria import describe_definition
+from tests.ui_layer.test_rules_written import rules_not_read_as_their_kinds
 from ui import nav
 
 MAIN = str(Path(__file__).resolve().parents[2] / "main.py")
@@ -53,6 +54,7 @@ def test_a_rule_frozen_from_outliers_names_the_columns_analysed(app: AppTest) ->
     rules = app.session_state["config"]["mask_families"]["outliers"]
     ((name, rule),) = [(n, r) for n, r in rules.items() if n != "operator"]
     assert rule["columns"] == ["age", "sbp_baseline"] and "patient_id" not in name
+    assert rules_not_read_as_their_kinds(app.session_state["config"]) == []
     assert describe_definition(name, rule).endswith(
         "(flagged by Isolation Forest on age and sbp_baseline together)"
     )

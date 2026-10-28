@@ -1125,6 +1125,13 @@ def deep_merge_dicts(original, new):
             # Only add the key if it doesn't already exist in original
             original[key] = value
 
+
+def refusal_text(problems: list[str]) -> str:
+    """Why a loaded configuration was refused: the file's text (rule names, values) as written, never as Markdown,
+    where an image or a link written in a rule's name would be fetched or followed."""
+    return "This configuration was not loaded:\n\n" + "\n".join(f"- {plain(p, limit=300)}" for p in problems)
+
+
 def _merge_uploaded(config: dict[str, Any], new_config: dict[str, Any]) -> list[str]:
     """
     An uploaded configuration added to the session's; returns the notices to show. The criteria and the derived
@@ -1551,9 +1558,7 @@ def app():
                     "the file must hold one JSON object"
                 ]
                 if problems:
-                    st.sidebar.error(
-                        "This configuration was not loaded:\n\n" + "\n".join(f"- {p}" for p in problems)
-                    )
+                    st.sidebar.error(refusal_text(problems))
                 else:
                     notices = _merge_uploaded(st.session_state.config, new_config)
                     st.sidebar.success("Configuration loaded and merged successfully!")

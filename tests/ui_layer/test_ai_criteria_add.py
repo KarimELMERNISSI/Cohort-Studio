@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from streamlit.testing.v1 import AppTest
 
+from tests.ui_layer.test_rules_written import rules_not_read_as_their_kinds
+
 OLD = {"numeric": False, "expression": "df['age'] > 80"}
 
 
@@ -46,3 +48,4 @@ def test_a_suggestion_replaces_a_rule_of_its_name_only_when_asked() -> None:
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     family = at.session_state["config"]["mask_families"]["clinical_anomalies"]
     assert family["old"] == {"numeric": False, "expression": "df['age'] > 90"}
+    assert rules_not_read_as_their_kinds(at.session_state["config"]) == []

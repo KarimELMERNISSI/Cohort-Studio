@@ -25,10 +25,11 @@ from pathlib import Path
 # the row-wise check and of the exact formulas (2026-10-21); to 78 at 80.9 with the derived variables' check.
 # ui to 85 at 87.0 with the connector choice control and its tests (M5b step 4, 2026-10-27).
 # manage to 76 at 78.4 with the tests of the Qdrant server's confirmation and folders (2026-10-27).
+# core to 94 at 95.8 with the catalogue of criterion kinds and its tests (M5b step 6, 2026-10-28).
 FLOORS: dict[str, float] = {
     "app_pages": 58.0,
     "biostats": 93.0,
-    "core": 92.0,
+    "core": 94.0,
     "enrich": 81.0,
     "explore": 75.0,
     "graph": 92.0,

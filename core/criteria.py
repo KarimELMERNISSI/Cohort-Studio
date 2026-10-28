@@ -105,9 +105,8 @@ def _whole(value: Any) -> bool:
 # How a kind treats a missing value; tests/core_layer/test_criterion_kinds.py checks each kind against its own.
 Missing = Literal["never", "asked", "not read", "members"]
 NEVER: Missing = "never"  # a missing value never fires it
-ASKED: Missing = (
-    "asked"  # an expression: as it asks (.isna() fires on a missing value, > and == do not)
-)
+# an expression: as it asks (.isna() fires on a missing value, > and == do not)
+ASKED: Missing = "asked"
 NOT_READ: Missing = "not read"  # it reads no value: listed rows fire whatever their values
 MEMBERS: Missing = "members"  # as the rules it combines
 
@@ -188,9 +187,8 @@ class CriterionKind:
     missing: Missing = NEVER
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "keys", MappingProxyType(dict(self.keys))
-        )  # read only, as the rest
+        # read only, as the rest of the kind
+        object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
 
 
 CRITERION_KINDS: Catalogue[CriterionKind] = Catalogue("criterion kind")
@@ -628,11 +626,11 @@ def rule_kind(name: str, definition: Mapping[str, Any]) -> CriterionKind:
 
     A definition is read in this order, and never changed:
 
-    1. a "kind" that names a kind registered without a recogniser (from M6 on, a kind that definitions state): that
-       kind;
-    2. otherwise the five kinds of M5, from their keys, in the order they were registered, whatever "kind" says: a
-       definition written before kinds were stated reads as it always did, and one holding both "threshold" and
-       "row_ids" is a threshold rule;
+    1. the five kinds of M5, from their keys, in the order they were registered, whatever "kind" says: one holding
+       both "threshold" and "row_ids" is a threshold rule, and a definition that reads today reads the same once a
+       kind it names is registered, so that its recorded population still replays;
+    2. otherwise a "kind" that names a kind registered without a recogniser (from M6 on, a kind that definitions
+       state): that kind, whose definitions hold none of the keys of the five;
     3. nothing read: refused, with the kind it states when it states one (a file written by a later version).
 
     A rule that holds both a numeric range and an expression is refused rather than read one way or the other: keep
@@ -640,13 +638,13 @@ def rule_kind(name: str, definition: Mapping[str, Any]) -> CriterionKind:
     """
     if not isinstance(definition, Mapping):
         raise CriterionError(f"criterion '{name}' has no definition")
+    for kind in CRITERION_KINDS:
+        if kind.recognise is not None and kind.recognise(name, definition):
+            return kind
     stated = definition.get("kind")
     named = CRITERION_KINDS.find(stated) if isinstance(stated, str) else None  # a list is no id
     if named is not None and named.recognise is None:
         return named
-    for kind in CRITERION_KINDS:
-        if kind.recognise is not None and kind.recognise(name, definition):
-            return kind
     if stated is not None:
         raise CriterionError(
             f"criterion '{name}': unknown kind {stated!r}; the kinds are "
@@ -806,9 +804,8 @@ def _shared(name: str, definition: Mapping[str, Any]) -> dict[str, Any] | None:
             if any(rule is None for rule in members.values()):
                 return None
             shared[key] = members
-        elif (
-            key == "kind" and kind.recognise is None
-        ):  # the catalogue's own key: the kind it states
+        # the catalogue's own key: the kind a definition states
+        elif key == "kind" and kind.recognise is None:
             if not is_text(value):
                 return None
             shared[key] = value
