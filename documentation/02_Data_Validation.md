@@ -29,6 +29,8 @@ Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, M
 The system checks your dataset for values that are clinically impossible or suspect, using the anomaly rules of your
 study configuration. Declare the rules on the **Handle Clinical Anomalies** tab, or load a configuration file (JSON)
 from the sidebar (**Action** > *Load Existing Config*); **Download Configuration File** saves it for a later session.
+A loaded file adds the families and rules this session lacks, each whole. A rule this session already holds keeps its
+definition here, and the page names those whose definition in the file differs.
 Turn on *For sharing: leave out the outlier rows* before downloading a file meant for someone else: the outlier rules
 found by a multivariate method list the ids of the rows they exclude, which only mean something for your dataset.
 

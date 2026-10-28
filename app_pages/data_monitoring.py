@@ -20,6 +20,7 @@ from core.population import (
     configuration_problems,
     criterion_id,
     family_masks,
+    merge_families,
     without_row_lists,
 )
 from core.registry import as_code
@@ -1220,6 +1221,38 @@ def deep_merge_dicts(original, new):
             # Only add the key if it doesn't already exist in original
             original[key] = value
 
+def _merge_uploaded(config: dict[str, Any], new_config: dict[str, Any]) -> list[str]:
+    """
+    An uploaded configuration added to the session's; returns the notices to show. The criteria and the derived
+    variables are added whole, each one: a rule or a definition the session holds keeps the session's, and is named
+    when the file's differs (core.population.merge_families, core.derived.merge_definitions). The other keys are added
+    when the session lacks them.
+    """
+    uploaded_families = new_config.pop("mask_families", None)
+    uploaded_derived = new_config.pop(DERIVED_KEY, None)
+    deep_merge_dicts(config, new_config)
+    notices = []
+    if uploaded_families:
+        merged, differing = merge_families(config.get("mask_families"), uploaded_families)
+        config["mask_families"] = merged
+        if differing:
+            notices.append(
+                "These criteria keep this session's definition, which differs from the file's: "
+                + ", ".join(as_code(name) for name in differing)
+                + "."
+            )
+    if uploaded_derived:
+        merged_derived, conflicts = merge_definitions(config.get(DERIVED_KEY), uploaded_derived)
+        config[DERIVED_KEY] = merged_derived
+        if conflicts:
+            notices.append(
+                "These derived variables keep this session's definition, which differs from the file's: "
+                + ", ".join(as_code(c) for c in conflicts)
+                + "."
+            )
+    return notices
+
+
 ##### ANOMALY PART
 
 def render_ai_criteria_assistant(st_container, config, family_name, mode="anomaly"):
@@ -1618,20 +1651,10 @@ def app():
                         "This configuration was not loaded:\n\n" + "\n".join(f"- {p}" for p in problems)
                     )
                 else:
-                    # Merge the new configuration with the existing one; the derived variables whole, each one
-                    # (the merge below keeps a list the session has, and would mix two definitions)
-                    uploaded = new_config.pop(DERIVED_KEY, None)
-                    deep_merge_dicts(st.session_state.config, new_config)
-                    conflicts = []
-                    if uploaded:
-                        merged, conflicts = merge_definitions(st.session_state.config.get(DERIVED_KEY), uploaded)
-                        st.session_state.config[DERIVED_KEY] = merged
+                    notices = _merge_uploaded(st.session_state.config, new_config)
                     st.sidebar.success("Configuration loaded and merged successfully!")
-                    if conflicts:
-                        st.sidebar.warning(
-                            "These derived variables keep this session's definition, which differs from the "
-                            "file's: " + ", ".join(as_code(c) for c in conflicts) + "."
-                        )
+                    for notice in notices:
+                        st.sidebar.warning(notice)
             except json.JSONDecodeError:
                 st.error("Invalid JSON file. Please upload a valid configuration file.")
             

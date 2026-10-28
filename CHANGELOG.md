@@ -646,6 +646,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   "at least 2 rules" lost it when its tab opened: the criterion "At least 2 rules of clinical_anomalies" no longer
   existed, so a population that had it ticked dropped it without a word. A family keeps its operator now; a tab sets
   one only for a family it creates.
+- **A loaded configuration adds its rules whole, never mixed into the session's.** A rule of the same name was merged
+  key by key: a numeric rule "age" and a loaded expression "age" became one rule holding both, which was refused
+  while the page said the configuration was loaded. A rule the session holds now keeps the session's definition
+  whole, and the page names the rules (and operators) whose definition in the file differs, as it already did for
+  the derived variables.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

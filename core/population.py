@@ -15,6 +15,7 @@ on another population are recognised as stale.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
@@ -204,6 +205,33 @@ def without_row_lists(config: Mapping[str, Any] | None) -> dict[str, Any]:
             else:
                 families[family] = kept
     return shared
+
+
+def merge_families(
+    session: Mapping[str, Any] | None, uploaded: Mapping[str, Any] | None
+) -> tuple[dict[str, Any], list[str]]:
+    """
+    An uploaded configuration's criteria added to the session's, never merged into them key by key: a family or a
+    rule the session lacks is added whole; a rule it holds keeps the session's definition whole, and is named when the
+    file's differs; so is the family's operator. A numeric rule and an uploaded expression of the same name made one
+    rule holding both, which was refused while the page reported success. The result shares nothing with the file.
+    Returns the merged families and the names that differ ("family: rule", "family: the operator").
+    """
+    merged: dict[str, Any] = copy.deepcopy(dict(session or {}))
+    differing: list[str] = []
+    for family, members in (uploaded or {}).items():
+        if not isinstance(members, Mapping):
+            continue
+        held = merged.get(family)
+        if not isinstance(held, Mapping):
+            merged[family] = copy.deepcopy(dict(members))
+            continue
+        for name, spec in members.items():
+            if name not in held:
+                held[name] = copy.deepcopy(spec)
+            elif held[name] != spec:
+                differing.append(f"{family}: {'the operator' if name == 'operator' else name}")
+    return merged, differing
 
 
 def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
@@ -456,5 +484,6 @@ __all__ = [
     "family_kind",
     "family_masks",
     "family_operator",
+    "merge_families",
     "without_row_lists",
 ]
