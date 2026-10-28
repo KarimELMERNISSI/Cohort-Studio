@@ -529,8 +529,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Opening Validate's quality dashboard no longer keeps the browser busy for a minute.** Its nullity matrix gave
   every row a label, 1,206 of them in 500 pixels for the tutorial cohort, which could not be read and took the
   browser about a minute to draw; since only the open tab runs, that minute came back each time the dashboard tab
-  was opened. The matrix now labels the rows that fit (every 20th row there; the hover names each row), and the
-  dashboard opens in under two seconds.
+  was opened. The matrix now labels the rows that fit (every 20th row there; the hover names each row): reopening the
+  dashboard kept the browser busy for 63.5 s, and now for 2.7 s (the tutorial cohort, in Edge).
 
 ### Settings and preferences (M5b)
 
