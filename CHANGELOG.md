@@ -262,13 +262,26 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     folder: a name such as `../../<user>/datasets/<version>` read another user's version. A saved version is now
     looked for in the user's datasets folder only, and a file chosen on the Reproduce page must lie in the user's
     workspace, as the paths a trace records already had to.
-  - A signed-in user whose name cannot become a folder name (longer than 64 characters, or without a letter or digit
-    a folder name keeps) has no workspace: their replay could read any file of the server, and now reads none.
+  - A replay without a workspace reads no file. It read any file of the server, and a signed-in user could have no
+    workspace (see the next item).
   - A network path (`\\server\share\...`) in a trace, or typed on the Reproduce page, made a Windows server connect
     to that share to check it, sending the server account's credentials. Such a path is now refused before anything
     is opened, unless the data folder is on that share.
   - The Reproduce page no longer checks whether the statistics files an older trace names exist: nothing records them
     any more, and the check told whether any file of the server existed.
+- **Every signed-in user has a workspace of their own.**
+  - A name that keeps nothing as a folder name (no ASCII letter or digit, such as "Мария") or that is longer than 64
+    characters (a long e-mail from Better Auth) gave no workspace. Such a user's datasets and traces were saved in the
+    shared folders under their name, and their document library and its indexes were those of every such user.
+  - Such a name now has a folder of its own, named after its SHA-256 (`users/_` followed by 32 hexadecimal
+    characters).
+  - What such a user saved before stays where it was, and is no longer shown to them. In the data folder, the files
+    of `datasets`, `stats`, `traces` and `traces/artifacts` whose names start with the user's name are theirs. The
+    files of `traces/snapshots`, `uploads` and `vectors` (with its Qdrant collection), and the `DOCUMENTS` folder
+    where the application runs, were shared by every such user and name nobody.
+  - `dev_scripts/migrate_user_layout.py` moves the files named after a user into that user's folder and the others
+    into the administrator's; it leaves `uploads` and `vectors`. Read its `--dry-run` plan first. A document index is
+    rebuilt from the documents.
 
 ### Usability
 

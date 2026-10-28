@@ -83,7 +83,7 @@ def test_a_file_the_user_chose_comes_first_and_stays_in_the_workspace(root: Path
 def test_a_resolver_given_no_place_reads_no_file(root: Path) -> None:
     shared = _write(Path(dp.get_uploads_dir()) / "cohort.csv")
     pd.DataFrame({"x": [1]}).to_parquet(Path(dp.get_datasets_dir()) / "v1.parquet")
-    nothing = PathResolver()  # a session whose user has no workspace gets this one
+    nothing = PathResolver()  # a session without a signed-in user gets this one
     assert nothing.resolve(str(shared)) is None
     assert nothing.resolve("uploads/cohort.csv") is None
     assert nothing.with_named({"x.csv": str(shared)}).resolve("x.csv") is None
@@ -269,13 +269,16 @@ def test_a_replay_in_a_session_finds_the_users_file_and_never_anothers(root: Pat
         assert rows is None and error.startswith("Source file not found"), key
 
 
-def test_a_session_whose_user_has_no_workspace_reads_no_file(root: Path) -> None:
-    shared = _write(Path(dp.get_uploads_dir()) / "cohort.csv", "who,n\nshared,1\n")
+def test_a_name_kept_by_no_folder_name_reads_its_own_workspace(root: Path) -> None:
+    """Such a user had no workspace, and their replay read any file of the server: they now have their own."""
+    maria = UserScope.for_user("Мария")  # no letter or digit a folder name keeps
+    _write(maria.uploads_dir() / "mine.csv", "who,n\nmaria,1\n")
+    shared = _write(Path(dp.get_uploads_dir()) / "shared.csv", "who,n\nshared,1\n")
     at = AppTest.from_function(_replay_in_a_session, default_timeout=60)
-    at.session_state["as_user"] = "Мария"  # no letter or digit a folder name keeps
-    at.session_state["sources"] = {"shared": str(shared), "relative": "uploads/cohort.csv"}
+    at.session_state["as_user"] = "Мария"
+    at.session_state["sources"] = {"own": "uploads/mine.csv", "shared": str(shared)}
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    for key in ("shared", "relative"):
-        error, rows = at.session_state[key]
-        assert rows is None and error.startswith("Source file not found"), key
+    assert at.session_state["own"] == (None, ["maria"])
+    error, rows = at.session_state["shared"]
+    assert rows is None and error.startswith("Source file not found")

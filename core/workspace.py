@@ -12,6 +12,7 @@ session state.
 
 from __future__ import annotations
 
+import hashlib
 import ntpath
 import os
 import re
@@ -53,10 +54,18 @@ def validate_username(username: str | None) -> str:
 
 
 def safe_dirname(username: str | None) -> str:
-    """Directory name for a (possibly legacy) username: never empty, never a path component escape."""
-    value = _UNSAFE_CHARS.sub("_", (username or "").strip()).strip("._-")
-    if not value or value in (".", "..") or len(value) > 64:
-        raise ValueError(f"Cannot derive a workspace directory from username {username!r}.")
+    """
+    Directory name for a (possibly legacy) username: never empty, never a path component escape. A name that keeps
+    nothing as a folder name (no ASCII letter or digit, such as "Мария") or that is longer than 64 characters (a long
+    e-mail from an identity provider) gets a folder named after its SHA-256, starting with "_", which no other name's
+    folder starts with: such a user had no workspace and used the shared folders, as every such user did.
+    """
+    name = (username or "").strip()
+    if not name:
+        raise ValueError("A workspace directory needs a username.")
+    value = _UNSAFE_CHARS.sub("_", name).strip("._-")
+    if not value or len(value) > 64:
+        return "_" + hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest()[:32]
     return value
 
 

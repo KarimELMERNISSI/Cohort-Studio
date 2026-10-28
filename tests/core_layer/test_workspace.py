@@ -1,5 +1,6 @@
 """Per-user workspace: directory isolation and path containment (audit E4)."""
 
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -33,9 +34,36 @@ def test_safe_dirname_handles_legacy_names_but_never_escapes() -> None:
     assert safe_dirname("admin") == "admin"
     assert safe_dirname("Dr Lee/ops") == "Dr_Lee_ops"
     assert safe_dirname("../../etc") == "etc"
-    for bad in ("", "..", "./", None):
+    for bad in ("", "  ", None):  # no user
         with pytest.raises(ValueError):
             safe_dirname(bad)
+
+
+def test_a_name_that_keeps_nothing_as_a_folder_name_gets_a_folder_of_its_own() -> None:
+    """Such a user had no workspace, and used the shared folders as every such user did: each now gets a folder named
+    after the name's SHA-256, starting with "_", which no other name's folder starts with."""
+    # 67 characters
+    long_mail = "firstname.middlename.lastname.department@hospital-group.example.org"
+    names = ("Мария", "Мариам", "..", "./", "_", long_mail, long_mail.upper())
+    folders = [safe_dirname(name) for name in names]
+    assert len(set(folders)) == len(names)  # one folder per name
+    for folder in folders:
+        assert len(folder) == 33 and folder[0] == "_" and int(folder[1:], 16) >= 0
+    assert safe_dirname(" Мария ") == folders[0]  # the same name, the same folder
+    # an ordinary name's folder never starts with "_": it can never be one of these
+    for ordinary in ("_x", "__init__", "-admin", ".hidden", "a" * 64):
+        assert not safe_dirname(ordinary).startswith("_"), ordinary
+    assert UserScope.for_user("Мария").username == folders[0]
+
+
+def test_a_hashed_name_is_never_normalised_into_another_names_folder() -> None:
+    """Among the names that keep nothing as a folder name, two spellings an identity provider may tell apart keep two
+    folders: at worst one person's files are split, never two people's merged. (An ordinary name loses the characters
+    a folder name cannot keep, so "José" and "Josè" share "Jos": local sign-up refuses the second.)"""
+    composed = "Ёлка"  # Ё as one character, or as Е and a combining diaeresis
+    assert safe_dirname(unicodedata.normalize("NFD", composed)) != safe_dirname(composed)
+    assert safe_dirname("ａｌｉｃｅ") != safe_dirname("alice")  # full-width letters
+    assert safe_dirname("МАРИЯ") != safe_dirname("Мария")
 
 
 def test_safe_filename() -> None:

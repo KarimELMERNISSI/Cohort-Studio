@@ -10,10 +10,11 @@ finds each file in the places the session may read:
 - for tests and scripts (:meth:`PathResolver.unconfined`): the recorded path when it exists, else the file's name in
   the shared folders of the data root.
 
-A resolver given none of these reads no file, as a replay given no resolver: a session whose user has no workspace
-(a name that cannot become a folder) reads nothing. A saved version a trace names is looked up in the datasets folder
-only (:meth:`PathResolver.dataset`): a name such as ``../../bob/datasets/x`` finds nothing. A path on a network share
-is never opened (:func:`core.workspace.network_share`).
+A resolver given none of these reads no file, as a replay given no resolver: a session without a signed-in user
+reads nothing (every signed-in user has a workspace, :func:`core.workspace.safe_dirname`). A saved version a trace
+names is looked up in the datasets folder only (:meth:`PathResolver.dataset`): a name such as
+``../../bob/datasets/x`` finds nothing. A path on a network share is never opened
+(:func:`core.workspace.network_share`).
 """
 
 from __future__ import annotations
