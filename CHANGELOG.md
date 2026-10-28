@@ -241,6 +241,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     a location the app cannot check: it reads "Mistral AI (cloud)".
 - **Sharing a study configuration**: a switch leaves out the outlier rules that list row ids, which only mean
   something for the user's dataset.
+- **Text from a file or the AI engine draws nothing on the page.** Streamlit reads some text anew after Markdown's
+  escapes, so escaping did not stop it:
+  - an answer of the AI engine with a `mermaid` block was drawn as a diagram, whose image shapes the browser fetched
+    from any address the text named (the data-protection review had one fetched); a `math` block drew a formula;
+  - `:material/name:` in a file's column, a rule's name or an answer was drawn as an icon, and so were character
+    references such as `&colon;` once read; `:streamlit:` drew Streamlit's logo.
+
+  These are now shown as written.
 
 ### Configuration and identity
 
@@ -394,6 +402,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   lifelines. It now installs Python 3.14 from conda-forge only (never the user's `defaults` channel), then the
   locked packages of `requirements.txt`, which follow `uv.lock`; a test keeps it so. The README shows how to use it,
   how to update it (create it again), and that on macOS the full install needs Apple silicon.
+- **Rules read as written.** A comparison written with `<=`, `>=`, `->` or `--` between spaces was shown with ≤, ≥, an
+  arrow or a dash wherever Markdown shows text: the participant flow read "age: excluded unless 18 ≤ age ≤ 85" where
+  the rule's box reads "18 <= age <= 85", and an expression appeared as its user did not write it.
 
 ### Internal structure: one catalogue of trace steps
 

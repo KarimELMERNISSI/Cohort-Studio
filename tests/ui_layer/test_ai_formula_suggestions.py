@@ -178,7 +178,7 @@ def test_a_models_text_stays_text_and_a_value_from_a_missing_input_is_named(
     enrich: AppTest,
 ) -> None:
     shown = " ".join(m.value for m in enrich.markdown)
-    assert r"\[Read more\]\(http\://e\.x\)" in shown and "[Read more](http" not in shown
+    assert r"\[Read more\]\(http\:\/\/e\.x\)" in shown and "[Read more](http" not in shown
     assert r"\!\[beacon\]" in shown and r"\:red\[alarm\]" in shown
     captions = " ".join(c.value for c in enrich.caption)
     # np.where answers "false" for a missing HbA1c: those rows get a value all the same, and the card says how many
