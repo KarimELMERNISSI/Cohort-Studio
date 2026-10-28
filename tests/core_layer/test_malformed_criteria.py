@@ -96,7 +96,7 @@ def test_a_listed_range_larger_than_the_table_gives_the_same_rows(frame: pd.Data
     assert criterion_mask(frame, "around", {"row_ids": [[-5, 1], [2, 2]]}).all()
     assert not criterion_mask(frame, "outside", {"row_ids": [[100, 200]]}).any()
     assert describe_definition("huge", {"row_ids": [[0, 1_000_000_000]]}).startswith(
-        "1,000,000,001 listed rows"
+        "one of the 1,000,000,001 listed rows"
     )
 
 

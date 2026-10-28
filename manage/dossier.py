@@ -127,14 +127,17 @@ def _exclusions(flow: ParticipantFlow) -> pd.DataFrame:
 
 def _frozen_criteria(flow: ParticipantFlow) -> list[str]:
     """
-    The criteria of a population kept as the dataset, with their roles: the freeze unticks them, so the table of the
-    ticked criteria no longer gives their definitions (its exit lists the step's description, then a line each).
+    The criteria of a population kept as the dataset, with their roles, one line each under the step that kept it (so
+    that two are told apart, and a criterion is never read as one more rule of a threshold): the freeze unticks them,
+    so the table of the ticked criteria no longer gives their definitions. Its exit lists the step's description, then
+    a line per criterion.
     """
-    return [
-        f"{exit_.label}, by these criteria: {'; '.join(exit_.details[1:])}."
-        for exit_ in flow.exits
-        if exit_.id.startswith("step") and len(exit_.details) > 1
-    ]
+    lines: list[str] = []
+    for exit_ in flow.exits:
+        if exit_.id.startswith("step") and len(exit_.details) > 1:
+            lines.append(f"{exit_.label} ({exit_.details[0]}), by these criteria:")
+            lines.extend(exit_.details[1:])
+    return lines
 
 
 def build_dossier(inp: DossierInput) -> BytesIO:

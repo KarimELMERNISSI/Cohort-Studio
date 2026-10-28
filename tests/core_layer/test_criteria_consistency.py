@@ -166,12 +166,12 @@ def test_other_configuration_problems() -> None:
         ({"numeric": True, "upper_bound": 85, "strategy": "exclude"}, "age > 85", [5, 6]),
         (
             {"numeric": True, "lower_bound": 18, "upper_bound": 85, "strategy": "include"},
-            "age within [18, 85]",
+            "18 <= age <= 85",
             [2, 3, 4],
         ),
         (
             {"numeric": True, "lower_bound": 18, "upper_bound": 85, "strategy": "exclude"},
-            "age outside [18, 85]",
+            "age < 18 or age > 85",
             [0, 1, 5, 6],
         ),
     ],

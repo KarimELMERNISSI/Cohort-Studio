@@ -293,7 +293,7 @@ def add_outlier_handling_ui(df, numeric_cols):
     df_processed.attrs["outlier_detection"] = {
         "method": detection_method,
         "params": {k: (v if isinstance(v, (int, float, str, bool)) else str(v)) for k, v in params.items()},
-        "columns": [str(c) for c in selected_cols],
+        "columns": [str(c) for c in detection.columns],  # those analysed: a column the method skipped is not named
         "strategy": handling_strategy,
         "flagged": [int(i) for i in detection.flagged],
         # the bounds that flag the outliers clip them: the preview above is the clip that is recorded

@@ -121,12 +121,13 @@ brackets.
 - The **Analysis population** tab draws the participant flow (STROBE item 13): the records read in the file,
   the rows removed by recorded steps, the rows excluded by each family of criteria and the analysis population.
   Click a box, or choose it in the menu under the diagram, to see the criteria behind an exclusion, the rows
-  each excluded first and their definitions. Each definition says what the criterion does ("Adult: kept when
-  age >= 18", "Implausible age: excluded when df['age'] > 110"), and the note under them says how a missing value
-  counts: it meets no condition, so an exclusion criterion keeps that participant and an inclusion criterion
-  excludes them (in an expression, `.isna()` is met by a missing value, and so can be a condition written with `!=`
-  or `~`). Below, the tables give the rows in, excluded and out for each family, what each criterion excludes (on
-  the whole table, at its step, and as the first reason), and the excluded rows with their reasons.
+  each excluded first and their definitions. Each definition says what the criterion does: "Implausible age:
+  excluded when df['age'] > 110", or for an inclusion criterion, which is a requirement, "Adult: excluded unless
+  18 <= age <= 85". The note under them says how a missing value counts: a participant whose value is missing meets
+  no condition on it, so an exclusion criterion keeps them and an inclusion criterion excludes them (in an
+  expression, a missing value meets `.isna()`, and may also meet a condition written with `!=` or `~`). Below, the
+  tables give the rows in, excluded and out for each family, what each criterion excludes (on the whole table, at
+  its step, and as the first reason), and the excluded rows with their reasons.
 - **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is
   the one action that removes rows: it asks for confirmation, it is one step of the trace, saved versions are not
   changed, and the criteria are then unticked.

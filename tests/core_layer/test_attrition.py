@@ -16,6 +16,7 @@ from core.attrition import (
     FlowExit,
     ParticipantFlow,
     SourceRows,
+    criterion_line,
     flow_layout,
     participant_flow,
     source_from_trace,
@@ -120,7 +121,7 @@ def test_malformed_lines_and_rows_removed_by_a_step_have_their_own_boxes() -> No
     # both roles under one exit: each definition says what it does ("Adult: age >= 18" read as adults removed)
     assert removed.details[1:] == (
         "Implausible age: excluded when df['age'] > 110",
-        "Adult: kept when df['age'] >= 18",
+        "Adult: excluded unless df['age'] >= 18",
     )
     assert flow.main[-1].label == "Analysis population (no criterion ticked)"
     assert flow.inconsistencies() == []
@@ -141,14 +142,14 @@ def test_criteria_are_described_in_words() -> None:
         describe_definition(
             "age", {"numeric": True, "lower_bound": 18, "upper_bound": 90, "strategy": "include"}
         )
-        == "age within [18, 90]"
+        == "18 <= age <= 90"
     )
     assert describe_definition("bmi", {"numeric": True, "upper_bound": 15}) == "bmi <= 15"
-    assert describe_definition("o", {"bounds": {"ldl": [0.5, 9]}}) == "ldl outside [0.5, 9]"
-    assert describe_definition("o", {"row_ids": [[1, 3], [10, 10]]}) == "4 listed rows"
+    assert describe_definition("o", {"bounds": {"ldl": [0.5, 9]}}) == "ldl < 0.5 or ldl > 9"
+    assert describe_definition("o", {"row_ids": [[1, 3], [10, 10]]}) == "one of the 4 listed rows"
     assert (
         describe_definition("o", {"row_ids": [[1, 3]], "method": "iqr"})
-        == "3 listed rows (flagged by IQR)"
+        == "one of the 3 listed rows (flagged by IQR)"
     )
     members = {
         "a": {"numeric": False, "expression": "df['x'] > 1"},
@@ -176,7 +177,7 @@ EXPRESSION_X = {"expression": "df['x'] > 1"}
                 "params": {"threshold": 3.0},
                 "columns": ["sbp"],
             },
-            "3 listed rows (flagged by |z| > 3 on sbp)",
+            "one of the 3 listed rows (flagged by |z| > 3 on sbp)",
         ),
         (
             {
@@ -185,7 +186,7 @@ EXPRESSION_X = {"expression": "df['x'] > 1"}
                 "params": {"multiplier": 1.5},
                 "columns": ["ldl"],
             },
-            "3 listed rows (flagged by 1.5 × IQR on ldl)",
+            "one of the 3 listed rows (flagged by more than 1.5 × IQR beyond the quartiles on ldl)",
         ),
         (
             {
@@ -194,35 +195,46 @@ EXPRESSION_X = {"expression": "df['x'] > 1"}
                 "params": {"lower": 0.01, "upper": 0.99},
                 "columns": ["a", "b", "c", "d"],
             },
-            "3 listed rows (flagged by quantiles 0.01–0.99 on a, b, c and 1 more)",
+            "one of the 3 listed rows (flagged outside quantiles 0.01–0.99 on any of a, b, c, d)",
         ),
-        ({"row_ids": [[7, 7]], "method": "DBSCAN"}, "1 listed row (flagged by DBSCAN)"),
+        ({"row_ids": [[7, 7]], "method": "DBSCAN"}, "the 1 listed row (flagged by DBSCAN)"),
+        # a multivariate method flags a row on its columns together, a univariate one on any of them
+        (
+            {"row_ids": [[2, 4]], "method": "Isolation Forest", "columns": ["ldl", "hdl"]},
+            "one of the 3 listed rows (flagged by Isolation Forest on ldl and hdl together)",
+        ),
         # a reversed range lists no row, as the mask reads it
-        ({"row_ids": [[2, 4], [9, 5]]}, "3 listed rows"),
+        ({"row_ids": [[2, 4], [9, 5]]}, "one of the 3 listed rows"),
+        ({"row_ids": [[5, 2]]}, "no listed row"),
+        # only the names of columns: a loaded file can list anything there
+        (
+            {"row_ids": [[2, 4]], "method": "zscore", "columns": [73196451, "sbp"]},
+            "one of the 3 listed rows (flagged by z-score on sbp)",
+        ),
         # a method or parameter this version does not know is not written out: a file can hold any text there
         (
             {"row_ids": [[2, 4]], "method": "Dr Smith's review", "params": {"threshold": "high"}},
-            "3 listed rows (flagged by a method not named here)",
+            "one of the 3 listed rows (flagged by an unrecognised method)",
         ),
         (
             {"row_ids": [[2, 4]], "method": "zscore", "params": {"threshold": "high"}},
-            "3 listed rows (flagged by z-score)",
+            "one of the 3 listed rows (flagged by z-score)",
         ),
         # several columns of frozen bounds: a value outside any of them
-        ({"bounds": {"ldl": [0.5, 9], "age": [None, 85]}}, "ldl outside [0.5, 9] or age > 85"),
-        ({"bounds": {"ldl": [None, None]}}, "no bound (met by no row)"),
+        ({"bounds": {"ldl": [0.5, 9], "age": [None, 85]}}, "ldl < 0.5 or ldl > 9 or age > 85"),
+        ({"bounds": {"ldl": [None, None]}}, "never met (no bound)"),
         # reversed bounds are said so: nothing lies within them
         (
             {"bounds": {"ldl": [9, 0.5]}},
-            "ldl outside [9, 0.5] (reversed: met by every recorded value)",
+            "ldl < 9 or ldl > 0.5 (reversed: met by every recorded value)",
         ),
         (
             {"numeric": True, "lower_bound": 85, "upper_bound": 18, "strategy": "include"},
-            "age within [85, 18] (reversed: met by no value)",
+            "85 <= age <= 18 (reversed: met by no value)",
         ),
         (
             {"numeric": True, "lower_bound": 85, "upper_bound": 18, "strategy": "exclude"},
-            "age outside [85, 18] (reversed: met by every recorded value)",
+            "age < 85 or age > 18 (reversed: met by every recorded value)",
         ),
         # a threshold is read as the mask reads it, and says when it is met by every row or by none
         (
@@ -253,6 +265,21 @@ def test_every_outlier_method_is_named() -> None:
     from core.criteria import METHOD_WORDS
 
     assert set(METHOD_WORDS) == {*UNIVARIATE_METHODS, *MULTIVARIATE_METHODS}
+
+
+def test_a_criterion_says_what_it_does() -> None:
+    """An inclusion criterion is a requirement ("excluded unless"): "kept when age >= 18" read as if meeting it were
+    enough to stay, whatever the other criteria."""
+    from core.population import EXCLUSION, INCLUSION
+
+    adult = {"numeric": True, "lower_bound": 18}
+    assert criterion_line("age", INCLUSION, adult) == "age: excluded unless age >= 18"
+    assert criterion_line("age", EXCLUSION, adult) == "age: excluded when age >= 18"
+    assert criterion_line("age", "", adult) == "age: age >= 18"  # a role that was not recorded
+    assert criterion_line("frozen", EXCLUSION, {"bounds": {}}) == "frozen: never met (no bound)"
+    assert criterion_line("age", INCLUSION, {"numeric": True}).startswith(
+        "age: cannot be evaluated"
+    )
 
 
 def test_the_layout_places_every_box(tutorial) -> None:

@@ -147,7 +147,7 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
         ({"numeric": False, "expression": "df['x'] > 70"}, "df['x'] > 70"),
         (
             {"numeric": True, "lower_bound": 18, "upper_bound": 85, "strategy": "include"},
-            "age within [18, 85]",
+            "18 <= age <= 85",
         ),
         (
             {"numeric": True, "lower_bound": 18, "upper_bound": None, "strategy": "exclude"},
@@ -157,18 +157,18 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
             {"numeric": True, "lower_bound": None, "upper_bound": 85, "strategy": "exclude"},
             "age > 85",
         ),
-        ({"bounds": {"age": [18, 90]}}, "age outside [18, 90]"),
+        ({"bounds": {"age": [18, 90]}}, "age < 18 or age > 90"),
         # corrected by the catalogue's commit 5: listed rows name their method, a bound open on one side reads as
         # one, and a family of rules that fire together gives each rule's definition; then listed rows give the
-        # columns they were flagged on (one row reads "row"), and a column without a bound is left out
+        # columns they were flagged on, a column without a bound is left out, and ranges are comparisons
         (
             {"row_ids": [[2, 4]], "method": "zscore", "columns": ["x"]},
-            "3 listed rows (flagged by z-score on x)",
+            "one of the 3 listed rows (flagged by z-score on x)",
         ),
-        ({"row_ids": [[2, 4]]}, "3 listed rows"),
+        ({"row_ids": [[2, 4]]}, "one of the 3 listed rows"),
         (
             {"row_ids": [[1, 1]], "method": "Isolation Forest"},
-            "1 listed row (flagged by Isolation Forest)",
+            "the 1 listed row (flagged by Isolation Forest)",
         ),
         ({"bounds": {"age": [None, 85]}}, "age > 85"),
         ({"bounds": {"age": [18, None], "ldl": [None, None]}}, "age < 18"),
@@ -180,7 +180,7 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
                     "age": {"numeric": True, "lower_bound": 18, "upper_bound": 85},
                 },
             },
-            "at least 2 of: old (df['age'] > 80); age (age within [18, 85])",
+            "at least 2 of: old (df['age'] > 80); age (18 <= age <= 85)",
         ),
     ],
 )

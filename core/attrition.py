@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from core.criteria import describe_definition
-from core.population import EXCLUSION, PopulationResult
+from core.population import EXCLUSION, INCLUSION, PopulationResult
 from core.steps import flow_name
 
 SOURCE, LOADED, DATA, STAGE, POPULATION, ANALYSIS = (
@@ -119,22 +119,24 @@ class ParticipantFlow:
 
 # Under the flow's details and the dossier's criteria: how a missing value counts (core.criteria).
 MISSING_VALUES_NOTE = (
-    "A missing value meets no condition: an exclusion criterion keeps that participant, an inclusion criterion "
-    "excludes them. In an expression, .isna() is met by a missing value, and so can be a condition written with != "
-    "or ~."
+    "A participant whose value is missing meets no condition on it: an exclusion criterion keeps them, an inclusion "
+    "criterion excludes them. In an expression, a missing value meets .isna(), and may also meet a condition written "
+    "with != or ~ (not)."
 )
 
 
 def criterion_line(name: str, kind: str, definition: Mapping[str, Any]) -> str:
     """
-    A criterion and what it does, for the flow's details and the dossier: "Adult: kept when age >= 18", "Implausible
-    age: excluded when df['age'] > 110". A frozen population lists both roles under one exit, where the words alone
-    read as if the adults were removed.
+    A criterion and what it does, for the flow's details and the dossier: "Implausible age: excluded when df['age'] >
+    110", "Adult: excluded unless age >= 18" (an inclusion criterion is a requirement: meeting it keeps no participant
+    whom another criterion excludes). A frozen population lists both roles under one exit, where the words alone read
+    as if the adults were removed. No role for a criterion whose role is not recorded, or that is never met or cannot
+    be evaluated.
     """
     words = describe_definition(name, definition)
-    if words.startswith("cannot be evaluated"):
+    if kind not in (EXCLUSION, INCLUSION) or words.startswith(("cannot be evaluated", "never met")):
         return f"{name}: {words}"
-    return f"{name}: {'excluded' if kind == EXCLUSION else 'kept'} when {words}"
+    return f"{name}: excluded {'when' if kind == EXCLUSION else 'unless'} {words}"
 
 
 def _family_label(family: str, kind: str) -> str:

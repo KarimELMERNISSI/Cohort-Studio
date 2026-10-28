@@ -167,19 +167,17 @@ def _rows(df: pd.DataFrame, mask: pd.Series) -> list[int]:
 
 # ---------------------------------------------------------------------------------------------------------- read back
 
-_RANGE = re.compile(
-    r"(?P<column>.+?) (?P<where>within|outside) \[(?P<low>[^,\]]+), (?P<high>[^,\]]+)\]"
-)
-_COMPARISON = re.compile(r"(?P<column>.+?) (?P<op>>=|<=|>|<) (?P<value>-?\d+(?:\.\d+)?)")
+_NUMBER = r"-?\d+(?:\.\d+)?"
+_BETWEEN = re.compile(rf"(?P<low>{_NUMBER}) <= (?P<column>.+?) <= (?P<high>{_NUMBER})")
+_COMPARISON = re.compile(rf"(?P<column>.+?) (?P<op>>=|<=|>|<) (?P<value>{_NUMBER})")
 _OPERATORS = {">": "gt", ">=": "ge", "<": "lt", "<=": "le"}
 
 
 def _read_condition(df: pd.DataFrame, text: str) -> pd.Series:
-    """One condition in words ("age within [18, 85]", "sbp > 180"), as the rows it names: a missing value meets none."""
-    if match := _RANGE.fullmatch(text):
+    """One condition in words ("18 <= age <= 85", "sbp > 180"), as the rows it names: a missing value meets none."""
+    if match := _BETWEEN.fullmatch(text):
         series = df[match["column"]]
-        inside = series.between(float(match["low"]), float(match["high"]))
-        rows = inside if match["where"] == "within" else ~inside
+        rows = series.between(float(match["low"]), float(match["high"]))
     elif match := _COMPARISON.fullmatch(text):
         series = df[match["column"]]
         rows = getattr(series, _OPERATORS[match["op"]])(float(match["value"]))
@@ -188,12 +186,12 @@ def _read_condition(df: pd.DataFrame, text: str) -> pd.Series:
     return rows & series.notna()
 
 
-def _read_bounds(
+def _read_conditions(
     df: pd.DataFrame, name: str, definition: Mapping[str, Any], text: str
 ) -> pd.Series:
-    """A value outside any column's range: the conditions joined by "or"."""
+    """Conditions joined by "or" (a value outside a range, or outside any column's frozen bounds)."""
     rows = pd.Series(False, index=df.index)
-    if text == "no bound (met by no row)":
+    if text == "never met (no bound)":
         return rows
     for part in text.split(" or "):
         rows |= _read_condition(df, part)
@@ -202,14 +200,15 @@ def _read_bounds(
 
 def _read_listed(df: pd.DataFrame, name: str, definition: Mapping[str, Any], text: str) -> int:
     """Listed rows give how many rows they list, and how and where they were flagged: a count, not the rows."""
-    match = re.fullmatch(r"(?P<n>[\d,]+) listed rows?( \(flagged by (?P<how>[^)]+)\))?", text)
+    match = re.fullmatch(
+        r"(no listed row|the (?P<one>1) listed row|one of the (?P<n>[\d,]+) listed rows)"
+        r"( \(flagged (?P<how>[^)]+)\))?",
+        text,
+    )
     assert match, text
     assert bool(match["how"]) == bool(definition.get("method")), text
-    columns = definition.get("columns") or []
-    assert not columns or match["how"].endswith(f" on {', '.join(columns)}"), text
-    n = int(match["n"].replace(",", ""))
-    assert text.startswith(f"{match['n']} listed row{'' if n == 1 else 's'}"), text
-    return n
+    assert all(f"{column}" in (match["how"] or "") for column in definition.get("columns") or [])
+    return 1 if match["one"] else int((match["n"] or "0").replace(",", ""))
 
 
 def _read_threshold(
@@ -235,8 +234,8 @@ def _read_threshold(
 READ_BACK: dict[str, Callable[[pd.DataFrame, str, Mapping[str, Any], str], pd.Series | int]] = {
     "threshold": _read_threshold,
     "row_ids": _read_listed,
-    "bounds": _read_bounds,
-    "numeric": lambda df, name, definition, text: _read_condition(df, text),
+    "bounds": _read_conditions,
+    "numeric": _read_conditions,
     # the words are the expression
     "expression": lambda df, name, definition, text: criterion_mask(df, name, {"expression": text}),
 }

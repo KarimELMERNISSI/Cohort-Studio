@@ -664,18 +664,24 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     dossier gives the definition of every criterion. It now reads "at least 2 of: old (df['age'] > 80); age (age <=
     85)", and says when such a rule is met by every row or by none (at least 0, or more rules than it has).
   - Listed rows always read "(a multivariate outlier method)", also when Validate froze z-score, IQR or quantile
-    outliers. They now say how and where they were flagged, "3 listed rows (flagged by |z| > 3 on sbp)", naming only
-    the methods Validate offers: a loaded file can hold any text there.
-  - A frozen bound open on one side read "age outside [None, 85]"; it now reads "age > 85". Bounds on several columns
-    read "ldl outside [0.5, 9] or age > 85", and reversed bounds are said so.
+    outliers. They now say how and where they were flagged: "one of the 3 listed rows (flagged by |z| > 3 on sbp)",
+    "(flagged outside quantiles 0.01–0.99 on any of ldl, hdl)", "(flagged by Isolation Forest on age and sbp
+    together)". Only the methods Validate offers and the names of columns are written: a loaded file can hold any
+    text there. A rule frozen from Validate's outliers records the columns the method analysed: an identifier chosen
+    for a multivariate method, which the method leaves out, was named as if it had been used.
+  - Ranges are written as comparisons, which say whether a bound itself counts: "18 <= age <= 85", "potassium < 2.5
+    or potassium > 7", not "within [18, 85]". A frozen bound open on one side read "age outside [None, 85]"; it now
+    reads "age > 85". Bounds on several columns read "ldl < 0.5 or ldl > 9 or age > 85", and reversed bounds are said
+    so.
   - A rule that the check of a loaded configuration refuses reads "cannot be evaluated" and why, never "age <= None".
 - **The flow says what each criterion does, and how a missing value counts.** Each criterion in the details of an
-  exclusion reads "Adult: kept when age >= 18" or "Implausible age: excluded when df['age'] > 110". A population kept
-  as the dataset lists both roles under one exit, where "Adult: age >= 18" read as if the adults had been removed;
-  the dossier now gives these criteria too, since keeping the population unticks them. A note under the details and
-  under the dossier's criteria says that a missing value meets no condition, so an exclusion criterion keeps that
-  participant and an inclusion criterion excludes them; in an expression, `.isna()` is met by a missing value, and so
-  can be a condition written with `!=` or `~`.
+  exclusion reads "Implausible age: excluded when df['age'] > 110" or, for an inclusion criterion, which is a
+  requirement, "Adult: excluded unless age >= 18". A population kept as the dataset lists both roles under one exit,
+  where "Adult: age >= 18" read as if the adults had been removed; the dossier now gives these criteria too, one line
+  each under the step, since keeping the population unticks them. A note under the details and under the dossier's
+  criteria says: "A participant whose value is missing meets no condition on it: an exclusion criterion keeps them,
+  an inclusion criterion excludes them. In an expression, a missing value meets .isna(), and may also meet a
+  condition written with != or ~ (not)."
 - **A configuration for someone else is a file of its own, and holds only the criteria and the derived variables**
   (privacy). The download for sharing was a switch, off by default, that left out only the rules listing row ids at
   the top of a family. What went into the file:

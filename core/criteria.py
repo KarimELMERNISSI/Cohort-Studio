@@ -304,51 +304,67 @@ def _figure(value: Any) -> str | None:
 
 def _zscore_words(params: Mapping[str, Any]) -> str:
     threshold = _figure(params.get("threshold"))
-    return f"|z| > {threshold}" if threshold else "z-score"
+    return f"by |z| > {threshold}" if threshold else "by z-score"
 
 
 def _iqr_words(params: Mapping[str, Any]) -> str:
     multiplier = _figure(params.get("multiplier"))
-    return f"{multiplier} × IQR" if multiplier else "IQR"
+    return f"by more than {multiplier} × IQR beyond the quartiles" if multiplier else "by IQR"
 
 
 def _quantile_words(params: Mapping[str, Any]) -> str:
     lower, upper = _figure(params.get("lower")), _figure(params.get("upper"))
-    return f"quantiles {lower}–{upper}" if lower and upper else "quantiles"
+    return f"outside quantiles {lower}–{upper}" if lower and upper else "by quantiles"
 
 
-# How each outlier method flags a row, by the id Validate records (biostats.outliers), with the numbers recorded. A
-# method missing here is not named: the words go into the dossier, and a loaded file can hold any text there.
+# How each outlier method flagged a row ("flagged by |z| > 3"), by the id Validate records (biostats.outliers), with
+# the numbers recorded. A method missing here is not named: the words go into the dossier, and a loaded file can hold
+# any text there.
 METHOD_WORDS: dict[str, Callable[[Mapping[str, Any]], str]] = {
     "zscore": _zscore_words,
     "iqr": _iqr_words,
     "quantile": _quantile_words,
-    "Local Outlier Factor": lambda params: "Local Outlier Factor",
-    "Isolation Forest": lambda params: "Isolation Forest",
-    "DBSCAN": lambda params: "DBSCAN",
+    "Local Outlier Factor": lambda params: "by Local Outlier Factor",
+    "Isolation Forest": lambda params: "by Isolation Forest",
+    "DBSCAN": lambda params: "by DBSCAN",
 }
+_UNIVARIATE = ("zscore", "iqr", "quantile")  # a value of any one column flags the row
+
+
+def _listed(columns: list[str], univariate: bool) -> str:
+    """The columns a method flagged rows on: one of them is enough for a univariate method, all together otherwise."""
+    if len(columns) == 1:
+        return columns[0]
+    if univariate:
+        return f"any of {', '.join(columns)}"
+    return f"{', '.join(columns[:-1])} and {columns[-1]} together"
 
 
 def _row_ids_text(name: str, definition: Mapping[str, Any]) -> str:
     # the univariate outlier rules are frozen as rows too: how the rows were flagged, and on which columns
     ranges = definition.get("row_ids") or []
-    n = sum(
-        int(b) - int(a) + 1 for a, b in ranges if int(a) <= int(b)
-    )  # a reversed range lists none
-    rows = f"{n:,} listed row{'' if n == 1 else 's'}"
+    n = sum(int(b) - int(a) + 1 for a, b in ranges if int(a) <= int(b))  # a reversed range: none
+    if n <= 1:
+        rows = "the 1 listed row" if n else "no listed row"
+    else:
+        rows = f"one of the {n:,} listed rows"  # the criterion: "excluded when one of the 5 listed rows"
     method = definition.get("method")
     if not method:
         return rows
     words = METHOD_WORDS.get(str(method))
     params = definition.get("params")
-    how = (
-        words(params if isinstance(params, Mapping) else {}) if words else "a method not named here"
+    if words is None:
+        how = "by an unrecognised method"
+    else:
+        how = words(params if isinstance(params, Mapping) else {})
+    recorded = definition.get("columns")
+    # the names of columns only: a loaded file can list anything there, row ids too
+    columns = (
+        [c for c in recorded if isinstance(c, str)] if isinstance(recorded, (list, tuple)) else []
     )
-    columns = [str(c) for c in definition.get("columns") or ()]
     if columns:
-        more = f" and {len(columns) - 3} more" if len(columns) > 3 else ""
-        how += f" on {', '.join(columns[:3])}{more}"
-    return f"{rows} (flagged by {how})"
+        how += f" on {_listed(columns, str(method) in _UNIVARIATE)}"
+    return f"{rows} (flagged {how})"
 
 
 def _row_ids_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -404,7 +420,7 @@ def _bound_text(column: Any, low: Any, high: Any) -> str:
     """Where frozen bounds fire: outside the range, or past its one side ("age > 85", never "outside [None, 85]")."""
     if low is not None and high is not None:
         reversed_ = float(low) > float(high)  # nothing lies within: every recorded value is outside
-        return f"{column} outside [{low}, {high}]" + (
+        return f"{column} < {low} or {column} > {high}" + (
             " (reversed: met by every recorded value)" if reversed_ else ""
         )
     if high is not None:
@@ -420,7 +436,7 @@ def _bounds_text(name: str, definition: Mapping[str, Any]) -> str:
         for column, (low, high) in (definition.get("bounds") or {}).items()
         if low is not None or high is not None
     ]
-    return " or ".join(texts) if texts else "no bound (met by no row)"
+    return " or ".join(texts) if texts else "never met (no bound)"
 
 
 def _bounds_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -489,9 +505,14 @@ def _numeric_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...
 
 
 def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
-    """Where a numeric rule fires, in words: inside the range, or outside it with the *exclude* strategy."""
+    """
+    Where a numeric rule fires, in words: inside the range, or outside it with the *exclude* strategy. Comparisons
+    rather than brackets, which leave the reader to know whether a bound itself counts ("18 <= age <= 85").
+    """
     if low is not None and high is not None:
-        text = f"{column} {'outside' if exclude else 'within'} [{low}, {high}]"
+        text = (
+            f"{column} < {low} or {column} > {high}" if exclude else f"{low} <= {column} <= {high}"
+        )
         if float(low) > float(high):  # nothing lies within: every recorded value is outside
             text += (
                 " (reversed: met by every recorded value)"

@@ -171,7 +171,8 @@ def test_the_word_dossier_documents_the_flow_and_the_results(data_root: Path) ->
 
 def test_the_word_dossier_gives_the_criteria_of_a_frozen_population() -> None:
     """A population kept as the dataset unticks its criteria, so the table of the ticked criteria left out their
-    definitions; its exit gives each one with its role."""
+    definitions; its exit gives each one with its role, one line each under the step (joined by "; ", a criterion read
+    as one more rule of a threshold before it)."""
     from core.attrition import FlowBox, FlowExit, ParticipantFlow
     from manage.dossier import DossierInput, build_dossier
 
@@ -187,16 +188,20 @@ def test_the_word_dossier_gives_the_criteria_of_a_frozen_population() -> None:
                 details=(
                     "Population kept as the dataset",
                     "Implausible age: excluded when df['age'] > 110",
-                    "Adult: kept when df['age'] >= 18",
+                    "Adult: excluded unless df['age'] >= 18",
                 ),
             ),
         ),
     )
     text, *_ = _text(build_dossier(DossierInput("Frozen", flow, "all 3 rows")).getvalue())
-    assert (
-        "Removed: population kept as the dataset, by these criteria: Implausible age: excluded when "
-        "df['age'] > 110; Adult: kept when df['age'] >= 18." in text
+    lines = text.splitlines()
+    first = lines.index(
+        "Removed: population kept as the dataset (Population kept as the dataset), by these criteria:"
     )
+    assert lines[first + 1 : first + 3] == [
+        "Implausible age: excluded when df['age'] > 110",
+        "Adult: excluded unless df['age'] >= 18",
+    ]
     assert MISSING_VALUES_NOTE in text
 
 
