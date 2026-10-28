@@ -270,7 +270,6 @@ def test_validate_gives_the_file_for_sharing_under_its_own_name(data_root: Path)
 
 def _sharing_script() -> None:
     """The rules, the enrichment and the derived variable written as the pages write them, then the file for sharing."""
-    import json
     from pathlib import Path
 
     import streamlit as st
@@ -298,7 +297,7 @@ def _sharing_script() -> None:
         "bmi": {"formula": "weight_kg / (height_cm / 100) ** 2", "note": ss["note"]}
     }
     shared = configuration_for_sharing(ss.config)
-    ss["shared"] = json.dumps(shared.config, default=str)
+    ss["shared"] = shared.config
     ss["caption"] = left_out_text(shared)
 
 
@@ -312,7 +311,7 @@ def test_a_file_for_sharing_holds_no_row_path_or_note(data_root: Path) -> None:
     at.session_state["note"] = CANARY_NOTE
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    shared = at.session_state["shared"]
+    shared = json.dumps(at.session_state["shared"], default=str)  # as the page writes the file
     for planted in (
         str(SENTINEL_ID),
         str(SENTINEL_ID + 1),

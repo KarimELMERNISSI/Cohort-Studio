@@ -132,7 +132,12 @@ def workspace_exists(username: str | None) -> bool:
     """Whether the folder ``username`` would have exists already. A new account never takes it: it may hold another
     account's files, such as the folder an earlier version gave an account that has not signed in since."""
     name = (username or "").strip()
-    return bool(name) and (data_root() / "users" / safe_dirname(name)).exists()
+    if not name:
+        return False
+    try:  # safe_dirname keeps it inside users/; resolve_within says so where code scanning reads it
+        return resolve_within(data_root() / "users", safe_dirname(name)).exists()
+    except ValueError:  # a link leading outside the data folder: never given to a new account
+        return True
 
 
 def earlier_workspaces(username: str | None) -> list[Path]:

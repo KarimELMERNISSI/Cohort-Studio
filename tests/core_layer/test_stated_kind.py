@@ -60,7 +60,7 @@ def date_order(monkeypatch: pytest.MonkeyPatch) -> CriterionKind:
 
 
 def _register(monkeypatch: pytest.MonkeyPatch) -> CriterionKind:
-    import core.criteria as criteria
+    from core import criteria
 
     kinds = CRITERION_KINDS.copy()
     monkeypatch.setattr(criteria, "CRITERION_KINDS", kinds)

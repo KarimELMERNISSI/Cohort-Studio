@@ -87,7 +87,7 @@ def test_the_ai_engine_keeps_its_documents_and_indexes_in_the_users_workspace(
     try:
         engine.initialize_system()
     except _Stop:
-        pass
+        pass  # the probe ends the start-up once it has seen the folder
     assert seen == [alice.vectors_dir()]
 
 

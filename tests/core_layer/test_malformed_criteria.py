@@ -103,8 +103,7 @@ def test_a_listed_range_larger_than_the_table_gives_the_same_rows(frame: pd.Data
 def test_listed_rows_are_found_without_listing_the_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     """The work follows the table and the number of ranges: never the ranges' lengths (5,000 ranges of a billion ids
     on 1,000 rows listed five million ids), on sparse ids, an empty table or labels of another kind."""
-    import core.criteria as criteria
-    import core.fingerprint as fingerprint
+    from core import criteria, fingerprint
 
     def never(*args: object) -> None:
         raise AssertionError("no range is turned into the ids it spans")

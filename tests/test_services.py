@@ -74,7 +74,8 @@ def test_a_sessions_stores_are_built_on_first_use_with_its_scope(root: Path) -> 
     alice = UserScope.for_user("alice")
     mine = build_services(shared, alice, PathResolver(scope=alice))
     assert mine.datasets.scope == alice and mine.trace.scope == alice
-    assert mine.datasets is mine.datasets and mine.trace is mine.trace  # built once
+    datasets, trace = mine.datasets, mine.trace
+    assert mine.datasets is datasets and mine.trace is trace  # built once
     assert Path(mine.trace.trace_dir) == alice.traces_dir()
     assert mine.paths.scope == alice and mine.shared is shared
 

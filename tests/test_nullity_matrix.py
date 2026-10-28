@@ -34,7 +34,9 @@ def test_a_long_cohort_gets_the_labels_that_fit(cluster_rows: bool) -> None:
     rows = sorted(drawn).index  # a dendrogram lists its rows from the top
     gaps = {abs(rows(b) - rows(a)) for a, b in zip(ticks, ticks[1:])}
     # evenly spaced, the 6-pixel font apart in the 500 pixels inside the margins
-    assert len(gaps) == 1 and gaps.pop() * 500 / 1206 >= 8
+    assert len(gaps) == 1, gaps
+    (gap,) = gaps
+    assert gap * 500 / 1206 >= 8
 
 
 def test_a_short_cohort_gets_every_label() -> None:

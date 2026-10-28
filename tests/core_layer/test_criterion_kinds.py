@@ -517,7 +517,7 @@ def test_the_writers_write_what_the_pages_wrote_and_it_reads_as_its_kind() -> No
 def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rules nested twenty deep are each read once when looking for a row list (walking the members twice doubled
     the work at each level of a loaded file), and once in each pass of sharing them."""
-    import core.criteria as criteria
+    from core import criteria
 
     calls: list[str] = []
     original = criteria.rule_kind
@@ -542,7 +542,7 @@ def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
     A kind registered later, in a module of its own, is read by what it declares: its row lists, and the rules it
     combines, whose checks and columns the free functions add (such a module cannot import core.criteria).
     """
-    import core.criteria as criteria
+    from core import criteria
 
     kinds = CRITERION_KINDS.copy()  # the test's kinds go with it
     monkeypatch.setattr(criteria, "CRITERION_KINDS", kinds)
