@@ -1119,6 +1119,15 @@ Applies a background color to specific columns.
 Deeply merges two dictionaries. Adds new keys and values from `new` to `original`
 without modifying existing keys in `original`.
 
+### def `refusal_text` (data_monitoring.py)
+
+- **Arguments**: `problems: list[str]`
+
+- **Returns**: `str`
+
+Why a loaded configuration was refused: the file's text (rule names, values) as written, never as Markdown,
+where an image or a link written in a rule's name would be fetched or followed.
+
 ### def `_merge_uploaded` (data_monitoring.py)
 
 - **Arguments**: `config: dict[ComplexType], new_config: dict[ComplexType]`

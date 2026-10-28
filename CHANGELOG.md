@@ -731,6 +731,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The developer guide's chapter on the study configuration gives the kinds, how a definition is read, why a stored
   definition is never rewritten, and how to add a kind.
 
+### Documentation: the developer guide's architecture (M5b)
+
+- **The architecture chapter is rewritten.** Its picture predated `core`, `biostats`, `ingest`, `enrich`, `graph` and
+  `ui`. It now gives the layers and the rules the layer test holds, the two extension mechanisms (connector families
+  and catalogues), the composition root, settings and preferences, the session state and what the application clears,
+  the runtime, and the checks that keep it so.
+- **Recipes** for adding a connector, a kind of trace step, a criterion kind, an analysis and a page panel, each with
+  the test that guards it.
+- The contributing notes no longer send new helpers to `utils`: new code goes in the layer it belongs to.
+
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 
 - **A column's name inside a text literal broke the formula.** The evaluator renamed the columns in the formula's
