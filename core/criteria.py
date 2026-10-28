@@ -337,6 +337,20 @@ _PROBLEMS = {
 }
 
 
+def holds_row_list(definition: Any) -> bool:
+    """
+    Whether a rule lists row ids of this dataset: its own "row_ids", or a rule it combines that does (a threshold
+    rule's members). Such a rule only means something for this dataset, and is left out of a configuration shared
+    with someone else (core.population.without_row_lists).
+    """
+    if not isinstance(definition, Mapping):
+        return False
+    if "row_ids" in definition:
+        return True
+    members = definition.get("members")
+    return isinstance(members, Mapping) and any(holds_row_list(spec) for spec in members.values())
+
+
 def criterion_problems(name: str, definition: Any) -> list[str]:
     """
     What makes a criterion unusable on any table, in words (empty when it can be evaluated): a configuration with such
@@ -359,5 +373,6 @@ __all__ = [
     "criterion_columns",
     "criterion_mask",
     "criterion_problems",
+    "holds_row_list",
     "rule_kind",
 ]

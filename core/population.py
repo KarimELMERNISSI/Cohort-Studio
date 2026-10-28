@@ -31,6 +31,7 @@ from core.criteria import (
     criterion_columns,
     criterion_mask,
     criterion_problems,
+    holds_row_list,
 )
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import shape_problems as derived_shape_problems
@@ -188,8 +189,9 @@ def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
 
 def without_row_lists(config: Mapping[str, Any] | None) -> dict[str, Any]:
     """
-    A copy of the configuration for sharing: without the rules that list rows (outliers found by a multivariate
-    method, frozen as row ids), which only mean something for this dataset; a family left empty is dropped.
+    A copy of the configuration for sharing: without the rules that list rows (outliers frozen as row ids), also
+    inside a threshold rule (core.criteria.holds_row_list), which only mean something for this dataset; a family left
+    empty is dropped.
     """
     shared = json.loads(json.dumps(dict(config or {}), default=str))
     families = shared.get("mask_families")
@@ -201,7 +203,7 @@ def without_row_lists(config: Mapping[str, Any] | None) -> dict[str, Any]:
             kept = {
                 name: spec
                 for name, spec in members.items()
-                if name == "operator" or not (isinstance(spec, dict) and "row_ids" in spec)
+                if name == "operator" or not holds_row_list(spec)
             }
             if any(name != "operator" for name in members) and all(
                 name == "operator" for name in kept

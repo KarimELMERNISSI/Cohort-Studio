@@ -664,6 +664,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   multivariate outlier method)", also when Validate froze z-score, IQR or quantile outliers: they now name the
   method recorded ("flagged by IQR"), or none. A frozen bound open on one side read "age outside [None, 85]"; it now
   reads "age > 85". Nothing a population or a trace records changes: only these words.
+- **"Leave out the outlier rows" also leaves out a row list inside a rule that combines others** (privacy). The
+  download for sharing removed the rules that list row ids at the top of a family, but kept a rule "at least 2 of"
+  whose combined rules included one: the row ids of the dataset went into the shared file. Such a rule is now left
+  out too.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

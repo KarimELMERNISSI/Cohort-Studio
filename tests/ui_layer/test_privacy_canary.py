@@ -107,12 +107,25 @@ def test_a_configuration_for_sharing_lists_no_row() -> None:
             },
             "only_rows": {"operator": "any", "lof": {"row_ids": [[4, 4]]}},
             "study_inclusion": {"operator": "all", "adult": {"expression": "df['age'] >= 18"}},
+            # a rule that combines others, one of which lists rows: it left the rows in the shared file
+            "combined": {
+                "operator": "any",
+                "two signs": {
+                    "threshold": 2,
+                    "members": {
+                        "listed": {"row_ids": [[5, 9]], "method": "zscore"},
+                        "old": {"expression": "df['age'] > 80"},
+                    },
+                },
+                "high": {"expression": "df['sbp'] > 180"},
+            },
         }
     }
     shared = without_row_lists(config)
     assert "row_ids" not in json.dumps(shared)
     # a family left empty is dropped
-    assert set(shared["mask_families"]) == {"outliers", "study_inclusion"}
+    assert set(shared["mask_families"]) == {"outliers", "study_inclusion", "combined"}
+    assert set(shared["mask_families"]["combined"]) == {"operator", "high"}
     assert "frozen bounds" in shared["mask_families"]["outliers"]
     assert "row_ids" in json.dumps(config)  # the session's configuration is unchanged
 
