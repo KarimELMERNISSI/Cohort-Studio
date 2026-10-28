@@ -235,7 +235,7 @@ class AppState:
         if "db_manager" not in st.session_state:
             from manage.db_manager import DBManager
 
-            st.session_state["db_manager"] = DBManager()
+            st.session_state["db_manager"] = DBManager(scope=get_current_scope())
         return st.session_state["db_manager"]
 
     @property
@@ -243,7 +243,9 @@ class AppState:
         if "transformation_manager" not in st.session_state:
             from manage.transformation_manager import TransformationManager
 
-            st.session_state["transformation_manager"] = TransformationManager()
+            st.session_state["transformation_manager"] = TransformationManager(
+                scope=get_current_scope()
+            )
         return st.session_state["transformation_manager"]
 
     @property

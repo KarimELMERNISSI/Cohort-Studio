@@ -12,23 +12,26 @@ from typing import Any
 
 import streamlit as st
 
+from utils.session_scope import get_current_scope
+
 ENGINE_KEY = "rag_manager"
 
 
 def ai_engine() -> Any:
     """
-    The session's AI engine, built on first use. An engine of a class reloaded since it was built (a code change while
-    the server runs) is stopped and built again with the key typed for it; an engine a test put there is kept.
+    The session's AI engine, built on first use for the signed-in user's workspace. An engine of a class reloaded
+    since it was built (a code change while the server runs) is stopped and built again with the key typed for it; an
+    engine a test put there is kept.
     """
     from manage.rag_manager import RAGManager
 
     engine = st.session_state.get(ENGINE_KEY)
     if engine is None:
-        engine = st.session_state[ENGINE_KEY] = RAGManager()
+        engine = st.session_state[ENGINE_KEY] = RAGManager(scope=get_current_scope())
     elif type(engine) is not RAGManager and _same_class(type(engine), RAGManager):
         key = getattr(engine, "api_key", None)
         _stop(engine, "the AI engine was reloaded after a code change")
-        engine = st.session_state[ENGINE_KEY] = RAGManager(api_key=key)
+        engine = st.session_state[ENGINE_KEY] = RAGManager(api_key=key, scope=get_current_scope())
     return engine
 
 

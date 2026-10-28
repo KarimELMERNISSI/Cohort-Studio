@@ -642,6 +642,29 @@ def test_the_engine_uses_the_server_the_settings_show(monkeypatch, tmp_path, ask
     assert opened == [None] and manager.recipients() == frozenset() and manager.qdrant_url is None
 
 
+def test_the_engine_keeps_its_index_in_the_workspace_of_the_user_it_was_given(monkeypatch, tmp_path) -> None:
+    """The session gives the engine its user's scope (ui.services.ai_engine): the index is opened in that user's
+    folder and named after that account, never after another or in the shared folder."""
+    from core.workspace import UserScope
+    from manage.vectorstores import VECTOR_STORES
+
+    _fake_connectors(monkeypatch, tmp_path)
+    opened: list[dict] = []
+
+    def stand_in(engine, **kwargs):
+        opened.append(kwargs)
+        return VECTOR_STORES.get("lancedb").open(tmp_path / "lance")
+
+    monkeypatch.setattr(rm, "open_index", stand_in)
+    alice = UserScope.for_user("alice")
+    manager = rm.RAGManager(provider="ollama", scope=alice)
+    ok, message = manager.initialize_system(
+        provider="ollama", model_name="m", embedding_model="e", vector_engine="lancedb"
+    )
+    assert ok, message
+    assert [(found["base_dir"], found["username"]) for found in opened] == [(alice.vectors_dir(), "alice")]
+
+
 def test_the_running_engine_names_each_recipient_by_its_role() -> None:
     from app_pages.rag_sidebar import _engine_recipients, _names
     from manage.ai_payload import provider_label

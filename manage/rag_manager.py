@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 from rapidfuzz import process
 
+from core.workspace import UserScope
 from manage.ai_payload import (
     column_profile,
     document_name,
@@ -149,12 +150,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         - suggest_alternative_formula
     """
     
-    def __init__(self, documents_dir=None, api_key=None, provider=None, base_url=None):
+    def __init__(
+        self, documents_dir=None, api_key=None, provider=None, base_url=None, *, scope: UserScope | None = None
+    ):
+        # the user's workspace, passed by the session (ui.services.ai_engine): their document library, their vector
+        # indexes and the account an index is named after; without one (tests, scripts), the shared folders
+        self.scope = scope
         if documents_dir is None:
-            # Per-user document library (audit E4); the legacy shared folder is used outside a session.
-            from utils.session_scope import get_current_scope
-
-            scope = get_current_scope()
             documents_dir = str(scope.documents_dir()) if scope else "DOCUMENTS"
         self.documents_dir = documents_dir
         self.api_key = api_key
@@ -424,9 +426,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # vector of every search, so the one chosen is a recipient too (the recommendation depends on a server being
         # configured, not on the library's size: no document is read for it)
         from utils.data_paths import get_vectors_dir
-        from utils.session_scope import get_current_scope
 
-        scope = get_current_scope()
+        scope = self.scope
         base_dir = scope.vectors_dir() if scope else Path(get_vectors_dir())  # per-user indexes
         store_settings = VectorStoreSettings.from_env()
         server = store_settings.server_for(qdrant_url)  # "": embedded; None asked: the server's setting

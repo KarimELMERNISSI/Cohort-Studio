@@ -6,6 +6,7 @@ built one on every visit, loading the AI packages for nothing. An engine of a cl
 built again with the key typed for it, and stopped first; an engine a test puts in the session is kept.
 """
 
+import importlib.util
 import os
 from pathlib import Path
 
@@ -36,6 +37,45 @@ def test_opening_a_page_builds_no_ai_engine(
     assert "db_manager" in at.session_state  # the dataset store is the session's (AppState)
 
 
+def _sessions_services() -> None:
+    import streamlit as st
+
+    from ui.state import get_state
+
+    st.session_state["username"] = st.session_state["as_user"]
+    state = get_state()
+    datasets, trace = state.db_manager, state.transformation_manager
+    st.session_state["folders"] = [datasets.dataset_dir, datasets.stats_dir, trace.trace_dir]
+    if st.session_state.get("with_ai"):
+        st.session_state["folders"].append(state.rag_manager.documents_dir)
+
+
+def test_a_signed_in_sessions_services_keep_to_the_users_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The services take the user's workspace from the session (AppState, ai_engine), and never ask for it themselves;
+    a name that keeps nothing as a folder name has a workspace of its own, not the shared folders."""
+    from core.workspace import UserScope
+
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    with_ai = importlib.util.find_spec("langchain_core") is not None
+    workspaces = set()
+    for user in ("alice", "Мария", "Мариам"):  # the last two keep nothing as a folder name
+        at = AppTest.from_function(_sessions_services, default_timeout=60)
+        at.session_state["as_user"] = user
+        at.session_state["with_ai"] = with_ai
+        at.run()
+        assert not at.exception, [str(e.value)[:300] for e in at.exception]
+        folders = at.session_state["folders"]
+        assert len(folders) == (4 if with_ai else 3)
+        workspace = UserScope.for_user(user).root.resolve()
+        for folder in folders:
+            assert Path(folder).resolve().is_relative_to(workspace), (user, folder)
+        workspaces.add(workspace)
+    assert len(workspaces) == 3  # one each
+    assert {w.parent for w in workspaces} == {(tmp_path / "users").resolve()}
+
+
 def _reloaded() -> None:
     import streamlit as st
 
@@ -45,20 +85,25 @@ def _reloaded() -> None:
     def stop(self, reason: str) -> None:
         st.session_state["stopped"] = reason
 
+    st.session_state["username"] = "alice"
     # the class as it was before a code change: another object, with the same module and name
     before = type("RAGManager", (), {"__module__": rag_manager.__name__, "stop": stop})
     old = before()
     old.api_key = "TYPED-KEY"
     st.session_state["rag_manager"] = old
     engine = ai_engine()
-    st.session_state["rebuilt"] = (type(engine) is rag_manager.RAGManager, engine.api_key)
+    built = (type(engine) is rag_manager.RAGManager, engine.api_key, engine.scope.username)
+    st.session_state["rebuilt"] = built
 
 
-def test_an_engine_of_a_reloaded_class_is_stopped_and_built_again_with_its_key() -> None:
+def test_an_engine_of_a_reloaded_class_is_stopped_and_built_again_with_its_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     at = AppTest.from_function(_reloaded, default_timeout=60).run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    assert at.session_state["rebuilt"] == (True, "TYPED-KEY")
+    assert at.session_state["rebuilt"] == (True, "TYPED-KEY", "alice")
     assert "code change" in at.session_state["stopped"]
 
 

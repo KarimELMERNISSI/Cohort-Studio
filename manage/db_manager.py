@@ -11,7 +11,6 @@ from core.workspace import UserScope
 from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
 from manage.iam.schemas import UserCredentials, UserRole
 from utils.data_paths import get_datasets_dir, get_stats_dir
-from utils.session_scope import get_current_scope
 
 
 def _sql_literal(value: str) -> str:
@@ -44,9 +43,10 @@ def write_parquet(df: pd.DataFrame, path: str) -> None:
 class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
     def __init__(self, db_path: str = ":memory:", scope: UserScope | None = None) -> None:
-        # Per-user workspace (audit E4): datasets and statistics live under <DATA_ROOT>/users/<username>/.
-        # Without a signed-in user (tests, CLI) the legacy shared directories are used.
-        self.scope: UserScope | None = scope if scope is not None else get_current_scope()
+        # Per-user workspace (audit E4): datasets and statistics live under <DATA_ROOT>/users/<username>/. The
+        # session passes its user's scope (ui.state.AppState); without one (tests, scripts, the command line) the
+        # shared directories are used.
+        self.scope: UserScope | None = scope
         shared_dir = get_datasets_dir()
         if self.scope is not None:
             self.dataset_dir: str = str(self.scope.datasets_dir())

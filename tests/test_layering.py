@@ -95,7 +95,8 @@ UTILS_GROUPS = {
     "utils.visualization_utils": "explore",
 }
 ENTRY_POINTS = ("main", "manage_users")  # above every layer
-HEADLESS = ("manage_users", "manage.replay")  # R5; manage.replay arrives with M8
+# R5; manage.replay arrives with M8, which reads traces outside the app as the replay does today
+HEADLESS = ("manage_users", "manage.replay", "manage.reproduction_manager")
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
 # Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws
@@ -105,21 +106,11 @@ MODULE_NAME = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+")  # a dotted n
 
 # --- today's exceptions (they can only shrink) ------------------------------------------------------------------
 # R1, (importer, imported): upward imports
-KNOWN_UPWARD = {
-    # services that ask the Streamlit session for the user: they take the scope explicitly (M5b)
-    ("manage.db_manager", "utils.session_scope"),
-    ("manage.rag_manager", "utils.session_scope"),
-    ("manage.transformation_manager", "utils.session_scope"),
-}
+KNOWN_UPWARD: set[tuple[str, str]] = set()
 # R2: the cycles allowed, by design
 CYCLES_BY_DESIGN = [{"biostats.mi.engine", "biostats.mi.parallel"}]
 # R3, (module below ui, the import through which it reaches Streamlit)
-KNOWN_STREAMLIT = {
-    # through utils.session_scope: the services take the scope explicitly (M5b, composition root)
-    ("manage.db_manager", "utils.session_scope"),
-    ("manage.rag_manager", "utils.session_scope"),
-    ("manage.transformation_manager", "utils.session_scope"),
-}
+KNOWN_STREAMLIT: set[tuple[str, str]] = set()
 # R4, modules outside manage/rag/providers that import a provider SDK: none (Gemini's file upload of the document
 # graph moved into its connector, read_document)
 KNOWN_SDK: set[str] = set()

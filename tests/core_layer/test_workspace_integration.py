@@ -56,6 +56,41 @@ def test_traces_live_in_the_user_workspace(root: Path) -> None:
     assert other.get_available_datasets_from_traces(username="bob") == []
 
 
+def test_services_given_no_scope_use_the_shared_folders(root: Path) -> None:
+    """The services never ask the session for the user (M5b step 5): the session passes its user's scope, and without
+    one (tests, scripts, the command line) the shared folders are used."""
+    assert Path(DBManager().dataset_dir) == root / "datasets"
+    assert Path(TransformationManager().trace_dir) == root / "traces"
+    assert DBManager().scope is None and TransformationManager().scope is None
+
+
+def test_the_ai_engine_keeps_its_documents_and_indexes_in_the_users_workspace(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    from manage import rag_manager
+
+    alice = UserScope.for_user("alice")
+    engine = rag_manager.RAGManager(provider="ollama", scope=alice)
+    assert Path(engine.documents_dir) == alice.documents_dir()
+    seen: list[Path] = []
+
+    class _Stop(Exception):
+        pass
+
+    def probe(base_dir) -> None:
+        # the folder the vector database is chosen for, before anything is sent
+        seen.append(Path(base_dir))
+        raise _Stop
+
+    monkeypatch.setattr(rag_manager, "probe_machine", probe)
+    try:
+        engine.initialize_system()
+    except _Stop:
+        pass
+    assert seen == [alice.vectors_dir()]
+
+
 def test_explicit_trace_dir_still_wins(tmp_path: Path) -> None:
     tm = TransformationManager(trace_dir=str(tmp_path / "custom"))
     assert tm.scope is None

@@ -124,6 +124,17 @@ def test_pages_never_build_services() -> None:
     assert not _count(r"\b(DBManager|TransformationManager|RAGManager)\(", "app_pages")
 
 
+_SERVICE = r"(?<!class )\b(DBManager|TransformationManager|RAGManager)\("
+
+
+def test_the_session_builds_its_services_with_the_users_workspace() -> None:
+    """Only AppState and ai_engine() build the dataset store, the trace and the AI engine, always passing the user's
+    scope: these services never ask the session for the user, and without a scope they use the shared folders."""
+    assert not _count(_SERVICE, *SOURCE_DIRS, exclude=("ui/state.py", "ui/services.py"))
+    assert _count(_SERVICE, "ui/state.py", "ui/services.py")
+    assert not _count(_SERVICE + r"(?![^)]*\bscope=)", "ui/state.py", "ui/services.py")
+
+
 _SERVICE_KEYS = "db_manager|transformation_manager|rag_manager"
 _SERVICE_WRITE = (
     rf"""session_state\[\s*["']({_SERVICE_KEYS})["']\s*\]\s*=(?!=)"""

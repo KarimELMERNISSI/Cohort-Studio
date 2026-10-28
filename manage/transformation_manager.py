@@ -11,7 +11,6 @@ from core.lineage import TRACE_SCHEMA, genesis_hash, seal_step, verify_trace
 from core.steps import STEPS
 from core.workspace import UserScope
 from utils.data_paths import get_traces_dir
-from utils.session_scope import get_current_scope
 from utils.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -25,9 +24,11 @@ class TransformationManager:
         -----------
         trace_dir : str, optional
              Directory where transformation traces will be stored.
-             Defaults to DATA_ROOT/traces via data_paths utility.
+             Defaults to the traces folder of ``scope``, else DATA_ROOT/traces via data_paths utility.
+        scope : UserScope, optional
+             The user's workspace, passed by the session (ui.state.AppState); None outside a session.
         """
-        self.scope: UserScope | None = scope if scope is not None else (None if trace_dir else get_current_scope())
+        self.scope: UserScope | None = scope
         if trace_dir:
             self.trace_dir: str = trace_dir
         elif self.scope is not None:
