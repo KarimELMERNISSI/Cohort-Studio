@@ -137,6 +137,13 @@ KEYS: tuple[Key, ...] = (
         note="Validate: the same, for the inclusion criteria",
     ),
     Key(
+        "validate_config_uploaded",
+        "app_pages.data_monitoring",
+        "page",
+        note="Validate: what the uploaded configuration gave (loaded, with its notices, or why not), merged once by the "
+        "uploader's callback, shown while the file stays in the uploader and dropped once it is empty",
+    ),
+    Key(
         "validity_outlier_method",
         "app_pages.data_quality_dashboard",
         "dataset",

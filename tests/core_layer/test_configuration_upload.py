@@ -10,6 +10,9 @@ differs.
 
 from __future__ import annotations
 
+import io
+import json
+
 from core.population import configuration_problems, merge_families
 
 NUMERIC_AGE = {
@@ -168,3 +171,35 @@ def test_why_a_file_is_refused_shows_its_text_as_written() -> None:
     assert text.startswith("This configuration was not loaded:")
     assert "![x](" not in text and "](https" not in text  # no image, no link
     assert "18 years" in text
+
+
+def _file(content: object) -> io.BytesIO:
+    return io.BytesIO(json.dumps(content).encode("utf-8"))
+
+
+def test_validates_upload_says_what_a_file_gave() -> None:
+    from app_pages.data_monitoring import read_uploaded_config
+
+    config = {"mask_families": {"study_inclusion": {"operator": "all", "age": NUMERIC_AGE}}}
+    loaded, messages = read_uploaded_config(
+        config,
+        _file({"mask_families": {"study_inclusion": {"operator": "all", "age": EXPRESSION_AGE}}}),
+    )
+    assert loaded and messages[0] == "Configuration loaded and merged successfully!"
+    assert "`study_inclusion: age`" in messages[1]
+    assert config["mask_families"]["study_inclusion"]["age"] == NUMERIC_AGE
+    bound = {
+        "mask_families": {"study_inclusion": {"age": {"numeric": True, "lower_bound": "18 years"}}}
+    }
+    for content, why in (
+        (bound, "This configuration was not loaded:"),
+        ([1, 2], "the file must hold one JSON object"),
+    ):
+        before = json.dumps(config, sort_keys=True)
+        loaded, messages = read_uploaded_config(config, _file(content))
+        assert not loaded and why in messages[0]
+        assert json.dumps(config, sort_keys=True) == before
+    assert read_uploaded_config(config, io.BytesIO(b"{not json")) == (
+        False,
+        ["Invalid JSON file. Please upload a valid configuration file."],
+    )

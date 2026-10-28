@@ -405,6 +405,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Rules read as written.** A comparison written with `<=`, `>=`, `->` or `--` between spaces was shown with ≤, ≥, an
   arrow or a dash wherever Markdown shows text: the participant flow read "age: excluded unless 18 ≤ age ≤ 85" where
   the rule's box reads "18 <= age <= 85", and an expression appeared as its user did not write it.
+- **A configuration loaded on Validate shows its criteria in the sidebar at once.** The sidebar still said "every
+  row", with nothing to tick, until the next click. The file is now read once when it is uploaded: it was read again
+  on every click while it stayed in the uploader, so a rule removed from the session after the upload came back from
+  the file.
 
 ### Internal structure: one catalogue of trace steps
 

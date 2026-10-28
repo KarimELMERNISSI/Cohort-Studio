@@ -1164,6 +1164,43 @@ def _merge_uploaded(config: dict[str, Any], new_config: dict[str, Any]) -> list[
     return notices
 
 
+def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[str]]:
+    """
+    An uploaded configuration file merged into ``config`` (:func:`_merge_uploaded`): whether it was loaded, and what to
+    tell. A file that cannot be read, or whose rules or operators would be read one way here and another there, is
+    refused with why.
+    """
+    try:
+        new_config = json.load(file)
+        problems = (
+            configuration_problems(new_config)
+            if isinstance(new_config, dict)
+            else ["the file must hold one JSON object"]
+        )
+        if problems:
+            return False, [refusal_text(problems)]
+        notices = _merge_uploaded(config, new_config)
+    except json.JSONDecodeError:
+        return False, ["Invalid JSON file. Please upload a valid configuration file."]
+    except Exception as exc:  # a file this version cannot read is refused, never an error page
+        return False, [f"This configuration was not loaded ({type(exc).__name__})."]
+    return True, ["Configuration loaded and merged successfully!", *notices]
+
+
+def _on_config_upload() -> None:
+    """
+    Callback of the configuration upload: the file is merged once, before the page and the sidebar are drawn. Merged in
+    the page, it was merged again on every run while it stayed in the uploader (a rule changed since came back from the
+    file), and the sidebar, drawn before the page, showed the criteria of the run before: "every row" right after a
+    configuration with criteria was loaded.
+    """
+    file = st.session_state.get("validate_config_upload")
+    if not callable(getattr(file, "read", None)):  # removed from the uploader (None, or the uploader's DeletedFile)
+        st.session_state.pop("validate_config_uploaded", None)
+        return
+    st.session_state["validate_config_uploaded"] = read_uploaded_config(st.session_state.config, file)
+
+
 ##### ANOMALY PART
 
 def render_ai_criteria_assistant(st_container, config, family_name, mode="anomaly"):
@@ -1547,27 +1584,22 @@ def app():
     )
     
     if action == "Load Existing Config":
-        uploaded_file = st.sidebar.file_uploader("Upload configuration file", key="validate_config_upload", type=['json'])
-
-        if uploaded_file is not None:
-            try:
-                # Parse the uploaded JSON file
-                new_config = json.load(uploaded_file)
-                # an ambiguous rule or operator would be read one way here and another there: refused, with why
-                problems = configuration_problems(new_config) if isinstance(new_config, dict) else [
-                    "the file must hold one JSON object"
-                ]
-                if problems:
-                    st.sidebar.error(refusal_text(problems))
-                else:
-                    notices = _merge_uploaded(st.session_state.config, new_config)
-                    st.sidebar.success("Configuration loaded and merged successfully!")
-                    for notice in notices:
-                        st.sidebar.warning(notice)
-            except json.JSONDecodeError:
-                st.error("Invalid JSON file. Please upload a valid configuration file.")
-            except Exception as exc:  # a file this version cannot read is refused, never an error page
-                st.sidebar.error(f"This configuration was not loaded ({type(exc).__name__}).")
+        uploaded_file = st.sidebar.file_uploader(
+            "Upload configuration file", key="validate_config_upload", type=["json"], on_change=_on_config_upload
+        )
+        # what the file gave, merged once by the callback, while it stays in the uploader (which forgets it when the
+        # page is left)
+        uploaded = st.session_state.get("validate_config_uploaded")
+        if uploaded_file is None:
+            st.session_state.pop("validate_config_uploaded", None)
+        elif uploaded is not None:
+            loaded, messages = uploaded
+            if loaded:
+                st.sidebar.success(messages[0])
+                for notice in messages[1:]:
+                    st.sidebar.warning(notice)
+            else:
+                st.sidebar.error(messages[0])
             
     
     # Every row of the dataset (validation ignores the analysis population); a copy: the checks below add
