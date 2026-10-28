@@ -162,9 +162,15 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
         # one, and a family of rules that fire together gives each rule's definition
         (
             {"row_ids": [[2, 4]], "method": "zscore", "columns": ["x"]},
-            "3 listed rows (a multivariate outlier method)",
+            "3 listed rows (flagged by z-score)",
         ),
-        ({"bounds": {"age": [None, 85]}}, "age outside [None, 85]"),
+        ({"row_ids": [[2, 4]]}, "3 listed rows"),
+        (
+            {"row_ids": [[1, 1]], "method": "Isolation Forest"},
+            "1 listed rows (flagged by Isolation Forest)",
+        ),
+        ({"bounds": {"age": [None, 85]}}, "age > 85"),
+        ({"bounds": {"age": [18, None], "ldl": [None, None]}}, "age < 18; ldl: no bound"),
         (
             {
                 "threshold": 2,
@@ -173,7 +179,7 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
                     "age": {"numeric": True, "lower_bound": 18, "upper_bound": 85},
                 },
             },
-            "at least 2 of: old, age",
+            "at least 2 of: old (df['age'] > 80); age (age within [18, 85])",
         ),
     ],
 )

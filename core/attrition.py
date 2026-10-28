@@ -126,6 +126,25 @@ def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
     return f"{column} > {high}" if exclude else f"{column} <= {high}"
 
 
+# the univariate outlier methods are recorded by their ids; the multivariate ones by their names
+_METHOD_NAMES = {"zscore": "z-score", "iqr": "IQR", "quantile": "quantiles"}
+
+
+def _method_name(method: Any) -> str:
+    return _METHOD_NAMES.get(str(method), str(method))
+
+
+def _bound_text(column: Any, low: Any, high: Any) -> str:
+    """Where frozen bounds fire: outside the range, or past its one side ("age > 85", never "outside [None, 85]")."""
+    if low is not None and high is not None:
+        return f"{column} outside [{low}, {high}]"
+    if high is not None:
+        return f"{column} > {high}"
+    if low is not None:
+        return f"{column} < {low}"
+    return f"{column}: no bound"
+
+
 def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
     """A criterion's definition in words (what makes it fire), read with :func:`core.criteria.rule_kind`. Never an
     error, whatever the definition: a malformed one reads "cannot be evaluated" and why."""
@@ -140,18 +159,29 @@ def _describe(name: str, definition: Mapping[str, Any]) -> str:
         kind = rule_kind(name, definition)
     except CriterionError as exc:
         return f"cannot be evaluated: {exc}"
-    if kind == "threshold":
-        members = ", ".join(str(m) for m in (definition.get("members") or {}))
+    if (
+        kind == "threshold"
+    ):  # each rule's definition: the dossier gives the definition of every criterion
+        members = "; ".join(
+            f"{member} ({describe_definition(str(member), spec)})"
+            for member, spec in (definition.get("members") or {}).items()
+        )
         return f"at least {definition.get('threshold')} of: {members}"
-    if kind == "row_ids":
+    if (
+        kind == "row_ids"
+    ):  # the univariate outlier rules are frozen as rows too: the method recorded, if any
         n = sum(int(b) - int(a) + 1 for a, b in definition.get("row_ids") or [])
-        return f"{n:,} listed rows (a multivariate outlier method)"
+        method = definition.get("method")
+        return (
+            f"{n:,} listed rows (flagged by {_method_name(method)})"
+            if method
+            else f"{n:,} listed rows"
+        )
     if kind == "bounds":
-        parts = [
-            f"{col} outside [{lo}, {hi}]"
-            for col, (lo, hi) in (definition.get("bounds") or {}).items()
-        ]
-        return "; ".join(parts)
+        return "; ".join(
+            _bound_text(column, low, high)
+            for column, (low, high) in (definition.get("bounds") or {}).items()
+        )
     if kind == "numeric":
         return _numeric_text(
             definition.get("column") or name,

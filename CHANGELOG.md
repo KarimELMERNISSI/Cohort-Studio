@@ -658,6 +658,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   failed until the session ended. Such a rule is now refused by name when the file is loaded; one already in a
   session reads "cannot be evaluated". A listed range is clipped to the table before it is expanded: `[[0,
   1000000000]]` made the server allocate gigabytes. What evaluates today (a bound written `"18"`) still loads.
+- **The participant flow and the dossier describe every rule in full.** A family of rules that fire together read
+  "at least 2 of: old, age", without the rules' definitions, though the dossier gives the definition of every
+  criterion; it now reads "at least 2 of: old (df['age'] > 80); age (age <= 85)". Listed rows always read "(a
+  multivariate outlier method)", also when Validate froze z-score, IQR or quantile outliers: they now name the
+  method recorded ("flagged by IQR"), or none. A frozen bound open on one side read "age outside [None, 85]"; it now
+  reads "age > 85". Nothing a population or a trace records changes: only these words.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

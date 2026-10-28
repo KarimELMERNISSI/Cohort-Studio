@@ -140,14 +140,21 @@ def test_criteria_are_described_in_words() -> None:
     )
     assert describe_definition("bmi", {"numeric": True, "upper_bound": 15}) == "bmi <= 15"
     assert describe_definition("o", {"bounds": {"ldl": [0.5, 9]}}) == "ldl outside [0.5, 9]"
+    assert describe_definition("o", {"row_ids": [[1, 3], [10, 10]]}) == "4 listed rows"
     assert (
-        describe_definition("o", {"row_ids": [[1, 3], [10, 10]]})
-        == "4 listed rows (a multivariate outlier method)"
+        describe_definition("o", {"row_ids": [[1, 3]], "method": "iqr"})
+        == "3 listed rows (flagged by IQR)"
     )
-    assert (
-        describe_definition("t", {"threshold": 2, "members": {"a": {}, "b": {}, "c": {}}})
-        == "at least 2 of: a, b, c"
+    members = {
+        "a": {"numeric": False, "expression": "df['x'] > 1"},
+        "b": {"numeric": True, "upper_bound": 15},
+        "c": {},
+    }
+    assert describe_definition("t", {"threshold": 2, "members": members}) == (
+        "at least 2 of: a (df['x'] > 1); b (b <= 15); "
+        "c (cannot be evaluated: criterion 'c' has neither an expression nor a numeric range)"
     )
+    assert describe_definition("f", {"bounds": {"ldl": [None, 9]}}) == "ldl > 9"
 
 
 def test_the_layout_places_every_box(tutorial) -> None:
@@ -160,3 +167,27 @@ def test_the_layout_places_every_box(tutorial) -> None:
     assert set(pos) == {b.id for b in (*flow.main, *flow.exits, *flow.analyses)}
     assert all(pos[e.id][0] > 0 for e in flow.exits)  # exits to the right of the main column
     assert pos["analysis:0"][1] < pos["population"][1]  # analyses under the population
+
+
+def test_the_dossier_gives_the_rules_of_a_threshold_family() -> None:
+    """The dossier gives the definition of every criterion: a family of rules that fire together listed their names
+    only."""
+    from app_pages.study_dossier import _criteria_table
+    from core.fingerprint import ensure_row_ids
+    from core.population import active_criteria, catalogue, evaluate_population
+
+    frame = ensure_row_ids(pd.DataFrame({"age": [10.0, 50.0, 95.0], "sbp": [90.0, 200.0, 210.0]}))
+    config = {
+        "mask_families": {
+            "warning_signs": {
+                "operator": {"threshold": 2},
+                "old": {"numeric": False, "expression": "df['age'] > 80"},
+                "sbp": {"numeric": True, "upper_bound": 180, "strategy": "exclude"},
+            }
+        }
+    }
+    population = evaluate_population(
+        frame, active_criteria(config, [c.id for c in catalogue(config)])
+    )
+    table = _criteria_table(population)
+    assert table["Definition"].tolist() == ["at least 2 of: old (df['age'] > 80); sbp (sbp > 180)"]
