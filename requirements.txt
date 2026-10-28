@@ -6,7 +6,7 @@ altair==6.3.0
     #   streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==1.15.0
+anthropic==2.3.0
     # via cohortstudio
 anyio==4.15.1
     # via

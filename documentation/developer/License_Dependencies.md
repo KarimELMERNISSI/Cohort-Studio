@@ -112,7 +112,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 
 | Package | Version | Licence |
 | :--- | :--- | :--- |
-| anthropic | 1.15.0 | MIT |
+| anthropic | 2.3.0 | Apache |
 | cffi | 2.1.1 | MIT-0 |
 | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |
 | deprecation | 2.1.0 | Apache |
