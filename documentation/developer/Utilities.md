@@ -175,14 +175,6 @@ _No module description._
 **Imports**:
 `logging`, `numpy`, `pandas`, `scipy.stats`, `biostats.inference.LEGACY_NAMES`, `biostats.inference.compare_groups`, `biostats.inference.groups_from_frame`, `biostats.inference.recommend`, `biostats.posthoc.default_method`, `biostats.posthoc.pairwise_comparisons`
 
-### def `render_analysis_configuration` (analysis_utils.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Compatibility shim: the widgets live in :mod:`app_pages.analysis_config`.
-
 ### def `analyze_variable` (analysis_utils.py)
 
 - **Arguments**: `df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test`
@@ -1569,60 +1561,6 @@ No description available.
 
 ---
 
-## path_utils.py
-
-_No module description._
-
-**Imports**:
-`logging`, `os`, `utils.logging_config.single_line`
-
-### def `normalize_path` (path_utils.py)
-
-- **Arguments**: `path_str: str`
-
-- **Returns**: `str`
-
-Normalizes a file path by replacing backslashes with forward slashes.
-Crucial for handling Windows paths in a Linux (Docker) environment,
-ensuring os.path.basename returns the correct filename.
-
-### def `resolve_path` (path_utils.py)
-
-- **Arguments**: `original_path: str, search_dirs: list`
-
-- **Returns**: `ComplexType`
-
-Attempts to resolve a file path.
-
-1. Checks if original_path exists validly.
-2. If not, extracts the filename and searches in `search_dirs`.
-
-Args:
-    original_path (str): The absolute or relative path from the trace.
-    search_dirs (list, optional): List of directories to search in. Defaults to ['data'].
-
-Returns:
-    str | None: The valid path if found, or None if not found.
-
----
-
-## session_scope.py
-
-_The current user's storage scope, derived from the Streamlit session (None outside a session)._
-
-**Imports**:
-`__future__.annotations`, `core.workspace.UserScope`
-
-### def `get_current_scope` (session_scope.py)
-
-- **Arguments**: ``
-
-- **Returns**: `ComplexType`
-
-Scope of the signed-in user, or ``None`` when there is no Streamlit session or no user.
-
----
-
 ## settings.py
 
 _The application's settings: one validated object, read from the environment (M5b, step 3).
@@ -1818,14 +1756,6 @@ Args:
 
 Returns:
     float: p-value or np.nan if test fails
-
-### def `show_test_guidelines` (statistics_utils.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Compatibility shim: the guide widgets live in :mod:`app_pages.statistics_guides`.
 
 ---
 

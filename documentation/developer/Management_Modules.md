@@ -17,11 +17,12 @@ Statistics that reach a prompt by another way (a variable taxonomy imported from
 this rule) pass through allow-lists: :func:`safe_stats` keeps the percentiles only, and :func:`taxonomy_for_prompt`
 drops the keys of a taxonomy that hold values of the data.
 
-The module also names the recipients of the data (:func:`recipient`, :func:`provider_label`): the cloud providers,
-and an Ollama outside this machine and the private network, which need the user's confirmation._
+The module also names the recipients of the data (:func:`recipient`, :func:`store_recipient`, :func:`provider_label`):
+the cloud providers, and an Ollama or a Qdrant server outside this machine and the private network, which need the
+user's confirmation._
 
 **Imports**:
-`__future__.annotations`, `ipaddress`, `logging`, `ntpath`, `os`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
+`__future__.annotations`, `ipaddress`, `logging`, `os`, `socket`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `core.workspace.file_name_of`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
 
 ### def `_frequent_values` (ai_payload.py)
 
@@ -112,7 +113,17 @@ names the user's account and the server's folders. Both separators are read: an 
 
 - **Returns**: `str`
 
-The host of a service address ("" when there is none).
+The host of a service address ("" when there is none), as an HTTP client reads it: a backslash counts as a
+slash, so a name and an "@" before it cannot hide the host the client connects to.
+
+### def `_numeric_address` (ai_payload.py)
+
+- **Arguments**: `host: str`
+
+- **Returns**: `ComplexType`
+
+The address a numeric host stands for, as the system's resolver reads it without a lookup (134744072 and
+0x08.0x08.0x08.0x08 are 8.8.8.8), or None for a name.
 
 ### def `on_this_machine` (ai_payload.py)
 
@@ -141,13 +152,23 @@ there may leave the user's organisation.
 The recipient that needs the user's confirmation: a cloud provider (any provider not known as local), or an
 Ollama outside the private network ("ollama@<host>"); None for an Ollama on this machine or the private network.
 
+### def `store_recipient` (ai_payload.py)
+
+- **Arguments**: `url: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A Qdrant server outside this machine and the private network ("qdrant@<host>"), which needs the confirmation as
+an Ollama there does: it keeps the text of every indexed PDF and receives the vector of every search. None for
+embedded Qdrant (no address) and a server on this machine or the private network.
+
 ### def `provider_label` (ai_payload.py)
 
 - **Arguments**: `provider: str`
 
 - **Returns**: `str`
 
-The name of a recipient: "Google Gemini", or "Ollama at <host>" for an Ollama outside the network.
+The name of a recipient: "Google Gemini", or "Ollama at <host>" and "Qdrant at <host>" outside the network.
 
 ### def `local_providers` (ai_payload.py)
 
@@ -470,6 +491,9 @@ Storage of chunks in one engine, a connector of :data:`manage.vectorstores.VECTO
 - **location**(`self`) -> `str`
   > Where the vectors live (folder or server), for display and the manifest.
 
+- **remote**(`self`) -> `bool`
+  > Whether the index lives on a server: what it is sent leaves this process (a search's filter included).
+
 - **exists**(`self`) -> `bool`
   > An index (possibly empty) is present.
 
@@ -725,7 +749,7 @@ For each connector setting that names nothing this version offers, the variable 
 _No module description._
 
 **Imports**:
-`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`, `utils.session_scope.get_current_scope`
+`glob`, `logging`, `os`, `re`, `functools.cached_property`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`
 
 ### class `DBManager` (db_manager.py)
 
@@ -735,6 +759,10 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 
 - **__init__**(`self, db_path: str, scope: ComplexType`) -> `None`
   > No description available.
+
+- **iam_provider**(`self`) -> `LocalDuckDBIAMProvider`
+  > The local accounts, opened on first use: a session's store never opens the users database for nothing
+  > (the application signs users in through manage.iam).
 
 - **_get_user_connection**(`self`) -> `None`
   > Get a new DuckDB connection for users DB.
@@ -955,10 +983,14 @@ _Engine-agnostic document index used by the RAG code.
 model. It exposes the LangChain vector-store calls the application uses (``similarity_search``,
 ``max_marginal_relevance_search``, ``as_retriever``), so the RAG code is identical whatever the
 engine. Filtering by document is expressed as a list of sources; the legacy Chroma filter
-(``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted._
+(``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted.
+
+A chunk is stored under its document's name, never its path on the server: a Qdrant server receives the index, and
+the path names the user's account and the server's folders. A filter sent to a server names documents only; a local
+index built by an earlier version, which stored paths, is matched by path too (the paths stay on this machine)._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `time`, `collections.abc.Callable`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `langchain_core.callbacks.CallbackManagerForRetrieverRun`, `langchain_core.documents.Document`, `langchain_core.embeddings.Embeddings`, `langchain_core.retrievers.BaseRetriever`, `langchain_core.vectorstores.utils.maximal_marginal_relevance`, `pydantic.ConfigDict`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorStoreError`
+`__future__.annotations`, `hashlib`, `time`, `collections.abc.Callable`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `langchain_core.callbacks.CallbackManagerForRetrieverRun`, `langchain_core.documents.Document`, `langchain_core.embeddings.Embeddings`, `langchain_core.retrievers.BaseRetriever`, `langchain_core.vectorstores.utils.maximal_marginal_relevance`, `pydantic.ConfigDict`, `core.workspace.file_name_of`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorStoreError`
 
 ### class `DocumentIndex` (document_index.py)
 
@@ -1015,6 +1047,24 @@ LangChain retriever over a :class:`DocumentIndex` (plain similarity or MMR).
 - **Returns**: `ComplexType`
 
 Translate the legacy Chroma filter on ``source`` into a list of sources.
+
+### def `_matching` (document_index.py)
+
+- **Arguments**: `sources: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The sources a filter matches: by the document's name, and on this machine also as given (a local index built by
+an earlier version stored paths). A server is sent names only: an index there named after the account, the only
+kind that held paths, is never reused.
+
+### def `_named` (document_index.py)
+
+- **Arguments**: `document: Document`
+
+- **Returns**: `Document`
+
+The chunk as the index stores it: its source is its document's name, never a path.
 
 ### def `_page` (document_index.py)
 
@@ -1813,6 +1863,81 @@ Embedding connector for OpenAI embeddings (text-embedding-3-small, text-embeddin
 
 ---
 
+## paths.py
+
+_The files a replay may read (M5b step 5): where the paths a trace records are looked for.
+
+A trace is user-supplied JSON, so in a session a path it records is never read as written. :class:`PathResolver`
+finds each file in the places the session may read:
+
+- the files the user chose for recorded paths on the Reproduce page (``named``), first, in the same places;
+
+- the user's workspace (``scope``): the recorded path when it lies inside it, else the file's name in its folders;
+
+- for a command line (M8), only the files named on it, found by their names (:meth:`PathResolver.for_files`);
+
+- for tests and scripts (:meth:`PathResolver.unconfined`): the recorded path when it exists, else the file's name in
+  the shared folders of the data root.
+
+A resolver given none of these reads no file, as a replay given no resolver: a session without a signed-in user
+reads nothing (every signed-in user has a workspace, :func:`core.workspace.safe_dirname`). A saved version a trace
+names is looked up in the datasets folder only (:meth:`PathResolver.dataset`): a name such as
+``../../bob/datasets/x`` finds nothing. A path on a network share is never opened
+(:func:`core.workspace.network_share`)._
+
+**Imports**:
+`__future__.annotations`, `logging`, `os`, `collections.abc.Iterable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `dataclasses.replace`, `pathlib.Path`, `pandas`, `core.workspace.UserScope`, `core.workspace.network_share`, `core.workspace.resolve_within`, `utils.logging_config.single_line`
+
+### class `PathResolver` (paths.py)
+
+Where the files a trace names are looked for (see the module docstring). ``PathResolver()`` reads none.
+
+**Methods:**
+
+- **for_files**(`cls, files: Iterable[ComplexType]`) -> `PathResolver`
+  > Only these files, found by their names (a command line's): nothing else is read.
+
+- **unconfined**(`cls`) -> `PathResolver`
+  > Tests and scripts, without a user: the recorded path when it exists, else its name in the shared folders of
+  > the data root. Never for a session: a trace could name any file of the server.
+
+- **with_named**(`self, named: Mapping[ComplexType]`) -> `PathResolver`
+  > The same places, and the files the user chose for recorded paths (Reproduce).
+
+- **resolve**(`self, recorded: object`) -> `ComplexType`
+  > The file to read for a path a trace records, or None when the session may read none.
+
+- **dataset**(`self, name: object`) -> `ComplexType`
+  > The saved version ``name`` (``<datasets>/<name>.parquet``), never a file outside that folder: the name comes
+  > from a trace.
+
+- **_chosen**(`self, recorded: str`) -> `ComplexType`
+  > The file the user chose for ``recorded``, in the places this resolver reads.
+
+- **_named_file**(`self, name: str`) -> `ComplexType`
+  > No description available.
+
+- **_search_dirs**(`self`) -> `list[str]`
+  > No description available.
+
+### def `normalize_path` (paths.py)
+
+- **Arguments**: `path_str: str`
+
+- **Returns**: `str`
+
+A path with forward slashes: one recorded on Windows keeps its backslashes, which are no separators on Linux.
+
+### def `read_version` (paths.py)
+
+- **Arguments**: `path: str`
+
+- **Returns**: `ComplexType`
+
+A saved version's table: read by pandas, or by DuckDB for a file pandas cannot read. None when it is missing.
+
+---
+
 ## preferences.py
 
 _The user's preferences: the choices made in Settings, kept for the next session (M5b, step 3).
@@ -1891,18 +2016,27 @@ _Qdrant engine, in two modes.
 
 - **Server** (``CMP_QDRANT_URL``, optional ``CMP_QDRANT_API_KEY``): a Qdrant service shared by every
   session, with HNSW approximate search, payload indexes and concurrent access. One collection
-  per user (``cmp_<user>_chunks``). Best for several users or very large libraries.
+  per user, named at random (``cmp_<32 hexadecimal digits>``), never after the account: the server
+  may belong to someone else (Qdrant Cloud). Best for several users or very large libraries.
 
 - **Embedded** (no URL): Qdrant's local mode in the user's workspace. Every vector is held in
   memory and a folder can be opened by one client only, so the client is shared per folder in this
   process. Suited to small and medium libraries (tens of thousands of chunks).
 
-Every rebuild writes a new collection (``<base>_<id>``) and then drops the previous one; the active
-name is kept in ``collection.txt`` next to the manifest. Embedded Qdrant on Windows can reload a
-deleted collection's files when the same name is recreated, so names are never reused._
+Every rebuild writes a new collection and then drops the previous one; the active name is kept in
+the user's workspace, in ``collection.txt`` next to the index's manifest. Each place has its own
+folder for both: the embedded index the engine's folder, each server ``servers/<key>`` (the key is a
+hash of its address as the client reads it), so that building in one place never loses, nor is
+taken for, the index of another. Embedded Qdrant on Windows can reload a deleted collection's files
+when the same name is recreated, so names are never reused.
+
+Earlier versions kept one manifest and one pointer for every place, and named a server collection
+after the account (``cmp_<user>_chunks``, then ``cmp_<user>_chunks_<id>``). Opening the engine moves
+such an index's manifest and pointer to its server's folder (the manifest names the server); it is
+never reused there, and the next rebuild on its server deletes it._
 
 **Imports**:
-`__future__.annotations`, `json`, `re`, `threading`, `uuid`, `pathlib.Path`, `typing.Any`, `core.registry.Availability`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.VectorEngine`, `base.VectorStoreError`
+`__future__.annotations`, `hashlib`, `json`, `re`, `threading`, `uuid`, `pathlib.Path`, `typing.Any`, `urllib.parse.urlparse`, `core.registry.Availability`, `base.MANIFEST_NAME`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorEngine`, `base.VectorStoreError`
 
 ### class `QdrantIndex` (qdrant_index.py)
 
@@ -1922,6 +2056,22 @@ No description available.
 - **mode**(`self`) -> `str`
   > No description available.
 
+- **_generation_name**(`self`) -> `str`
+  > The name of a new collection: at random on a server (never the account), ``chunks_<id>`` embedded.
+
+- **remote**(`self`) -> `bool`
+  > No description available.
+
+- **_pointer**(`self`) -> `Path`
+  > The file naming the collection in use, in this place's folder.
+
+- **_pointed**(`self`) -> `str`
+  > The collection the pointer names ("" when none; embedded, never a server's, as an earlier version wrote).
+
+- **named_after_account**(`self`) -> `bool`
+  > Whether the index in use on a server was built by an earlier version, under the account's name (read from
+  > the workspace: no request is made). It is never reused: its rebuild deletes it.
+
 - **location**(`self`) -> `str`
   > No description available.
 
@@ -1932,7 +2082,9 @@ No description available.
   > Reachability of the server (or the local folder).
 
 - **active_collection**(`self`) -> `str`
-  > Collection holding the current index (the base name for indexes built before generations).
+  > Collection holding the current index: the one the pointer names; else the base name of the earliest indexes
+  > (before generations), on a server only when this workspace built one there (two installations can share a
+  > server and a user name); else ``NO_INDEX``.
 
 - **exists**(`self`) -> `bool`
   > No description available.
@@ -1957,6 +2109,68 @@ No description available.
 
 One client per folder (local mode allows a single client) or per server and key.
 
+### def `_read` (qdrant_index.py)
+
+- **Arguments**: `pointer: Path`
+
+- **Returns**: `str`
+
+The collection a pointer file names ("" when there is none).
+
+### def `explicit_address` (qdrant_index.py)
+
+- **Arguments**: `url: ComplexType, api_key: ComplexType`
+
+- **Returns**: `ComplexType`
+
+An address with the scheme the client gives one written without (https with an API key, http without), so that
+the address badge, the server's folder and the recipient read the server the client connects to.
+
+### def `_server_key` (qdrant_index.py)
+
+- **Arguments**: `url: str`
+
+- **Returns**: `str`
+
+An address as the client reads it (http when no scheme is given, the host in lower case, port 6333 when none
+is given, the path without a final slash): two spellings of one server share one folder.
+
+### def `server_folder` (qdrant_index.py)
+
+- **Arguments**: `directory: Path, url: str`
+
+- **Returns**: `Path`
+
+The folder that keeps the manifest and the collection's name of one server's index, in the engine's folder.
+
+### def `_built_on_server` (qdrant_index.py)
+
+- **Arguments**: `manifest: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The server and the collection a manifest's index was built on, read from its location ("<url> (<name>)"); None
+for an embedded index.
+
+### def `adopt_earlier_index` (qdrant_index.py)
+
+- **Arguments**: `directory: Path`
+
+- **Returns**: `None`
+
+An earlier version kept one manifest and one pointer for every place, in ``directory``, both written by the last
+build. One built on a server moves to that server's folder (the manifest names the server), so that a build
+elsewhere neither loses it nor is taken for it. Reads and writes the workspace only.
+
+### def `unrecorded_collection` (qdrant_index.py)
+
+- **Arguments**: `directory: Path`
+
+- **Returns**: `ComplexType`
+
+A server collection an earlier version's pointer names without the manifest that names its server (a build that
+stopped half-way): which server holds it cannot be known, so it can only be reported.
+
 ### def `release_clients` (qdrant_index.py)
 
 - **Arguments**: ``
@@ -1971,7 +2185,8 @@ Close every shared client (tests, shutdown).
 
 - **Returns**: `str`
 
-Collection of a user on a shared Qdrant server.
+The name earlier versions gave a user's collection on a server, after the account: kept to find an index built
+then (:attr:`QdrantIndex.named_after_account`), which the next rebuild replaces.
 
 ---
 
@@ -2321,7 +2536,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -2378,12 +2593,13 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **__init__**(`self, documents_dir, api_key, provider, base_url`) -> `None`
   > No description available.
 
-- **recipients_of**(`provider: ComplexType, base_url: ComplexType, embedding_provider: ComplexType, embedding_base_url: ComplexType`) -> `frozenset[str]`
-  > The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, and
-  > an Ollama outside the private network ("ollama@<host>").
+- **recipients_of**(`provider: ComplexType, base_url: ComplexType, embedding_provider: ComplexType, embedding_base_url: ComplexType, qdrant_url: ComplexType`) -> `frozenset[str]`
+  > The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, an
+  > Ollama outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
+  > ("qdrant@<host>").
 
 - **recipients**(`self`) -> `frozenset[str]`
-  > The recipients the engine sends data to, for answers and for embeddings.
+  > The recipients the engine sends data to: for answers, for embeddings, and the index's Qdrant server.
 
 - **uses_cloud**(`self`) -> `bool`
   > Whether data leaves this machine and the private network.
@@ -2769,8 +2985,9 @@ The report blocks of one stored result (unknown types give a short text).
 _Reproduction engine: replays a transformation trace headlessly (no Streamlit).
 
 One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
-source dataset (or a pre-loaded frame) up to an optional step index, resolving file paths through
-the user's workspace and the ``path_overrides`` chosen in the UI. :func:`execute_trace_pipeline`
+source dataset (or a pre-loaded frame) up to an optional step index. It reads the files a trace names
+through the resolver it is given (:class:`manage.paths.PathResolver`: the user's workspace and the files
+chosen in the UI, or a command line's files); given none, it reads no file. :func:`execute_trace_pipeline`
 keeps the historical ``(df, error)`` signature.
 
 Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
@@ -2780,7 +2997,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.apply_variable_transformation`, `manage.db_manager.DBManager`, `utils.date_parser.smart_parse_dates`, `utils.path_utils.resolve_path`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.apply_variable_transformation`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.date_parser.smart_parse_dates`
 
 ### class `StepRecord` (reproduction_manager.py)
 
@@ -2802,23 +3019,31 @@ A step the engine cannot recompute; carries the frame to continue from.
 
 ### def `_resolve` (reproduction_manager.py)
 
-- **Arguments**: `path: ComplexType, overrides: ComplexType`
+- **Arguments**: `path: ComplexType, paths: ComplexType`
 
 - **Returns**: `ComplexType`
 
-No description available.
+The file a recorded path stands for; None without a resolver (a replay given none reads no file).
+
+### def `_version` (reproduction_manager.py)
+
+- **Arguments**: `name: str, paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A saved version a trace names, from the datasets folder only (PathResolver.dataset).
 
 ### def `_read_any` (reproduction_manager.py)
 
-- **Arguments**: `path: str, parse_options: ComplexType`
+- **Arguments**: `path: str, parse_options: ComplexType, paths: ComplexType`
 
 - **Returns**: `ComplexType`
 
-Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are DuckDB dataset names.
+Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions.
 
 ### def `load_source` (reproduction_manager.py)
 
-- **Arguments**: `trace_data: dict[ComplexType], path_overrides: ComplexType`
+- **Arguments**: `trace_data: dict[ComplexType], paths: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
@@ -2837,7 +3062,7 @@ an anomaly rule's bound must not take its row out of the next fill.
 
 ### def `_snapshot` (reproduction_manager.py)
 
-- **Arguments**: `step: dict[ComplexType], overrides: ComplexType`
+- **Arguments**: `step: dict[ComplexType], paths: ComplexType`
 
 - **Returns**: `ComplexType`
 
@@ -2845,7 +3070,7 @@ No description available.
 
 ### def `_enrichment` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2872,7 +3097,7 @@ None (every row) when none was recorded, as by earlier versions, or when no crit
 
 ### def `_imputation` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result`
 
 - **Returns**: `None`
 
@@ -2880,7 +3105,7 @@ No description available.
 
 ### def `_targeted_imputation` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result`
 
 - **Returns**: `None`
 
@@ -2888,7 +3113,7 @@ No description available.
 
 ### def `_variable_transformation` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2896,7 +3121,7 @@ No description available.
 
 ### def `_variable_computation` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2904,7 +3129,7 @@ No description available.
 
 ### def `_data_type_conversion` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2912,7 +3137,7 @@ No description available.
 
 ### def `_missing_value_handling` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2920,7 +3145,7 @@ No description available.
 
 ### def `_rename_columns` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2928,7 +3153,7 @@ No description available.
 
 ### def `_apply_filter` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2936,7 +3161,7 @@ No description available.
 
 ### def `_population_definition` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2944,7 +3169,7 @@ No description available.
 
 ### def `_mi_impute` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result`
 
 - **Returns**: `None`
 
@@ -2952,7 +3177,7 @@ Re-run a multiple imputation on its population and check the imputed cells again
 
 ### def `_freeze_population` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2960,7 +3185,7 @@ No description available.
 
 ### def `_outlier_clipping` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, overrides, warnings`
+- **Arguments**: `df, step, index, paths, warnings`
 
 - **Returns**: `None`
 
@@ -2968,7 +3193,7 @@ No description available.
 
 ### def `_apply_step` (reproduction_manager.py)
 
-- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, overrides: ComplexType, warnings: list[str], result: ComplexType`
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, paths: ComplexType, warnings: list[str], result: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
@@ -2980,7 +3205,8 @@ Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for s
 
 - **Returns**: `ReplayResult`
 
-Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints. ``frames``:
+Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
+the files the steps name (none read without it). ``frames``:
 tables a step's population may name by fingerprint although the replay does not pass through them (a draft
 redone one change at a time names the dataset it was built on).
 
@@ -3121,11 +3347,27 @@ No description available.
 - **from_env**(`cls, settings: ComplexType`) -> `VectorStoreSettings`
   > The vector store's settings (utils.settings; the current ones by default).
 
+- **server_for**(`self, asked: ComplexType`) -> `ComplexType`
+  > The Qdrant server to use: the address asked for, None for embedded (an empty one), or the server's
+  > (CMP_QDRANT_URL) when none is asked for.
+
+- **key_for**(`self, url: ComplexType`) -> `ComplexType`
+  > The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only: it is never sent to an
+  > address a user typed.
+
 ### class `MachineProfile` (selection.py)
 
 No description available.
 
 ### class `Recommendation` (selection.py)
+
+No description available.
+
+### def `_same_address` (selection.py)
+
+- **Arguments**: `first: str, second: str`
+
+- **Returns**: `bool`
 
 No description available.
 
@@ -3194,6 +3436,93 @@ through, and the selection says why.
 - **Returns**: `BaseVectorIndex`
 
 Open the engine's index in ``base_dir/<engine>`` (on a server when the engine has one and a URL is given).
+
+---
+
+## services.py
+
+_The services of the application, built in one place (M5b step 5, the composition root).
+
+- :class:`Shared`, one per server process, holds nothing of a user's: the settings, the identity provider, the graph
+  renderers and the multiple-imputation worker budget, each read from its process-wide instance at each access (a
+  test that installs another finds it; a copy kept here would be stale). A command line passes the settings it
+  loaded instead.
+
+- :class:`Services`, one per session (a user in a browser tab, or one command-line run): the user's scope, the
+  resolver of the files a trace names, and the dataset store and the trace, built on first use with that scope, so
+  that a command line that saves nothing creates no folder.
+
+The module is headless (rule R5): it reaches neither Streamlit nor the AI packages. The session builds the AI engine
+(``ui.services.ai_engine``), which needs them, and ``main.py`` checks the connector settings._
+
+**Imports**:
+`__future__.annotations`, `dataclasses.dataclass`, `functools.cached_property`, `typing.TYPE_CHECKING`, `core.workspace.UserScope`, `manage.paths.PathResolver`, `utils.settings.Settings`
+
+### class `Shared` (services.py)
+
+One per server process; never a user's data.
+
+**Methods:**
+
+- **settings**(`self`) -> `Settings`
+  > No description available.
+
+- **iam**(`self`) -> `IAMManager`
+  > No description available.
+
+- **graphs**(`self`) -> `GraphRendererManager`
+  > No description available.
+
+- **mi_workers**(`self`) -> `WorkerBudget`
+  > No description available.
+
+### class `Services` (services.py)
+
+One session's services. ``scope`` is the signed-in user's workspace; None for no user (tests, scripts, the command
+line), whose stores use the shared folders. Never passed to a worker process: the budget holds a lock.
+
+**Methods:**
+
+- **datasets**(`self`) -> `DBManager`
+  > The dataset store (saved versions and statistics), in the user's workspace.
+
+- **trace**(`self`) -> `TransformationManager`
+  > The session's trace, in the user's workspace.
+
+### def `build_shared` (services.py)
+
+- **Arguments**: `settings: ComplexType`
+
+- **Returns**: `Shared`
+
+The process's shared services. Builds nothing: each one is built on its first use, as before. ``settings``: those
+a command line loaded (``utils.settings.load_settings``); without them, the process's current ones.
+
+### def `build_services` (services.py)
+
+- **Arguments**: `shared: Shared, scope: ComplexType, paths: PathResolver`
+
+- **Returns**: `Services`
+
+One session's services. ``datasets`` and ``trace`` are stores the session already holds for the same user, kept
+rather than built again: a session that outlives a code change keeps its trace.
+
+### def `same_user` (services.py)
+
+- **Arguments**: `first: ComplexType, second: ComplexType`
+
+- **Returns**: `bool`
+
+Whether two scopes are the same user's workspace: compared by folder, which survives a reload of
+``core.workspace`` (a reloaded class makes two equal scopes unequal) and a change of role.
+
+### def `_folder` (services.py)
+
+- **Arguments**: `scope: ComplexType`
+
+- **Returns**: `ComplexType`
+
+No description available.
 
 ---
 
@@ -3273,7 +3602,7 @@ the trace left its copy behind: a draft discarded, redone on newer data or dropp
 and a change that changed nothing. :func:`delete_unreferenced` deletes those copies.
 
 A file is deleted only when it is a ``.parquet`` file directly in the snapshots folder and no trace of the workspace
-names it. The replay also finds a file by its name alone (``utils.path_utils.resolve_path``), so a trace that names a
+names it. The replay also finds a file by its name alone (:class:`manage.paths.PathResolver`), so a trace that names a
 file of the same name in any folder keeps it. When a trace cannot be read, nothing is deleted._
 
 **Imports**:
@@ -3401,7 +3730,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`contextlib`, `json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.lineage.TRACE_SCHEMA`, `core.lineage.genesis_hash`, `core.lineage.seal_step`, `core.lineage.verify_trace`, `core.steps.STEPS`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.session_scope.get_current_scope`, `utils.settings.get_settings`
+`contextlib`, `json`, `logging`, `os`, `datetime.datetime`, `typing.Any`, `pandas`, `core.lineage.TRACE_SCHEMA`, `core.lineage.genesis_hash`, `core.lineage.seal_step`, `core.lineage.verify_trace`, `core.steps.STEPS`, `core.workspace.UserScope`, `utils.data_paths.get_traces_dir`, `utils.settings.get_settings`
 
 ### class `TransformationManager` (transformation_manager.py)
 
@@ -3417,7 +3746,10 @@ No description available.
   >
   > trace_dir : str, optional
   >      Directory where transformation traces will be stored.
-  >      Defaults to DATA_ROOT/traces via data_paths utility.
+  >      Defaults to the traces folder of ``scope``, else DATA_ROOT/traces via data_paths utility.
+  > scope : UserScope, optional
+  >      The user's workspace, passed by the session's services (manage.services); None outside a
+  >      session.
 
 - **initialize_session**(`self, dataset_name: str, username: ComplexType`) -> `None`
   > Initializes a new session trace (``parent`` links it to the trace of a saved version it starts from).

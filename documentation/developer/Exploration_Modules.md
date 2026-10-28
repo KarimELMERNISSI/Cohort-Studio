@@ -43,17 +43,6 @@ Parameters:
 Returns:
 - plotly.graph_objs._figure.Figure: Plotly figure object.
 
-### def `get_yfiles_network_data` (corr_matrix.py)
-
-- **Arguments**: `data, targets, predictors, method, threshold_category, correlation_matrix, focus_node`
-
-- **Returns**: `None`
-
-Deprecated: use :func:`graph.builders.correlation.build_correlation_graph`.
-
-Kept for backward compatibility; returns plain-dict nodes/edges in the historical shape
-(``{"id", "properties"}`` / ``{"start", "end", "id", "properties"}``).
-
 ### def `add_correlation_strength_table` (corr_matrix.py)
 
 - **Arguments**: `writer, method, sheet_name`

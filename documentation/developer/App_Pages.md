@@ -469,7 +469,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`, `utils.session_scope.get_current_scope`
+`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -800,7 +800,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `re`, `pandas`, `streamlit`, `core.registry.as_code`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `manage.ai_payload.column_profile`, `ui.components.no_dataset`, `ui.components.text.answer`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
+`json`, `os`, `re`, `pandas`, `streamlit`, `core.registry.as_code`, `core.workspace.UserScope`, `graph.builders.taxonomy.CATEGORY_LABELS`, `graph.builders.taxonomy.RELATION_LABELS`, `graph.builders.taxonomy.build_taxonomy_graph`, `graph.builders.taxonomy.make_formula_id`, `graph.builders.taxonomy.parse_formula_id`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `manage.ai_payload.column_profile`, `ui.components.no_dataset`, `ui.components.text.answer`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `ui.services.drop_ai_engine`, `utils.clustering_utils.compute_cluster_profiles`, `utils.clustering_utils.fit_dbscan`, `utils.clustering_utils.fit_gaussian_mixture`, `utils.clustering_utils.fit_kmeans`, `utils.clustering_utils.prepare_data_for_clustering`, `utils.clustering_utils.run_famd`, `utils.clustering_utils.run_pca`, `utils.clustering_utils.run_tsne`, `utils.clustering_utils.run_umap`, `utils.optional.available_methods`
 
 ### def `get_user_taxonomy_dir` (data_insight.py)
 
@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`html`, `json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.without_row_lists`, `core.registry.as_code`, `ingest.loaders.UPLOAD_TYPES`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.session_scope.get_current_scope`
+`html`, `json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.without_row_lists`, `core.registry.as_code`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1671,7 +1671,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -1931,7 +1931,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`html`, `json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `graph.builders.correlation.build_correlation_graph`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `manage.ai_payload.column_profile`, `manage.db_manager.DBManager`, `manage.rag_manager.RAGManager`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.components.text.plain`, `ui.graph_legend.render_legend`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
+`hashlib`, `html`, `json`, `time`, `io.BytesIO`, `duckdb`, `numpy`, `pandas`, `streamlit`, `explore.corr_matrix`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `graph.builders.correlation.build_correlation_graph`, `graph.model.LayoutHint`, `graph.model.RenderOptions`, `manage.ai_payload.column_profile`, `ui.components.confirm`, `ui.components.no_dataset`, `ui.components.text.plain`, `ui.graph_legend.render_legend`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.graph_view.render_graph_exports`, `ui.graph_view.renderer_selector`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.export_utils.to_excel`, `utils.export_utils.to_excel_sheets`, `utils.statistics_utils.normality_test`, `utils.statistics_utils.sanitize_dataframe_for_arrow`
 
 ### class `RenameColumnsComponent` (home.py)
 
@@ -1963,6 +1963,27 @@ Quote a DuckDB identifier (column names come from uploaded files; audit E4).
 - **Returns**: `str`
 
 Short content hash so cached statistics follow the frame (filters, renames), not only its name (audit E8).
+
+### def `_table_key` (home.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `str`
+
+How the caches below tell two tables apart: by every row, where Streamlit hashes a sample of 10,000 rows of a
+table of 50,000 or more (two versions of a cohort that differed outside the sample could get each other's
+results). Column by column: a column pandas cannot hash (lists in its cells) is hashed as text on its own; a
+categorical column's categories and order, and the kinds of value an object column holds (1 and "1" hash alike),
+are part of the key. Computed once per run by the caller, which passes the table itself unhashed.
+
+### def `_owner` (home.py)
+
+- **Arguments**: ``
+
+- **Returns**: `ComplexType`
+
+The workspace the cached results below belong to (the signed-in user's folder): part of their cache key, so
+that a cache shared by the sessions of the server, or a session another user signs in to, never serves them.
 
 ### def `_top_correlations` (home.py)
 
@@ -1997,14 +2018,15 @@ pd.DataFrame: DataFrame with specified columns moved to the front.
 
 ### def `get_statistics_dataframe` (home.py)
 
-- **Arguments**: `df, _analyzer, nb_top_categories, exclude_columns, qual_var_threshold, dataset_name, _db_manager`
+- **Arguments**: `_df, _analyzer, nb_top_categories, exclude_columns, qual_var_threshold, dataset_name, _db_manager`
 
 - **Returns**: `None`
 
 Creates new DataFrames with statistics for numerical and non-numerical columns.
 Tries to load from DuckDB/Parquet cache if dataset_name is provided.
 
-Note: Parameters starting with _ are excluded from hashing by Streamlit.
+Note: Parameters starting with _ are excluded from hashing by Streamlit: the table is known by ``table_key``
+(:func:`_table_key`), and ``owner`` is the user's workspace.
 
 ### def `_date_stats_for_excel` (home.py)
 
@@ -2017,11 +2039,11 @@ became an unlabelled number).
 
 ### def `_cached_corr_excel_bytes` (home.py)
 
-- **Arguments**: `data, targets, predictors, group_column, method`
+- **Arguments**: `_data, targets, predictors, group_column, method`
 
 - **Returns**: `None`
 
-No description available.
+The correlation workbook of a table (known by ``table_key``, :func:`_table_key`) for one user's workspace.
 
 ### def `run_benchmark` (home.py)
 
@@ -2154,7 +2176,7 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `shutil`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.user_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `utils.data_paths.get_vectors_dir`, `utils.session_scope.get_current_scope`, `utils.settings.get_settings`
+`os`, `shutil`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -2209,11 +2231,11 @@ The provider and chat model of the engine that runs (empty when it does not run)
 
 ### def `_address_badge` (rag_sidebar.py)
 
-- **Arguments**: `url: str`
+- **Arguments**: `url: str, carried: str`
 
 - **Returns**: `None`
 
-Where an Ollama address sends the prompts and the documents.
+Where an address (an Ollama's, a Qdrant server's) sends the data.
 
 ### def `_provider_card` (rag_sidebar.py)
 
@@ -2241,15 +2263,23 @@ until the user chooses again.
 
 Claude has no embedding model: choose the provider that embeds the documents (local Ollama by default).
 
+### def `_roles` (rag_sidebar.py)
+
+- **Arguments**: `cfg: dict, vector: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The recipients that need the confirmation, by role: the chat provider when it is a cloud one or an Ollama outside
+the private network; the embedding provider of Claude when it is another such recipient (it receives the
+documents and every search text); the Qdrant server outside the private network that keeps the index.
+
 ### def `_recipients` (rag_sidebar.py)
 
-- **Arguments**: `cfg: dict`
+- **Arguments**: `cfg: dict, vector: ComplexType`
 
 - **Returns**: `list[str]`
 
-The recipients of a configuration that need the confirmation: its cloud provider, the embedding provider of
-Claude when it is another cloud provider (it receives the documents and every search text), and an Ollama
-outside the private network.
+The recipients of a configuration that need the confirmation, as one box confirms them together.
 
 ### def `_names` (rag_sidebar.py)
 
@@ -2286,11 +2316,20 @@ an untouched box for another configuration withdraw, and stop, the engine that r
 
 ### def `_notice` (rag_sidebar.py)
 
-- **Arguments**: `recipients: list[str], cfg: dict`
+- **Arguments**: `recipients: list[str], cfg: dict, vector: ComplexType`
 
 - **Returns**: `str`
 
-No description available.
+What the recipients of one box receive, each for its role (a Qdrant server receives no column summary).
+
+### def `_engine_recipients` (rag_sidebar.py)
+
+- **Arguments**: `manager`
+
+- **Returns**: `tuple[ComplexType]`
+
+The recipients the running engine sends data to, by role as it uses them (never by position: a Qdrant server
+is no embedding provider), and its embedding provider among them.
 
 ### def `_running_engine` (rag_sidebar.py)
 
@@ -2302,13 +2341,14 @@ Where the running engine sends data, whatever provider is selected below, and ho
 
 ### def `_consent_card` (rag_sidebar.py)
 
-- **Arguments**: `cfg: dict`
+- **Arguments**: `cfg: dict, vector: ComplexType`
 
 - **Returns**: `bool`
 
 Explicit, session-scoped confirmation before any data is sent outside this machine and the private network
-(audit E6). One box per set of recipients, naming each (with Claude, a cloud embedding provider too); ticking or
-unticking it is what counts, and unticking stops an engine that sends data to one of them.
+(audit E6). One box per set of recipients, naming each (with Claude, a cloud embedding provider too; a Qdrant
+server there that keeps the index); ticking or unticking it is what counts, and unticking stops an engine that
+sends data to one of them.
 
 ### def `_library_card` (rag_sidebar.py)
 
@@ -2383,7 +2423,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`, `utils.path_utils.normalize_path`, `utils.path_utils.resolve_path`, `utils.session_scope.get_current_scope`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 
@@ -2408,6 +2448,14 @@ No description available.
 - **Returns**: `str`
 
 No description available.
+
+### def `_resolver` (reproduce_analysis.py)
+
+- **Arguments**: ``
+
+- **Returns**: `PathResolver`
+
+Where the files a trace names are looked for: the user's workspace (the session's services, manage.paths).
 
 ### def `_resolve_user_path` (reproduce_analysis.py)
 
@@ -2474,40 +2522,6 @@ The step's status for the current data, as on the map.
 - **Returns**: `None`
 
 A card's links side by side, each opening its page (on one of its tabs when it names one).
-
----
-
-## statistics_guides.py
-
-_Normality-test guidance widgets (moved out of utils so the statistics helpers stay UI-free)._
-
-**Imports**:
-`streamlit`
-
-### def `show_test_guidelines` (statistics_guides.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Displays a detailed explanation of the normality tests,
-including algorithms, formulas, and recommendations.
-
-### def `_show_overview_guide` (statistics_guides.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Display normality test overview and selection guide.
-
-### def `_show_algorithm_details` (statistics_guides.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Display detailed algorithm explanations.
 
 ---
 
@@ -2652,15 +2666,6 @@ _Survival & regression page: Kaplan-Meier, log-rank, Cox, logistic and count reg
 
 ---
 
-## transformation_logic.py
-
-_Compatibility shim: the transformation logic lives in :mod:`enrich.transformation_logic` (no UI code)._
-
-**Imports**:
-`enrich.transformation_logic.apply_variable_transformation`
-
----
-
 ## users.py
 
 _Users page (administrators)._
@@ -2719,7 +2724,7 @@ _Variable map page: taxonomy of variables, formulas, clustering and the knowledg
 _No module description._
 
 **Imports**:
-`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `manage.db_manager.DBManager`, `ui.components.no_dataset`, `ui.state.get_state`
+`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `ui.components.no_dataset`, `ui.state.get_state`
 
 ### def `hover_columns_input` (visualization.py)
 

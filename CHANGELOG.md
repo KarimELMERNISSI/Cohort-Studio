@@ -592,6 +592,33 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - `ConnectorFactory.create_connectors` raises `ValueError` on an unknown provider; it built Gemini's connectors.
   - A renderer's `capabilities` is a class attribute, and `availability()` returns an `Availability`.
 
+### The services of a session, built in one place (M5b)
+
+- **Statistics & correlations and Enrich no longer load the AI packages when they open.** Each built an AI engine on
+  every visit; the engine is now built by Settings, or by the feature that needs it. Validate and Visualize no longer
+  build a dataset store that nothing read.
+- **Signing out stops the AI engine** before the session is cleared. It was deleted without being stopped, and kept
+  its connections until Python released it.
+- **A session never holds anything of another user.** The user changes only by signing in again. A session that
+  finds another user's services, dataset store, trace or AI engine (which the application itself does not produce)
+  ends as a sign-out ends it, and asks for a sign-in.
+- **A replay reads files only through the resolver it is given** (`manage/paths.PathResolver`): the user's workspace
+  in the application, only the named files for a command line, and no file without one. The fixes this brought are
+  under "Configuration and identity".
+- For developers:
+  - `manage/services.py` builds the services of the server process (`Shared`) and of a session (`Services`). It loads
+    neither Streamlit nor the AI packages, so M8's command line will build the same services. `ui/services.py` keeps
+    them for the session: `shared()`, `services()`, `ai_engine()`, `end_session()`.
+  - `DBManager`, `TransformationManager` and `RAGManager` take the user's workspace (`scope=`) and never ask the
+    Streamlit session; only the composition root builds them, which a test checks.
+  - `run_trace`, `apply_steps`, `load_source` and `execute_trace_pipeline` take `paths=` (a `PathResolver`) instead of
+    `path_overrides`.
+  - `utils/session_scope.py` moved to `ui/session_scope.py`; `utils/path_utils.py` was removed (`manage/paths.py`).
+  - The shims that imported pages from below were removed: `utils.analysis_utils.render_analysis_configuration`,
+    `utils.statistics_utils.show_test_guidelines` with `app_pages/statistics_guides.py`,
+    `explore.corr_matrix.get_yfiles_network_data` and `app_pages/transformation_logic.py`.
+  - The layer test's exception lists for imports going up and for Streamlit below the user interface are empty.
+
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 
 - **A column's name inside a text literal broke the formula.** The evaluator renamed the columns in the formula's
