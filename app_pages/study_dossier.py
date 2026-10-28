@@ -11,7 +11,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from core.attrition import AnalysisCount, describe_definition
+from core.attrition import AnalysisCount
+from core.criteria import describe_definition
 from core.lineage import verify_trace
 from core.state import checksum_text
 from core.steps import DOCUMENT, LOAD, POPULATION, step_title

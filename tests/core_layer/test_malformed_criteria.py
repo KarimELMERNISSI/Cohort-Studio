@@ -13,8 +13,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from core.attrition import describe_definition
-from core.criteria import CriterionError, criterion_columns, criterion_mask, criterion_problems
+from core.criteria import (
+    CriterionError,
+    criterion_columns,
+    criterion_mask,
+    criterion_problems,
+    describe_definition,
+)
 from core.fingerprint import ensure_row_ids
 from core.population import active_criteria, catalogue, configuration_problems, evaluate_population
 

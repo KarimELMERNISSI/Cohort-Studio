@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.attrition import describe_definition
+from core.criteria import describe_definition
 from core.fingerprint import ensure_row_ids
 from core.lineage import canonical_json
 from core.population import active_criteria, catalogue, evaluate_population

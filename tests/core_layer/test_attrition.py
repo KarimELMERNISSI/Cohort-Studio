@@ -16,11 +16,11 @@ from core.attrition import (
     FlowExit,
     ParticipantFlow,
     SourceRows,
-    describe_definition,
     flow_layout,
     participant_flow,
     source_from_trace,
 )
+from core.criteria import describe_definition
 from core.population import catalogue, criterion_id
 from core.session import DataSession
 

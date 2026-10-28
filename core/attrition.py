@@ -21,7 +21,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from core.criteria import CriterionError, rule_kind
+from core.criteria import describe_definition
 from core.population import EXCLUSION, PopulationResult
 from core.steps import flow_name
 
@@ -115,81 +115,6 @@ class ParticipantFlow:
             "analyses": [asdict(a) for a in self.analyses],
             "notes": list(self.notes),
         }
-
-
-def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
-    """Where a numeric rule fires, in words: inside the range, or outside it with the *exclude* strategy."""
-    if low is not None and high is not None:
-        return f"{column} {'outside' if exclude else 'within'} [{low}, {high}]"
-    if low is not None:
-        return f"{column} < {low}" if exclude else f"{column} >= {low}"
-    return f"{column} > {high}" if exclude else f"{column} <= {high}"
-
-
-# the univariate outlier methods are recorded by their ids; the multivariate ones by their names
-_METHOD_NAMES = {"zscore": "z-score", "iqr": "IQR", "quantile": "quantiles"}
-
-
-def _method_name(method: Any) -> str:
-    return _METHOD_NAMES.get(str(method), str(method))
-
-
-def _bound_text(column: Any, low: Any, high: Any) -> str:
-    """Where frozen bounds fire: outside the range, or past its one side ("age > 85", never "outside [None, 85]")."""
-    if low is not None and high is not None:
-        return f"{column} outside [{low}, {high}]"
-    if high is not None:
-        return f"{column} > {high}"
-    if low is not None:
-        return f"{column} < {low}"
-    return f"{column}: no bound"
-
-
-def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
-    """A criterion's definition in words (what makes it fire), read with :func:`core.criteria.rule_kind`. Never an
-    error, whatever the definition: a malformed one reads "cannot be evaluated" and why."""
-    try:
-        return _describe(name, definition)
-    except Exception as exc:
-        return f"cannot be evaluated: {exc}"
-
-
-def _describe(name: str, definition: Mapping[str, Any]) -> str:
-    try:
-        kind = rule_kind(name, definition)
-    except CriterionError as exc:
-        return f"cannot be evaluated: {exc}"
-    if (
-        kind == "threshold"
-    ):  # each rule's definition: the dossier gives the definition of every criterion
-        members = "; ".join(
-            f"{member} ({describe_definition(str(member), spec)})"
-            for member, spec in (definition.get("members") or {}).items()
-        )
-        return f"at least {definition.get('threshold')} of: {members}"
-    if (
-        kind == "row_ids"
-    ):  # the univariate outlier rules are frozen as rows too: the method recorded, if any
-        n = sum(int(b) - int(a) + 1 for a, b in definition.get("row_ids") or [])
-        method = definition.get("method")
-        return (
-            f"{n:,} listed rows (flagged by {_method_name(method)})"
-            if method
-            else f"{n:,} listed rows"
-        )
-    if kind == "bounds":
-        return "; ".join(
-            _bound_text(column, low, high)
-            for column, (low, high) in (definition.get("bounds") or {}).items()
-        )
-    if kind == "numeric":
-        return _numeric_text(
-            definition.get("column") or name,
-            definition.get("lower_bound"),
-            definition.get("upper_bound"),
-            definition.get("strategy") == "exclude",
-        )
-    return str(definition.get("expression") or "").strip()
 
 
 def _family_label(family: str, kind: str) -> str:
@@ -415,7 +340,6 @@ __all__ = [
     "FlowExit",
     "ParticipantFlow",
     "SourceRows",
-    "describe_definition",
     "flow_layout",
     "participant_flow",
     "source_from_trace",

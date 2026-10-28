@@ -16,8 +16,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.attrition import describe_definition
-from core.criteria import CriterionError, criterion_columns, criterion_mask, rule_kind
+from core.criteria import (
+    CriterionError,
+    criterion_columns,
+    criterion_mask,
+    describe_definition,
+    rule_kind,
+)
 from core.population import (
     EXCLUSION,
     INCLUSION,
