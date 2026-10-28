@@ -161,7 +161,7 @@ class CriterionKind:
     selection is a kind of its own, under a new id, and the old one stays registered, marked legacy.
     """
 
-    # stored, never renamed; the five kinds of M5 are implied by their keys
+    # stored, never renamed; the five kinds of M5 are implied by their keys, a later kind is stated as "kind"
     id: str
     # its name on the screens that list rules
     label: str
@@ -626,15 +626,32 @@ def rule_kind(name: str, definition: Mapping[str, Any]) -> CriterionKind:
     The kind of a criterion: the only place that decides it, so that the evaluation, the columns read, the words and
     the upload checks agree (they disagreed when each decided in its own order).
 
-    The kinds are tried in the order they were registered, which is the order M5 read the keys: a rule holding both
-    "threshold" and "row_ids" is a threshold rule. A rule that holds both a numeric range and an expression is refused
-    rather than read one way or the other: keep one of them. The definition is only read, never changed.
+    A definition is read in this order, and never changed:
+
+    1. a "kind" that names a kind registered without a recogniser (from M6 on, a kind that definitions state): that
+       kind;
+    2. otherwise the five kinds of M5, from their keys, in the order they were registered, whatever "kind" says: a
+       definition written before kinds were stated reads as it always did, and one holding both "threshold" and
+       "row_ids" is a threshold rule;
+    3. nothing read: refused, with the kind it states when it states one (a file written by a later version).
+
+    A rule that holds both a numeric range and an expression is refused rather than read one way or the other: keep
+    one of them.
     """
     if not isinstance(definition, Mapping):
         raise CriterionError(f"criterion '{name}' has no definition")
+    stated = definition.get("kind")
+    named = CRITERION_KINDS.find(stated) if isinstance(stated, str) else None  # a list is no id
+    if named is not None and named.recognise is None:
+        return named
     for kind in CRITERION_KINDS:
         if kind.recognise is not None and kind.recognise(name, definition):
             return kind
+    if stated is not None:
+        raise CriterionError(
+            f"criterion '{name}': unknown kind {stated!r}; the kinds are "
+            + ", ".join(CRITERION_KINDS.ids(legacy=False))
+        )
     raise CriterionError(f"criterion '{name}' has neither an expression nor a numeric range")
 
 
@@ -789,6 +806,12 @@ def _shared(name: str, definition: Mapping[str, Any]) -> dict[str, Any] | None:
             if any(rule is None for rule in members.values()):
                 return None
             shared[key] = members
+        elif (
+            key == "kind" and kind.recognise is None
+        ):  # the catalogue's own key: the kind it states
+            if not is_text(value):
+                return None
+            shared[key] = value
         elif key in kind.keys:
             if not kind.keys[key](value):
                 return None

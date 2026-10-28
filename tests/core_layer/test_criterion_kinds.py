@@ -282,6 +282,20 @@ def test_the_five_kinds_of_m5_are_read_by_their_keys_in_a_fixed_order() -> None:
     )
 
 
+def test_a_kind_that_definitions_state_holds_none_of_the_keys_of_the_five() -> None:
+    """
+    The rule for a kind registered later (M6, M9): its definitions are read by the "kind" they state, and without it
+    by none of the five, so that no file written before it reads otherwise.
+    """
+    for kind in CRITERION_KINDS:
+        if kind.recognise is None:
+            for name, definition in EXAMPLES[kind.id]:
+                assert definition.get("kind") == kind.id
+                unstated = {key: value for key, value in definition.items() if key != "kind"}
+                with pytest.raises(CriterionError):
+                    rule_kind(name, unstated)
+
+
 def test_every_kind_has_a_label_examples_a_read_back_and_a_way_with_missing_values() -> None:
     ids = set(CRITERION_KINDS.ids())
     assert set(EXAMPLES) == ids and set(READ_BACK) == ids
@@ -327,7 +341,8 @@ def test_a_kind_holds_the_keys_its_definitions_are_written_with(
 ) -> None:
     """A copy for sharing keeps a kind's keys and no other: a definition the app writes is shared as written."""
     declared = rule_kind(name, definition)
-    assert set(definition) <= {*declared.keys, declared.members_key}
+    stated = ("kind",) if declared.recognise is None else ()  # the catalogue's own key
+    assert set(definition) <= {*declared.keys, declared.members_key, *stated}
     assert all(
         declared.keys[key](value) for key, value in definition.items() if key in declared.keys
     )
