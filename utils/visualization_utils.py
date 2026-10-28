@@ -35,7 +35,7 @@ def compute_pairwise_stats(data_list, group_labels, test_type="Auto-Detect", cor
         return pd.DataFrame()
     rows = []
     for _, r in table.iterrows():
-        p_adj = r["p_adj"]
+        p_adj = float(r["p_adj"])
         rows.append({
             "Group 1": r["group_1"], "Group 2": r["group_2"], "Test": r["method"], "Statistic": r["statistic"],
             "P-Value": r["p_raw"], "g1_index": index_of[r["group_1"]], "g2_index": index_of[r["group_2"]],

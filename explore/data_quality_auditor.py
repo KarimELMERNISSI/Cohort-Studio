@@ -333,7 +333,7 @@ class DataQualityAuditor:
             return dependencies
             
         missing_mask = self.df[target_col].isnull()
-        if missing_mask.sum() == 0 or missing_mask.sum() == len(self.df):
+        if int(missing_mask.sum()) in (0, len(self.df)):
             return dependencies # Cannot test if all or none are missing
             
         # Split data
@@ -380,7 +380,7 @@ class DataQualityAuditor:
         from scipy import stats
         
         p_values = []
-        cols_with_missing = [col for col in self.df.columns if self.df[col].isnull().any()]
+        cols_with_missing = [col for col in self.df.columns if bool(self.df[col].isnull().any())]
         
         if not cols_with_missing:
             return {"p_value": 1.0, "interpretation": "No missing data (MCAR trivially true)", "is_mcar": True}
@@ -491,7 +491,7 @@ class DataQualityAuditor:
                 Q1 = self.df[col].quantile(0.25)
                 Q3 = self.df[col].quantile(0.75)
                 IQR = Q3 - Q1
-                outliers = ((self.df[col] < (Q1 - 1.5 * IQR)) | (self.df[col] > (Q3 + 1.5 * IQR))).sum()
+                outliers = int(((self.df[col] < (Q1 - 1.5 * IQR)) | (self.df[col] > (Q3 + 1.5 * IQR))).sum())
                 if outliers > 0:
                     outlier_cols.append((col, outliers))
             

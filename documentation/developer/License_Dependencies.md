@@ -68,7 +68,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | openpyxl | 3.1.5 | MIT |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
-| pandas | 3.0.6 | BSD |
+| pandas | 3.1.0 | BSD-3-Clause |
 | patsy | 1.0.3 | BSD |
 | pillow | 13.0.0 | MIT-CMU |
 | plotly | 7.1.0 | MIT |

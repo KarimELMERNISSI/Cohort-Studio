@@ -56,7 +56,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
     numeric = list(analyzer.numeric_cols)
     binary = list(analyzer.binary_cols)
     small_cats = [
-        c for c in df.columns if 2 <= df[c].nunique(dropna=True) <= 8 and c not in numeric
+        c for c in df.columns if 2 <= int(df[c].nunique(dropna=True)) <= 8 and c not in numeric
     ]
 
     section(
@@ -426,7 +426,7 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer, *, mi=None) -> None:
 
 def run_reliability(df: pd.DataFrame, analyzer) -> None:
     numeric = list(analyzer.numeric_cols)
-    cats = [c for c in df.columns if 2 <= df[c].nunique(dropna=True) <= 10]
+    cats = [c for c in df.columns if 2 <= int(df[c].nunique(dropna=True)) <= 10]
 
     section(
         "Inter-rater agreement (Cohen's kappa)",

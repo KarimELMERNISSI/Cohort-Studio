@@ -78,7 +78,7 @@ def _cohens_d(x: pd.Series, y: pd.Series) -> float:
     nx, ny = len(x), len(y)
     if nx < 2 or ny < 2:
         return float("nan")
-    pooled = ((nx - 1) * x.var(ddof=1) + (ny - 1) * y.var(ddof=1)) / (nx + ny - 2)
+    pooled = float(((nx - 1) * x.var(ddof=1) + (ny - 1) * y.var(ddof=1)) / (nx + ny - 2))
     return float((x.mean() - y.mean()) / np.sqrt(pooled)) if pooled > 0 else float("nan")
 
 
@@ -146,7 +146,7 @@ def scan_missingness_dependencies(
 
     for target in targets:
         t_missing = missing[target]
-        if t_missing.sum() == 0 or t_missing.sum() == len(df):
+        if int(t_missing.sum()) in (0, len(df)):
             done += len(predictors)
             skipped += len(predictors)
             continue
@@ -157,7 +157,7 @@ def scan_missingness_dependencies(
             if pred == target:
                 continue
             observed = ~missing[pred]
-            if observed.sum() >= min_observed:
+            if int(observed.sum()) >= min_observed:
                 values = df.loc[observed, pred]
                 groups = t_missing.loc[observed]
                 n_missing, n_observed = int(groups.sum()), int((~groups).sum())
@@ -212,7 +212,7 @@ def scan_missingness_dependencies(
                 skipped += 1
 
             p_missing = missing[pred]
-            if 0 < p_missing.sum() < len(df):
+            if 0 < int(p_missing.sum()) < len(df):
                 try:
                     table = pd.crosstab(t_missing, p_missing)
                     if table.shape == (2, 2):

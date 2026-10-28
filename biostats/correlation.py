@@ -84,7 +84,7 @@ def variable_types(df: pd.DataFrame, columns: list[str] | None = None) -> dict[s
     out: dict[str, str] = {}
     for col in columns or df.columns:
         s = df[col]
-        nunique = s.nunique(dropna=True)
+        nunique = int(s.nunique(dropna=True))
         if nunique == 2:
             out[col] = "binary"
         elif pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
@@ -157,7 +157,7 @@ def association_matrix(
                 )
                 ok = ~(x.isna() | y.isna())
                 x, y = x[ok], y[ok]
-                if len(x) >= min_periods and x.std() > 0 and y.std() > 0:
+                if len(x) >= min_periods and float(x.std()) > 0 and float(y.std()) > 0:
                     if "binary" in kinds:
                         r, p = stats.pearsonr(x, y)
                         row.update(measure="point-biserial r", estimate=float(r), p_raw=float(p))

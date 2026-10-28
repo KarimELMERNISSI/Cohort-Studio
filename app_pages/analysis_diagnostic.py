@@ -79,7 +79,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
         diag_config = (outcome, score, str(pos_label), mode, float(manual), float(prevalence))
         if st.button("Run diagnostic accuracy", type="primary", key="diag_run"):
             try:
-                if clean[outcome].nunique() != 2:
+                if int(clean[outcome].nunique()) != 2:
                     raise ValueError("the reference standard must have exactly two levels after dropping missing values")
                 auc = delong_auc(clean[outcome].tolist(), clean[score].tolist(), pos_label=pos_label)
                 youden = youden_cutoff(clean[outcome].tolist(), clean[score].tolist(), pos_label=pos_label, n_boot=300)

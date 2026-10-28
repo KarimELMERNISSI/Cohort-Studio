@@ -33,7 +33,7 @@ def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[s
     numeric = set(analyzer.numeric_cols)
     out = []
     for col in df.columns:
-        n = df[col].nunique(dropna=True)
+        n = int(df[col].nunique(dropna=True))
         if 2 <= n <= max_levels and (col not in numeric or n <= 3):
             out.append(col)
     return out

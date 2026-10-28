@@ -91,7 +91,7 @@ def column_profile(
             if not series.empty:
                 info["range"] = f"{series.min().year} to {series.max().year}"
         elif pd.api.types.is_bool_dtype(series) or (
-            pd.api.types.is_numeric_dtype(series) and series.nunique() <= FEW_LEVELS
+            pd.api.types.is_numeric_dtype(series) and int(series.nunique()) <= FEW_LEVELS
         ):
             info["type"] = "Categorical"
             info["top_values"] = _frequent_values(series)

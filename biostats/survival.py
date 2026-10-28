@@ -318,7 +318,7 @@ def cox_regression(
                 "p": summary["p"].to_numpy(),
             }
         )
-        if (ph_table["p"] < 0.05).any():
+        if bool((ph_table["p"] < 0.05).any()):
             warnings.append(
                 "the proportional-hazards assumption is questionable for: "
                 + ", ".join(ph_table.loc[ph_table["p"] < 0.05, "term"])

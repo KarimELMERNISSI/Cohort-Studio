@@ -203,7 +203,7 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
             skipped_cols = []
             for col in numeric_cols:
                 if pd.api.types.is_numeric_dtype(df_analysis[col]):
-                    if df_analysis[col].min() >= 0:
+                    if float(df_analysis[col].min()) >= 0:
                         df_analysis[col] = np.log1p(df_analysis[col])
                         cols_to_transform.append(col)
                     else:
@@ -214,7 +214,7 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
                 
         elif transformation == "Z-Score Standardization":
             for col in numeric_cols:
-                if pd.api.types.is_numeric_dtype(df_analysis[col]) and df_analysis[col].std() > 0:
+                if pd.api.types.is_numeric_dtype(df_analysis[col]) and float(df_analysis[col].std()) > 0:
                     df_analysis[col] = (df_analysis[col] - df_analysis[col].mean()) / df_analysis[col].std()
                     
         elif transformation == "Min-Max Normalization":
@@ -222,7 +222,7 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
                 if pd.api.types.is_numeric_dtype(df_analysis[col]):
                     min_val = df_analysis[col].min()
                     max_val = df_analysis[col].max()
-                    if max_val > min_val:
+                    if float(max_val) > float(min_val):
                         df_analysis[col] = (df_analysis[col] - min_val) / (max_val - min_val)
     
     st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
@@ -1228,8 +1228,8 @@ def run_zscore_analysis(df, analyzer):
         for var in target_vars:
             c_mu, c_sd = st.columns(2)
             series = pd.to_numeric(df[var], errors="coerce")
-            default_mu = float(series.mean()) if pd.notna(series.mean()) else 0.0
-            default_sd = float(series.std()) if pd.notna(series.std()) and series.std() > 0 else 1.0
+            default_mu = float(series.mean()) if bool(pd.notna(series.mean())) else 0.0
+            default_sd = float(series.std()) if bool(pd.notna(series.std())) and float(series.std()) > 0 else 1.0
             manual_refs[var] = (
                 c_mu.number_input(f"Reference mean for {var}", value=default_mu, format="%.4f", persist_state="page", key=f"mu_{var}", help=HELP["z_mean"]),
                 c_sd.number_input(f"Reference SD for {var}", value=default_sd, min_value=1e-9, format="%.4f", persist_state="page", key=f"sigma_{var}", help=HELP["z_sd"]),

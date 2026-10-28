@@ -338,7 +338,7 @@ def plan_group_comparison(
         values = data[target]
         n = int(values.notna().sum())
         missing = 1 - n / len(values) if len(values) else 0.0
-        if values.nunique(dropna=True) < 2:
+        if int(values.nunique(dropna=True)) < 2:
             planned.append(
                 PlannedTest(
                     target,
@@ -355,7 +355,7 @@ def plan_group_comparison(
             test, reason = _numeric_test(subset, group_col, target, strategy, k)
             planned.append(PlannedTest(target, "numeric", test, reason, n, missing))
         elif target in categorical:
-            levels = values.nunique(dropna=True)
+            levels = int(values.nunique(dropna=True))
             test, reason = _categorical_test(subset, group_col, target)
             if levels > 10:
                 reason = (
@@ -429,7 +429,7 @@ def ancova_check(
     cols = [target, group, *covariates]
     complete = df[cols].dropna()
     n = len(complete)
-    k = complete[group].nunique() if n else 0
+    k = int(complete[group].nunique()) if n else 0
     parameters = 1 + max(k - 1, 0) + len(covariates)
     per = n / parameters if parameters else 0.0
     advice: list[Advice] = []
@@ -473,7 +473,7 @@ def ancova_check(
             )
         )
     for cov in covariates:
-        if n and complete[cov].nunique() <= 2:
+        if n and int(complete[cov].nunique()) <= 2:
             advice.append(
                 Advice(
                     "info", f"{cov} has two values only: it acts as a second factor, not a slope."
@@ -498,7 +498,7 @@ def ancova_check(
 def _eta_squared(values: pd.Series, groups: pd.Series) -> float:
     y = pd.to_numeric(values, errors="coerce")
     frame = pd.DataFrame({"y": y, "g": groups}).dropna()
-    if frame.empty or frame["y"].var(ddof=0) == 0:
+    if frame.empty or float(frame["y"].var(ddof=0)) == 0:
         return 0.0
     grand = frame["y"].mean()
     between = frame.groupby("g")["y"].agg(["count", "mean"])

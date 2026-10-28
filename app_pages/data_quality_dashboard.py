@@ -1078,7 +1078,7 @@ def render_dashboard(df, config):
                     
                     # Iterate over columns (rules) in the boolean dataframe
                     for col in auditor.clinical_anomalies_booleans.columns:
-                        count = auditor.clinical_anomalies_booleans[col].sum()
+                        count = int(auditor.clinical_anomalies_booleans[col].sum())
                         if count > 0:
                             summary_stats.append({
                                 "Criteria": col,

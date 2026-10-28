@@ -759,7 +759,7 @@ def derivation_steps(
             variable: sorted(seen)
             for variable, seen in found.checked_levels.items()
             if variable in data.columns
-            and (data[variable].notna() & ~data[variable].astype(str).isin(seen)).any()
+            and bool((data[variable].notna() & ~data[variable].astype(str).isin(seen)).any())
         }
         if levels:
             step["only_levels"] = levels

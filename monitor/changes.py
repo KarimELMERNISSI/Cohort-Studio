@@ -85,6 +85,12 @@ def keep_modifications(row, common_id_only_in_df1, common_id_only_in_df2, common
 
 ######################################## COMPARE DATA FILES ########################################
 
+def _differs(a, b) -> bool:
+    """Two cells differ: one is missing and the other is not, or both hold values that differ."""
+    a_missing, b_missing = bool(pd.isna(a)), bool(pd.isna(b))
+    return a_missing != b_missing or (not a_missing and bool(a != b))
+
+
 def compare_dataframes(df1, df2, id_column, exception_list):
     """
     Compare two DataFrames based on a common row identifier and identify modifications.
@@ -121,13 +127,12 @@ def compare_dataframes(df1, df2, id_column, exception_list):
         logger.debug("Columns to compare: %s", cols_to_compare)
         # Iterate over rows and compare values
         for index, row in merged_df.iterrows():
-            if row['_merge'] != 'both':
+            if str(row['_merge']) != 'both':
                 continue
             # Check if any value in the row (excluding the ID column) is different between df1 and df2
             differing_columns = [
-                col for col in cols_to_compare 
-                if (pd.isna(row[f'{col}_df1']) != pd.isna(row[f'{col}_df2'])) or 
-                   (pd.notna(row[f'{col}_df1']) and pd.notna(row[f'{col}_df2']) and row[f'{col}_df1'] != row[f'{col}_df2'])
+                col for col in cols_to_compare
+                if _differs(row[f'{col}_df1'], row[f'{col}_df2'])
             ]
             if differing_columns:
                 merged_df.at[index, 'modification'] = True

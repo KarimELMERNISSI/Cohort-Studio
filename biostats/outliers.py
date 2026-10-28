@@ -133,7 +133,9 @@ def _multivariate(
         series = df[col]
         if pd.api.types.is_numeric_dtype(series) or pd.api.types.is_bool_dtype(series):
             numeric.append(col)
-        elif series.nunique(dropna=True) <= max(2, IDENTIFIER_SHARE * series.notna().sum()):
+        elif int(series.nunique(dropna=True)) <= max(
+            2, IDENTIFIER_SHARE * int(series.notna().sum())
+        ):
             text.append(col)
         else:
             skipped.append(str(col))

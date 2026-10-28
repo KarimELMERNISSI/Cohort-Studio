@@ -54,11 +54,11 @@ def default_model_columns(df: pd.DataFrame, *, max_levels: int = 20) -> list[str
         series = df[col]
         if (
             pd.api.types.is_datetime64_any_dtype(series)
-            or series.dropna().nunique() < 2
+            or int(series.dropna().nunique()) < 2
             or _identifier(series)
         ):
             continue
-        if not is_numeric(series) and series.dropna().astype(str).nunique() > max_levels:
+        if not is_numeric(series) and int(series.dropna().astype(str).nunique()) > max_levels:
             continue
         keep.append(str(col))
     return keep

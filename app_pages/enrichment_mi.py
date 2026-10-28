@@ -332,8 +332,8 @@ def render_multiple_imputation() -> None:
             c
             for c in frame.columns
             if not is_numeric(frame[c])
-            and frame[c].notna().all()
-            and 2 <= frame[c].astype(str).nunique() <= 10
+            and bool(frame[c].notna().all())
+            and 2 <= int(frame[c].astype(str).nunique()) <= 10
         ]
         by = st.selectbox(
             "Impute separately within",
@@ -342,12 +342,12 @@ def render_multiple_imputation() -> None:
             help="For example the trial arm: each level is imputed with its own model.",
         )
         complete_numeric = [
-            c for c in frame.columns if is_numeric(frame[c]) and frame[c].notna().all()
+            c for c in frame.columns if is_numeric(frame[c]) and bool(frame[c].notna().all())
         ]
         binary = [
             c
             for c in frame.columns
-            if frame[c].notna().all() and frame[c].astype(str).nunique() == 2
+            if bool(frame[c].notna().all()) and int(frame[c].astype(str).nunique()) == 2
         ]
         survival = None
         if st.toggle(
@@ -375,9 +375,9 @@ def render_multiple_imputation() -> None:
         )
 
     methods = {
-        row["column"]: ("" if row["method"] == DO_NOT_IMPUTE else row["method"])
+        row["column"]: ("" if str(row["method"]) == DO_NOT_IMPUTE else row["method"])
         for _, row in edited.iterrows()
-        if row["method"] != default_method(frame[row["column"]])
+        if str(row["method"]) != default_method(frame[row["column"]])
     }
     if st.button(
         "Run the multiple imputation", type="primary", icon=":material/play_arrow:", key="mi_run"

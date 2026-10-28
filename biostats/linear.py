@@ -325,11 +325,11 @@ def welch_means(
     frame = df[[outcome, group]].dropna()
     values = pd.to_numeric(frame[outcome], errors="coerce").groupby(frame[group].astype(str))
     n = values.count().reindex(order).fillna(0).astype(float)
-    empty = [level for level in order if n[level] == 0]
+    empty = [level for level in order if float(n[level]) == 0]
     if empty:
         raise ValueError(f"{', '.join(empty)}: no value in the data")
     variance = values.var(ddof=1).reindex(order)
-    constant = [level for level in order if not variance[level] > 0]
+    constant = [level for level in order if not float(variance[level]) > 0]
     if constant:
         raise ValueError(
             f"{', '.join(constant)}: the same value throughout, so a variance of zero, which a comparison that "
@@ -371,7 +371,7 @@ def welch_means(
     crit_means = stats.t.ppf(1 - alpha / 2, means["df"].to_numpy())
     means["ci_low"] = means["mean"] - crit_means * means["se"]
     means["ci_high"] = means["mean"] + crit_means * means["se"]
-    few = [f"{level} ({int(n[level])})" for level in order if n[level] < FEW_VALUES]
+    few = [f"{level} ({int(n[level])})" for level in order if float(n[level]) < FEW_VALUES]
     warnings = list(fit.warnings) + (
         [
             f"groups with fewer than {FEW_VALUES} values: {', '.join(few)}. A group's own variance is estimated "

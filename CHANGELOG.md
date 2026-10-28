@@ -1003,7 +1003,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The DOI is in `CITATION.cff` (GitHub's *Cite this repository*), the README (a badge and the BibTeX entry) and the
   site's APA and BibTeX citations. A test keeps it the same everywhere.
 
-### Dependency updates: DuckDB 2, the Anthropic SDK 2 and seven others
+### Dependency updates: DuckDB 2, the Anthropic SDK 2, pandas 3.1 and seven others
 
 - Updated in `uv.lock`, as Dependabot proposed:
   - qdrant-client 1.20.0, langchain-core 1.7.0, openai 3.37.0, prince 0.23.0, pypdf 6.21.2 and google-genai
@@ -1012,7 +1012,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     and stays readable by DuckDB 1. A file that DuckDB 2 creates, on a new installation, cannot be opened by an
     earlier CohortStudio. Saved versions are written by pyarrow, as before;
   - anthropic 2.3.0, the SDK of the Claude connector, whose calls (the client, the model list, a message and its
-    reply) are unchanged.
+    reply) are unchanged;
+  - pandas 3.1.0. Its type hints read a column taken from a table as a column or a table, so the type check flagged
+    each place that tests a count, a mean or a check of a column: these now convert the value, with the same
+    results.
 - qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.

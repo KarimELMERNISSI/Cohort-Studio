@@ -266,21 +266,21 @@ class DataAnalyzer:
         Returns:
             tuple: (all_binary, numeric_binary, non_numeric_binary)
         """
-        all_binary = [col for col in self.df.columns if self.df[col].nunique() == 2]
+        all_binary = [col for col in self.df.columns if int(self.df[col].nunique()) == 2]
         num_binary = [col for col in self.df.select_dtypes(include=[np.number]).columns 
-                      if self.df[col].nunique() == 2]
+                      if int(self.df[col].nunique()) == 2]
         non_num_binary = [col for col in self.df.select_dtypes(exclude=[np.number]).columns 
-                          if self.df[col].nunique() == 2]
+                          if int(self.df[col].nunique()) == 2]
         return all_binary, num_binary, non_num_binary
     
     def _detect_low_cardinality_numeric_columns(self) -> list[str]:
         """Detect numeric columns with <= 10 unique values to treat as categorical."""
-        return [col for col in self.numeric_cols if self.df[col].nunique() <= 10]
+        return [col for col in self.numeric_cols if int(self.df[col].nunique()) <= 10]
     
     def _detect_high_cardinality_cat_columns(self) -> list[str]:
         """Detect categorical columns with many unique values."""
         return [col for col in self.categorical_cols 
-                if self.df[col].nunique() > 0.5 * len(self.df)]
+                if int(self.df[col].nunique()) > 0.5 * len(self.df)]
 
     def get_suitable_columns(self, plot_type: str) -> dict[str, Any]:
         """
@@ -307,7 +307,7 @@ class DataAnalyzer:
             "Line Plot": {"x": date_cols, "y": num_vars, "color": cat_vars},
             "Bar Plot": {"x": cat_vars, "y": num_vars, "color": cat_vars},
             "Pie Chart": {
-                "names": [col for col in self.categorical_cols if self.df[col].nunique() <= 10],
+                "names": [col for col in self.categorical_cols if int(self.df[col].nunique()) <= 10],
                 "values": num_vars
             },
             "Correlation Matrix": {
@@ -317,7 +317,7 @@ class DataAnalyzer:
             },
             "ROC Curve": {
                 # a two-level text column is in both lists: each column once
-                "true_class": list(dict.fromkeys(self.binary_cols + [c for c in cat_vars if self.df[c].nunique() == 2])),
+                "true_class": list(dict.fromkeys(self.binary_cols + [c for c in cat_vars if int(self.df[c].nunique()) == 2])),
                 "score": num_vars
             },
             "Clustermap": {

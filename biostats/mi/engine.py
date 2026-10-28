@@ -165,7 +165,7 @@ def _check(df: pd.DataFrame, spec: ImputationSpec) -> None:
             raise ValueError(f"{col} is numeric: use pmm, norm or rf, not {method}")
         if not is_numeric(df[col]) and method and method not in CATEGORICAL_METHODS:
             raise ValueError(f"{col} is categorical: use logreg, polyreg or rf, not {method}")
-        if method == "logreg" and df[col].dropna().astype(str).nunique() > 2:
+        if method == "logreg" and int(df[col].dropna().astype(str).nunique()) > 2:
             raise ValueError(f"{col} has more than two categories: use polyreg")
     if spec.by is not None:
         if spec.by not in df.columns:
