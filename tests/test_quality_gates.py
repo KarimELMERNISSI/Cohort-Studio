@@ -92,22 +92,34 @@ def test_version_is_recorded_in_the_changelog() -> None:
     assert f"## [{version}]" in changelog or "## [Unreleased]" in changelog
 
 
+def _session_writes(text: str) -> set[str]:
+    """The session keys a module writes: [...] =, .name =, setdefault(), also through a name bound to the session."""
+    alias = re.compile(r"""^\s*(\w+)\s*=\s*st\.session_state\s*$""", re.MULTILINE)  # ss = st.session_state
+    holders = "|".join(["session_state", *(re.escape(name) for name in alias.findall(text))])
+    written = re.compile(
+        rf"""(?:{holders})(?:\[\s*["'](\w+)["']\s*\]\s*=(?!=)|\.setdefault\(\s*["'](\w+)["'])"""
+        rf"""|(?:{holders})\.(?!setdefault\b)(\w+)\s*=(?!=)"""
+    )
+    return {m.group(1) or m.group(2) or m.group(3) for m in written.finditer(text)}
+
+
 def test_undeclared_session_keys_are_ratcheted_down() -> None:
     """
     A key that the code writes into the session is declared in ui/keys.py, with its owner, its readers and its
     lifetime, from which AppState knows when to clear it (M5b). The keys written without a declaration can only become
-    fewer: 54 when the cleared keys were first derived from the declarations.
+    fewer: 54 when the cleared keys were first derived from the declarations, 52 once setdefault() and an alias were
+    counted and the six keys AppState and the preferences write were declared. A key is written with [...] =, with
+    setdefault(), or through a name the session is bound to (ss = st.session_state).
     """
     from ui.keys import BY_NAME
 
-    written = re.compile(r"""session_state(?:\[\s*["'](\w+)["']\s*\]|\.(\w+))\s*=(?!=)""")
+    sample = 'ss = st.session_state\nss["a"] = 1\nss.setdefault("b", 2)\nst.session_state.c = 3\nst.session_state["d"] = 4\n'
+    assert _session_writes(sample) == {"a", "b", "c", "d"}
     undeclared = set()
     for file in _files("app_pages", "ui"):
-        for match in written.finditer(file.read_text(encoding="utf-8", errors="replace")):
-            key = match.group(1) or match.group(2)
-            if key not in BY_NAME:
-                undeclared.add(key)
-    assert len(undeclared) <= 54, f"{len(undeclared)} undeclared session keys (ceiling 54): {sorted(undeclared)[:5]}"
+        written = _session_writes(file.read_text(encoding="utf-8", errors="replace"))
+        undeclared |= {key for key in written if key not in BY_NAME}
+    assert len(undeclared) <= 52, f"{len(undeclared)} undeclared session keys (ceiling 52): {sorted(undeclared)[:5]}"
 
 
 def test_stored_analysis_results_are_cleared_when_the_dataset_changes() -> None:

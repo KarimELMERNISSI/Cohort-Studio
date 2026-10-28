@@ -37,6 +37,56 @@ class Key:
 
 
 KEYS: tuple[Key, ...] = (
+    # the dataset of the session, replaced when another is loaded (AppState.set_dataset), never cleared
+    Key(
+        "data",
+        "ui.state",
+        "session",
+        (
+            "app_pages.data_enrichment",
+            "app_pages.data_monitoring",
+            "app_pages.epidemiology",
+            "app_pages.home",
+            "app_pages.rag_sidebar",
+            "app_pages.visualization",
+            "app_pages.views.survival",
+            "ui.progress",
+        ),
+        "the dataset: every row of the current data",
+    ),
+    Key(
+        "dataset_ref",
+        "ui.state",
+        "session",
+        ("ui.progress",),
+        "where the dataset comes from (DatasetRef)",
+    ),
+    Key(
+        "current_dataset_name",
+        "ui.state",
+        "session",
+        ("app_pages.home", "ui.progress"),
+        "the dataset's name, with its version",
+    ),
+    Key(
+        "last_uploaded_file_hash",
+        "ui.state",
+        "session",
+        note="the file read last: read again only when it changes",
+    ),
+    Key(
+        "import_default_dayfirst",
+        "ui.preferences",
+        "session",
+        ("ui.import_flow",),
+        "the user's saved choice of day-first dates, seeded once per session",
+    ),
+    Key(
+        "rag_qdrant_url",
+        "app_pages.rag_sidebar",
+        "page",
+        note="Settings: the Qdrant server's address, seeded from the server's setting",
+    ),
     Key(
         "config",
         "ui.state",
