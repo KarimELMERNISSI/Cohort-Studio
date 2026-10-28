@@ -29,19 +29,22 @@ from core.criteria import (
     NOT_READ,
     CriterionError,
     CriterionKind,
+    combined_rules,
     criterion_columns,
     criterion_mask,
     criterion_problems,
     describe_definition,
     holds_row_list,
+    is_scalar,
     rule_kind,
+    shared_definition,
 )
 from core.fingerprint import ensure_row_ids
 from core.population import (
     catalogue,
+    configuration_for_sharing,
     criteria_from_trace,
     evaluate_population,
-    without_row_lists,
 )
 from tests.core_layer.test_criteria_golden import EDGE
 
@@ -289,8 +292,25 @@ def test_a_definition_reads_as_its_kind_and_is_kept_as_written(
     describe_definition(name, definition)
     criterion_problems(name, definition)
     holds_row_list(definition)
-    without_row_lists(config)
+    configuration_for_sharing(config)
     assert definition == written
+
+
+@pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
+def test_a_kind_holds_the_keys_its_definitions_are_written_with(
+    kind: str, name: str, definition: dict
+) -> None:
+    """A copy for sharing keeps a kind's keys and no other: a definition the app writes is shared as written."""
+    declared = rule_kind(name, definition)
+    assert set(definition) <= {*declared.keys, declared.members_key}
+    assert all(
+        declared.keys[key](value) for key, value in definition.items() if key in declared.keys
+    )
+    shared = shared_definition(name, definition)
+    if holds_row_list(definition):
+        assert shared is None  # listed rows, or a rule that combines them
+    else:
+        assert shared == definition and shared is not definition
 
 
 @pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
@@ -321,7 +341,7 @@ def test_each_kind_treats_a_missing_value_as_it_declares(
         assert after.equals(before)
         assert criterion_mask(everything_blank, name, definition).equals(before)
     elif declared.missing == MEMBERS:  # as the rules it combines
-        members = declared.members(definition)
+        members = combined_rules(definition)
         fired = pd.concat([criterion_mask(blank, m, spec) for m, spec in members.items()], axis=1)
         assert after.equals(fired.sum(axis=1) >= int(definition["threshold"]))
     elif declared.missing == ASKED and ".isna()" in definition["expression"]:
@@ -368,31 +388,59 @@ def test_every_stored_definition_reads_as_a_registered_kind() -> None:
         for criterion in catalogue(config):
             kind = rule_kind(criterion.name, criterion.definition)
             assert kind.id in STORED
-            for member, spec in kind.members(criterion.definition).items():
+            for member, spec in combined_rules(criterion.definition).items():
                 assert rule_kind(member, spec).id in STORED
 
 
-def test_a_row_list_is_found_by_its_kind_or_its_key() -> None:
-    """holds_row_list reads the kinds (listed rows, and the rules a threshold combines); a "row_ids" or "members" key
-    counts whatever the rule reads as, so the row ids of a rule that cannot be read never reach a shared file."""
+def test_a_row_list_never_reaches_a_shared_rule() -> None:
+    """holds_row_list reads the kinds (listed rows, and the rules a kind combines). A shared rule keeps only the keys
+    its kind reads, with the values it reads there, so row ids under any other key or of another type stay out, and a
+    rule that cannot be read is left out whole."""
     assert [k.id for k in CRITERION_KINDS if k.lists_rows] == ["row_ids"]
     for _, name, definition in (p.values for p in _every(EXAMPLES)):
         kind = rule_kind(name, definition)
         expected = kind.lists_rows or any(
-            holds_row_list(spec) for spec in kind.members(definition).values()
+            holds_row_list(spec) for spec in combined_rules(definition).values()
         )
         assert holds_row_list(definition) == expected, name
-    assert holds_row_list({"threshold": 1, "members": {"old": OLD}, "row_ids": [[0, 0]]})
-    assert holds_row_list({"expression": "df['x'] > 1", "members": {"a": {"row_ids": [[0, 0]]}}})
-    unreadable = {
-        "numeric": True,
-        "expression": "df['x'] > 1",
-        "members": {"a": {"row_ids": [[0, 0]]}},
-    }
+    listed = {"row_ids": [[0, 0]]}
+    # a key the rule's kind does not read
+    stray = {"threshold": 1, "members": {"old": OLD}, "row_ids": [[0, 0]]}
+    assert shared_definition("t", stray) == {"threshold": 1, "members": {"old": OLD}}
+    assert shared_definition("x", {**OLD, "members": {"a": listed}}) == OLD
+    # a key the kind reads, holding a value of another type: left out whole
+    assert shared_definition("x", {"expression": {"row_ids": [[100, 250]]}}) is None
+    assert (
+        shared_definition("age", {"numeric": True, "column": [[100, 250]], "lower_bound": 1})
+        is None
+    )
+    assert shared_definition("o", {"bounds": {"age": [[100, 250], None]}}) is None
+    unreadable = {"numeric": True, "expression": "df['x'] > 1", "members": {"a": listed}}
     with pytest.raises(CriterionError):
         rule_kind("both", unreadable)
-    assert holds_row_list(unreadable)
+    assert shared_definition("both", unreadable) is None
     assert not holds_row_list({"members": {"a": OLD}}) and not holds_row_list(["row_ids"])
+
+
+def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rules nested twenty deep are each read once when looking for a row list (walking the members twice doubled
+    the work at each level of a loaded file), and once more to share them."""
+    import core.criteria as criteria
+
+    calls: list[str] = []
+    original = criteria.rule_kind
+
+    def counting(name: str, definition: Mapping[str, Any]) -> CriterionKind:
+        calls.append(name)
+        return original(name, definition)
+
+    monkeypatch.setattr(criteria, "rule_kind", counting)
+    rule: dict[str, Any] = {"expression": "df['x'] > 1"}
+    for _ in range(20):
+        rule = {"threshold": 1, "members": {"inner": rule}}
+    assert not holds_row_list(rule) and len(calls) == 21
+    calls.clear()
+    assert shared_definition("deep", rule) == rule and len(calls) == 42
 
 
 def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
@@ -415,11 +463,27 @@ def test_a_kind_declares_its_row_lists_and_the_rules_it_combines(
             **declared,
         )
 
+    def broken(name: str, definition: Mapping[str, Any]) -> bool:
+        if "broken" in definition:
+            raise RuntimeError("the kind's own check failed")
+        return False
+
     CRITERION_KINDS.register(kind("sample", lists_rows=True))
-    CRITERION_KINDS.register(kind("group", members=lambda definition: definition["rules"]))
+    CRITERION_KINDS.register(kind("group", members_key="rules", keys={"group": is_scalar}))
+    CRITERION_KINDS.register(
+        CriterionKind("broken", "Broken", nothing, kind("x").columns, kind("x").describe, broken)
+    )
     assert holds_row_list({"sample": "rows 4 to 9"})
     assert holds_row_list({"group": True, "rules": {"a": {"sample": "rows 4 to 9"}}})
     assert not holds_row_list({"group": True, "rules": {"a": OLD}})
+    # its combined rules are rebuilt where it keeps them
+    assert shared_definition("g", {"group": True, "rules": {"a": OLD}, "x": 1}) == {
+        "group": True,
+        "rules": {"a": OLD},
+    }
+    # an error in a kind's own function never stops a page, and the rule is never shared
+    assert holds_row_list({"broken": 1}) and shared_definition("b", {"broken": 1}) is None
+    assert criterion_problems("b", {"broken": 1}) == ["criterion 'b': the kind's own check failed"]
 
 
 def test_the_flow_and_the_dossier_give_the_words() -> None:

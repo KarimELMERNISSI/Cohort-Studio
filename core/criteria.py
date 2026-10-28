@@ -19,9 +19,10 @@ written in every population block of a trace.
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -111,8 +112,32 @@ def _no_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
     return []
 
 
-def _no_members(definition: Mapping[str, Any]) -> Mapping[str, Any]:
-    return {}
+# What a key of a definition may hold (CriterionKind.keys): a copy shared with someone else keeps a key only with such
+# a value, since a loaded file can hold anything there, row ids too.
+
+
+def is_text(value: Any) -> bool:
+    """A text: an expression, a column's name, a description."""
+    return isinstance(value, str)
+
+
+def is_scalar(value: Any) -> bool:
+    """One value: a number, a text, true or false, or nothing (a bound, a threshold, a strategy)."""
+    return value is None or isinstance(value, (str, int, float))
+
+
+def _is_bounds(value: Any) -> bool:
+    """Frozen bounds: column names, each with a [lower, upper] pair of single values."""
+    return value is None or (
+        isinstance(value, Mapping)
+        and all(
+            isinstance(column, str)
+            and isinstance(pair, (list, tuple))
+            and len(pair) == 2
+            and all(is_scalar(bound) for bound in pair)
+            for column, pair in value.items()
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -122,39 +147,36 @@ class CriterionKind:
     kind's functions, which take the rule's name (a numeric rule reads the column named like it) and its definition.
     """
 
-    id: str  # stored, never renamed; the five kinds of M5 are implied by their keys
-    label: str  # its name on the screens that list rules
-    mask: Callable[
-        [pd.DataFrame, str, Mapping[str, Any]], pd.Series
-    ]  # rows where it fires, on df.index
-    columns: Callable[[str, Mapping[str, Any]], tuple[str, ...]]  # the columns the mask reads
-    describe: Callable[
-        [str, Mapping[str, Any]], str
-    ]  # what makes it fire: the flow and the dossier
+    # stored, never renamed; the five kinds of M5 are implied by their keys
+    id: str
+    # its name on the screens that list rules
+    label: str
+    # the rows where it fires, on df.index
+    mask: Callable[[pd.DataFrame, str, Mapping[str, Any]], pd.Series]
+    # the columns the mask reads
+    columns: Callable[[str, Mapping[str, Any]], tuple[str, ...]]
+    # what makes it fire, in words: the flow and the dossier
+    describe: Callable[[str, Mapping[str, Any]], str]
     # whether a definition is of this kind, from its keys: it may raise CriterionError for a definition of this kind
     # that cannot be read (a numeric range with an expression); None for a kind that a definition names
     recognise: Callable[[str, Mapping[str, Any]], bool] | None = None
-    problems: Callable[[str, Mapping[str, Any]], list[str]] = (
-        _no_problems  # unusable on any table: upload refused
-    )
-    members: Callable[[Mapping[str, Any]], Mapping[str, Any]] = (
-        _no_members  # the rules it combines, by name
-    )
-    lists_rows: bool = (
-        False  # lists row ids of this dataset: left out of a configuration shared with someone else
-    )
-    missing: str = NEVER  # how it treats a missing value: NEVER, ASKED, NOT_READ or MEMBERS
+    # what makes a definition unusable on any table: a configuration holding it is refused when loaded
+    problems: Callable[[str, Mapping[str, Any]], list[str]] = _no_problems
+    # the key under which it keeps the rules it combines, {name: definition}; None when it combines none
+    members_key: str | None = None
+    # the other keys a definition of this kind holds, each with what it may hold (is_text, is_scalar...): a copy
+    # shared with someone else keeps these and no other, and leaves the rule out when a value is of another kind
+    keys: Mapping[str, Callable[[Any], bool]] = field(default_factory=dict, hash=False)
+    # it lists row ids of this dataset: left out of a configuration shared with someone else
+    lists_rows: bool = False
+    # how it treats a missing value: NEVER, ASKED, NOT_READ or MEMBERS
+    missing: str = NEVER
 
 
 CRITERION_KINDS: Catalogue[CriterionKind] = Catalogue("criterion kind")
 
 
 # threshold: {"threshold": k, "members": {name: definition, ...}} fires when at least k members fire
-
-
-def _threshold_members(definition: Mapping[str, Any]) -> Mapping[str, Any]:
-    members = definition.get("members")
-    return members if isinstance(members, Mapping) else {}
 
 
 def _threshold_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
@@ -215,7 +237,8 @@ CRITERION_KINDS.register(
         describe=_threshold_text,
         recognise=lambda name, definition: "threshold" in definition,
         problems=_threshold_problems,
-        members=_threshold_members,
+        members_key="members",
+        keys={"threshold": is_scalar, "description": is_text},
         missing=MEMBERS,
     )
 )
@@ -348,6 +371,13 @@ CRITERION_KINDS.register(
         describe=_row_ids_text,
         recognise=lambda name, definition: "row_ids" in definition,
         problems=_row_ids_problems,
+        keys={
+            "row_ids": lambda value: isinstance(value, (list, tuple)),
+            "method": is_text,
+            "params": lambda value: isinstance(value, Mapping),
+            "columns": lambda value: isinstance(value, (list, tuple)),
+            "description": is_text,
+        },
         lists_rows=True,
         missing=NOT_READ,
     )
@@ -415,6 +445,7 @@ CRITERION_KINDS.register(
         describe=_bounds_text,
         recognise=lambda name, definition: "bounds" in definition,
         problems=_bounds_problems,
+        keys={"bounds": _is_bounds, "description": is_text},
     )
 )
 
@@ -506,6 +537,14 @@ CRITERION_KINDS.register(
         describe=_numeric_rule_text,
         recognise=_is_numeric,
         problems=_numeric_problems,
+        keys={
+            "numeric": is_scalar,
+            "column": is_text,
+            "lower_bound": is_scalar,
+            "upper_bound": is_scalar,
+            "strategy": is_scalar,
+            "description": is_text,
+        },
     )
 )
 
@@ -539,6 +578,7 @@ CRITERION_KINDS.register(
         columns=_expression_columns,
         describe=lambda name, definition: _expression_of(definition),
         recognise=lambda name, definition: bool(_expression_of(definition)),
+        keys={"numeric": is_scalar, "expression": is_text, "description": is_text},
         missing=ASKED,
     )
 )
@@ -634,30 +674,80 @@ def criterion_problems(name: str, definition: Any) -> list[str]:
         kind = rule_kind(name, definition)
     except CriterionError as exc:
         return [str(exc)]
+    except (
+        Exception
+    ) as exc:  # a kind's recogniser failed: never an error in the upload check itself
+        return [f"criterion '{name}': {exc}"]
     try:
         return kind.problems(name, definition)
     except Exception as exc:  # never an error in the upload check itself
         return [f"criterion '{name}': {exc}"]
 
 
+def _members(kind: CriterionKind, definition: Mapping[str, Any]) -> Mapping[str, Any]:
+    members = definition.get(kind.members_key) if kind.members_key else None
+    return members if isinstance(members, Mapping) else {}
+
+
+def combined_rules(definition: Any) -> Mapping[str, Any]:
+    """The rules a rule combines, by name (a threshold rule's members): none for a rule that cannot be read."""
+    kind = _kind_or_none(definition) if isinstance(definition, Mapping) else None
+    return _members(kind, definition) if kind is not None else {}
+
+
 def holds_row_list(definition: Any) -> bool:
     """
-    Whether a rule lists row ids of this dataset: a kind that lists rows, or a rule it combines that does (a threshold
-    rule's members). Such a rule only means something for this dataset, and is left out of a configuration shared
-    with someone else (core.population.without_row_lists). The "row_ids" and "members" keys count whatever the rule
-    reads as: the list of a rule that cannot be read is this dataset's rows too.
+    Whether a rule lists row ids of this dataset: its kind lists rows, or a rule it combines does, at any depth (a
+    threshold rule's members). Such a rule only means something for this dataset, and is left out of a configuration
+    shared with someone else (core.population.configuration_for_sharing). Each rule is read once, however the rules
+    nest, and an error in a kind's own function counts as a row list.
     """
-    if not isinstance(definition, Mapping):
-        return False
-    kind = _kind_or_none(definition)
-    if "row_ids" in definition or (kind is not None and kind.lists_rows):
-        return True
-    combined = kind.members(definition) if kind is not None else {}
-    keyed = definition.get("members")
-    groups = (
-        [combined, keyed] if isinstance(keyed, Mapping) and keyed is not combined else [combined]
-    )
-    return any(holds_row_list(spec) for group in groups for spec in group.values())
+    pending, seen = [definition], set()
+    while pending:
+        rule = pending.pop()
+        if not isinstance(rule, Mapping) or id(rule) in seen:
+            continue
+        seen.add(id(rule))
+        try:
+            kind = _kind_or_none(rule)
+            if kind is not None and kind.lists_rows:
+                return True
+            if kind is not None:
+                pending.extend(_members(kind, rule).values())
+        except Exception:
+            return True
+    return False
+
+
+def shared_definition(name: str, definition: Any) -> dict[str, Any] | None:
+    """
+    A rule as a configuration shared with someone else holds it: the keys its kind holds and no other, each only with
+    a value its kind reads there (a loaded file can hold anything, row ids too), and the rules it combines likewise.
+    None, and the rule is left out whole, when it lists rows of this dataset (holds_row_list), cannot be read, or holds
+    another value under one of its keys.
+    """
+    try:
+        return None if holds_row_list(definition) else _shared(name, definition)
+    except Exception:  # cannot be read, nested past reach, or a kind's own function failed
+        return None
+
+
+def _shared(name: str, definition: Mapping[str, Any]) -> dict[str, Any] | None:
+    kind = rule_kind(name, definition)
+    shared: dict[str, Any] = {}
+    for key, value in definition.items():  # in the order written
+        if key == kind.members_key:
+            if not isinstance(value, Mapping):
+                return None
+            members = {member: _shared(str(member), spec) for member, spec in value.items()}
+            if any(rule is None for rule in members.values()):
+                return None
+            shared[key] = members
+        elif key in kind.keys:
+            if not kind.keys[key](value):
+                return None
+            shared[key] = copy.deepcopy(value)
+    return shared
 
 
 __all__ = [
@@ -669,10 +759,14 @@ __all__ = [
     "NOT_READ",
     "CriterionError",
     "CriterionKind",
+    "combined_rules",
     "criterion_columns",
     "criterion_mask",
     "criterion_problems",
     "describe_definition",
     "holds_row_list",
+    "is_scalar",
+    "is_text",
     "rule_kind",
+    "shared_definition",
 ]

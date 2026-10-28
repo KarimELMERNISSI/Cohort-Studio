@@ -32,6 +32,7 @@ from core.criteria import (
     criterion_mask,
     criterion_problems,
     holds_row_list,
+    shared_definition,
 )
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import shape_problems as derived_shape_problems
@@ -187,31 +188,100 @@ def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
     return FamilyMasks(operator, k, rules, errors, flag)
 
 
-def without_row_lists(config: Mapping[str, Any] | None) -> dict[str, Any]:
+# What a configuration shared with someone else holds. The other keys are this installation's settings: its folders
+# (folder_names, under DATA_ROOT), the paths of the files uploaded for an enrichment (data_enrichments), and defaults
+# that nothing reads.
+SHARED_KEYS = ("description", "mask_families", DERIVED_KEY)
+# a derived variable in a shared copy: without its note, the user's commentary, which no shared output holds
+_DERIVED_SHARED_KEYS = ("formula", "inverses", "kind", "origin", "tolerance", "accepted")
+
+
+@dataclass(frozen=True)
+class SharedConfiguration:
+    """A configuration for someone else, and what it left out of the session's (names as written)."""
+
+    config: dict[str, Any]
+    with_rows: tuple[
+        str, ...
+    ] = ()  # "family: rule" listing row ids of this dataset, or a family left out whole
+    # "family: rule" (or a family) that cannot be read, or holds a value its kind does not read where it is
+    unreadable: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()  # the derived variables whose note was left out
+    settings: tuple[str, ...] = ()  # the other keys of the configuration
+
+
+def _shared_family(
+    family: str, members: Mapping[str, Any]
+) -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    """A family as a shared copy holds it (None: left out whole), and its rules that list rows or cannot be read."""
+    rules = {name: spec for name, spec in members.items() if name != "operator"}
+    shared = {name: shared_definition(str(name), spec) for name, spec in rules.items()}
+    with_rows = [f"{family}: {name}" for name, spec in rules.items() if holds_row_list(spec)]
+    unreadable = [
+        f"{family}: {name}"
+        for name, rule in shared.items()
+        if rule is None and not holds_row_list(rules[name])
+    ]
+    if family_operator(members)[0] == "threshold" and (with_rows or unreadable):
+        # "at least 2 of" these rules would count others without the ones left out: the family goes whole
+        return (None, [family], []) if with_rows else (None, [], [family])
+    kept = {name: rule for name, rule in shared.items() if rule is not None}
+    if rules and not kept:
+        return None, with_rows, unreadable  # each of its rules is named
+    if "operator" in members:
+        operator = members["operator"]
+        operator = (
+            {"threshold": operator.get("threshold")} if isinstance(operator, Mapping) else operator
+        )
+        kept = {"operator": operator, **kept}
+    return kept, with_rows, unreadable
+
+
+def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfiguration:
     """
-    A copy of the configuration for sharing: without the rules that list rows (outliers frozen as row ids), also
-    inside a threshold rule (core.criteria.holds_row_list), which only mean something for this dataset; a family left
-    empty is dropped.
+    A copy of the configuration to share with someone else, and what it leaves out.
+
+    It holds the description, the criteria and the derived variables (SHARED_KEYS): each rule rebuilt from the keys
+    its kind holds (core.criteria.shared_definition), each derived variable without its note. Left out, and named: a
+    rule that lists row ids of this dataset (outliers frozen as rows, by any method), also inside a threshold rule, or
+    that cannot be read; a family counted with a threshold, whole, when one of its rules is left out ("at least 2 of"
+    would count other rules); a family left without a rule; the other keys, which hold this installation's folders
+    and the paths of uploaded files. The copy shares nothing with the session's configuration.
     """
-    shared = json.loads(json.dumps(dict(config or {}), default=str))
-    families = shared.get("mask_families")
+    source = json.loads(json.dumps(dict(config or {}), default=str))
+    shared: dict[str, Any] = {}
+    with_rows: list[str] = []
+    unreadable: list[str] = []
+    if isinstance(source.get("description"), str):
+        shared["description"] = source["description"]
+    families = source.get("mask_families")
     if isinstance(families, dict):
-        for family in list(families):
-            members = families[family]
+        kept_families: dict[str, Any] = {}
+        for family, members in families.items():
             if not isinstance(members, dict):
+                unreadable.append(str(family))
                 continue
-            kept = {
-                name: spec
-                for name, spec in members.items()
-                if name == "operator" or not holds_row_list(spec)
-            }
-            if any(name != "operator" for name in members) and all(
-                name == "operator" for name in kept
-            ):
-                del families[family]
-            else:
-                families[family] = kept
-    return shared
+            kept, rows, unread = _shared_family(str(family), members)
+            with_rows += rows
+            unreadable += unread
+            if kept is not None:
+                kept_families[family] = kept
+        shared["mask_families"] = kept_families
+    notes: list[str] = []
+    derived = source.get(DERIVED_KEY)
+    if isinstance(derived, dict):
+        definitions = {target: d for target, d in derived.items() if isinstance(d, dict)}
+        shared[DERIVED_KEY] = {
+            target: {key: value for key, value in d.items() if key in _DERIVED_SHARED_KEYS}
+            for target, d in definitions.items()
+        }
+        notes = [str(target) for target, d in definitions.items() if d.get("note")]
+    settings = tuple(
+        str(key)
+        for key, value in source.items()
+        if key not in SHARED_KEYS and value not in (None, "", [], {})
+    )
+    return SharedConfiguration(shared, tuple(with_rows), tuple(unreadable), tuple(notes), settings)
 
 
 def merge_families(
@@ -471,13 +541,16 @@ def active_criteria(
 __all__ = [
     "EXCLUSION",
     "INCLUSION",
+    "SHARED_KEYS",
     "Criterion",
     "CriterionCount",
     "FamilyMasks",
     "PopulationResult",
+    "SharedConfiguration",
     "Stage",
     "active_criteria",
     "catalogue",
+    "configuration_for_sharing",
     "configuration_problems",
     "criteria_from_trace",
     "criterion_id",
@@ -486,5 +559,4 @@ __all__ = [
     "family_masks",
     "family_operator",
     "merge_families",
-    "without_row_lists",
 ]

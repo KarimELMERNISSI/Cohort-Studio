@@ -16,7 +16,7 @@ from docx import Document
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
-from core.population import without_row_lists
+from core.population import catalogue, configuration_for_sharing, configuration_problems
 
 CANARY_LINE = "CANARY-LINE-9F2"
 CANARY_CELL = "CANARY-CELL-4D1"
@@ -97,37 +97,145 @@ def test_a_planted_value_never_reaches_a_shared_output(data_root: Path) -> None:
     assert "SHA-256" in dossier  # the source file's checksum, with its algorithm
 
 
+SENTINEL_ID = 73_196_451  # a row id planted in the rules that list rows
+
+
 def test_a_configuration_for_sharing_lists_no_row() -> None:
+    old = {"expression": "df['age'] > 80"}
+    listed = {"row_ids": [[SENTINEL_ID, SENTINEL_ID]], "method": "zscore"}
     config = {
         "mask_families": {
             "outliers": {
                 "operator": "any",
-                "iforest": {"row_ids": [[3, 3], [17, 17]], "columns": ["sbp"]},
+                "iforest": {"row_ids": [[3, 3], [SENTINEL_ID, SENTINEL_ID]], "columns": ["sbp"]},
                 "frozen bounds": {"bounds": {"sbp": [80, 200]}},
             },
-            "only_rows": {"operator": "any", "lof": {"row_ids": [[4, 4]]}},
+            "only_rows": {"operator": "any", "lof": {"row_ids": [[4, SENTINEL_ID]]}},
             "study_inclusion": {"operator": "all", "adult": {"expression": "df['age'] >= 18"}},
-            # a rule that combines others, one of which lists rows: it left the rows in the shared file
+            # rules that combine others, one of which lists rows: at the first level, and at the second
             "combined": {
                 "operator": "any",
-                "two signs": {
-                    "threshold": 2,
-                    "members": {
-                        "listed": {"row_ids": [[5, 9]], "method": "zscore"},
-                        "old": {"expression": "df['age'] > 80"},
-                    },
+                "two signs": {"threshold": 2, "members": {"listed": listed, "old": old}},
+                "deeper": {
+                    "threshold": 1,
+                    "members": {"inner": {"threshold": 1, "members": {"listed": listed}}},
                 },
                 "high": {"expression": "df['sbp'] > 180"},
             },
+            # a family counted with a threshold: without its listed rule, "at least 2 of" would count the others
+            "warning_signs": {
+                "operator": {"threshold": 2},
+                "listed": listed,
+                "sbp high": {"expression": "df['sbp'] > 180"},
+                "dbp high": {"expression": "df['dbp'] > 110"},
+            },
+            # ids under keys that no kind holds, in a rule and in an operator
+            "hand_written": {
+                "operator": {"threshold": 1, "rows": [SENTINEL_ID]},
+                "old": {**old, "flagged": [SENTINEL_ID]},
+            },
         }
     }
-    shared = without_row_lists(config)
-    assert "row_ids" not in json.dumps(shared)
-    # a family left empty is dropped
-    assert set(shared["mask_families"]) == {"outliers", "study_inclusion", "combined"}
-    assert set(shared["mask_families"]["combined"]) == {"operator", "high"}
-    assert "frozen bounds" in shared["mask_families"]["outliers"]
-    assert "row_ids" in json.dumps(config)  # the session's configuration is unchanged
+    shared = configuration_for_sharing(config)
+    text = json.dumps(shared.config)
+    assert "row_ids" not in text and str(SENTINEL_ID) not in text
+    families = shared.config["mask_families"]
+    # a family left empty is dropped, and so is a threshold family that held a list, whole
+    assert set(families) == {"outliers", "study_inclusion", "combined", "hand_written"}
+    assert set(families["combined"]) == {"operator", "high"}
+    assert families["hand_written"] == {"operator": {"threshold": 1}, "old": old}
+    assert families["outliers"] == {
+        "operator": "any",
+        "frozen bounds": {"bounds": {"sbp": [80, 200]}},
+    }
+    assert shared.with_rows == (
+        "outliers: iforest",
+        "only_rows: lof",
+        "combined: two signs",
+        "combined: deeper",
+        "warning_signs",
+    )
+    assert configuration_problems(shared.config) == []  # the file loads
+    assert str(SENTINEL_ID) in json.dumps(config)  # the session's configuration is unchanged
+
+
+def test_a_study_shared_keeps_the_fingerprints_of_its_criteria() -> None:
+    """The file for sharing keeps every key the app writes in a rule: its criteria are the study's, fingerprints
+    included."""
+    path = Path(__file__).resolve().parents[2] / "assets" / "tutorial" / "tutorial_config.json"
+    tutorial = json.loads(path.read_text(encoding="utf-8"))
+    shared = configuration_for_sharing(tutorial)
+    assert shared.with_rows == shared.unreadable == ()
+    assert [c.fingerprint for c in catalogue(shared.config)] == [
+        c.fingerprint for c in catalogue(tutorial)
+    ]
+
+
+def _sharing_script() -> None:
+    """The rules, the enrichment and the derived variable written as the pages write them, then the file for sharing."""
+    import json
+    from pathlib import Path
+
+    import streamlit as st
+
+    from app_pages.data_enrichment import save_enrichment_config
+    from app_pages.data_monitoring import _exclude_outliers, left_out_text
+    from core.derived import CONFIG_KEY
+    from core.population import configuration_for_sharing
+    from ui.state import get_state
+
+    state = get_state()
+    ss = st.session_state
+    state.load_tutorial_cohort()  # its configuration names this installation's folders
+    detection = {"method": "zscore", "params": {"threshold": 3.0}, "columns": ["sbp_baseline"]}
+    _exclude_outliers({**detection, "flagged": ss["ids"]})
+    upload = Path(ss["upload"])
+    save_enrichment_config(
+        "labs",
+        "merge",
+        input_file_folder=str(upload.parent),
+        input_file=str(upload),
+        identifier="id",
+    )
+    ss.config[CONFIG_KEY] = {
+        "bmi": {"formula": "weight_kg / (height_cm / 100) ** 2", "note": ss["note"]}
+    }
+    shared = configuration_for_sharing(ss.config)
+    ss["shared"] = json.dumps(shared.config, default=str)
+    ss["caption"] = left_out_text(shared)
+
+
+def test_a_file_for_sharing_holds_no_row_path_or_note(data_root: Path) -> None:
+    at = AppTest.from_function(_sharing_script, default_timeout=120)
+    at.session_state["username"] = "canary_user"
+    at.session_state["ids"] = [SENTINEL_ID, SENTINEL_ID + 1]
+    at.session_state["upload"] = str(
+        data_root / "users" / "canary_user" / "uploads" / "labs_site_B.xlsx"
+    )
+    at.session_state["note"] = CANARY_NOTE
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    shared = at.session_state["shared"]
+    for planted in (
+        str(SENTINEL_ID),
+        str(SENTINEL_ID + 1),
+        CANARY_NOTE,
+        "labs_site_B",
+        "canary_user",
+    ):
+        assert planted not in shared, planted
+    for path in {str(data_root), str(data_root.resolve()), str(data_root).replace("\\", "\\\\")}:
+        assert path not in shared
+    config = json.loads(shared)
+    assert set(config) == {"description", "mask_families", "derived_variables"}
+    assert config["derived_variables"] == {"bmi": {"formula": "weight_kg / (height_cm / 100) ** 2"}}
+    assert configuration_problems(config) == []  # the file loads
+    caption = at.session_state["caption"]
+    assert "zscore outliers (sbp_baseline)" in caption
+    assert (
+        "the notes of the derived variables" in caption
+        and "this installation's settings" in caption
+    )
 
 
 CANARY_LEVEL = "CANARY-LEVEL-7A3"

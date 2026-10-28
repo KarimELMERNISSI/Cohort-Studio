@@ -676,10 +676,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   under the dossier's criteria says that a missing value meets no condition, so an exclusion criterion keeps that
   participant and an inclusion criterion excludes them; in an expression, `.isna()` is met by a missing value, and so
   can be a condition written with `!=` or `~`.
-- **"Leave out the outlier rows" also leaves out a row list inside a rule that combines others** (privacy). The
-  download for sharing removed the rules that list row ids at the top of a family, but kept a rule "at least 2 of"
-  whose combined rules included one: the row ids of the dataset went into the shared file. Such a rule is now left
-  out too.
+- **A configuration for someone else is a file of its own, and holds only the criteria and the derived variables**
+  (privacy). The download for sharing was a switch, off by default, that left out only the rules listing row ids at
+  the top of a family. What went into the file:
+  - a rule "at least 2 of" whose combined rules included listed rows kept the dataset's row ids;
+  - every other key of the configuration: this installation's folders, and the full paths of the files uploaded for
+    an enrichment, which name the user's workspace;
+  - the notes of the derived variables, and any key a hand-written file held in a rule.
+
+  **Download for Sharing** now writes `config_for_sharing.json`, beside the whole `config.json`.
+  - It holds the description, the criteria and the derived variables without their notes.
+  - Each rule keeps only the keys its kind reads, each with a value of the type read there; a rule holding
+    another value there, or that cannot be read, is left out whole.
+  - A rule that lists rows (outliers frozen as rows by any method, also inside a rule "at least k of") is left out.
+    A family counted "at least k of" goes whole when one of its rules is left out: "at least 2 of" the rules left
+    would select other rows.
+
+  The page names what was left out, and says that the other rules are kept as written.
 
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 

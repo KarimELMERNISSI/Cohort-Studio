@@ -31,8 +31,15 @@ study configuration. Declare the rules on the **Handle Clinical Anomalies** tab,
 from the sidebar (**Action** > *Load Existing Config*); **Download Configuration File** saves it for a later session.
 A loaded file adds the families and rules this session lacks, each whole. A rule this session already holds keeps its
 definition here, and the page names those whose definition in the file differs.
-Turn on *For sharing: leave out the outlier rows* before downloading a file meant for someone else: the outlier rules
-found by a multivariate method list the ids of the rows they exclude, which only mean something for your dataset.
+For someone else, use **Download for Sharing** (`config_for_sharing.json`). It holds the criteria and the derived
+variables, and leaves out what only means something here, naming it under the button:
+- the rules that list the ids of the rows they exclude (outliers frozen as rows, by any method), also inside a rule
+  "at least k of", and a family counted "at least k of" whole when one of its rules lists rows;
+- the notes of the derived variables;
+- this installation's settings: its folders and the paths of uploaded files.
+
+The other rules are kept as written, with their descriptions: check that none names a participant (an expression
+such as `df['patient_id'] == 'P-0042'`).
 
 ### How It Works
 

@@ -16,12 +16,13 @@ from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
 from core.fingerprint import ids_to_ranges
 from core.population import (
+    SharedConfiguration,
     catalogue,
+    configuration_for_sharing,
     configuration_problems,
     criterion_id,
     family_masks,
     merge_families,
-    without_row_lists,
 )
 from core.registry import as_code
 from ingest.loaders import UPLOAD_TYPES
@@ -1180,22 +1181,50 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
             #st.dataframe(st.session_state.working_df)
 
     with col3:
-        # Save configuration
-        for_sharing = st.toggle(
-            "For sharing: leave out the outlier rows",
-            persist_state="page", key=f"{key_base}_config_share",
-            help="The outlier rules found by a multivariate method list the ids of the rows they exclude. Keep them "
-            "to restore the same exclusions on this dataset later; leave them out when the file goes to someone else.",
-        )
-        config = without_row_lists(st.session_state.config) if for_sharing else st.session_state.config
+        # The configuration, whole to load it again with this dataset, or for someone else: two files, never a switch
+        config = st.session_state.config
         st.download_button(
             label="Download Configuration File",
             data=json.dumps(config, indent=4, default=str),
             file_name="config.json",
             mime="application/json",
             key=f"{key_base}_config",
-            width='stretch'
+            width='stretch',
+            help="The whole configuration, to load it again with this dataset: the outlier rules keep the ids of the "
+                 "rows they exclude, and the settings name this installation's folders and uploaded files.",
         )
+        shared = configuration_for_sharing(config)
+        st.download_button(
+            label="Download for Sharing",
+            data=json.dumps(shared.config, indent=4, default=str),
+            file_name="config_for_sharing.json",
+            mime="application/json",
+            key=f"{key_base}_config_shared",
+            width='stretch',
+            help="For someone else: the criteria and the derived variables, without the rules that list rows of this "
+                 "dataset (outliers frozen as row ids, by any method), the notes of the derived variables, or this "
+                 "installation's settings.",
+        )
+        st.caption(left_out_text(shared))
+
+
+def left_out_text(shared: SharedConfiguration) -> str:
+    """What the file for sharing leaves out of this session's configuration, and what it keeps as written."""
+    def names(items: tuple[str, ...]) -> str:
+        more = f" and {len(items) - 5} more" if len(items) > 5 else ""
+        return ", ".join(as_code(item) for item in items[:5]) + more
+
+    parts = []
+    if shared.with_rows:
+        parts.append(f"the rules that list rows of this dataset ({names(shared.with_rows)})")
+    if shared.unreadable:
+        parts.append(f"the rules that cannot be read as written ({names(shared.unreadable)})")
+    if shared.notes:
+        parts.append("the notes of the derived variables")
+    if shared.settings:
+        parts.append("this installation's settings (folders, uploaded files)")
+    left_out = f"For sharing, left out: {'; '.join(parts)}. " if parts else ""
+    return left_out + "The other rules are kept as written, with their descriptions: check that none names a participant."
 
 
 # Function to apply column-wide styling
