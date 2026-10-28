@@ -1347,9 +1347,9 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     family_name = "clinical_anomalies"
     ensure_family_exists(config, family_name)
 
-    # Operator Selection
-    family_operator = "any"
-    config["mask_families"][family_name]["operator"] = family_operator
+    # a family this form creates combines its rules with "any"; one that holds an operator keeps it: an uploaded
+    # "at least k rules" family was rewritten on every run, and its ticked criterion left the population unseen
+    config["mask_families"][family_name].setdefault("operator", "any")
 
     # Mask Addition
     mask_name = st_container.text_input("Anomaly Mask Name", key="anomaly_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")
@@ -1429,9 +1429,8 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
     family_name = "study_inclusion"
     ensure_family_exists(config, family_name)
 
-    # Operator Selection
-    family_operator = "all"
-    config["mask_families"][family_name]["operator"] = family_operator
+    # a family this form creates combines its rules with "all"; one that holds an operator keeps it
+    config["mask_families"][family_name].setdefault("operator", "all")
 
     # Mask Addition
     mask_name = st_container.text_input("Inclusion Mask Name", key="inclusion_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")

@@ -639,6 +639,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     `explore.corr_matrix.get_yfiles_network_data` and `app_pages/transformation_logic.py`.
   - The layer test's exception lists for imports going up and for Streamlit below the user interface are empty.
 
+### Criteria: one reading of a rule, kept as written (M5b)
+
+- **Opening Validate's anomalies or inclusion tab no longer changes the analysis population** (results corrected).
+  The tabs set their family's operator to "any" and "all" on every run. A loaded configuration whose family keeps
+  "at least 2 rules" lost it when its tab opened: the criterion "At least 2 rules of clinical_anomalies" no longer
+  existed, so a population that had it ticked dropped it without a word. A family keeps its operator now; a tab sets
+  one only for a family it creates.
+
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 
 - **A column's name inside a text literal broke the formula.** The evaluator renamed the columns in the formula's

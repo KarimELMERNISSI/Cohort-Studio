@@ -59,7 +59,8 @@ organised into **mask families** — groups of related conditions combined with 
   configuration file can add others.
 - **Mask**: An individual condition within a family (numeric range or expression).
 - **Family Operator**: How masks within a family combine — `all` (inclusion: a row must meet every ticked criterion)
-  or `any` (exclusion: a row is excluded when a ticked rule fires).
+  or `any` (exclusion: a row is excluded when a ticked rule fires). A family a tab creates gets the tab's operator; a
+  family that a loaded configuration gives another operator, such as "at least 2 rules", keeps it when its tab opens.
 
 ### Mask Types
 
