@@ -19,6 +19,7 @@ written in every population block of a trace.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -176,11 +177,16 @@ def _threshold_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, .
 
 def _threshold_text(name: str, definition: Mapping[str, Any]) -> str:
     # each rule's definition: the dossier gives the definition of every criterion
-    members = "; ".join(
-        f"{member} ({describe_definition(str(member), spec)})"
-        for member, spec in (definition.get("members") or {}).items()
+    members = definition.get("members") or {}
+    k = int(definition["threshold"])  # as the mask reads it: a threshold of 2.5 is 2
+    text = f"at least {k} of: " + "; ".join(
+        f"{member} ({describe_definition(str(member), spec)})" for member, spec in members.items()
     )
-    return f"at least {definition.get('threshold')} of: {members}"
+    if k <= 0:
+        return f"{text} (met by every row)"
+    if k > len(members):
+        return f"{text} (met by no row)"
+    return text
 
 
 def _threshold_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -266,21 +272,60 @@ def _row_ids_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...
     return tuple(str(c) for c in definition.get("columns") or ())
 
 
-# the univariate outlier methods are recorded by their ids; the multivariate ones by their names
-_METHOD_NAMES = {"zscore": "z-score", "iqr": "IQR", "quantile": "quantiles"}
+def _figure(value: Any) -> str | None:
+    """A recorded number as words write it (3.0 reads 3); None for anything else, since a file can hold any text."""
+    if isinstance(value, bool) or not _number(value) or not math.isfinite(float(value)):
+        return None
+    return f"{float(value):g}"
 
 
-def _method_name(method: Any) -> str:
-    return _METHOD_NAMES.get(str(method), str(method))
+def _zscore_words(params: Mapping[str, Any]) -> str:
+    threshold = _figure(params.get("threshold"))
+    return f"|z| > {threshold}" if threshold else "z-score"
+
+
+def _iqr_words(params: Mapping[str, Any]) -> str:
+    multiplier = _figure(params.get("multiplier"))
+    return f"{multiplier} × IQR" if multiplier else "IQR"
+
+
+def _quantile_words(params: Mapping[str, Any]) -> str:
+    lower, upper = _figure(params.get("lower")), _figure(params.get("upper"))
+    return f"quantiles {lower}–{upper}" if lower and upper else "quantiles"
+
+
+# How each outlier method flags a row, by the id Validate records (biostats.outliers), with the numbers recorded. A
+# method missing here is not named: the words go into the dossier, and a loaded file can hold any text there.
+METHOD_WORDS: dict[str, Callable[[Mapping[str, Any]], str]] = {
+    "zscore": _zscore_words,
+    "iqr": _iqr_words,
+    "quantile": _quantile_words,
+    "Local Outlier Factor": lambda params: "Local Outlier Factor",
+    "Isolation Forest": lambda params: "Isolation Forest",
+    "DBSCAN": lambda params: "DBSCAN",
+}
 
 
 def _row_ids_text(name: str, definition: Mapping[str, Any]) -> str:
-    # the univariate outlier rules are frozen as rows too: the method recorded, if any
-    n = sum(int(b) - int(a) + 1 for a, b in definition.get("row_ids") or [])
+    # the univariate outlier rules are frozen as rows too: how the rows were flagged, and on which columns
+    ranges = definition.get("row_ids") or []
+    n = sum(
+        int(b) - int(a) + 1 for a, b in ranges if int(a) <= int(b)
+    )  # a reversed range lists none
+    rows = f"{n:,} listed row{'' if n == 1 else 's'}"
     method = definition.get("method")
-    if method:
-        return f"{n:,} listed rows (flagged by {_method_name(method)})"
-    return f"{n:,} listed rows"
+    if not method:
+        return rows
+    words = METHOD_WORDS.get(str(method))
+    params = definition.get("params")
+    how = (
+        words(params if isinstance(params, Mapping) else {}) if words else "a method not named here"
+    )
+    columns = [str(c) for c in definition.get("columns") or ()]
+    if columns:
+        more = f" and {len(columns) - 3} more" if len(columns) > 3 else ""
+        how += f" on {', '.join(columns[:3])}{more}"
+    return f"{rows} (flagged by {how})"
 
 
 def _row_ids_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -328,19 +373,24 @@ def _bounds_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]
 def _bound_text(column: Any, low: Any, high: Any) -> str:
     """Where frozen bounds fire: outside the range, or past its one side ("age > 85", never "outside [None, 85]")."""
     if low is not None and high is not None:
-        return f"{column} outside [{low}, {high}]"
+        reversed_ = float(low) > float(high)  # nothing lies within: every recorded value is outside
+        return f"{column} outside [{low}, {high}]" + (
+            " (reversed: met by every recorded value)" if reversed_ else ""
+        )
     if high is not None:
         return f"{column} > {high}"
-    if low is not None:
-        return f"{column} < {low}"
-    return f"{column}: no bound"
+    return f"{column} < {low}"
 
 
 def _bounds_text(name: str, definition: Mapping[str, Any]) -> str:
-    return "; ".join(
+    # a value outside any column's range: "or" (a list of conditions reads as "and", and inside a threshold rule as
+    # several rules); a column without a bound fires on no row
+    texts = [
         _bound_text(column, low, high)
         for column, (low, high) in (definition.get("bounds") or {}).items()
-    )
+        if low is not None or high is not None
+    ]
+    return " or ".join(texts) if texts else "no bound (met by no row)"
 
 
 def _bounds_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
@@ -410,7 +460,14 @@ def _numeric_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...
 def _numeric_text(column: Any, low: Any, high: Any, exclude: bool) -> str:
     """Where a numeric rule fires, in words: inside the range, or outside it with the *exclude* strategy."""
     if low is not None and high is not None:
-        return f"{column} {'outside' if exclude else 'within'} [{low}, {high}]"
+        text = f"{column} {'outside' if exclude else 'within'} [{low}, {high}]"
+        if float(low) > float(high):  # nothing lies within: every recorded value is outside
+            text += (
+                " (reversed: met by every recorded value)"
+                if exclude
+                else " (reversed: met by no value)"
+            )
+        return text
     if low is not None:
         return f"{column} < {low}" if exclude else f"{column} >= {low}"
     return f"{column} > {high}" if exclude else f"{column} <= {high}"
@@ -552,10 +609,17 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
 def describe_definition(name: str, definition: Mapping[str, Any]) -> str:
     """
     A criterion's definition in words (what makes it fire), as the participant flow and the dossier give it. Never an
-    error, whatever the definition: a malformed one reads "cannot be evaluated" and why.
+    error, whatever the definition: a rule that the upload checks refuse reads "cannot be evaluated" and why, never as
+    if it were sound ("age <= None", or a threshold rule with a member that cannot be read).
     """
     try:
-        return rule_kind(name, definition).describe(name, definition)
+        kind = rule_kind(name, definition)
+        problems = kind.problems(name, definition)
+        return (
+            f"cannot be evaluated: {'; '.join(problems)}"
+            if problems
+            else kind.describe(name, definition)
+        )
     except Exception as exc:
         return f"cannot be evaluated: {exc}"
 
@@ -600,6 +664,7 @@ __all__ = [
     "ASKED",
     "CRITERION_KINDS",
     "MEMBERS",
+    "METHOD_WORDS",
     "NEVER",
     "NOT_READ",
     "CriterionError",

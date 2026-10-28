@@ -4,7 +4,7 @@ population's specification and rows, the recorded blocks and their replay, and t
 
 A stored definition is never rewritten: its fingerprint keys the population memos and is written in every population
 block of a trace, which the trace chain hashes. These values must not change when the code that reads a definition
-does; only the three texts the catalogue's commit 5 corrects may.
+does; only the words may, as the catalogue's commit 5 and the review of its words corrected them.
 """
 
 from __future__ import annotations
@@ -159,18 +159,19 @@ def test_every_shape_of_rule_keeps_its_fingerprint() -> None:
         ),
         ({"bounds": {"age": [18, 90]}}, "age outside [18, 90]"),
         # corrected by the catalogue's commit 5: listed rows name their method, a bound open on one side reads as
-        # one, and a family of rules that fire together gives each rule's definition
+        # one, and a family of rules that fire together gives each rule's definition; then listed rows give the
+        # columns they were flagged on (one row reads "row"), and a column without a bound is left out
         (
             {"row_ids": [[2, 4]], "method": "zscore", "columns": ["x"]},
-            "3 listed rows (flagged by z-score)",
+            "3 listed rows (flagged by z-score on x)",
         ),
         ({"row_ids": [[2, 4]]}, "3 listed rows"),
         (
             {"row_ids": [[1, 1]], "method": "Isolation Forest"},
-            "1 listed rows (flagged by Isolation Forest)",
+            "1 listed row (flagged by Isolation Forest)",
         ),
         ({"bounds": {"age": [None, 85]}}, "age > 85"),
-        ({"bounds": {"age": [18, None], "ldl": [None, None]}}, "age < 18; ldl: no bound"),
+        ({"bounds": {"age": [18, None], "ldl": [None, None]}}, "age < 18"),
         (
             {
                 "threshold": 2,

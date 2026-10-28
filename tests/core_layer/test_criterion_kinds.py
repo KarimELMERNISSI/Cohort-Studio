@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.attrition import participant_flow
+from core.attrition import criterion_line, participant_flow
 from core.criteria import (
     ASKED,
     CRITERION_KINDS,
@@ -82,7 +82,7 @@ EXAMPLES: dict[str, list[tuple[str, dict[str, Any]]]] = {
                 "row_ids": [[2, 3], [9, 9]],
                 "description": "Rows an outlier method flagged.",
                 "method": "iqr",
-                "params": {"k": 1.5},
+                "params": {"multiplier": 1.5},
                 "columns": ["ldl"],
             },
         ),
@@ -188,19 +188,25 @@ def _read_condition(df: pd.DataFrame, text: str) -> pd.Series:
 def _read_bounds(
     df: pd.DataFrame, name: str, definition: Mapping[str, Any], text: str
 ) -> pd.Series:
+    """A value outside any column's range: the conditions joined by "or"."""
     rows = pd.Series(False, index=df.index)
-    for part in text.split("; "):
-        if not part.endswith(": no bound"):
-            rows |= _read_condition(df, part)
+    if text == "no bound (met by no row)":
+        return rows
+    for part in text.split(" or "):
+        rows |= _read_condition(df, part)
     return rows
 
 
 def _read_listed(df: pd.DataFrame, name: str, definition: Mapping[str, Any], text: str) -> int:
-    """Listed rows give how many rows they list, and the method that flagged them: a count, not the rows."""
-    match = re.fullmatch(r"(?P<n>[\d,]+) listed rows( \(flagged by (?P<method>[^)]+)\))?", text)
+    """Listed rows give how many rows they list, and how and where they were flagged: a count, not the rows."""
+    match = re.fullmatch(r"(?P<n>[\d,]+) listed rows?( \(flagged by (?P<how>[^)]+)\))?", text)
     assert match, text
-    assert bool(match["method"]) == bool(definition.get("method")), text
-    return int(match["n"].replace(",", ""))
+    assert bool(match["how"]) == bool(definition.get("method")), text
+    columns = definition.get("columns") or []
+    assert not columns or match["how"].endswith(f" on {', '.join(columns)}"), text
+    n = int(match["n"].replace(",", ""))
+    assert text.startswith(f"{match['n']} listed row{'' if n == 1 else 's'}"), text
+    return n
 
 
 def _read_threshold(
@@ -428,9 +434,14 @@ def test_the_flow_and_the_dossier_give_the_words() -> None:
     }
     population = evaluate_population(_frame(), catalogue(config))
     assert population.ok, population.errors
-    words = [f"{c.name}: {describe_definition(c.name, c.definition)}" for c in population.criteria]
+    # the flow says what each criterion does: "excluded when" its words (every family here excludes)
+    lines = [criterion_line(c.name, c.kind, c.definition) for c in population.criteria]
+    assert all(
+        line == f"{c.name}: excluded when {describe_definition(c.name, c.definition)}"
+        for line, c in zip(lines, population.criteria, strict=True)
+    )
     details = [d for exit_ in participant_flow(population).exits for d in exit_.details]
-    assert details == words
+    assert details == lines
     assert _criteria_table(population)["Definition"].tolist() == [
         describe_definition(c.name, c.definition) for c in population.criteria
     ]

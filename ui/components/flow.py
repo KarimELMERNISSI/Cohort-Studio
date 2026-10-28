@@ -15,6 +15,7 @@ import streamlit as st
 
 from core.attrition import (
     ANALYSIS,
+    MISSING_VALUES_NOTE,
     POPULATION,
     AnalysisCount,
     FlowExit,
@@ -193,6 +194,7 @@ def render_flow(flow: ParticipantFlow | None, *, key: str) -> None:
         "Participant flow (STROBE item 13): each exclusion counts the rows that criterion excluded first, in the "
         "order of the study configuration, so the counts add up to the next box."
     )
+    st.caption(MISSING_VALUES_NOTE)
 
 
 __all__ = ["current_flow", "flow_figure", "render_flow"]

@@ -117,6 +117,26 @@ class ParticipantFlow:
         }
 
 
+# Under the flow's details and the dossier's criteria: how a missing value counts (core.criteria).
+MISSING_VALUES_NOTE = (
+    "A missing value meets no condition: an exclusion criterion keeps that participant, an inclusion criterion "
+    "excludes them. In an expression, .isna() is met by a missing value, and so can be a condition written with != "
+    "or ~."
+)
+
+
+def criterion_line(name: str, kind: str, definition: Mapping[str, Any]) -> str:
+    """
+    A criterion and what it does, for the flow's details and the dossier: "Adult: kept when age >= 18", "Implausible
+    age: excluded when df['age'] > 110". A frozen population lists both roles under one exit, where the words alone
+    read as if the adults were removed.
+    """
+    words = describe_definition(name, definition)
+    if words.startswith("cannot be evaluated"):
+        return f"{name}: {words}"
+    return f"{name}: {'excluded' if kind == EXCLUSION else 'kept'} when {words}"
+
+
 def _family_label(family: str, kind: str) -> str:
     words = family.replace("_", " ")
     return f"Excluded: {words}" if kind == EXCLUSION else f"Not meeting: {words}"
@@ -189,7 +209,7 @@ def participant_flow(
                 if int(c.get("sequential") or 0)
             )
             details = details + tuple(
-                f"{c['name']}: {describe_definition(c['name'], c.get('definition') or {})}"
+                criterion_line(c["name"], c.get("kind"), c.get("definition") or {})
                 for c in block.get("criteria") or []
             )
         if removed:
@@ -237,9 +257,7 @@ def participant_flow(
                 _family_label(stage.family, stage.kind),
                 stage.n_excluded,
                 reasons=reasons,
-                details=tuple(
-                    f"{c.name}: {describe_definition(c.name, c.definition)}" for c in members
-                ),
+                details=tuple(criterion_line(c.name, c.kind, c.definition) for c in members),
             )
         )
         last = k == len(stages) - 1
@@ -332,6 +350,7 @@ __all__ = [
     "ANALYSIS",
     "DATA",
     "LOADED",
+    "MISSING_VALUES_NOTE",
     "POPULATION",
     "SOURCE",
     "STAGE",
@@ -340,6 +359,7 @@ __all__ = [
     "FlowExit",
     "ParticipantFlow",
     "SourceRows",
+    "criterion_line",
     "flow_layout",
     "participant_flow",
     "source_from_trace",

@@ -29,7 +29,7 @@ import pandas as pd
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 
-from core.attrition import FlowExit, ParticipantFlow
+from core.attrition import MISSING_VALUES_NOTE, FlowExit, ParticipantFlow
 from manage.report_tables import ResultBlocks
 
 METHOD_REFERENCES = {
@@ -125,6 +125,18 @@ def _exclusions(flow: ParticipantFlow) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Step", "Criterion", "Rows excluded first"])
 
 
+def _frozen_criteria(flow: ParticipantFlow) -> list[str]:
+    """
+    The criteria of a population kept as the dataset, with their roles: the freeze unticks them, so the table of the
+    ticked criteria no longer gives their definitions (its exit lists the step's description, then a line each).
+    """
+    return [
+        f"{exit_.label}, by these criteria: {'; '.join(exit_.details[1:])}."
+        for exit_ in flow.exits
+        if exit_.id.startswith("step") and len(exit_.details) > 1
+    ]
+
+
 def build_dossier(inp: DossierInput) -> BytesIO:
     doc = Document()
     normal = doc.styles["Normal"]
@@ -159,9 +171,14 @@ def build_dossier(inp: DossierInput) -> BytesIO:
     if not exclusions.empty:
         doc.add_paragraph().add_run("Exclusions").bold = True
         _table(doc, exclusions)
-    if inp.criteria is not None and not inp.criteria.empty:
+    criteria = inp.criteria if inp.criteria is not None and not inp.criteria.empty else None
+    if criteria is not None:
         doc.add_paragraph().add_run("Criteria (ticked, in the order they are applied)").bold = True
-        _table(doc, inp.criteria)
+        _table(doc, criteria)
+    for line in _frozen_criteria(inp.flow):
+        _small(doc.add_paragraph(), line)
+    if criteria is not None or not exclusions.empty:
+        _small(doc.add_paragraph(), MISSING_VALUES_NOTE)
     for line in [
         *inp.flow.notes,
         *(f"The flow does not add up: {p}" for p in inp.flow.inconsistencies()),

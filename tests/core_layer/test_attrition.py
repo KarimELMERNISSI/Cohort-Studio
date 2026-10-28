@@ -117,6 +117,11 @@ def test_malformed_lines_and_rows_removed_by_a_step_have_their_own_boxes() -> No
     assert (skipped.label, skipped.n) == ("Malformed lines skipped", 2)
     assert removed.label == "Removed: population kept as the dataset" and removed.n == 2
     assert dict(removed.reasons) == {"Implausible age": 1, "Adult": 1}
+    # both roles under one exit: each definition says what it does ("Adult: age >= 18" read as adults removed)
+    assert removed.details[1:] == (
+        "Implausible age: excluded when df['age'] > 110",
+        "Adult: kept when df['age'] >= 18",
+    )
     assert flow.main[-1].label == "Analysis population (no criterion ticked)"
     assert flow.inconsistencies() == []
 
@@ -150,11 +155,104 @@ def test_criteria_are_described_in_words() -> None:
         "b": {"numeric": True, "upper_bound": 15},
         "c": {},
     }
+    # a rule that the upload checks refuse reads as such, never as if it were sound
     assert describe_definition("t", {"threshold": 2, "members": members}) == (
-        "at least 2 of: a (df['x'] > 1); b (b <= 15); "
-        "c (cannot be evaluated: criterion 'c' has neither an expression nor a numeric range)"
+        "cannot be evaluated: rule 't': criterion 'c' has neither an expression nor a numeric range"
     )
     assert describe_definition("f", {"bounds": {"ldl": [None, 9]}}) == "ldl > 9"
+
+
+EXPRESSION_X = {"expression": "df['x'] > 1"}
+
+
+@pytest.mark.parametrize(
+    ("definition", "words"),
+    [
+        # listed rows: how the rows were flagged, with the numbers recorded, and on which columns
+        (
+            {
+                "row_ids": [[2, 4]],
+                "method": "zscore",
+                "params": {"threshold": 3.0},
+                "columns": ["sbp"],
+            },
+            "3 listed rows (flagged by |z| > 3 on sbp)",
+        ),
+        (
+            {
+                "row_ids": [[2, 4]],
+                "method": "iqr",
+                "params": {"multiplier": 1.5},
+                "columns": ["ldl"],
+            },
+            "3 listed rows (flagged by 1.5 × IQR on ldl)",
+        ),
+        (
+            {
+                "row_ids": [[2, 4]],
+                "method": "quantile",
+                "params": {"lower": 0.01, "upper": 0.99},
+                "columns": ["a", "b", "c", "d"],
+            },
+            "3 listed rows (flagged by quantiles 0.01–0.99 on a, b, c and 1 more)",
+        ),
+        ({"row_ids": [[7, 7]], "method": "DBSCAN"}, "1 listed row (flagged by DBSCAN)"),
+        # a reversed range lists no row, as the mask reads it
+        ({"row_ids": [[2, 4], [9, 5]]}, "3 listed rows"),
+        # a method or parameter this version does not know is not written out: a file can hold any text there
+        (
+            {"row_ids": [[2, 4]], "method": "Dr Smith's review", "params": {"threshold": "high"}},
+            "3 listed rows (flagged by a method not named here)",
+        ),
+        (
+            {"row_ids": [[2, 4]], "method": "zscore", "params": {"threshold": "high"}},
+            "3 listed rows (flagged by z-score)",
+        ),
+        # several columns of frozen bounds: a value outside any of them
+        ({"bounds": {"ldl": [0.5, 9], "age": [None, 85]}}, "ldl outside [0.5, 9] or age > 85"),
+        ({"bounds": {"ldl": [None, None]}}, "no bound (met by no row)"),
+        # reversed bounds are said so: nothing lies within them
+        (
+            {"bounds": {"ldl": [9, 0.5]}},
+            "ldl outside [9, 0.5] (reversed: met by every recorded value)",
+        ),
+        (
+            {"numeric": True, "lower_bound": 85, "upper_bound": 18, "strategy": "include"},
+            "age within [85, 18] (reversed: met by no value)",
+        ),
+        (
+            {"numeric": True, "lower_bound": 85, "upper_bound": 18, "strategy": "exclude"},
+            "age outside [85, 18] (reversed: met by every recorded value)",
+        ),
+        # a threshold is read as the mask reads it, and says when it is met by every row or by none
+        (
+            {"threshold": 1.5, "members": {"a": EXPRESSION_X, "b": EXPRESSION_X}},
+            "at least 1 of: a (df['x'] > 1); b (df['x'] > 1)",
+        ),
+        (
+            {"threshold": 0, "members": {"a": EXPRESSION_X}},
+            "at least 0 of: a (df['x'] > 1) (met by every row)",
+        ),
+        (
+            {"threshold": 3, "members": {"a": EXPRESSION_X, "b": EXPRESSION_X}},
+            "at least 3 of: a (df['x'] > 1); b (df['x'] > 1) (met by no row)",
+        ),
+        # what the upload checks refuse reads "cannot be evaluated", never "age <= None"
+        (
+            {"numeric": True},
+            "cannot be evaluated: rule 'age' has neither a lower nor an upper bound",
+        ),
+    ],
+)
+def test_the_words_say_what_a_rule_does_at_its_edges(definition: dict, words: str) -> None:
+    assert describe_definition("age", definition) == words
+
+
+def test_every_outlier_method_is_named() -> None:
+    from biostats.outliers import MULTIVARIATE_METHODS, UNIVARIATE_METHODS
+    from core.criteria import METHOD_WORDS
+
+    assert set(METHOD_WORDS) == {*UNIVARIATE_METHODS, *MULTIVARIATE_METHODS}
 
 
 def test_the_layout_places_every_box(tutorial) -> None:

@@ -9,6 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
+from core.attrition import MISSING_VALUES_NOTE
 from ui import nav
 from ui.components.population import _family_key
 
@@ -58,6 +59,7 @@ def test_a_result_goes_into_the_dossier_and_its_flow(app: AppTest) -> None:
     flow_items = app.selectbox(key="dossier_flow::item").options
     assert any(o.startswith("Cox proportional-hazards model (n = ") for o in flow_items)
     assert any("Cox proportional-hazards model" in m.value for m in app.markdown)
+    assert any(c.value == MISSING_VALUES_NOTE for c in app.caption)  # under the flow's details
 
 
 def test_a_result_of_another_population_is_marked_stale_then_removed(app: AppTest) -> None:

@@ -11,6 +11,7 @@ from docx import Document
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
+from core.attrition import MISSING_VALUES_NOTE
 
 
 def _script() -> None:
@@ -165,6 +166,38 @@ def test_the_word_dossier_documents_the_flow_and_the_results(data_root: Path) ->
     assert (
         "Group comparison" in headings
     )  # the observed comparison (a list of rows) is documented too
+    assert MISSING_VALUES_NOTE in text  # how a missing value counts, under the criteria
+
+
+def test_the_word_dossier_gives_the_criteria_of_a_frozen_population() -> None:
+    """A population kept as the dataset unticks its criteria, so the table of the ticked criteria left out their
+    definitions; its exit gives each one with its role."""
+    from core.attrition import FlowBox, FlowExit, ParticipantFlow
+    from manage.dossier import DossierInput, build_dossier
+
+    flow = ParticipantFlow(
+        main=(FlowBox("loaded", "Loaded: c", 5, "loaded"), FlowBox("step0", "After", 3, "data")),
+        exits=(
+            FlowExit(
+                "step0:removed",
+                "loaded",
+                "Removed: population kept as the dataset",
+                2,
+                reasons=(("Implausible age", 1), ("Adult", 1)),
+                details=(
+                    "Population kept as the dataset",
+                    "Implausible age: excluded when df['age'] > 110",
+                    "Adult: kept when df['age'] >= 18",
+                ),
+            ),
+        ),
+    )
+    text, *_ = _text(build_dossier(DossierInput("Frozen", flow, "all 3 rows")).getvalue())
+    assert (
+        "Removed: population kept as the dataset, by these criteria: Implausible age: excluded when "
+        "df['age'] > 110; Adult: kept when df['age'] >= 18." in text
+    )
+    assert MISSING_VALUES_NOTE in text
 
 
 def test_only_pooled_results_count_imputations() -> None:
