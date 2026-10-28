@@ -53,6 +53,7 @@ from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
 from ui.components.text import plain
 from ui.graph_view import current_theme, render_graph
+from ui.session_scope import get_current_scope
 from ui.state import get_state
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
@@ -60,7 +61,6 @@ from utils.export_utils import to_excel
 from utils.logging_config import single_line
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
 from utils.optional import available_methods, method_available, missing_methods_message
-from utils.session_scope import get_current_scope
 
 
 def _workspace_path(path_text: str) -> str:

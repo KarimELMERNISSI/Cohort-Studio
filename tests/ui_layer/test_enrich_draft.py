@@ -523,9 +523,9 @@ def _signed_in_script() -> None:
     import streamlit as st
 
     from core.state import DatasetRef
+    from ui.session_scope import get_current_scope
     from ui.shell import _user_menu
     from ui.state import get_state
-    from utils.session_scope import get_current_scope
 
     if not st.session_state.get("username"):
         return  # signed out: the session was reset

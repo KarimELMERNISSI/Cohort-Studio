@@ -19,7 +19,7 @@ import streamlit as st
 
 from core.registry import as_code
 from manage.preferences import Preferences, load_preferences, update_preferences
-from utils.session_scope import get_current_scope
+from ui.session_scope import get_current_scope
 
 PREFERENCES_KEY = "_preferences"  # the user's preferences, read once per session
 SEEDED_KEY = "_preferences_seeded"  # the user whose preferences seeded this session

@@ -90,7 +90,6 @@ UTILS_GROUPS = {
     "utils.llm_utils": "manage",
     "utils.miss_forest": "enrich",
     "utils.multipage": "ingest",
-    "utils.session_scope": "ui",  # reads the Streamlit session: moves to ui (M5b, composition root)
     "utils.statistics_utils": "explore",
     "utils.visualization_utils": "explore",
 }

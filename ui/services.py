@@ -12,7 +12,7 @@ from typing import Any
 
 import streamlit as st
 
-from utils.session_scope import get_current_scope
+from ui.session_scope import get_current_scope
 
 ENGINE_KEY = "rag_manager"
 

@@ -14,9 +14,9 @@ from manage.reproduction_manager import run_trace
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
 from ui.progress import current_trace_session, mark_step
+from ui.session_scope import get_current_scope
 from ui.state import get_state
 from utils.data_paths import get_traces_dir, get_uploads_dir
-from utils.session_scope import get_current_scope
 
 
 def _uploads_dir() -> str:

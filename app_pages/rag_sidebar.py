@@ -60,8 +60,8 @@ from ui.components import confirm
 from ui.components.connector_selector import connector_selector, explain_choice
 from ui.components.text import plain
 from ui.services import ai_engine
+from ui.session_scope import get_current_scope
 from utils.data_paths import get_vectors_dir
-from utils.session_scope import get_current_scope
 from utils.settings import get_settings
 
 # .env is loaded once, at start-up (main.py): the keys are in the environment from the first page on

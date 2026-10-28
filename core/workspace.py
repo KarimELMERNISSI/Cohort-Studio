@@ -6,7 +6,7 @@ through a :class:`UserScope`, instead of filename prefixes checked inconsistentl
 Paths supplied by users (uploads, manual file paths) are resolved with :meth:`UserScope.resolve_within`
 so they can never leave the user's workspace.
 
-This module has no Streamlit dependency; ``utils.session_scope`` derives the current scope from the
+This module has no Streamlit dependency; ``ui.session_scope`` derives the current scope from the
 session state.
 """
 

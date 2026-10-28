@@ -16,7 +16,7 @@ from pathlib import Path
 import streamlit as st
 
 from core.progress import MARKABLE, Progress, StepMark, data_revision, evaluate, revision_labels
-from utils.session_scope import get_current_scope
+from ui.session_scope import get_current_scope
 
 _KEY = "workflow_marks"
 
