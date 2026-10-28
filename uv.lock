@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.14"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -924,8 +924,8 @@ name = "httpcore2"
 version = "2.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11", marker = "sys_platform != 'emscripten'" },
-    { name = "truststore", marker = "sys_platform != 'emscripten'" },
+    { name = "h11" },
+    { name = "truststore" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/f3/1db7aa2bc2524062192bb0e0323969492d1883152a232fe36eea65f4e35c/httpcore2-2.13.1.tar.gz", hash = "sha256:e0aa977abe17e69a3b820a24542a6fa88702676d83880b8d194dcd18408e5103", size = 68071, upload-time = "2026-09-23T07:47:22.372Z" }
 wheels = [
@@ -1967,17 +1967,18 @@ wheels = [
 
 [[package]]
 name = "prince"
-version = "0.21.0"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "altair" },
+    { name = "narwhals" },
     { name = "pandas" },
     { name = "scikit-learn" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/4f/ba01d4fc44cff79a4ce3ac53fb2f0033698da55e9b954d0e8805c49c2cd4/prince-0.21.0.tar.gz", hash = "sha256:08d9414380166a7cc2af43c01c4dd301ee8b35527b0ad4bf43533ee13a3cb2d9", size = 221175, upload-time = "2026-09-17T07:20:25.114Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/4d/ba8e79efb0559ee35428bd1394f06dc486f96b5c389b5fad745c2cf883e6/prince-0.23.0.tar.gz", hash = "sha256:73ffe3ce12ae058d05f28467b037ff54f3ec536be6d2c5fa94892169ff0037bd", size = 226616, upload-time = "2026-10-24T19:02:31.559Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/a8/49fc8193534b7df945166d87400c6b74ca5cda70b91cf77d3c11d17459b4/prince-0.21.0-py3-none-any.whl", hash = "sha256:7a71df5118007a86360ad83ec0cd95ca976eab6c1f3cd60716c20aabb4e0f1f2", size = 206290, upload-time = "2026-09-17T07:20:23.878Z" },
+    { url = "https://files.pythonhosted.org/packages/78/c7/44a8b235f29c7b76295164e5e8c35ab2c06c1a44df8cece9beb195d38391/prince-0.23.0-py3-none-any.whl", hash = "sha256:096ac1269e234381cdd8b242a98bc508c2102ff592a4c54a17c3ff6ddc814103", size = 207851, upload-time = "2026-10-24T19:02:30.26Z" },
 ]
 
 [[package]]
