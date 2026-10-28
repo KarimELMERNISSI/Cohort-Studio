@@ -316,8 +316,11 @@ class TestBetterAuthIAMProvider:
 class TestIAMManager:
     """Test suite for IAMManager facade and environment configuration."""
 
-    def test_manager_local_default(self, temp_db_path: str) -> None:
+    def test_manager_local_default(self, temp_db_path: str, monkeypatch: pytest.MonkeyPatch) -> None:
         """Default configuration instantiates LocalDuckDBIAMProvider."""
+        import utils.data_paths as dp
+
+        monkeypatch.setattr(dp, "DATA_ROOT", str(Path(temp_db_path).parent))  # no workspace folder exists there
         config = IAMConfig(provider_type=IAMProviderType.LOCAL, duckdb_path=temp_db_path)
         manager = IAMManager(config=config)
 
@@ -357,12 +360,33 @@ class TestIAMManager:
 
 
 def test_a_name_sharing_an_accounts_workspace_folder_is_refused(local_provider: LocalDuckDBIAMProvider) -> None:
-    """One folder per account (data-protection review, M5b): case variants share a folder on Windows and macOS, and
-    a final '.', '_' or '-' is dropped from folder names."""
+    """One folder per account: names differing only by letter case share a folder on Windows and macOS, and are
+    refused. A name differing by punctuation has a folder of its own (core.workspace.safe_dirname: a name that is no
+    folder name gets a code); earlier versions dropped a final '.', '_' or '-', and refused such a name."""
     assert local_provider.create_user("drlee", "a-long-password-1")[0]
-    for look_alike in ("DrLee", "DRLEE", "drlee_", "drlee."):
+    for look_alike in ("DrLee", "DRLEE"):
         ok, message = local_provider.create_user(look_alike, "a-long-password-1")
-        assert not ok and "case or punctuation" in message, look_alike
-    assert local_provider.create_user("jdoe.", "a-long-password-1")[0]  # an account made before the rule
-    assert not local_provider.create_user("jdoe", "a-long-password-1")[0]
-    assert local_provider.create_user("dr.lee", "a-long-password-1")[0]  # another folder
+        assert not ok and "letter case" in message, look_alike
+    for own_folder in ("drlee_", "drlee.", "dr.lee"):
+        assert local_provider.create_user(own_folder, "a-long-password-1")[0], own_folder
+    assert not local_provider.create_user("DrLee.", "a-long-password-1")[0]  # "drlee." in another case
+
+
+def test_a_name_whose_workspace_folder_exists_is_refused_unless_the_operator_reuses_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An earlier version gave "drlee." the folder "drlee": until that account signs in, a new account "drlee" would
+    open its files. Every creation through the manager refuses a name whose folder exists, with the message of a
+    name taken; the operator's create-admin may reuse a folder (a users database replaced, the folders kept)."""
+    import utils.data_paths as dp
+    from manage.iam.manager import IAMManager
+    from manage.iam.schemas import IAMConfig, IAMProviderType
+
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    iam = IAMManager(
+        config=IAMConfig(provider_type=IAMProviderType.LOCAL, duckdb_path=str(tmp_path / "users.duckdb"))
+    )
+    assert iam.create_user("drlee.", "a-long-password-1")[0]
+    (tmp_path / "users" / "drlee" / "datasets").mkdir(parents=True)  # "drlee."'s earlier folder
+    assert iam.create_user("drlee", "a-long-password-1") == (False, "Username already exists")
+    assert iam.create_user("drlee", "a-long-password-1", reuse_folder=True)[0]

@@ -29,6 +29,7 @@ try:
 except SettingsError as exc:
     sys.exit(f"Error: {exc}")
 
+from core.workspace import workspace_exists
 from manage.iam import IAMConfigurationError, UserRole, get_iam_manager
 from manage.iam.authz import validate_password, validate_username
 
@@ -56,7 +57,16 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     problem = validate_password(password)
     if problem:
         _fail(problem)
-    ok, msg = get_iam_manager().create_user(args.username, password, role=UserRole.ADMIN, auto_activate=True)
+    # a folder that exists may hold another account's files (the earlier folder of an account that has not signed in
+    # since): reused only when the operator says so, after a users database was replaced and its folders kept
+    if not args.reuse_folder and workspace_exists(args.username):
+        _fail(
+            f"the workspace folder of {args.username!r} exists and may hold another account's files. If it is this "
+            "account's own (a users database replaced, its folders kept), run again with --reuse-folder."
+        )
+    ok, msg = get_iam_manager().create_user(
+        args.username, password, role=UserRole.ADMIN, auto_activate=True, reuse_folder=args.reuse_folder
+    )
     print(msg if ok else f"Error: {msg}")
     sys.exit(0 if ok else 1)
 
@@ -119,6 +129,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("create-admin", help="create an ACTIVE administrator account")
     p.add_argument("username")
+    p.add_argument(
+        "--reuse-folder",
+        action="store_true",
+        help="give the account the workspace folder of its name although it exists (it must be this account's)",
+    )
     p.set_defaults(func=cmd_create_admin)
 
     p = sub.add_parser("activate", help="activate a pending account")

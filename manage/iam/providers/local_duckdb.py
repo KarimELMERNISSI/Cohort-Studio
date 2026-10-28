@@ -233,10 +233,10 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             res = con.execute("SELECT 1 FROM users WHERE username = ?", [username]).fetchone()
             if res:
                 return False, "Username already exists"
-            # one workspace folder per account: a name differing from another only by case (one folder on Windows
-            # and macOS) or by a final '.', '_' or '-' (dropped from folder names) would share its datasets
+            # one workspace folder per account: a name differing from another only by letter case has one folder
+            # on Windows and macOS (core.workspace.safe_dirname gives any other two names two folders)
             if _shares_a_folder(username, (row[0] for row in con.execute("SELECT username FROM users").fetchall())):
-                return False, "A username differing from an existing one only by case or punctuation is not allowed"
+                return False, "A username differing from an existing one only by letter case is not allowed"
 
             hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
             # Accounts are never activated or promoted because of their name (audit E5).

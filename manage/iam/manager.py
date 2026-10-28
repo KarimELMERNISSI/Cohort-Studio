@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Any
 
+from core.workspace import workspace_exists
 from utils.logging_config import single_line
 from utils.settings import Settings, get_settings
 
@@ -131,8 +132,17 @@ class IAMManager:
         password: str,
         role: UserRole = UserRole.RESEARCHER,
         auto_activate: bool = False,
+        *,
+        reuse_folder: bool = False,
     ) -> tuple[bool, str]:
-        """Provision a new user account."""
+        """
+        Provision a new user account. A name whose workspace folder exists is refused, with the message of a name taken
+        (core.workspace.workspace_exists): the folder may hold another account's files, such as the folder an earlier
+        version gave an account that has not signed in since. The server's operator may reuse it (``reuse_folder``,
+        manage_users.py create-admin).
+        """
+        if not reuse_folder and workspace_exists(username):
+            return False, "Username already exists"
         return self._provider.create_user(
             username=username,
             password=password,

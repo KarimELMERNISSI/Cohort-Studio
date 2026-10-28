@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+
 import streamlit as st
 
+from core.workspace import earlier_workspaces, move_earlier_workspace
 from manage.iam import UserCredentials, UserRole, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, validate_new_credentials
+from manage.iam.schemas import IAMProviderType
 from ui.theme import APP_NAME, APP_TAGLINE, brand_asset
+from utils.logging_config import single_line
+
+logger = logging.getLogger(__name__)
 
 LOGO = brand_asset("icon.png")
 
@@ -57,6 +64,38 @@ def _first_admin_card(iam) -> None:
                     st.error(message, icon=":material/error:")
 
 
+def _move_earlier_workspace(iam, username: str) -> None:
+    """
+    The workspace folder an earlier version gave this account, moved to its folder now when it is clearly this
+    account's (core.workspace.move_earlier_workspace): with local accounts only, whose list is complete and names each
+    account as it signs in. Another identity provider may list its accounts in pages, or under another name: the
+    folder stays, and the log names it for an administrator (dev_scripts/move_workspaces.py).
+    """
+    try:
+        if iam.provider_type == IAMProviderType.LOCAL:
+            moved, outcome = move_earlier_workspace(
+                username, lambda: [user.username for user in iam.list_users()]
+            )
+        else:
+            moved, left = False, [folder.name for folder in earlier_workspaces(username)]
+            outcome = (
+                f"the folder {', '.join(left)} an earlier version gave this account is left for an "
+                "administrator (dev_scripts/move_workspaces.py)"
+                if left
+                else ""
+            )
+    except Exception as exc:  # never in the way of a sign-in
+        logger.warning(
+            "An earlier workspace folder was not moved (%s: %s)",
+            type(exc).__name__,
+            single_line(str(exc)),
+        )
+        return
+    if outcome:
+        level = logging.INFO if moved else logging.WARNING
+        logger.log(level, "Workspace folder at sign-in: %s", single_line(outcome))
+
+
 def _login_card(iam) -> None:
     if iam.setup_pending():
         _first_admin_card(iam)
@@ -93,6 +132,7 @@ def _login_card(iam) -> None:
                     UserCredentials(username=username.strip(), password=password)
                 )
                 if result.success:
+                    _move_earlier_workspace(iam, username.strip())
                     st.session_state.user_authenticated = True
                     st.session_state.username = username.strip()
                     st.session_state.user_role = (

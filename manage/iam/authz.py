@@ -15,8 +15,8 @@ from .schemas import UserRole
 
 # the CMP_MIN_PASSWORD_LENGTH setting, read once; tests patch this attribute
 MIN_PASSWORD_LENGTH = get_settings().iam.min_password_length
-# a new name starts and ends with a letter or a digit: it is its own workspace folder (core.workspace.safe_dirname
-# drops a final ".", "_" or "-", so "drlee." and "drlee" would share one; data-protection review, M5b)
+# a new name starts and ends with a letter or a digit: it is its own workspace folder (core.workspace.safe_dirname,
+# which gives any other name a code of its own)
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{1,30}[A-Za-z0-9]$")
 
 

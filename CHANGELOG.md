@@ -269,16 +269,36 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     is opened, unless the data folder is on that share.
   - The Reproduce page no longer checks whether the statistics files an older trace names exist: nothing records them
     any more, and the check told whether any file of the server existed.
-- **Every signed-in user has a workspace of their own.**
+- **Every signed-in user has a workspace of their own, and two names share one only if they differ by letter case
+  alone** (one folder on Windows and macOS; local sign-up refuses such a name).
+  - A workspace folder was the username with each run of other characters than ASCII letters, digits, `_`, `.` and
+    `-` replaced by `_`, and those three trimmed from its ends. Two names could share a folder: "j.smith@chl.lu" (a
+    Better Auth e-mail) and "j.smith_chl.lu", which anyone could register in the application, so an account an
+    administrator activated could open another's workspace; also "o'neil@x.org" and "o_neil@x.org", or "drlee." and
+    "drlee".
   - A name that keeps nothing as a folder name (no ASCII letter or digit, such as "Мария") or that is longer than 64
-    characters (a long e-mail from Better Auth) gave no workspace. Such a user's datasets and traces were saved in the
-    shared folders under their name, and their document library and its indexes were those of every such user.
-  - Such a name now has a folder of its own, named after its SHA-256 (`users/_` followed by 32 hexadecimal
-    characters).
-  - What such a user saved before stays where it was, and is no longer shown to them. In the data folder, the files
-    of `datasets`, `stats`, `traces` and `traces/artifacts` whose names start with the user's name are theirs. The
-    files of `traces/snapshots`, `uploads` and `vectors` (with its Qdrant collection), and the `DOCUMENTS` folder
-    where the application runs, were shared by every such user and name nobody.
+    characters gave no workspace at all. Such a user's datasets and traces were saved in the shared folders under
+    their name, and their document library and its indexes were those of every such user.
+  - Now a name that is a folder name keeps it: every account created in the application. Any other name gets `_`
+    and a readable code of it, which no folder name and no other name has: "j.smith@chl.lu" gets
+    `_j.smith_at_chl.lu`, "o'neil@x.org" gets `_o_x27_neil_at_x.org`. A code longer than 64 characters gets `_` and
+    32 hexadecimal characters of the name's SHA-256. Windows device names (`nul`, `con`...) get a code too.
+  - **A local account whose folder changed finds its files at its first sign-in**: the folder the earlier version
+    gave it is moved, when no other local account could own it (as its folder now or an earlier one), its new folder
+    holds no file, and the folder is no link. Otherwise the folder stays where it is, and the server log names it.
+  - **With Better Auth, run `python dev_scripts/move_workspaces.py` after updating.** Its list of accounts may come
+    in pages, or name an account by its e-mail, so nothing is moved at sign-in (the log names the folder left). The
+    script prints the plan, and with `--apply` moves a folder when no other listed account could own it. It can tell
+    only when the identity provider lists every account, under the name each signs in with: check the count it
+    prints. A folder two names shared stays with the account it is named after until an administrator splits it.
+  - Creating an account in the application refuses a name whose folder exists, with the message of a name already
+    taken: the folder may hold another account's files, such as the earlier folder of an account that has not
+    signed in since. `manage_users.py create-admin` refuses it too, unless the operator adds `--reuse-folder` (a
+    users database replaced, its folders kept). Accounts registered directly at Better Auth are not checked.
+  - What a user without a workspace saved before stays where it was, and is no longer shown to them. In the data
+    folder, the files of `datasets`, `stats`, `traces` and `traces/artifacts` whose names start with the user's name
+    are theirs. The files of `traces/snapshots`, `uploads` and `vectors` (with its Qdrant collection), and the
+    `DOCUMENTS` folder where the application runs, were shared by every such user and name nobody.
   - `dev_scripts/migrate_user_layout.py` moves the files named after a user into that user's folder and the others
     into the administrator's; it leaves `uploads` and `vectors`. Read its `--dry-run` plan first. A document index is
     rebuilt from the documents.

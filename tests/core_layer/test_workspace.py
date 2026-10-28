@@ -1,5 +1,7 @@
 """Per-user workspace: directory isolation and path containment (audit E4)."""
 
+import os
+import random
 import unicodedata
 from pathlib import Path
 
@@ -9,11 +11,15 @@ import utils.data_paths as dp
 from core.workspace import (
     UserScope,
     all_user_scopes,
+    earlier_folders,
+    move_earlier_workspace,
+    planned_move,
     remove_pdf,
     resolve_within,
     safe_dirname,
     safe_filename,
     validate_username,
+    workspace_exists,
 )
 
 
@@ -30,40 +36,225 @@ def test_username_validation() -> None:
             validate_username(bad)
 
 
-def test_safe_dirname_handles_legacy_names_but_never_escapes() -> None:
+def test_a_folder_name_never_leaves_the_users_folder() -> None:
     assert safe_dirname("admin") == "admin"
-    assert safe_dirname("Dr Lee/ops") == "Dr_Lee_ops"
-    assert safe_dirname("../../etc") == "etc"
+    assert safe_dirname("Dr Lee/ops") == "_Dr_x20_Lee_x2f_ops"
+    assert safe_dirname("../../etc") == "_.._x2f_.._x2f_etc"
+    for name in ("..", ".", "./", "a/b", "a\\b", "C:x", "nul", "CON.txt", "drlee.", " lead"):
+        folder = safe_dirname(name)
+        assert "/" not in folder and "\\" not in folder and ":" not in folder, name
+        assert folder not in (".", "..") and not folder.endswith("."), name
     for bad in ("", "  ", None):  # no user
         with pytest.raises(ValueError):
             safe_dirname(bad)
 
 
-def test_a_name_that_keeps_nothing_as_a_folder_name_gets_a_folder_of_its_own() -> None:
-    """Such a user had no workspace, and used the shared folders as every such user did: each now gets a folder named
-    after the name's SHA-256, starting with "_", which no other name's folder starts with."""
-    # 67 characters
-    long_mail = "firstname.middlename.lastname.department@hospital-group.example.org"
-    names = ("Мария", "Мариам", "..", "./", "_", long_mail, long_mail.upper())
+def _decoded(folder: str) -> str:
+    """The name a coded folder stands for: what makes the code one name's only."""
+    assert folder.startswith("_")
+    out, rest = [], folder[1:]
+    while rest:
+        if rest.startswith("__"):
+            out.append("_")
+            rest = rest[2:]
+        elif rest.startswith("_at_"):
+            out.append("@")
+            rest = rest[4:]
+        elif rest.startswith("_x"):
+            code, rest = rest[2:].split("_", 1)
+            out.append(chr(int(code, 16)))
+        else:
+            out.append(rest[0])
+            rest = rest[1:]
+    return "".join(out)
+
+
+def test_no_two_names_share_a_folder() -> None:
+    """
+    Earlier versions replaced each run of characters a folder name cannot hold by "_": "j.smith@chl.lu" (an identity
+    provider's e-mail) and "j.smith_chl.lu" (an account created in the application) had one workspace. A name that is
+    a folder name keeps it; any other gets "_" and a readable code of it, which no folder name and no other name has.
+    """
+    long_mail = "firstname.middlename.lastname.department@hospital-group.example.org"  # its code is too long
+    names = [
+        "j.smith@chl.lu",
+        "j.smith_chl.lu",
+        "j.smith_at_chl.lu",
+        "_j.smith_at_chl.lu",
+        "o'neil@x.org",
+        "o_neil@x.org",
+        "a+b@x.org",
+        "a_b@x.org",
+        "José",
+        "Josè",
+        "Jos",
+        "Мария1",
+        "Иван1",
+        "1",
+        "drlee.",
+        "drlee..",
+        "drlee",
+        "-admin",
+        "admin",
+        "nul",
+        "_nul",
+        "Мария",
+        "Мариам",
+        "..",
+        "./",
+        "_",
+        long_mail,
+        long_mail.upper(),
+    ]
     folders = [safe_dirname(name) for name in names]
-    assert len(set(folders)) == len(names)  # one folder per name
-    for folder in folders:
-        assert len(folder) == 33 and folder[0] == "_" and int(folder[1:], 16) >= 0
-    assert safe_dirname(" Мария ") == folders[0]  # the same name, the same folder
-    # an ordinary name's folder never starts with "_": it can never be one of these
-    for ordinary in ("_x", "__init__", "-admin", ".hidden", "a" * 64):
-        assert not safe_dirname(ordinary).startswith("_"), ordinary
-    assert UserScope.for_user("Мария").username == folders[0]
+    assert len(set(folders)) == len(names), sorted(folders)  # one folder per name
+    assert safe_dirname("j.smith@chl.lu") == "_j.smith_at_chl.lu"
+    assert safe_dirname("o_neil@x.org") == "_o__neil_at_x.org"
+    for name, folder in zip(names, folders, strict=True):
+        if folder == name:  # a folder name already: an account created in the application
+            assert not folder.startswith("_")
+        elif len(folder) == 33 and folder.count("_") == 1:  # a code too long: the hash
+            assert len(name) > 30
+        else:
+            assert _decoded(folder) == name
+        assert len(folder) <= 64
+    assert safe_dirname(" Мария ") == safe_dirname("Мария")  # the same name, the same folder
+    assert UserScope.for_user("Мария").username == safe_dirname("Мария")
 
 
-def test_a_hashed_name_is_never_normalised_into_another_names_folder() -> None:
-    """Among the names that keep nothing as a folder name, two spellings an identity provider may tell apart keep two
-    folders: at worst one person's files are split, never two people's merged. (An ordinary name loses the characters
-    a folder name cannot keep, so "José" and "Josè" share "Jos": local sign-up refuses the second.)"""
+def test_a_coded_name_is_never_normalised_into_another_names_folder() -> None:
+    """Two spellings an identity provider may tell apart keep two folders: at worst one person's files are split,
+    never two people's merged."""
     composed = "Ёлка"  # Ё as one character, or as Е and a combining diaeresis
     assert safe_dirname(unicodedata.normalize("NFD", composed)) != safe_dirname(composed)
     assert safe_dirname("ａｌｉｃｅ") != safe_dirname("alice")  # full-width letters
     assert safe_dirname("МАРИЯ") != safe_dirname("Мария")
+    assert safe_dirname("José") != safe_dirname(unicodedata.normalize("NFD", "José"))
+
+
+def _earlier(root: Path, folder: str) -> Path:
+    path = root / "users" / folder / "datasets" / "cohort_v1.parquet"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"rows")
+    return path
+
+
+def _never_asked() -> list[str]:
+    raise AssertionError("the accounts are listed only when there is a folder to move")
+
+
+def test_an_earlier_folder_is_moved_once_when_it_is_clearly_the_accounts(root: Path) -> None:
+    _earlier(root, "j.smith_chl.lu")
+    moved, outcome = move_earlier_workspace("j.smith@chl.lu", lambda: ["alice", "j.smith@chl.lu"])
+    assert moved and "moved" in outcome
+    there = root / "users" / "_j.smith_at_chl.lu" / "datasets" / "cohort_v1.parquet"
+    assert there.read_bytes() == b"rows" and not (root / "users" / "j.smith_chl.lu").exists()
+    assert move_earlier_workspace("j.smith@chl.lu", _never_asked) == (False, "")  # once
+
+
+def test_an_earlier_folder_another_account_could_own_is_left_where_it_is(root: Path) -> None:
+    earlier = _earlier(root, "j.smith_chl.lu")
+    for accounts in (
+        ["j.smith@chl.lu", "j.smith_chl.lu"],  # the account whose folder it is now
+        ["j.smith@chl.lu", "j.smith!chl.lu"],  # another account an earlier version gave it
+        ["alice"],  # a list without this account: a provider that failed returns none
+        [],
+    ):
+        moved, outcome = move_earlier_workspace(
+            "j.smith@chl.lu", lambda accounts=accounts: accounts
+        )
+        assert not moved and outcome and earlier.exists(), accounts
+    assert not (root / "users" / "_j.smith_at_chl.lu").exists()
+
+
+def test_the_accounts_are_compared_by_folder_as_the_disk_compares_them(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows and macOS two names differing only by case are one folder: such an account could own it too."""
+    earlier = _earlier(root, "j.smith_chl.lu")
+    monkeypatch.setattr("core.workspace.os.path.normcase", str.lower)  # as on Windows
+    moved, _ = move_earlier_workspace(
+        "j.smith@chl.lu", lambda: ["j.smith@chl.lu", "J.Smith_chl.lu"]
+    )
+    assert not moved and earlier.exists()
+
+
+def test_a_folder_that_holds_files_is_never_replaced(root: Path) -> None:
+    _earlier(root, "j.smith_chl.lu")
+    mine = _earlier(root, "_j.smith_at_chl.lu")
+    moved, outcome = move_earlier_workspace("j.smith@chl.lu", _never_asked)
+    assert not moved and "holds files" in outcome  # the log names the folder left
+    assert mine.exists() and (root / "users" / "j.smith_chl.lu").exists()
+
+
+def test_several_earlier_folders_are_left_for_an_administrator(root: Path) -> None:
+    trimmed = _earlier(root, "j.smith_chl.lu")
+    hashed = _earlier(root, earlier_folders("j.smith@chl.lu")[1])  # a development version's folder
+    moved, outcome = move_earlier_workspace("j.smith@chl.lu", _never_asked)
+    assert not moved and "several" in outcome and trimmed.exists() and hashed.exists()
+
+
+def test_a_link_is_never_moved(root: Path) -> None:
+    target = root / "elsewhere"
+    target.mkdir()
+    link = root / "users" / "j.smith_chl.lu"
+    link.parent.mkdir(parents=True)
+    try:
+        if os.name == "nt":
+            import _winapi  # ty: ignore[unresolved-import]
+
+            _winapi.CreateJunction(str(target), str(link))
+        else:
+            link.symlink_to(target, target_is_directory=True)
+        moved, outcome = move_earlier_workspace("j.smith@chl.lu", _never_asked)
+        assert not moved and "link" in outcome
+        assert not (root / "users" / "_j.smith_at_chl.lu").exists()
+    finally:
+        if os.name == "nt":
+            os.rmdir(link)  # the junction only
+        else:
+            link.unlink()
+
+
+def test_a_folder_created_empty_before_the_move_is_replaced(root: Path) -> None:
+    _earlier(root, "drlee")
+    # created by this visit, before the sign-in moved anything
+    (root / "users" / "_drlee_x2e_" / "traces" / "snapshots").mkdir(parents=True)
+    moved, _ = move_earlier_workspace("drlee.", lambda: ["drlee."])
+    assert moved and (root / "users" / "_drlee_x2e_" / "datasets" / "cohort_v1.parquet").exists()
+
+
+def test_a_name_that_is_its_own_folder_has_nothing_to_move(root: Path) -> None:
+    _earlier(root, "alice")
+    assert move_earlier_workspace("alice", _never_asked) == (False, "")
+    assert "alice" not in earlier_folders("alice")  # its folder now is never one to move away
+
+
+def test_planned_moves_name_the_folder_and_move_nothing(root: Path) -> None:
+    earlier = _earlier(root, "j.smith_chl.lu")
+    folder, reason = planned_move("j.smith@chl.lu", ["j.smith@chl.lu"])
+    assert folder is not None and folder.name == "j.smith_chl.lu" and reason == ""
+    assert earlier.exists()  # a plan only
+
+
+def test_no_two_of_many_random_names_share_a_folder() -> None:
+    """Names drawn from the characters that make codes: letters of both cases, digits, "_", "@", ".", "-", a space,
+    an apostrophe, letters of other scripts; the folders differ unless the names do."""
+    rng = random.Random(20261028)
+    alphabet = "aAbZ09_@.- 'éЖ_x"
+    names = {
+        "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 12))).strip()
+        for _ in range(20000)
+    }
+    names.discard("")
+    folders = {safe_dirname(name): name for name in names}
+    assert len(folders) == len(names)
+
+
+def test_a_new_account_never_takes_a_folder_that_exists(root: Path) -> None:
+    _earlier(root, "j.smith_chl.lu")  # the earlier folder of "j.smith@chl.lu", until it signs in
+    assert workspace_exists("j.smith_chl.lu") and not workspace_exists("someone.else")
+    assert not workspace_exists("") and not workspace_exists(None)
 
 
 def test_safe_filename() -> None:
@@ -127,3 +318,66 @@ def test_only_a_pdf_of_the_library_can_be_removed(root: Path) -> None:
     with pytest.raises(ValueError):
         remove_pdf(library, "../../../outside.pdf")
     assert (root / "outside.pdf").exists()
+
+
+def test_the_administrators_script_plans_then_moves_only_what_is_clear(root: Path) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "move_workspaces",
+        Path(__file__).resolve().parents[2] / "dev_scripts" / "move_workspaces.py",
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    _earlier(root, "j.smith_chl.lu")
+    shared = _earlier(root, "o_neil_x.org")  # the earlier folder of two accounts
+    names = ["j.smith@chl.lu", "o'neil@x.org", "o_neil@x.org", "alice"]
+    rows = {account: verdict for account, _, verdict in script.plan(names)}
+    assert rows["j.smith@chl.lu"] == "move"
+    assert "administrator" in rows["o'neil@x.org"] and "administrator" in rows["o_neil@x.org"]
+    assert (root / "users" / "j.smith_chl.lu").exists()  # a plan moves nothing
+    assert len(script.apply(names)) == 1
+    assert (root / "users" / "_j.smith_at_chl.lu" / "datasets" / "cohort_v1.parquet").exists()
+    assert shared.exists()
+
+
+def test_a_link_where_the_folder_goes_is_never_followed(root: Path) -> None:
+    _earlier(root, "drlee")
+    outside = root / "outside"
+    (outside / "empty").mkdir(parents=True)
+    link = root / "users" / "_drlee_x2e_"
+    try:
+        if os.name == "nt":
+            import _winapi  # ty: ignore[unresolved-import]
+
+            _winapi.CreateJunction(str(outside), str(link))
+        else:
+            link.symlink_to(outside, target_is_directory=True)
+        moved, outcome = move_earlier_workspace("drlee.", lambda: ["drlee."])
+        assert not moved and "link" in outcome
+        assert (outside / "empty").exists() and (root / "users" / "drlee").exists()
+    finally:
+        if os.name == "nt":
+            os.rmdir(link)  # the junction only
+        else:
+            link.unlink()
+
+
+def test_the_script_counts_the_name_before_an_at_sign_as_an_owner(root: Path) -> None:
+    """Better Auth lists an account that signs in as "j.smith_chl.lu" under "j.smith_chl.lu@local.cohort" when it has
+    no username field: that account could own the folder "j.smith_chl.lu", which then stays."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "move_workspaces",
+        Path(__file__).resolve().parents[2] / "dev_scripts" / "move_workspaces.py",
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    current = _earlier(root, "j.smith_chl.lu")
+    names = ["j.smith@chl.lu", "j.smith_chl.lu@local.cohort"]
+    rows = {account: verdict for account, _, verdict in script.plan(names)}
+    assert "administrator" in rows["j.smith@chl.lu"]
+    assert script.apply(names) == [] and current.exists()

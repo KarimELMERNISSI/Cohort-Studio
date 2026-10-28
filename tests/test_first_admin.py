@@ -94,3 +94,22 @@ def test_the_command_line_bootstrap_and_setup_token(
     assert iam.create_first_admin(token, "chief", "a-long-password-7")[0] is True
     with pytest.raises(SystemExit):
         manage_users.main(["setup-token"])  # not needed any more
+
+
+def test_create_admin_reuses_an_existing_folder_only_when_told(
+    iam: IAMManager, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The folder of a name may hold another account's files (the earlier folder of an account that has not signed
+    in since): the operator reuses it only with --reuse-folder (a users database replaced, its folders kept)."""
+    import manage_users
+
+    monkeypatch.setattr(manage_users, "get_iam_manager", lambda: iam)
+    monkeypatch.setenv("CMP_ADMIN_PASSWORD", "a-long-password-8")
+    (tmp_path / "users" / "chief" / "datasets").mkdir(parents=True)
+    with pytest.raises(SystemExit) as refused:
+        manage_users.main(["create-admin", "chief"])
+    assert "--reuse-folder" in str(refused.value.code)  # the message is the exit status
+    assert "chief" not in iam.get_all_users()
+    with pytest.raises(SystemExit) as created:
+        manage_users.main(["create-admin", "chief", "--reuse-folder"])
+    assert created.value.code == 0 and "chief" in iam.get_all_users()

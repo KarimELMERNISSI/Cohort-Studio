@@ -16,13 +16,27 @@ import hashlib
 import ntpath
 import os
 import re
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-# a new name starts and ends with a letter or a digit: it is its own workspace folder (core.workspace.safe_dirname
-# drops a final ".", "_" or "-", so "drlee." and "drlee" would share one; data-protection review, M5b)
+# a new name starts and ends with a letter or a digit: it is its own workspace folder (safe_dirname)
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{1,30}[A-Za-z0-9]$")
+# what earlier versions did to a name to make its folder (earlier_folders)
 _UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
+# a name that is its own folder: ASCII letters and digits, with "_", "." and "-" inside, at most 64 characters
+_FOLDER_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9])?")
+_DEVICE_NAMES = frozenset(
+    {
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{i}" for i in range(1, 10)),
+        *(f"lpt{i}" for i in range(1, 10)),
+    }
+)  # no folder of Windows can have these names, with or without an extension
+_KEPT_IN_CODE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-")
 KINDS: tuple[str, ...] = (
     "datasets",
     "stats",
@@ -55,18 +69,164 @@ def validate_username(username: str | None) -> str:
 
 def safe_dirname(username: str | None) -> str:
     """
-    Directory name for a (possibly legacy) username: never empty, never a path component escape. A name that keeps
-    nothing as a folder name (no ASCII letter or digit, such as "Мария") or that is longer than 64 characters (a long
-    e-mail from an identity provider) gets a folder named after its SHA-256, starting with "_", which no other name's
-    folder starts with: such a user had no workspace and used the shared folders, as every such user did.
+    The workspace folder of a username, never a path escape; two names never share one.
+
+    - A name that is a folder name already is its own folder: ASCII letters and digits, with "_", "." or "-" inside,
+      at most 64 characters, and not a device name of Windows. Every account created in the application has one.
+    - Any other name, such as an identity provider's e-mail, gets "_" and a readable code of it: "j.smith@chl.lu" gets
+      "_j.smith_at_chl.lu". No folder name starts with "_", and two names never get the same code: "_" is doubled,
+      "@" is written "_at_", and any other character (and a final ".") is written "_x", its code point in
+      hexadecimal, and "_" ("o'neil@x.org" gets "_o_x27_neil_at_x.org").
+    - A code longer than 64 characters: "_" and 32 hexadecimal characters of the name's SHA-256.
+
+    Earlier versions replaced each run of such characters by "_": "j.smith@chl.lu" and "j.smith_chl.lu" had one folder.
+    Names are never normalised or case-folded, so two spellings an identity provider may tell apart keep two folders
+    (on Windows, names differing only by case are one folder: local sign-up refuses such a name).
     """
     name = (username or "").strip()
     if not name:
         raise ValueError("A workspace directory needs a username.")
-    value = _UNSAFE_CHARS.sub("_", name).strip("._-")
-    if not value or len(value) > 64:
-        return "_" + hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest()[:32]
-    return value
+    if _FOLDER_NAME.fullmatch(name) and name.split(".")[0].lower() not in _DEVICE_NAMES:
+        return name
+    code = _code(name)
+    if len(code) <= 64:
+        return code
+    return "_" + hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest()[:32]
+
+
+def _code(name: str) -> str:
+    """The readable code of a name that is no folder name (safe_dirname); it starts with "_"."""
+    last = len(name) - 1
+    out = ["_"]
+    for position, character in enumerate(name):
+        if character == "_":
+            out.append("__")
+        elif character == "@":
+            out.append("_at_")
+        elif character in _KEPT_IN_CODE and not (character == "." and position == last):
+            out.append(character)
+        else:  # Windows drops a final "." from a folder name
+            out.append(f"_x{ord(character):x}_")
+    return "".join(out)
+
+
+def earlier_folders(username: str | None) -> list[str]:
+    """
+    The folders earlier versions gave ``username`` that are not its folder now: the name with each run of characters
+    other than ASCII letters, digits, "_", "." and "-" replaced by "_" and those three trimmed from its ends, and "_"
+    with 32 hexadecimal characters of its SHA-256.
+    """
+    name = (username or "").strip()
+    if not name:
+        return []
+    found = []
+    trimmed = _UNSAFE_CHARS.sub("_", name).strip("._-")
+    if trimmed and len(trimmed) <= 64:
+        found.append(trimmed)
+    found.append("_" + hashlib.sha256(name.encode("utf-8", "surrogatepass")).hexdigest()[:32])
+    current = safe_dirname(name)
+    return [folder for folder in dict.fromkeys(found) if folder != current]
+
+
+def workspace_exists(username: str | None) -> bool:
+    """Whether the folder ``username`` would have exists already. A new account never takes it: it may hold another
+    account's files, such as the folder an earlier version gave an account that has not signed in since."""
+    name = (username or "").strip()
+    return bool(name) and (data_root() / "users" / safe_dirname(name)).exists()
+
+
+def earlier_workspaces(username: str | None) -> list[Path]:
+    """The folders an earlier version gave ``username`` that exist and are not its folder now."""
+    users = data_root() / "users"
+    return [users / folder for folder in earlier_folders(username) if (users / folder).exists()]
+
+
+def planned_move(username: str | None, accounts: Iterable[str]) -> tuple[Path | None, str]:
+    """
+    The earlier folder of ``username`` to move to its folder now, and why not when it cannot be: (folder, "") when
+    exactly one exists, it is a folder and no link or junction, the folder now holds no file, ``accounts`` (every
+    account) holds ``username``, and no other account in it could own the earlier folder, as its folder now or an
+    earlier one; (None, reason) when it cannot be moved; (None, "") when there is none.
+    """
+    name = (username or "").strip()
+    found = earlier_workspaces(name)
+    if not found:
+        return None, ""
+    if len(found) > 1:
+        return (
+            None,
+            f"several earlier folders ({', '.join(f.name for f in found)}) are left for an administrator",
+        )
+    earlier = found[0]
+    if earlier.is_symlink() or earlier.is_junction() or not earlier.is_dir():
+        return (
+            None,
+            f"the earlier folder {earlier.name} is a link, never moved: it is left for an administrator",
+        )
+    target = earlier.parent / safe_dirname(name)
+    if target.is_symlink() or target.is_junction():
+        return (
+            None,
+            f"the folder {target.name} is a link, never replaced: {earlier.name} is left for an administrator",
+        )
+    if target.exists() and any(path.is_file() for path in target.rglob("*")):
+        return (
+            None,
+            f"the earlier folder {earlier.name} is left for an administrator: {target.name} holds files",
+        )
+    names = [str(other).strip() for other in accounts]
+    if name not in names:
+        return (
+            None,
+            f"the list of accounts does not hold this one: the folder {earlier.name} is left",
+        )
+    owned = os.path.normcase(earlier.name)
+    for other in names:
+        if not other or other == name:
+            continue
+        if owned in {
+            os.path.normcase(folder) for folder in (safe_dirname(other), *earlier_folders(other))
+        }:
+            return (
+                None,
+                f"another account could own the folder {earlier.name}: it is left for an administrator",
+            )
+    return earlier, ""
+
+
+def move_workspace(username: str | None, earlier: Path) -> str:
+    """Move ``earlier`` (from :func:`planned_move`) to the folder of ``username`` now. An empty folder there, created on
+    this visit, is replaced; never one that holds a file."""
+    target = earlier.parent / safe_dirname((username or "").strip())
+    if target.is_symlink() or target.is_junction():  # planned_move refuses it: never followed
+        raise ValueError(f"the folder {target.name} is a link: nothing is moved")
+    if target.exists():
+        for folder, _, _ in sorted(
+            os.walk(target), key=lambda walked: len(walked[0]), reverse=True
+        ):
+            os.rmdir(folder)  # fails on a file: nothing is ever deleted
+    earlier.rename(target)
+    return f"the folder {earlier.name} was moved to {target.name}"
+
+
+def move_earlier_workspace(
+    username: str | None, accounts: Callable[[], Iterable[str]]
+) -> tuple[bool, str]:
+    """
+    At the sign-in of a local account: move the folder an earlier version gave it to its folder now, once, when it is
+    clearly its own (:func:`planned_move`; ``accounts`` is asked only when there is a folder to move). Returns whether
+    it moved and what happened, for the server log ("" when there was nothing to move).
+    """
+    if not earlier_workspaces(username):
+        return False, ""
+
+    def listed() -> Iterator[str]:  # the accounts, asked only after the checks on the folders
+        yield from accounts()
+
+    earlier, reason = planned_move(username, listed())
+    if earlier is None:
+        return False, reason
+    return True, move_workspace(username, earlier)
 
 
 def safe_filename(name: str | None, default: str = "file") -> str:
@@ -229,9 +389,15 @@ __all__ = [
     "UserScope",
     "all_user_scopes",
     "data_root",
+    "earlier_folders",
+    "earlier_workspaces",
+    "move_earlier_workspace",
+    "move_workspace",
+    "planned_move",
     "network_share",
     "resolve_within",
     "safe_dirname",
     "safe_filename",
     "validate_username",
+    "workspace_exists",
 ]
