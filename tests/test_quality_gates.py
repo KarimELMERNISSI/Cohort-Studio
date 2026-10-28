@@ -46,9 +46,10 @@ def test_no_hard_coded_data_directories() -> None:
 
 def test_raw_html_is_ratcheted_down() -> None:
     # 31: the graph legend's block moved from graph/ into ui/ (M5b), and graph/ is counted too since then; 30: the
-    # Home page's frequent values, cells of the file, shown as text (privacy review, 2026-10-21)
+    # Home page's frequent values, cells of the file, shown as text (privacy review, 2026-10-21); 23: Validate's and the
+    # dashboard's lists of rules, one card per rule in the flow's words (M5b step 6)
     hits = _count(r"unsafe_allow_html=True", "app_pages", "ui", "graph")
-    assert len(hits) <= 30, f"{len(hits)} raw-HTML blocks (ceiling 30): {hits[:5]}"
+    assert len(hits) <= 23, f"{len(hits)} raw-HTML blocks (ceiling 23): {hits[:5]}"
 
 
 def test_print_calls_are_ratcheted_down() -> None:

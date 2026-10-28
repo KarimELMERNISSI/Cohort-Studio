@@ -682,6 +682,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   criteria says: "A participant whose value is missing meets no condition on it: an exclusion criterion keeps them,
   an inclusion criterion excludes them. In an expression, a missing value meets .isna(), and may also meet a
   condition written with != or ~ (not)."
+- **Validate and the quality dashboard show one box per rule, in the flow's words.** Their lists decided a rule's
+  kind by "numeric" alone: frozen bounds, listed rows and a rule "at least k of" showed as an "Expression" with "No
+  expression defined". Each box, closed until opened so that a long list stays short, is titled with the rule's name
+  and its kind ("Implausible age · Expression"), and gives what makes it fire, the words of the participant flow and
+  the dossier, with its description; a rule that cannot be read says why. Names, descriptions and the flow's details
+  show as written, never as formatting. The dashboard's anomaly report highlights the cells of the columns each rule
+  reads: only a rule named like a column had its cells highlighted, so an expression's never were.
 - **A configuration for someone else is a file of its own, and holds only the criteria and the derived variables**
   (privacy). The download for sharing was a switch, off by default, that left out only the rules listing row ids at
   the top of a family. What went into the file:

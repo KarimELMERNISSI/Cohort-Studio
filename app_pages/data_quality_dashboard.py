@@ -10,6 +10,7 @@ import streamlit as st
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
+from core.criteria import criterion_columns
 from explore.data_quality_auditor import DERIVED_CATEGORY
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
@@ -20,6 +21,7 @@ from explore.quality_score import (
     weighted_score,
 )
 from ui.components import page_link
+from ui.components.criteria import criterion_cards
 from ui.progress import mark_step, record_quality_check
 from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
 from ui.state import get_state
@@ -125,6 +127,14 @@ def _sync_validity_settings() -> None:
         name: ss.get(key, stored.get(name, default))
         for name, (key, default) in VALIDITY_PARAMS.get(method, {}).items()
     }
+
+
+def anomaly_columns(rules) -> dict[str, set[str]]:
+    """
+    The columns each anomaly rule reads (core.criteria.criterion_columns), whose cells the anomaly report highlights
+    where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
+    """
+    return {str(name): set(criterion_columns(str(name), spec)) for name, spec in rules.items() if name != "operator"}
 
 
 def render_dashboard(df, config):
@@ -1130,22 +1140,20 @@ def render_dashboard(df, config):
                     st.markdown("### Detailed Anomaly Report")
                     st.markdown("The table below shows rows that triggered at least one anomaly. Cells causing the anomaly are highlighted (where applicable).")
                     
-                    # Define styling function
+                    anomaly_rules = (auditor.config or {}).get("mask_families", {}).get("clinical_anomalies") or {}
+                    reads = anomaly_columns(anomaly_rules)
+
                     def highlight_anomalies(row):
                         styles = [''] * len(row)
-                        # row.name is the index
-                        if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
-                            if row.name in auditor.clinical_anomalies_booleans.index:
-                                bool_row = auditor.clinical_anomalies_booleans.loc[row.name]
-                                
-                                # Handle potential duplicate indices safely
-                                if isinstance(bool_row, pd.DataFrame):
-                                    bool_row = bool_row.iloc[0] # Take first match if duplicates exist
-
-                                for i, col_name in enumerate(row.index):
-                                    # Check if col_name is a mask that is True for this row
-                                    if col_name in bool_row.index and bool_row[col_name]:
-                                        styles[i] = 'background-color: #ff4b4b; color: white'
+                        booleans = getattr(auditor, 'clinical_anomalies_booleans', None)
+                        if booleans is not None and row.name in booleans.index:
+                            fired = booleans.loc[row.name]
+                            if isinstance(fired, pd.DataFrame):  # duplicate indices: the first match
+                                fired = fired.iloc[0]
+                            columns = set().union(*(reads.get(rule, ()) for rule in fired.index if fired[rule]))
+                            for i, col_name in enumerate(row.index):
+                                if col_name in columns:
+                                    styles[i] = 'background-color: #ff4b4b; color: white'
                         return styles
 
                     # Display with style
@@ -1167,37 +1175,8 @@ def render_dashboard(df, config):
                         st.divider()
                         st.markdown("### Applied Clinical Criteria")
                         st.markdown("The following rules were used to detect anomalies:")
-                        
-                        # Use card-based layout similar to Data Monitoring page
-                        cols_per_row = 3
-                        grid = st.columns(cols_per_row)
-                        
-                        # Filter out 'operator' key
-                        rules = {k: v for k, v in clinical_config.items() if k != "operator"}
-                        
-                        for i, (name, rule) in enumerate(rules.items()):
-                            is_numeric = rule.get('numeric', False)
-                            color = '#3498db' if is_numeric else '#2ecc71'
-                            
-                            with grid[i % cols_per_row]:
-                                if is_numeric:
-                                    with st.expander(f"{name}", expanded=False):
-                                        st.markdown(f"**Type:** <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
-                                        
-                                        c1, c2 = st.columns(2)
-                                        with c1:
-                                            if rule.get('lower_bound') is not None:
-                                                st.metric("Min", rule['lower_bound'])
-                                        with c2:
-                                            if rule.get('upper_bound') is not None:
-                                                st.metric("Max", rule['upper_bound'])
-                                                
-                                        if rule.get('strategy'):
-                                            st.markdown(f"**Strategy:** {rule['strategy']}")
-                                else:
-                                    with st.expander(f"{name}", expanded=False):
-                                        st.markdown(f"**Type:** <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
-                                        st.code(rule.get('expression', 'N/A'), language='python')
+                        # the cards of Validate, in the words of the participant flow
+                        criterion_cards(clinical_config)
 
                 else:
                     st.info("Go to the **'Data Validation & Monitoring'** page to inspect specific rows and rules.")

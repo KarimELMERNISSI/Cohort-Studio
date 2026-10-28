@@ -53,8 +53,10 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 ### 2.2 Clinical anomalies
 
 1. Open the **Handle Clinical Anomalies** tab. Under *Declared Anomaly Criteria* you will find the 8 rules of the
-   configuration. Six are expression rules, such as `df['dbp_baseline'] >= df['sbp_baseline']`. Two are numeric
-   range rules, on `lvef_pct` and `potassium_mmol_l`: with *exclude*, values outside the range are flagged.
+   configuration, one box each, titled with its name and its kind; open one to see what makes it fire, in the words
+   of the participant flow. Six are
+   expression rules, such as `df['dbp_baseline'] >= df['sbp_baseline']`. Two are numeric range rules, on `lvef_pct`
+   and `potassium_mmol_l`: with *exclude*, values outside the range are flagged ("lvef_pct < 5 or lvef_pct > 85").
 2. Expand *Apply Anomaly Detection based on Domain-Expert Criteria* and click **Run Anomaly Detection**.
    **16 rows** are flagged:
 

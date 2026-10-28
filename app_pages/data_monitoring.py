@@ -1,5 +1,4 @@
 # pages/data_monitoring.py
-import html
 import json
 import os
 from io import BytesIO
@@ -27,6 +26,7 @@ from core.population import (
 from core.registry import as_code
 from ingest.loaders import UPLOAD_TYPES
 from ui.components import no_dataset
+from ui.components.criteria import criterion_cards
 from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
 from ui.components.text import plain
@@ -894,134 +894,6 @@ def handle_expression_mask_input(st_container, base_key: str):
     return {"numeric": False, "expression": expression}
 
 
-# Define a recursive function to display the JSON as collapsible sections
-def display_mask_family(config):
-    """
-    Create a color-coded display of mask families configuration.
-    """
-    # Ensure config is a dictionary
-    if isinstance(config, str):
-        try:
-            config = json.loads(config)
-        except json.JSONDecodeError:
-            st.error(f"Invalid JSON configuration: {config}")
-            return
-
-    # Prepare dynamic grid layout
-    #num_items = len(config)
-    cols_per_row = 3  # Adjustable number of columns per row
-    grid = st.columns(cols_per_row)
-
-    # Iterate through config items
-    for i, (key, value) in enumerate(config.items()):
-        if not isinstance(value, dict):
-            continue
-
-        # Determine configuration type
-        is_numeric = value.get('numeric', False)
-
-        # Set color based on type
-        color = '#3498db' if is_numeric else '#2ecc71'
-        #border_color = f"2px solid {color}"
-
-        with grid[i % cols_per_row]:
-            if is_numeric:
-                # Expander for numeric configuration
-                with st.expander(plain(key, limit=200), expanded=False):
-                    # Numeric details
-                    st.markdown(f"**Type:** <span style='color:{color};'>Numeric</span>", unsafe_allow_html=True)
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        lower_bound = value.get('lower_bound', None)
-                        if lower_bound is not None:
-                            st.metric(label="Lower Bound", value=lower_bound)
-                    with col2:
-                        upper_bound = value.get('upper_bound', None)
-                        if upper_bound is not None:
-                            st.metric(label="Upper Bound", value=upper_bound)
-
-                    strategy = value.get('strategy', None)
-                    if strategy is not None:
-                        st.markdown(f"**Validation Strategy:** {strategy}")
-                    st.success("Numeric Validation Active")
-
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-            else:
-                # Expander for non-numeric configuration
-                with st.expander(plain(key, limit=200), expanded=False):
-                    # Non-numeric details
-                    st.markdown(f"**Type:** <span style='color:{color};'>Expression</span>", unsafe_allow_html=True)
-
-                    expression = value.get('expression', "No expression defined")
-                    #st.markdown("**Validation Expression:**")
-                    st.code(expression, language='python')
-                    st.warning("Custom Expression Validation")
-
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-
-def display_mask_family_alt(config):
-    """
-    Display mask families configuration in a single top-level expander without nesting.
-    """
-    st.subheader("Data masking configuration", icon=":material/rule:", anchor=False)
-
-    # Ensure config is a dictionary
-    if isinstance(config, str):
-        try:
-            config = json.loads(config)
-        except json.JSONDecodeError:
-            st.error(f"Invalid JSON configuration: {config}")
-            return
-
-    # Top-level expander for all configurations
-    with st.expander("View Mask Families Configuration", expanded=False):
-        for i, (key, value) in enumerate(config.items()):
-            # Skip invalid entries
-            if not isinstance(value, dict):
-                continue
-
-            # Determine type and color
-            is_numeric = value.get('numeric', False)
-            color = '#3498db' if is_numeric else '#2ecc71'
-            border_color = f"2px solid {color}"
-
-            # Section header
-            st.markdown(
-                f"""
-                <div style="border: {border_color}; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                    <h4 style="margin: 0;">{'' if is_numeric else ''} {html.escape(str(key))}</h4>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Numeric Configuration
-            if is_numeric:
-                col1, col2 = st.columns(2)
-                with col1:
-                    lower_bound = value.get('lower_bound', "N/A")
-                    st.metric(label="Lower Bound", value=lower_bound)
-                with col2:
-                    upper_bound = value.get('upper_bound', "N/A")
-                    st.metric(label="Upper Bound", value=upper_bound)
-
-                strategy = value.get('strategy', "None")
-                st.markdown(f"**Validation Strategy:** {strategy}")
-                st.success("Numeric Validation Active")
-
-            # Non-Numeric Configuration
-            else:
-                expression = value.get('expression', "No expression defined")
-                st.markdown("**Validation Expression:**")
-                st.code(expression, language='python')
-                st.warning("Custom Expression Validation")
-
-            st.divider()  # Divider between items
-
-
 def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, st_container):
     """
     Apply a single mask family from JSON configuration to the dataset.
@@ -1731,7 +1603,7 @@ def app():
 
             #with st.expander("Current Mask Families", expanded=True):
             st.subheader("Declared Anomaly Criteria")
-            display_mask_family(st.session_state.config["mask_families"][anomaly_family])
+            criterion_cards(st.session_state.config["mask_families"][anomaly_family])
 
             with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
             
@@ -1772,7 +1644,7 @@ def app():
                 add_study_inclusion_mask(st.session_state.config, st)
         
             st.subheader("Declared Inclusion Criteria")
-            display_mask_family(st.session_state.config["mask_families"][inclusion_family])
+            criterion_cards(st.session_state.config["mask_families"][inclusion_family])
 
             with st.expander("Apply Data Validation based on Inclusion Criteria"):
             

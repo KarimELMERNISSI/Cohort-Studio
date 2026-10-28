@@ -10,6 +10,7 @@ import utils.data_paths as dp
 from core.population import criterion_id
 from ui import nav
 from ui.components.population import _family_key, _widget_key
+from ui.components.text import plain
 
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = str(ROOT / "main.py")
@@ -103,7 +104,9 @@ def test_validate_shows_the_participant_flow_and_the_reasons_of_each_exclusion(
     _ok(app)
     reasons = next(d.value for d in app.dataframe if "Rows it excluded first" in d.value.columns)
     assert reasons["Rows it excluded first"].sum() == 262
-    assert any(c.value.startswith("Written consent:") for c in app.caption)  # its definition
+    # its definition, with its role, shown as written
+    consent = plain("Written consent: excluded unless")
+    assert any(c.value.startswith(consent) for c in app.caption)
 
 
 def test_imputation_on_enrich_is_fitted_on_the_population_only(app: AppTest) -> None:

@@ -24,6 +24,7 @@ from core.attrition import (
     participant_flow,
     source_from_trace,
 )
+from ui.components.text import plain
 
 BOX_W, BOX_H = 1.0, 0.56
 FILL = {"exit": "#fbf1e4", POPULATION: "#d9ecf5", ANALYSIS: "#e6f3ea"}
@@ -182,8 +183,8 @@ def render_flow(flow: ParticipantFlow | None, *, key: str) -> None:
         persist_state="page",  # kept while the tab that shows the flow is closed (M5b)
     )
     item = flow.item(chosen)
-    for line in item.details:
-        st.caption(line)
+    for line in item.details:  # names and expressions as written: the user's text, never Markdown
+        st.caption(plain(line))
     if isinstance(item, FlowExit) and item.reasons:
         st.dataframe(
             pd.DataFrame(item.reasons, columns=["Criterion", "Rows it excluded first"]),
