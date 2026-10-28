@@ -792,10 +792,11 @@ def outlier_values_dialog(outlier_summary):
 
 ##### COMMON PART
 
-def ensure_family_exists(config: dict[str, Any], family_name: str):
-    """Ensure the specified family exists in the configuration."""
+def ensure_family_exists(config: dict[str, Any], family_name: str, operator: str | None = None):
+    """Ensure the specified family exists in the configuration. A family created here gets ``operator``; one that
+    exists keeps how it reads, never given an operator (a family without one reads "any")."""
     if family_name not in config["mask_families"]:
-        config["mask_families"][family_name] = {}
+        config["mask_families"][family_name] = {} if operator is None else {"operator": operator}
 
 
 def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str, st_container):
@@ -1347,7 +1348,7 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                                 expression = item.get('expression', '')
                                 
                                 # Add to config
-                                ensure_family_exists(config, family_name)
+                                ensure_family_exists(config, family_name, "any" if mode == "anomaly" else "all")
                                 config["mask_families"][family_name][mask_name] = {
                                     "numeric": False,
                                     "expression": expression
@@ -1378,11 +1379,9 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     render_ai_criteria_assistant(st_container, config, "clinical_anomalies", mode="anomaly")
 
     family_name = "clinical_anomalies"
-    ensure_family_exists(config, family_name)
-
-    # a family this form creates combines its rules with "any"; one that holds an operator keeps it: an uploaded
+    # a family this form creates combines its rules with "any"; one that exists keeps how it reads: an uploaded
     # "at least k rules" family was rewritten on every run, and its ticked criterion left the population unseen
-    config["mask_families"][family_name].setdefault("operator", "any")
+    ensure_family_exists(config, family_name, "any")
 
     # Mask Addition
     mask_name = st_container.text_input("Anomaly Mask Name", key="anomaly_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")
@@ -1460,10 +1459,8 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
     render_ai_criteria_assistant(st_container, config, "study_inclusion", mode="inclusion")
 
     family_name = "study_inclusion"
-    ensure_family_exists(config, family_name)
-
-    # a family this form creates combines its rules with "all"; one that holds an operator keeps it
-    config["mask_families"][family_name].setdefault("operator", "all")
+    # a family this form creates combines its rules with "all"; one that exists keeps how it reads
+    ensure_family_exists(config, family_name, "all")
 
     # Mask Addition
     mask_name = st_container.text_input("Inclusion Mask Name", key="inclusion_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")

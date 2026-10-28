@@ -216,11 +216,13 @@ def merge_families(
     session: Mapping[str, Any] | None, uploaded: Mapping[str, Any] | None
 ) -> tuple[dict[str, Any], list[str]]:
     """
-    An uploaded configuration's criteria added to the session's, never merged into them key by key: a family or a
-    rule the session lacks is added whole; a rule it holds keeps the session's definition whole, and is named when the
-    file's differs; so is the family's operator. A numeric rule and an uploaded expression of the same name made one
-    rule holding both, which was refused while the page reported success. The result shares nothing with the file.
-    Returns the merged families and the names that differ ("family: rule", "family: the operator").
+    An uploaded configuration's criteria added to the session's, never merged into them key by key: a family the
+    session lacks, or holds without a rule, is added whole; a rule it holds keeps the session's definition whole, and
+    is named when the file's differs; a family that holds rules keeps how it reads, and its operator is named when the
+    file's reads otherwise (one without an operator reads "any": given the file's, its ticked criteria would change or
+    vanish). A numeric rule and an uploaded expression of the same name made one rule holding both, which was refused
+    while the page reported success. The result shares nothing with the file. Returns the merged families and the
+    names that differ ("family: rule", "family: the operator").
     """
     merged: dict[str, Any] = copy.deepcopy(dict(session or {}))
     differing: list[str] = []
@@ -228,14 +230,18 @@ def merge_families(
         if not isinstance(members, Mapping):
             continue
         held = merged.get(family)
-        if not isinstance(held, Mapping):
+        if not isinstance(held, dict) or not _rules(held):
             merged[family] = copy.deepcopy(dict(members))
             continue
+        if family_operator(held) != family_operator(members):
+            differing.append(f"{family}: the operator")
         for name, spec in members.items():
+            if name == "operator":
+                continue
             if name not in held:
                 held[name] = copy.deepcopy(spec)
             elif held[name] != spec:
-                differing.append(f"{family}: {'the operator' if name == 'operator' else name}")
+                differing.append(f"{family}: {name}")
     return merged, differing
 
 

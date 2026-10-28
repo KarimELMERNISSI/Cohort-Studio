@@ -126,3 +126,27 @@ def test_validates_upload_names_the_criteria_then_the_derived_variables_that_dif
     assert len(notices) == 2
     assert "criteria" in notices[0] and "study_inclusion: age" in notices[0]
     assert "derived variables" in notices[1] and "bmi_kg_m2" in notices[1]
+
+
+def test_a_family_that_holds_rules_keeps_how_it_reads() -> None:
+    """A family without an operator reads "any": given the file's operator, its ticked criteria would change or
+    vanish. It keeps how it reads, and the operator is named."""
+    young = {"numeric": False, "expression": "df['age'] < 0"}
+    merged, differing = merge_families(
+        {"study_inclusion": {"old": OLD}},
+        {"study_inclusion": {"operator": {"threshold": 2}, "young": young}},
+    )
+    assert merged["study_inclusion"] == {"old": OLD, "young": young}
+    assert differing == ["study_inclusion: the operator"]
+    # one reading written two ways is no difference
+    _, differing = merge_families({"f": {"old": OLD}}, {"f": {"operator": "ANY", "old": OLD}})
+    assert differing == []
+
+
+def test_a_family_the_session_holds_without_rules_takes_the_files() -> None:
+    merged, differing = merge_families(
+        {"study_inclusion": {"operator": "any"}},
+        {"study_inclusion": {"operator": "all", "age": NUMERIC_AGE}},
+    )
+    assert merged["study_inclusion"] == {"operator": "all", "age": NUMERIC_AGE}
+    assert differing == []

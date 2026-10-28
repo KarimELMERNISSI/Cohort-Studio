@@ -644,13 +644,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Opening Validate's anomalies or inclusion tab no longer changes the analysis population** (results corrected).
   The tabs set their family's operator to "any" and "all" on every run. A loaded configuration whose family keeps
   "at least 2 rules" lost it when its tab opened: the criterion "At least 2 rules of clinical_anomalies" no longer
-  existed, so a population that had it ticked dropped it without a word. A family keeps its operator now; a tab sets
-  one only for a family it creates.
+  existed, so a population that had it ticked dropped it without a word. A family keeps how it reads now (one
+  without an operator reads "any"); a tab, or the AI assistant's "Add", gives an operator only to a family it
+  creates.
 - **A loaded configuration adds its rules whole, never mixed into the session's.** A rule of the same name was merged
   key by key: a numeric rule "age" and a loaded expression "age" became one rule holding both, which was refused
   while the page said the configuration was loaded. A rule the session holds now keeps the session's definition
-  whole, and the page names the rules (and operators) whose definition in the file differs, as it already did for
-  the derived variables.
+  whole, and the page names the rules whose definition in the file differs, as it already did for the derived
+  variables. A family that holds rules keeps how it reads, and is named when the file's operator reads otherwise.
 - **A malformed rule is refused when a configuration is loaded, and never stops a page.** A bound written
   `"18 years"`, frozen bounds or listed rows of the wrong shape, or a threshold rule written `"two"` passed the check,
   then raised an error the pages did not expect: the sidebar counts every criterion before each page, so every page

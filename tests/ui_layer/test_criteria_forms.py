@@ -90,3 +90,27 @@ def test_a_family_a_form_creates_gets_its_operator(
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     assert at.session_state["operators"] == {family: operator}
+
+
+def test_a_family_without_an_operator_keeps_how_it_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A family without an operator reads "any": the inclusion tab gave such a loaded family "all", and its criteria
+    changed role (their fingerprints with them)."""
+    import utils.data_paths as dp
+    from core.population import catalogue
+
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    config = {
+        "mask_families": {
+            "study_inclusion": {"old": {"numeric": False, "expression": "df['age'] > 80"}}
+        }
+    }
+    before = [criterion.fingerprint for criterion in catalogue(config)]
+    at = AppTest.from_function(_form, default_timeout=60)
+    at.session_state["config"] = config
+    at.session_state["form"] = "inclusion"
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert "operator" not in config["mask_families"]["study_inclusion"]
+    assert [criterion.fingerprint for criterion in catalogue(config)] == before
