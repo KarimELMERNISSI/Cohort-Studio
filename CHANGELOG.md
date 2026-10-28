@@ -1003,6 +1003,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The DOI is in `CITATION.cff` (GitHub's *Cite this repository*), the README (a badge and the BibTeX entry) and the
   site's APA and BibTeX citations. A test keeps it the same everywhere.
 
+### Dependency updates: DuckDB 2 and seven others
+
+- Updated in `uv.lock`, as Dependabot proposed:
+  - qdrant-client 1.20.0, langchain-core 1.7.0, openai 3.37.0, prince 0.23.0, pypdf 6.21.2 and google-genai
+    2.33.0; for development, ruff 0.17.2, which the pre-commit hook follows;
+  - DuckDB 2.0.0, which holds the local accounts. An accounts file that DuckDB 1 wrote is read and updated as it is,
+    and stays readable by DuckDB 1. A file that DuckDB 2 creates, on a new installation, cannot be opened by an
+    earlier CohortStudio. Saved versions are written by pyarrow, as before.
+- qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
+  leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
+  it): it happened once in the tests, right after the installation, and not in 140 runs since.
+
 ## [2.4.1] - 2026-10-17
 
 Security work, fixes found by code scanning and in use, and one addition to imputation. The first release archived

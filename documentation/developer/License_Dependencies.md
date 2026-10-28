@@ -47,7 +47,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | colorama | 0.4.6 | BSD |
 | contourpy | 1.4.0 | BSD-3-Clause |
 | cycler | 0.12.1 | BSD |
-| duckdb | 1.5.6 | MIT |
+| duckdb | 2.0.0 | MIT |
 | et-xmlfile | 2.0.0 | MIT |
 | fonttools | 4.66.1 | MIT |
 | formulaic | 1.2.2 | MIT |
