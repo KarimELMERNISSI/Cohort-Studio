@@ -85,6 +85,24 @@ def test_version_is_recorded_in_the_changelog() -> None:
     assert f"## [{version}]" in changelog or "## [Unreleased]" in changelog
 
 
+def test_undeclared_session_keys_are_ratcheted_down() -> None:
+    """
+    A key that the code writes into the session is declared in ui/keys.py, with its owner, its readers and its
+    lifetime, from which AppState knows when to clear it (M5b). The keys written without a declaration can only become
+    fewer: 54 when the cleared keys were first derived from the declarations.
+    """
+    from ui.keys import BY_NAME
+
+    written = re.compile(r"""session_state(?:\[\s*["'](\w+)["']\s*\]|\.(\w+))\s*=(?!=)""")
+    undeclared = set()
+    for file in _files("app_pages", "ui"):
+        for match in written.finditer(file.read_text(encoding="utf-8", errors="replace")):
+            key = match.group(1) or match.group(2)
+            if key not in BY_NAME:
+                undeclared.add(key)
+    assert len(undeclared) <= 54, f"{len(undeclared)} undeclared session keys (ceiling 54): {sorted(undeclared)[:5]}"
+
+
 def test_stored_analysis_results_are_cleared_when_the_dataset_changes() -> None:
     """Every ``*_result(s)`` key a page stores is dropped by ``AppState.set_dataset`` (audit E8)."""
     from ui.state import DERIVED_KEYS

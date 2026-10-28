@@ -3,9 +3,9 @@ The session keys that one part of the application writes and another reads (M5b,
 
 Once only the open tab of a page runs (``st.tabs`` with ``on_change="rerun"``), a key that one tab writes and another
 tab, or a later run, reads is how they share state. Each such key is declared here with its owner (the module that
-writes it), its lifetime and the other modules that read it, so that the sharing stays visible. The lifetimes are
-those ``ui.state`` gives today (``DERIVED_KEYS``, ``KEPT_ON_DATA_CHANGE``); a test checks that they agree, until
-M5b step 7 derives those lists from this file.
+writes it), its lifetime and the other modules that read it, so that the sharing stays visible. The lifetimes decide
+what ``AppState`` clears: ``ui.state.DERIVED_KEYS`` and ``KEPT_ON_DATA_CHANGE`` are derived from them. A key the
+code writes into the session without a declaration here is counted by a quality gate, and that count only falls.
 
 Lifetimes:
 
@@ -132,6 +132,141 @@ KEYS: tuple[Key, ...] = (
         "app_pages.epidemiology",
         "data_change",
         note="the grouping variable of those results",
+    ),
+    # the dataset's own state, which follows its trace: kept when it changes, cleared when another is loaded
+    Key(
+        "working_df",
+        "ui.state",
+        "dataset",
+        (
+            "app_pages.data_enrichment",
+            "app_pages.data_insight",
+            "app_pages.data_monitoring",
+            "app_pages.document_insight",
+            "app_pages.home",
+            "app_pages.rag_sidebar",
+        ),
+        "the analysis population: the rows that the ticked criteria keep, which the analyses use",
+    ),
+    Key(
+        "enriched_df",
+        "ui.state",
+        "dataset",
+        ("app_pages.data_enrichment",),
+        "the Enrich draft, before it is applied to the dataset",
+    ),
+    Key(
+        "_mi",
+        "ui.state",
+        "dataset",
+        note="the multiple imputation (StoredMI): its status follows the rows",
+    ),
+    Key(
+        "_results",
+        "ui.results",
+        "dataset",
+        note="the results: a stamped result goes stale on a change",
+    ),
+    Key(
+        "_report",
+        "ui.results",
+        "dataset",
+        note="the results added to the study dossier, stale like them",
+    ),
+    Key(
+        "workflow_marks",
+        "ui.progress",
+        "dataset",
+        note="the steps of the Start page done on this dataset",
+    ),
+    Key(
+        "quality_history",
+        "ui.progress",
+        "dataset",
+        note="the quality scores of this dataset as it changed",
+    ),
+    Key(
+        "loaded_path",
+        "app_pages.data_insight",
+        "dataset",
+        note="Data insight: the file of the dataset",
+    ),
+    Key(
+        "last_enrichment_file_hash",
+        "app_pages.data_enrichment",
+        "dataset",
+        note="Enrich: the enrichment file read last, read again only when it changes",
+    ),
+    # what a page computed on the data: cleared on any change of the data
+    *(
+        Key(name, owner, "data_change", note=note)
+        for name, owner, note in (
+            ("zscore_results", "app_pages.epidemiology", "Hypothesis tests: the z-score results"),
+            (
+                "zscore_config_key",
+                "app_pages.epidemiology",
+                "the settings those results were computed with",
+            ),
+            (
+                "mwu_p_xy",
+                "app_pages.epidemiology",
+                "the Mann-Whitney effect size, for the Power tab",
+            ),
+            ("last_power_selected_groups", "app_pages.epidemiology", "the Power tab's groups"),
+            ("last_power_group_col", "app_pages.epidemiology", "the Power tab's grouping variable"),
+            (
+                "univariate_cache",
+                "app_pages.epidemiology",
+                "the univariate tests, by their settings",
+            ),
+            ("fig_clustermap", "app_pages.visualization", "Visualize: the clustered heat map"),
+            (
+                "fig_clustermap_error",
+                "app_pages.visualization",
+                "why that heat map could not be drawn",
+            ),
+            (
+                "preview_new_variable",
+                "app_pages.data_enrichment",
+                "Enrich: a new variable, before it is added",
+            ),
+            (
+                "imputation_suggestions",
+                "app_pages.data_enrichment",
+                "Enrich: the AI engine's imputations",
+            ),
+            (
+                "ai_variable_suggestions",
+                "app_pages.data_enrichment",
+                "Enrich: the AI engine's variables",
+            ),
+            (
+                "ai_domain_analysis",
+                "app_pages.data_enrichment",
+                "Enrich: the AI engine's reading of the domain",
+            ),
+            ("ai_renaming_suggestions", "app_pages.home", "Statistics: the AI engine's renames"),
+            (
+                "enrichment_candidates",
+                "app_pages.data_insight",
+                "Data insight: the files to enrich with",
+            ),
+            (
+                "enrichment_formulas",
+                "app_pages.data_insight",
+                "Data insight: the formulas suggested with them",
+            ),
+            (
+                "clustering_results",
+                "app_pages.data_insight",
+                "Data insight: the clusters of the rows",
+            ),
+            (
+                "doc_coverage_results",
+                "app_pages.document_insight",
+                "Document insight: what the documents cover",
+            ),
+        )
     ),
     Key(
         "_services",

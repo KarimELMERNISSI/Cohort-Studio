@@ -52,6 +52,7 @@ from core.steps import ids as step_ids
 from manage.snapshots import delete_unreferenced
 from manage.snapshots import folders as snapshot_folders
 from manage.snapshots import save as save_snapshot_to
+from ui.keys import KEYS
 from ui.session_scope import get_current_scope
 from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
@@ -75,91 +76,15 @@ TUTORIAL_CONFIG_PATH = TUTORIAL_DIR / "tutorial_config.json"
 TUTORIAL_FOLLOWUP_PATH = TUTORIAL_DIR / "tutorial_followup_labs.csv"
 TUTORIAL_DICTIONARY_PATH = TUTORIAL_DIR / "tutorial_dictionary.md"
 
-# Results derived from the current dataset: cleared whenever another dataset is loaded.
-DERIVED_KEYS: tuple[str, ...] = (
-    "rename_dict",
-    "enriched_df",
-    "working_df",
-    "epidemiology_results",
-    "zscore_results",
-    "zscore_config_key",
-    "fig_clustermap",
-    "fig_clustermap_error",
-    "preview_new_variable",
-    "enrichment_candidates",
-    "imputation_suggestions",
-    "ai_variable_suggestions",
-    "ai_renaming_suggestions",
-    "ai_domain_analysis",
-    "enrichment_formulas",
-    "loaded_path",
-    "last_main_file_hash",
-    "last_enrichment_file_hash",
-    "mwu_p_xy",
-    "last_power_selected_groups",
-    "last_power_group_col",
-    "epidemiology_group_col",
-    "validity_outlier_params",
-    "validity_outlier_method",
-    # the controls of those detection settings (Validate dashboard): reset with them when another dataset is loaded
-    "validity_detection_method",
-    "validity_iqr_mult",
-    "validity_zscore_thresh",
-    "validity_q_lower",
-    "validity_q_upper",
-    "univariate_cache",
-    "diag_result",
-    "ba_result",
-    "workflow_marks",
-    "quality_history",
-    "anomaly_check_done",
-    "inclusion_check_done",
-    "anomaly_data_applied",
-    "inclusion_data_applied",
-    "outliers_data_applied",
-    # Analysis results kept by the analysis pages; they describe the previous dataset after a swap.
-    "surv_result",
-    "cox_result",
-    "logit_result",
-    "pois_result",
-    "pair_result",
-    "one_result",
-    "mc_result",
-    "mh_result",
-    "clustering_results",
-    "doc_coverage_results",
-    "_results",  # the result store (ui/results.py): stamped results go stale on change, cleared on a swap
-    "_report",  # the results added to the study dossier (ui/results.py), stale like the store
-    "_mi",  # the multiple imputation (biostats.mi.binding.StoredMI); its status follows the rows
+# The keys AppState clears, from their declarations (ui/keys.py): when another dataset is loaded, every key of the
+# dataset (its own state and what was computed on it) and the page keys that go with it; on any change of the data,
+# what was computed on it.
+DERIVED_KEYS: tuple[str, ...] = tuple(
+    key.name for key in KEYS if key.lifetime in ("dataset", "data_change") or key.reset_on_dataset
 )
 # Kept when the same dataset changes (they follow the trace, or describe the check rather than the data).
 KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
-    {
-        "enriched_df",
-        "working_df",
-        "workflow_marks",
-        "quality_history",
-        "loaded_path",
-        "last_main_file_hash",
-        "last_enrichment_file_hash",
-        "anomaly_check_done",
-        "inclusion_check_done",
-        "anomaly_data_applied",
-        "inclusion_data_applied",
-        "outliers_data_applied",
-        # the outlier detection settings of the Validate dashboard, and their controls: the user's choice, kept
-        # wherever the data change
-        "validity_outlier_method",
-        "validity_outlier_params",
-        "validity_detection_method",
-        "validity_iqr_mult",
-        "validity_zscore_thresh",
-        "validity_q_lower",
-        "validity_q_upper",
-        "_results",
-        "_report",
-        "_mi",
-    }
+    key.name for key in KEYS if key.lifetime == "dataset" or key.reset_on_dataset
 )
 DATA_DERIVED_KEYS: tuple[str, ...] = tuple(k for k in DERIVED_KEYS if k not in KEPT_ON_DATA_CHANGE)
 

@@ -498,9 +498,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   runs; its controls keep their values while you stay on the page, and a result of the Analysis tab is still
   offered to the Power tab.
 - **The session keys shared between the tabs of these pages are declared** in `ui/keys.py`: the module that
-  writes each, how long it lives and the modules that read it. A test checks the declarations against the code and
-  against what the application clears when the data change. The other shared keys (`analysis_data_mode`,
-  `workflow_marks`, the stored results) are declared when the session state is reorganised (M5b, step 7).
+  writes each, how long it lives and the modules that read it. A test checks the declarations against the code.
+  What the application clears when another dataset is loaded, or when the data change, is derived from these
+  declarations (`ui.state.DERIVED_KEYS`, `KEPT_ON_DATA_CHANGE`), which now cover every key it clears: the dataset's
+  own state (`working_df`, the Enrich draft, the results, the multiple imputation, the workflow marks) and what the
+  pages computed on it. Fourteen names that nothing wrote any more are gone, among them the analysis results the
+  result store replaced, and a quality gate counts the keys written without a declaration, a count that only falls.
 - **Inputs that show a value kept elsewhere follow it again.** Keeping every control's value while its tab is closed
   made three inputs come back stale: a column renamed and renamed back was renamed again at the next Apply; the
   Mann-Whitney effect returned to its old value after a change of scale; and a chi-square result loaded into the
