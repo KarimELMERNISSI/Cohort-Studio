@@ -262,63 +262,108 @@ This is primarily a developer and admin tool for diagnosing RAG performance issu
 ### Study configuration (JSON)
 
 The study configuration lives in the session (`st.session_state.config`). It starts from
-`utils.config_loader.create_empty_config()` and is uploaded on **Data > Validate** (sidebar, _Load Existing
-Config_), which merges it into the session without overwriting existing rules. The Validate page reads
-`mask_families` only:
+`utils.config_loader.create_empty_config()`. A file uploaded on **Data > Validate** (sidebar, _Load Existing Config_)
+adds the families and rules the session lacks, each whole: a rule the session holds keeps its definition, and the page
+names those whose definition in the file differs (`core.population.merge_families`).
 
-| Family               | Operator       | A rule that matches...      | Result column                        |
-| -------------------- | -------------- | --------------------------- | ------------------------------------ |
-| `clinical_anomalies` | `any` (forced) | flags the row as an anomaly | `clinical_anomalies_any` (+ `_list`) |
-| `study_inclusion`    | `all` (forced) | keeps the row in the study  | `study_inclusion_all` (+ `_list`)    |
+The criteria are `config["mask_families"]`. Each family maps rule names to definitions, and its `operator` says how it
+combines them. Operators are read without regard to case, and a Validate tab gives one only to a family it creates.
 
-Each rule is a key of its family (the rule name) with one of two shapes:
+| Operator           | The family is                                          | A row is excluded when        |
+| ------------------ | ------------------------------------------------------ | ----------------------------- |
+| `"any"` (or none)  | an exclusion family (`clinical_anomalies`, `outliers`) | a ticked rule fires           |
+| `"all"`            | an inclusion family (`study_inclusion`)                | it fails a ticked criterion   |
+| `{"threshold": k}` | one exclusion rule, "at least k of these rules"        | at least k of its rules fire  |
 
-- **Expression rule:** `{"numeric": false, "expression": "<expression>"}`. The expression uses `df['column']`
-  (bare names are rejected), `& | ~` with parenthesised comparisons, and the allow-listed `pd.*` / `np.*`
-  functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`, `.str.*`, `.dt.*`,
-  `pd.to_datetime(..., dayfirst=True)`, ...).
-- **Numeric rule:** `{"numeric": true, "lower_bound": x, "upper_bound": y, "strategy": "include" | "exclude"}`.
-  The rule name must be the column name. With both bounds, _include_ matches values inside the range and
-  _exclude_ values outside it, so use _exclude_ with the plausible range for anomalies and _include_ with the
-  eligible range for inclusion. NaN never matches. Avoid leaving `strategy` empty when both bounds are set.
+Do not add keys at family level other than `operator`. `description` in a rule is shown as the help text of its
+criterion in the sidebar, and in its box on Validate.
 
-A rule has exactly one shape. `core.criteria.rule_kind` decides it, and it is the only place that does: the
-evaluation, the columns read and the description in the participant flow all use it. A rule that holds both a
-numeric range and an expression is refused rather than read one way or the other. The outlier rules (`bounds`,
-`row_ids`) and threshold families (`{"threshold": k}` as the operator) have their own shapes.
+#### Criterion kinds
 
-Extra keys in a rule are kept; `description` is shown as the help text of the criterion in the sidebar. Do not add
-keys at family level other than `operator`. Operators are read without regard to case.
+Each kind of rule is one `CriterionKind` in the catalogue `core.criteria.CRITERION_KINDS` (a `core.registry.Catalogue`).
+The five kinds of M5 are read from their keys, in this order:
 
-`core.population.configuration_problems` lists what makes a configuration ambiguous or unusable, and an uploaded
-file with problems is not loaded:
+| Kind         | Label            | Definition                                                                     | Fires when                                   |
+| ------------ | ---------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
+| `threshold`  | At least k rules | `{"threshold": k, "members": {name: definition}}`                              | at least k of its rules fire                 |
+| `row_ids`    | Listed rows      | `{"row_ids": [[first, last]], "method", "params", "columns", "description"}`   | the row is listed (outliers frozen as rows)  |
+| `bounds`     | Frozen bounds    | `{"bounds": {"column": [lower, upper]}}`                                       | a value of any column is outside its range   |
+| `numeric`    | Numeric range    | `{"numeric": true, "lower_bound": a, "upper_bound": b, "strategy": "include"}` | inside the range, or outside with _exclude_  |
+| `expression` | Expression       | `{"numeric": false, "expression": "df['age'] > 110"}`                          | the expression is true                       |
 
-- an unknown operator, or a threshold that is not a whole number;
-- a family entry that is not a rule;
-- what makes a rule of each shape fail on any table (`core.criteria.criterion_problems`): a numeric rule without
-  bounds, with a bound `float()` cannot read or an unknown strategy; bounds that are not `[lower, upper]` pairs;
-  row ranges that are not `[first, last]` pairs; a threshold rule without a number or its rules, or with a member
-  that has a problem. What evaluates today (a bound written `"18"`, a threshold of 2.5) still loads;
-- a rule of an unknown shape, or with both shapes.
+A numeric range reads the column named like the rule, or the one its `"column"` names.
 
-`criterion_mask` raises `CriterionError` and nothing else, `criterion_columns` returns `()` and
-`describe_definition` says "cannot be evaluated" for any definition: a malformed rule never stops a page. A listed
-range is clipped to the table's row ids before it is expanded.
+An expression uses `df['column']` (bare names are rejected), `& | ~` with parenthesised comparisons, and the
+allow-listed `pd.*` / `np.*` functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`,
+`.str.*`, `.dt.*`, `pd.to_datetime(..., dayfirst=True)`, ...). A missing value meets no condition of the other kinds.
+In an expression it meets `.isna()`, and may also meet a condition written with `!=` or `~`: the flow and the dossier
+say so, and how such expressions should read a missing value is an open decision.
 
-Ticked criteria define the analysis population (`core/population.py`). A family with the `any` operator is an
-exclusion family (`clinical_anomalies`, and `outliers`, which the Handle Outliers tab fills with frozen row ids):
-a row is excluded when a ticked rule fires. A family with `all` is an inclusion family (`study_inclusion`): a row
-is excluded when it fails a ticked criterion. A family with a threshold operator is one exclusion rule, "at least
-k of these rules". A ticked criterion that cannot be evaluated (unknown column, syntax error) stops the analyses:
-`core/criteria.py` raises `CriterionError`, the population is not `ok`, and the pages show the error until the
-criterion is unticked or corrected. The **Run Anomaly Detection** and **Run Inclusion Criteria Check** buttons of
-the Validate tabs (the result columns above) and the quality dashboard evaluate the rules with the same functions
-(`core.population.family_masks`), so they count what the population counts. A rule that cannot be evaluated is
-shown with its reason, and the family result is left out until it is corrected.
+`core.criteria.rule_kind` is the only place that decides a rule's kind:
 
-`assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion
-criteria). `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay
-machine-specific).
+1. a `"kind"` that names a kind registered without a recogniser (from M6: `date_order`, then M9's `concept`): that
+   kind;
+2. otherwise the five kinds above, from their keys and in their order, whatever `"kind"` says;
+3. nothing read: refused, with the kind it states when it states one. An older version refuses a newer file, and says
+   which kind it does not know.
+
+A rule holding both a numeric range and an expression is refused rather than read one way or the other.
+
+**The interface.** Pages and services never call a kind's functions. They call the free functions of `core.criteria`,
+which read the kind:
+
+- `criterion_mask(df, name, definition)`: the rows where it fires. It raises `CriterionError` and nothing else.
+- `criterion_columns(name, definition)`: the columns it reads, those of the rules it combines included; `()` when they
+  cannot be read.
+- `describe_definition(name, definition)`: what makes it fire, in the words of the participant flow, the dossier and
+  Validate's boxes ("18 <= age <= 85", "one of the 3 listed rows (flagged by |z| > 3 on sbp)"). A rule that the
+  checks refuse reads "cannot be evaluated" and why. It never raises.
+- `criterion_problems(name, definition)`: what makes it unusable on any table. `core.population.configuration_problems`
+  refuses an uploaded file holding such a rule, an unknown operator, a threshold that is not a whole number, or a
+  family entry that is not a rule. What evaluates (a bound written `"18"`, a threshold of 2.5) still loads.
+- `holds_row_list` and `shared_definition`: the copy for sharing (`core.population.configuration_for_sharing`, the
+  **Download for Sharing** button) keeps a rule only when it lists no row of the dataset, can be read and passes the
+  checks, rebuilt from its kind's keys with values of the types declared. It names what it leaves out.
+- The writers `numeric_rule`, `expression_rule`, `listed_rows_rule` and `threshold_rule`: every rule the application
+  writes comes from one of them (a gate in `tests/test_quality_gates.py`).
+
+A malformed rule never stops a page: the sidebar counts every criterion before each page. Listed rows are found on
+the table's sorted row ids, whatever the length of the ranges they list.
+
+**A stored definition is never rewritten.** A criterion's fingerprint (`core.population.Criterion.fingerprint`)
+hashes its definition: it keys the population memos, and every population block of a trace holds it, which the trace
+chain hashes. No reader adds, removes or reorders a key. So the five kinds keep their keys, and only the kinds
+registered from M6 on carry `"kind"`. A kind's id is stored with every rule of its kind: what a kind selects never
+changes under the same id. A changed selection is a new kind, and the old id stays registered, marked legacy.
+
+#### Adding a criterion kind
+
+M6's `date_order` and M9's `concept` are one registration each.
+
+1. Write its functions in a module of its own (`core/temporal_checks.py`), which must not import `core.criteria` (rule
+   R2): `mask(df, name, definition)`, `columns(name, definition)`, `describe(name, definition)` and
+   `problems(name, definition)`. Raise `ValueError` for what cannot be evaluated: `criterion_mask` names the criterion.
+2. Register it in `core/criteria.py`, after the five, without a recogniser:
+   `CRITERION_KINDS.register(CriterionKind("date_order", "Date order", mask=..., columns=..., describe=...,
+   problems=..., keys={"first": is_text, "then": is_text, "tolerance": is_scalar, "description": is_text}))`. A kind
+   that combines rules names the key it keeps them under (`members_key`): the free functions add their checks and
+   columns. Say how it treats a missing value (`missing`).
+3. Add a writer that states the kind (`{"kind": "date_order", ...}`), used by every page that writes the rule.
+4. Give it examples, the rows each selects (`ROWS`), a read-back of its words and malformed examples in
+   `tests/core_layer/test_criterion_kinds.py`, which fails until they are there. Its definitions hold none of the keys
+   of the five.
+
+#### The population
+
+Ticked criteria define the analysis population (`core/population.py`). A ticked criterion that cannot be evaluated
+(unknown column, syntax error) stops the analyses: the population is not `ok`, and the pages show the error until the
+criterion is unticked or corrected. The **Run Anomaly Detection** and **Run Inclusion Criteria Check** buttons of the
+Validate tabs and the quality dashboard evaluate the rules with the same functions (`core.population.family_masks`),
+so they count what the population counts. A rule that cannot be evaluated is shown with its reason, and the family
+result is left out until it is corrected.
+
+`assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion criteria).
+`ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay machine-specific).
 
 ### Settings, preferences and API keys
 

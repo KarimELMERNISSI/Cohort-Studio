@@ -1158,7 +1158,7 @@ The input is plain data (:class:`DossierInput`); the app gathers it (app_pages/s
 supports these reporting guidelines; it does not certify compliance, and it is not an electronically signed record._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
+`__future__.annotations`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.MISSING_VALUES_NOTE`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
 
 ### class `DossierResult` (dossier.py)
 
@@ -1199,6 +1199,17 @@ No description available.
 - **Returns**: `pd.DataFrame`
 
 No description available.
+
+### def `_frozen_criteria` (dossier.py)
+
+- **Arguments**: `flow: ParticipantFlow`
+
+- **Returns**: `list[str]`
+
+The criteria of a population kept as the dataset, with their roles, one line each under the step that kept it (so
+that two are told apart, and a criterion is never read as one more rule of a threshold): the freeze unticks them,
+so the table of the ticked criteria no longer gives their definitions. Its exit lists the step's description, then
+a line per criterion.
 
 ### def `build_dossier` (dossier.py)
 
@@ -1520,7 +1531,7 @@ Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
 Better Auth, or Disabled) based on environment configuration or runtime parameters._
 
 **Imports**:
-`logging`, `os`, `typing.Any`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `typing.Any`, `core.workspace.workspace_exists`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `IAMConfigurationError` (manager.py)
 
@@ -1569,7 +1580,10 @@ Central facade managing IAM operations and provider lifecycle.
   > Maintains complete drop-in compatibility with legacy DBManager calls.
 
 - **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
-  > Provision a new user account.
+  > Provision a new user account. A name whose workspace folder exists is refused, with the message of a name taken
+  > (core.workspace.workspace_exists): the folder may hold another account's files, such as the folder an earlier
+  > version gave an account that has not signed in since. The server's operator may reuse it (``reuse_folder``,
+  > manage_users.py create-admin).
 
 - **verify_session**(`self, token: str`) -> `AuthResult`
   > Verify an existing session token.

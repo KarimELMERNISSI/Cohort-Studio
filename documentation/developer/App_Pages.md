@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`html`, `json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.catalogue`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.without_row_lists`, `core.registry.as_code`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1005,11 +1005,12 @@ Display outlier values in a dialog
 
 ### def `ensure_family_exists` (data_monitoring.py)
 
-- **Arguments**: `config: dict[ComplexType], family_name: str`
+- **Arguments**: `config: dict[ComplexType], family_name: str, operator: ComplexType`
 
 - **Returns**: `None`
 
-Ensure the specified family exists in the configuration.
+Ensure the specified family exists in the configuration. A family created here gets ``operator``; one that
+exists keeps how it reads, never given an operator (a family without one reads "any").
 
 ### def `validate_mask_name` (data_monitoring.py)
 
@@ -1034,22 +1035,6 @@ Collect numeric mask inputs from the user.
 - **Returns**: `None`
 
 Collect expression mask inputs from the user.
-
-### def `display_mask_family` (data_monitoring.py)
-
-- **Arguments**: `config`
-
-- **Returns**: `None`
-
-Create a color-coded display of mask families configuration.
-
-### def `display_mask_family_alt` (data_monitoring.py)
-
-- **Arguments**: `config`
-
-- **Returns**: `None`
-
-Display mask families configuration in a single top-level expander without nesting.
 
 ### def `apply_family_mask` (data_monitoring.py)
 
@@ -1109,6 +1094,14 @@ What to do with the detected outliers: exclude them from the population, or clip
 
 Display the results of the enrichment process.
 
+### def `left_out_text` (data_monitoring.py)
+
+- **Arguments**: `shared: SharedConfiguration`
+
+- **Returns**: `str`
+
+What the file for sharing leaves out of this session's configuration, and what it keeps as written.
+
 ### def `color_columns` (data_monitoring.py)
 
 - **Arguments**: `s, columns_to_highlight`
@@ -1125,6 +1118,17 @@ Applies a background color to specific columns.
 
 Deeply merges two dictionaries. Adds new keys and values from `new` to `original`
 without modifying existing keys in `original`.
+
+### def `_merge_uploaded` (data_monitoring.py)
+
+- **Arguments**: `config: dict[ComplexType], new_config: dict[ComplexType]`
+
+- **Returns**: `list[str]`
+
+An uploaded configuration added to the session's; returns the notices to show. The criteria and the derived
+variables are added whole, each one: a rule or a definition the session holds keeps the session's, and is named
+when the file's differs (core.population.merge_families, core.derived.merge_definitions). The other keys are added
+when the session lacks them.
 
 ### def `render_ai_criteria_assistant` (data_monitoring.py)
 
@@ -1214,7 +1218,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -1250,6 +1254,15 @@ The scorecard at the top of the dashboard is computed before the detection setti
 used the settings of the run before: it followed a change one click late, and fell back to the defaults for a
 run after each change of the data. Streamlit updates a widget's value before the rerun: the settings are read
 from the widgets here.
+
+### def `anomaly_columns` (data_quality_dashboard.py)
+
+- **Arguments**: `rules`
+
+- **Returns**: `dict[ComplexType]`
+
+The columns each anomaly rule reads (core.criteria.criterion_columns), whose cells the anomaly report highlights
+where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
 
 ### def `render_dashboard` (data_quality_dashboard.py)
 
@@ -2532,7 +2545,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.attrition.describe_definition`, `core.lineage.verify_trace`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 

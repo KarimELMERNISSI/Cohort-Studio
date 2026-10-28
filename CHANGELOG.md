@@ -713,6 +713,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   The page names what was left out, and the rules shared without keys this version does not read; everything else
   is kept as written (the names, the descriptions, the expressions and the derived formulas).
 
+### Internal structure: one catalogue of criterion kinds (M5b)
+
+- **Each kind of criterion is one entry of a catalogue** (`core.criteria.CRITERION_KINDS`): how a rule of that kind
+  is recognised, evaluated, described, checked when loaded, shared, and how it treats a missing value. The five kinds
+  (a threshold of rules, listed rows, frozen bounds, a numeric range, an expression) were branches in four functions;
+  the rows each selects, its fingerprint and its words are as they were.
+- **A definition may state its kind** (`{"kind": "date_order", ...}`): M6's date checks and M9's concepts are one
+  registration each. The five kinds are still read from their keys, whatever a stated kind says. An older version
+  refuses a rule of a kind it does not know, and names that kind.
+- **Every rule the application writes comes from one writer per kind**, and a quality gate keeps it so.
+- The developer guide's chapter on the study configuration gives the kinds, how a definition is read, why a stored
+  definition is never rewritten, and how to add a kind.
+
 ### Formulas: a text inside a formula is no longer rewritten (results corrected)
 
 - **A column's name inside a text literal broke the formula.** The evaluator renamed the columns in the formula's
