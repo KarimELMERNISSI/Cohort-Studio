@@ -1,5 +1,6 @@
 """Source-level quality gates (audit E14): fixed rules and ratchets that must never regress."""
 
+import ast
 import re
 import tomllib
 from pathlib import Path
@@ -42,6 +43,27 @@ def test_no_artificial_sleeps_on_pages() -> None:
 def test_no_hard_coded_data_directories() -> None:
     hits = _count(r"""(["']data/|os\.path\.join\(["']data["'])""", "app_pages", "utils", "manage", "ui", exclude=("utils/data_paths.py",))
     assert not hits, hits
+
+
+def test_rules_are_written_through_their_kinds() -> None:
+    """
+    Every rule the application writes comes from a writer of core/criteria.py, whose definitions read as their kind
+    (M5b step 6): the keys of a range and of listed rows appear nowhere else, and no other dict holds both "numeric"
+    and "expression" (a rule holding both was refused, after the page had said it was added).
+    """
+    keys = _count(r"""["'](lower_bound|upper_bound|row_ids)["']""", *SOURCE_DIRS, exclude=("core/criteria.py",))
+    assert not keys, keys
+    both = []
+    for file in _files(*SOURCE_DIRS):
+        rel = file.relative_to(ROOT).as_posix()
+        if rel == "core/criteria.py":
+            continue
+        for node in ast.walk(ast.parse(file.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Dict):
+                written = {k.value for k in node.keys if isinstance(k, ast.Constant)}
+                if {"numeric", "expression"} <= written:
+                    both.append(f"{rel}:{node.lineno}")
+    assert not both, both
 
 
 def test_raw_html_is_ratcheted_down() -> None:

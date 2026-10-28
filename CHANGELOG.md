@@ -689,6 +689,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the dossier, with its description; a rule that cannot be read says why. Names, descriptions and the flow's details
   show as written, never as formatting. The dashboard's anomaly report highlights the cells of the columns each rule
   reads: only a rule named like a column had its cells highlighted, so an expression's never were.
+- **The AI assistant's "Add" replaces a rule of the same name only when asked.** It replaced it without a word, so a
+  ticked criterion could change under the user. Validate's form asks before it overwrites a rule, and the assistant
+  now does too ("Replace the rule `age`"); both show the names as written.
 - **A configuration for someone else is a file of its own, and holds only the criteria and the derived variables**
   (privacy). The download for sharing was a switch, off by default, that left out only the rules listing row ids at
   the top of a family. What went into the file:

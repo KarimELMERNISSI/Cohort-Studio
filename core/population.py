@@ -33,6 +33,7 @@ from core.criteria import (
     criterion_problems,
     holds_row_list,
     shared_definition,
+    threshold_rule,
 )
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import KINDS as DERIVED_KINDS
@@ -125,7 +126,7 @@ def catalogue(config: Mapping[str, Any] | None) -> tuple[Criterion, ...]:
                     family,
                     EXCLUSION,
                     name,
-                    {"threshold": k, "members": rules},
+                    threshold_rule(k, rules),
                     f"Rows breaking at least {k} of the {len(rules)} rules of the family.",
                 )
             )

@@ -34,11 +34,15 @@ from core.criteria import (
     criterion_mask,
     criterion_problems,
     describe_definition,
+    expression_rule,
     holds_row_list,
     is_scalar,
     is_text,
+    listed_rows_rule,
+    numeric_rule,
     rule_kind,
     shared_definition,
+    threshold_rule,
 )
 from core.fingerprint import ensure_row_ids
 from core.population import (
@@ -471,6 +475,43 @@ def test_a_row_list_never_reaches_a_shared_rule() -> None:
         rule_kind("both", unreadable)
     assert shared_definition("both", unreadable) is None
     assert not holds_row_list({"members": {"a": OLD}}) and not holds_row_list(["row_ids"])
+
+
+def test_the_writers_write_what_the_pages_wrote_and_it_reads_as_its_kind() -> None:
+    """Every rule the application writes comes from these (tests/test_quality_gates.py): each reads as its kind, holds
+    only its kind's keys, and passes the checks of a loaded file."""
+    listed = listed_rows_rule(
+        [[2, 3]],
+        method="iqr",
+        params={"multiplier": 1.5},
+        columns=("ldl",),
+        description="Rows flagged by iqr on ldl, frozen when added.",
+    )
+    written = {
+        "numeric": numeric_rule(18, 85, "include"),
+        "expression": expression_rule("df['age'] > 80"),
+        "row_ids": listed,
+        "threshold": threshold_rule(1, {"old": expression_rule("df['age'] > 80")}),
+    }
+    # the definitions the pages wrote before
+    assert written["numeric"] == {
+        "numeric": True,
+        "lower_bound": 18,
+        "upper_bound": 85,
+        "strategy": "include",
+    }
+    assert written["expression"] == {"numeric": False, "expression": "df['age'] > 80"}
+    assert listed == {
+        "row_ids": [[2, 3]],
+        "description": "Rows flagged by iqr on ldl, frozen when added.",
+        "method": "iqr",
+        "params": {"multiplier": 1.5},
+        "columns": ["ldl"],
+    }
+    for kind, definition in written.items():
+        declared = rule_kind("rule", definition)
+        assert declared.id == kind and criterion_problems("rule", definition) == []
+        assert set(definition) <= {*declared.keys, declared.members_key}
 
 
 def test_each_rule_is_read_once_however_the_rules_nest(monkeypatch: pytest.MonkeyPatch) -> None:

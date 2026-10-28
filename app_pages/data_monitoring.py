@@ -11,6 +11,7 @@ import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
+from core.criteria import expression_rule, listed_rows_rule, numeric_rule
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
 from core.fingerprint import ids_to_ranges
@@ -807,7 +808,7 @@ def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str,
         return False
     if mask_name in config["mask_families"][family_name]:
         overwrite = st_container.radio(
-            f"Mask '{mask_name}' already exists in family '{family_name}'. Overwrite?",
+            f"Mask {as_code(mask_name)} already exists in family {as_code(family_name)}. Overwrite?",
             ["No", "Yes"],
             key=f"mask_overwrite_{family_name}", index=0,  # a confirmation: not kept when the tab is left
             help="Select 'Yes' to overwrite the existing mask.",
@@ -851,12 +852,7 @@ def handle_numeric_mask_input(st_container, base_key:str):
         )
     ) if is_lower_bound and is_upper_bound else None
 
-    return {
-        "numeric": True,
-        "lower_bound": lower_bound,
-        "upper_bound": upper_bound,
-        "strategy": strategy,
-    }
+    return numeric_rule(lower_bound, upper_bound, strategy)
 
 
 def handle_expression_mask_input(st_container, base_key: str):
@@ -891,7 +887,7 @@ def handle_expression_mask_input(st_container, base_key: str):
         
     if use_simplified_mask_expression:
         expression = transform_expression(expression)  # Example placeholder function
-    return {"numeric": False, "expression": expression}
+    return expression_rule(expression)
 
 
 def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, st_container):
@@ -955,14 +951,14 @@ def _exclude_outliers(detection: dict) -> None:
     family = config.setdefault("mask_families", {}).setdefault("outliers", {"operator": "any"})
     columns = detection["columns"]
     name = f"{detection['method']} outliers ({', '.join(columns[:3])}{', ...' if len(columns) > 3 else ''})"
-    family[name] = {
-        "row_ids": ids_to_ranges(detection["flagged"]),
-        "description": f"Rows flagged by {detection['method']} {detection['params']} on {', '.join(columns)}, "
-                       "frozen when added.",
-        "method": detection["method"],
-        "params": detection["params"],
-        "columns": list(columns),
-    }
+    family[name] = listed_rows_rule(
+        ids_to_ranges(detection["flagged"]),
+        method=detection["method"],
+        params=detection["params"],
+        columns=columns,
+        description=f"Rows flagged by {detection['method']} {detection['params']} on {', '.join(columns)}, "
+                    "frozen when added.",
+    )
     get_state().tick(criterion_id("outliers", name), True)
 
 
@@ -1247,19 +1243,23 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                                             st.error("No proxy found.")
 
                         with c2:
+                            mask_name = item.get('name', f"criteria_{i}")
+                            # a rule of this name is replaced only when asked, as the form asks (it was overwritten)
+                            exists = mask_name in config["mask_families"].get(family_name, {})
+                            replace = exists and st.checkbox(
+                                f"Replace the rule {as_code(mask_name)}", key=f"ai_replace_{family_name}_{i}",
+                                help="A rule of this name exists in the family: tick to replace it with this one.",
+                            )
                             # Disable Add if missing variables exist
                             if missing_vars:
                                 st.button("Add", key=f"ai_add_{family_name}_{i}", disabled=True, help="Fix missing variables first")
-                            elif st.button("Add", key=f"ai_add_{family_name}_{i}"):
-                                mask_name = item.get('name', f"criteria_{i}")
+                            elif st.button("Add", key=f"ai_add_{family_name}_{i}", disabled=exists and not replace,
+                                           help="Tick Replace first: a rule of this name exists." if exists else None):
                                 expression = item.get('expression', '')
-                                
+
                                 # Add to config
                                 ensure_family_exists(config, family_name, "any" if mode == "anomaly" else "all")
-                                config["mask_families"][family_name][mask_name] = {
-                                    "numeric": False,
-                                    "expression": expression
-                                }
+                                config["mask_families"][family_name][mask_name] = expression_rule(expression)
                                 st.success("Added!")
                                 st.rerun()
                         st.divider()

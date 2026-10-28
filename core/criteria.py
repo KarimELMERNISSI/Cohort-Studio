@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal
@@ -819,6 +819,44 @@ def _shared(name: str, definition: Mapping[str, Any]) -> dict[str, Any] | None:
     return shared
 
 
+# ----------------------------------------------------------------------------------------------------- the writers
+# Every rule the application writes comes from one of these (tests/test_quality_gates.py), so every definition it
+# writes reads as a registered kind and holds only that kind's keys (tests/core_layer/test_criterion_kinds.py).
+
+
+def numeric_rule(lower: Any, upper: Any, strategy: str | None) -> dict[str, Any]:
+    """A range on the column named like the rule (Validate's form): *include* fires inside it, *exclude* outside."""
+    return {"numeric": True, "lower_bound": lower, "upper_bound": upper, "strategy": strategy}
+
+
+def expression_rule(expression: str) -> dict[str, Any]:
+    """An expression (Validate's form, the AI assistant's suggestions)."""
+    return {"numeric": False, "expression": expression}
+
+
+def listed_rows_rule(
+    row_ids: list[list[int]],
+    *,
+    method: str,
+    params: Mapping[str, Any],
+    columns: Sequence[str],
+    description: str,
+) -> dict[str, Any]:
+    """The rows an outlier method flagged, frozen as row ids (Validate's outliers), with how they were found."""
+    return {
+        "row_ids": row_ids,
+        "description": description,
+        "method": method,
+        "params": dict(params),
+        "columns": list(columns),
+    }
+
+
+def threshold_rule(k: Any, members: Mapping[str, Any]) -> dict[str, Any]:
+    """At least k of the rules (a family counted with a threshold, core.population.catalogue)."""
+    return {"threshold": k, "members": members}
+
+
 __all__ = [
     "ASKED",
     "CRITERION_KINDS",
@@ -833,10 +871,14 @@ __all__ = [
     "criterion_mask",
     "criterion_problems",
     "describe_definition",
+    "expression_rule",
     "holds_row_list",
     "is_flag",
     "is_scalar",
     "is_text",
+    "listed_rows_rule",
+    "numeric_rule",
     "rule_kind",
     "shared_definition",
+    "threshold_rule",
 ]
