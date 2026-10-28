@@ -382,7 +382,7 @@ class DataSession:
 
     # ------------------------------------------------------------------ Enrich draft
 
-    def working_frame(self) -> pd.DataFrame | None:
+    def draft_frame(self) -> pd.DataFrame | None:
         """The table Enrich works on: the draft when there is one, otherwise the base."""
         return self.draft.frame if self.draft is not None else self.base
 
@@ -456,8 +456,8 @@ class DataSession:
         return StagingStatus(OK, n)
 
     @property
-    def working_fp(self) -> str:
-        """The fingerprint of :meth:`working_frame`: the draft's last change, or the dataset's."""
+    def draft_fp(self) -> str:
+        """The fingerprint of :meth:`draft_frame`: the draft's last change, or the dataset's."""
         draft = self.draft
         return draft.steps[-1].change.fp_out if draft is not None and draft.steps else self.data_fp
 

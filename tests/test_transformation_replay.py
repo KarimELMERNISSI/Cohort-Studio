@@ -104,7 +104,7 @@ def _record(tmp_path: Path, steps: list[dict]):
         params={"source_path": str(src), "parse_options": options.to_dict()},
     )
     for params in steps:
-        working = session.working_frame()
+        working = session.draft_frame()
         new_columns = apply_variable_transformation(working, params)
         assert new_columns is not None
         session.stage(

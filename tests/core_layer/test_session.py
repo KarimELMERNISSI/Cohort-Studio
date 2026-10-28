@@ -99,7 +99,7 @@ def test_a_broken_ticked_criterion_blocks_the_analysis(session: DataSession) -> 
 def test_the_draft_reaches_the_base_only_when_applied(session: DataSession) -> None:
     start = session.data_fp
     session.stage(
-        session.working_frame().assign(bmi_sq=1.0), "variable_computation", {"v": 1}, "BMI squared"
+        session.draft_frame().assign(bmi_sq=1.0), "variable_computation", {"v": 1}, "BMI squared"
     )
     assert session.data_fp == start and "bmi_sq" not in session.base.columns
     assert session.staging_status(CONFIG).state == OK
@@ -113,7 +113,7 @@ def test_the_draft_reaches_the_base_only_when_applied(session: DataSession) -> N
 
 
 def test_a_draft_built_on_older_data_cannot_overwrite_it(session: DataSession) -> None:
-    session.stage(session.working_frame().assign(x=1), "variable_computation", {}, "x")
+    session.stage(session.draft_frame().assign(x=1), "variable_computation", {}, "x")
     session.commit(
         session.base.rename(columns={"age": "age_years"}), "rename_columns", {}, "Renamed"
     )
@@ -129,7 +129,7 @@ def test_a_draft_built_on_older_data_cannot_overwrite_it(session: DataSession) -
 def test_an_imputation_fitted_on_another_population_cannot_be_applied(session: DataSession) -> None:
     session.set_ticked([ADULT])
     population = session.population(CONFIG)
-    imputed = session.working_frame().copy()
+    imputed = session.draft_frame().copy()
     imputed.loc[population.included, "bmi"] = imputed.loc[population.included, "bmi"].fillna(21.0)
     session.stage(imputed, "imputation", {"numerical": "Median"}, "Median", population=population)
     assert session.staging_status(CONFIG).state == OK
@@ -147,9 +147,9 @@ def test_the_population_is_traced_once_when_used(session: DataSession) -> None:
 
 
 def test_cells_filled_by_a_single_imputation_are_remembered(session: DataSession) -> None:
-    session.stage(session.working_frame().assign(bmi_sq=1.0), "variable_computation", {}, "x")
+    session.stage(session.draft_frame().assign(bmi_sq=1.0), "variable_computation", {}, "x")
     assert session.draft is not None and session.draft.single_imputed == {}  # not an imputation
-    imputed = session.working_frame().assign(bmi=lambda f: f["bmi"].fillna(21.0))
+    imputed = session.draft_frame().assign(bmi=lambda f: f["bmi"].fillna(21.0))
     session.stage(imputed, "imputation", {"numerical": "Median"}, "Median")
     assert session.single_imputed == {}  # still a draft
     session.commit_staging(CONFIG)
@@ -169,13 +169,13 @@ def test_cells_filled_by_a_single_imputation_are_remembered(session: DataSession
 
 
 def test_values_imputed_by_an_exact_formula_are_kept_apart(session: DataSession) -> None:
-    frame = session.working_frame()
+    frame = session.draft_frame()
     exact = frame.assign(
         bmi=frame["bmi"].where(frame.index != 1, 21.0)
     )  # row 1, by an exact formula
     params = {"target_variable": "bmi", "formula": "21"}
     session.stage(exact, "targeted_imputation", {**params, "exact": True}, "Exact formula")
-    approximate = session.working_frame().assign(bmi=lambda f: f["bmi"].fillna(23.0))  # row 3
+    approximate = session.draft_frame().assign(bmi=lambda f: f["bmi"].fillna(23.0))  # row 3
     session.stage(approximate, "targeted_imputation", {**params, "exact": False}, "Approximation")
     assert session.draft is not None and session.draft.exact_imputed["bmi"].tolist() == [1]
     session.commit_staging(CONFIG)

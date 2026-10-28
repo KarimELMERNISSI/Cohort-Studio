@@ -23,7 +23,7 @@ def _script() -> None:
     action = ss.get("action", "impute")
     if action == "exact":  # a targeted imputation by a formula the user marked exact
         state.load_tutorial_cohort()
-        filled, n = fill_with_formula(state.working_frame(), "ldl_mmol_l", "age * 0 + 3")
+        filled, n = fill_with_formula(state.draft_frame(), "ldl_mmol_l", "age * 0 + 3")
         params = {"target_variable": "ldl_mmol_l", "formula": "age * 0 + 3", "exact": True}
         state.stage(filled, "targeted_imputation", params, "Exact formula")
         ss["commit"] = state.commit_staging()
@@ -31,7 +31,7 @@ def _script() -> None:
     elif action == "impute":
         state.load_tutorial_cohort()
         outcome = impute_rows(
-            state.working_frame(), None, numerical="Median", categorical="Most_Frequent"
+            state.draft_frame(), None, numerical="Median", categorical="Most_Frequent"
         )
         state.stage(outcome.frame, "imputation", outcome.params, "Median imputation")
         ss["commit"] = state.commit_staging()

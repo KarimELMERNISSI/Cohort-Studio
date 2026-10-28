@@ -220,7 +220,7 @@ class TestReplayVerification:
 
         tm, session = self._recorded(tmp_path)
         session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
-        filled, n = fill_with_formula(session.working_frame(), "age", "weight / 2")
+        filled, n = fill_with_formula(session.draft_frame(), "age", "weight / 2")
         session.stage(filled, "targeted_imputation", {"target_variable": "age", "formula": "weight / 2", "filled_count": n}, "Imputed age")
         session.commit_staging()
 
@@ -245,7 +245,7 @@ class TestReplayVerification:
         from manage.reproduction_manager import run_trace
 
         tm, session = self._recorded(tmp_path)
-        session.stage(session.working_frame().fillna(0), "multiple_imputation", {"m": 5}, "MI adopted", replayable=False)
+        session.stage(session.draft_frame().fillna(0), "multiple_imputation", {"m": 5}, "MI adopted", replayable=False)
         session.commit_staging()
         result = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
         assert result.not_replayable == [1] and not result.reproducible

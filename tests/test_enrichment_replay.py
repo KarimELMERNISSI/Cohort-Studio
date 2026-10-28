@@ -80,13 +80,13 @@ def _record(tmp_path: Path, main: pd.DataFrame, enrichment: pd.DataFrame, path: 
     session = DataSession(trace=tm)
     options = ParseOptions()
     session.install(read_path(str(src), options).df, params={"source_path": str(src), "parse_options": options.to_dict()})
-    working = session.working_frame()
+    working = session.draft_frame()
     if "visit_date" in working.columns:  # the main dataset holds dates (a recorded conversion)
         converted = working.assign(visit_date=pd.to_datetime(working["visit_date"]))
         params = {"columns": ["visit_date"], "new_type": "datetime"}
         session.stage(converted, "data_type_conversion", params, "Dates")
         session.commit_staging()
-        working = session.working_frame()
+        working = session.draft_frame()
     enrichment = eed.align_date_keys(working, enrichment)
     params = {
         "enrichment_file_path": str(path),

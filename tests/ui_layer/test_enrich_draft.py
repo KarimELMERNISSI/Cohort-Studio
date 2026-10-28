@@ -29,7 +29,7 @@ def _banner_script(change: str) -> None:
         state.set_dataset(
             pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
         )
-        frame = state.working_frame()
+        frame = state.draft_frame()
         state.stage(
             frame.assign(b=frame["a"] * 2),
             "variable_computation",
@@ -43,7 +43,7 @@ def _banner_script(change: str) -> None:
         elif change == "added":  # the dataset gains a column after the draft was started
             state.commit_change(state.base.assign(c=0), "external_write", {}, "Added c")
     render_draft_banner()
-    draft = state.working_frame()
+    draft = state.draft_frame()
     st.session_state["probe"] = {
         "columns": list(state.base.columns),
         "draft_columns": list(draft.columns),
@@ -135,9 +135,7 @@ def _population_script(kind: str = "imputation") -> None:
             "freeze",
         ):  # the mean of the rows used, 25, for each missing bmi
             formula = "bmi.mean() + 0 * age"
-            filled, n = fill_with_formula(
-                state.working_frame(), "bmi", formula, population.included
-            )
+            filled, n = fill_with_formula(state.draft_frame(), "bmi", formula, population.included)
             scoped = population.n_included if population.criteria else None
             state.stage(
                 filled,
@@ -147,7 +145,7 @@ def _population_script(kind: str = "imputation") -> None:
                 population=population,
             )
         else:
-            outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
+            outcome = impute_rows(state.draft_frame(), population.included, numerical="Mean")
             state.stage(
                 outcome.frame,
                 "imputation",
@@ -165,7 +163,7 @@ def _population_script(kind: str = "imputation") -> None:
         else:  # the population changes after the imputation was fitted
             state.set_ticked([])
         if kind == "two":  # a second imputation, on the population of the time (every row)
-            outcome = impute_rows(state.working_frame(), None, numerical="Mean")
+            outcome = impute_rows(state.draft_frame(), None, numerical="Mean")
             state.stage(
                 outcome.frame, "imputation", outcome.params, "Mean", population=state.population
             )
@@ -178,7 +176,7 @@ def _population_script(kind: str = "imputation") -> None:
     step = draft.steps[-1] if draft is not None and draft.steps else None
     st.session_state["probe"] = {
         "status": state.staging_status().state,
-        "draft_bmi": state.working_frame()["bmi"].tolist(),
+        "draft_bmi": state.draft_frame()["bmi"].tolist(),
         "params": dict(step.params) if step else None,
         "description": step.description if step else None,
     }
@@ -282,15 +280,13 @@ def _applied_script(change: bool, scoped: bool = True, kind: str = "statistical"
             state.set_ticked([adult])
         population = state.population
         if kind == "statistical":
-            outcome = impute_rows(state.working_frame(), population.included, numerical="Mean")
+            outcome = impute_rows(state.draft_frame(), population.included, numerical="Mean")
             state.stage(
                 outcome.frame, "imputation", outcome.params, "Imputation", population=population
             )
         else:  # a formula of each row's own values, or one of other rows (a mean)
             formula = "age / 2" if kind == "row-wise" else "bmi.mean() + 0 * age"
-            filled, n = fill_with_formula(
-                state.working_frame(), "bmi", formula, population.included
-            )
+            filled, n = fill_with_formula(state.draft_frame(), "bmi", formula, population.included)
             params = {"target_variable": "bmi", "formula": formula, "row_wise": row_wise(formula)}
             state.stage(filled, "targeted_imputation", params, "Imputation", population=population)
         state.commit_staging()
@@ -344,7 +340,7 @@ def _left_out_script() -> None:
         )
         population = state.population  # no criterion ticked: the child's bmi is the one missing
         formula = "18 + 0 * age"
-        filled, n = fill_with_formula(state.working_frame(), "bmi", formula, population.included)
+        filled, n = fill_with_formula(state.draft_frame(), "bmi", formula, population.included)
         state.stage(
             filled,
             "targeted_imputation",
@@ -384,7 +380,7 @@ def _enrich_page_script() -> None:
         state.set_dataset(
             pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
         )
-        frame = state.working_frame()
+        frame = state.draft_frame()
         state.stage(
             frame.assign(b=frame["a"] * 2),
             "variable_computation",
@@ -432,7 +428,7 @@ def _snapshots_script(action: str) -> None:
     state.set_dataset(
         pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
     )
-    frame = state.working_frame()
+    frame = state.draft_frame()
     staged = frame.assign(b=frame["a"] * 2)
     params = {"variable_name": "b", "formula": "a * 2"}
     state.stage(
@@ -443,13 +439,13 @@ def _snapshots_script(action: str) -> None:
         output_dataset_path=snapshot("staged", staged),
     )
     if action == "no_change":  # the same table again: the change is not added to the draft
-        again = state.working_frame()
+        again = state.draft_frame()
         state.stage(
             again, "variable_computation", params, "b", output_dataset_path=snapshot("same", again)
         )
     elif action == "same_file":  # a change that changes nothing names a file the draft still uses
         state.stage(
-            state.working_frame(),
+            state.draft_frame(),
             "variable_computation",
             params,
             "b",
@@ -535,7 +531,7 @@ def _signed_in_script() -> None:
         state.set_dataset(
             pd.DataFrame({"a": [1, 2, 3]}), DatasetRef(name="d", origin="upload", file_hash="h")
         )
-        frame = state.working_frame()
+        frame = state.draft_frame()
         staged = frame.assign(b=frame["a"] * 2)
         scope = get_current_scope()
         assert scope is not None
@@ -602,7 +598,7 @@ def _fill_rule_script(derived: bool = False) -> None:
             )
             assert state.fill_exactly() == 2
         else:
-            frame = state.working_frame()
+            frame = state.draft_frame()
             for target, formula in (
                 ("weight_kg", "bmi * (height_cm / 100) ** 2"),
                 ("bmi_x2", "bmi * 2"),
@@ -630,7 +626,7 @@ def _fill_rule_script(derived: bool = False) -> None:
     draft = state.session.draft
     st.session_state["probe"] = {
         "status": state.staging_status().state,
-        "bmi_x2": state.working_frame()["bmi_x2"].tolist(),
+        "bmi_x2": state.draft_frame()["bmi_x2"].tolist(),
         "steps": len(draft.steps) if draft is not None else 0,
     }
 
@@ -678,7 +674,7 @@ def _declined_script() -> None:
             DatasetRef(name="d", origin="upload", file_hash="h"),
         )
         state.set_ticked([criterion_id("study_inclusion", "Adult")])
-        outcome = impute_rows(state.working_frame(), state.population.included, numerical="Mean")
+        outcome = impute_rows(state.draft_frame(), state.population.included, numerical="Mean")
         # derived variables declared, their computation declined: a plain imputation
         params = {**outcome.params, "derived": {"recompute": False, "definitions": []}}
         state.stage(

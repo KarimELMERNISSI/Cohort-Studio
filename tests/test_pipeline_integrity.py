@@ -50,7 +50,7 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     assert [s.n_out for s in population.stages] == [1190, 928]
 
     imputed = impute_rows(
-        session.working_frame(),
+        session.draft_frame(),
         population.included,
         numerical="Median",
         categorical="Most_Frequent",

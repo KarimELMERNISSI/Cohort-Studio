@@ -377,7 +377,7 @@ def test_the_steps_replay_to_the_same_cells(tmp_path) -> None:
         params={"source_path": str(source), "parse_options": options.to_dict()},
         description="Loaded",
     )
-    frame = session.working_frame()
+    frame = session.draft_frame()
     plan = plan_exact_fills([_bmi()], frame)
     steps = fill_steps(plan, frame, None, "run1")
     for filled, params, description in steps:
@@ -480,7 +480,7 @@ def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -
     )
 
     def fill(run: str) -> None:
-        frame = session.working_frame()
+        frame = session.draft_frame()
         plan = plan_exact_fills(
             [_bmi()], frame, single=dict(session.draft.single_imputed) if session.draft else None
         )
@@ -488,7 +488,7 @@ def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -
             session.stage(filled, "targeted_imputation", params, description)
 
     fill("exact")  # 10 BMIs and 8 heights from the recorded values
-    outcome = impute_rows(session.working_frame(), None, numerical="Median", set_aside=["bmi"])
+    outcome = impute_rows(session.draft_frame(), None, numerical="Median", set_aside=["bmi"])
     session.stage(
         outcome.frame,
         "imputation",

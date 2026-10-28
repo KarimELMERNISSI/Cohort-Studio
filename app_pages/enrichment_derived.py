@@ -389,7 +389,7 @@ def _find(data: pd.DataFrame, engine) -> None:
         columns, column_kinds=kinds, units=units, ranges=ranges
     )
     st.session_state[_PROPOSALS] = {
-        "fp": get_state().session.working_fp,
+        "fp": get_state().session.draft_fp,
         "found": list(found),
         "error": error,
     }
@@ -454,7 +454,7 @@ def _proposals(definitions: tuple[DerivedVariable, ...]) -> None:
     choose: nothing is added by itself."""
     state = get_state()
     stored = st.session_state.get(_PROPOSALS)
-    if not stored or stored.get("fp") != state.session.working_fp:
+    if not stored or stored.get("fp") != state.session.draft_fp:
         return
     if stored.get("error"):
         st.error(f"The AI engine could not answer: {plain(stored['error'], limit=300)}")
@@ -679,7 +679,7 @@ def render_derived_variables() -> None:
     if not state.has_data:
         st.info("Load a dataset first.")
         return
-    data = state.working_frame()
+    data = state.draft_frame()
     assert data is not None
     st.markdown("### Derived variables")
     st.caption(

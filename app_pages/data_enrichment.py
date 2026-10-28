@@ -168,7 +168,7 @@ def handle_main_data_upload() -> pd.DataFrame | None:
     Datasets are loaded from Data > Import or the sidebar (AppState.set_dataset), so every load starts a
     trace; this page no longer reads files of its own.
     """
-    frame = get_state().working_frame()
+    frame = get_state().draft_frame()
     if frame is None:
         no_dataset()
         return None
@@ -1914,7 +1914,7 @@ def _tried(
     population, not at every rerun. The version is the fingerprint of the Enrich data, which the page receives as a
     new frame at every run."""
     rows = None if population is None else population.rows_fingerprint
-    key = (formula, target, get_state().session.working_fp, rows)
+    key = (formula, target, get_state().session.draft_fp, rows)
     if sugg.get("_tried_on") != key:
         scope = data if population is None else data.loc[data.index.intersection(population.included)]
         sugg["_trial"], sugg["_tried_on"] = try_formula(formula, scope, target=target), key

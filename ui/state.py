@@ -376,9 +376,9 @@ class AppState:
 
     # ------------------------------------------------------------------ the Enrich draft
 
-    def working_frame(self) -> pd.DataFrame | None:
+    def draft_frame(self) -> pd.DataFrame | None:
         """What Enrich works on: the draft when there is one, otherwise the dataset (every row), as a copy."""
-        frame = self.session.working_frame()
+        frame = self.session.draft_frame()
         return None if frame is None else frame.copy(deep=False)
 
     def stage(
@@ -627,12 +627,12 @@ class AppState:
         from enrich.derived import check_derived
 
         session = self.session
-        frame = session.working_frame()
+        frame = session.draft_frame()
         assert frame is not None
         read = (definition.target, definition.formula, definition.tolerance, definition.kind)
         check = session.memo(
             slot or f"derived_check::{definition.target}",
-            (session.working_fp, read),
+            (session.draft_fp, read),
             lambda: check_derived(definition, frame, imputed=self.imputed_cells()),
         )
         return replace(check, definition=definition)  # its acceptance as it is now
@@ -660,7 +660,7 @@ class AppState:
         from enrich.derived import plan_exact_fills
 
         session = self.session
-        frame = session.working_frame()
+        frame = session.draft_frame()
         assert frame is not None
         scope = self.population_scope(frame)
         definitions = self.derived_variables
@@ -669,7 +669,7 @@ class AppState:
         source = session.draft if session.draft is not None else session
         return session.memo(
             "derived_fill_plan",
-            (session.working_fp, population, scope.blocked, read),
+            (session.draft_fp, population, scope.blocked, read),
             lambda: plan_exact_fills(
                 definitions,
                 frame,
@@ -693,7 +693,7 @@ class AppState:
         from enrich.derived import fill_steps
 
         session = self.session
-        frame = session.working_frame()
+        frame = session.draft_frame()
         assert frame is not None
         scope = self.population_scope(frame)
         plan = self.exact_fill_plan()
@@ -703,7 +703,7 @@ class AppState:
         run = hashlib.sha256(
             canonical_json(
                 [
-                    session.working_fp,
+                    session.draft_fp,
                     scope.population.fingerprint if scope.scoped and scope.population else "",
                     [(f.target, f.definition.semantic_hash) for f in plan.fills],
                 ]
@@ -757,7 +757,7 @@ class AppState:
         from enrich.derived import contradicted, recomputed
         from enrich.imputation_service import describe_imputation, impute_rows
 
-        frame = self.session.working_frame()
+        frame = self.session.draft_frame()
         assert frame is not None
         scope = self.population_scope(frame)
         if scope.blocked:
@@ -774,7 +774,7 @@ class AppState:
             missing = self.exact_fill_plan().left if recompute and pairs else {}
             kept_out = [(d, c) for d, c in pairs if missing.get(d.target)]
             aside = [d.target for d, _ in kept_out]
-            working = self.session.working_frame()
+            working = self.session.draft_frame()
             assert working is not None
             outcome = impute_rows(
                 working,
@@ -814,7 +814,7 @@ class AppState:
             derived = self.fill_exactly() if kept_out else 0
         # what the formulas could not give, and recorded values their imputed variables no longer match
         left = self.exact_fill_plan().left if kept_out else {}
-        final = self.session.working_frame()
+        final = self.session.draft_frame()
         source = self.session.draft if self.session.draft is not None else self.session
         cells = dict(source.single_imputed)
         mismatched = (
@@ -1119,7 +1119,7 @@ class AppState:
         except PopulationError:
             analysis = session.base  # the population banner stops the analysis pages
         data_view = analysis.copy(deep=False)
-        enrich_view = session.working_frame().copy(deep=False)
+        enrich_view = session.draft_frame().copy(deep=False)
         ss["data"] = data_view
         ss["working_df"] = data_view
         ss["enriched_df"] = enrich_view

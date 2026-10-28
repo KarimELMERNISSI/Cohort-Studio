@@ -88,7 +88,7 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
 
     formula = "sbp_baseline + np.where(nyha_class == 'III', 5.0, -2.0)"
     filled_frame, filled = fill_with_formula(
-        session.working_frame(), "sbp_6m", formula, rows=included
+        session.draft_frame(), "sbp_6m", formula, rows=included
     )
     assert filled == int(original.loc[included, "sbp_6m"].isna().sum()) == 150
     session.stage(
@@ -156,7 +156,7 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> N
     session.set_ticked([c.id for c in catalogue(config)])
     population = session.population(config)
     assert len(population.included) == 4  # a missing weight fires no criterion
-    frame = session.working_frame()
+    frame = session.draft_frame()
     for target, formula in (("weight_kg", "bmi * (height_cm / 100) ** 2"), ("bmi_x2", "bmi * 2")):
         frame, filled = fill_with_formula(
             frame, target, formula, rows=population.included, complete_inputs=True

@@ -504,6 +504,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   own state (`working_df`, the Enrich draft, the results, the multiple imputation, the workflow marks) and what the
   pages computed on it. Fourteen names that nothing wrote any more are gone, among them the analysis results the
   result store replaced, and a quality gate counts the keys written without a declaration, a count that only falls.
+  For developers, "working" now names one table only: `working_df`, the analysis population; what Enrich works on
+  (its draft, or the dataset) is `draft_frame()`, which was `working_frame()`, with its fingerprint `draft_fp`.
 - **Inputs that show a value kept elsewhere follow it again.** Keeping every control's value while its tab is closed
   made three inputs come back stale: a column renamed and renamed back was renamed again at the next Apply; the
   Mann-Whitney effect returned to its old value after a change of scale; and a chi-square result loaded into the
