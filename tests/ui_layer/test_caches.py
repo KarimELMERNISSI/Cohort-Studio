@@ -43,10 +43,13 @@ def test_a_reset_clears_the_statistics_of_this_session_only(
     monkeypatch.setattr(cache_data_api, "get_session_id_or_throw", lambda: session["id"])
     df = pd.DataFrame({"age": [30.0, 41.0, 52.0, 63.0, 70.0], "sex": ["F", "M", "F", "M", "F"]})
     workspace = _Workspace()
+    key = home._table_key(df)
 
     def statistics(user: str) -> None:
         session["id"] = user
-        home.get_statistics_dataframe(df, DataAnalyzer(df), dataset_name="t", _db_manager=workspace)
+        home.get_statistics_dataframe(
+            df, DataAnalyzer(df), dataset_name="t", _db_manager=workspace, table_key=key, owner=user
+        )
 
     try:
         statistics("alice")

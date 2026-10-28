@@ -1,4 +1,5 @@
 # pages/home.py
+import hashlib
 import html
 import json
 import time
@@ -33,6 +34,36 @@ def _q(identifier) -> str:
 def _frame_fingerprint(df) -> str:
     """Short content hash so cached statistics follow the frame (filters, renames), not only its name (audit E8)."""
     return frame_fingerprint(df, index=False, length=12)
+
+
+def _table_key(df: pd.DataFrame) -> str:
+    """
+    How the caches below tell two tables apart: by every row, where Streamlit hashes a sample of 10,000 rows of a
+    table of 50,000 or more (two versions of a cohort that differed outside the sample could get each other's
+    results). Column by column: a column pandas cannot hash (lists in its cells) is hashed as text on its own; a
+    categorical column's categories and order, and the kinds of value an object column holds (1 and "1" hash alike),
+    are part of the key. Computed once per run by the caller, which passes the table itself unhashed.
+    """
+    digest = hashlib.sha256(repr((df.shape, [str(c) for c in df.columns], [str(t) for t in df.dtypes])).encode())
+    for position in range(df.shape[1]):
+        column = df.iloc[:, position]
+        try:
+            hashed = pd.util.hash_pandas_object(column, index=False)
+        except TypeError:  # cells pandas cannot hash, such as lists: this column as text
+            hashed = pd.util.hash_pandas_object(column.map(repr), index=False)
+        digest.update(hashed.to_numpy().tobytes())
+        if isinstance(column.dtype, pd.CategoricalDtype):
+            digest.update(repr((list(column.cat.categories), column.cat.ordered)).encode())
+        elif column.dtype == object:
+            digest.update(repr(sorted({type(value).__name__ for value in column.dropna()})).encode())
+    return digest.hexdigest()
+
+
+def _owner() -> str | None:
+    """The workspace the cached results below belong to (the signed-in user's folder): part of their cache key, so
+    that a cache shared by the sessions of the server, or a session another user signs in to, never serves them."""
+    scope = get_state().services.scope
+    return scope.username if scope is not None else None
 
 
 def _top_correlations(corr_matrix: pd.DataFrame, node_ids, limit: int = 10) -> pd.DataFrame:
@@ -291,17 +322,26 @@ def move_columns_to_front(df, columns_to_move):
     # Reorder the DataFrame
     return df[columns_to_move + remaining_columns]
 
-# Kept per session: the Reset button clears this user's statistics only (it cleared every cache of every user)
-@st.cache_data(ttl=3600, show_spinner="Computing statistics...", scope="session")
-def get_statistics_dataframe(df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None):
+# Kept per session: the Reset button clears this user's statistics only (it cleared every cache of every user);
+# keyed by every row of the table and by the user's workspace
+@st.cache_data(
+    ttl=3600, show_spinner="Computing statistics...", scope="session"
+)
+def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_columns=None, qual_var_threshold=50, dataset_name=None, _db_manager=None, *, table_key, owner):
     """
     Creates new DataFrames with statistics for numerical and non-numerical columns.
     Tries to load from DuckDB/Parquet cache if dataset_name is provided.
-    
-    Note: Parameters starting with _ are excluded from hashing by Streamlit.
+
+    Note: Parameters starting with _ are excluded from hashing by Streamlit: the table is known by ``table_key``
+    (:func:`_table_key`), and ``owner`` is the user's workspace.
     """
+    df = _df
     if dataset_name:
-        dataset_name = f"{dataset_name}__{_frame_fingerprint(df)}"
+        # the saved statistics follow the frame and the settings that shape them (the number of top values was not
+        # part of the name: a saved dataset kept the first number asked)
+        settings = f"{nb_top_categories}_{qual_var_threshold}_{sorted(map(str, exclude_columns or []))}"
+        settings_key = hashlib.sha256(settings.encode()).hexdigest()[:8]
+        dataset_name = f"{dataset_name}__{_frame_fingerprint(df)}__{settings_key}"
     # Try to load cached stats if dataset name is available
     if dataset_name and _db_manager:
         cached_num, _ = _db_manager.load_stats(dataset_name, "numerical")
@@ -524,9 +564,12 @@ def _date_stats_for_excel(stats: pd.DataFrame) -> pd.DataFrame:
     out.insert(out.columns.get_loc("Duration"), "Duration (days)", days.round(2))
     return out.drop(columns="Duration")
 
-# Bounded: each entry is a whole workbook, and the cache is shared by the sessions of the server
+# Bounded: each entry is a whole workbook, and the cache is shared by the sessions of the server: keyed by every row
+# of the table and by the user's workspace
 @st.cache_data(show_spinner="Generating Correlation Excel file...", max_entries=8, ttl=3600)
-def _cached_corr_excel_bytes(data, targets, predictors, group_column, method):
+def _cached_corr_excel_bytes(_data, targets, predictors, group_column, method, *, table_key, owner):
+    """The correlation workbook of a table (known by ``table_key``, :func:`_table_key`) for one user's workspace."""
+    data = _data
     output = BytesIO()
     try:
         ecm.custom_corr_mat_to_excel(
@@ -819,6 +862,7 @@ def app():
                 with st.expander("Preview the first lines of your dataset", expanded=True):
                     # The rows are the analysis population (criteria ticked in the sidebar)
                     filtered_df = df
+                    table_key = _table_key(filtered_df)  # the cached statistics' key, once per run
                     st.dataframe(df.head(), width='stretch', hide_index=True)
                     st.write(f"**Data Overview:** {df.shape[0]:,} rows and {df.shape[1]:,} columns.")
 
@@ -865,7 +909,9 @@ def app():
                             nb_top_categories=max_top_modalities, 
                             qual_var_threshold=50,
                             dataset_name=dataset_name,
-                            _db_manager=st.session_state.db_manager
+                            _db_manager=st.session_state.db_manager,
+                            table_key=table_key,
+                            owner=_owner(),
                         )
                         mark_step("analyse", "descriptive statistics")
                         # Show available columns and let user select columns to retain
@@ -909,9 +955,11 @@ def app():
                                 continue
                             #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
                             numerical_stats, _, group_date_stats = get_statistics_dataframe(
-                                df=group, 
+                                _df=group, 
                                 _analyzer=analyzer, 
-                                nb_top_categories=1
+                                nb_top_categories=1,
+                                table_key=_table_key(group),
+                                owner=_owner(),
                             )
                             quant_dict[category] = numerical_stats
                             date_stats_dict[category] = group_date_stats
@@ -1029,7 +1077,9 @@ def app():
                             nb_top_categories=max_top_modalities, 
                             qual_var_threshold=50,
                             dataset_name=dataset_name,
-                            _db_manager=st.session_state.db_manager
+                            _db_manager=st.session_state.db_manager,
+                            table_key=table_key,
+                            owner=_owner(),
                         )
                     
                         with col2:
@@ -1069,9 +1119,11 @@ def app():
                         for category, group in qual_category_groups:
                             #st.write(f"---------------\ncategory : {category}, \ngroup : {group}\n------------")
                             _, non_numerical_stats, _ = get_statistics_dataframe(
-                                df=group, 
+                                _df=group, 
                                 _analyzer=analyzer, 
-                                nb_top_categories=max_top_modalities
+                                nb_top_categories=max_top_modalities,
+                                table_key=_table_key(group),
+                                owner=_owner(),
                             )
                             qual_dict[category] = non_numerical_stats
 
@@ -1211,7 +1263,9 @@ def app():
                                         targets,
                                         predictors,
                                         group_column,
-                                        corr_method
+                                        corr_method,
+                                        table_key=_table_key(filtered_df),
+                                        owner=_owner(),
                                     )
                                     st.download_button(
                                         label="Download Correlation Matrix (.xlsx)",

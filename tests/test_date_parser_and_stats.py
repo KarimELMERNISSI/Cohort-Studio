@@ -148,7 +148,7 @@ class TestPyArrowStatisticsCompatibility:
         })
         analyzer = DataAnalyzer(df_clinical)
         # the computation itself: the cache is per session, so it needs a running app
-        num_stats, cat_stats, date_stats = home_get_stats.__wrapped__(df_clinical, analyzer)
+        num_stats, cat_stats, date_stats = home_get_stats.__wrapped__(df_clinical, analyzer, table_key="", owner=None)
 
         # PyArrow conversion must succeed for all three statistical tables
         t_num = pa.Table.from_pandas(num_stats)

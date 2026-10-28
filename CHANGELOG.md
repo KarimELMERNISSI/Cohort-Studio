@@ -282,6 +282,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - `dev_scripts/migrate_user_layout.py` moves the files named after a user into that user's folder and the others
     into the administrator's; it leaves `uploads` and `vectors`. Read its `--dry-run` plan first. A document index is
     rebuilt from the documents.
+- **The cached statistics and correlation workbooks of Statistics & correlations follow every row and the user**
+  (results corrected).
+  - Streamlit tells two tables apart by a sample of 10,000 rows once a table has 50,000 or more. Two versions of a
+    cohort that differed outside the sample (a corrected value, a few changed rows) could get the statistics and the
+    correlation workbook computed for the other. Each cached result is now keyed by every row of its table, with
+    the categories of a categorical column and the kinds of value of a text column.
+  - The statistics saved in the workspace for a saved dataset were named after the dataset and its content only:
+    the number of top values asked after the first had no effect. Their name now includes the settings that shape
+    them.
+  - The workbooks are cached for every session of the server, and the statistics for every user signed in to one
+    browser session in turn: another user with a table that hashed alike could be served them. Each cached result
+    is now keyed by the signed-in user's workspace too.
 
 ### Usability
 
