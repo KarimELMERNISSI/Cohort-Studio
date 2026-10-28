@@ -61,6 +61,7 @@ from utils.settings import get_settings
 if TYPE_CHECKING:
     from enrich.derived import DerivedCheck, FillPlan
     from explore.data_quality_auditor import DataQualityAuditor
+    from manage.services import Services
 
 logger = logging.getLogger(__name__)
 
@@ -231,22 +232,19 @@ class AppState:
             ss["dataset_ref"] = None
 
     @property
-    def db_manager(self):
-        if "db_manager" not in st.session_state:
-            from manage.db_manager import DBManager
+    def services(self) -> Services:
+        """The session's services, for the signed-in user (ui.services: built once, again for another user)."""
+        from ui.services import services
 
-            st.session_state["db_manager"] = DBManager(scope=get_current_scope())
-        return st.session_state["db_manager"]
+        return services()
+
+    @property
+    def db_manager(self):
+        return self.services.datasets
 
     @property
     def transformation_manager(self):
-        if "transformation_manager" not in st.session_state:
-            from manage.transformation_manager import TransformationManager
-
-            st.session_state["transformation_manager"] = TransformationManager(
-                scope=get_current_scope()
-            )
-        return st.session_state["transformation_manager"]
+        return self.services.trace
 
     @property
     def rag_manager(self):
@@ -541,7 +539,6 @@ class AppState:
         """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
         population-scoped imputations on the current population. Only replayable changes can be redone; a redone
         imputation is recorded as what it did on the current data (its rows, counts and description)."""
-        from manage.paths import PathResolver
         from manage.reproduction_manager import apply_steps
 
         session = self.session
@@ -587,7 +584,7 @@ class AppState:
                 frame,
                 [step],
                 frames={session.data_fp: session.base},
-                paths=PathResolver(scope=get_current_scope()),
+                paths=self.services.paths,
             )
             if result.error or result.df is None:
                 return False, result.error or f"'{pending.description}' could not be redone."

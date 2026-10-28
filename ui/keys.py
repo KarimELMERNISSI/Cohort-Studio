@@ -133,6 +133,44 @@ KEYS: tuple[Key, ...] = (
         "data_change",
         note="the grouping variable of those results",
     ),
+    Key(
+        "_services",
+        "ui.services",
+        "session",
+        note="the session's services (manage.services.Services), for the user they were built for",
+    ),
+    Key(
+        "db_manager",
+        "ui.services",
+        "session",
+        ("app_pages.data_enrichment", "app_pages.home"),
+        "the dataset store of the session's services, under the key the pages read",
+    ),
+    Key(
+        "transformation_manager",
+        "ui.services",
+        "session",
+        ("app_pages.data_enrichment", "ui.progress", "ui.results"),
+        "the trace of the session's services, under the key the pages read",
+    ),
+    Key(
+        "rag_manager",
+        "ui.services",
+        "session",
+        (
+            "app_pages.data_enrichment",
+            "app_pages.data_insight",
+            "app_pages.data_monitoring",
+            "app_pages.document_insight",
+            "app_pages.enrichment_derived",
+            "app_pages.home",
+            "app_pages.rag_monitoring",
+            "app_pages.rag_sidebar",
+            "ui.progress",
+            "ui.state",
+        ),
+        "the AI engine, built on first use (ui.services.ai_engine); a page that only uses a running one reads it",
+    ),
 )
 
 BY_NAME: dict[str, Key] = {key.name: key for key in KEYS}

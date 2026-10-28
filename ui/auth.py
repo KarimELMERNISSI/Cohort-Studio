@@ -11,15 +11,11 @@ from ui.theme import APP_NAME, APP_TAGLINE, brand_asset
 LOGO = brand_asset("icon.png")
 
 
-def _reset_session() -> None:
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-
-
 def logout() -> None:
-    """Drop everything tied to the user (managers bound to their workspace, datasets, caches)."""
-    _reset_session()
-    st.rerun()
+    """Drop everything tied to the user (managers bound to their workspace, datasets, caches; ui.services)."""
+    from ui.services import end_session
+
+    end_session("the user signed out")
 
 
 def _first_admin_card(iam) -> None:

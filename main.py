@@ -25,7 +25,7 @@ except SettingsError as exc:  # stopped before a module reads the wrong value; t
 import streamlit as st
 
 from manage.ai_payload import disable_remote_tracing
-from manage.iam import IAMConfigurationError, get_iam_manager
+from manage.iam import IAMConfigurationError
 from manage.iam.authz import is_admin_role
 from ui import nav, shell
 from ui.auth import LOGO, require_login
@@ -38,7 +38,9 @@ from utils.logging_config import configure_logging
 @st.cache_resource(show_spinner=False)
 def _bootstrap_admin_once() -> str:
     """Create the initial administrator from CMP_ADMIN_* settings, once per server process."""
-    _, message = get_iam_manager().ensure_bootstrap_admin()
+    from ui.services import shared
+
+    _, message = shared().iam.ensure_bootstrap_admin()
     return message
 
 

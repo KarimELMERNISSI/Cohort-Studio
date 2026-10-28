@@ -2,6 +2,7 @@ import glob
 import logging
 import os
 import re
+from functools import cached_property
 from typing import Any
 
 import duckdb
@@ -44,8 +45,8 @@ class DBManager:
     """Helper class to manage DuckDB connections and data persistence using Parquet with versioning"""
     def __init__(self, db_path: str = ":memory:", scope: UserScope | None = None) -> None:
         # Per-user workspace (audit E4): datasets and statistics live under <DATA_ROOT>/users/<username>/. The
-        # session passes its user's scope (ui.state.AppState); without one (tests, scripts, the command line) the
-        # shared directories are used.
+        # session's services pass its user's scope (manage.services); without one (tests, scripts, the command line)
+        # the shared directories are used.
         self.scope: UserScope | None = scope
         shared_dir = get_datasets_dir()
         if self.scope is not None:
@@ -57,11 +58,14 @@ class DBManager:
         # The user directory and the DuckDB catalog are shared by design.
         self.db_path: str = os.path.join(shared_dir, "cohort_data.duckdb")
         self.user_db_path: str = os.path.join(shared_dir, "users.duckdb")
-        
-        # Modular IAM Provider (Local DuckDB default)
-        self.iam_provider: LocalDuckDBIAMProvider = LocalDuckDBIAMProvider(db_path=self.user_db_path)
-        
+
         # Don't keep a persistent connection - open/close as needed
+
+    @cached_property
+    def iam_provider(self) -> LocalDuckDBIAMProvider:
+        """The local accounts, opened on first use: a session's store never opens the users database for nothing
+        (the application signs users in through manage.iam)."""
+        return LocalDuckDBIAMProvider(db_path=self.user_db_path)
 
     def _get_user_connection(self):
         """Get a new DuckDB connection for users DB."""

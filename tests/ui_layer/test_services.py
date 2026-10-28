@@ -34,7 +34,7 @@ def test_opening_a_page_builds_no_ai_engine(
         at.switch_page(nav.page_path(page)).run()
         assert not at.exception, [str(e.value)[:300] for e in at.exception]
         assert "rag_manager" not in at.session_state, page
-    assert "db_manager" in at.session_state  # the dataset store is the session's (AppState)
+    assert "db_manager" in at.session_state  # the dataset store is the session's (ui.services)
 
 
 def _sessions_services() -> None:
@@ -123,8 +123,195 @@ def _injected_then_dropped() -> None:
     st.session_state["dropped"] = "rag_manager" not in st.session_state
 
 
-def test_an_engine_put_in_the_session_is_kept_and_dropping_one_stops_it() -> None:
+def test_an_engine_put_in_the_session_is_kept_and_dropping_one_stops_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))  # the session's stores are built too
     at = AppTest.from_function(_injected_then_dropped, default_timeout=60).run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     assert at.session_state["kept"] and at.session_state["dropped"]
     assert at.session_state["stopped"] == "the user signed out"
+
+
+def _a_session() -> None:
+    """A run that first puts in the session what a test plans (another user's store or engine), then asks for the
+    session's services as the signed-in user of the plan."""
+    from pathlib import Path
+
+    import streamlit as st
+
+    from core.workspace import UserScope
+    from manage.transformation_manager import TransformationManager
+    from ui.services import services
+
+    plan = st.session_state.get("plan")
+    if plan is None:  # the session was ended: nothing of it is left
+        return
+
+    class Engine:
+        def __init__(self, owner: str) -> None:
+            self.scope = UserScope.for_user(owner)
+
+        def stop(self, reason: str) -> None:
+            Path(plan["log"]).write_text(reason, encoding="utf-8")
+
+    if plan.get("engine_of") and "rag_manager" not in st.session_state:
+        st.session_state["rag_manager"] = Engine(plan["engine_of"])
+    if plan.get("trace_of") and "transformation_manager" not in st.session_state:
+        planted = TransformationManager(scope=UserScope.for_user(plan["trace_of"]))
+        st.session_state["transformation_manager"] = planted
+        st.session_state["planted"] = id(planted)
+    st.session_state["data"] = f"the dataset of {plan['user']}"
+    st.session_state["username"] = plan["user"]
+    built = services()
+    st.session_state["seen"] = {
+        "user": built.scope.username if built.scope is not None else None,
+        "trace": id(built.trace),
+        "folder": built.trace.trace_dir,
+        "keys": st.session_state["db_manager"] is built.datasets
+        and st.session_state["transformation_manager"] is built.trace,
+    }
+
+
+SESSION_KEYS = (
+    "_services",
+    "db_manager",
+    "transformation_manager",
+    "rag_manager",
+    "username",
+    "data",
+)
+
+
+def _session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppTest:
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path / "data"))
+    return AppTest.from_function(_a_session, default_timeout=60)
+
+
+def test_another_user_signed_in_to_the_session_ends_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The user changes only by signing in again: a session that finds another user ends, as a sign-out ends it, and
+    nothing of the last user stays (their dataset, stores, engine)."""
+    log = tmp_path / "stopped.txt"
+    at = _session(tmp_path, monkeypatch)
+    at.session_state["plan"] = {"user": "alice", "engine_of": "alice", "log": str(log)}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    alice = at.session_state["seen"]
+    assert alice["user"] == "alice" and alice["keys"]
+    at.run()  # the same user: the same services
+    assert at.session_state["seen"]["trace"] == alice["trace"]
+    at.session_state["plan"] = {"user": "bob", "log": str(log)}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert log.read_text(encoding="utf-8") == "another user was signed in to this session"
+    for key in (*SESSION_KEYS, "plan"):
+        assert key not in at.session_state, key
+
+
+@pytest.mark.parametrize("planted", ["trace_of", "engine_of"])
+def test_another_users_store_or_engine_in_the_session_ends_it(
+    planted: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log = tmp_path / "stopped.txt"
+    at = _session(tmp_path, monkeypatch)
+    at.session_state["plan"] = {"user": "alice", planted: "bob", "log": str(log)}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    for key in (*SESSION_KEYS, "plan"):
+        assert key not in at.session_state, key
+    if planted == "engine_of":
+        assert log.read_text(encoding="utf-8") == "another user was signed in to this session"
+
+
+def test_a_session_older_than_its_services_keeps_its_trace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A session that outlives a code change keeps the trace it holds, when it is the same user's."""
+    at = _session(tmp_path, monkeypatch)
+    at.session_state["plan"] = {"user": "alice", "trace_of": "alice"}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    seen = at.session_state["seen"]
+    assert seen["user"] == "alice" and seen["keys"] and seen["trace"] == at.session_state["planted"]
+
+
+def test_services_built_before_the_sign_in_are_built_again_for_the_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from core.workspace import UserScope
+
+    at = _session(tmp_path, monkeypatch)
+    at.session_state["plan"] = {"user": None}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    before = at.session_state["seen"]
+    assert before["user"] is None
+    at.session_state["plan"] = {"user": "alice"}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    alice = at.session_state["seen"]
+    assert alice["user"] == "alice" and alice["keys"] and alice["trace"] != before["trace"]
+    assert Path(alice["folder"]).resolve() == UserScope.for_user("alice").traces_dir().resolve()
+
+
+def _signing_out() -> None:
+    from pathlib import Path
+
+    import streamlit as st
+
+    from ui.auth import logout
+    from ui.services import services
+
+    log = st.session_state.get("log")
+    if log is None:  # after the sign-out: nothing of the session is left
+        return
+    st.session_state["username"] = "alice"
+    services()
+
+    class Engine:
+        def stop(self, reason: str) -> None:
+            Path(log).write_text(reason, encoding="utf-8")
+
+    st.session_state["rag_manager"] = Engine()
+    logout()
+
+
+def test_signing_out_stops_the_engine_and_drops_the_services(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path / "data"))
+    log = tmp_path / "stopped.txt"
+    at = AppTest.from_function(_signing_out, default_timeout=60)
+    at.session_state["log"] = str(log)
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert log.read_text(encoding="utf-8") == "the user signed out"
+    for key in ("_services", "db_manager", "transformation_manager", "rag_manager", "username"):
+        assert key not in at.session_state, key
+
+
+def _one_user() -> None:
+    import streamlit as st
+
+    from ui.services import services, shared
+
+    st.session_state["username"] = st.session_state["as_user"]
+    built = services()
+    st.session_state["seen"] = (id(shared()), id(built.shared), built.datasets.dataset_dir)
+
+
+def test_two_users_share_only_the_services_of_the_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    seen = {}
+    for user in ("alice", "bob"):
+        at = AppTest.from_function(_one_user, default_timeout=60)
+        at.session_state["as_user"] = user
+        at.run()
+        assert not at.exception, [str(e.value)[:300] for e in at.exception]
+        seen[user] = at.session_state["seen"]
+    assert seen["alice"][0] == seen["bob"][0] == seen["alice"][1] == seen["bob"][1]
+    assert seen["alice"][2] != seen["bob"][2]

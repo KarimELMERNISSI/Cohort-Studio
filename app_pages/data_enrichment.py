@@ -1961,7 +1961,8 @@ def app():
     4. Dataset Versioning and Persistence
     """
 
-    # The session's dataset store and trace (AppState builds them); the AI engine is built by Settings, when used
+    # The session's dataset store and trace (its services build them); the AI engine is built by Settings, when
+    # used
     state = get_state()
     state.db_manager
     state.transformation_manager

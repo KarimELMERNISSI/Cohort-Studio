@@ -26,7 +26,8 @@ class TransformationManager:
              Directory where transformation traces will be stored.
              Defaults to the traces folder of ``scope``, else DATA_ROOT/traces via data_paths utility.
         scope : UserScope, optional
-             The user's workspace, passed by the session (ui.state.AppState); None outside a session.
+             The user's workspace, passed by the session's services (manage.services); None outside a
+             session.
         """
         self.scope: UserScope | None = scope
         if trace_dir:

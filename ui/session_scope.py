@@ -1,8 +1,8 @@
 """
 The current user's storage scope, derived from the Streamlit session (None outside a session or without a user).
 
-Nothing below ui calls it (layering rules R1 and R3): the UI passes the scope down, and AppState and ui.services
-build the services with it (M5b step 5).
+Nothing below ui calls it (layering rules R1 and R3): the UI passes the scope down, and ui.services builds the
+session's services with it (M5b step 5).
 """
 
 from __future__ import annotations

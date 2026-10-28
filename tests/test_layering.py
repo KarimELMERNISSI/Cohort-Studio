@@ -95,7 +95,7 @@ UTILS_GROUPS = {
 }
 ENTRY_POINTS = ("main", "manage_users")  # above every layer
 # R5; manage.replay arrives with M8, which reads traces outside the app as the replay does today
-HEADLESS = ("manage_users", "manage.replay", "manage.reproduction_manager")
+HEADLESS = ("manage_users", "manage.replay", "manage.reproduction_manager", "manage.services")
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
 # Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws

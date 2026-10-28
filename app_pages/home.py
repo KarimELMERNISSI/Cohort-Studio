@@ -755,7 +755,7 @@ TAB_KEY = "home_tab"
 
 
 def app():
-    # the session's dataset store (AppState builds it); the AI engine is built by Settings, when used
+    # the session's dataset store (its services build it); the AI engine is built by Settings, when used
     get_state().db_manager
 
     # RAG Configuration Sidebar - MOVED TO GLOBAL SIDEBAR (utils/multipage.py -> app_pages/rag_sidebar.py)
