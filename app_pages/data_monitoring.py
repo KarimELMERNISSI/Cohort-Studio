@@ -1217,14 +1217,20 @@ def left_out_text(shared: SharedConfiguration) -> str:
     parts = []
     if shared.with_rows:
         parts.append(f"the rules that list rows of this dataset ({names(shared.with_rows)})")
+    if shared.families:
+        parts.append(f"whole, the families counted \"at least k of\" their rules when one of these rules is left out "
+                     f"({names(shared.families)})")
     if shared.unreadable:
-        parts.append(f"the rules that cannot be read as written ({names(shared.unreadable)})")
+        parts.append(f"what cannot be read as written ({names(shared.unreadable)})")
     if shared.notes:
         parts.append("the notes of the derived variables")
     if shared.settings:
         parts.append("this installation's settings (folders, uploaded files)")
-    left_out = f"For sharing, left out: {'; '.join(parts)}. " if parts else ""
-    return left_out + "The other rules are kept as written, with their descriptions: check that none names a participant."
+    text = f"For sharing, left out: {'; '.join(parts)}. " if parts else ""
+    if shared.trimmed:
+        text += f"Shared without the keys this version does not read: {names(shared.trimmed)}. "
+    return text + ("The rest is kept as written, the names of the rules and families, their descriptions, the "
+                   "expressions and the derived formulas: check that none names a participant.")
 
 
 # Function to apply column-wide styling

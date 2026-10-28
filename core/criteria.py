@@ -126,6 +126,11 @@ def is_scalar(value: Any) -> bool:
     return value is None or isinstance(value, (str, int, float))
 
 
+def is_flag(value: Any) -> bool:
+    """True or false (whether a rule is a numeric range)."""
+    return isinstance(value, bool)
+
+
 def _is_bounds(value: Any) -> bool:
     """Frozen bounds: column names, each with a [lower, upper] pair of single values."""
     return value is None or (
@@ -559,7 +564,7 @@ CRITERION_KINDS.register(
         recognise=_is_numeric,
         problems=_numeric_problems,
         keys={
-            "numeric": is_scalar,
+            "numeric": is_flag,
             "column": is_text,
             "lower_bound": is_scalar,
             "upper_bound": is_scalar,
@@ -599,7 +604,7 @@ CRITERION_KINDS.register(
         columns=_expression_columns,
         describe=lambda name, definition: _expression_of(definition),
         recognise=lambda name, definition: bool(_expression_of(definition)),
-        keys={"numeric": is_scalar, "expression": is_text, "description": is_text},
+        keys={"numeric": is_flag, "expression": is_text, "description": is_text},
         missing=ASKED,
     )
 )
@@ -786,6 +791,7 @@ __all__ = [
     "criterion_problems",
     "describe_definition",
     "holds_row_list",
+    "is_flag",
     "is_scalar",
     "is_text",
     "rule_kind",

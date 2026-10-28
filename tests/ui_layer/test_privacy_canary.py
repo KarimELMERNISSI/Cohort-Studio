@@ -134,27 +134,58 @@ def test_a_configuration_for_sharing_lists_no_row() -> None:
                 "operator": {"threshold": 1, "rows": [SENTINEL_ID]},
                 "old": {**old, "flagged": [SENTINEL_ID]},
             },
-        }
+            # ids where a single value is read: the copy never relies on the upload check, which refuses these
+            "odd_values": {
+                "operator": "any",
+                "flag as a number": {"numeric": SENTINEL_ID, "column": "age", "lower_bound": 18},
+                "high": {"expression": "df['sbp'] > 180"},
+            },
+            "odd_operator": {"operator": {"threshold": [SENTINEL_ID]}, "old": old},
+        },
+        # and in the labels of a derived variable, which the upload check does not read
+        "derived_variables": {
+            "bmi": {
+                "formula": "weight_kg / (height_cm / 100) ** 2",
+                "kind": [SENTINEL_ID],
+                "origin": {"rows": [SENTINEL_ID]},
+            },
+            "odd": {"formula": [SENTINEL_ID]},
+        },
     }
     shared = configuration_for_sharing(config)
     text = json.dumps(shared.config)
     assert "row_ids" not in text and str(SENTINEL_ID) not in text
     families = shared.config["mask_families"]
     # a family left empty is dropped, and so is a threshold family that held a list, whole
-    assert set(families) == {"outliers", "study_inclusion", "combined", "hand_written"}
+    assert set(families) == {
+        "outliers",
+        "study_inclusion",
+        "combined",
+        "hand_written",
+        "odd_values",
+    }
     assert set(families["combined"]) == {"operator", "high"}
     assert families["hand_written"] == {"operator": {"threshold": 1}, "old": old}
     assert families["outliers"] == {
         "operator": "any",
         "frozen bounds": {"bounds": {"sbp": [80, 200]}},
     }
+    assert shared.config["derived_variables"] == {
+        "bmi": {"formula": "weight_kg / (height_cm / 100) ** 2"}
+    }
     assert shared.with_rows == (
         "outliers: iforest",
         "only_rows: lof",
         "combined: two signs",
         "combined: deeper",
-        "warning_signs",
     )
+    assert shared.families == ("warning_signs",)
+    assert shared.unreadable == (
+        "odd_values: flag as a number",
+        "odd_operator",
+        "derived_variables: odd",
+    )
+    assert shared.trimmed == ("hand_written: old", "hand_written: the operator")
     assert configuration_problems(shared.config) == []  # the file loads
     assert str(SENTINEL_ID) in json.dumps(config)  # the session's configuration is unchanged
 
@@ -165,10 +196,53 @@ def test_a_study_shared_keeps_the_fingerprints_of_its_criteria() -> None:
     path = Path(__file__).resolve().parents[2] / "assets" / "tutorial" / "tutorial_config.json"
     tutorial = json.loads(path.read_text(encoding="utf-8"))
     shared = configuration_for_sharing(tutorial)
-    assert shared.with_rows == shared.unreadable == ()
+    assert shared.with_rows == shared.families == shared.unreadable == shared.trimmed == ()
     assert [c.fingerprint for c in catalogue(shared.config)] == [
         c.fingerprint for c in catalogue(tutorial)
     ]
+
+
+def _download_script() -> None:
+    """Validate's own buttons: the file each one gives, by its name."""
+    from typing import Any
+
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.data_monitoring import display_results
+    from ui.state import get_state
+
+    get_state().load_tutorial_cohort()
+    listed = {"row_ids": [[st.session_state["id"], st.session_state["id"]]], "method": "zscore"}
+    st.session_state.config["mask_families"]["outliers"] = {"operator": "any", "flagged": listed}
+    files: dict[str, Any] = {}
+    button = st.download_button
+
+    def keep(*args: Any, **kwargs: Any) -> Any:
+        files[str(kwargs.get("file_name"))] = kwargs.get("data")
+        return button(*args, **kwargs)
+
+    st.download_button = keep  # type: ignore[assignment]
+    try:
+        frame = pd.DataFrame({"x": [1]})
+        display_results(frame, None, None, "anomaly_data", st)  # pyright: ignore[reportArgumentType]
+    finally:
+        st.download_button = button  # type: ignore[assignment]
+    st.session_state["files"] = files
+
+
+def test_validate_gives_the_file_for_sharing_under_its_own_name(data_root: Path) -> None:
+    """The page's buttons: config.json is whole, to load again with this dataset; config_for_sharing.json holds no
+    row of it."""
+    at = AppTest.from_function(_download_script, default_timeout=120)
+    at.session_state["username"] = "canary_user"
+    at.session_state["id"] = SENTINEL_ID
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    files = at.session_state["files"]
+    assert str(SENTINEL_ID) in files["config.json"]
+    assert str(SENTINEL_ID) not in files["config_for_sharing.json"]
+    assert str(data_root).replace("\\", "\\\\") not in files["config_for_sharing.json"]
 
 
 def _sharing_script() -> None:

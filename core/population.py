@@ -35,6 +35,7 @@ from core.criteria import (
     shared_definition,
 )
 from core.derived import CONFIG_KEY as DERIVED_KEY
+from core.derived import DerivedVariable
 from core.derived import shape_problems as derived_shape_problems
 from core.fingerprint import ids_fingerprint, ids_to_ranges
 
@@ -192,8 +193,6 @@ def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
 # (folder_names, under DATA_ROOT), the paths of the files uploaded for an enrichment (data_enrichments), and defaults
 # that nothing reads.
 SHARED_KEYS = ("description", "mask_families", DERIVED_KEY)
-# a derived variable in a shared copy: without its note, the user's commentary, which no shared output holds
-_DERIVED_SHARED_KEYS = ("formula", "inverses", "kind", "origin", "tolerance", "accepted")
 
 
 @dataclass(frozen=True)
@@ -201,40 +200,73 @@ class SharedConfiguration:
     """A configuration for someone else, and what it left out of the session's (names as written)."""
 
     config: dict[str, Any]
-    with_rows: tuple[
-        str, ...
-    ] = ()  # "family: rule" listing row ids of this dataset, or a family left out whole
-    # "family: rule" (or a family) that cannot be read, or holds a value its kind does not read where it is
+    # "family: rule": a rule that lists row ids of this dataset (outliers frozen as rows), at any depth
+    with_rows: tuple[str, ...] = ()
+    # a family counted "at least k of" its rules, left out whole because one of its rules was
+    families: tuple[str, ...] = ()
+    # "family: rule", a family or "derived_variables: target" that cannot be read, or holds a value of another type
     unreadable: tuple[str, ...] = ()
-    notes: tuple[str, ...] = ()  # the derived variables whose note was left out
-    settings: tuple[str, ...] = ()  # the other keys of the configuration
+    # "family: rule" or "family: the operator", rebuilt without keys that this version does not read
+    trimmed: tuple[str, ...] = ()
+    # the derived variables whose note was left out
+    notes: tuple[str, ...] = ()
+    # the other keys of the configuration
+    settings: tuple[str, ...] = ()
+
+
+def _shared_operator(operator: Any) -> Any:
+    """A family's operator as a shared copy holds it: "any" or "all", or {"threshold": k}; None for anything else."""
+    if isinstance(operator, str) and operator.strip().lower() in ("any", "all"):
+        return operator
+    if isinstance(operator, Mapping):
+        k = operator.get("threshold")
+        if isinstance(k, int) and not isinstance(k, bool):
+            return {"threshold": k}
+    return None
 
 
 def _shared_family(
-    family: str, members: Mapping[str, Any]
-) -> tuple[dict[str, Any] | None, list[str], list[str]]:
-    """A family as a shared copy holds it (None: left out whole), and its rules that list rows or cannot be read."""
+    family: str, members: Mapping[str, Any], left: dict[str, list[str]]
+) -> dict[str, Any] | None:
+    """A family as a shared copy holds it, None when it is left out whole; what it leaves out goes into ``left``."""
+    operator = _shared_operator(members.get("operator", "any"))
+    if operator is None:
+        left["unreadable"].append(family)
+        return None
     rules = {name: spec for name, spec in members.items() if name != "operator"}
     shared = {name: shared_definition(str(name), spec) for name, spec in rules.items()}
-    with_rows = [f"{family}: {name}" for name, spec in rules.items() if holds_row_list(spec)]
-    unreadable = [
-        f"{family}: {name}"
-        for name, rule in shared.items()
-        if rule is None and not holds_row_list(rules[name])
-    ]
-    if family_operator(members)[0] == "threshold" and (with_rows or unreadable):
+    rows = [name for name, spec in rules.items() if holds_row_list(spec)]
+    unread = [name for name, rule in shared.items() if rule is None and name not in rows]
+    if family_operator(members)[0] == "threshold" and (rows or unread):
         # "at least 2 of" these rules would count others without the ones left out: the family goes whole
-        return (None, [family], []) if with_rows else (None, [], [family])
+        left["families"].append(family)
+        return None
+    left["with_rows"] += [f"{family}: {name}" for name in rows]
+    left["unreadable"] += [f"{family}: {name}" for name in unread]
     kept = {name: rule for name, rule in shared.items() if rule is not None}
+    left["trimmed"] += [f"{family}: {name}" for name, rule in kept.items() if rule != rules[name]]
     if rules and not kept:
-        return None, with_rows, unreadable  # each of its rules is named
+        return None  # each of its rules is named
     if "operator" in members:
-        operator = members["operator"]
-        operator = (
-            {"threshold": operator.get("threshold")} if isinstance(operator, Mapping) else operator
-        )
+        if operator != members["operator"]:
+            left["trimmed"].append(f"{family}: the operator")
         kept = {"operator": operator, **kept}
-    return kept, with_rows, unreadable
+    return kept
+
+
+def _shared_derived(target: str, definition: Any) -> dict[str, Any] | None:
+    """
+    A derived variable as a shared copy holds it: read as the application reads it (core.derived), without its note,
+    the user's commentary, which no shared output holds. None when it cannot be read: a file can hold anything there.
+    """
+    if not isinstance(definition, Mapping) or derived_shape_problems({target: definition}):
+        return None
+    try:
+        shared = DerivedVariable.from_config(target, definition).to_config()
+    except Exception:
+        return None
+    shared.pop("note", None)
+    return shared
 
 
 def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfiguration:
@@ -242,46 +274,61 @@ def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfigu
     A copy of the configuration to share with someone else, and what it leaves out.
 
     It holds the description, the criteria and the derived variables (SHARED_KEYS): each rule rebuilt from the keys
-    its kind holds (core.criteria.shared_definition), each derived variable without its note. Left out, and named: a
-    rule that lists row ids of this dataset (outliers frozen as rows, by any method), also inside a threshold rule, or
-    that cannot be read; a family counted with a threshold, whole, when one of its rules is left out ("at least 2 of"
-    would count other rules); a family left without a rule; the other keys, which hold this installation's folders
-    and the paths of uploaded files. The copy shares nothing with the session's configuration.
+    its kind holds, with values of the types it reads (core.criteria.shared_definition), each family's operator as
+    "any", "all" or {"threshold": k}, each derived variable as core.derived reads it, without its note. Left out, and
+    named: a rule that lists row ids of this dataset (outliers frozen as rows, by any method), also inside a threshold
+    rule, or that cannot be read; a family counted with a threshold, whole, when one of its rules is left out ("at
+    least 2 of" would count other rules); a family left without a rule; the other keys, which hold this installation's
+    folders and the paths of uploaded files. A rule rebuilt without keys that no kind reads is named too. The copy
+    never relies on the upload check, and shares nothing with the session's configuration.
     """
     source = json.loads(json.dumps(dict(config or {}), default=str))
     shared: dict[str, Any] = {}
-    with_rows: list[str] = []
-    unreadable: list[str] = []
+    left: dict[str, list[str]] = {
+        "with_rows": [],
+        "families": [],
+        "unreadable": [],
+        "trimmed": [],
+        "notes": [],
+    }
     if isinstance(source.get("description"), str):
         shared["description"] = source["description"]
     families = source.get("mask_families")
     if isinstance(families, dict):
         kept_families: dict[str, Any] = {}
         for family, members in families.items():
-            if not isinstance(members, dict):
-                unreadable.append(str(family))
-                continue
-            kept, rows, unread = _shared_family(str(family), members)
-            with_rows += rows
-            unreadable += unread
+            kept = _shared_family(str(family), members, left) if isinstance(members, dict) else None
             if kept is not None:
                 kept_families[family] = kept
+            elif not isinstance(members, dict):
+                left["unreadable"].append(str(family))
         shared["mask_families"] = kept_families
-    notes: list[str] = []
     derived = source.get(DERIVED_KEY)
     if isinstance(derived, dict):
-        definitions = {target: d for target, d in derived.items() if isinstance(d, dict)}
-        shared[DERIVED_KEY] = {
-            target: {key: value for key, value in d.items() if key in _DERIVED_SHARED_KEYS}
-            for target, d in definitions.items()
-        }
-        notes = [str(target) for target, d in definitions.items() if d.get("note")]
+        kept_derived: dict[str, Any] = {}
+        for target, definition in derived.items():
+            rebuilt = _shared_derived(str(target), definition)
+            if rebuilt is None:
+                left["unreadable"].append(f"{DERIVED_KEY}: {target}")
+                continue
+            kept_derived[target] = rebuilt
+            if definition.get("note"):
+                left["notes"].append(str(target))
+        shared[DERIVED_KEY] = kept_derived
     settings = tuple(
         str(key)
         for key, value in source.items()
         if key not in SHARED_KEYS and value not in (None, "", [], {})
     )
-    return SharedConfiguration(shared, tuple(with_rows), tuple(unreadable), tuple(notes), settings)
+    return SharedConfiguration(
+        shared,
+        with_rows=tuple(left["with_rows"]),
+        families=tuple(left["families"]),
+        unreadable=tuple(left["unreadable"]),
+        trimmed=tuple(left["trimmed"]),
+        notes=tuple(left["notes"]),
+        settings=settings,
+    )
 
 
 def merge_families(
