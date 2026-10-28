@@ -1248,6 +1248,12 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
     # We subtract a small buffer (e.g. 2px) to prevent touching
     font_size_row = max(6, min(12, int(px_per_row_actual - 2)))
     font_size_col = max(6, min(12, int(px_per_col_actual)))
+    # a label for every row while they fit, else for every k-th row: 1,206 labels in 600 pixels could not be read, and
+    # drawing them kept the browser busy for a minute each time the chart was shown (the hover names every row). The
+    # rows are drawn inside the top and bottom margins (20 and 80 pixels, below)
+    px_per_row_drawn = max(height_px - 100, 1) * (heatmap_domain_y[1] - heatmap_domain_y[0]) / max(1, n_rows)
+    label_every = max(1, int(np.ceil((font_size_row + 2) / max(px_per_row_drawn, 1e-9))))
+    labelled = range(0, n_rows, label_every)
 
     # --- FIGURE CONSTRUCTION ---
     fig_matrix = go.Figure()
@@ -1360,8 +1366,8 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
             title=row_id_col,
             side='left',
             tickmode='array',
-            tickvals=y_sequential,
-            ticktext=final_row_labels,
+            tickvals=[y_sequential[i] for i in labelled],
+            ticktext=[final_row_labels.iloc[i] for i in labelled],
             showticklabels=show_row_labels,
             tickfont=dict(size=font_size_row), # DYNAMIC FONT
             showgrid=False, zeroline=False,

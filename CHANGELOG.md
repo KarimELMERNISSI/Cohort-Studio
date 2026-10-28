@@ -522,6 +522,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Mann-Whitney effect returned to its old value after a change of scale; and a chi-square result loaded into the
   power calculator kept the calculator's previous effect and minimum dimension, under "Parameters loaded!". These
   inputs are no longer kept on their own, and loading a result sets the calculator's inputs themselves.
+- **Opening Validate's quality dashboard no longer keeps the browser busy for a minute.** Its nullity matrix gave
+  every row a label, 1,206 of them in 500 pixels for the tutorial cohort, which could not be read and took the
+  browser about a minute to draw; since only the open tab runs, that minute came back each time the dashboard tab
+  was opened. The matrix now labels the rows that fit (every 20th row there; the hover names each row), and the
+  dashboard opens in under two seconds.
 
 ### Settings and preferences (M5b)
 
