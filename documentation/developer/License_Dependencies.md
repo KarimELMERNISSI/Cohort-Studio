@@ -188,7 +188,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | cfgv | 3.5.0 | MIT |
 | coverage | 7.16.2 | Apache-2.0 |
 | distlib | 0.4.3 | PSF |
-| filelock | 4.0.12 | MIT |
+| filelock | 4.2.1 | MIT |
 | identify | 2.6.20 | MIT |
 | iniconfig | 2.3.1 | MIT |
 | nodeenv | 1.11.0 | BSD |
