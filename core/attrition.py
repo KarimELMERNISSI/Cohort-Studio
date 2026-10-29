@@ -139,6 +139,25 @@ def criterion_line(name: str, kind: str, definition: Mapping[str, Any]) -> str:
     return f"{name}: excluded {'when' if kind == EXCLUSION else 'unless'} {words}"
 
 
+def _added_lines(step: Mapping[str, Any], added: int) -> tuple[str, ...]:
+    """
+    The rows a step added. A merge tells apart the rows of the dataset it repeated (a participant whose identifier
+    more than one row of the file holds) and the rows its file added: both have new row ids.
+    """
+    if not added:
+        return ()
+    params = step.get("params") or {}
+    counts = (params.get("join_counts") or {}) if step.get("function") == "enrichment" else {}
+    repeated = min(int(counts.get("main_rows_repeated") or 0), added)
+    lines = []
+    if repeated:
+        rows = "1 row repeats" if repeated == 1 else f"{repeated:,} rows repeat"
+        lines.append(f"{rows} a row of the dataset (its identifier on several rows of the file)")
+    if added - repeated:
+        lines.append("1 row added" if added - repeated == 1 else f"{added - repeated:,} rows added")
+    return tuple(lines)
+
+
 def _family_label(family: str, kind: str) -> str:
     words = family_words(family)
     return f"Excluded: {words}" if kind == EXCLUSION else f"Not meeting: {words}"
@@ -231,7 +250,7 @@ def participant_flow(
                 f"After the {flow_name(function)}",
                 rows_out,
                 DATA,
-                details=(description, *((f"{added:,} rows added",) if added else ())),
+                details=(description, *_added_lines(step, added)),
                 added=added,
             )
         )

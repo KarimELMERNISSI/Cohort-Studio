@@ -216,6 +216,8 @@ def _enrichment(df, step, index, paths, warnings):
         df=main, additional_df=enrichment_df, left_id_names=left_ids, right_id_names=right_ids,
         additional_cols=additional_columns, strategy=params.get("strategy", "left"),
         conflict_resolution=params.get("conflict_resolution", "keep"),
+        # how many rows of the file each row took (a step recorded before chose none: all of them)
+        file_rows=params.get("file_rows", "all"),
     ), None
 
 

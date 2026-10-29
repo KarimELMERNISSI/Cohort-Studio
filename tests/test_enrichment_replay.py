@@ -65,8 +65,18 @@ def test_an_upload_is_the_table_the_replay_reads(files: dict[str, Path]) -> None
     assert upload.attrs["parse_options"]["sep"] == ";" and upload.attrs["parse_options"]["decimal"] == ","
 
 
-def _record(tmp_path: Path, main: pd.DataFrame, enrichment: pd.DataFrame, path: Path, identifier: list[str]):
-    """A session that merges ``enrichment`` (read from ``path``) as the Enrich page does: align, merge, stage."""
+def _record(
+    tmp_path: Path,
+    main: pd.DataFrame,
+    enrichment: pd.DataFrame,
+    path: Path,
+    identifier: list[str],
+    file_rows: str | None = None,
+):
+    """
+    A session that merges ``enrichment`` (read from ``path``) as the Enrich page does: align, merge, stage.
+    ``file_rows`` None records no choice, as a merge did before it was asked.
+    """
     from core.session import DataSession
     from core.state import ParseOptions
     from ingest.loaders import read_path
@@ -97,6 +107,8 @@ def _record(tmp_path: Path, main: pd.DataFrame, enrichment: pd.DataFrame, path: 
         "retained_main_columns": [str(c) for c in working.columns],
         "retained_enrichment_columns": [str(c) for c in enrichment.columns],
     }
+    if file_rows is not None:
+        params["file_rows"] = file_rows
     merged = eed.add_data(
         df=working,
         additional_df=enrichment,
@@ -105,6 +117,7 @@ def _record(tmp_path: Path, main: pd.DataFrame, enrichment: pd.DataFrame, path: 
         additional_cols=[c for c in enrichment.columns if c not in identifier],
         strategy="left",
         conflict_resolution="keep",
+        file_rows=file_rows or "all",
     )
     session.stage(merged, "enrichment", params, "Enriched with external data")
     session.commit_staging()
@@ -119,6 +132,22 @@ def _replays(tm, session) -> None:
     result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)), paths=PathResolver.unconfined())
     assert result.error is None and result.reproducible, result.warnings
     assert frame_fingerprint(result.df) == session.data_fp
+
+
+@pytest.mark.parametrize(("file_rows", "rows"), [(None, 6), ("all", 6), ("first", 4), ("last", 4)])
+def test_the_rows_of_the_file_each_participant_took_replay(
+    tmp_path: Path, file_rows: str | None, rows: int
+) -> None:
+    """Two participants on two rows of the file: repeated (no choice recorded, or "all"), or one row each."""
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,potassium\n1,4.1\n1,4.6\n2,3.9\n3,5.2\n3,5.0\n", encoding="utf-8")
+    main = pd.DataFrame({"id": [1, 2, 3, 4], "age": [50, 61, 72, 45]})
+    tm, session = _record(tmp_path, main, load_dataframe(str(labs)), labs, ["id"], file_rows=file_rows)
+    assert len(session.base) == rows
+    if file_rows in ("first", "last"):
+        expected = [4.1, 3.9, 5.2] if file_rows == "first" else [4.6, 3.9, 5.0]
+        assert session.base["potassium"].tolist()[:3] == expected
+    _replays(tm, session)
 
 
 def test_an_enrichment_read_by_path_replays(tmp_path: Path, files: dict[str, Path]) -> None:

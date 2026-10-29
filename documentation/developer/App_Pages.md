@@ -517,6 +517,24 @@ trace; this page no longer reads files of its own.
 
 Handle the upload or path input for the enrichment dataset.
 
+### def `file_rows_choice` (data_enrichment.py)
+
+- **Arguments**: `main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_ids, right_ids, strategy: str`
+
+- **Returns**: `ComplexType`
+
+How many rows of the file each row of the dataset takes (enrich.external_data.FILE_ROWS). When the file repeats
+an identifier, the merge would repeat rows of the dataset, which the analyses would count as participants: the
+page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique".
+
+### def `_merged` (data_enrichment.py)
+
+- **Arguments**: `enriched_df: ComplexType, main_df: pd.DataFrame`
+
+- **Returns**: `bool`
+
+Whether the merge ran (it returns the dataset unchanged when it could not), said on the page either way.
+
 ### def `configure_enrichment` (data_enrichment.py)
 
 - **Arguments**: `main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str`

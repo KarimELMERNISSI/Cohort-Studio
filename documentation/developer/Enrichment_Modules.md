@@ -539,7 +539,26 @@ reads the declared list.
 _No module description._
 
 **Imports**:
-`logging`, `os`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.dates.smart_parse_dates`, `ingest.loaders.read_path`
+`logging`, `os`, `dataclasses.dataclass`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.dates.smart_parse_dates`, `ingest.loaders.read_path`
+
+### class `KeyCheck` (external_data.py)
+
+What a merge on keys would do to the rows of the dataset, before it is done.
+
+**Methods:**
+
+- **repeats**(`self`) -> `bool`
+  > No description available.
+
+### def `key_check` (external_data.py)
+
+- **Arguments**: `df, additional_df, left_id_names, right_id_names`
+
+- **Returns**: `ComplexType`
+
+How a merge on these keys would repeat the rows of the dataset: a row whose key more than one row of the file
+holds comes out once per such row. Missing keys match one another, as pandas merges them. None when the keys
+cannot be compared (a column missing, or of another type): the merge says why.
 
 ### def `align_date_keys` (external_data.py)
 
@@ -553,7 +572,7 @@ tables, so they merge the same rows.
 
 ### def `add_data` (external_data.py)
 
-- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution`
+- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, file_rows`
 
 - **Returns**: `None`
 
@@ -562,11 +581,12 @@ Enrich the dataset by either merging on common identifiers (columns) or appendin
 Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
 right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
 ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
+``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys.
 Same parameters and result as :func:`_merge`.
 
 ### def `_merge` (external_data.py)
 
-- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution`
+- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, validate`
 
 - **Returns**: `None`
 
@@ -580,6 +600,8 @@ Parameters:
     additional_cols (list, optional): List of columns to include from the additional dataset. If None, all columns are included.
     strategy (str, optional): Enrichment strategy. Options are 'left', 'right', 'outer', 'inner', 'cross' for column merges, or 'rows' for row append. Defaults to 'left'.
     conflict_resolution (str, optional): Handle row conflicts based on identifiers with 'replace', 'keep', or 'ignore'. Defaults to 'keep' if None.
+    validate (str, optional): pandas' check of a column merge ("many_to_one": one row of the file per key); a file
+        that breaks it is refused, and the main dataset returned unchanged.
 
 Returns:
     DataFrame: The enriched DataFrame or the original if an error occurs.

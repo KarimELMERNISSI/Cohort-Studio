@@ -257,6 +257,64 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
     return None, None
 
 
+_FILE_ROWS_WORDS = {
+    "first": "One row each: the first the file holds for it",
+    "last": "One row each: the last the file holds for it",
+    "all": "Every matching row: the row of the dataset repeated once per row of the file (a long table)",
+}
+
+
+def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_ids, right_ids, strategy: str) -> str | None:
+    """
+    How many rows of the file each row of the dataset takes (enrich.external_data.FILE_ROWS). When the file repeats
+    an identifier, the merge would repeat rows of the dataset, which the analyses would count as participants: the
+    page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique".
+    """
+    if strategy not in ("left", "right", "outer", "inner") or not left_ids:
+        return "all"
+    check = eed.key_check(main_df, enrichment_df, left_ids, right_ids)
+    if check is None:  # the identifiers cannot be compared: the merge says why
+        return "all"
+    if not check.repeats:
+        return "unique"
+    rows, keys, more = check.rows_repeated, check.file_keys_repeated, check.rows_added
+    st.warning(
+        f"{'1 row' if rows == 1 else f'{rows:,} rows'} of the dataset "
+        f"{'matches' if rows == 1 else 'match'} more than one row of the file "
+        f"({'1 identifier' if keys == 1 else f'{keys:,} identifiers'} repeated in the file). Merged as they are, "
+        f"the file's repeats would add {'1 row' if more == 1 else f'{more:,} rows'}, which the analyses would count "
+        "as participants."
+    )
+    return st.radio(
+        "Rows of the file for each row of the dataset",
+        options=list(_FILE_ROWS_WORDS),
+        format_func=_FILE_ROWS_WORDS.__getitem__,
+        index=None,
+        key="enrich_file_rows",
+        help="The first and the last follow the order of the file's rows, not their dates: sort the file first when "
+        "it holds visits.",
+    )
+
+
+def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame) -> bool:
+    """Whether the merge ran (it returns the dataset unchanged when it could not), said on the page either way."""
+    if enriched_df is None or enriched_df is main_df:
+        st.error("The merge could not be done: check that the identifiers hold the same kind of values in both files.")
+        return False
+    counts = enriched_df.attrs.get("join_counts") or {}
+    said = [f"{counts['rows_before']:,} rows before, {counts['rows_after']:,} after"] if counts else []
+    for key, words in (
+        ("main_rows_repeated", "rows of the dataset repeated"),
+        ("rows_added", "rows added from the file"),
+        ("main_rows_dropped", "rows of the dataset left out"),
+        ("file_rows_left_out", "rows of the file left out (one per identifier)"),
+    ):
+        if counts.get(key):
+            said.append(f"{counts[key]:,} {words}")
+    st.success("Enrichment completed" + (f": {'; '.join(said)}." if said else "."))
+    return True
+
+
 def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
     """Configure and perform the data enrichment."""
     st.subheader("Enrichment Configuration")
@@ -339,8 +397,9 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             options=common_columns,
             help="Choose the column that exists in both datasets"
         )
-        
-        if st.button("Perform Enrichment"):
+        file_rows = file_rows_choice(main_df, enrichment_df, identifier, identifier, strategy)
+
+        if st.button("Perform Enrichment", disabled=file_rows is None):
             try:
                 # Ensure right_identifier is a set for compatibility with the subtraction operation
                 identifier_set = {identifier} if isinstance(identifier, str) else set(identifier)
@@ -349,13 +408,14 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 additional_columns = [c for c in enrichment_df.columns if c not in identifier_set]
 
                 enriched_df = eed.add_data(
-                    df=main_df, additional_df=enrichment_df, 
-                    left_id_names=identifier, right_id_names=identifier, 
+                    df=main_df, additional_df=enrichment_df,
+                    left_id_names=identifier, right_id_names=identifier,
                     additional_cols=additional_columns,
-                    strategy=strategy, 
-                    conflict_resolution=conflict_resolution)
-                
-                if enriched_df is not None:
+                    strategy=strategy,
+                    conflict_resolution=conflict_resolution,
+                    file_rows=file_rows)
+
+                if _merged(enriched_df, main_df):
                     # Save snapshot
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
@@ -365,6 +425,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "conflict_resolution": conflict_resolution,
                         "identifier": identifier,
                         "add_choice": add_choice,
+                        "file_rows": file_rows,
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),
@@ -372,7 +433,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     # Into the Enrich draft; traced when the draft is applied (AppState, audit E10)
                     get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
                                       output_dataset_path=snapshot_path)
-                st.success("Enrichment completed successfully!")
+                else:
+                    enriched_df = None
             except Exception as e:
                 st.error(f"Error performing enrichment: {e!s}")
     else:
@@ -393,8 +455,9 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 options=enrichment_df.columns,
                 help="Choose the column from enrichment dataset"
             )
-        
-        if st.button("Perform Enrichment"):
+        file_rows = file_rows_choice(main_df, enrichment_df, left_identifier, right_identifier, strategy)
+
+        if st.button("Perform Enrichment", disabled=file_rows is None):
             try:
                 # Ensure right_identifier is a set for compatibility with the subtraction operation
                 right_identifier_set = {right_identifier} if isinstance(right_identifier, str) else set(right_identifier)
@@ -403,11 +466,12 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 additional_columns = [c for c in enrichment_df.columns if c not in right_identifier_set]
 
                 enriched_df = eed.add_data(
-                    df=main_df, additional_df=enrichment_df, 
-                    left_id_names=left_identifier, right_id_names=right_identifier, 
+                    df=main_df, additional_df=enrichment_df,
+                    left_id_names=left_identifier, right_id_names=right_identifier,
                     additional_cols=additional_columns,
-                    strategy=strategy, 
-                    conflict_resolution=conflict_resolution)
+                    strategy=strategy,
+                    conflict_resolution=conflict_resolution,
+                    file_rows=file_rows)
 
                 save_enrichment_config(enrichment_name=enrichment_name,
                                        strategy=strategy,
@@ -418,7 +482,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                                        additional_columns=additional_columns,
                                        conflict_resolution=conflict_resolution
                                        )
-                if enriched_df is not None:
+                if _merged(enriched_df, main_df):
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
@@ -428,13 +492,15 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "left_id_names": left_identifier,
                         "right_id_names": right_identifier,
                         "add_choice": add_choice,
+                        "file_rows": file_rows,
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),
                     }
                     get_state().stage(enriched_df, "enrichment", params, "Enriched with external data",
                                       output_dataset_path=snapshot_path)
-                st.success("Enrichment completed successfully!")
+                else:
+                    enriched_df = None
             except Exception as e:
                 st.error(f"Error performing enrichment: {e!s}")
     

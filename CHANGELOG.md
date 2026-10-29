@@ -1041,6 +1041,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   definitions. A file written in one step, such as `preferences.json`, now holds the same bytes on every system,
   and reaches the disk before it replaces the previous one.
 
+### Enrich: a merge says how many participants it would repeat, and asks (M6, results)
+
+- **A file that holds an identifier on several rows no longer repeats participants silently.** Merged on that
+  identifier, each row of the dataset came out once per matching row of the file, and the analyses counted every
+  repeat as a participant: the trace counted them, nothing showed it, and the participant flow called them added
+  rows. Before the merge, Enrich now says how many rows of the dataset match more than one row of the file and how
+  many rows the merge would add, and asks how many rows of the file each takes: the first or the last it holds (in
+  the file's order), or every one (a long table, a row per visit). The merge waits for the answer. A file with one
+  row per identifier is merged as such, and pandas checks it (`validate="many_to_one"`).
+- The choice is recorded with the step and replayed; a merge recorded before replays as it did, every matching row
+  kept.
+- After a merge, Enrich says what it did: the rows before and after, those repeated, added from the file or left
+  out. A merge that cannot be done (identifiers holding different kinds of values) says so, where it reported a
+  success and added an unchanged step to the draft.
+- The participant flow tells the rows a merge repeated from the rows its file added.
+- A merge that pandas refuses no longer writes into the log the identifiers it found repeated.
+
 ### Validate: Date checks, a tab of its own (M6)
 
 - **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed

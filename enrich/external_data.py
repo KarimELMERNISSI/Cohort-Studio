@@ -1,5 +1,6 @@
 import logging  # Added for logging
 import os
+from dataclasses import dataclass
 
 import pandas as pd  # for Dataframes manipulation
 
@@ -8,6 +9,47 @@ from ingest.dates import smart_parse_dates
 from ingest.loaders import read_path
 
 logger = logging.getLogger(__name__)
+
+# How many rows of the file a row of the dataset takes in a merge on keys, recorded with the step: "all" repeats the
+# row once per matching row of the file (a long table), "first" and "last" keep one, in the file's order, "unique"
+# expects one and refuses a file that repeats a key. A step recorded before had none: "all".
+FILE_ROWS = ("all", "unique", "first", "last")
+_KEYED = ("left", "right", "outer", "inner")
+
+
+@dataclass(frozen=True)
+class KeyCheck:
+    """What a merge on keys would do to the rows of the dataset, before it is done."""
+
+    file_keys_repeated: int  # keys that more than one row of the file holds
+    rows_repeated: int  # rows of the dataset whose key more than one row of the file holds
+    rows_added: int  # the rows the merge would add by repeating them, one per extra row of the file
+
+    @property
+    def repeats(self) -> bool:
+        return self.rows_repeated > 0
+
+
+def key_check(df, additional_df, left_id_names, right_id_names) -> KeyCheck | None:
+    """
+    How a merge on these keys would repeat the rows of the dataset: a row whose key more than one row of the file
+    holds comes out once per such row. Missing keys match one another, as pandas merges them. None when the keys
+    cannot be compared (a column missing, or of another type): the merge says why.
+    """
+    left = [left_id_names] if isinstance(left_id_names, str) else list(left_id_names or [])
+    right = [right_id_names] if isinstance(right_id_names, str) else list(right_id_names or [])
+    if not left or len(left) != len(right):
+        return None
+    try:
+        per_key = additional_df.groupby(right, dropna=False, sort=False).size()
+        repeated = per_key[per_key > 1].rename("__matches").reset_index()
+        if repeated.empty:
+            return KeyCheck(0, 0, 0)
+        keys = df[left].set_axis(right, axis=1)
+        matches = keys.merge(repeated, on=right, how="left")["__matches"].dropna()
+    except (KeyError, TypeError, ValueError):
+        return None
+    return KeyCheck(len(repeated), int(len(matches)), int((matches - 1).sum()))
 
 
 def align_date_keys(main_df, additional_df):
@@ -24,19 +66,29 @@ def align_date_keys(main_df, additional_df):
     return aligned
 
 
-def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
+def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, file_rows="all"):
     """
     Enrich the dataset by either merging on common identifiers (columns) or appending rows.
 
     Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
     right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
     ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
+    ``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys.
     Same parameters and result as :func:`_merge`.
     """
+    if file_rows not in FILE_ROWS:
+        raise ValueError(f"file_rows is one of {', '.join(FILE_ROWS)}, not {file_rows!r}")
     carries_ids = df.index.name == ROW_ID
     left = df.reset_index() if carries_ids else df
     right = additional_df.drop(columns=[ROW_ID], errors="ignore")  # ids of another table mean nothing here
-    combined = _merge(left, right, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution)
+    keyed = str(strategy).lower() in _KEYED and file_rows != "all"
+    file_rows_left_out = 0
+    if keyed and file_rows in ("first", "last"):
+        right_ids = [right_id_names] if isinstance(right_id_names, str) else list(right_id_names)
+        kept = right.drop_duplicates(subset=right_ids, keep=file_rows)
+        file_rows_left_out, right = len(right) - len(kept), kept
+    combined = _merge(left, right, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution,
+                      validate="many_to_one" if keyed else None)
     if combined is left:  # the merge failed: the main dataset is returned unchanged
         return df
     if not carries_ids or ROW_ID not in combined.columns:
@@ -49,6 +101,8 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
         "rows_added": int(ids.isna().sum()),
         "main_rows_dropped": int(len(df) - ids.dropna().nunique()),
         "main_rows_repeated": int(ids.dropna().duplicated().sum()),
+        "file_rows": file_rows,
+        "file_rows_left_out": int(file_rows_left_out),
     }
     combined = extend_row_ids(combined, used=df.index)
     combined.attrs["join_counts"] = counts
@@ -56,7 +110,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
     return combined
 
 
-def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None):
+def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, validate=None):
     """
     Enrich the dataset by either merging on common identifiers (columns) or appending rows.
 
@@ -68,6 +122,8 @@ def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=Non
         additional_cols (list, optional): List of columns to include from the additional dataset. If None, all columns are included.
         strategy (str, optional): Enrichment strategy. Options are 'left', 'right', 'outer', 'inner', 'cross' for column merges, or 'rows' for row append. Defaults to 'left'.
         conflict_resolution (str, optional): Handle row conflicts based on identifiers with 'replace', 'keep', or 'ignore'. Defaults to 'keep' if None.
+        validate (str, optional): pandas' check of a column merge ("many_to_one": one row of the file per key); a file
+            that breaks it is refused, and the main dataset returned unchanged.
 
     Returns:
         DataFrame: The enriched DataFrame or the original if an error occurs.
@@ -187,7 +243,7 @@ def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=Non
                 suffixes = ('', '_add')
 
             # Perform merge with column-based strategy
-            combined_df = pd.merge(df, additional_df, left_on=left_id_names, right_on=right_id_names, suffixes=suffixes, how=strategy)
+            combined_df = pd.merge(df, additional_df, left_on=left_id_names, right_on=right_id_names, suffixes=suffixes, how=strategy, validate=validate)
             logger.debug("Columns merged: %s", combined_df.shape)
 
             # Remove unnecessary columns based on conflict_resolution
@@ -200,13 +256,11 @@ def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=Non
         return combined_df
 
     except KeyError as e:
-        logging.error(f"Key error: {e}")
-        return df
-    except ValueError as e:
-        logging.error(f"Value error: {e}")
+        logging.error(f"Key error: {e}")  # a column's name
         return df
     except Exception as e:
-        logging.error(f"An unexpected error occurred during data enrichment: {e!s}")
+        # the type only: pandas' message quotes values (the keys a many-to-one merge finds repeated), patient data
+        logging.error("The merge failed (%s)", type(e).__name__)
         return df
 
 
