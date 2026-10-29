@@ -137,7 +137,7 @@ def _population_script() -> None:
         state.set_dataset(full, DatasetRef(name="filtered", origin="upload", file_hash="f"))
         # a change prepared on Enrich before the criteria are ticked
         state.stage(state.draft_frame().assign(y=1), "variable_computation", {}, "y")
-        activate_family("clinical_anomalies")  # Validate's "Exclude these anomalies..." button
+        activate_family("clinical_anomalies")  # Validate's "Exclude the rows..." button
         st.session_state["probe"] = {
             "analysed": len(st.session_state["data"]),
             "base": len(state.base),

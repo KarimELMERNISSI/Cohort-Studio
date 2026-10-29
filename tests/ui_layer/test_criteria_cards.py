@@ -92,7 +92,7 @@ def test_validate_shows_a_card_per_rule_in_the_flow_s_words(app: AppTest) -> Non
     # loaded before the checks, or written into the session by hand
     family["Cannot be read"] = UNREADABLE
     try:
-        codes, captions, boxes = _open(app, "Handle Clinical Anomalies")
+        codes, captions, boxes = _open(app, "Handle Implausible Values")
     finally:
         del family["Cannot be read"]
     why = (

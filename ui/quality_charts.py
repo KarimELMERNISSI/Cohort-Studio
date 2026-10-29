@@ -23,7 +23,7 @@ from ui.theme import BRAND, OKABE_ITO, TOKENS
 DIMENSION_COLORS: dict[str, str] = {
     "Completeness": OKABE_ITO[0],  # blue
     "Statistical Validity": OKABE_ITO[2],  # green
-    "Clinical Validity": OKABE_ITO[4],  # reddish purple
+    "Domain Validity": OKABE_ITO[4],  # reddish purple
     "Consistency": OKABE_ITO[5],  # sky blue
     "Uniformity": OKABE_ITO[1],  # orange
     "Uniqueness": BRAND["teal"],

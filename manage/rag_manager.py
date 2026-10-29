@@ -773,7 +773,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
     def suggest_anomaly_criteria(self, description, columns, sample_data=None, mode="anomaly"):
         """
-        Suggests anomaly or inclusion criteria based on natural language description.
+        Suggests plausibility rules or inclusion criteria based on natural language description.
         Returns a list of criteria dictionaries.
         """
         if not self.initialized:

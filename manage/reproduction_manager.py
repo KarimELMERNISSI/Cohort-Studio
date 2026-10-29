@@ -164,7 +164,7 @@ def _population_rows(
     Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
     evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
     to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
-    an anomaly rule's bound must not take its row out of the next fill.
+    a plausibility rule's bound must not take its row out of the next fill.
     """
     criteria = criteria_from_trace(block)
     if not criteria:

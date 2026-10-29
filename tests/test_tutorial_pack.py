@@ -94,7 +94,9 @@ def test_files_match_the_generator(cohort: pd.DataFrame) -> None:
         assert column in DICTIONARY, column
 
 
-def test_anomaly_rules_flag_exactly_the_planted_errors(cohort: pd.DataFrame, config: dict) -> None:
+def test_plausibility_rules_flag_exactly_the_planted_errors(
+    cohort: pd.DataFrame, config: dict
+) -> None:
     masks = _masks(cohort, config, "clinical_anomalies")
     counts = {name: int(m.sum()) for name, m in masks.items()}
     assert counts == {

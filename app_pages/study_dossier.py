@@ -14,6 +14,7 @@ import streamlit as st
 from core.attrition import AnalysisCount
 from core.criteria import describe_definition
 from core.lineage import verify_trace
+from core.population import family_words
 from core.state import checksum_text
 from core.steps import DOCUMENT, LOAD, POPULATION, step_title
 from core.steps import ids as step_ids
@@ -107,7 +108,7 @@ def _criteria_table(population) -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "Family": c.family.replace("_", " "),
+                "Family": family_words(c.family),
                 "Criterion": c.name,
                 "Kind": c.kind,
                 "Definition": describe_definition(c.name, c.definition),

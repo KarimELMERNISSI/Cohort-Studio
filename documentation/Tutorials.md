@@ -25,17 +25,18 @@ Step-by-step guides for common workflows in CohortStudio.
 
 ## Tutorial 2: Data Quality Check & Cleaning
 
-**Goal**: Identify anomalies, outliers, and incomplete records, and define the analysis population.
+**Goal**: Identify implausible values, outliers, and incomplete records, and define the analysis population.
 
 Inclusion and exclusion criteria are filters: ticking them in the sidebar defines the analysis population and
 deletes no row.
 
 1. Go to **Data > Validate**.
 2. In the **Data Quality Dashboard** tab, review the **Global Quality Score**.
-3. In the **Handle Clinical Anomalies** tab:
-- Add anomaly criteria under **New Anomaly Criterion** (e.g. a plausible range for a column).
-- Click **Run Anomaly Detection** and review the flagged rows.
-- Click **Exclude these anomalies from the analysis population** to tick the anomaly rules in the sidebar.
+3. In the **Handle Implausible Values** tab:
+- Add plausibility rules under **New Plausibility Rule** (e.g. a plausible range for a column).
+- Click **Run the Plausibility Check** and review the flagged rows.
+- Click **Exclude the rows with implausible values from the analysis population** to tick the plausibility rules in
+  the sidebar.
 4. In the **Handle Inclusion Criteria** tab:
 - Add criteria under **New Inclusion Criterion** (e.g. `df['age'] >= 18`).
 - Click **Run Inclusion Criteria Check** and review the rows that meet them.

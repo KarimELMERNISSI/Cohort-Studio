@@ -1,6 +1,6 @@
 # Data Validation & Monitoring
 
-The **Data Validation & Monitoring** page provides a comprehensive data quality framework. It detects clinical anomalies, applies inclusion/exclusion criteria, identifies statistical and ML-based outliers, and compares dataset versions — all tracked through an integrated Data Quality Score.
+The **Data Validation & Monitoring** page provides a comprehensive data quality framework. It flags implausible values, applies inclusion/exclusion criteria, identifies statistical and ML-based outliers, and compares dataset versions — all tracked through an integrated Data Quality Score.
 
 ---
 
@@ -24,11 +24,12 @@ Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, M
 
 ---
 
-## Clinical Anomalies
+## Implausible Values
 
-The system checks your dataset for values that are clinically impossible or suspect, using the anomaly rules of your
-study configuration. Declare the rules on the **Handle Clinical Anomalies** tab, or load a configuration file (JSON)
-from the sidebar (**Action** > *Load Existing Config*); **Download Configuration File** saves it for a later session.
+The system checks your dataset for values that domain knowledge says are impossible or suspect, such as a potassium
+of 25 mmol/L or a discharge before admission, using the plausibility rules of your study configuration. Declare the
+rules on the **Handle Implausible Values** tab, or load a configuration file (JSON) from the sidebar (**Action** >
+*Load Existing Config*); **Download Configuration File** saves it for a later session.
 A loaded file adds the families and rules this session lacks, each whole. A rule this session already holds keeps its
 definition here, and the page names those whose definition in the file differs.
 For someone else, use **Download for Sharing** (`config_for_sharing.json`). It holds the criteria and the derived
@@ -45,13 +46,15 @@ such as `df['patient_id'] == 'P-0042'`).
 
 1. **Rule Evaluation** — Each rule is checked on every row: a plausible range on one column (for example potassium
    outside 2.5–7.0) or an expression (for example `df['BMI'] > 100`). See *Mask Types* below.
-2. **Anomaly Flagging** — Rows with anomalies are flagged, with the violated rule displayed per variable.
-3. **Impact Score** — Anomalies contribute to the overall Data Quality Score.
+2. **Flagging** — Rows with implausible values are flagged, with the broken rule displayed per variable.
+3. **Impact Score** — They lower the *Domain Validity* dimension of the Data Quality Score.
 
-### Anomaly Rules
+### Plausibility Rules
 
-Every anomaly rule belongs to the *clinical_anomalies* family (operator `any`): a row is flagged when at least one
-rule fires. The rules have no severity classes (such as impossible or suspect).
+Every plausibility rule belongs to the family of implausible values (operator `any`): a row is flagged when at least
+one rule fires. The rules have no severity classes (such as impossible or suspect). In configuration files and traces
+the family keeps its id, *clinical_anomalies* (its name until CohortStudio 2.4), so files written before load as
+they did.
 
 ---
 
@@ -63,8 +66,8 @@ organised into **mask families** — groups of related conditions combined with 
 
 ### Key Concepts
 
-- **Mask Family**: A group of conditions. The page fills three families: *clinical_anomalies* (Handle Clinical
-  Anomalies tab), *study_inclusion* (Handle Inclusion Criteria tab) and *outliers* (Handle Outliers tab); a loaded
+- **Mask Family**: A group of conditions. The page fills three families: *clinical_anomalies* (Handle Implausible
+  Values tab), *study_inclusion* (Handle Inclusion Criteria tab) and *outliers* (Handle Outliers tab); a loaded
   configuration file can add others.
 - **Mask**: An individual condition within a family (numeric range or expression).
 - **Family Operator**: How masks within a family combine — `all` (inclusion: a row must meet every ticked criterion)
@@ -80,7 +83,7 @@ organised into **mask families** — groups of related conditions combined with 
 
 A numeric mask applies to the column named like the mask. With both bounds, the strategy *include* selects the
 values inside the range and *exclude* the values outside it: for an inclusion criterion, use *include* with the
-eligible range (age 18–85); for an anomaly rule, use *exclude* with the plausible range (potassium 2.5–7.0 flags 9.8).
+eligible range (age 18–85); for a plausibility rule, use *exclude* with the plausible range (potassium 2.5–7.0 flags 9.8).
 With a single bound, the values at or beyond it are selected (lower bound 18: age ≥ 18). In a configuration file, a
 single bound with the strategy *exclude* selects the values short of it instead (age < 18), and the participant
 flow says so. An expression is a Python condition on `df`; combine conditions with `&` (and) or `|` (or), each in
@@ -88,11 +91,11 @@ brackets.
 
 ### Workflow
 
-1. Open the tab of the family: **Handle Clinical Anomalies** or **Handle Inclusion Criteria**.
+1. Open the tab of the family: **Handle Implausible Values** or **Handle Inclusion Criteria**.
 2. Add individual masks (numeric or expression), by hand or with the *AI Assistant* (AI engine required).
 3. Run the check to see the flagged and retained rows.
-4. Click **Exclude these anomalies from the analysis population** or **Restrict the analysis population to these
-   criteria**: the family is ticked in the sidebar (*Population*). You can also tick or untick single criteria there.
+4. Click **Exclude the rows with implausible values from the analysis population** or **Restrict the analysis
+   population to these criteria**: the family is ticked in the sidebar (*Population*). You can also tick or untick single criteria there.
 
 ### The analysis population
 
@@ -101,7 +104,7 @@ brackets.
   population is not shown as current.
 - Families are applied in the order of the configuration: an exclusion family (operator *any*) excludes a row when a
   ticked rule fires; an inclusion family (operator *all*) excludes a row that fails a ticked criterion. A missing
-  value never fires a rule: it does not flag an anomaly and does not meet an inclusion criterion.
+  value never fires a rule: it is not flagged as implausible and does not meet an inclusion criterion.
 - A ticked criterion that cannot be evaluated (a typo in a column name, a text column in a numeric rule) stops the
   analyses with an explanation instead of silently keeping or dropping rows.
 - **The checks, the quality dashboard and the population read the rules the same way**, so they count the same rows.
@@ -241,13 +244,13 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
 | **Statistical Validity** | Proportion of non-outlier values (based on selected method). |
-| **Clinical Validity** | Compliance with defined clinical anomaly rules. |
+| **Domain Validity** | Percentage of rows that break none of the plausibility rules you declare. |
 | **Consistency** | Percentage of columns with correct data type definitions. |
 | **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
 | **Uniqueness** | Percentage of unique (non-duplicate) rows. |
 
-The **global score** is the weighted mean of the dimensions (Score Weights Configuration; clinical validity counts
-double by default, and is left out when no anomaly rule is declared). It is drawn as three linked charts:
+The **global score** is the weighted mean of the dimensions (Score Weights Configuration; domain validity counts
+double by default, and is left out when no plausibility rule is declared). It is drawn as three linked charts:
 
 - **The ring** — each coloured segment is one dimension, sized by its weight; the grey gap after a segment is the
   points that dimension loses, so the score in the centre is 100 minus the gaps. Hover a segment for its score,

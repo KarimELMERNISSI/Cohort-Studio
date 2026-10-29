@@ -2,7 +2,7 @@
 
 ## anomaly_criteria.py
 
-_Prompt for generating anomaly and inclusion criteria._
+_Prompt for generating plausibility rules and inclusion criteria._
 
 ### def `anomaly_criteria_prompt` (anomaly_criteria.py)
 

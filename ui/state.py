@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_COHORT_PATH = Path(__file__).resolve().parents[1] / "assets" / "sample_cohort.csv"
 SAMPLE_DICTIONARY_PATH = SAMPLE_COHORT_PATH.with_name("sample_cohort_dictionary.md")
-# The tutorial pack: a richer cohort, its study configuration (anomaly rules, inclusion criteria),
+# The tutorial pack: a richer cohort, its study configuration (plausibility rules, inclusion criteria),
 # a follow-up file to merge, and its dictionary (dev_scripts/make_tutorial_cohort.py).
 TUTORIAL_DIR = SAMPLE_COHORT_PATH.parent / "tutorial"
 TUTORIAL_COHORT_PATH = TUTORIAL_DIR / "tutorial_cohort.csv"
@@ -942,7 +942,7 @@ class AppState:
         """
         The quality audit of every row (the Validate dashboard): the auditor, its metrics and its advice. It is kept
         until the data, the criteria definitions, the declared derived variables or the validity method change; the
-        page only reads the auditor. One audit is kept per session, with the rows that break an anomaly rule
+        page only reads the auditor. One audit is kept per session, with the rows that break a plausibility rule
         (``clinical_anomalies_df``).
         """
         import copy
@@ -1240,7 +1240,7 @@ class AppState:
         )
 
     def load_tutorial_cohort(self, *, with_config: bool = True) -> DatasetRef:
-        """The tutorial cohort; its study configuration (anomaly rules, inclusion criteria) is loaded too."""
+        """The tutorial cohort; its study configuration (plausibility rules, inclusion criteria) is loaded too."""
         from ingest.loaders import read_table
 
         data = TUTORIAL_COHORT_PATH.read_bytes()

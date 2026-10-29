@@ -1,7 +1,7 @@
 # Screenshot library
 
 Screenshots of the real application on the tutorial cohort (Start > Load the tutorial cohort), with the
-clinical-anomaly and study-inclusion criteria ticked (928 of 1,206 rows). Each one is a 1440x900 browser viewport
+plausibility rules and study-inclusion criteria ticked (928 of 1,206 rows). Each one is a 1440x900 browser viewport
 captured at 2x and stored as lossless WebP. They are the source of the images of the documentation site
 (`docs/assets`) and of the README (`assets/readme`), and of any new image, such as another animation.
 

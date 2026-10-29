@@ -33,7 +33,7 @@ class DataQualityAuditor:
     - Uniqueness: Presence of duplicate rows.
     - Validity: Presence of outliers in numerical data.
     - Consistency: Basic type consistency checks.
-    - Clinical Validity: Compliance with declared anomaly criteria.
+    - Domain Validity: rows that break none of the declared plausibility rules.
     """
 
     def __init__(
@@ -180,13 +180,13 @@ class DataQualityAuditor:
         score = (1 - (inconsistent_cols / len(object_cols))) * 100
         return round(score, 2)
 
-    def compute_clinical_validity(self) -> float | None:
+    def compute_domain_validity(self) -> float | None:
         """
-        Calculates a score based on declared anomaly criteria (if available).
-        Score = 100 - (% of rows the clinical-anomalies family flags). The rules are read as the analysis
+        Calculates a score based on the declared plausibility rules (if any).
+        Score = 100 - (% of rows the family of implausible values, clinical_anomalies, flags). The rules are read as the analysis
         population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
         evaluated is listed in the details, and the score uses the rules that can.
-        Returns None if no anomaly rules are defined (shows as N/A in dashboard).
+        Returns None if no plausibility rule is declared (shows as N/A in dashboard).
         """
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
@@ -196,7 +196,7 @@ class DataQualityAuditor:
             return None
 
         anomaly_config = self.config["mask_families"].get("clinical_anomalies", {})
-        # If no anomaly rules defined, return None (N/A - no rules to evaluate)
+        # If no plausibility rule is declared, return None (N/A - no rules to evaluate)
         if not anomaly_config:
             return None
 
@@ -209,7 +209,7 @@ class DataQualityAuditor:
                 )
             if masks.flag is None:
                 # no rule can be evaluated (or the operator is unusable): N/A, with the reasons
-                self.details["Clinical Validity"] = _details(broken)
+                self.details["Domain Validity"] = _details(broken)
                 return None
             any_anomaly_mask = masks.flag
             anomaly_data = dict(masks.rules)
@@ -223,18 +223,18 @@ class DataQualityAuditor:
                 # 2. Store the original values for display
                 self.clinical_anomalies_df = self.df[any_anomaly_mask].copy()
                 
-                # 3. Add an "Anomalies" column listing the triggered masks
+                # 3. Add a "Rules broken" column listing the rules that fire
                 def get_active_anomalies(row):
                     return [col for col in row.index if row[col]]
                 
                 anomalies_list = self.clinical_anomalies_booleans.apply(get_active_anomalies, axis=1)
-                self.clinical_anomalies_df.insert(0, "Anomalies", anomalies_list)
+                self.clinical_anomalies_df.insert(0, "Rules broken", anomalies_list)
 
             total_rows = len(self.df)
             if total_rows == 0:
                 return 100.0
 
-            self.details["Clinical Validity"] = _details(
+            self.details["Domain Validity"] = _details(
                 [
                     (str(rule), "rows flagged by this rule", int(mask.sum()), float(mask.sum()) / total_rows)
                     for rule, mask in anomaly_data.items()
@@ -247,7 +247,7 @@ class DataQualityAuditor:
             return round(score, 2)
             
         except Exception as e:
-            logger.error("Error computing clinical validity: %s", e)
+            logger.error("Error computing domain validity: %s", e)
             return None
 
     def compute_uniformity(self) -> float:
@@ -444,10 +444,10 @@ class DataQualityAuditor:
             "Uniformity": self.compute_uniformity()
         }
         
-        # Add Clinical Validity only if rules are defined (otherwise N/A)
-        clinical_score = self.compute_clinical_validity()
-        if clinical_score is not None:
-            self.metrics["Clinical Validity"] = clinical_score
+        # Add Domain Validity only if rules are declared (otherwise N/A)
+        domain_score = self.compute_domain_validity()
+        if domain_score is not None:
+            self.metrics["Domain Validity"] = domain_score
         
         self.generate_advice()
         return self.metrics
@@ -517,9 +517,9 @@ class DataQualityAuditor:
                 "severity": "low"
             })
 
-        # 5. Clinical Validity Advice
-        if "Clinical Validity" in self.metrics and self.metrics["Clinical Validity"] < 100:
-            msg = f"Detected rows violating declared anomaly criteria (Score: {self.metrics['Clinical Validity']}%)."
+        # 5. Domain Validity Advice
+        if "Domain Validity" in self.metrics and self.metrics["Domain Validity"] < 100:
+            msg = f"Some rows break the declared plausibility rules (Domain Validity: {self.metrics['Domain Validity']}%)."
             
             # Try to find top violated rule
             if hasattr(self, 'clinical_anomalies_booleans') and self.clinical_anomalies_booleans is not None:
@@ -528,12 +528,12 @@ class DataQualityAuditor:
                     top_rule = rule_counts.index[0]
                     msg += f" Most frequent violation: **{top_rule}**."
             
-            msg += " Review 'Data Validation & Monitoring' tab."
+            msg += " Review them on the Handle Implausible Values tab."
 
             self.advice.append({
-                "category": "Clinical Validity",
+                "category": "Domain Validity",
                 "message": msg,
-                "severity": "high" if self.metrics["Clinical Validity"] < 90 else "medium"
+                "severity": "high" if self.metrics["Domain Validity"] < 90 else "medium"
             })
 
         # 6. Uniformity Advice

@@ -1056,6 +1056,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   that has no missing value, or no value at all, has no correlation, not even with itself, and SciPy refused the
   distances. Such a column is now at distance 1 from every other column, and 0 from itself.
 
+### Validate: clinical anomalies are now implausible values
+
+- **The rules that flag what domain knowledge says cannot be are plausibility rules, and the rows they flag hold
+  implausible values.** "Clinical" was too narrow: the same rules check registries, administrative files and other
+  fields, such as a discharge before admission or a negative duration. The tab is **Handle Implausible Values**; the
+  sidebar says *Exclude: implausible values*; the participant flow, the study dossier, the trace report and the
+  Start page say *implausible values*. The quality dashboard's *Clinical Validity* is now **Domain Validity**, beside *Statistical
+  Validity*: the share of rows that break none of the plausibility rules, counted as before.
+- **Files and traces are unchanged.** The family keeps its id `clinical_anomalies` in configuration files, criterion
+  ids and traces, so earlier files load and traces replay as they did, and the population's fingerprint is the same.
+- The tab's AI assistant is asked for plausibility rules (values or combinations that domain knowledge says cannot
+  be right) rather than for rows to flag as suspicious.
+- The dashboard's table of the rows that break a rule names its first column *Rules broken*, and downloads as
+  `implausible_values.csv`.
+
 ## [2.4.1] - 2026-10-17
 
 Security work, fixes found by code scanning and in use, and one addition to imputation. The first release archived

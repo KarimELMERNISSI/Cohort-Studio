@@ -1,9 +1,9 @@
 """
-Strict evaluation of one study criterion (clinical anomaly rule, inclusion criterion, outlier rule).
+Strict evaluation of one study criterion (plausibility rule, inclusion criterion, outlier rule).
 
-A criterion *fires* on a row when its condition holds: for an anomaly or outlier rule the row is
-flagged, for an inclusion criterion the row meets it. A missing value never fires (an anomaly is not
-flagged on a missing value, an inclusion criterion is not met by one), unless an expression asks for
+A criterion *fires* on a row when its condition holds: for a plausibility or outlier rule the row
+is flagged, for an inclusion criterion the row meets it. A missing value never fires (a value is not
+flagged implausible when missing, an inclusion criterion is not met by one), unless an expression asks for
 missing values explicitly (``df['x'].isna()``).
 
 Every problem raises :class:`CriterionError`, so a population built on a broken criterion fails visibly instead

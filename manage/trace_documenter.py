@@ -8,6 +8,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 from core.lineage import verify_trace
+from core.population import family_words
 from core.steps import step_title
 
 
@@ -154,7 +155,7 @@ class TraceDocumenter:
                 cell.text = title
             for stage in population.get("stages") or []:
                 cells = table.add_row().cells
-                cells[0].text = f"{stage.get('family')} ({stage.get('kind')})"
+                cells[0].text = f"{family_words(str(stage.get('family')))} ({stage.get('kind')})"
                 cells[1].text = f"{stage.get('n_in', 0):,}"
                 cells[2].text = f"{stage.get('n_excluded', 0):,}"
                 cells[3].text = f"{stage.get('n_out', 0):,}"

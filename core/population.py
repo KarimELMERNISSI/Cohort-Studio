@@ -3,7 +3,7 @@ The analysis population: which rows of the dataset an analysis uses.
 
 Inclusion and exclusion criteria are filters the user ticks or unticks; they never delete rows. The
 study configuration groups criteria in families (``config["mask_families"]``): a family with the operator
-``any`` (clinical anomalies, outliers) is an *exclusion* family (a row is excluded when a ticked rule fires),
+``any`` (implausible values, outliers) is an *exclusion* family (a row is excluded when a ticked rule fires),
 a family with the operator ``all`` (study inclusion) an *inclusion* family (a row is excluded when it fails
 a ticked criterion), and a family with a threshold operator one exclusion rule "at least k of these".
 
@@ -53,6 +53,16 @@ def _digest(payload: Any, length: int = 16) -> str:
 
 def criterion_id(family: str, name: str) -> str:
     return f"{family}::{name}"
+
+
+# What the pages, the participant flow and the dossier call a family. Its id is stored (config.json, criterion ids,
+# traces, the population fingerprint) and never changes; its words may.
+FAMILY_WORDS: dict[str, str] = {"clinical_anomalies": "implausible values"}
+
+
+def family_words(family: str) -> str:
+    """A family in words: "implausible values" for ``clinical_anomalies``, else its id with spaces."""
+    return FAMILY_WORDS.get(family, family.replace("_", " "))
 
 
 @dataclass(frozen=True)
@@ -603,6 +613,7 @@ def active_criteria(
 
 __all__ = [
     "EXCLUSION",
+    "FAMILY_WORDS",
     "INCLUSION",
     "SHARED_KEYS",
     "Criterion",
@@ -621,5 +632,6 @@ __all__ = [
     "family_kind",
     "family_masks",
     "family_operator",
+    "family_words",
     "merge_families",
 ]

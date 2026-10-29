@@ -117,8 +117,8 @@ class TestDataQualityAuditor:
         issues = [d["Issues"] for d in auditor.uniformity_details]
         assert any("Whitespace" in i or "Capitalization" in i for i in issues)
 
-    def test_clinical_validity_with_and_without_rules(self) -> None:
-        """Clinical validity evaluates custom anomaly rules when provided in config."""
+    def test_domain_validity_with_and_without_rules(self) -> None:
+        """Domain validity evaluates the declared plausibility rules when provided in config."""
         df = pd.DataFrame({
             "sbp": [120, 130, 240, 115],  # 240 is clinically abnormal (> 200)
             "dbp": [80, 85, 130, 78],
@@ -126,9 +126,9 @@ class TestDataQualityAuditor:
 
         # No config -> returns None (N/A)
         auditor_no_config = DataQualityAuditor(df)
-        assert auditor_no_config.compute_clinical_validity() is None
+        assert auditor_no_config.compute_domain_validity() is None
 
-        # Config with clinical anomaly rule formatted as expression
+        # Config with a plausibility rule formatted as an expression
         config = {
             "mask_families": {
                 "clinical_anomalies": {
@@ -139,7 +139,7 @@ class TestDataQualityAuditor:
             }
         }
         auditor_with_rules = DataQualityAuditor(df, config=config)
-        score = auditor_with_rules.compute_clinical_validity()
+        score = auditor_with_rules.compute_domain_validity()
         # 1 out of 4 rows triggers anomaly -> 75.0%
         assert score == 75.0
         assert auditor_with_rules.clinical_anomalies_df is not None

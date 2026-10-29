@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `app_pages.validate_dates.render_date_checks`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `app_pages.validate_dates.render_date_checks`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1274,7 +1274,7 @@ Main application function for the Data Monitoring page.
 
 Handles:
 1. Data Quality Dashboard (Data Validity, Completeness, etc.).
-2. Clinical Anomalies Management (Add/Apply Masks).
+2. Implausible values: the plausibility rules (add, apply).
 3. Study Inclusion Criteria Management (Add/Apply Masks).
 4. Outlier Handling (Univariate & Multivariate).
 5. Dataset Comparison (Changes tracking).
@@ -1329,7 +1329,7 @@ from the widgets here.
 
 - **Returns**: `dict[ComplexType]`
 
-The columns each anomaly rule reads (core.criteria.criterion_columns), whose cells the anomaly report highlights
+The columns each plausibility rule reads (core.criteria.criterion_columns), whose cells the report highlights
 where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
 
 ### def `missingness_linkage` (data_quality_dashboard.py)
@@ -2623,7 +2623,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -2794,7 +2794,7 @@ Render the Users page.
 
 ## validate.py
 
-_Validate page: data quality dashboard, anomalies, inclusion criteria, outliers, version comparison._
+_Validate page: data quality dashboard, implausible values, inclusion criteria, outliers, version comparison._
 
 **Imports**:
 `app_pages.data_monitoring.app`, `ui.components.page_header`

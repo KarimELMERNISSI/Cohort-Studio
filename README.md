@@ -55,7 +55,7 @@ The Start page draws this workflow: three core steps from a raw file to results,
 
 1. **Plain files and per-user workspaces**: each saved version is a complete Parquet file (`name_v1`, `name_v2`, …) written with pyarrow, with a lineage file next to it; DuckDB holds the user accounts and the statistics cache. Every account works in its own workspace.
 2. **Statistics** (`biostats`, in the data and statistics engine): Welch-first group comparisons with effect sizes and confidence intervals ($\text{Hedges' } g$, rank-biserial $r$, $\eta^2$, $\omega^2$), ANCOVA (one outcome, several covariates) with a test of parallel slopes, 2x2 measures with the Haldane-Anscombe correction, Little's MCAR test, diagnostic accuracy (ROC, PPV, NPV, likelihood ratios), survival and regression models, and multiple imputation. Normality and variance checks are diagnostics, never gates.
-3. **Data quality**: a score across completeness, uniqueness, consistency, uniformity, statistical validity (IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN) and the clinical anomaly rules you declare.
+3. **Data quality**: a score across completeness, uniqueness, consistency, uniformity, statistical validity (IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN) and the plausibility rules you declare (domain validity).
 4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions, and new variables proposed from the columns of your dataset (standard indices and scores, each with its source and a formula checked against your columns). Cloud providers, and an Ollama or a Qdrant server outside your network, need an explicit consent; the suggestions come from the language model and are not checked against a terminology.
 5. **Analysis Population, Recorded Lineage & Checked Replay**: Inclusion and exclusion criteria are filters you tick in the sidebar; every page analyses the same population, every result says which population and data it was computed on, and a result computed on other data is not shown as current. Every change of the data goes through one write path and is one step of a hash-chained (tamper-evident) JSON trace that records what it did to the table. The headless engine (`run_trace`) replays the trace, checks every step against the fingerprint recorded for it, and says when the replayed table is exactly the analysed one; a multiple imputation is re-run and its imputed cells are checked; the few steps it cannot recompute (the single imputation adopted from the former multiple-imputation panel) are listed. A Microsoft Word (`.docx`) report documents the trace, and a Word **study dossier** gathers the provenance, the participant flow (STROBE item 13), the data handling, the missing data (with the multiple-imputation items of Sterne et al. 2009) and the results you add to it. Neither is an electronically signed record, and neither certifies compliance with a reporting guideline.
 
@@ -66,11 +66,11 @@ The Start page draws this workflow: three core steps from a raw file to results,
 | Area                     | What CohortStudio does                                                                                      |
 | :----------------------- | :---------------------------------------------------------------------------------------------------------- |
 | **Storage**              | Parquet versions (`name_v1`, `name_v2`, …) with a lineage file, in a workspace per user                      |
-| **Analysis population**  | Inclusion, anomaly and outlier criteria ticked in the sidebar; participant flow (STROBE item 13)             |
+| **Analysis population**  | Inclusion, plausibility and outlier criteria ticked in the sidebar; participant flow (STROBE item 13)        |
 | **Statistics**           | Welch-first comparisons with effect sizes, 2x2 measures, survival and regression, diagnostic accuracy, agreement |
 | **Missing data**         | Little's MCAR test; declared derived variables (a BMI from the weight and the height) checked against the data, filled exactly and recomputed from their imputed inputs; single imputation for exploration or multiple imputation pooled with Rubin's rules |
 | **Outliers**             | IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN                                      |
-| **Clinical anomaly rules** | Bounds and expressions declared in the study configuration                                                 |
+| **Plausibility rules**   | Bounds and expressions declared in the study configuration, flagging implausible values                     |
 | **Reproducibility**      | Hash-chained trace (tamper-evident, not signed), a replay that checks every step, Word report and study dossier |
 | **AI (optional)**        | Local Ollama by default; Gemini, OpenAI, Mistral and Claude, and an Ollama or Qdrant server outside your network, after an explicit consent |
 | **Knowledge graphs**     | Offline Plotly/NetworkX engine by default, or a static Graphviz one; the proprietary yFiles engine is optional |
@@ -185,13 +185,13 @@ the replay handles it.
 - **Diagnostic Test Accuracy**: Sensitivity, Specificity, Positive/Negative Predictive Values (PPV/NPV), Diagnostic Odds Ratio, Youden's Index, Likelihood Ratios (LR+, LR-), and ROC AUC.
 - **Multiple Testing Corrections**: Holm (the default) and Bonferroni for the family-wise error rate, Benjamini-Hochberg for the false discovery rate.
 
-### 3. Data Quality & Anomaly Profiling
+### 3. Data Quality & Plausibility Profiling
 
 - **Completeness Index**: Total non-missing data ratio with variable-level missingness ranking.
 - **Uniqueness Index**: Detection of exact duplicate rows.
 - **Statistical Validity**: Univariate (IQR, Z-Score, Quantiles) and multivariate (Isolation Forest, Local Outlier Factor, DBSCAN) outlier scoring.
 - **Consistency & Uniformity**: Identification of mis-typed numerical/date strings, trailing whitespace, and capitalization inconsistencies.
-- **Clinical Rules**: Clinical exclusion and anomaly rules declared as bounds or expressions (`mask_families` in the study configuration, built on Validate or loaded from a JSON file).
+- **Plausibility Rules**: Rules that flag implausible values, declared as bounds or expressions (`mask_families` in the study configuration, built on Validate or loaded from a JSON file).
 
 ### 4. Advanced Data Enrichment
 
@@ -220,7 +220,7 @@ Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area f
 
 - **Trace Engine**: Logs timestamped steps with function names, serialized parameters, and output snapshot paths.
 - **Pipeline Replay**: Replays the recorded steps (enrichment joins, derived variables, targeted formula imputation, single imputation fitted on the recorded population, date conversion, outlier clipping, kept population) headless (`run_trace`) or from the Versions & traces page, checks each step against its recorded fingerprint, re-runs a multiple imputation and checks that it finds the same imputed cells, and lists every step it could not recompute (the single imputation adopted from the former multiple-imputation panel).
-- **Analysis Population**: Inclusion, anomaly and outlier criteria are ticked or unticked in the sidebar and filter every analysis without deleting rows; Validate shows the participant flow (rows in, excluded and out per family, per-criterion counts and reasons). Imputation on Enrich is fitted on the population rows only.
+- **Analysis Population**: Inclusion, plausibility and outlier criteria are ticked or unticked in the sidebar and filter every analysis without deleting rows; Validate shows the participant flow (rows in, excluded and out per family, per-criterion counts and reasons). Imputation on Enrich is fitted on the population rows only.
 - **Integrity**: Trace steps are chained by SHA-256 hashes (tamper-evident, not signed); saved versions carry a lineage file (fingerprint, parent trace, population) checked when they are loaded.
 - **Replay Modes**: Fast replay loads the snapshot recorded with each step; Full replay recomputes every step from the source file. Paths are resolved inside the user's workspace, on Windows and Linux.
 - **Trace download**: Reproduce > Versions & traces downloads a trace as recorded (JSON), so that its chain can be checked elsewhere.
@@ -431,7 +431,7 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 
 - [**00_Researcher_Handbook.md**](documentation/00_Researcher_Handbook.md): Methodological workflow, clinical philosophy, and phase-by-phase execution guide.
 - [**01_Home.md**](documentation/01_Home.md): The Start page, file import (encoding, delimiter and decimal detection, parse report) and saved versions.
-- [**02_Data_Validation.md**](documentation/02_Data_Validation.md): Quality scorecards, clinical anomaly masks, outlier clipping, and version comparisons.
+- [**02_Data_Validation.md**](documentation/02_Data_Validation.md): Quality scorecards, plausibility rules, outlier clipping, and version comparisons.
 - [**03_Data_Enrichment.md**](documentation/03_Data_Enrichment.md): Merges, derived variables, targeted and global single imputation, multiple imputation for inference, dimensionality reduction, and clustering.
 - [**04_Visualization.md**](documentation/04_Visualization.md): Interactive Plotly clinical graphics with integrated statistical significance overlays.
 - [**05_Epidemiology.md**](documentation/05_Epidemiology.md): Parametric/non-parametric testing, ANCOVA, power analysis, and epidemiological ratios.

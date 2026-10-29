@@ -11,21 +11,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-# Display order and the default weights (clinical rules count double).
+# Display order and the default weights (the plausibility rules count double).
 DIMENSIONS: tuple[str, ...] = (
     "Completeness",
     "Statistical Validity",
-    "Clinical Validity",
+    "Domain Validity",
     "Consistency",
     "Uniformity",
     "Uniqueness",
 )
-DEFAULT_WEIGHTS: dict[str, float] = {name: 1.0 for name in DIMENSIONS} | {"Clinical Validity": 2.0}
+DEFAULT_WEIGHTS: dict[str, float] = {name: 1.0 for name in DIMENSIONS} | {"Domain Validity": 2.0}
 
 DIMENSION_HELP: dict[str, str] = {
     "Completeness": "Share of cells that are not empty.",
     "Statistical Validity": "Share of numeric values not flagged as outliers by the method chosen in Handle Outliers.",
-    "Clinical Validity": "Share of rows that trigger none of the declared clinical anomaly rules.",
+    "Domain Validity": "Share of rows that break none of the declared plausibility rules.",
     "Consistency": "Share of text columns whose values do not look like numbers or dates stored as text.",
     "Uniformity": "Share of text columns without stray spaces or mixed capitalisation.",
     "Uniqueness": "Share of rows that are not an exact duplicate of another row.",
@@ -78,7 +78,7 @@ def weighted_score(
     metrics: Mapping[str, float | None], weights: Mapping[str, float] | None = None
 ) -> QualityScore:
     """
-    Weighted mean of the available dimensions (a ``None`` metric, e.g. clinical validity without rules, is left out).
+    Weighted mean of the available dimensions (a ``None`` metric, e.g. domain validity without rules, is left out).
 
     With every weight at zero the global score is 0, as before.
     """

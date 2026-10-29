@@ -66,7 +66,7 @@ def test_validate_counts_what_the_population_counts(tutorial, family: str) -> No
 def test_the_dashboard_counts_the_anomaly_family(tutorial) -> None:
     df, config = tutorial
     auditor = DataQualityAuditor(df, config)
-    score = auditor.compute_clinical_validity()
+    score = auditor.compute_domain_validity()
     flagged = len(_flagged(df, config, "clinical_anomalies"))
     assert flagged == 16 and score == pytest.approx(round((1 - flagged / len(df)) * 100, 2))
 
@@ -91,7 +91,7 @@ def test_a_threshold_family_counts_the_same_on_every_screen() -> None:
     assert masks.operator == "threshold" and list(df.index[masks.flag]) == [5, 6]
     assert df.index[masks.flag].equals(_excluded_by_family(df, config, "clinical_anomalies"))
     auditor = DataQualityAuditor(df, config)
-    assert auditor.compute_clinical_validity() == pytest.approx(round((1 - 2 / len(df)) * 100, 2))
+    assert auditor.compute_domain_validity() == pytest.approx(round((1 - 2 / len(df)) * 100, 2))
 
 
 def test_an_operator_is_read_without_regard_to_case() -> None:

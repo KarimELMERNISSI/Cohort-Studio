@@ -517,6 +517,11 @@ combines them. Operators are read without regard to case, and a Validate tab giv
 Do not add keys at family level other than `operator`. `description` in a rule is shown as the help text of its
 criterion in the sidebar, and in its box on Validate.
 
+A family's id is stored (configuration files, criterion ids such as `clinical_anomalies::Implausible age`, traces,
+the population fingerprint) and never changes; the pages, the participant flow and the dossier name it in words,
+`core.population.family_words`: `clinical_anomalies` is shown as *implausible values*, the family of the
+plausibility rules, and any other family as its id with spaces.
+
 #### Criterion kinds
 
 Each kind of rule is one `CriterionKind` in the catalogue `core.criteria.CRITERION_KINDS` (a `core.registry.Catalogue`).
@@ -600,12 +605,12 @@ M6's `date_order` and M9's `concept` are one registration each.
 
 Ticked criteria define the analysis population (`core/population.py`). A ticked criterion that cannot be evaluated
 (unknown column, syntax error) stops the analyses: the population is not `ok`, and the pages show the error until the
-criterion is unticked or corrected. The **Run Anomaly Detection** and **Run Inclusion Criteria Check** buttons of the
+criterion is unticked or corrected. The **Run the Plausibility Check** and **Run Inclusion Criteria Check** buttons of the
 Validate tabs and the quality dashboard evaluate the rules with the same functions (`core.population.family_masks`),
 so they count what the population counts. A rule that cannot be evaluated is shown with its reason, and the family
 result is left out until it is corrected.
 
-`assets/tutorial/tutorial_config.json` is a complete, tested example (8 anomaly rules, 4 inclusion criteria).
+`assets/tutorial/tutorial_config.json` is a complete, tested example (8 plausibility rules, 4 inclusion criteria).
 `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay machine-specific).
 
 ### Settings, preferences and API keys

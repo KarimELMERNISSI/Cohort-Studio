@@ -132,7 +132,7 @@ def _sync_validity_settings() -> None:
 
 def anomaly_columns(rules) -> dict[str, set[str]]:
     """
-    The columns each anomaly rule reads (core.criteria.criterion_columns), whose cells the anomaly report highlights
+    The columns each plausibility rule reads (core.criteria.criterion_columns), whose cells the report highlights
     where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
     """
     return {str(name): set(criterion_columns(str(name), spec)) for name, spec in rules.items() if name != "operator"}
@@ -282,8 +282,8 @@ def render_dashboard(df, config):
                 **3. Consistency**
                 Ensure dates are actual Date objects and numbers are Numeric. This prevents analysis errors later.
                 
-                **4. Clinical Validity**
-                This is your most important metric. Ensure your data respects the biological rules defined in *Data Validation*.
+                **4. Domain Validity**
+                This is your most important metric. Ensure your data respects the plausibility rules declared on *Validate*.
                 """)
 
     st.divider()
@@ -292,7 +292,7 @@ def render_dashboard(df, config):
     tab1, tab2, tab3, tab4 = st.tabs([
         "Completeness (Missing)", 
         "Validity (Outliers)", 
-        "Clinical Validity",
+        "Domain Validity",
         "Conformity"
     ])
 
@@ -1070,13 +1070,13 @@ def render_dashboard(df, config):
         else:
             st.info("No numerical columns to analyze.")
 
-    # --- Tab 3: Clinical Validity ---
+    # --- Tab 3: Domain Validity ---
     with tab3:
-        st.subheader("Compliance with Declared Anomaly Criteria")
-        if "Clinical Validity" in metrics:
-            st.metric("Clinical Validity Score", f"{metrics['Clinical Validity']}%")
-            if metrics['Clinical Validity'] < 100:
-                st.warning("Some rows violate the expert-defined anomaly rules.")
+        st.subheader("Rows That Break the Plausibility Rules")
+        if "Domain Validity" in metrics:
+            st.metric("Domain Validity Score", f"{metrics['Domain Validity']}%")
+            if metrics['Domain Validity'] < 100:
+                st.warning("Some rows break the declared plausibility rules.")
                 
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
                     # --- Summary Report ---
@@ -1143,12 +1143,12 @@ def render_dashboard(df, config):
                                     )
                                 }
                             )
-                            st.caption("Note: *Total Percentage* is the sum of all violations. It may be higher than the *Clinical Validity Score* gap because a single row can violate multiple criteria.")
+                            st.caption("Note: *Total Percentage* is the sum of all violations. It may be higher than the *Domain Validity Score* gap because a single row can violate multiple criteria.")
                     
                     st.divider()
 
-                    st.markdown("### Detailed Anomaly Report")
-                    st.markdown("The table below shows rows that triggered at least one anomaly. Cells causing the anomaly are highlighted (where applicable).")
+                    st.markdown("### Rows with Implausible Values")
+                    st.markdown("The table below shows the rows that break at least one plausibility rule. The cells each broken rule reads are highlighted (where applicable).")
                     
                     anomaly_rules = (auditor.config or {}).get("mask_families", {}).get("clinical_anomalies") or {}
                     reads = anomaly_columns(anomaly_rules)
@@ -1172,9 +1172,9 @@ def render_dashboard(df, config):
                     # Download button
                     csv = auditor.clinical_anomalies_df.to_csv(index=True).encode('utf-8')
                     st.download_button(
-                        label="Download Anomaly Report",
+                        label="Download the Rows with Implausible Values",
                         data=csv,
-                        file_name='clinical_anomalies.csv',
+                        file_name='implausible_values.csv',
                         mime='text/csv',
                     )
                 
@@ -1183,17 +1183,17 @@ def render_dashboard(df, config):
                     clinical_config = auditor.config["mask_families"].get("clinical_anomalies", {})
                     if clinical_config:
                         st.divider()
-                        st.markdown("### Applied Clinical Criteria")
-                        st.markdown("The following rules were used to detect anomalies:")
+                        st.markdown("### The Plausibility Rules")
+                        st.markdown("The rules the rows were checked against:")
                         # the cards of Validate, in the words of the participant flow
                         criterion_cards(clinical_config)
 
                 else:
-                    st.info("Go to the **'Data Validation & Monitoring'** page to inspect specific rows and rules.")
+                    st.info("Open the **Handle Implausible Values** tab to inspect the rows and the rules.")
             else:
-                st.success("All rows comply with the declared clinical rules.")
+                st.success("No row breaks the declared plausibility rules.")
         else:
-            st.info("No clinical anomaly rules defined yet. Go to **'Data Validation & Monitoring'** to set them up.")
+            st.info("No plausibility rule is declared yet. Declare them on the **Handle Implausible Values** tab.")
 
     # --- Tab 4: Conformity ---
     with tab4:

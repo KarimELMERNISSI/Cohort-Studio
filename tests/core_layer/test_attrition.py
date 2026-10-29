@@ -74,9 +74,13 @@ def test_the_tutorial_flow_matches_the_known_counts(tutorial) -> None:
     assert flow.main[0].label == "Records read in tutorial_cohort.csv"
     assert flow.main[-1].kind == POPULATION and flow.main[-1].label == "Analysis population"
     assert [(e.label, e.n) for e in flow.exits] == [
-        ("Excluded: clinical anomalies", 16),
+        ("Excluded: implausible values", 16),
         ("Not meeting: study inclusion", 262),
     ]
+    # the flow names the family in words; its stored id stays in the ids (config.json, criterion ids, traces)
+    assert [e.id for e in flow.exits] == ["stage:clinical_anomalies", "stage:study_inclusion"]
+    after = flow.main[1]
+    assert after.id == "after:clinical_anomalies" and after.label == "After: implausible values"
     assert all(sum(n for _, n in e.reasons) == e.n for e in flow.exits)
     assert all(e.details for e in flow.exits)  # the criteria definitions, shown on a click
     assert flow.inconsistencies() == [] and flow.notes == ()

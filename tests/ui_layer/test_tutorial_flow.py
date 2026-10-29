@@ -86,8 +86,8 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
     assert "anomaly_check_done" not in app.session_state
-    _open(app, "Handle Clinical Anomalies")
-    _click(app, "Run Anomaly Detection")
+    _open(app, "Handle Implausible Values")
+    _click(app, "Run the Plausibility Check")
     assert _metric(app, "Irregular Rows (%)").delta == "16"
     app.run()
     app.button(key="anomaly_data_apply_criteria").click().run()

@@ -124,7 +124,7 @@
             </div>
             <ol class="mini-flow">
               <li class="mf-node"><span>Records read</span><b>1,206</b></li>
-              <li class="mf-out"><span>Clinical anomalies</span><b>−16</b></li>
+              <li class="mf-out"><span>Implausible values</span><b>−16</b></li>
               <li class="mf-out"><span>Study inclusion not met</span><b>−262</b></li>
               <li class="mf-node mf-final"><span>Analysis population</span><b>928</b></li>
             </ol>
@@ -197,7 +197,7 @@
             <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-validate"/></svg></span>
             <span class="step-num">02</span>
             <h3>Validate</h3>
-            <p>Quality score, clinical anomaly rules, inclusion criteria, outliers and the participant flow.</p>
+            <p>Quality score, plausibility rules, inclusion criteria, outliers and the participant flow.</p>
           </li>
           <li class="step">
             <span class="step-icon"><svg class="i" aria-hidden="true"><use href="#i-enrich"/></svg></span>
@@ -248,7 +248,7 @@
           <div class="feature-text">
             <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-funnel"/></svg>Analysis population</p>
             <h3>One population, ticked in the sidebar, used everywhere</h3>
-            <p>Inclusion, anomaly and outlier criteria are filters, not deletions. Tick or untick them and Explore, Analyze, Survival and Enrich all work on the same rows. Rows are removed only when you choose <em>Keep only these rows</em> on Validate, a traced step.</p>
+            <p>Inclusion, plausibility and outlier criteria are filters, not deletions. Tick or untick them and Explore, Analyze, Survival and Enrich all work on the same rows. Rows are removed only when you choose <em>Keep only these rows</em> on Validate, a traced step.</p>
             <ul class="checks">
               <li>A participant flow diagram (STROBE item 13), with per-criterion counts and the reason for each exclusion</li>
               <li>Every result is stamped with its data, its population and the N analysed</li>
@@ -259,7 +259,7 @@
           <figure class="feature-media">
             <button class="zoom" type="button" aria-label="Enlarge the screenshot of the participant flow">
               <img src="assets/shots/population.webp" width="990" height="1030" loading="lazy" decoding="async"
-                   alt="Validate, Analysis population tab: the participant flow goes from 1,206 records read, minus 16 clinical anomalies and 262 not meeting the study inclusion criteria, to an analysis population of 928.">
+                   alt="Validate, Analysis population tab: the participant flow goes from 1,206 records read, minus 16 with implausible values and 262 not meeting the study inclusion criteria, to an analysis population of 928.">
               <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
             </button>
           </figure>
@@ -269,9 +269,9 @@
           <div class="feature-text">
             <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-gauge"/></svg>Data quality</p>
             <h3>A quality score you can act on</h3>
-            <p>Six dimensions, from completeness to clinical validity, with weights you can adjust and a breakdown of where the score loses points, so you know where to look first.</p>
+            <p>Six dimensions, from completeness to domain validity, with weights you can adjust and a breakdown of where the score loses points, so you know where to look first.</p>
             <ul class="checks">
-              <li>Clinical anomaly rules you declare, such as an implausible weight or a height entered in metres</li>
+              <li>Plausibility rules you declare, such as an implausible weight or a height entered in metres</li>
               <li>Outlier detection by IQR, z-score, Isolation Forest, local outlier factor or DBSCAN</li>
               <li>Little's MCAR test and a scan of what predicts missingness</li>
             </ul>
@@ -280,7 +280,7 @@
           <figure class="feature-media">
             <button class="zoom" type="button" aria-label="Enlarge the screenshot of the quality dashboard">
               <img src="assets/shots/quality.webp" width="1600" height="1074" loading="lazy" decoding="async"
-                   alt="Validate, Data quality dashboard: a global quality score of 97.3 out of 100 shown as a ring, and a scorecard for completeness, statistical validity, clinical validity, consistency, uniformity and uniqueness.">
+                   alt="Validate, Data quality dashboard: a global quality score of 97.3 out of 100 shown as a ring, and a scorecard for completeness, statistical validity, domain validity, consistency, uniformity and uniqueness.">
               <span class="zoom-hint" aria-hidden="true"><svg class="i"><use href="#i-expand"/></svg></span>
             </button>
           </figure>
@@ -689,7 +689,7 @@ docker logs cohortstudio</code></pre>
             <span class="doc-num">14</span><h3>Full tutorial</h3><p>From a raw file to a reproducible report, on the tutorial cohort.</p>
           </a>
           <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/02_Data_Validation.md">
-            <span class="doc-num">02</span><h3>Data validation</h3><p>Quality score, anomaly rules, inclusion criteria, outliers and the participant flow.</p>
+            <span class="doc-num">02</span><h3>Data validation</h3><p>Quality score, plausibility rules, inclusion criteria, outliers and the participant flow.</p>
           </a>
           <a class="doc" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/03_Data_Enrichment.md">
             <span class="doc-num">03</span><h3>Data enrichment</h3><p>Merges, derived variables, single and multiple imputation, transformations.</p>

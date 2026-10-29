@@ -14,7 +14,7 @@ import hashlib
 import pandas as pd
 import streamlit as st
 
-from core.population import EXCLUSION, catalogue
+from core.population import EXCLUSION, catalogue, family_words
 from ui.components.text import plain
 
 _FREEZE_CONFIRM = "pop_freeze_confirm"
@@ -49,7 +49,7 @@ def activate_family(family: str, on: bool = True) -> None:
 
 def family_title(family: str, kind: str) -> str:
     verb = "Exclude" if kind == EXCLUSION else "Require"
-    return f"{verb}: {family.replace('_', ' ')}"
+    return f"{verb}: {family_words(family)}"
 
 
 def render_population_selector(state) -> None:
@@ -164,13 +164,13 @@ def render_population_panel(state) -> None:
     criteria = catalogue(state.config)
     if not criteria:
         st.info(
-            "No inclusion or exclusion criterion is defined yet: add them in the anomaly and inclusion tabs."
+            "No inclusion or exclusion criterion is defined yet: add them in the implausible values and inclusion tabs."
         )
         return
     if not population.criteria:
         st.info(
             "No criterion is ticked: the analyses use every row. Tick criteria in the sidebar, or use the "
-            "buttons of the anomaly and inclusion tabs."
+            "buttons of the implausible values and inclusion tabs."
         )
         return
     if not population.ok:

@@ -56,7 +56,7 @@ def test_the_forms_write_rules_that_read_as_their_kinds() -> None:
     # an expression on the anomaly form
     at.text_input(key="anomaly_mask_name").input("Implausible age").run()
     at.text_area(key="clinical_anomalies_txt_area").input("df['age'] > 110").run()
-    _click(at, "Add Anomaly Criterion")
+    _click(at, "Add Plausibility Rule")
     # a numeric range on the inclusion form
     at.text_input(key="inclusion_mask_name").input("age").run()
     at.checkbox(key="is_num_inclusion").check().run()

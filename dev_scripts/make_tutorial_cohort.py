@@ -10,7 +10,7 @@ Outputs:
 
 A synthetic, randomised heart-failure cohort (4 sites in Luxembourg and Lorraine, enrolled 2021 to early 2024). No real
 patients. Deterministic (seed 2027). Every analysis of the app has something to find: data-entry errors
-matching the anomaly rules of tutorial_config.json, patients failing its inclusion criteria, MCAR / MAR /
+matching the plausibility rules of tutorial_config.json, patients failing its inclusion criteria, MCAR / MAR /
 structural missingness, uniformity and duplicate problems, a paired before/after design, two raters,
 two measurement methods, a diagnostic marker against an adjudicated diagnosis, binary, count and
 time-to-event outcomes with real treatment effects, a stratifying variable (site), and variables computed from
@@ -345,7 +345,7 @@ cohort, 1,200 patients at 4 sites (Luxembourg, Esch-sur-Alzette, Ettelbruck, Met
 early January 2024 and followed until 31/12/2024. **No real patients.** The file has 1,206 rows because 6 patients were entered twice.
 
 Files: `tutorial_cohort.csv` (this table), `tutorial_followup_labs.csv` (6-month laboratory visit, merge on
-`patient_id`), `tutorial_config.json` (anomaly rules and inclusion criteria). The step-by-step tutorial is the
+`patient_id`), `tutorial_config.json` (plausibility rules and inclusion criteria). The step-by-step tutorial is the
 handbook chapter *14 Full tutorial*.
 
 | Column | Type | Meaning | Notes |
@@ -392,14 +392,14 @@ handbook chapter *14 Full tutorial*.
 
 | Problem | Where | Found by |
 |---|---|---|
-| Impossible ages (212, -3) | 2 rows | anomaly rule *Implausible age* |
-| Heights typed in metres | 3 rows | anomaly rule *Height not in centimetres* |
-| Impossible weights (0, 350 kg) | 2 rows | anomaly rule *Implausible weight* |
-| Diastolic above systolic | 3 rows | anomaly rule *Diastolic above systolic* |
-| Ejection fraction 155% | 1 row | anomaly rule *Ejection fraction out of range* |
-| Potassium 9.8 and 0.9 mmol/L | 2 rows | anomaly rule *Potassium out of range* |
-| Negative follow-up | 1 row | anomaly rule *Negative follow-up* |
-| Last contact before enrolment | 2 rows | anomaly rule *Last contact before enrolment* |
+| Impossible ages (212, -3) | 2 rows | plausibility rule *Implausible age* |
+| Heights typed in metres | 3 rows | plausibility rule *Height not in centimetres* |
+| Impossible weights (0, 350 kg) | 2 rows | plausibility rule *Implausible weight* |
+| Diastolic above systolic | 3 rows | plausibility rule *Diastolic above systolic* |
+| Ejection fraction 155% | 1 row | plausibility rule *Ejection fraction out of range* |
+| Potassium 9.8 and 0.9 mmol/L | 2 rows | plausibility rule *Potassium out of range* |
+| Negative follow-up | 1 row | plausibility rule *Negative follow-up* |
+| Last contact before enrolment | 2 rows | plausibility rule *Last contact before enrolment* |
 | HbA1c in the diabetic range without a diabetes diagnosis | a few rows | soft rule *Possible undiagnosed diabetes* (clinical review, not an error) |
 | 6 duplicated patients | 6 rows | Data Quality Dashboard, Uniqueness |
 | Inconsistent sex codes, site with trailing spaces | 16 rows | Data Quality Dashboard, Uniformity |

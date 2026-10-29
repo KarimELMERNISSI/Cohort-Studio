@@ -94,7 +94,7 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
         ("Date checks", "render_date_checks"),
         ("Analysis population", "render_population_panel"),
         ("Handle Outliers", "add_outlier_handling_ui"),
-        ("Handle Clinical Anomalies", "add_domain_expert_based_anomaly_mask"),
+        ("Handle Implausible Values", "add_domain_expert_based_anomaly_mask"),
         ("Handle Inclusion Criteria", "add_study_inclusion_mask"),
     ):
         calls.clear()

@@ -128,7 +128,7 @@ KEYS: tuple[Key, ...] = (
         "anomaly_check_done",
         "app_pages.data_monitoring",
         "dataset",
-        note="Validate: the anomaly check's results stay shown after the click that ran it",
+        note="Validate: the plausibility check's results stay shown after the click that ran it",
     ),
     Key(
         "inclusion_check_done",

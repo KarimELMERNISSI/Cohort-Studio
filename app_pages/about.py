@@ -4,10 +4,10 @@ import streamlit as st
 
 FEATURES = (
     (":material/fact_check:", "Data quality & monitoring", (
-        "**Global quality score** across completeness, consistency, statistical validity, uniformity, clinical validity and uniqueness.",
+        "**Global quality score** across completeness, consistency, statistical validity, uniformity, domain validity and uniqueness.",
         "**Drill-down** on every flag: outlier detection (z-score, IQR, quantiles, Isolation Forest, local outlier "
         "factor, DBSCAN), integrity checks, version comparison.",
-        "**Clinical anomalies and inclusion criteria** as declared rules that you tick to define the analysis "
+        "**Plausibility rules and inclusion criteria** as declared rules that you tick to define the analysis "
         "population, with its participant flow.",
     )),
     (":material/auto_fix_high:", "Data enrichment", (

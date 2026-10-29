@@ -42,9 +42,9 @@ def test_the_outlier_tab_does_not_see_the_flags_of_the_criteria_tabs(app: AppTes
     """The anomaly check added its flag columns to the frame the outlier tab analysed, in the same run."""
     app.switch_page(nav.page_path("validate")).run()
     _ok(app)
-    app.session_state["validate_tab"] = "Handle Clinical Anomalies"
+    app.session_state["validate_tab"] = "Handle Implausible Values"
     app.run()
-    next(b for b in app.button if b.label == "Run Anomaly Detection").click().run()
+    next(b for b in app.button if b.label == "Run the Plausibility Check").click().run()
     _ok(app)
     app.session_state["validate_tab"] = "Handle Outliers"
     app.run()

@@ -272,7 +272,7 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 - Consistency: Basic type consistency checks.
 
-- Clinical Validity: Compliance with declared anomaly criteria.
+- Domain Validity: rows that break none of the declared plausibility rules.
 
 **Methods:**
 
@@ -309,12 +309,12 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > Approximates consistency by checking if text/object columns could be converted to numeric or datetime.
   > If a column is text but contains mostly numbers, it might be inconsistent formatting.
 
-- **compute_clinical_validity**(`self`) -> `ComplexType`
-  > Calculates a score based on declared anomaly criteria (if available).
-  > Score = 100 - (% of rows the clinical-anomalies family flags). The rules are read as the analysis
+- **compute_domain_validity**(`self`) -> `ComplexType`
+  > Calculates a score based on the declared plausibility rules (if any).
+  > Score = 100 - (% of rows the family of implausible values, clinical_anomalies, flags). The rules are read as the analysis
   > population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
   > evaluated is listed in the details, and the score uses the rules that can.
-  > Returns None if no anomaly rules are defined (shows as N/A in dashboard).
+  > Returns None if no plausibility rule is declared (shows as N/A in dashboard).
 
 - **compute_uniformity**(`self`) -> `float`
   > Checks for string uniformity issues:
@@ -415,7 +415,7 @@ Known dimensions first, in display order, then any other metric.
 
 - **Returns**: `QualityScore`
 
-Weighted mean of the available dimensions (a ``None`` metric, e.g. clinical validity without rules, is left out).
+Weighted mean of the available dimensions (a ``None`` metric, e.g. domain validity without rules, is left out).
 
 With every weight at zero the global score is 0, as before.
 

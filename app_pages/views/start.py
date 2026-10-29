@@ -146,7 +146,7 @@ with right:
             "A randomised heart-failure cohort from 4 sites (1,206 rows, 41 variables) with planted data-entry errors, "
             "patients to exclude, documented missingness, variables computed from others, two raters, paired "
             "measurements and survival data. "
-            "Its study configuration (8 anomaly rules, 4 inclusion criteria) is loaded with it."
+            "Its study configuration (8 plausibility rules, 4 inclusion criteria) is loaded with it."
         )
         with st.container(horizontal=True, vertical_alignment="center"):
             if st.button("Load the tutorial cohort", key="start_tutorial", icon=":material/school:",

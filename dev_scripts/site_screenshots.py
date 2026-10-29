@@ -12,7 +12,7 @@ then, with Playwright from a temporary environment (Microsoft Edge or Chromium i
 and build the page images with dev_scripts/make_site_assets.py <out-dir> and the README images with
 dev_scripts/make_readme_assets.py <out-dir>; dev_scripts/keep_screenshots.py <out-dir> adds them to the
 screenshot library (assets/screenshots). The 1440x900 viewport is captured at 2x; the script ticks the
-clinical-anomaly and study-inclusion criteria, captures the Explore statistics and correlations, draws six
+plausibility rules and study-inclusion criteria, captures the Explore statistics and correlations, draws six
 Visualize figures (each also captured on its own, as plot_<name>.png), runs a multiple imputation (m = 10), the
 pooled survival analysis and Cox model, the group comparison, adds two results to the study dossier, and ends on
 the Start page, whose workflow map (workflow.png) then shows the steps done.
@@ -180,7 +180,7 @@ with sync_playwright() as p:
     sidebar = page.locator('[data-testid="stSidebar"]')
     sidebar.get_by_text(re.compile(r"Population: all 1,206 rows")).first.click()
     settle(page, 800)
-    page.locator("label").filter(has_text="Exclude: clinical anomalies").first.click()
+    page.locator("label").filter(has_text="Exclude: implausible values").first.click()
     settle(page, 1500)
     label = page.locator("label").filter(has_text="Require: study inclusion").first
     if not label.is_visible():

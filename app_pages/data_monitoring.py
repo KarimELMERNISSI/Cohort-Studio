@@ -23,6 +23,7 @@ from core.population import (
     configuration_problems,
     criterion_id,
     family_masks,
+    family_words,
     merge_families,
 )
 from core.registry import as_code
@@ -847,7 +848,7 @@ def handle_numeric_mask_input(st_container, base_key:str):
         help=(
             "**include**: rows with a value inside [Lower, Upper] match the rule. "
             "**exclude**: rows with a value outside [Lower, Upper] match the rule.\n\n"
-            "For a clinical anomaly a match flags the row: use *exclude* with the plausible range "
+            "For a plausibility rule a match flags the row: use *exclude* with the plausible range "
             "(potassium 2.5-7.0 flags 9.8). For an inclusion criterion a match keeps the row: use *include* "
             "with the eligible range (age 18-85)."
         )
@@ -912,7 +913,7 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
     masks = family_masks(df, family_config)
     for rule, message in masks.errors.items():
         st_container.error(
-            f"Rule '{rule}' of {family_name} cannot be evaluated: {message}. Correct it or untick it: the "
+            f"Rule '{rule}' ({family_words(family_name)}) cannot be evaluated: {message}. Correct it or untick it: the "
             "analysis population refuses it while it is ticked."
         )
     masks_df = pd.DataFrame(masks.rules, index=df.index)
@@ -939,8 +940,8 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
 
 # Validate's check results act on the analysis population: (family ticked, button label, confirmation)
 _POPULATION_ACTIONS = {
-    "anomaly_data": ("clinical_anomalies", "Exclude these anomalies from the analysis population",
-                     "The anomaly rules are ticked."),
+    "anomaly_data": ("clinical_anomalies", "Exclude the rows with implausible values from the analysis population",
+                     "The plausibility rules are ticked."),
     "inclusion_data": ("study_inclusion", "Restrict the analysis population to these criteria",
                        "The inclusion criteria are ticked."),
 }
@@ -1310,20 +1311,21 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
                         st.divider()
 
 def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
-    st_container.subheader("Define New Anomaly Criterion")
+    st_container.subheader("Define New Plausibility Rule")
 
     st_container.info(
         """
-        **What is a Clinical Anomaly?**
+        **What is an implausible value?**
         
-        An anomaly is a data point considered *incorrect* or *suspicious* based on domain knowledge.
+        A value, or a combination of values, that domain knowledge says cannot be right: a potassium of 25 mmol/L,
+        a discharge before admission. A plausibility rule describes it.
         * **Action:** Rows matching these criteria are **flagged** but kept in the dataset.
         
         **How to use:**
         * **Numeric Mode:** Use this for simple range checks on a single column.
-          * **IMPORTANT:** The 'Anomaly Mask Name' **MUST** be the exact name of the column you want to check.
+          * **IMPORTANT:** The 'Plausibility Rule Name' **MUST** be the exact name of the column you want to check.
         * **Custom Expression:** Use this for complex logic involving multiple columns or specific conditions.
-          * The 'Anomaly Mask Name' can be anything you like.
+          * The 'Plausibility Rule Name' can be anything you like.
         """
     )
     
@@ -1336,7 +1338,7 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     ensure_family_exists(config, family_name, "any")
 
     # Mask Addition
-    mask_name = st_container.text_input("Anomaly Mask Name", key="anomaly_mask_name", persist_state="page", placeholder="Enter mask name (Exact Column Name if Numeric!)")
+    mask_name = st_container.text_input("Plausibility Rule Name", key="anomaly_mask_name", persist_state="page", placeholder="Enter rule name (Exact Column Name if Numeric!)")
     if not validate_mask_name(config, family_name, mask_name, st_container):
         return
 
@@ -1346,17 +1348,17 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     else:
         mask_details = handle_expression_mask_input(st_container, base_key=family_name)
 
-    if mask_details and st_container.button("Add Anomaly Criterion"):
+    if mask_details and st_container.button("Add Plausibility Rule"):
         config["mask_families"][family_name][mask_name] = mask_details
         #st.session_state.config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"Anomaly mask '{mask_name}' added to family '{family_name}'.")
+        st_container.success(f"Plausibility rule '{mask_name}' added.")
     
     #st_container.json(config["mask_families"][family_name])
 
 
 def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
     """Display the results of the enrichment process."""
-    st.subheader("Anomaly Detection Results")
+    st.subheader("Plausibility Check Results")
     filtered_df = df[df[anomaly_col] == True]
     # Display metrics
     col1, col2 = st.columns(2)
@@ -1366,8 +1368,8 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
             delta=len(filtered_df), 
             value=f"{(len(filtered_df) / len(df)) * 100:.2f}%",
             help=(
-                "This metric indicates the total number of rows identified as anomalies and their percentage relative to the entire dataset. "
-                "The 'Value' represents the percentage of anomalies compared to all rows, while 'Delta' shows the count of anomalous rows."
+                "This metric indicates the number of rows with implausible values and their percentage of the entire dataset. "
+                "The 'Value' represents the percentage of such rows among all rows, while 'Delta' shows their count."
             )
         )
 
@@ -1377,14 +1379,14 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
             value=len(df) - len(filtered_df),
             delta=f"-{len(filtered_df)}",
             help=(
-                "This metric shows the number of rows not flagged as anomalies. "
+                "This metric shows the number of rows that break no plausibility rule. "
                 "The 'Value' indicates the count of valid rows, while 'Delta' represents "
-                "the decrease in rows due to anomalies detected."
+                "the decrease in rows due to the implausible values found."
             )
         )
     
     # Preview the enriched dataset
-    display_results(df=df, bool_column=anomaly_col, title="Rows with anomalies", key_base="anomaly_data", st=st)
+    display_results(df=df, bool_column=anomaly_col, title="Rows with implausible values", key_base="anomaly_data", st=st)
 
 
 ##### INCLUSION PART
@@ -1489,21 +1491,21 @@ def _anomalies_tab() -> None:
     anomaly_family = "clinical_anomalies"
     detect = False  # set when the family is checked below
     anomaly_view = None
-    with st.expander("New Anomaly Criterion", expanded=True):
+    with st.expander("New Plausibility Rule", expanded=True):
         add_domain_expert_based_anomaly_mask(st.session_state.config, st)
 
     #with st.expander("Current Mask Families", expanded=True):
-    st.subheader("Declared Anomaly Criteria")
+    st.subheader("Declared Plausibility Rules")
     criterion_cards(st.session_state.config["mask_families"][anomaly_family])
 
-    with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
+    with st.expander("Check the Data Against the Plausibility Rules"):
 
         family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
         #st.json(family_config)
         if family_config:
             # The check stays on after the click, so the Results panel (and its Apply button) survive
             # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
-            if st.button("Run Anomaly Detection"):
+            if st.button("Run the Plausibility Check"):
                 st.session_state["anomaly_check_done"] = True
             detect = bool(st.session_state.get("anomaly_check_done"))
 
@@ -1693,7 +1695,7 @@ def _compare_tab(opened: bool) -> None:
 VALIDATE_TABS = (
     PageTab("dashboard", "Data Quality Dashboard", lambda opened: _dashboard_tab()),
     PageTab("date_checks", "Date checks", lambda opened: render_date_checks()),
-    PageTab("anomalies", "Handle Clinical Anomalies", lambda opened: _anomalies_tab()),
+    PageTab("anomalies", "Handle Implausible Values", lambda opened: _anomalies_tab()),
     PageTab("inclusion", "Handle Inclusion Criteria", lambda opened: _inclusion_tab()),
     PageTab("outliers", "Handle Outliers", lambda opened: _outliers_tab()),
     PageTab("population", "Analysis population", lambda opened: _population_tab()),
@@ -1741,7 +1743,7 @@ def app():
 
     Handles:
     1. Data Quality Dashboard (Data Validity, Completeness, etc.).
-    2. Clinical Anomalies Management (Add/Apply Masks).
+    2. Implausible values: the plausibility rules (add, apply).
     3. Study Inclusion Criteria Management (Add/Apply Masks).
     4. Outlier Handling (Univariate & Multivariate).
     5. Dataset Comparison (Changes tracking).

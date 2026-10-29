@@ -12,7 +12,7 @@ in the data on purpose. No real patient is involved. Each step says what you sho
 | File | What it is | Where it is used |
 | --- | --- | --- |
 | `tutorial_cohort.csv` | The cohort (1,206 rows, 41 columns, dates in dd/mm/yyyy) | Step 1 |
-| `tutorial_config.json` | The study configuration: 8 clinical anomaly rules and 4 inclusion criteria | Step 2 |
+| `tutorial_config.json` | The study configuration: 8 plausibility rules and 4 inclusion criteria | Step 2 |
 | `tutorial_followup_labs.csv` | The 6-month laboratory visit (1,017 patients), to merge on `patient_id` | Step 3 |
 | `tutorial_dictionary.md` | The data dictionary and the list of planted problems | Throughout |
 
@@ -43,21 +43,21 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 **Where the score loses points**:
 
 - **Uniqueness 99.5%**: 6 rows are exact duplicates of another row.
-- **Clinical Validity 98.67%**: 16 of the 1,206 rows break at least one anomaly rule of the configuration.
+- **Domain Validity 98.67%**: 16 of the 1,206 rows break at least one plausibility rule of the configuration.
 - **Uniformity**: the `sex` column mixes codes (*male*, *Female*, *f*, *M* with a trailing space, ...) and 8 `site`
   values end with a space. You will clean both in step 3. Until then, the lists of groups on Analyze show such a
   space as ␣ (*Luxembourg␣*), and warn that these groups differ only by spaces or capitals.
 - **Completeness**: the cells missing in `hba1c_pct`, `nt_probnp_pg_ml`, `sbp_6m`, `ldl_mmol_l` and `height_cm`, and in
   three variables computed from others: `bmi_kg_m2`, `egfr_ml_min_1_73m2` and `hf_phenotype` (see 2.5).
 
-### 2.2 Clinical anomalies
+### 2.2 Implausible values
 
-1. Open the **Handle Clinical Anomalies** tab. Under *Declared Anomaly Criteria* you will find the 8 rules of the
+1. Open the **Handle Implausible Values** tab. Under *Declared Plausibility Rules* you will find the 8 rules of the
    configuration, one box each, titled with its name and its kind; open one to see what makes it fire, in the words
    of the participant flow. Six are
    expression rules, such as `df['dbp_baseline'] >= df['sbp_baseline']`. Two are numeric range rules, on `lvef_pct`
    and `potassium_mmol_l`: with *exclude*, values outside the range are flagged ("lvef_pct < 5 or lvef_pct > 85").
-2. Expand *Apply Anomaly Detection based on Domain-Expert Criteria* and click **Run Anomaly Detection**.
+2. Expand *Check the Data Against the Plausibility Rules* and click **Run the Plausibility Check**.
    **16 rows** are flagged:
 
 | Rule | Rows |
@@ -71,14 +71,14 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 | Negative follow-up | 1 |
 | Last contact before enrolment | 2 |
 
-3. In *Results*, click **Exclude these anomalies from the analysis population**. Criteria are filters: the 8 rules
-   are now ticked in the sidebar (*Population*), and every analysis uses the **1,190 rows** they keep. The dataset
-   itself still has its 1,206 rows, and you can untick a rule at any time. In a real study you would correct these
-   values at the source; here, excluding them keeps the tutorial simple.
-4. **Add your own rule.** In *New Anomaly Criterion*, create an expression rule named *Possible undiagnosed
-   diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the detection again: **16 patients**
-   are flagged. These are not data-entry errors but patients to review clinically, so **leave this rule unticked**
-   in the sidebar.
+3. In *Results*, click **Exclude the rows with implausible values from the analysis population**. Criteria are
+   filters: the 8 rules are now ticked in the sidebar (*Population*), and every analysis uses the **1,190 rows**
+   they keep. The dataset itself still has its 1,206 rows, and you can untick a rule at any time. In a real study
+   you would correct these values at the source; here, excluding them keeps the tutorial simple.
+4. **Add your own rule.** In *New Plausibility Rule*, create an expression rule named *Possible undiagnosed
+   diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the check again: **16 patients** are
+   flagged. Their values are plausible: these are patients to review clinically, not data-entry errors, so **leave
+   this rule unticked** in the sidebar.
 
 ### 2.3 Inclusion criteria
 
@@ -96,10 +96,10 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
 
 A patient can fail several criteria, so the rows do not add up to 262.
 
-3. Click **Restrict the analysis population to these criteria**. With the anomaly rules, 12 criteria are ticked and
-   the analysis set has **928 patients**: 462 Control and 466 Intervention. The sidebar shows *928 of 1,206 rows*,
-   and every analysis page shows the same population in a banner.
-4. Open the **Analysis population** tab: it shows the participant flow (1,206 rows, 16 excluded by the anomaly
+3. Click **Restrict the analysis population to these criteria**. With the plausibility rules, 12 criteria are
+   ticked and the analysis set has **928 patients**: 462 Control and 466 Intervention. The sidebar shows *928 of
+   1,206 rows*, and every analysis page shows the same population in a banner.
+4. Open the **Analysis population** tab: it shows the participant flow (1,206 rows, 16 excluded by the plausibility
    rules, 1,190, 262 excluded by the inclusion criteria, 928), what each criterion excludes, and the excluded rows
    with their reasons. *Keep only these rows* would delete the excluded rows from the dataset; you do not need it,
    because the criteria already filter every analysis.
@@ -370,7 +370,7 @@ says when the replayed table is exactly the one you analysed.
 
 Then build the study dossier. Under the Cox model of step 6 (and any other result you want to report), click
 **Add to the study dossier**. Open **Reproduce > Study dossier**: the participant flow goes from the 1,206
-records of `tutorial_cohort.csv` to 1,190 after the clinical anomalies (16 excluded) and 928 after the inclusion
+records of `tutorial_cohort.csv` to 1,190 after the implausible values (16 excluded) and 928 after the inclusion
 criteria (262 not meeting them), with a box per analysis below. Click the *Not meeting: study inclusion* box to
 see how many patients each criterion excluded first. **Download the Word dossier**: it has the provenance, the
 flow figure, the criteria, the missing data and the multiple imputation with its methods paragraph, your

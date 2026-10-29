@@ -1033,7 +1033,7 @@ def render_new_variable_statistics(temp_data, var_name, used_cols):
         f"{len(extreme):,} value(s) of {var_name} lie far outside the others (beyond 3 interquartile ranges from the "
         f"quartiles: below {low:.4g} or above {high:.4g}). They move the mean and the SD; the median and the quartiles "
         "show the typical values. Check their source values below: entry errors (for example a height in metres or "
-        "a weight of 0) are best excluded with a clinical-anomaly criterion (Validate).",
+        "a weight of 0) are best excluded with a plausibility rule (Validate).",
         icon=":material/warning:",
     )
     distance = (numbers.loc[extreme] - numbers.median()).abs().sort_values(ascending=False)
@@ -1042,8 +1042,8 @@ def render_new_variable_statistics(temp_data, var_name, used_cols):
     unticked = [c for c in catalogue(state.config) if c.id not in set(state.ticked)]
     if unticked and not (population is not None and population.criteria):
         st.caption(
-            "No inclusion or exclusion criterion is ticked: these statistics use every row. Tick the clinical "
-            "anomaly criteria in the sidebar to leave entry errors out of the analyses."
+            "No inclusion or exclusion criterion is ticked: these statistics use every row. Tick the plausibility "
+            "rules in the sidebar to leave entry errors out of the analyses."
         )
 
 

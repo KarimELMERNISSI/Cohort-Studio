@@ -14,6 +14,7 @@ from core.population import (
     catalogue,
     criterion_id,
     evaluate_population,
+    family_words,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +35,13 @@ def cohort() -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def config() -> dict:
     return json.loads((TUTORIAL / "tutorial_config.json").read_text(encoding="utf-8"))
+
+
+def test_a_family_is_named_apart_from_its_stored_id() -> None:
+    """The family once shown as "clinical anomalies" holds plausibility rules of any field; its id stays."""
+    assert family_words("clinical_anomalies") == "implausible values"
+    assert family_words("study_inclusion") == "study inclusion"
+    assert family_words("my_own_family") == "my own family"
 
 
 def test_the_catalogue_lists_every_criterion_in_configuration_order(config: dict) -> None:

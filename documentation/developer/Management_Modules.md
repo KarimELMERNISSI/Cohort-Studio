@@ -2688,7 +2688,7 @@ Computed Variable Methods (from ComputedVarsMixin):
   > Refines specific variables in the taxonomy based on user feedback.
 
 - **suggest_anomaly_criteria**(`self, description, columns, sample_data, mode`) -> `None`
-  > Suggests anomaly or inclusion criteria based on natural language description.
+  > Suggests plausibility rules or inclusion criteria based on natural language description.
   > Returns a list of criteria dictionaries.
 
 ### def `_passages` (rag_manager.py)
@@ -3063,7 +3063,7 @@ The source dataset of a trace: the recorded artifact (newer traces) or the origi
 Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
 evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
 to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
-an anomaly rule's bound must not take its row out of the next fill.
+a plausibility rule's bound must not take its row out of the next fill.
 
 ### def `_snapshot` (reproduction_manager.py)
 
@@ -3689,7 +3689,7 @@ kept.
 _No module description._
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.steps.step_title`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.population.family_words`, `core.steps.step_title`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 

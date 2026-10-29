@@ -1,4 +1,4 @@
-"""Prompt for generating anomaly and inclusion criteria."""
+"""Prompt for generating plausibility rules and inclusion criteria."""
 
 def anomaly_criteria_prompt(
     description: str,
@@ -18,7 +18,7 @@ def anomaly_criteria_prompt(
         Formatted prompt string.
     """
     
-    task_desc = "identify DATA ANOMALIES (rows to flag as suspicious)" if mode == "anomaly" else "define INCLUSION CRITERIA (rows to KEEP in the study)"
+    task_desc = "write PLAUSIBILITY RULES (rows whose values, alone or together, domain knowledge says cannot be right)" if mode == "anomaly" else "define INCLUSION CRITERIA (rows to KEEP in the study)"
     
     return f"""Role: Data Science Expert.
 

@@ -81,7 +81,7 @@ See: [01_Home.md](01_Home.md)
 | --- | --- |
 | 2.1 | Review the **Data Quality Score** dashboard. |
 | 2.2 | **Diagnose missing data** patterns (Completeness) using visual and statistical tools. |
-| 2.3 | Check for **clinical anomalies** (impossible or suspect values). |
+| 2.3 | Check for **implausible values** (impossible or suspect values, by the plausibility rules you declare). |
 | 2.4 | Define **inclusion criteria**, then tick the criteria that define the **analysis population** (sidebar): they filter every analysis without deleting rows. |
 | 2.5 | Detect and handle **outliers** using statistical or ML methods. |
 | 2.6 | **Check conformity** (duplicates, consistency, uniformity). |

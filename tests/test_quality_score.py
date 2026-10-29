@@ -23,8 +23,8 @@ def test_global_score_is_100_minus_the_points_lost() -> None:
 
 
 def test_missing_dimensions_and_zero_weights() -> None:
-    q = weighted_score({**METRICS, "Clinical Validity": None}, DEFAULT_WEIGHTS)
-    assert "Clinical Validity" not in {d.name for d in q.dimensions}  # no rules: left out, not counted as 0
+    q = weighted_score({**METRICS, "Domain Validity": None}, DEFAULT_WEIGHTS)
+    assert "Domain Validity" not in {d.name for d in q.dimensions}  # no rules: left out, not counted as 0
     zero = weighted_score(METRICS, dict.fromkeys(METRICS, 0.0))
     assert zero.total == 0.0 and all(d.share == 0 for d in zero.dimensions)
     assert [d.name for d in q.dimensions] == ["Completeness", "Statistical Validity", "Consistency", "Uniqueness"]

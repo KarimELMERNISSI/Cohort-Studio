@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from core.criteria import describe_definition
-from core.population import EXCLUSION, INCLUSION, PopulationResult
+from core.population import EXCLUSION, INCLUSION, PopulationResult, family_words
 from core.steps import flow_name
 
 SOURCE, LOADED, DATA, STAGE, POPULATION, ANALYSIS = (
@@ -140,7 +140,7 @@ def criterion_line(name: str, kind: str, definition: Mapping[str, Any]) -> str:
 
 
 def _family_label(family: str, kind: str) -> str:
-    words = family.replace("_", " ")
+    words = family_words(family)
     return f"Excluded: {words}" if kind == EXCLUSION else f"Not meeting: {words}"
 
 
@@ -266,7 +266,7 @@ def participant_flow(
         main.append(
             FlowBox(
                 "population" if last else f"after:{stage.family}",
-                "Analysis population" if last else f"After: {stage.family.replace('_', ' ')}",
+                "Analysis population" if last else f"After: {family_words(stage.family)}",
                 stage.n_out,
                 POPULATION if last else STAGE,
                 details=(population.label,) if last else (),
