@@ -32,6 +32,7 @@ from ui.components import no_dataset
 from ui.components.criteria import criterion_cards
 from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
+from ui.components.tabs import PageTab, lazy_tabs
 from ui.components.text import plain
 from ui.session_scope import get_current_scope
 from ui.state import get_state
@@ -1519,16 +1520,233 @@ def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
 
 
 
-# The tabs of Validate; only the open one runs (M5b). Their labels are part of the tabs' identity (Streamlit 1.66):
-# keep them fixed, without counts.
-TABS = (
-    "Data Quality Dashboard",
-    "Handle Clinical Anomalies",
-    "Handle Inclusion Criteria",
-    "Handle Outliers",
-    "Analysis population",
-    "Compare Data Files",
+# The tabs of Validate. Each works on every row of the dataset (validation ignores the analysis population), as a
+# copy: the checks add display columns, and changes to the data go through AppState (audit E8).
+
+
+def _dashboard_tab() -> None:
+    df = get_state().base
+    if df is not None:
+        render_dashboard(df, st.session_state.config)
+    else:
+        no_dataset()
+
+
+def _anomalies_tab() -> None:
+    df = get_state().base
+    anomaly_family = "clinical_anomalies"
+    detect = False  # set when the family is checked below
+    anomaly_view = None
+    with st.expander("New Anomaly Criterion", expanded=True):
+        add_domain_expert_based_anomaly_mask(st.session_state.config, st)
+
+    #with st.expander("Current Mask Families", expanded=True):
+    st.subheader("Declared Anomaly Criteria")
+    criterion_cards(st.session_state.config["mask_families"][anomaly_family])
+
+    with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
+
+        family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
+        #st.json(family_config)
+        if family_config:
+            # The check stays on after the click, so the Results panel (and its Apply button) survive
+            # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
+            if st.button("Run Anomaly Detection"):
+                st.session_state["anomaly_check_done"] = True
+            detect = bool(st.session_state.get("anomaly_check_done"))
+
+            if detect:
+                # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                anomaly_view, anom_cols = apply_family_mask(df.copy(deep=False), anomaly_family, family_config, st)
+                # Increase the max elements limit for Pandas Styler
+                pd.set_option("styler.render.max_elements", 600000)
+                styled_df = anomaly_view.style.apply(
+                                        color_columns,
+                                        axis=0,
+                                        columns_to_highlight=anom_cols
+                                    )
+                st.write("Updated Dataset:")
+                st.dataframe(styled_df, width="stretch")
+        else:
+            st.error(f"Family '{anomaly_family}' not found in the configuration.")
+
+    if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
+        with st.expander("Results", expanded=True):
+            display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
+
+
+def _inclusion_tab() -> None:
+    df = get_state().base
+    inclusion_family = "study_inclusion"
+    check_inc = False  # set when the family is checked below
+    inclusion_view = None
+    with st.expander("New Inclusion Criterion", expanded=True):
+        add_study_inclusion_mask(st.session_state.config, st)
+
+    st.subheader("Declared Inclusion Criteria")
+    criterion_cards(st.session_state.config["mask_families"][inclusion_family])
+
+    with st.expander("Apply Data Validation based on Inclusion Criteria"):
+
+        family_config = st.session_state.config["mask_families"].get(inclusion_family, {})
+        #st.json(family_config)
+        if family_config:
+            if st.button("Run Inclusion Criteria Check"):
+                st.session_state["inclusion_check_done"] = True
+            check_inc = bool(st.session_state.get("inclusion_check_done"))
+
+            if check_inc:
+                # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
+                inclusion_view, inc_cols = apply_family_mask(df.copy(deep=False), inclusion_family, family_config, st)
+                styled_df = inclusion_view.style.apply(
+                                        color_columns,
+                                        axis=0,
+                                        columns_to_highlight=inc_cols
+                                    )
+                st.write("Updated Dataset:")
+                st.dataframe(styled_df, width="stretch")
+        else:
+            st.error(f"Family '{inclusion_family}' not found in the configuration.")
+
+    if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
+        with st.expander("Results", expanded=True):
+            display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
+
+
+def _outliers_tab() -> None:
+    state = get_state()
+    df = state.base
+    analyzer = state.analyzer("base")  # its column profile is kept until the data change (M5b)
+    if df is None or analyzer is None:
+        no_dataset()
+    else:
+        # Outliers Handler
+        with st.expander("Outliers Handler"):
+            handled = add_outlier_handling_ui(df, analyzer.numeric_cols)
+        render_outlier_actions(handled.attrs.get("outlier_detection"))
+
+
+def _population_tab() -> None:
+    state = get_state()
+    df = state.base
+    if df is None:
+        no_dataset()
+    else:
+        render_population_panel(state)
+
+
+def _compare_tab(opened: bool) -> None:
+    run_comp, row_ids, column_to_check = False, [], []  # set once both files and the ids are chosen
+    # 1. Add External Data
+    with st.expander("Upload the data files to compare", expanded=True):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Reference Dataset")
+            data_c1, c1_file = data_selection("c1", "Reference Dataset", load=opened)
+            if data_c1 is not None:
+                data_c1 = process_dataset(data_c1)
+                st.dataframe(data_c1.head(), width='stretch')
+                st.info(f"Rows: {len(data_c1)} | Columns: {len(data_c1.columns)}")
+
+        with col2:
+            st.subheader("New Dataset")
+            data_c2, c2_file = data_selection("c2", "New Dataset", load=opened)
+            if data_c2 is not None:
+                data_c2 = process_dataset(data_c2)
+                st.dataframe(data_c2.head(), width='stretch')
+                st.info(f"Rows: {len(data_c2)} | Columns: {len(data_c2.columns)}")
+
+
+    with st.expander("Process Comparison", expanded=False):
+        if data_c1 is not None and data_c2 is not None:
+
+            common_columns = list(set(data_c1.columns) & set(data_c2.columns))
+
+            if not common_columns:
+                st.warning("No common columns found between datasets!")
+            else:
+                row_ids = st.multiselect(
+                    "Select a Subset Among Common identifiers",
+                    options=common_columns,
+                    default=None,
+                    help="Choose the ids that exists in both datasets",
+                    persist_state="page", key="common_ids_comparator"
+                )
+
+                column_to_check = st.multiselect(
+                    "Select a Subset Among Common Columns",
+                    options=set(common_columns) - set(row_ids),
+                    default=set(common_columns) - set(row_ids),
+                    help="Choose the column that exists in both datasets",
+                    persist_state="page", key="common_columns_comparator"
+                )
+
+                if not row_ids:
+                    st.warning("Please select at least one common identifier (e.g., subject_id) to proceed.")
+                else:
+                    run_comp = st.button("Run Comparison", key="run_comparison_bt", width='stretch')
+
+
+    with st.expander("Results", expanded=True):
+        if run_comp:
+            #st.write(f"column_to_check size: {len(column_to_check)}")
+            result_comp = mc.process_comparison_st(comparison_name='comp1',
+                                                df1=data_c1,
+                                                df2=data_c2,
+                                                common_id=row_ids,
+                                                common_cols=column_to_check
+                                                #output_file=
+                                            )
+            if result_comp:
+                df1, df2, common_id, comparison_result_filtered, rows_only_in_df1, rows_only_in_df2, modified_common_ids, _ = result_comp
+                # st.write("### Comparison Result")
+                # st.dataframe(comparison_result_filtered)
+                # st.write(f"len df: {comparison_result_filtered.shape}")
+                # st.write(f"Rows only in DataFrame 1: {len(rows_only_in_df1)}, {rows_only_in_df1}")
+                # st.write(f"Rows only in DataFrame 2: {len(rows_only_in_df2)}, {rows_only_in_df2}")
+                # st.write(f"Modified Rows: {common_id, modified_common_ids}")
+                # st.write(f"output_file: {output_file}")
+                # Create a new column order
+                # List of columns to move to the front
+                priority_columns = ['deletion', 'addition', 'modification', 'differing_columns']
+                new_column_order = (priority_columns + [col for col in comparison_result_filtered.columns if col not in priority_columns])
+
+                # Reorder the columns
+                comparison_result_filtered = comparison_result_filtered[new_column_order]
+                styled_df = comparison_result_filtered.style.apply(mc.highlight_modifications_tuples, args=("summary", rows_only_in_df1, rows_only_in_df2, modified_common_ids, common_id), axis=1)
+                st.dataframe(styled_df, width="stretch")
+
+                # Prepare Excel writer
+                if st.download_button(
+                    label="Export Comparison Results",
+                    key="compare_export_download_bt",
+                    data=export_comparison_results(
+                        df1, df2, comparison_result_filtered,
+                        rows_only_in_df1, rows_only_in_df2,
+                        modified_common_ids, common_id, "compare"
+                    ),
+                    file_name="comparison_results.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    width='stretch'
+                ):
+                    st.success("Comparison results exported successfully!")
+            else:
+                st.warning("Please upload both datasets first.")
+
+
+# Validate's tabs, in order. Only the open one runs (M5b); Compare always does, told whether it is open: its file
+# uploaders cannot keep their files while it is closed. The lambdas look the functions up when called, so that a
+# test can replace one. The labels are part of the tabs' identity (Streamlit 1.66): keep them fixed, without counts.
+VALIDATE_TABS = (
+    PageTab("dashboard", "Data Quality Dashboard", lambda opened: _dashboard_tab()),
+    PageTab("anomalies", "Handle Clinical Anomalies", lambda opened: _anomalies_tab()),
+    PageTab("inclusion", "Handle Inclusion Criteria", lambda opened: _inclusion_tab()),
+    PageTab("outliers", "Handle Outliers", lambda opened: _outliers_tab()),
+    PageTab("population", "Analysis population", lambda opened: _population_tab()),
+    PageTab("compare", "Compare Data Files", lambda opened: _compare_tab(opened), always_runs=True),
 )
+TABS = tuple(tab.label for tab in VALIDATE_TABS)
 TAB_KEY = "validate_tab"
 
 
@@ -1602,220 +1820,10 @@ def app():
                 st.sidebar.error(messages[0])
             
     
-    # Every row of the dataset (validation ignores the analysis population); a copy: the checks below add
-    # display columns, and changes to the data go through AppState (audit E8)
+    # every row of the dataset, as the tabs below (a copy)
     state = get_state()
     df = state.base
-    analyzer = None
     if df is not None:
-        analyzer = state.analyzer("base")  # its column profile is kept until the data change (M5b)
-        render_date_conversion(state, df, analyzer)
-        
+        render_date_conversion(state, df, state.analyzer("base"))
 
-    # Only the open tab runs (M5b): a click no longer recomputes every tab. The Compare tab always runs: its file
-    # uploaders cannot keep their files while it is closed.
-    tab_dashboard, tab1, tab2, tab3, tab_population, tab4 = st.tabs(list(TABS), key=TAB_KEY, on_change="rerun")
-
-    with tab_population:
-        if tab_population.open:
-            if df is None:
-                no_dataset()
-            else:
-                render_population_panel(state)
-
-    with tab_dashboard:
-        if tab_dashboard.open:
-            if df is not None:
-                render_dashboard(df, st.session_state.config)
-            else:
-                no_dataset()
-
-    with tab1:
-        if tab1.open:
-            anomaly_family = "clinical_anomalies"
-            detect = False  # set when the family is checked below
-            anomaly_view = None
-            with st.expander("New Anomaly Criterion", expanded=True):
-                add_domain_expert_based_anomaly_mask(st.session_state.config, st)
-
-            #with st.expander("Current Mask Families", expanded=True):
-            st.subheader("Declared Anomaly Criteria")
-            criterion_cards(st.session_state.config["mask_families"][anomaly_family])
-
-            with st.expander("Apply Anomaly Detection based on Domain-Expert Criteria"):
-            
-                family_config = st.session_state.config["mask_families"].get(anomaly_family, {})
-                #st.json(family_config)
-                if family_config:
-                    # The check stays on after the click, so the Results panel (and its Apply button) survive
-                    # the next rerun; it is reset when another dataset is loaded (ui.state.DERIVED_KEYS).
-                    if st.button("Run Anomaly Detection"):
-                        st.session_state["anomaly_check_done"] = True
-                    detect = bool(st.session_state.get("anomaly_check_done"))
-
-                    if detect:
-                        # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
-                        anomaly_view, anom_cols = apply_family_mask(df.copy(deep=False), anomaly_family, family_config, st)
-                        # Increase the max elements limit for Pandas Styler
-                        pd.set_option("styler.render.max_elements", 600000)
-                        styled_df = anomaly_view.style.apply(
-                                                color_columns, 
-                                                axis=0, 
-                                                columns_to_highlight=anom_cols
-                                            )
-                        st.write("Updated Dataset:")
-                        st.dataframe(styled_df, width="stretch")
-                else:
-                    st.error(f"Family '{anomaly_family}' not found in the configuration.")
-        
-            if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
-                with st.expander("Results", expanded=True):
-                    display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
-            
-    with tab2:
-        if tab2.open:
-            inclusion_family = "study_inclusion"
-            check_inc = False  # set when the family is checked below
-            inclusion_view = None
-            with st.expander("New Inclusion Criterion", expanded=True):
-                add_study_inclusion_mask(st.session_state.config, st)
-        
-            st.subheader("Declared Inclusion Criteria")
-            criterion_cards(st.session_state.config["mask_families"][inclusion_family])
-
-            with st.expander("Apply Data Validation based on Inclusion Criteria"):
-            
-                family_config = st.session_state.config["mask_families"].get(inclusion_family, {})
-                #st.json(family_config)
-                if family_config:
-                    if st.button("Run Inclusion Criteria Check"):
-                        st.session_state["inclusion_check_done"] = True
-                    check_inc = bool(st.session_state.get("inclusion_check_done"))
-
-                    if check_inc:
-                        # its own copy: the flags it adds are not data, and no other tab sees them (M5b)
-                        inclusion_view, inc_cols = apply_family_mask(df.copy(deep=False), inclusion_family, family_config, st)
-                        styled_df = inclusion_view.style.apply(
-                                                color_columns, 
-                                                axis=0, 
-                                                columns_to_highlight=inc_cols
-                                            )
-                        st.write("Updated Dataset:")
-                        st.dataframe(styled_df, width="stretch")
-                else:
-                    st.error(f"Family '{inclusion_family}' not found in the configuration.")
-        
-            if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
-                with st.expander("Results", expanded=True):
-                    display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
-
-
-    with tab3:
-        if tab3.open:
-            if df is None or analyzer is None:
-                no_dataset()
-            else:
-                # Outliers Handler
-                with st.expander("Outliers Handler"):
-                    handled = add_outlier_handling_ui(df, analyzer.numeric_cols)
-                render_outlier_actions(handled.attrs.get("outlier_detection"))
-
-    with tab4:
-        run_comp, row_ids, column_to_check = False, [], []  # set once both files and the ids are chosen
-        # 1. Add External Data
-        with st.expander("Upload the data files to compare", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.subheader("Reference Dataset")
-                data_c1, c1_file = data_selection("c1", "Reference Dataset", load=tab4.open)
-                if data_c1 is not None:
-                    data_c1 = process_dataset(data_c1)
-                    st.dataframe(data_c1.head(), width='stretch')
-                    st.info(f"Rows: {len(data_c1)} | Columns: {len(data_c1.columns)}")
-
-            with col2:
-                st.subheader("New Dataset")
-                data_c2, c2_file = data_selection("c2", "New Dataset", load=tab4.open)
-                if data_c2 is not None:
-                    data_c2 = process_dataset(data_c2)
-                    st.dataframe(data_c2.head(), width='stretch')
-                    st.info(f"Rows: {len(data_c2)} | Columns: {len(data_c2.columns)}")
-
-
-        with st.expander("Process Comparison", expanded=False):
-            if data_c1 is not None and data_c2 is not None:
-                
-                common_columns = list(set(data_c1.columns) & set(data_c2.columns)) 
-
-                if not common_columns:
-                    st.warning("No common columns found between datasets!")
-                else:  
-                    row_ids = st.multiselect(
-                        "Select a Subset Among Common identifiers",
-                        options=common_columns,
-                        default=None,
-                        help="Choose the ids that exists in both datasets",
-                        persist_state="page", key="common_ids_comparator"
-                    )
-
-                    column_to_check = st.multiselect(
-                        "Select a Subset Among Common Columns",
-                        options=set(common_columns) - set(row_ids),
-                        default=set(common_columns) - set(row_ids),
-                        help="Choose the column that exists in both datasets",
-                        persist_state="page", key="common_columns_comparator"
-                    )
-                    
-                    if not row_ids:
-                        st.warning("Please select at least one common identifier (e.g., subject_id) to proceed.")
-                    else:
-                        run_comp = st.button("Run Comparison", key="run_comparison_bt", width='stretch')
-
-
-        with st.expander("Results", expanded=True):
-            if run_comp:
-                #st.write(f"column_to_check size: {len(column_to_check)}")
-                result_comp = mc.process_comparison_st(comparison_name='comp1',
-                                                    df1=data_c1,
-                                                    df2=data_c2,
-                                                    common_id=row_ids,
-                                                    common_cols=column_to_check
-                                                    #output_file=
-                                                )
-                if result_comp:
-                    df1, df2, common_id, comparison_result_filtered, rows_only_in_df1, rows_only_in_df2, modified_common_ids, _ = result_comp
-                    # st.write("### Comparison Result")
-                    # st.dataframe(comparison_result_filtered)
-                    # st.write(f"len df: {comparison_result_filtered.shape}")
-                    # st.write(f"Rows only in DataFrame 1: {len(rows_only_in_df1)}, {rows_only_in_df1}")
-                    # st.write(f"Rows only in DataFrame 2: {len(rows_only_in_df2)}, {rows_only_in_df2}")
-                    # st.write(f"Modified Rows: {common_id, modified_common_ids}")
-                    # st.write(f"output_file: {output_file}")
-                    # Create a new column order
-                    # List of columns to move to the front
-                    priority_columns = ['deletion', 'addition', 'modification', 'differing_columns']
-                    new_column_order = (priority_columns + [col for col in comparison_result_filtered.columns if col not in priority_columns])
-
-                    # Reorder the columns
-                    comparison_result_filtered = comparison_result_filtered[new_column_order]
-                    styled_df = comparison_result_filtered.style.apply(mc.highlight_modifications_tuples, args=("summary", rows_only_in_df1, rows_only_in_df2, modified_common_ids, common_id), axis=1)
-                    st.dataframe(styled_df, width="stretch")
-
-                    # Prepare Excel writer
-                    if st.download_button(
-                        label="Export Comparison Results",
-                        key="compare_export_download_bt",
-                        data=export_comparison_results(
-                            df1, df2, comparison_result_filtered, 
-                            rows_only_in_df1, rows_only_in_df2, 
-                            modified_common_ids, common_id, "compare"
-                        ),
-                        file_name="comparison_results.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        width='stretch'
-                    ):
-                        st.success("Comparison results exported successfully!")
-                else:
-                    st.warning("Please upload both datasets first.")
-
+    lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)

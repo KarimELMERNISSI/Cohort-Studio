@@ -1025,6 +1025,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - Date parsing and the column profile moved into `ingest`, where files are read: `utils/date_parser.py` is now
   `ingest/dates.py`, and `utils/data_analyzer.py` is `ingest/analyzer.py`. Nothing is left at the old paths. Today's
   parsing is pinned by tests, its wrong readings included, since traces that recorded it replay with it.
+- Validate's tabs are a registry (`ui/components/tabs.py`): each tab a function, and only the open one runs, as
+  before. A link can now open one of them, which the date checks use.
 - qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.
