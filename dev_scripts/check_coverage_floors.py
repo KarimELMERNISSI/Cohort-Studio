@@ -12,6 +12,7 @@ Usage: python dev_scripts/check_coverage_floors.py [coverage.xml]
 
 from __future__ import annotations
 
+import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -26,15 +27,17 @@ from pathlib import Path
 # ui to 85 at 87.0 with the connector choice control and its tests (M5b step 4, 2026-10-27).
 # manage to 76 at 78.4 with the tests of the Qdrant server's confirmation and folders (2026-10-27).
 # core to 94 at 95.8 with the catalogue of criterion kinds and its tests (M5b step 6, 2026-10-28).
+# app_pages to 60 at 62.2, with the tests of the Date checks tab and of the missingness clustering, and the smoke test
+# opening the new tab; enrich to 83 at 85.0 and manage to 77 at 79.8, which were at the margin (M6, 2026-10-29).
 FLOORS: dict[str, float] = {
-    "app_pages": 58.0,
+    "app_pages": 60.0,
     "biostats": 93.0,
     "core": 94.0,
-    "enrich": 81.0,
+    "enrich": 83.0,
     "explore": 75.0,
     "graph": 92.0,
     "ingest": 89.0,
-    "manage": 76.0,
+    "manage": 77.0,
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 85.0,
@@ -57,8 +60,13 @@ def package_coverage(xml_path: Path) -> dict[str, tuple[int, int]]:
     return totals
 
 
-def check(xml_path: Path, floors: dict[str, float] = FLOORS) -> list[str]:
-    """Print one line per package and return the packages under their floor or too far above it."""
+def check(
+    xml_path: Path, floors: dict[str, float] = FLOORS, *, annotate: bool = False
+) -> list[str]:
+    """
+    Print one line per package and return the packages under their floor or too far above it. ``annotate`` also
+    prints each of those as a GitHub annotation, which the public API shows (a job's log needs admin rights).
+    """
     coverage = package_coverage(xml_path)
     failures = []
     for package, floor in floors.items():
@@ -73,8 +81,13 @@ def check(xml_path: Path, floors: dict[str, float] = FLOORS) -> list[str]:
         print(f"{package:10s} {percent:5.1f} %  (floor {floor:.0f} %)  {verdict}")
         if verdict != "ok":
             failures.append(package)
+            if annotate:
+                print(
+                    f"::error title=Coverage floor::{package} {percent:.1f} % (floor {floor:.0f} %): {verdict}"
+                )
     return failures
 
 
 if __name__ == "__main__":
-    sys.exit(1 if check(Path(sys.argv[1] if len(sys.argv) > 1 else "coverage.xml")) else 0)
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else "coverage.xml")
+    sys.exit(1 if check(path, annotate=os.environ.get("GITHUB_ACTIONS") == "true") else 0)

@@ -5,6 +5,8 @@ import re
 import tomllib
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRS = ("app_pages", "biostats", "core", "enrich", "explore", "graph", "ingest", "manage", "monitor", "ui", "utils", "main.py")
 
@@ -288,8 +290,7 @@ def test_the_list_of_unformatted_files_only_shrinks() -> None:
     assert not formatted, f"formatted now, delete them from [tool.ruff.format] exclude: {formatted}"
 
 
-def test_every_package_has_a_coverage_floor() -> None:
-    """dev_scripts/check_coverage_floors.py: one floor per package of the wheel, which CI checks."""
+def _floors_script():
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -298,9 +299,37 @@ def test_every_package_has_a_coverage_floor() -> None:
     assert spec is not None and spec.loader is not None
     floors = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(floors)
+    return floors
+
+
+def test_every_package_has_a_coverage_floor() -> None:
+    """dev_scripts/check_coverage_floors.py: one floor per package of the wheel, which CI checks."""
+    floors = _floors_script()
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     wheel = set(pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
     assert set(floors.FLOORS) == wheel, {"no floor": sorted(wheel - set(floors.FLOORS))}
+
+
+def test_a_package_off_its_coverage_floor_is_named_in_an_annotation(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CI's job log needs admin rights: the annotation names the package where the public API shows it."""
+    floors = _floors_script()
+    report = tmp_path / "coverage.xml"
+    report.write_text(
+        '<coverage><packages><package><classes><class filename="app_pages/x.py"><lines>'
+        '<line number="1" hits="1"/><line number="2" hits="0"/>'
+        "</lines></class></classes></package></packages></coverage>",
+        encoding="utf-8",
+    )
+    assert floors.check(report, {"app_pages": 80.0}, annotate=True) == ["app_pages"]
+    assert "::error title=Coverage floor::app_pages 50.0 % (floor 80 %): UNDER THE FLOOR" in (
+        capsys.readouterr().out
+    )
+    assert floors.check(report, {"app_pages": 40.0}, annotate=True) == ["app_pages"]
+    assert "RAISE THE FLOOR to 48" in capsys.readouterr().out
+    assert floors.check(report, {"app_pages": 48.0}, annotate=True) == []
+    assert "::error" not in capsys.readouterr().out
 
 
 def test_pre_commit_and_ci_format_with_the_same_ruff() -> None:
