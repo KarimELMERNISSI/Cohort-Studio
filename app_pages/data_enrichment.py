@@ -1656,7 +1656,7 @@ def compute_transformations(dataframe):
         # keyed: a transformation adds columns to the draft, and an unkeyed list would forget the next choice
         columns = st.multiselect(
             "Choose categorical columns to encode:",
-            options=dataframe.select_dtypes(include=['object', 'category']).columns,
+            options=dataframe.select_dtypes(include=['object', 'string', 'category']).columns,
             help="Select one or more categorical columns from the dataset.",
             key="tf_columns_encoding",
         )

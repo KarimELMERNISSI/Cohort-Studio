@@ -948,7 +948,7 @@ def app():
             
             # Identify column types
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            categorical_cols = df.select_dtypes(include=['object', 'string', 'category']).columns.tolist()
             
             if len(numeric_cols) < 2:
                 st.error("Need at least 2 numeric variables for clustering.")

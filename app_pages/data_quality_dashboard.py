@@ -580,7 +580,7 @@ def render_dashboard(df, config):
                             
                             # Identify col types for analyzer
                             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-                            categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+                            categorical_cols = df.select_dtypes(include=['object', 'string', 'category']).columns.tolist()
                             binary_cols = [c for c in df.columns if df[c].nunique() == 2]
                             
                             for i, pred in enumerate(predictors):
@@ -1201,7 +1201,7 @@ def render_dashboard(df, config):
 
         with c2:
             st.subheader("Type Consistency")
-            object_cols = df.select_dtypes(include=['object']).columns
+            object_cols = df.select_dtypes(include=['object', 'string']).columns
             potential_issues = []
             for col in object_cols:
                 # Check if numeric

@@ -302,4 +302,11 @@ markers = [
     "slow: statistical simulation suites (minutes; run with -m slow)",
 ]
 addopts = "-m 'not integration and not slow' -ra"
+# a use of pandas that pandas 4 removes fails the tests; lifelines' own uses are for its maintainers
+filterwarnings = [
+    "error::pandas.errors.Pandas4Warning",
+    "ignore::pandas.errors.Pandas4Warning:lifelines",
+    # .xls files are read by xlrd until they move to calamine: a new dependency and another reader, its own step
+    "ignore:The xlrd engine is deprecated:pandas.errors.Pandas4Warning",
+]
 

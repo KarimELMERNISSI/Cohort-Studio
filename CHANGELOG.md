@@ -1016,6 +1016,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - pandas 3.1.0. Its type hints read a column taken from a table as a column or a table, so the type check flagged
     each place that tests a count, a mean or a check of a column: these now convert the value, with the same
     results.
+- Ready for pandas 4: the quality dashboard, Validate's charts, Enrich and the data insight page select text columns
+  by their type. pandas 4 leaves them out of a selection of "object" columns, so these checks would have skipped every
+  text column without a word. A use of pandas that pandas 4 removes now fails the tests.
 - qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.

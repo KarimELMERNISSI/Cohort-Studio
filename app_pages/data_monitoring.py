@@ -648,7 +648,7 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
     # Impute missing values instead of dropping to preserve data points
     # Separate numeric and categorical
     num_cols = data_viz.select_dtypes(include=['number']).columns
-    cat_cols = data_viz.select_dtypes(include=['object', 'category']).columns
+    cat_cols = data_viz.select_dtypes(include=['object', 'string', 'category']).columns
 
     if not num_cols.empty:
         # Fill numeric with mean

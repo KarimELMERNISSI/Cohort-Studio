@@ -438,7 +438,7 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
     # Remove low-cardinality numeric columns from numerical stats (added to categorical stats below)
     for col in analyzer.low_cardinality_numeric_cols:
         if col in numerical_stats.index:
-            numerical_stats.drop(index=col, inplace=True)
+            numerical_stats = numerical_stats.drop(index=col)
 
     # Categorical statistics
     if not categorical_df.empty:
@@ -447,7 +447,9 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
         categorical_stats = pd.DataFrame()
 
     columns_to_drop = ['min', 'std']
-    categorical_stats.drop(columns=[col for col in columns_to_drop if col in categorical_stats.columns], inplace=True)
+    categorical_stats = categorical_stats.drop(
+        columns=[col for col in columns_to_drop if col in categorical_stats.columns]
+    )
     if not categorical_df.empty:
         categorical_stats['nb_modalities'] = categorical_df.apply(lambda x: x.nunique())
         categorical_stats['fill_percentage'] = (1 - categorical_df.isnull().mean()) * 100
@@ -482,8 +484,8 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
             top_categories = percentage_counts.head(nb_top_categories)
 
             for i, (value, representation) in enumerate(top_categories.items(), start=1):
-                categorical_stats.at[col, f'top_{i}_value'] = str(value)
-                categorical_stats.at[col, f'top_{i}_representation'] = representation
+                categorical_stats.loc[col, f'top_{i}_value'] = str(value)
+                categorical_stats.loc[col, f'top_{i}_representation'] = representation
 
     # Format float columns to 2 decimals for cleaner display
     float_columns = numerical_stats.select_dtypes(include='float').columns

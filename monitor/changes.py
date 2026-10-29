@@ -178,8 +178,8 @@ def process_comparison(comparison_name, comparison_info, config, exclude_cols=No
         if exclude_cols is not None:
             cols_to_drop_df1 = [col for col in exclude_cols if col in df1.columns]
             cols_to_drop_df2 = [col for col in exclude_cols if col in df2.columns]
-            df1.drop(columns=cols_to_drop_df1, inplace=True)
-            df2.drop(columns=cols_to_drop_df2, inplace=True)
+            df1 = df1.drop(columns=cols_to_drop_df1)
+            df2 = df2.drop(columns=cols_to_drop_df2)
 
         common_id_df1 = set(df1[common_id_name])
         common_id_df2 = set(df2[common_id_name])
@@ -270,8 +270,8 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         # Exclude specified columns (if provided)
         if exclude_cols:
             logging.info(f"Excluding columns: {exclude_cols}")
-            df1.drop(columns=[col for col in exclude_cols if col in df1.columns], inplace=True)
-            df2.drop(columns=[col for col in exclude_cols if col in df2.columns], inplace=True)
+            df1 = df1.drop(columns=[col for col in exclude_cols if col in df1.columns])
+            df2 = df2.drop(columns=[col for col in exclude_cols if col in df2.columns])
 
         rows_only_in_df1 = list(common_id_df1.difference(common_id_df2))
         rows_only_in_df2 = list(common_id_df2.difference(common_id_df1))
