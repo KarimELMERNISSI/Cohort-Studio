@@ -11,6 +11,7 @@ import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
+from app_pages.validate_dates import date_candidates, dates_found, render_date_checks
 from core.criteria import expression_rule, listed_rows_rule, numeric_rule
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
@@ -26,7 +27,6 @@ from core.population import (
 )
 from core.registry import as_code
 from ingest.analyzer import DataAnalyzer
-from ingest.dates import smart_parse_dates
 from ingest.loaders import UPLOAD_TYPES
 from ui.components import no_dataset
 from ui.components.criteria import criterion_cards
@@ -1472,54 +1472,6 @@ def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):
 
 ####################### APP PART ###############################
 
-def _date_preview(df: pd.DataFrame, analyzer) -> tuple[list, dict, dict, dict]:
-    """The text columns that look like dates, their parsing, the format found and the values that would be lost."""
-    candidates = [c for c in analyzer.date_cols
-                  if c in df.columns and not pd.api.types.is_datetime64_any_dtype(df[c])]
-    parsed, notes, lost = {}, {}, {}
-    for col in candidates:
-        series, used_notes = smart_parse_dates(df[col])
-        parsed[col] = series
-        notes[col] = ", ".join(used_notes)
-        lost[col] = int(series.isna().sum() - df[col].isna().sum())
-    return candidates, parsed, notes, lost
-
-
-def render_date_conversion(state, df: pd.DataFrame, analyzer) -> None:
-    """Text columns that look like dates: preview the parsing, convert them as one traced step on request.
-
-    Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
-    """
-    # above the tabs, so it runs on every click: the parsing is kept until the data change (M5b)
-    candidates, parsed, notes, lost = state.session.memo("date_preview", "", lambda: _date_preview(df, analyzer))
-    if not candidates:
-        return
-    n = len(candidates)
-    with st.expander(f"{n} text column{'s' if n != 1 else ''} look like dates", icon=":material/calendar_month:"):
-        st.caption("They stay as text until you convert them. The conversion is one step of the trace and is "
-                   "replayed with the others.")
-        st.dataframe(pd.DataFrame({"Column": candidates,
-                                   "Detected format": [notes[c] for c in candidates],
-                                   "Values that would become missing": [lost[c] for c in candidates]}),
-                     hide_index=True, width="stretch")
-        for col, count in lost.items():
-            if count > len(df) * 0.05:
-                st.warning(f"High data loss in '{col}': {count} values could not be parsed.")
-        if st.button(f"Convert {n} column{'s' if n != 1 else ''} to dates", key="convert_dates", type="primary"):
-            converted = state.base
-            for col in candidates:
-                converted[col] = parsed[col]
-            state.commit_change(
-                converted,
-                "data_type_conversion",
-                {"columns": candidates, "new_type": "datetime", "method": "smart_parse_dates",
-                 "notes": notes, "values_lost": lost},
-                f"Converted {n} column{'s' if n != 1 else ''} to dates",
-            )
-            st.rerun()
-
-
-
 # The tabs of Validate. Each works on every row of the dataset (validation ignores the analysis population), as a
 # copy: the checks add display columns, and changes to the data go through AppState (audit E8).
 
@@ -1740,6 +1692,7 @@ def _compare_tab(opened: bool) -> None:
 # test can replace one. The labels are part of the tabs' identity (Streamlit 1.66): keep them fixed, without counts.
 VALIDATE_TABS = (
     PageTab("dashboard", "Data Quality Dashboard", lambda opened: _dashboard_tab()),
+    PageTab("date_checks", "Date checks", lambda opened: render_date_checks()),
     PageTab("anomalies", "Handle Clinical Anomalies", lambda opened: _anomalies_tab()),
     PageTab("inclusion", "Handle Inclusion Criteria", lambda opened: _inclusion_tab()),
     PageTab("outliers", "Handle Outliers", lambda opened: _outliers_tab()),
@@ -1748,6 +1701,11 @@ VALIDATE_TABS = (
 )
 TABS = tuple(tab.label for tab in VALIDATE_TABS)
 TAB_KEY = "validate_tab"
+
+
+def _open_date_checks() -> None:
+    """Callback: open the Date checks tab (it runs before the tabs are drawn)."""
+    st.session_state[TAB_KEY] = "Date checks"
 
 
 def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
@@ -1820,10 +1778,15 @@ def app():
                 st.sidebar.error(messages[0])
             
     
-    # every row of the dataset, as the tabs below (a copy)
-    state = get_state()
-    df = state.base
-    if df is not None:
-        render_date_conversion(state, df, state.analyzer("base"))
-
+    hint = st.container()
     lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)
+    # above the tabs, the text columns that look like dates, counted from the column profile (kept until the data
+    # change); drawn once the tabs are, which then know the open one (a link opens Date checks on its first run)
+    state = get_state()
+    df, analyzer = state.base, state.analyzer("base")
+    if df is not None and analyzer is not None and st.session_state.get(TAB_KEY) != "Date checks":
+        n = len(date_candidates(df, analyzer))
+        if n:
+            with hint, st.container(horizontal=True, vertical_alignment="center"):
+                st.caption(f":material/calendar_month: {dates_found(n)}.")
+                st.button("Open Date checks", key="open_date_checks", type="tertiary", on_click=_open_date_checks)

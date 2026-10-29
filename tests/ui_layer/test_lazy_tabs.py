@@ -24,6 +24,7 @@ NO_PERSIST = {
 LAZY = (
     "app_pages/data_monitoring.py",
     "app_pages/data_quality_dashboard.py",
+    "app_pages/validate_dates.py",
     "app_pages/home.py",
     "app_pages/epidemiology.py",
     # the panels of its tabs
@@ -77,7 +78,8 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
 
     calls: list[str] = []
     for name in ("render_dashboard", "render_population_panel", "add_outlier_handling_ui",
-                 "add_domain_expert_based_anomaly_mask", "add_study_inclusion_mask"):  # fmt: skip
+                 "add_domain_expert_based_anomaly_mask", "add_study_inclusion_mask",
+                 "render_date_checks"):  # fmt: skip
         original = getattr(dm, name)
 
         def counted(*args, _name=name, _original=original, **kwargs):
@@ -89,6 +91,7 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
     _ok(app)
     assert calls == ["render_dashboard"]  # the first tab is open
     for label, work in (
+        ("Date checks", "render_date_checks"),
         ("Analysis population", "render_population_panel"),
         ("Handle Outliers", "add_outlier_handling_ui"),
         ("Handle Clinical Anomalies", "add_domain_expert_based_anomaly_mask"),

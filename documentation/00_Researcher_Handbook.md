@@ -17,8 +17,9 @@ This application is built around three principles:
 ## Core path and optional paths
 
 The **Start** page shows the workflow as a diagram. Three core steps take you from a raw file to results:
-**Load** (Data > Import, a saved version or the sample cohort), **Validate** (Data > Validate) and
-**Explore & analyse** (Explore and Analyze). Optional paths branch off whenever they help:
+**Load** (Data > Import, a saved version or the sample cohort), **Validate** (Data > Validate; the card's
+**Date checks** link opens the tab that converts text columns to dates) and **Explore & analyse** (Explore and
+Analyze). Optional paths branch off whenever they help:
 
 | Optional path | When | What it adds | Page |
 | --- | --- | --- | --- |

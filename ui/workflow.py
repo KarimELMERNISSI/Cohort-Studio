@@ -53,7 +53,10 @@ CORE_STEPS: tuple[CoreStep, ...] = (
         ":material/fact_check:",
         "Validate the data",
         "Quality score, missingness pattern, clinical anomalies, inclusion criteria and outliers.",
-        (Link("validate", "Open Validate"),),
+        (
+            Link("validate", "Open Validate"),
+            Link("validate", "Date checks", tab="date_checks", icon=":material/event:"),
+        ),
     ),
     CoreStep(
         3,

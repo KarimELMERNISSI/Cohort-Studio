@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `app_pages.validate_dates.render_date_checks`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1200,24 +1200,6 @@ No description available.
 
 Display the results of the enrichment process.
 
-### def `_date_preview` (data_monitoring.py)
-
-- **Arguments**: `df: pd.DataFrame, analyzer`
-
-- **Returns**: `tuple[ComplexType]`
-
-The text columns that look like dates, their parsing, the format found and the values that would be lost.
-
-### def `render_date_conversion` (data_monitoring.py)
-
-- **Arguments**: `state, df: pd.DataFrame, analyzer`
-
-- **Returns**: `None`
-
-Text columns that look like dates: preview the parsing, convert them as one traced step on request.
-
-Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
-
 ### def `_dashboard_tab` (data_monitoring.py)
 
 - **Arguments**: ``
@@ -1266,6 +1248,14 @@ No description available.
 
 No description available.
 
+### def `_open_date_checks` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Callback: open the Date checks tab (it runs before the tabs are drawn).
+
 ### def `process_dataset` (data_monitoring.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -1296,7 +1286,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
+`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -1341,6 +1331,16 @@ from the widgets here.
 
 The columns each anomaly rule reads (core.criteria.criterion_columns), whose cells the anomaly report highlights
 where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
+
+### def `missingness_linkage` (data_quality_dashboard.py)
+
+- **Arguments**: `corr_matrix: pd.DataFrame`
+
+- **Returns**: `np.ndarray`
+
+The average-linkage clustering of the columns, at the distance 1 - |r| between their missingness indicators. A
+column whose missingness never varies (complete, or empty) has no correlation, not even with itself: it is 1
+from every other column and 0 from itself, where the 1 on the diagonal made SciPy refuse the matrix.
 
 ### def `render_dashboard` (data_quality_dashboard.py)
 
@@ -2267,7 +2267,7 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `shutil`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
+`os`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -2798,6 +2798,52 @@ _Validate page: data quality dashboard, anomalies, inclusion criteria, outliers,
 
 **Imports**:
 `app_pages.data_monitoring.app`, `ui.components.page_header`
+
+---
+
+## validate_dates.py
+
+_Validate > Date checks: the text columns that look like dates, how they would be read, and their conversion as one
+step of the trace, which the replay reads with the same method (smart_parse_dates). Its own tab since M6: above
+Validate's tabs, it read those columns whenever Validate opened on new data, whichever tab was wanted._
+
+**Imports**:
+`__future__.annotations`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+
+### def `date_candidates` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer: DataAnalyzer`
+
+- **Returns**: `list[str]`
+
+The text columns the column profile takes for dates. Nothing is parsed: the profile is kept until the data
+change, so the line above Validate's tabs can count them on every click.
+
+### def `dates_found` (validate_dates.py)
+
+- **Arguments**: `n: int`
+
+- **Returns**: `str`
+
+How many text columns look like dates, in the line above Validate's tabs and at the top of the tab.
+
+### def `_date_preview` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer: DataAnalyzer`
+
+- **Returns**: `tuple[ComplexType]`
+
+The text columns that look like dates, their parsing, the format found and the values that would be lost.
+
+### def `render_date_checks` (validate_dates.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+The Date checks tab: how the text columns that look like dates would be read, and their conversion, one traced
+step, on request. Dates used to be re-parsed in place on every visit of the page, untraced and invisible to the
+replay.
 
 ---
 

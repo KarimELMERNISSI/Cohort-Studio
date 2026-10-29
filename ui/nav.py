@@ -61,6 +61,7 @@ PAGES: tuple[PageDef, ...] = (
         "Data",
         ":material/fact_check:",
         chapter="02_Data_Validation",
+        tabs=(("date_checks", ("Date checks",)),),
     ),
     PageDef(
         "enrich",

@@ -502,8 +502,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Validate runs only the open tab.** Each click ran all six tabs: the dashboard, both criteria checks, the
   outlier detection, the participant flow and the file comparison. Now only the open tab runs. Compare Data Files
   still shows its source controls while it is closed, because its file uploaders cannot keep their files otherwise,
-  but reads and compares nothing until it is opened. The preview of the text columns that look like dates, above the
-  tabs, is worked out once per dataset. The controls of a closed tab keep their values while you stay on the page;
+  but reads and compares nothing until it is opened. The preview of the text columns that look like dates is worked
+  out once per dataset. The controls of a closed tab keep their values while you stay on the page;
   the confirmations (overwriting a criterion, keeping only the population's rows) are asked again. The dashboard
   records the quality check and the workflow step when it is open, which it is when Validate opens.
 - **Statistics & correlations runs only the open tab.** Each click computed the statistics, rebuilt the renaming
@@ -1027,6 +1027,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   parsing is pinned by tests, its wrong readings included, since traces that recorded it replay with it.
 - Validate's tabs are a registry (`ui/components/tabs.py`): each tab a function, and only the open one runs, as
   before. A link can now open one of them, which the date checks use.
+
+### Validate: Date checks, a tab of its own (M6)
+
+- **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed
+  those columns whenever Validate opened on new data, whichever tab you came for. A line above the tabs now says how
+  many text columns look like dates, counted from the column profile without parsing them, and opens the tab; the
+  Start page's Validate card links to it. The tab shows how each column would be read, the format found and the
+  values that would become missing, and converts them on request as one step of the trace, recorded and replayed as
+  before.
 
 ### Removed: what remained of ChromaDB
 

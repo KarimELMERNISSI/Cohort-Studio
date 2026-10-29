@@ -110,7 +110,7 @@ KEYS: tuple[Key, ...] = (
         "validate_tab",
         "app_pages.data_monitoring",
         "page",
-        note="the open tab of Validate: only that tab runs",
+        note="the open tab of Validate: only that tab runs; the line above the tabs opens Date checks through it",
     ),
     Key(
         "home_tab",
