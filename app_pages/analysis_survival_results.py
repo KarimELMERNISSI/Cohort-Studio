@@ -152,12 +152,18 @@ class Curve:
     survival: np.ndarray
     lower: np.ndarray
     upper: np.ndarray
+    end: float | None = (
+        None  # the last follow-up time: the curve runs on to it, flat, after its last event
+    )
+    censored: np.ndarray | None = (
+        None  # the times at which rows were censored: a tick on the curve each
+    )
 
 
-def _at_risk(
-    frame: pd.DataFrame, time_col: str, event_col: str, group: str | None, ticks: np.ndarray
-) -> dict[str, list[int]] | None:
-    """Rows still followed at each tick, per group: the rows the curves read (a known time >= 0, a known event)."""
+def _follow_up(
+    frame: pd.DataFrame, time_col: str, event_col: str, group: str | None
+) -> dict[str, tuple[np.ndarray, np.ndarray]] | None:
+    """Per group, the times and events of the rows the curves read (a known time >= 0, a known event)."""
     columns = [time_col, event_col, *([group] if group else [])]
     data = frame[columns].dropna()
     try:
@@ -166,13 +172,22 @@ def _at_risk(
         return None
     times = pd.to_numeric(data[time_col], errors="coerce").to_numpy(dtype=float)
     keep = ~np.isnan(times) & ~np.isnan(events) & (times >= 0)
-    times = times[keep]
+    times, events = times[keep], events[keep]
     if not group:
-        return {"all": [int((times >= tick).sum()) for tick in ticks]}
+        return {"all": (times, events)}
     labels = data[group].astype(str).to_numpy()[keep]
     return {
-        level: [int(((labels == level) & (times >= tick)).sum()) for tick in ticks]
-        for level in sorted(set(labels))
+        level: (times[labels == level], events[labels == level]) for level in sorted(set(labels))
+    }
+
+
+def _at_risk(
+    follow_up: dict[str, tuple[np.ndarray, np.ndarray]], ticks: np.ndarray
+) -> dict[str, list[int]]:
+    """Rows still followed at each tick, per group."""
+    return {
+        label: [int((times >= tick).sum()) for tick in ticks]
+        for label, (times, _) in follow_up.items()
     }
 
 
@@ -181,7 +196,8 @@ def km_figure(
 ) -> go.Figure:
     """
     Kaplan-Meier curves, each with its pointwise band in its own colour (Okabe-Ito, in the order of the sorted
-    levels), and the numbers at risk under the axis, at its ticks.
+    levels), run on to its last follow-up after its last event, with a tick where rows were censored, and the numbers
+    at risk under the axis, at its ticks.
     """
     order = sorted(c.label for c in curves)
     colour = {label: OKABE_ITO[i % len(OKABE_ITO)] for i, label in enumerate(order)}
@@ -194,6 +210,12 @@ def km_figure(
             np.concatenate([[1.0], np.asarray(curve.lower, dtype=float)]),
             np.concatenate([[1.0], np.asarray(curve.upper, dtype=float)]),
         )
+        if (
+            curve.end is not None and curve.end > times[-1]
+        ):  # flat to the last follow-up, as the estimate is
+            times = np.append(times, curve.end)
+            survival = np.append(survival, survival[-1])
+            band = (np.append(band[0], band[0][-1]), np.append(band[1], band[1][-1]))
         known = ~(np.isnan(band[0]) | np.isnan(band[1]))
         top = max(top, float(np.nanmax(times)))
         fig.add_trace(
@@ -209,6 +231,27 @@ def km_figure(
                 hovertemplate="%{x:.4g}: %{y:.3f}<extra>%{meta}</extra>",
             )
         )
+        if curve.censored is not None and len(curve.censored):
+            at = (
+                np.searchsorted(times, curve.censored, side="right") - 1
+            )  # the curve's value at each censoring
+            fig.add_trace(
+                go.Scatter(
+                    x=curve.censored,
+                    y=survival[np.clip(at, 0, len(survival) - 1)],
+                    mode="markers",
+                    # an open symbol is stroked in marker.color: unset, it took the palette's next colour
+                    marker={
+                        "symbol": "line-ns-open",
+                        "size": 6,
+                        "color": colour[curve.label],
+                        "line": {"width": 1, "color": colour[curve.label]},
+                    },
+                    meta=html.escape(curve.label),
+                    hovertemplate="censored at %{x:.4g}<extra>%{meta}</extra>",
+                    showlegend=False,
+                )
+            )
         t = times[known]
         fig.add_trace(
             go.Scatter(
@@ -350,7 +393,8 @@ def _ratio_ticks(lo: float, hi: float) -> list[float]:
 # ----------------------------------------------------------------------------- time to event
 
 
-def _curves(km: Any, pooled: bool) -> list[Curve]:
+def _curves(km: Any, pooled: bool, follow_up: dict | None = None) -> list[Curve]:
+    """The curves to draw; with the rows they read (``follow_up``), observed curves get their censoring ticks."""
     if pooled:
         return [
             Curve(
@@ -371,6 +415,12 @@ def _curves(km: Any, pooled: bool) -> list[Curve]:
             c.survival,
             c.lower,
             c.upper,
+            end=getattr(
+                c, "last_time", None
+            ),  # a curve stored before kept none: it stops at its last event
+            censored=np.unique(follow_up[c.label][0][follow_up[c.label][1] == 0])
+            if follow_up and c.label in follow_up
+            else None,
         )
         for c in km.curves
     ]
@@ -509,12 +559,18 @@ def show_time_to_event(
         words = "Kaplan-Meier curves only: choose the Cox model above for a hazard ratio."
     _headline(metrics, words, len(notes))
     if km is not None:
-        at_risk = None
-        if not pooled and frame is not None:
-            top = max((float(np.max(c.times)) for c in km.curves if len(c.times)), default=0.0)
-            at_risk = _at_risk(frame, time_col, event_col, group, _ticks(top))
+        at_risk = follow_up = None
+        if (
+            not pooled
+            and frame is not None
+            and (follow_up := _follow_up(frame, time_col, event_col, group))
+        ):
+            top = max(
+                (float(times.max()) for times, _ in follow_up.values() if len(times)), default=0.0
+            )
+            at_risk = _at_risk(follow_up, _ticks(top))
         st.plotly_chart(
-            km_figure(_curves(km, pooled), time_label=time_col, at_risk=at_risk),
+            km_figure(_curves(km, pooled, follow_up), time_label=time_col, at_risk=at_risk),
             width="stretch",
         )
         _group_table(km, pooled)

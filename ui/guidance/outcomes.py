@@ -103,7 +103,8 @@ HELP: dict[str, str] = {
     "without it they compare mean counts.",
     "family": "Poisson assumes that the counts vary as much as their mean. When they vary more (over-dispersion, "
     "shown in Checks), its intervals are too narrow: the negative binomial model allows the extra variance.",
-    "read_km": "Each step down is an event; vertical ticks would mark censoring. The band is the pointwise 95% "
+    "read_km": "Each step down is an event; a vertical tick marks rows censored at that time (followed without the "
+    "event up to it); each curve runs on to its group's last follow-up. The band is the pointwise 95% "
     "interval. The log-rank test weights every time equally and loses power when curves cross; report medians and "
     "the hazard ratio from the Cox model with it. With imputed data the curves are pooled on the log(-log S) scale "
     "at every time any curve steps, and the median is read from the pooled curve.",

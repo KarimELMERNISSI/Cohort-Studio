@@ -1134,6 +1134,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   trend: the plan says so, and how to compare its values (make it categorical).
 - Choosing to compare by a variable no longer drops it from the adjustment for good; the Cox model chosen without any
   variable says it needs one; with no analysis chosen, the plan reads "nothing to run", not "ready".
+- **The Kaplan-Meier curves run to the last follow-up**, flat after their last event, with a tick in the curve's
+  colour where rows were censored: they stopped at the last event (the tutorial's Intervention arm at 1,138 days,
+  though 66 rows were followed to 1,448, its row at risk showing 41 under no curve), and the help mentioned ticks that
+  were not drawn.
 - Each stored result's "Add to the study dossier" says which result it is; with imputed data, the pooling line and
   the warnings are shown once. The checks say that the concordance and the AUC measure prediction (a well-adjusted
   comparison can sit near 0.5), and the glossary that censoring is assumed non-informative and a competing event is

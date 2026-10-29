@@ -614,13 +614,21 @@ No description available.
 Round ticks from 0 to ``top``, about ``count`` of them: 1, 2, 2.5 or 5 times a power of ten apart (1,450 days:
 every 250, not every 500).
 
-### def `_at_risk` (analysis_survival_results.py)
+### def `_follow_up` (analysis_survival_results.py)
 
-- **Arguments**: `frame: pd.DataFrame, time_col: str, event_col: str, group: ComplexType, ticks: np.ndarray`
+- **Arguments**: `frame: pd.DataFrame, time_col: str, event_col: str, group: ComplexType`
 
 - **Returns**: `ComplexType`
 
-Rows still followed at each tick, per group: the rows the curves read (a known time >= 0, a known event).
+Per group, the times and events of the rows the curves read (a known time >= 0, a known event).
+
+### def `_at_risk` (analysis_survival_results.py)
+
+- **Arguments**: `follow_up: dict[ComplexType], ticks: np.ndarray`
+
+- **Returns**: `dict[ComplexType]`
+
+Rows still followed at each tick, per group.
 
 ### def `km_figure` (analysis_survival_results.py)
 
@@ -629,7 +637,8 @@ Rows still followed at each tick, per group: the rows the curves read (a known t
 - **Returns**: `go.Figure`
 
 Kaplan-Meier curves, each with its pointwise band in its own colour (Okabe-Ito, in the order of the sorted
-levels), and the numbers at risk under the axis, at its ticks.
+levels), run on to its last follow-up after its last event, with a tick where rows were censored, and the numbers
+at risk under the axis, at its ticks.
 
 ### def `forest_figure` (analysis_survival_results.py)
 
@@ -660,11 +669,11 @@ Plotly's own log ticks label 0.5 to 0.9 as "5 ... 9".
 
 ### def `_curves` (analysis_survival_results.py)
 
-- **Arguments**: `km: Any, pooled: bool`
+- **Arguments**: `km: Any, pooled: bool, follow_up: ComplexType`
 
 - **Returns**: `list[Curve]`
 
-No description available.
+The curves to draw; with the rows they read (``follow_up``), observed curves get their censoring ticks.
 
 ### def `_median_ci` (analysis_survival_results.py)
 

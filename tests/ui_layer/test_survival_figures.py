@@ -139,3 +139,31 @@ def test_a_models_warning_is_drawn_as_text() -> None:
     assert not at.exception
     (warning,) = at.warning
     assert "![i](" not in warning.value and r"\!\[i\]" in warning.value
+
+
+def test_a_curve_runs_to_its_last_follow_up_with_its_censored_rows_marked() -> None:
+    """The curves stopped at their last event: 66 rows of the tutorial's Intervention arm followed 310 days longer."""
+    times = np.array([1.0, 4.0, 9.0])
+    survival = np.array([0.9, 0.7, 0.5])
+    curve = Curve(
+        "A",
+        "A",
+        times,
+        survival,
+        survival - 0.1,
+        survival + 0.05,
+        end=12.0,
+        censored=np.array([2.0, 9.5, 12.0]),
+    )
+    fig = km_figure([curve], time_label="t")
+    line, ticks = fig.data[0], fig.data[1]
+    assert line.x[-1] == 12.0 and line.y[-1] == 0.5  # flat after the last event
+    assert ticks.marker.symbol == "line-ns-open" and list(ticks.y) == [
+        0.9,
+        0.5,
+        0.5,
+    ]  # on the curve where censored
+    assert list(fig.layout.xaxis.tickvals)[-1] >= 10  # the axis covers the follow-up
+    assert (
+        ticks.marker.color == line.line.color
+    )  # the curve's colour: unset, it took the palette's next
