@@ -346,7 +346,8 @@ def render_date_checks() -> None:
     )
     st.caption(
         "Ambiguous: dates that read otherwise in the other order (5 March or 3 May), read as *Order from* says. "
-        "Partial dates are among those that cannot be read."
+        "Partial dates are among those that cannot be read: left missing, never completed. For an age or a time since "
+        "diagnosis, the usual way is a stated completion (the 15th, or 1 July) as a derived variable."
     )
     for column, report in reports.items():
         if report.january_first or report.month_first_day:
@@ -355,17 +356,15 @@ def render_date_checks() -> None:
                 f":material/info: {as_code(column)}: many dates fall on {where}. Did the source complete dates it "
                 "knew only by their month or year?"
             )
-        if report.unreadable:  # on screen only, never recorded
+        if report.unreadable:  # on screen only, never recorded, and only when asked for
             text = df[column].astype("string").str.strip()
             unread = (
                 text[text.notna() & (text != "") & readings[column].isna()]
                 .drop_duplicates()
                 .head(5)
             )
-            st.caption(
-                f"{as_code(column)} cannot read, for example: "
-                + ", ".join(as_code(v) for v in unread)
-            )
+            with st.expander(f"Values of {column} that cannot be read", icon=":material/search:"):
+                st.caption("For example: " + ", ".join(as_code(v) for v in unread))
 
     to_missing = _placeholders(chosen, readings)
 

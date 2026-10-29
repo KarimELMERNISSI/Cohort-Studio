@@ -17,6 +17,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
+from scipy import stats
 
 from core.registry import Catalogue
 
@@ -560,8 +561,11 @@ def placeholders_found(dates: pd.Series) -> dict[str, int]:
 
 
 HEAPING_MIN = 5  # values on one day before they are told heaped there
-_JANUARY_FIRST = 5 / 365.25  # the share of 1 January among dates spread over the year
-_MONTH_FIRST = 2 * 12 / 365.25  # twice the share of the 1st of a month among them
+# heaping: more dates on 1 January, or on the 1st of February to December, than dates spread over the year hold
+# by chance (their shares 1/365.25 and 11/365.25; a binomial tail below HEAPING_P), and at least HEAPING_MIN of them
+HEAPING_P = 0.001
+_JANUARY_FIRST = 1 / 365.25
+_OTHER_FIRSTS = 11 / 365.25
 
 
 @dataclass(frozen=True)
@@ -593,6 +597,14 @@ class DateReport:
         return asdict(self)
 
 
+def _heaped(k: int, n: int, share: float) -> bool:
+    """
+    More values on a day than dates spread over the year would hold by chance: at least HEAPING_MIN, and a binomial
+    tail below HEAPING_P (5 times the expected share flagged even dates by chance one time in ten, at n = 76).
+    """
+    return k >= HEAPING_MIN and float(stats.binom.sf(k - 1, n, share)) < HEAPING_P
+
+
 def date_report(
     series: pd.Series,
     format_id: str,
@@ -620,7 +632,9 @@ def date_report(
         two_digit = int((_extract(series, _SLASH)["y"].str.len() == 2).sum())
     days = read.dt.normalize()
     january = int(((read.dt.month == 1) & (read.dt.day == 1)).sum())
-    first = int((read.dt.day == 1).sum())
+    firsts = int(
+        ((read.dt.day == 1) & (read.dt.month != 1)).sum()
+    )  # apart: a heap on 1 January counted twice
     return DateReport(
         values=values,
         unreadable=values - len(read),
@@ -633,8 +647,8 @@ def date_report(
         after_extraction=None
         if extraction is None
         else int((days > pd.Timestamp(extraction)).sum()),
-        january_first=january >= HEAPING_MIN and january > _JANUARY_FIRST * len(read),
-        month_first_day=first >= HEAPING_MIN and first > _MONTH_FIRST * len(read),
+        january_first=_heaped(january, len(read), _JANUARY_FIRST),
+        month_first_day=_heaped(firsts, len(read), _OTHER_FIRSTS),
     )
 
 

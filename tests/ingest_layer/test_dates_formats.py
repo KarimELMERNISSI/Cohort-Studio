@@ -231,7 +231,11 @@ def test_the_report_counts_what_reading_found() -> None:
 @pytest.mark.parametrize(
     ("values", "january", "month"),
     [
-        (["01/01/2020"] * 5 + ["15/06/2020"] * 10, True, True),
+        (
+            ["01/01/2020"] * 5 + ["15/06/2020"] * 10,
+            True,
+            False,
+        ),  # 1 January no longer among the 1sts
         (["01/01/2020"] * 4 + ["15/06/2020"], False, False),  # fewer than 5 on the day
         (["01/03/2020"] * 5 + ["15/06/2020"] * 20, False, True),
         (
@@ -298,3 +302,17 @@ def test_an_order_shown_one_way_by_a_few_values_is_pre_filled_from_them() -> Non
         "few_values",
         False,
     )  # asked
+
+
+def test_a_heap_on_1_january_is_not_a_heap_on_the_first_of_the_month() -> None:
+    """50 more dates on 1 January among 1,000 spread over the year set the 1st-of-the-month flag too (87 > 65.7)."""
+    spread = pd.date_range("2020-01-01", periods=1000, freq="9h").strftime("%d/%m/%Y").tolist()
+    report = date_report(S(spread + ["01/01/2021"] * 50), "day_first")
+    assert (report.january_first, report.month_first_day) == (True, False)
+
+
+def test_dates_spread_over_the_year_are_not_told_heaped() -> None:
+    """Five times the expected share flagged even dates by chance one time in ten at n = 76."""
+    even = pd.date_range("2020-01-01", periods=76, freq="4D19h").strftime("%d/%m/%Y").tolist()
+    report = date_report(S(even), "day_first")
+    assert (report.january_first, report.month_first_day) == (False, False)

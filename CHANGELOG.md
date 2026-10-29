@@ -1211,7 +1211,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   before 1900; dates after the extraction date, which is pre-filled with the day the dataset was loaded (a column
   that may hold planned dates, such as a next appointment, is not counted); the earliest and latest dates (on the
   screen only); and a note when dates heap on 1 January or on the 1st of a month, as dates the source completed
-  from a month or a year would.
+  from a month or a year would: each tested apart (1 January was counted among the 1sts of the month too) against
+  what dates spread over the year hold by chance (a binomial tail below 0.001; five times the expected share flagged
+  even dates one time in ten at 76 dates). The values that cannot be read are shown on request, in a closed section;
+  partial dates, left missing, are said with the usual way round (a stated completion, the 15th or 1 July, as a
+  derived variable).
 - The conversion records these counts with each column, never a date or a value of the data, and the extraction
   date with the step.
 - The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
