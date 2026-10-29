@@ -372,60 +372,25 @@ No description available.
 
 ## analysis_survival.py
 
-_Survival & regression page body: Kaplan-Meier, log-rank, Cox, logistic and count regression (audit S11).
+_Survival & regression page body, organised by the outcome (audit S11): the time to an event (Kaplan-Meier curves,
+the log-rank test and the Cox model), a binary outcome (logistic regression) or a count of events (Poisson or
+negative binomial regression). For each, the user chooses what is compared and what it is adjusted for; the plan
+checked on the data says what Run will do (ui.guidance.outcomes); one click runs it; the result reads effect first,
+then the model and its checks (app_pages.analysis_survival_results). Nothing is decided for the user: every default
+is a visible choice.
 
 With multiply imputed data (``mi``), every analysis is run on the m imputed datasets and pooled
 (biostats.mi.analyze_mi): Kaplan-Meier curves on the cloglog scale with the median read from the pooled
 curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
 
 **Imports**:
-`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.TestResult`, `biostats.regression.APPARENT_AUC`, `biostats.regression.APPARENT_AUC_NOTE`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_group_candidates` (analysis_survival.py)
 
 - **Arguments**: `df: pd.DataFrame, analyzer, max_levels: int`
 
 - **Returns**: `list[str]`
-
-No description available.
-
-### def `_km_figure` (analysis_survival.py)
-
-- **Arguments**: `curves`
-
-- **Returns**: `go.Figure`
-
-No description available.
-
-### def `_pooled_km_figure` (analysis_survival.py)
-
-- **Arguments**: `curves: dict[ComplexType]`
-
-- **Returns**: `go.Figure`
-
-No description available.
-
-### def `_median_text` (analysis_survival.py)
-
-- **Arguments**: `median: ComplexType`
-
-- **Returns**: `str`
-
-The median survival time, or 'not reached' when the curve stays above 0.5.
-
-### def `_median_ci_text` (analysis_survival.py)
-
-- **Arguments**: `curve`
-
-- **Returns**: `str`
-
-The median's interval; an end the band never reaches is 'not reached'.
-
-### def `_table` (analysis_survival.py)
-
-- **Arguments**: `df: pd.DataFrame, formats: dict`
-
-- **Returns**: `None`
 
 No description available.
 
@@ -437,25 +402,328 @@ No description available.
 
 Index of the first option whose name contains a hint (e.g. 'time', 'died'), else 0.
 
-### def `_show_survival` (analysis_survival.py)
+### def `_candidates` (analysis_survival.py)
 
-- **Arguments**: `res`
+- **Arguments**: `df: pd.DataFrame, numeric: Sequence[str], groups: Sequence[str], exclude: Sequence[str]`
+
+- **Returns**: `list[str]`
+
+What a model can compare by or adjust for: numeric variables, and categorical ones of 2 to 8 levels.
+
+### def `_compare_and_adjust` (analysis_survival.py)
+
+- **Arguments**: `candidates: list[str]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The second row of every outcome: what is compared, and what it is adjusted for.
+
+### def `_render_plan` (analysis_survival.py)
+
+- **Arguments**: `plan: ModelPlan`
 
 - **Returns**: `None`
 
-No description available.
+What Run will do, checked on the data (while Guidance is on): a status, each step's rows, the advice.
 
-### def `_show_pooled_survival` (analysis_survival.py)
+### def `_failed` (analysis_survival.py)
 
-- **Arguments**: `res`
+- **Arguments**: `what: str, exc: Exception`
 
 - **Returns**: `None`
 
-No description available.
+An error card whose first line says why: the models' messages are written for the reader (as text).
+
+### def `_planned` (analysis_survival.py)
+
+- **Arguments**: `mi, frame: pd.DataFrame, columns: Sequence[str]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The rows the plan reads: the observed data, or the first imputed dataset when the analysis is pooled.
 
 ### def `run_survival` (analysis_survival.py)
 
 - **Arguments**: `df: pd.DataFrame, analyzer`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_comparison` (analysis_survival.py)
+
+- **Arguments**: `mi, df: pd.DataFrame, compare: ComplexType, adjust: Sequence[str], result`
+
+- **Returns**: `Comparison`
+
+How a result reads: the comparison's values in the data the model read, and its reference level.
+
+### def `_fit_curves` (analysis_survival.py)
+
+- **Arguments**: `df, mi, key, config, time_col, event_col, group`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_fit_cox` (analysis_survival.py)
+
+- **Arguments**: `df, mi, key, config, time_col, event_col, covariates`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_time_to_event` (analysis_survival.py)
+
+- **Arguments**: `df, numeric, binary, groups`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_binary` (analysis_survival.py)
+
+- **Arguments**: `df, numeric, binary, groups`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_count` (analysis_survival.py)
+
+- **Arguments**: `df, numeric, binary, groups`
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
+## analysis_survival_results.py
+
+_How the results of the Survival & regression page read: the effect first (the comparison's ratios with their
+interval and p-value), then the figure (Kaplan-Meier curves with the numbers at risk, or the model's ratios on a log
+scale), the warnings of the fit, then every term of the model and its checks (ui.guidance.outcomes.diagnostics), and
+under each stored result what it was computed on. Observed and pooled (multiply imputed) results read the same way._
+
+**Imports**:
+`__future__.annotations`, `html`, `math`, `collections.abc.Callable`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.regression.APPARENT_AUC_NOTE`, `biostats.survival.event_indicator`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.mi_mode.pooled_frame`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.components.text.plain`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.ComparisonTerm`, `ui.guidance.outcomes.comparison_terms`, `ui.guidance.outcomes.diagnostics`, `ui.guidance.outcomes.listing`, `ui.results.provenance`, `ui.theme.OKABE_ITO`
+
+### class `Comparison` (analysis_survival_results.py)
+
+What a model's result is read by: the comparison, its values in the data the model read, the adjustment.
+
+**Methods:**
+
+- **terms**(`self, terms: Sequence[str]`) -> `list[ComparisonTerm]`
+  > No description available.
+
+- **words**(`self`) -> `str`
+  > No description available.
+
+### class `Metric` (analysis_survival_results.py)
+
+No description available.
+
+### class `Curve` (analysis_survival_results.py)
+
+No description available.
+
+### def `_p` (analysis_survival_results.py)
+
+- **Arguments**: `p: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_ratio` (analysis_survival_results.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_median` (analysis_survival_results.py)
+
+- **Arguments**: `value: ComplexType`
+
+- **Returns**: `str`
+
+The median survival time, or 'not reached' when the curve stays above 0.5: in the time's unit, without an
+exponent (1,119 days, not 1.12e+03), to two decimals at most (a midpoint ends in .5; 2.37 years).
+
+### def `_table` (analysis_survival_results.py)
+
+- **Arguments**: `df: pd.DataFrame, formats: dict`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_effects` (analysis_survival_results.py)
+
+- **Arguments**: `table: pd.DataFrame, ratio: str, comparison: Comparison, name: str`
+
+- **Returns**: `list[Metric]`
+
+The comparison's ratios, one metric per term (the first level is the reference).
+
+### def `_headline` (analysis_survival_results.py)
+
+- **Arguments**: `metrics: list[Metric], words: str, warnings: int`
+
+- **Returns**: `None`
+
+The result first: the comparison's effect, the test and the counts, then what the model is adjusted for.
+
+### def `_rgba` (analysis_survival_results.py)
+
+- **Arguments**: `colour: str, alpha: float`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_ticks` (analysis_survival_results.py)
+
+- **Arguments**: `top: float, count: int`
+
+- **Returns**: `np.ndarray`
+
+Round ticks from 0 to ``top``, about ``count`` of them: 1, 2, 2.5 or 5 times a power of ten apart (1,450 days:
+every 250, not every 500).
+
+### def `_at_risk` (analysis_survival_results.py)
+
+- **Arguments**: `frame: pd.DataFrame, time_col: str, event_col: str, group: ComplexType, ticks: np.ndarray`
+
+- **Returns**: `ComplexType`
+
+Rows still followed at each tick, per group: the rows the curves read (a known time >= 0, a known event).
+
+### def `km_figure` (analysis_survival_results.py)
+
+- **Arguments**: `curves: Sequence[Curve]`
+
+- **Returns**: `go.Figure`
+
+Kaplan-Meier curves, each with its pointwise band in its own colour (Okabe-Ito, in the order of the sorted
+levels), and the numbers at risk under the axis, at its ticks.
+
+### def `forest_figure` (analysis_survival_results.py)
+
+- **Arguments**: `table: pd.DataFrame`
+
+- **Returns**: `go.Figure`
+
+The model's ratios on a log scale, with their 95% intervals: the comparison's terms filled and in colour, the
+adjustment terms hollow and grey; a hairline at 1. Terms without a finite interval are left to the table.
+
+### def `_decades` (analysis_survival_results.py)
+
+- **Arguments**: `steps: Sequence[float]`
+
+- **Returns**: `list[float]`
+
+No description available.
+
+### def `_ratio_ticks` (analysis_survival_results.py)
+
+- **Arguments**: `lo: float, hi: float`
+
+- **Returns**: `list[float]`
+
+Round ratios from ``lo`` to ``hi`` for a log axis, 1 among them: 0.1, 0.2, 0.5, 1, 2, 5 on a wide range, halves
+and doubles on a middle one (0.25, 0.5, 1, 2, 4), finer steps on a narrow one (0.8, 0.9, 1), never more than 8.
+Plotly's own log ticks label 0.5 to 0.9 as "5 ... 9".
+
+### def `_curves` (analysis_survival_results.py)
+
+- **Arguments**: `km: Any, pooled: bool`
+
+- **Returns**: `list[Curve]`
+
+No description available.
+
+### def `_median_ci` (analysis_survival_results.py)
+
+- **Arguments**: `lower: ComplexType, upper: ComplexType`
+
+- **Returns**: `str`
+
+The median's interval: 'not reached' alone when neither end is reached (the lower one is reached first).
+
+### def `_group_table` (analysis_survival_results.py)
+
+- **Arguments**: `km: Any, pooled: bool`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `show_km_observed` (analysis_survival_results.py)
+
+- **Arguments**: `km: Any`
+
+- **Returns**: `None`
+
+A Kaplan-Meier result of the observed data, as the complete-case comparison under a pooled one.
+
+### def `_logrank` (analysis_survival_results.py)
+
+- **Arguments**: `km: Any, pooled: bool`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `show_time_to_event` (analysis_survival_results.py)
+
+- **Arguments**: `km: Any, cox: Any`
+
+- **Returns**: `None`
+
+The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first. ``model``:
+a Cox model is chosen, so a missing one has not been fitted with these variables (or could not be).
+
+### def `_diagnostics` (analysis_survival_results.py)
+
+- **Arguments**: `result: Any`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_model` (analysis_survival_results.py)
+
+- **Arguments**: `res: Any`
+
+- **Returns**: `None`
+
+A logistic or count model: the comparison's ratios first, the forest of every ratio, then details and checks.
+
+### def `_reference_words` (analysis_survival_results.py)
+
+- **Arguments**: `res: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `show_logistic` (analysis_survival_results.py)
+
+- **Arguments**: `res: Any`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `show_count` (analysis_survival_results.py)
+
+- **Arguments**: `res: Any`
 
 - **Returns**: `None`
 

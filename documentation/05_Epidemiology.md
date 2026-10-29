@@ -166,6 +166,53 @@ Convert raw variable values into Z-scores relative to a reference population or 
 
 ## Survival & regression (Analyze > Survival & regression)
 
+The page starts from the outcome. Choose **Time to event**, **Binary (yes/no)** or **Count or rate** at the top; the
+page then asks two rows of questions:
+
+1. **The outcome:** the follow-up time and the event; the binary variable and the level counted as the event; or the
+   count, its person-time (optional) and the model, Poisson or negative binomial.
+2. **The comparison:** **Compare by**, the exposure or group you compare (a treatment arm, a risk factor), and
+   **Adjust for**, the variables measured at or before the start of follow-up that may confound the comparison. Both
+   are optional, but a model needs at least one variable.
+
+With **Guidance** on (the default), a box under the questions gives the plan before anything runs: what Run will do,
+on how many rows and events, and what to check first. It names:
+
+- codes other than 0 and 1 in the event, and negative follow-up times;
+- the rows a model leaves out for a missing value;
+- fewer than 10 events per estimated term;
+- a variable left with one value in the rows used (the model leaves it out);
+- one value written several ways ("F", "F␣", "female"), each a group of its own, with the formula of a cleaned copy;
+- levels held by fewer than 10 rows, or without an event: their ratios are unstable or cannot be estimated, and the
+  model may not converge;
+- a level where every row or none has the event (logistic);
+- variables that are exact combinations of others, or strongly collinear (variance inflation above 10; for a
+  categorical variable, the generalised VIF of Fox and Monette on the same scale), with the variable each is most
+  correlated with;
+- a count model without person-time.
+
+It advises; what runs is what you chose. A Cox model with no finite estimate (a level without events sends a hazard
+ratio to infinity) stops with that reason rather than showing a table of missing values.
+
+**Run analysis** runs it. For a time-to-event outcome, one click draws the Kaplan-Meier curves (by the comparison
+when it is a grouping variable, with the log-rank test) and fits the Cox model of the comparison and the adjustment;
+**Analyses** keeps either or both.
+
+The result reads in this order:
+
+- **the effect:** the comparison's ratio for each level against the first (or per unit of a numeric variable), with
+  its 95% interval and p-value; the log-rank test; the events; what the model is adjusted for;
+- **the figure:** the Kaplan-Meier curves with their bands and the numbers at risk under the time axis, or the
+  model's ratios on a log scale, the comparison's terms filled and in colour, the adjustment terms hollow and grey;
+- **the warnings** of the fit;
+- **Model details:** every term of the model, the reference levels and the method;
+- **Checks:** events per term, the proportional-hazards test per term and the concordance (Cox), the apparent AUC
+  and the pseudo-R² (logistic), the dispersion (Poisson) or alpha (negative binomial), and the AIC.
+
+The ratios of the variables you adjust for are adjustment terms, not effects to interpret: each is adjusted for the
+others, not for its own confounders (the "Table 2 fallacy"). Leave **Compare by** empty to read every term of a model
+alike. Each outcome keeps its choices while another is open.
+
 | Method | What it gives | Reference |
 | --- | --- | --- |
 | Kaplan-Meier | survival curve per group with pointwise 95% Greenwood (log-log) intervals, median survival | Kaplan & Meier 1958 |

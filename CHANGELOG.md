@@ -1058,6 +1058,43 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The participant flow tells the rows a merge repeated from the rows its file added.
 - A merge that pandas refuses no longer writes into the log the identifiers it found repeated.
 
+### Survival & regression: the outcome first, the effect first
+
+- **The page starts from the outcome:** *Time to event*, *Binary (yes/no)* or *Count or rate*, the words of the
+  Which test? guide. Each asks for the outcome, then what is compared (**Compare by**) and what it is adjusted for
+  (**Adjust for**). Before, four forms followed one another (Kaplan-Meier, Cox, logistic, count), each with its own
+  copy of the variables: the follow-up time and the event were chosen twice, and one list of covariates mixed the
+  comparison with the adjustment.
+- **The plan before the run** (Guidance, on by default): what Run will do, on how many rows and events, checked on
+  the data: event codes other than 0 and 1, negative follow-up times, rows left out for a missing value, fewer than
+  10 events per term, a level where every row or none has the event, a count model without person-time. It advises;
+  what runs is what you chose.
+- **What would make a model's terms unstable, before it runs:** a variable left with one value in the rows used
+  (the model left it out without a word), one value written several ways ("F", "F␣", "female", each a group of its
+  own, with the formula of a cleaned copy), levels held by fewer than 10 rows or without an event, variables that are
+  exact combinations of others, and strong collinearity (variance inflation above 10, the generalised VIF of Fox and
+  Monette for a categorical variable), each with the variable it is most correlated with.
+- **A Cox model with no finite estimate stops with the reason.** In the tutorial, `sex` holds one value written ten
+  ways, eight of them on one row and four without an event: adjusting for it sent a hazard ratio to infinity,
+  statsmodels returned missing values for every term (the arm's included), and the proportional-hazards test said
+  "high collinearity", with lifelines' advice and a link. The model now refuses with the reason, the error card's
+  first line gives it, and a diagnostic that cannot run says so in one line.
+- **One click for a time-to-event analysis:** the Kaplan-Meier curves with the log-rank test and the Cox model of the
+  comparison and the adjustment; **Analyses** keeps either or both.
+- **The effect first:** the comparison's hazard, odds or rate ratio for each level against the first, with its 95%
+  interval and p-value, then the figure, the warnings of the fit, *Model details* (every term, the reference levels,
+  the method) and *Checks* (events per term, the proportional-hazards test, the concordance, the apparent AUC, the
+  dispersion). The ratios of the adjustment variables are shown as adjustment terms, not effects to interpret.
+- **The figures:** the numbers at risk under the Kaplan-Meier curves, at round times (every 250 days, not 500), each
+  curve's band in its own colour, and the ratios of a logistic or count model on a log scale read as ratios (0.5, 1,
+  2, 4: Plotly labelled 0.5 to 0.9 "5 ... 9"), the comparison's terms filled and in colour, the adjustment terms
+  hollow and grey. A level's text in a chart's legend or labels is shown as text (it could draw a link). A warning
+  that the curves and the model both give is shown once; a median whose interval is never reached reads "not
+  reached"; "1 row with a negative follow-up time was left out" (was "1 row(s) ... were").
+- **The numbers do not change:** the same functions on the same rows; the model is the comparison plus the
+  adjustment, so the same covariates give the same fit. Stored results and the study dossier are unchanged. Median
+  survival times read without an exponent (1,119 days, not 1.12e+03).
+
 ### Survival: one rule for every median (M6, results)
 
 - **Every median of a survival curve is read by one rule, R's** (Brookmeyer and Crowley): the first time the curve

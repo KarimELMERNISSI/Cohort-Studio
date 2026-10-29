@@ -4,3 +4,5 @@
 # [tool.ruff.format] exclude; its full SHA is added here in a later commit, and is never rewritten afterwards.
 # style: format the date parser and the column profile (M6)
 2c160536d1230bdcd80407f6a84e3500f25b29e0
+# style: format the Survival & regression page
+4ed083c4f2221b0071df5132c8013bca1b48141c

@@ -198,7 +198,12 @@ def show_tests(result, *, title: str = "Tests of several terms at once") -> None
         )
 
 
-def show_mi_notes(result, *, complete_case: Callable[[Any], None] | None = None) -> None:
+def show_mi_notes(
+    result,
+    *,
+    complete_case: Callable[[Any], None] | None = None,
+    label: str = "Complete-case analysis, for comparison",
+) -> None:
     """Pooling caption, preview note, warnings counted across imputations and the complete-case analysis."""
     st.caption(
         f":material/stacks: Pooled over {result.m} imputed datasets with Rubin's rules (Barnard-Rubin df)."
@@ -209,7 +214,7 @@ def show_mi_notes(result, *, complete_case: Callable[[Any], None] | None = None)
     for warning in result.warnings:
         st.warning(warning)
     if complete_case is not None and result.complete_case is not None:
-        with st.expander("Complete-case analysis, for comparison"):
+        with st.expander(label):
             complete_case(result.complete_case)
 
 

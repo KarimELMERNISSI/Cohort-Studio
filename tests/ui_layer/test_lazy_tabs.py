@@ -33,6 +33,8 @@ LAZY = (
     "app_pages/analysis_extras.py",
     "app_pages/analysis_pooled.py",
     "app_pages/analysis_guidance_ui.py",
+    # the outcome panels of Survival & regression (one runs at a time)
+    "app_pages/analysis_survival.py",
     # the panels of the Analysis population tab of Validate
     "ui/components/population.py",
     "ui/components/flow.py",

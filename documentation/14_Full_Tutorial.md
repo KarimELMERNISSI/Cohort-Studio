@@ -315,26 +315,29 @@ has 928, so the mortality question in step 6 was always going to be inconclusive
 
 ## Step 6 - Survival and regression
 
-Open **Analyze > Survival & regression**.
+Open **Analyze > Survival & regression**. The page starts from the outcome: **Time to event** is selected.
 
-- **Kaplan-Meier:** time `fu_days`, event `death`, group `arm`. The curves separate a little; the log-rank
-  **p = 0.25**.
-- **Cox model:** covariate `arm`. **HR about 0.88 (95% CI 0.70 to 1.10)**. This result is inconclusive, not
-  "no effect": the interval includes both a 30% reduction and a 10% increase (see the power calculation in 5.5).
-- **Logistic regression:** outcome `hf_hospitalisation` (event *Yes*), covariates `arm`, `age`, `diabetes` and
-  `nyha_class`. You get adjusted odds ratios.
-- **Count model:** count `n_hospital_visits`, exposure (person-time) `fu_days`, covariate `arm`. The incidence
-  rate ratio is about **0.80**.
+- **Time to event:** follow-up time `fu_days`, event `death`, **Compare by** `arm`, nothing to adjust for. The plan
+  above the button says what will run, on how many rows. **Run analysis** draws the Kaplan-Meier curves and fits the
+  Cox model in one click. The hazard ratio comes first: **about 0.88 (95% CI 0.70 to 1.10)**, with the log-rank
+  **p = 0.25**; the curves separate a little. This result is inconclusive, not "no effect": the interval includes
+  both a 30% reduction and a 10% increase (see the power calculation in 5.5).
+- **Binary (yes/no):** outcome `hf_hospitalisation` (event *Yes*), compare by `arm`, adjust for `age`, `diabetes`
+  and `nyha_class`. The adjusted odds ratio of the arm comes first; every term of the model is under *Model
+  details*.
+- **Count or rate:** count `n_hospital_visits`, person-time `fu_days`, compare by `arm`. The incidence rate ratio is
+  about **0.80**.
 
 ### 6.1 With multiple imputation
 
 In the sidebar, set **Analysis data** to *Imputed*. The banner says that the analyses pool the imputed datasets
-of the 928 rows. Fit the Cox model again with `arm`, `age`, `diabetes` and `hba1c_pct`:
+of the 928 rows. Back on **Time to event**, compare by `arm` and adjust for `age`, `diabetes` and `hba1c_pct`, then
+**Run analysis**:
 
-- each hazard ratio comes with its 95% CI, the Barnard-Rubin df, the fraction of missing information (FMI) and
-  the relative increase in variance (RIV); `hba1c_pct` has the largest FMI;
-- *Complete-case analysis, for comparison* fits the same model on the patients with every value: about a
-  fifth fewer patients and wider intervals.
+- under *Model details*, each hazard ratio comes with its 95% CI, the Barnard-Rubin df, the fraction of missing
+  information (FMI) and the relative increase in variance (RIV); `hba1c_pct` has the largest FMI;
+- *Complete-case analysis, for comparison: Cox model* fits the same model on the patients with every value: about
+  a fifth fewer patients and wider intervals.
 
 On **Hypothesis tests & epidemiology**, compare `hba1c_pct` between the arms: the Welch t-test is pooled, and
 the Mann-Whitney test is listed as not poolable, with the reason. Untick a criterion in the sidebar: the pages

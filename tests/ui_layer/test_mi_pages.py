@@ -58,7 +58,9 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
     app.selectbox(key="surv_time").select("fu_days").run()
     app.selectbox(key="surv_event").select("death").run()
     app.selectbox(key="surv_group").select("arm").run()
-    app.button(key="surv_run").click().run()
+    app.multiselect(key="surv_adjust").select("age").select("hba1c_pct").run()
+    assert any("Counted on the first imputed dataset." in c.value for c in app.caption)
+    app.button(key="surv_run").click().run()  # the curves and the Cox model, pooled
     _ok(app)
     km = _stored(app, "survival_mi")
     assert (
@@ -68,11 +70,6 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
         == set(km.complete_case.curves[i].label for i in range(len(km.complete_case.curves)))
     )
     assert km.tests["log_rank"].method == "D2"
-    app.selectbox(key="cox_time").select("fu_days").run()
-    app.selectbox(key="cox_event").select("death").run()
-    app.multiselect(key="cox_covs").select("age").select("hba1c_pct").select("arm").run()
-    app.button(key="cox_run").click().run()
-    _ok(app)
     cox = _stored(app, "cox_mi")
     hba1c = cox.term("hba1c_pct")
     assert (
@@ -82,6 +79,10 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
         cox.complete_case is not None and cox.complete_case.n < 1206
     )  # complete cases drop the missing HbA1c
     assert any("Complete-case analysis" in e.label for e in app.expander)
+    assert [m.label for m in app.metric][:2] == [
+        "Hazard ratio · Intervention vs Control",
+        "Log-rank test, pooled",
+    ]
 
 
 def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:

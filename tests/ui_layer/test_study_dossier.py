@@ -43,10 +43,11 @@ def app(tmp_path_factory: pytest.TempPathFactory):
 
 def test_a_result_goes_into_the_dossier_and_its_flow(app: AppTest) -> None:
     app.switch_page(nav.page_path("survival")).run()
-    app.selectbox(key="cox_time").select("fu_days").run()
-    app.selectbox(key="cox_event").select("death").run()
-    app.multiselect(key="cox_covs").select("arm").select("hba1c_pct").run()
-    app.button(key="cox_run").click().run()
+    app.selectbox(key="surv_time").select("fu_days").run()
+    app.selectbox(key="surv_event").select("death").run()
+    app.selectbox(key="surv_group").select("arm").run()
+    app.multiselect(key="surv_adjust").select("hba1c_pct").run()
+    app.button(key="surv_run").click().run()
     _ok(app)
     app.button(key="report_add::cox").click().run()
     _ok(app)
