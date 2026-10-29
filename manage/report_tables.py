@@ -155,7 +155,14 @@ def km_png(curves: list[tuple[str, Any, Any]], *, dpi: int = 160) -> bytes:
 
 
 def _median(value: Any) -> str:
-    return "not reached" if value is None else _num(value)
+    """A median time: "not reached", or the time in its unit, without an exponent, to two decimals at most (a
+    midpoint ends in .5: 1,119.5, which three figures rounded to 1,120)."""
+    return "not reached" if value is None else f"{float(value):,.2f}".rstrip("0").rstrip(".")
+
+
+def _median_ci(lower: Any, upper: Any) -> str:
+    """The median's interval: "not reached" alone when neither end is reached (the lower one is reached first)."""
+    return "not reached" if lower is None and upper is None else f"{_median(lower)} to {_median(upper)}"
 
 
 def _survival_blocks(res: Any) -> ResultBlocks:
@@ -166,7 +173,7 @@ def _survival_blocks(res: Any) -> ResultBlocks:
                 "n": c.n,
                 "Events": c.events,
                 "Median survival": _median(c.median),
-                f"Median {c.level:.0%} CI": f"{_median(c.median_lower)} to {_median(c.median_upper)}",
+                f"Median {c.level:.0%} CI": _median_ci(c.median_lower, c.median_upper),
             }
             for c in res.curves
         ]
@@ -216,6 +223,7 @@ def _pooled_blocks(res: Any) -> ResultBlocks:
     elif res.kind == "survival":
         curves = res.extra.get("curves") or {}
         medians = res.extra.get("medians") or {}
+        intervals = res.extra.get("median_ci") or {}  # a result pooled before: none
         blocks.tables.append(
             (
                 "Kaplan-Meier, pooled (log(-log) scale)",
@@ -224,6 +232,9 @@ def _pooled_blocks(res: Any) -> ResultBlocks:
                         {
                             "Group": label,
                             "Median survival (pooled curve)": _median(medians.get(label)),
+                            "Median 95% CI (pooled band)": _median_ci(*intervals[label])
+                            if label in intervals
+                            else "n/a",
                             "Survival at last time": _num(curve["survival"].iloc[-1]),
                         }
                         for label, curve in curves.items()

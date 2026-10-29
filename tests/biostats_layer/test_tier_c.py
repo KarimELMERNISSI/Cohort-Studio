@@ -59,8 +59,10 @@ def test_kaplan_meier_medians_and_logrank_gehan() -> None:
     assert res.logrank_p < 1e-4 and res.logrank_df == 1
     curve = kaplan_meier([t for t, _ in PLACEBO], [e for _, e in PLACEBO], "placebo")
     assert curve.n == 21 and curve.events == 21 and curve.survival[-1] == pytest.approx(0.0)
-    assert (curve.lower <= curve.survival + 1e-9).all() and (
-        curve.upper >= curve.survival - 1e-9
+    defined = curve.survival > 0  # at S = 0 the log-log band is undefined (missing), as R's NA
+    assert np.isnan(curve.lower[~defined]).all() and np.isnan(curve.upper[~defined]).all()
+    assert (curve.lower[defined] <= curve.survival[defined] + 1e-9).all() and (
+        curve.upper[defined] >= curve.survival[defined] - 1e-9
     ).all()
 
 

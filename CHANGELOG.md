@@ -1113,8 +1113,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   of one curve: a Kaplan-Meier curve took the first time strictly below 0.5 (6.0 for times 1 to 10, every one an
   event), a curve pooled over imputations the first time at or below it (5.0), and R 5.5. A median moves only where
   the curve stays at exactly 0.5; the Gehan leukaemia data keep 23 and 8.
-- The Kaplan-Meier median comes with its 95 % interval, the same rule on the band's curves, on Survival &
-  regression and in the dossier.
+- The Kaplan-Meier median comes with its 95 % interval, the same rule on the band's curves (Brookmeyer and
+  Crowley), on Survival & regression and in the dossier.
+- **Where no one is left without the event (S = 0), the band is undefined**, as R's log-log band is: the median's
+  interval reads "not reached" there, where the last event time became a limit (three participants, every one an
+  event: "1 to 3", R "1 to not reached").
+- **A pooled median reads a flat stretch at 0.5 up to the last follow-up**, as a single curve does (times 1 to 6,
+  the first three events: 4.5, where the pooled curve gave 3.0), and comes with its interval, read on the pooled band.
+- The dossier gives median times without rounding a midpoint away (1,119.5, which it printed 1,120), and an interval
+  neither end of which is reached as "not reached".
 
 ### Dates: read by the day-first choice or a declared format (M6, results)
 

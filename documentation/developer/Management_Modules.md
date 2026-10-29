@@ -3098,7 +3098,16 @@ Kaplan-Meier curves (label, times, survival) as a step plot.
 
 - **Returns**: `str`
 
-No description available.
+A median time: "not reached", or the time in its unit, without an exponent, to two decimals at most (a
+midpoint ends in .5: 1,119.5, which three figures rounded to 1,120).
+
+### def `_median_ci` (report_tables.py)
+
+- **Arguments**: `lower: Any, upper: Any`
+
+- **Returns**: `str`
+
+The median's interval: "not reached" alone when neither end is reached (the lower one is reached first).
 
 ### def `_survival_blocks` (report_tables.py)
 

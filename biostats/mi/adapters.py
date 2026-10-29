@@ -444,11 +444,16 @@ def pool_km_curves(curves: list[Any], *, alpha: float = 0.05) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def median_from_curve(curve: pd.DataFrame) -> float | None:
-    """The median of a pooled curve, by the rule of every median (biostats.survival.km_quantile)."""
+def median_from_curve(
+    curve: pd.DataFrame, column: str = "survival", *, last: float | None = None
+) -> float | None:
+    """
+    The median of a pooled curve (``column`` "survival"), or an end of its interval ("lower", "upper": the pooled
+    band), by the rule of every median (biostats.survival.km_quantile); ``last`` is the last follow-up time.
+    """
     from biostats.survival import km_quantile
 
-    return km_quantile(curve["time"], curve["survival"])
+    return km_quantile(curve["time"], curve[column], last=last)
 
 
 class SurvivalAdapter(Adapter):
@@ -474,6 +479,7 @@ class SurvivalAdapter(Adapter):
         labels = list(extracts[0].extra["curves"])
         pooled = {}
         medians = {}
+        intervals = {}
         for label in labels:
             curves = [e.extra["curves"][label] for e in extracts if label in e.extra["curves"]]
             if any(c.se is None for c in curves):
@@ -482,8 +488,15 @@ class SurvivalAdapter(Adapter):
                 )
             curve = pool_km_curves(curves, alpha=alpha)
             pooled[label] = curve
-            medians[label] = median_from_curve(curve)
-        return {"curves": pooled, "medians": medians}
+            # a stretch at exactly 0.5 runs to the last follow-up of any imputation (a curve recorded before: none)
+            ends = [c.last_time for c in curves if getattr(c, "last_time", None) is not None]
+            last = max(ends) if ends else None
+            medians[label] = median_from_curve(curve, last=last)
+            intervals[label] = (
+                median_from_curve(curve, "lower", last=last),
+                median_from_curve(curve, "upper", last=last),
+            )
+        return {"curves": pooled, "medians": medians, "median_ci": intervals}
 
 
 def adapter_for(result: Any) -> Adapter:

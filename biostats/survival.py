@@ -142,6 +142,8 @@ class KMCurve:
     median_lower: float | None = None
     median_upper: float | None = None
     level: float = 0.95  # of the band and of the median's interval
+    # the last follow-up time, an event's or a censoring's: a stretch at exactly 0.5 runs to it (km_quantile's last)
+    last_time: float | None = None
 
 
 @dataclass
@@ -161,11 +163,12 @@ def km_quantile(
     times: Sequence, survival: Sequence, p: float = 0.5, *, last: float | None = None
 ) -> float | None:
     """
-    The p-quantile of a survival curve, read as R's quantile.survfit reads it (Brookmeyer & Crowley 1982): the
-    first time at which S(t) <= 1 - p. Where the curve stays at exactly 1 - p, from the time it reaches it to the
-    next time it falls (or to ``last``, the last follow-up time, when it never does), the midpoint of that stretch:
-    times 1 to 10, every one an event, give a median of 5.5, where the first time at or below 0.5 gives 5. None
-    when the curve never reaches 1 - p.
+    The p-quantile of a survival curve, read as R's quantile.survfit reads it: the first time at which
+    S(t) <= 1 - p. Where the curve stays at exactly 1 - p, from the time it reaches it to the next time it falls (or
+    to ``last``, the last follow-up time, when it never does), the midpoint of that stretch (R's convention): times
+    1 to 10, every one an event, give a median of 5.5, where the first time at or below 0.5 gives 5. None when the
+    curve never reaches 1 - p. Read on the band's curves, the same rule gives the quantile's interval (Brookmeyer &
+    Crowley 1982); where the band is undefined (missing) the time is skipped, as R skips its NA.
     """
     t = np.asarray(times, dtype=float)
     s = np.asarray(survival, dtype=float)
@@ -203,6 +206,10 @@ def kaplan_meier(
         se_c = se[inside] / (surv[inside] * np.abs(np.log(surv[inside])))
         lower[inside] = np.exp(-np.exp(c + z * se_c))
         upper[inside] = np.exp(-np.exp(c - z * se_c))
+    # where no one is left without the event (S = 0) the Greenwood SE is infinite and the log-log band undefined:
+    # missing, as R's NA, so that the median's interval reads "not reached" there rather than the last event time
+    gone = surv <= 0
+    lower[gone] = upper[gone] = np.nan
     unique_times = np.asarray(sf.surv_times, dtype=float)
     lower, upper = np.clip(lower, 0, 1), np.clip(upper, 0, 1)
     last = float(
@@ -225,6 +232,7 @@ def kaplan_meier(
         median_lower=km_quantile(unique_times, lower, last=last),
         median_upper=km_quantile(unique_times, upper, last=last),
         level=1 - alpha,
+        last_time=last,
     )
 
 

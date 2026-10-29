@@ -381,10 +381,14 @@ def _median_ci(lower: float | None, upper: float | None) -> str:
 
 def _group_table(km: Any, pooled: bool) -> None:
     if pooled:
+        intervals = km.extra.get("median_ci") or {}  # a result pooled before: none
         rows = [
             {
                 "group": label,
                 "median survival (pooled curve)": _median(km.extra["medians"].get(label)),
+                "median 95% CI (pooled band)": _median_ci(*intervals[label])
+                if label in intervals
+                else "n/a",
                 "survival at last time": float(curve["survival"].iloc[-1]),
             }
             for label, curve in km.extra["curves"].items()
