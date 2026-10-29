@@ -2837,21 +2837,49 @@ _Validate page: data quality dashboard, implausible values, inclusion criteria, 
 
 ## validate_dates.py
 
-_Validate > Date checks: the text columns that look like dates, how they would be read, and their conversion as one
-step of the trace, which the replay reads with the same method (smart_parse_dates). Its own tab since M6: above
-Validate's tabs, it read those columns whenever Validate opened on new data, whichever tab was wanted._
+_Validate > Date checks: the text columns that look like dates, and their conversion. Each column is read with one
+format (ingest.dates): detected from the shape of its values, the order of day and month from the values that show
+it, else asked and pre-filled from the import's day-first setting; two-digit years with a pivot; Excel serial numbers
+only when accepted; the placeholder dates the user keeps ticked set to missing. The conversion is one step of the
+trace (method parse_dates, each column's format recorded), which the replay reads with the same function, never
+detecting again. Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
+opened on new data, whichever tab was wanted._
 
 **Imports**:
-`__future__.annotations`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.detect`, `ingest.dates.partial_dates`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+
+### def `_dayfirst` (validate_dates.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `bool`
+
+The import's day-first setting, else the user's default for imports.
+
+### def `detections` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `dict[ComplexType]`
+
+The columns that look like dates (detect() gives them a format, chosen or proposed), and how.
+
+### def `_detected` (validate_dates.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `dict[ComplexType]`
+
+The dataset's detections, kept until the data or the day-first setting change.
 
 ### def `date_candidates` (validate_dates.py)
 
-- **Arguments**: `df: pd.DataFrame, analyzer: DataAnalyzer`
+- **Arguments**: `state`
 
 - **Returns**: `list[str]`
 
-The text columns the column profile takes for dates. Nothing is parsed: the profile is kept until the data
-change, so the line above Validate's tabs can count them on every click.
+The text columns that look like dates, by the shape of their values: nothing is read as a date, and the result is
+kept until the data change, so that the line above Validate's tabs can count them on every click.
 
 ### def `dates_found` (validate_dates.py)
 
@@ -2861,13 +2889,37 @@ change, so the line above Validate's tabs can count them on every click.
 
 How many text columns look like dates, in the line above Validate's tabs and at the top of the tab.
 
-### def `_date_preview` (validate_dates.py)
+### def `_label` (validate_dates.py)
 
-- **Arguments**: `df: pd.DataFrame, analyzer: DataAnalyzer`
+- **Arguments**: `format_id: str`
 
-- **Returns**: `tuple[ComplexType]`
+- **Returns**: `str`
 
-The text columns that look like dates, their parsing, the format found and the values that would be lost.
+No description available.
+
+### def `_why` (validate_dates.py)
+
+- **Arguments**: `detection: Detection`
+
+- **Returns**: `str`
+
+Why a column's reading is asked: counts only, never a value.
+
+### def `_choose` (validate_dates.py)
+
+- **Arguments**: `column: str, detection: Detection`
+
+- **Returns**: `ComplexType`
+
+How a column is read: as detected when the data decide, else as chosen here. None: left as text.
+
+### def `_readings` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame, chosen: dict[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each chosen column read as it would be converted (before the placeholders are set to missing).
 
 ### def `render_date_checks` (validate_dates.py)
 
@@ -2875,9 +2927,9 @@ The text columns that look like dates, their parsing, the format found and the v
 
 - **Returns**: `None`
 
-The Date checks tab: how the text columns that look like dates would be read, and their conversion, one traced
-step, on request. Dates used to be re-parsed in place on every visit of the page, untraced and invisible to the
-replay.
+The Date checks tab: how the text columns that look like dates would be read, what is asked, and their conversion,
+one traced step, on request. Dates used to be re-parsed in place on every visit of the page, untraced and invisible
+to the replay.
 
 ---
 

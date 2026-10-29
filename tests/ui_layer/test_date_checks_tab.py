@@ -1,7 +1,8 @@
 """
 Validate > Date checks (M6): the text columns that look like dates, how they would be read, and their conversion as one
 step of the trace. The conversion sat above Validate's tabs and parsed every such column whenever Validate opened on
-new data; a line there now counts them from the column profile, without parsing them, and opens the tab.
+new data; a line there now counts them by the shape of their values, without reading them as dates, and opens the tab.
+Each column is read with the format the data show or the user chooses, recorded with the step (method parse_dates).
 """
 
 from __future__ import annotations
@@ -41,13 +42,13 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     os.environ.setdefault("CMP_IAM_PROVIDER", "local")
     reads: list[int] = []
-    preview = validate_dates._date_preview
+    readings = validate_dates._readings
 
-    def counted(df, analyzer):
+    def counted(df, chosen):
         reads.append(1)
-        return preview(df, analyzer)
+        return readings(df, chosen)
 
-    monkeypatch.setattr(validate_dates, "_date_preview", counted)
+    monkeypatch.setattr(validate_dates, "_readings", counted)
     at = AppTest.from_file(MAIN, default_timeout=300)
     at.run()
     at.session_state["user_authenticated"] = True
@@ -58,13 +59,13 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     at.button(key="start_tutorial").click().run()
     _ok(at)
 
-    # the dashboard: the line counts the columns, and nothing is parsed
+    # the dashboard: the line counts the columns by their shape, and nothing is read as a date
     at.switch_page(nav.page_path("validate")).run()
     _ok(at)
     assert _line(at) == [":material/calendar_month: 2 text columns look like dates."]
     assert reads == []
 
-    # its button opens the tab, which parses them once, until the data change
+    # its button opens the tab, which reads them once, until the data or the choices change
     at.button(key="open_date_checks").click().run()
     _ok(at)
     assert at.session_state[dm.TAB_KEY] == "Date checks"
@@ -72,6 +73,9 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     assert headings == ["2 text columns look like dates"]
     assert _line(at) == []
     assert reads == [1]
+    assert not [
+        s for s in at.selectbox if s.key.startswith("date_format::")
+    ]  # the data decide: nothing asked
     at.run()
     assert reads == [1]
 
@@ -85,18 +89,26 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     assert at.session_state[dm.TAB_KEY] == "Date checks"
     assert _line(at) == []
 
-    # the conversion: one step, as Validate recorded it before M6, that replays to the same table
+    # the conversion: one step, each column's format recorded, which replays to the same table
     before = at.session_state["data"].copy()
     at.button(key="convert_dates").click().run()
     _ok(at)
     step = at.session_state["transformation_manager"].history[-1]
     assert step["function"] == "data_type_conversion"
+    read = {
+        "format": "day_first",
+        "order_source": "data",
+        "placeholders_to_missing": [],
+        "values": 1206,
+        "unreadable": 0,
+        "partial": 0,
+    }
     assert step["params"] == {
         "columns": DATES,
         "new_type": "datetime",
-        "method": "smart_parse_dates",
-        "notes": dict.fromkeys(DATES, "Strict Structure: Y=P2, M=P1, D=P0"),
-        "values_lost": dict.fromkeys(DATES, 0),
+        "method": "parse_dates",
+        "formats": dict.fromkeys(DATES, read),
+        "dayfirst": True,
     }
     after = at.session_state["data"]
     assert all(pd.api.types.is_datetime64_any_dtype(after[c]) for c in DATES)
@@ -104,8 +116,8 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     assert replayed.error is None and replayed.divergence is None
     assert frame_fingerprint(replayed.df) == step["data"]["fp_out"] == frame_fingerprint(after)
 
-    # nothing left to convert: the data changed, so the open tab parsed again
-    assert reads == [1, 1]
+    # nothing left to convert
+    assert reads == [1]
     assert "No text column looks like dates." in [c.value for c in at.caption]
     del at.query_params[nav.TAB_PARAM]
     at.session_state[dm.TAB_KEY] = "Data Quality Dashboard"

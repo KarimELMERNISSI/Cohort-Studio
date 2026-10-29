@@ -1058,11 +1058,34 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The participant flow tells the rows a merge repeated from the rows its file added.
 - A merge that pandas refuses no longer writes into the log the identifiers it found repeated.
 
+### Dates: read by the day-first choice or a declared format (M6, results)
+
+- **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
+  of day and month from the largest numbers and otherwise passed each value to a general date reader: in one column
+  it read two-digit years month first twice and day first once, took 20210305 for the year 57233 and 2021 for 1905,
+  completed 03/2021 to the 1st, made empty Excel cells into dates of 1899 and 1900, and lost a date that held a time.
+  Now:
+  - a format is chosen when nearly all values (95 %) have its shape, and proposed when half do;
+  - the values decide day first or month first when some can be read only one way, all the same way (at least 5 % of
+    them); otherwise the order is asked, pre-filled from the import's day-first setting, which was recorded but never
+    read;
+  - a two-digit year is read with a pivot you confirm (with 26: 21 is 2021, 68 is 1968);
+  - eight digits are read year first or day first, as their values show (20210305, 05032021);
+  - whole numbers are read as Excel serial dates only when you choose it;
+  - a month and a year, or a year alone, stays missing, never completed;
+  - the placeholder dates no one has (1900-01-01, 9999-12-31...) are ticked to be set missing; 1970-01-01 is not;
+  - a column that would lose more than 5 % of its values converts only when you say *Convert anyway*.
+- The conversion records each column's format, where its order came from, the pivot, the placeholders set missing
+  and the counts of values, of unreadable and of partial ones; the replay reads the columns with them and never
+  detects again. A conversion recorded before replays as it did.
+- Every format is read whole, never value by value: 24,000 values in 0.3 s.
+- The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
+
 ### Validate: Date checks, a tab of its own (M6)
 
 - **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed
   those columns whenever Validate opened on new data, whichever tab you came for. A line above the tabs now says how
-  many text columns look like dates, counted from the column profile without parsing them, and opens the tab; the
+  many text columns look like dates, counted by the shape of their values without reading them, and opens the tab; the
   Start page's Validate card links to it. The tab shows how each column would be read, the format found and the
   values that would become missing, and converts them on request as one step of the trace, recorded and replayed as
   before.

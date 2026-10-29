@@ -38,7 +38,7 @@ LAZY = (
     "ui/components/flow.py",
 )
 # widgets deliberately not kept when their tab is closed: a confirmation is asked again
-CONFIRMATIONS = ("mask_overwrite_", "ai_replace_", "_FREEZE_CONFIRM")
+CONFIRMATIONS = ("mask_overwrite_", "ai_replace_", "_FREEZE_CONFIRM", "dates_convert_anyway")
 # nor an input that mirrors a session key holding its value (value= comes from it): a kept value would come back stale
 MIRRORS = (
     "rename_",

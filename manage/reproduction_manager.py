@@ -43,6 +43,8 @@ from enrich.imputation_service import (
     left_missing,
 )
 from enrich.transformation_logic import apply_variable_transformation
+from ingest.dates import METHOD as DATES_METHOD
+from ingest.dates import convert as convert_dates
 from ingest.dates import smart_parse_dates
 from manage.paths import PathResolver, read_version
 
@@ -335,8 +337,11 @@ def _variable_computation(df, step, index, paths, warnings):
 
 def _data_type_conversion(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
-    new_df = df.copy()
     new_type = params.get("new_type")
+    if new_type == "datetime" and params.get("method") == DATES_METHOD:
+        # each column with the format recorded, never detected again (the page called the same function)
+        return convert_dates(df, params.get("formats") or {}), None
+    new_df = df.copy()
     for col in params.get("columns", []):
         if new_type == "datetime" and params.get("method") == "smart_parse_dates":
             new_df[col], _ = smart_parse_dates(new_df[col])

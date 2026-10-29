@@ -371,10 +371,12 @@ def _ordered(
 def _serials(series: pd.Series, name: str, n: int) -> Detection:
     """Excel serial numbers, proposed only for a column named like a date whose values nearly all are whole numbers
     between 1 January 1900 and today: a duration in days or an age is not a date."""
+    if not _DATE_NAME.search(name):
+        return Detection(None, False, n, 0)
     serial = pd.to_numeric(series, errors="coerce").dropna()
     today = (pd.Timestamp.today().normalize() - _EXCEL_ORIGIN).days
     whole = int(((serial == serial.round()) & serial.between(2, today)).sum())
-    if _DATE_NAME.search(name) and whole >= CHOSEN * n:
+    if whole >= CHOSEN * n:
         return Detection("excel_serial", False, n, whole)
     return Detection(None, False, n, 0)
 

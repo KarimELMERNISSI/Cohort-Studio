@@ -1804,12 +1804,11 @@ def app():
     
     hint = st.container()
     lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)
-    # above the tabs, the text columns that look like dates, counted from the column profile (kept until the data
+    # above the tabs, the text columns that look like dates, by the shape of their values (kept until the data
     # change); drawn once the tabs are, which then know the open one (a link opens Date checks on its first run)
     state = get_state()
-    df, analyzer = state.base, state.analyzer("base")
-    if df is not None and analyzer is not None and st.session_state.get(TAB_KEY) != "Date checks":
-        n = len(date_candidates(df, analyzer))
+    if state.base is not None and st.session_state.get(TAB_KEY) != "Date checks":
+        n = len(date_candidates(state))
         if n:
             with hint, st.container(horizontal=True, vertical_alignment="center"):
                 st.caption(f":material/calendar_month: {dates_found(n)}.")
