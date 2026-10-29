@@ -338,7 +338,8 @@ def impute(
     ``workers`` > 1 runs the chains in that many processes; the result is identical (one stream per chain). The
     processes are started from a separate interpreter (:mod:`biostats.mi.parallel`), so that they never re-run
     the Streamlit page script that is ``__main__`` in the application. If that run fails (the system refuses
-    the processes, the interpreter stops), the chains run here instead, with a warning: the result is the same.
+    the processes, the interpreter stops), the chains run here, one after another, with a warning: the result is the
+    same.
     """
     from biostats.mi.parallel import in_subprocess, run_in_subprocess
 
@@ -348,7 +349,13 @@ def impute(
         try:
             return run_in_subprocess(df, spec, workers, progress)
         except (RuntimeError, OSError, EOFError, pickle.UnpicklingError) as exc:
-            fallback = f"the parallel run failed ({exc}); the chains ran in one process instead (the result is the same)"
+            # named by its type: the warning is saved with the imputation, and the child's last line can quote a
+            # cell, an OSError the temporary folder, which names the server's account
+            fallback = (
+                f"the parallel run failed ({type(exc).__name__}); the chains ran in one process instead (the result "
+                "is the same)"
+            )
+            workers = 1  # a pool started here would re-run the page script, __main__ in Streamlit, in each worker
     started = time.perf_counter()
     methods, predictors, warnings = _resolve(df, spec)
     strata: list[tuple[int, Any, np.ndarray]] = []

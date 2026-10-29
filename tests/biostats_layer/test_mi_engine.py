@@ -264,13 +264,20 @@ def test_a_failed_parallel_run_falls_back_to_one_process(monkeypatch: pytest.Mon
     def refuse(*args, **kwargs):
         raise RuntimeError("the parallel imputation failed: exit code 3")
 
+    def no_pool(*args, **kwargs):
+        # inside Streamlit the page script is __main__: a pool started here re-ran it in each worker
+        raise AssertionError("a process pool was started in the calling process")
+
     monkeypatch.setattr(parallel, "run_in_subprocess", refuse)
+    monkeypatch.setattr("concurrent.futures.ProcessPoolExecutor", no_pool)
     _, df = _cohort(n=200)
     spec = SPEC.model_copy(update={"m": 3, "maxit": 2})
     fallback = impute(df, spec, workers=2)
     sequential = impute(df, spec)
     assert fallback.mi.fingerprint() == sequential.mi.fingerprint()
-    assert any("the parallel run failed" in w and "exit code 3" in w for w in fallback.warnings)
+    assert any("the parallel run failed (RuntimeError)" in w for w in fallback.warnings)
+    # the child's last line can quote a cell
+    assert not any("exit code" in w for w in fallback.warnings)
     assert not any("parallel" in w for w in sequential.warnings)
 
 

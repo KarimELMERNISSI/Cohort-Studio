@@ -89,6 +89,9 @@ def test_parallel_run_from_the_app_matches_the_sequential_one(app: AppTest) -> N
     assert "_mi" in app.session_state, [
         e.value for e in app.error
     ]  # the panel shows why the run failed
+    # a run that fell back to one process would pass without testing the processes
+    warnings = [w.value for w in app.warning]
+    assert not any("the parallel run failed" in w for w in warnings), warnings
     parallel = app.session_state["_mi"].mi.fingerprint()
     app.toggle(key="mi_parallel").set_value(False)
     app.button(key="mi_run").click().run()
