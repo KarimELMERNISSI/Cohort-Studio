@@ -801,11 +801,14 @@ Handle the upload or path input for the enrichment dataset.
 
 How many rows of the file each row of the dataset takes (enrich.external_data.FILE_ROWS). When the file repeats
 an identifier, the merge would repeat rows of the dataset, which the analyses would count as participants: the
-page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique".
+page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique"
+(checked by the merge); one that repeats only identifiers no row of the dataset holds merges as "all", which
+takes one row of the file for each row of the dataset all the same: the merge's check covers every identifier of
+the file, so "unique" would refuse it.
 
 ### def `_merged` (data_enrichment.py)
 
-- **Arguments**: `enriched_df: ComplexType, main_df: pd.DataFrame`
+- **Arguments**: `enriched_df: ComplexType, main_df: pd.DataFrame, file_df: ComplexType`
 
 - **Returns**: `bool`
 

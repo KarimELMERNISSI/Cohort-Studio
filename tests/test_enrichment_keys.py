@@ -148,6 +148,10 @@ def test_the_page_asks_before_a_merge_that_repeats_rows() -> None:
             "rows",
             "all",
         ),  # rows appended, no keys
+        # the file repeats only an identifier no row of the dataset holds, or holds two rows without one: "unique"
+        # was refused (pandas checks every identifier of the file), the merge failed with no way round
+        (pd.DataFrame({"pid": [2, 3, 9, 9], "hb": [11.0, 13.0, 8.0, 8.5]}), "left", "all"),
+        (pd.DataFrame({"pid": [2, 3, None, None], "hb": [11.0, 13.0, 8.0, 8.5]}), "left", "all"),
     ],
 )
 def test_the_page_asks_nothing_when_nothing_repeats(file, how, chosen) -> None:
@@ -155,3 +159,16 @@ def test_the_page_asks_nothing_when_nothing_repeats(file, how, chosen) -> None:
     at.session_state["file"], at.session_state["how"] = file, how
     at.run()
     assert not at.exception and not at.warning and at.session_state["chosen"] == chosen
+
+
+def test_a_file_repeating_only_identifiers_the_dataset_lacks_merges_again() -> None:
+    main = ensure_row_ids(pd.DataFrame({"pid": [1, 2, 3], "age": [50, 60, 70]}))
+    file = pd.DataFrame({"pid": [2, 3, 9, 9], "hb": [11.0, 13.0, 8.0, 8.5]})
+    assert key_check(main, file, ["pid"], ["pid"]) == KeyCheck(
+        1, 0, 0
+    )  # repeated, but for no row of the dataset
+    refused = add_data(main, file, ["pid"], ["pid"], ["hb"], strategy="left", file_rows="unique")
+    assert refused is main  # what the page chose before
+    merged = add_data(main, file, ["pid"], ["pid"], ["hb"], strategy="left", file_rows="all")
+    assert merged["hb"].tolist() == pytest.approx([np.nan, 11.0, 13.0], nan_ok=True)
+    assert list(merged.index) == list(main.index)  # each row of the dataset once

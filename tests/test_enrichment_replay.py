@@ -134,6 +134,22 @@ def _replays(tm, session) -> None:
     assert frame_fingerprint(result.df) == session.data_fp
 
 
+def test_a_merge_the_file_no_longer_allows_stops_the_replay_at_its_step(tmp_path: Path) -> None:
+    """A "unique" step whose file now repeats an identifier: the replay said "Unknown variable" one step later."""
+    from manage.paths import PathResolver
+    from manage.reproduction_manager import run_trace
+
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,potassium\n1,4.1\n2,3.9\n3,5.2\n", encoding="utf-8")
+    main = pd.DataFrame({"id": [1, 2, 3, 4], "age": [50, 61, 72, 45]})
+    tm, _ = _record(tmp_path, main, load_dataframe(str(labs)), labs, ["id"], file_rows="unique")
+    labs.write_text("id,potassium\n1,4.1\n1,4.6\n2,3.9\n3,5.2\n", encoding="utf-8")  # the file changed since
+    result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)), paths=PathResolver.unconfined())
+    assert not result.reproducible
+    said = " ".join([str(result.error or ""), *map(str, result.warnings)])
+    assert "the merge could not be done again" in said
+
+
 @pytest.mark.parametrize(("file_rows", "rows"), [(None, 6), ("all", 6), ("first", 4), ("last", 4)])
 def test_the_rows_of_the_file_each_participant_took_replay(
     tmp_path: Path, file_rows: str | None, rows: int

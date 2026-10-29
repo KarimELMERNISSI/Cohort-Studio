@@ -268,7 +268,10 @@ def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_id
     """
     How many rows of the file each row of the dataset takes (enrich.external_data.FILE_ROWS). When the file repeats
     an identifier, the merge would repeat rows of the dataset, which the analyses would count as participants: the
-    page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique".
+    page says how many and asks; None until the user chooses. A file with one row per identifier merges as "unique"
+    (checked by the merge); one that repeats only identifiers no row of the dataset holds merges as "all", which
+    takes one row of the file for each row of the dataset all the same: the merge's check covers every identifier of
+    the file, so "unique" would refuse it.
     """
     if strategy not in ("left", "right", "outer", "inner") or not left_ids:
         return "all"
@@ -276,7 +279,7 @@ def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_id
     if check is None:  # the identifiers cannot be compared: the merge says why
         return "all"
     if not check.repeats:
-        return "unique"
+        return "unique" if check.file_keys_repeated == 0 else "all"
     rows, keys, more = check.rows_repeated, check.file_keys_repeated, check.rows_added
     st.warning(
         f"{'1 row' if rows == 1 else f'{rows:,} rows'} of the dataset "
@@ -296,10 +299,16 @@ def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_id
     )
 
 
-def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame) -> bool:
+def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd.DataFrame | None = None) -> bool:
     """Whether the merge ran (it returns the dataset unchanged when it could not), said on the page either way."""
     if enriched_df is None or enriched_df is main_df:
-        st.error("The merge could not be done: check that the identifiers hold the same kind of values in both files.")
+        if file_df is not None and file_df.empty:
+            st.error("The merge could not be done: the file holds no rows.")
+        else:
+            st.error(
+                "The merge could not be done: check that the identifiers hold the same kind of values in both files "
+                "(numbers in one and text in the other never match)."
+            )
         return False
     counts = enriched_df.attrs.get("join_counts") or {}
     said = [f"{counts['rows_before']:,} rows before, {counts['rows_after']:,} after"] if counts else []
@@ -415,7 +424,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     conflict_resolution=conflict_resolution,
                     file_rows=file_rows)
 
-                if _merged(enriched_df, main_df):
+                if _merged(enriched_df, main_df, enrichment_df):
                     # Save snapshot
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
@@ -482,7 +491,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                                        additional_columns=additional_columns,
                                        conflict_resolution=conflict_resolution
                                        )
-                if _merged(enriched_df, main_df):
+                if _merged(enriched_df, main_df, enrichment_df):
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),

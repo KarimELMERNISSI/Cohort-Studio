@@ -1057,6 +1057,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   success and added an unchanged step to the draft.
 - The participant flow tells the rows a merge repeated from the rows its file added.
 - A merge that pandas refuses no longer writes into the log the identifiers it found repeated.
+- **A file that repeats only identifiers no row of the dataset holds merges again** (a regression of the check
+  above): pandas checks every identifier of the file, so such a file, or one with two rows without an identifier,
+  was refused, with a message about the kinds of values and no way round. It now merges every row of the file,
+  which still gives each row of the dataset one row of the file. A file with no rows says so.
+- A merge that the replay cannot do again (the file now repeats an identifier the step took once) stops the replay
+  at that step, where it went on and failed one step later on a missing column.
 
 ### Survival & regression: the outcome first, the effect first
 

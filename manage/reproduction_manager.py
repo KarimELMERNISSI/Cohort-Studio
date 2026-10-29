@@ -214,13 +214,19 @@ def _enrichment(df, step, index, paths, warnings):
     if params.get("retained_main_columns"):
         main = df[[c for c in df.columns if str(c) in set(params["retained_main_columns"])]]
     additional_columns = [c for c in enrichment_df.columns if c not in set(right_ids)]
-    return eed.add_data(
+    merged = eed.add_data(
         df=main, additional_df=enrichment_df, left_id_names=left_ids, right_id_names=right_ids,
         additional_cols=additional_columns, strategy=params.get("strategy", "left"),
         conflict_resolution=params.get("conflict_resolution", "keep"),
         # how many rows of the file each row took (a step recorded before chose none: all of them)
         file_rows=params.get("file_rows", "all"),
-    ), None
+    )
+    if merged is main:  # refused (the merge returns the dataset unchanged): said here, not one step later
+        raise ValueError(
+            "the merge could not be done again: the file now repeats an identifier the step took once, or its "
+            "identifiers no longer compare with the dataset's"
+        )
+    return merged, None
 
 
 def _with_inputs(step: dict[str, Any]) -> dict[str, Any] | None:
