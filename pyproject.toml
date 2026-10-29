@@ -109,7 +109,6 @@ exclude = [
     "app_pages/analysis_extras.py",
     "app_pages/analysis_guidance_ui.py",
     "app_pages/analysis_pooled.py",
-    "app_pages/analysis_survival.py",
     "app_pages/data_enrichment.py",
     "app_pages/data_insight.py",
     "app_pages/data_monitoring.py",

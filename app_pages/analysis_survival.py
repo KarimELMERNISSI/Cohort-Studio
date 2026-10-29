@@ -26,7 +26,9 @@ from ui.progress import mark_step
 from ui.results import provenance, recall, remember
 from ui.state import get_state
 
-PH_TEST_IMPUTATIONS = 5  # the proportional-hazards test (lifelines) runs on the first imputed datasets only
+PH_TEST_IMPUTATIONS = (
+    5  # the proportional-hazards test (lifelines) runs on the first imputed datasets only
+)
 
 
 def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[str]:
@@ -81,7 +83,11 @@ def _pooled_km_figure(curves: dict[str, pd.DataFrame]) -> go.Figure:
         times = np.concatenate([[0.0], curve["time"].to_numpy()])
         surv = np.concatenate([[1.0], curve["survival"].to_numpy()])
         band = curve.dropna(subset=["lower", "upper"])
-        fig.add_trace(go.Scatter(x=times, y=surv, mode="lines", line={"shape": "hv"}, name=f"{label} (pooled)"))
+        fig.add_trace(
+            go.Scatter(
+                x=times, y=surv, mode="lines", line={"shape": "hv"}, name=f"{label} (pooled)"
+            )
+        )
         if not band.empty:
             t = band["time"].to_numpy()
             fig.add_trace(
@@ -95,7 +101,12 @@ def _pooled_km_figure(curves: dict[str, pd.DataFrame]) -> go.Figure:
                     showlegend=False,
                 )
             )
-    fig.update_layout(xaxis_title="time", yaxis_title="survival probability", yaxis={"range": [0, 1.02]}, height=440)
+    fig.update_layout(
+        xaxis_title="time",
+        yaxis_title="survival probability",
+        yaxis={"range": [0, 1.02]},
+        height=440,
+    )
     return fig
 
 
@@ -124,9 +135,33 @@ def _default_index(options: list[str], hints: tuple[str, ...]) -> int:
 TIME_HINTS = ("time", "days", "months", "years", "duration", "follow", "fu_")
 EVENT_HINTS = ("died", "death", "dead", "event", "status", "relapse", "fail")
 
-COX_FORMATS = {"log_hr": "{:.3f}", "se": "{:.3f}", "hr": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
-LOGIT_FORMATS = {"coef": "{:.3f}", "se": "{:.3f}", "odds_ratio": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
-COUNT_FORMATS = {"coef": "{:.3f}", "se": "{:.3f}", "rate_ratio": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}", "z": "{:.2f}", "p": "{:.4f}"}
+COX_FORMATS = {
+    "log_hr": "{:.3f}",
+    "se": "{:.3f}",
+    "hr": "{:.3f}",
+    "ci_low": "{:.3f}",
+    "ci_high": "{:.3f}",
+    "z": "{:.2f}",
+    "p": "{:.4f}",
+}
+LOGIT_FORMATS = {
+    "coef": "{:.3f}",
+    "se": "{:.3f}",
+    "odds_ratio": "{:.3f}",
+    "ci_low": "{:.3f}",
+    "ci_high": "{:.3f}",
+    "z": "{:.2f}",
+    "p": "{:.4f}",
+}
+COUNT_FORMATS = {
+    "coef": "{:.3f}",
+    "se": "{:.3f}",
+    "rate_ratio": "{:.3f}",
+    "ci_low": "{:.3f}",
+    "ci_high": "{:.3f}",
+    "z": "{:.2f}",
+    "p": "{:.4f}",
+}
 
 
 def _show_survival(res) -> None:
@@ -234,9 +269,13 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
             help="Curves per level and the log-rank test between them.",
         )
         group = None if group_col == "(none)" else group_col
-        key, config = ("survival_mi", (time_col, event_col, group_col, token)) if mi is not None else (
-            "survival",
-            (time_col, event_col, group_col),
+        key, config = (
+            ("survival_mi", (time_col, event_col, group_col, token))
+            if mi is not None
+            else (
+                "survival",
+                (time_col, event_col, group_col),
+            )
         )
         if st.button("Run survival analysis", type="primary", key="surv_run"):
             try:
@@ -244,7 +283,11 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                     from biostats.mi import analyze_mi
 
                     columns = [time_col, event_col, *([group] if group else [])]
-                    res = analyze_mi(lambda d: compare_survival(d, time_col, event_col, group), mi, columns=columns)
+                    res = analyze_mi(
+                        lambda d: compare_survival(d, time_col, event_col, group),
+                        mi,
+                        columns=columns,
+                    )
                     remember(key, res, config=config, n_analysed=len(mi.base), columns=columns)
                 else:
                     res = compare_survival(df, time_col, event_col, group)
@@ -291,13 +334,21 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         )
         covariates = st.multiselect(
             "Covariates",
-            [c for c in df.columns if c not in (cox_time, cox_event) and (c in numeric or c in groups)],
+            [
+                c
+                for c in df.columns
+                if c not in (cox_time, cox_event) and (c in numeric or c in groups)
+            ],
             key="cox_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
-        key, config = ("cox_mi", (cox_time, cox_event, tuple(covariates), token)) if mi is not None else (
-            "cox",
-            (cox_time, cox_event, tuple(covariates)),
+        key, config = (
+            ("cox_mi", (cox_time, cox_event, tuple(covariates), token))
+            if mi is not None
+            else (
+                "cox",
+                (cox_time, cox_event, tuple(covariates)),
+            )
         )
         if st.button("Fit Cox model", key="cox_run", type="primary", disabled=not covariates):
             try:
@@ -307,18 +358,31 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                     levels = mi.levels(covariates)
                     fitted = analyze_mi(
                         lambda d, i: cox_regression(
-                            d, cox_time, cox_event, covariates, levels=levels, diagnostics=i <= PH_TEST_IMPUTATIONS
+                            d,
+                            cox_time,
+                            cox_event,
+                            covariates,
+                            levels=levels,
+                            diagnostics=i <= PH_TEST_IMPUTATIONS,
                         ),
                         mi,
                         columns=[cox_time, cox_event, *covariates],
                     )
                     remember(
-                        key, fitted, config=config, n_analysed=len(mi.base), columns=[cox_time, cox_event, *covariates]
+                        key,
+                        fitted,
+                        config=config,
+                        n_analysed=len(mi.base),
+                        columns=[cox_time, cox_event, *covariates],
                     )
                 else:
                     fitted = cox_regression(df, cox_time, cox_event, covariates)
                     remember(
-                        key, fitted, config=config, n_analysed=fitted.n, columns=[cox_time, cox_event, *covariates]
+                        key,
+                        fitted,
+                        config=config,
+                        n_analysed=fitted.n,
+                        columns=[cox_time, cox_event, *covariates],
                     )
                 mark_step("analyse", "Cox model")
             except Exception as exc:
@@ -373,9 +437,13 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
             key="logit_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
-        key, config = ("logistic_mi", (outcome, event_level, tuple(covs), token)) if mi is not None else (
-            "logistic",
-            (outcome, event_level, tuple(covs)),
+        key, config = (
+            ("logistic_mi", (outcome, event_level, tuple(covs), token))
+            if mi is not None
+            else (
+                "logistic",
+                (outcome, event_level, tuple(covs)),
+            )
         )
         if st.button("Fit logistic model", key="logit_run", type="primary", disabled=not covs):
             try:
@@ -384,14 +452,24 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
 
                     levels = mi.levels(covs)
                     fitted = analyze_mi(
-                        lambda d: logistic_regression(d, outcome, covs, event_level=event_level, levels=levels),
+                        lambda d: logistic_regression(
+                            d, outcome, covs, event_level=event_level, levels=levels
+                        ),
                         mi,
                         columns=[outcome, *covs],
                     )
-                    remember(key, fitted, config=config, n_analysed=len(mi.base), columns=[outcome, *covs])
+                    remember(
+                        key,
+                        fitted,
+                        config=config,
+                        n_analysed=len(mi.base),
+                        columns=[outcome, *covs],
+                    )
                 else:
                     fitted = logistic_regression(df, outcome, covs, event_level=event_level)
-                    remember(key, fitted, config=config, n_analysed=fitted.n, columns=[outcome, *covs])
+                    remember(
+                        key, fitted, config=config, n_analysed=fitted.n, columns=[outcome, *covs]
+                    )
                 mark_step("analyse", "logistic regression")
             except Exception as exc:
                 error_card("The logistic model could not be fitted.", exc)
@@ -445,14 +523,22 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
         )
         covs = st.multiselect(
             "Covariates  ",
-            [c for c in df.columns if c not in (count_col, exposure) and (c in numeric or c in groups)],
+            [
+                c
+                for c in df.columns
+                if c not in (count_col, exposure) and (c in numeric or c in groups)
+            ],
             key="pois_covs",
             help="Numeric covariates enter linearly; categorical ones are one-hot coded.",
         )
         exposure_col = None if exposure == "(none)" else exposure
-        key, config = ("count_mi", (count_col, exposure, family, tuple(covs), token)) if mi is not None else (
-            "count",
-            (count_col, exposure, family, tuple(covs)),
+        key, config = (
+            ("count_mi", (count_col, exposure, family, tuple(covs), token))
+            if mi is not None
+            else (
+                "count",
+                (count_col, exposure, family, tuple(covs)),
+            )
         )
         if st.button("Fit count model", key="pois_run", type="primary", disabled=not covs):
             try:
@@ -462,7 +548,12 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                     levels = mi.levels(covs)
                     fitted = analyze_mi(
                         lambda d: count_regression(
-                            d, count_col, covs, exposure_col=exposure_col, family=family, levels=levels
+                            d,
+                            count_col,
+                            covs,
+                            exposure_col=exposure_col,
+                            family=family,
+                            levels=levels,
                         ),
                         mi,
                         columns=[count_col, *covs, *([exposure_col] if exposure_col else [])],
@@ -475,9 +566,15 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
                         columns=[count_col, *covs, exposure_col or ""],
                     )
                 else:
-                    fitted = count_regression(df, count_col, covs, exposure_col=exposure_col, family=family)
+                    fitted = count_regression(
+                        df, count_col, covs, exposure_col=exposure_col, family=family
+                    )
                     remember(
-                        key, fitted, config=config, n_analysed=fitted.n, columns=[count_col, *covs, exposure_col or ""]
+                        key,
+                        fitted,
+                        config=config,
+                        n_analysed=fitted.n,
+                        columns=[count_col, *covs, exposure_col or ""],
                     )
                 mark_step("analyse", "count regression")
             except Exception as exc:
