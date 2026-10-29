@@ -249,8 +249,6 @@ exclude = [
     "utils/analysis_utils.py",
     "utils/clustering_utils.py",
     "utils/config_loader.py",
-    "utils/data_analyzer.py",
-    "utils/date_parser.py",
     "utils/environment.py",
     "utils/epidemiology_utils.py",
     "utils/export_utils.py",

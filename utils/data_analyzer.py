@@ -4,6 +4,7 @@ Data Analyzer Module.
 Provides the DataAnalyzer class for analyzing and categorizing DataFrame columns.
 This is a consolidated module combining functionality from home.py and visualization_utils.py.
 """
+
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,6 +15,7 @@ import pandas as pd
 @dataclass(frozen=True)
 class DatasetProfile:
     """Immutable representation of categorized DataFrame columns."""
+
     total_rows: int
     total_columns: int
     numeric_cols: list[str] = field(default_factory=list)
@@ -32,7 +34,7 @@ class DatasetProfile:
 class DataAnalyzer:
     """
     Helper class to analyze and validate data columns.
-    
+
     Categorizes columns into:
     - numeric_cols: Numeric columns (excluding low cardinality)
     - categorical_cols: Categorical and object columns
@@ -42,11 +44,11 @@ class DataAnalyzer:
     - high_cardinality_cat_cols: Categorical columns with many unique values
     - timedelta_cols: Time interval columns
     """
-    
+
     def __init__(self, df: pd.DataFrame) -> None:
         """
         Initialize the analyzer with a DataFrame.
-        
+
         Args:
             df: pandas DataFrame to analyze
         """
@@ -80,7 +82,9 @@ class DataAnalyzer:
         analyzer.num_binary_cols = list(profile.num_binary_cols)
         analyzer.non_num_binary_cols = list(profile.non_num_binary_cols)
         analyzer.low_cardinality_numeric_cols = list(profile.low_cardinality_numeric_cols)
-        analyzer.non_binary_low_cardinality_numeric_cols = list(profile.non_binary_low_cardinality_numeric_cols)
+        analyzer.non_binary_low_cardinality_numeric_cols = list(
+            profile.non_binary_low_cardinality_numeric_cols
+        )
         analyzer.timedelta_cols = list(profile.timedelta_cols)
         analyzer.high_cardinality_cat_cols = list(profile.high_cardinality_cat_cols)
         return analyzer
@@ -88,7 +92,7 @@ class DataAnalyzer:
     def refresh(self, df: pd.DataFrame) -> None:
         """
         Refresh the column metadata based on the latest DataFrame state.
-        
+
         Args:
             df: Updated pandas DataFrame
         """
@@ -112,29 +116,34 @@ class DataAnalyzer:
             date_formats=dict(self.date_formats),
             num_binary_cols=list(self.num_binary_cols),
             non_num_binary_cols=list(self.non_num_binary_cols),
-            non_binary_low_cardinality_numeric_cols=list(self.non_binary_low_cardinality_numeric_cols),
+            non_binary_low_cardinality_numeric_cols=list(
+                self.non_binary_low_cardinality_numeric_cols
+            ),
         )
-    
+
     def analyze_columns(self) -> None:
         """Analyze and categorize columns by data type."""
         self.numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
-        self.categorical_cols = self.df.select_dtypes(include=['object', 'category', 'string']).columns.tolist()
+        self.categorical_cols = self.df.select_dtypes(
+            include=["object", "category", "string"]
+        ).columns.tolist()
         self.date_cols = self._detect_date_columns()
-        self.binary_cols, self.num_binary_cols, self.non_num_binary_cols = self._detect_binary_columns()
+        self.binary_cols, self.num_binary_cols, self.non_num_binary_cols = (
+            self._detect_binary_columns()
+        )
         self.low_cardinality_numeric_cols = self._detect_low_cardinality_numeric_columns()
         self.non_binary_low_cardinality_numeric_cols = [
-            col for col in self.low_cardinality_numeric_cols 
-            if col not in self.binary_cols
+            col for col in self.low_cardinality_numeric_cols if col not in self.binary_cols
         ]
         self.timedelta_cols = self.df.select_dtypes(include=[np.timedelta64]).columns.tolist()
-        
+
         # Remove low-cardinality numeric columns from numeric_cols and add to categorical_cols
         for col in self.low_cardinality_numeric_cols:
             if col in self.numeric_cols:
                 self.numeric_cols.remove(col)
             if col not in self.categorical_cols and col not in self.binary_cols:
                 self.categorical_cols.append(col)
-        
+
         # Remove date and time interval columns from categorical_cols and numeric_cols
         for col in self.date_cols + self.timedelta_cols:
             if col in self.categorical_cols:
@@ -143,7 +152,7 @@ class DataAnalyzer:
                 self.numeric_cols.remove(col)
 
         self.high_cardinality_cat_cols = self._detect_high_cardinality_cat_columns()
-    
+
     def _detect_date_columns(self) -> list[str]:
         """Detect columns that are likely dates, with additional checks for accuracy."""
         date_cols: list[str] = []
@@ -162,7 +171,7 @@ class DataAnalyzer:
             "%Y/%m/%d %H:%M:%S",
             "%H:%M:%S",
         ]
-        
+
         for col in self.df.columns:
             # Add proper date format columns
             if pd.api.types.is_datetime64_any_dtype(self.df[col]):
@@ -170,13 +179,15 @@ class DataAnalyzer:
                 continue
 
             # Proceed only if column is of object or string type
-            if pd.api.types.is_object_dtype(self.df[col]) or pd.api.types.is_string_dtype(self.df[col]):
+            if pd.api.types.is_object_dtype(self.df[col]) or pd.api.types.is_string_dtype(
+                self.df[col]
+            ):
                 is_date_column = False
-                
+
                 non_null_values = self.df[col].dropna().astype(str)
                 if len(non_null_values) == 0:
                     continue
-                    
+
                 sample_size = min(10, len(non_null_values))
                 sample_values = non_null_values.sample(
                     n=sample_size,
@@ -184,32 +195,35 @@ class DataAnalyzer:
                     random_state=20260101,  # deterministic date detection (audit S16)
                 )
 
-                date_regex = r'(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{4}[-/]\d{1,2}[-/]\d{1,2} \d{1,2}:\d{2}(:\d{2})?)'
-                
+                date_regex = r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{4}[-/]\d{1,2}[-/]\d{1,2} \d{1,2}:\d{2}(:\d{2})?)"
+
                 # Check for keyword strong signals in column name
-                name_signal = any(x in col.upper() for x in ['DATE', 'DOB', 'BIRTH', 'TIME', 'YEAR', 'MONTH'])
-                
+                name_signal = any(
+                    x in col.upper() for x in ["DATE", "DOB", "BIRTH", "TIME", "YEAR", "MONTH"]
+                )
+
                 # Check match rate in sample (allow some garbage)
                 matches_regex = sample_values.str.match(date_regex).mean() > 0.6  # >60% match regex
-                
+
                 if matches_regex or name_signal:
                     # Try specific formats first
                     best_format = None
                     min_nat_count = len(self.df) + 1
-                    
+
                     # Heuristic: Check for dayfirst (13/05/2021)
                     # If we see day > 12 at position 0, it's Day First.
                     is_dayfirst_strong_signal = False
                     for val in sample_values:
                         import re
+
                         if isinstance(val, str):
-                            m = re.match(r'(\d{1,2})[-/](\d{1,2})[-/]\d{2,4}', val)
+                            m = re.match(r"(\d{1,2})[-/](\d{1,2})[-/]\d{2,4}", val)
                             if m:
                                 d, m_val = int(m.group(1)), int(m.group(2))
                                 if d > 12:
                                     is_dayfirst_strong_signal = True
                                     break
-                    
+
                     if is_dayfirst_strong_signal:
                         # Prioritize Day-First formats
                         priority_formats = ["%d/%m/%Y", "%d-%m-%Y"] + formats
@@ -218,31 +232,33 @@ class DataAnalyzer:
 
                     for fmt in priority_formats:
                         try:
-                            converted = pd.to_datetime(self.df[col], format=fmt, errors='coerce')
+                            converted = pd.to_datetime(self.df[col], format=fmt, errors="coerce")
                             nat_count = converted.isna().sum()
-                            
+
                             # If this format parses everything (or mostly everything), it's a winner
                             if nat_count < min_nat_count:
                                 min_nat_count = nat_count
                                 best_format = fmt
-                                
-                            if nat_count == 0: # Perfect match
+
+                            if nat_count == 0:  # Perfect match
                                 break
                         except Exception:
                             continue
-                    
+
                     if best_format:
-                         # Threshold: More than 40% valid dates (relaxed from 50% to catch messy columns)
-                         converted = pd.to_datetime(self.df[col], format=best_format, errors='coerce')
-                         if converted.notna().sum() > len(self.df[col]) * 0.4:
+                        # Threshold: More than 40% valid dates (relaxed from 50% to catch messy columns)
+                        converted = pd.to_datetime(
+                            self.df[col], format=best_format, errors="coerce"
+                        )
+                        if converted.notna().sum() > len(self.df[col]) * 0.4:
                             date_cols.append(col)
                             self.date_formats[col] = best_format
                             is_date_column = True
                     # Fallback: exact format failed, but name suggested Date?
                     # Try generic parser
                     elif name_signal:
-                         converted = pd.to_datetime(self.df[col], errors='coerce')
-                         if converted.notna().sum() > len(self.df[col]) * 0.4:
+                        converted = pd.to_datetime(self.df[col], errors="coerce")
+                        if converted.notna().sum() > len(self.df[col]) * 0.4:
                             date_cols.append(col)
                             self.date_formats[col] = "mixed"
                             is_date_column = True
@@ -250,54 +266,68 @@ class DataAnalyzer:
                     if not is_date_column:
                         try:
                             # Fallback to dayfirst=True if signaled
-                            converted = pd.to_datetime(self.df[col], dayfirst=is_dayfirst_strong_signal, errors='coerce')
+                            converted = pd.to_datetime(
+                                self.df[col], dayfirst=is_dayfirst_strong_signal, errors="coerce"
+                            )
                             non_na_dates = converted.notna().sum()
                             if non_na_dates > len(self.df[col]) * 0.5:
                                 date_cols.append(col)
                         except Exception:
                             continue
-        
+
         return date_cols
 
     def _detect_binary_columns(self) -> tuple[list[str], list[str], list[str]]:
         """
         Detect columns with only two unique values, including numeric columns.
-        
+
         Returns:
             tuple: (all_binary, numeric_binary, non_numeric_binary)
         """
         all_binary = [col for col in self.df.columns if int(self.df[col].nunique()) == 2]
-        num_binary = [col for col in self.df.select_dtypes(include=[np.number]).columns 
-                      if int(self.df[col].nunique()) == 2]
-        non_num_binary = [col for col in self.df.select_dtypes(exclude=[np.number]).columns 
-                          if int(self.df[col].nunique()) == 2]
+        num_binary = [
+            col
+            for col in self.df.select_dtypes(include=[np.number]).columns
+            if int(self.df[col].nunique()) == 2
+        ]
+        non_num_binary = [
+            col
+            for col in self.df.select_dtypes(exclude=[np.number]).columns
+            if int(self.df[col].nunique()) == 2
+        ]
         return all_binary, num_binary, non_num_binary
-    
+
     def _detect_low_cardinality_numeric_columns(self) -> list[str]:
         """Detect numeric columns with <= 10 unique values to treat as categorical."""
         return [col for col in self.numeric_cols if int(self.df[col].nunique()) <= 10]
-    
+
     def _detect_high_cardinality_cat_columns(self) -> list[str]:
         """Detect categorical columns with many unique values."""
-        return [col for col in self.categorical_cols 
-                if int(self.df[col].nunique()) > 0.5 * len(self.df)]
+        return [
+            col for col in self.categorical_cols if int(self.df[col].nunique()) > 0.5 * len(self.df)
+        ]
 
     def get_suitable_columns(self, plot_type: str) -> dict[str, Any]:
         """
         Get suitable columns for different plot types.
-        
+
         Args:
             plot_type: Type of plot (e.g., 'Histogram', 'Box Plot', 'Scatter Plot')
-            
+
         Returns:
             dict: Mapping of axis/parameter to suitable columns
         """
         num_vars = sorted(set(self.numeric_cols))
         date_cols = sorted(set(self.date_cols + self.timedelta_cols))
-        cat_vars = sorted(set(
-            col for col in self.categorical_cols + self.binary_cols + self.low_cardinality_numeric_cols 
-            if col not in self.high_cardinality_cat_cols
-        ))
+        cat_vars = sorted(
+            set(
+                col
+                for col in self.categorical_cols
+                + self.binary_cols
+                + self.low_cardinality_numeric_cols
+                if col not in self.high_cardinality_cat_cols
+            )
+        )
 
         plot_configs = {
             "Histogram": {"x": num_vars, "color": cat_vars},
@@ -307,36 +337,37 @@ class DataAnalyzer:
             "Line Plot": {"x": date_cols, "y": num_vars, "color": cat_vars},
             "Bar Plot": {"x": cat_vars, "y": num_vars, "color": cat_vars},
             "Pie Chart": {
-                "names": [col for col in self.categorical_cols if int(self.df[col].nunique()) <= 10],
-                "values": num_vars
+                "names": [
+                    col for col in self.categorical_cols if int(self.df[col].nunique()) <= 10
+                ],
+                "values": num_vars,
             },
             "Correlation Matrix": {
                 "numeric": num_vars,
-                "categorical": [col for col in cat_vars 
-                               if all(pd.api.types.is_numeric_dtype(val) for val in self.df[col].unique())]
+                "categorical": [
+                    col
+                    for col in cat_vars
+                    if all(pd.api.types.is_numeric_dtype(val) for val in self.df[col].unique())
+                ],
             },
             "ROC Curve": {
                 # a two-level text column is in both lists: each column once
-                "true_class": list(dict.fromkeys(self.binary_cols + [c for c in cat_vars if int(self.df[c].nunique()) == 2])),
-                "score": num_vars
+                "true_class": list(
+                    dict.fromkeys(
+                        self.binary_cols + [c for c in cat_vars if int(self.df[c].nunique()) == 2]
+                    )
+                ),
+                "score": num_vars,
             },
             "Clustermap": {
                 "categorical": cat_vars + self.high_cardinality_cat_cols,
                 "numeric": num_vars,
-                "identifiers": sorted(self.df.columns.tolist())
+                "identifiers": sorted(self.df.columns.tolist()),
             },
-            "Sunburst Chart": {
-                "categorical": cat_vars + self.high_cardinality_cat_cols
-            },
-            "Icicle Chart": {
-                "categorical": cat_vars + self.high_cardinality_cat_cols
-            },
-            "Treemap": {
-                "categorical": cat_vars + self.high_cardinality_cat_cols
-            },
-            "Sankey Diagram": {
-                "categorical": cat_vars + self.high_cardinality_cat_cols
-            }
+            "Sunburst Chart": {"categorical": cat_vars + self.high_cardinality_cat_cols},
+            "Icicle Chart": {"categorical": cat_vars + self.high_cardinality_cat_cols},
+            "Treemap": {"categorical": cat_vars + self.high_cardinality_cat_cols},
+            "Sankey Diagram": {"categorical": cat_vars + self.high_cardinality_cat_cols},
         }
-        
+
         return plot_configs.get(plot_type, {})
