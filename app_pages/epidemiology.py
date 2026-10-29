@@ -38,6 +38,7 @@ from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
 from ui.components import error_card, no_dataset, result_card
 from ui.components.levels import level_warning, show_level
+from ui.components.text import plain
 from ui.guidance.analysis import (
     HELP,
     ancova_check,
@@ -111,7 +112,7 @@ def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
         table = TwoByTwo.from_crosstab(df, group_col, outcome_col, exposure_ref=reference, event_level=event)
         return analyze_twobytwo(table, design=design).legacy_dict()
     except Exception as exc:
-        st.error(f"2x2 analysis failed: {exc}")
+        st.error(f"2x2 analysis failed: {plain(exc, limit=500)}")
         return None
 
 
@@ -1280,7 +1281,7 @@ def run_zscore_analysis(df, analyzer):
                 ref_col=ref_group_col, ref_value=ref_group_val, manual=manual_refs,
             )
         except ValueError as exc:
-            st.error(f"Z-scores could not be computed: {exc}")
+            st.error(f"Z-scores could not be computed: {plain(exc, limit=500)}")
             return
         mark_step("analyse", "reference z-scores")
         z_cols = [f"{var}_Z" for var in target_vars]
@@ -2530,7 +2531,7 @@ def run_power_analysis(df, analyzer):
                     effect_size = cohens_f_from_means(planned_means, sd_expected)
                     st.caption(f"Cohen's f = **{effect_size:.3f}** for {len(planned_means)} groups")
                 except ValueError as exc:
-                    st.error(str(exc))
+                    st.error(plain(exc, limit=500))
                     planned_means, effect_size = None, 0.0
             else:
                 effect_size_input = _prefilled_number_input(
@@ -2587,7 +2588,7 @@ def run_power_analysis(df, analyzer):
                     effect_size = cohens_f_from_means(planned_means, sd_expected)
                     st.caption(f"Cohen's f = **{effect_size:.3f}** for {len(planned_means)} groups")
                 except ValueError as exc:
-                    st.error(str(exc))
+                    st.error(plain(exc, limit=500))
                     planned_means, effect_size = None, 0.0
             else:
                 effect_size_input = _prefilled_number_input(
@@ -2652,7 +2653,7 @@ def run_power_analysis(df, analyzer):
                     st.session_state['chi2_w'] = cohens_w_from_proportions(planned_props)
                     st.caption(f"Cohen's w = **{st.session_state['chi2_w']:.3f}** for {len(planned_props)} groups")
                 except ValueError as exc:
-                    st.error(str(exc))
+                    st.error(plain(exc, limit=500))
                     planned_props = None
             else:
                 if 'min_dim_chi2' not in st.session_state:

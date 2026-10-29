@@ -103,7 +103,7 @@ def app():
             if selected_load and st.button("Load Graph"):
                 payload, err = load_graph(selected_load, username=username)
                 if err:
-                    st.sidebar.error(f"Load failed: {err}")
+                    st.sidebar.error(f"Load failed: {plain(err, limit=500)}")
                 else:
                     st.session_state.doc_graph_json = payload.get("graph")
                     st.session_state.doc_graph_source = payload.get("meta", {}).get("source_docs", [])

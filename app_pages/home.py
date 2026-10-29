@@ -160,7 +160,7 @@ class RenameColumnsComponent:
                                     else:
                                         st.code(str(suggestions)[:5000], language="text")  # as written: never Markdown
                                 except Exception as e:
-                                    st.error(f"Error parsing suggestions: {e}")
+                                    st.error(f"Error parsing suggestions: {plain(e, limit=500)}")
             else:
                 st.info("The AI engine is not initialised. Initialise it in Settings > AI engine.")
 
@@ -587,7 +587,7 @@ def _cached_corr_excel_bytes(_data, targets, predictors, group_column, method, *
     except Exception as exc:
         fallback = BytesIO()
         with pd.ExcelWriter(fallback, engine='openpyxl') as writer:
-            pd.DataFrame({"Status": [f"Unable to generate correlation Excel export: {exc}"]}).to_excel(
+            pd.DataFrame({"Status": [f"Unable to generate correlation Excel export ({type(exc).__name__})"]}).to_excel(
                 writer, sheet_name="Export Error", index=False
             )
         return fallback.getvalue()
@@ -1347,7 +1347,7 @@ def app():
                                         spec, RenderOptions(key="corr_network_graph"), file_stem="correlation_network"
                                     )
                         except Exception as e:
-                            st.error(f"An error occurred: {e}")
+                            st.error(f"An error occurred: {plain(e, limit=500)}")
 
             else:
                 no_dataset()

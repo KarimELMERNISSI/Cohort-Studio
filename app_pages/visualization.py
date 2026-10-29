@@ -13,6 +13,7 @@ import utils.export_utils as eu
 import utils.visualization_utils as vu
 from app_pages import data_monitoring as dm
 from ui.components import no_dataset
+from ui.components.text import plain
 from ui.state import get_state
 
 
@@ -1163,7 +1164,7 @@ def app():
                                         st.session_state['fig_clustermap'] = None
                                         st.session_state['fig_clustermap_error'] = error
                                 except Exception as e:
-                                    st.error(f"Error processing data: {e}")
+                                    st.error(f"Error processing data: {plain(e, limit=500)}")
 
                 if st.session_state.get('fig_clustermap'):
                     fig = st.session_state['fig_clustermap']
@@ -1522,5 +1523,5 @@ def app():
                         st.write(f"**Specificity at Best Threshold:** {1-fpr[ix]:.4f}")
 
         except Exception as e:
-            st.error(f"An error occurred: {e!s}")
+            st.error(f"An error occurred: {plain(e, limit=500)}")
             st.write("Please try different variables or plot settings.")

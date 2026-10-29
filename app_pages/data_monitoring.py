@@ -185,7 +185,7 @@ def data_selection(tmp:str, label:str, load: bool = True) -> tuple[pd.DataFrame 
                             st.error("Failed to load dataframe.")
                             return None, None
                     except Exception as e:
-                        st.error(f"Error loading file: {e}")
+                        st.error(f"Error loading file: {plain(e, limit=500)}")
                         return None, None
                 else:
                     st.error(f"File not found: {file_path}")
@@ -208,7 +208,7 @@ def data_selection(tmp:str, label:str, load: bool = True) -> tuple[pd.DataFrame 
                 st.success("Dataset successfully loaded.")
                 return df, uploaded_file.name
             except Exception as e:
-                st.error(f"Error loading file: {e!s}")
+                st.error(f"Error loading file: {plain(e, limit=500)}")
                 return None, None
 
     elif selection_method == "Enter File Path":
@@ -225,7 +225,7 @@ def data_selection(tmp:str, label:str, load: bool = True) -> tuple[pd.DataFrame 
             try:  # manual paths must stay inside the user's workspace (audit E4)
                 resolved_path = str(scope.resolve_within(file_path_input))
             except ValueError as exc:
-                st.error(str(exc))
+                st.error(plain(exc, limit=500))
                 return None, None
             if os.path.exists(resolved_path):
                 try:
@@ -235,7 +235,7 @@ def data_selection(tmp:str, label:str, load: bool = True) -> tuple[pd.DataFrame 
                     st.success("Dataset successfully loaded.")
                     return df, resolved_path
                 except Exception as e:
-                    st.error(f"Error loading file: {e!s}")
+                    st.error(f"Error loading file: {plain(e, limit=500)}")
                     return None, None
             else:
                 st.error("File not found in your workspace.")
@@ -728,10 +728,10 @@ def display_outlier_visualization(df, outlier_matrix, selected_cols, method):
                 title = f"FAMD Projection (Explained Variance: {info.get('total_variance_explained', 0):.2%})"
 
     except ImportError as e:
-        st.error(f"Dependency missing: {e!s}")
+        st.error(f"Dependency missing: {plain(e, limit=500)}")
         return
     except Exception as e:
-        st.error(f"Error running {projection_method}: {e!s}")
+        st.error(f"Error running {projection_method}: {plain(e, limit=500)}")
         return
 
     if embeddings is None:

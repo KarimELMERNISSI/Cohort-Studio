@@ -23,6 +23,7 @@ from explore.quality_score import (
 )
 from ui.components import page_link
 from ui.components.criteria import criterion_cards
+from ui.components.text import plain
 from ui.progress import mark_step, record_quality_check
 from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
 from ui.state import get_state
@@ -392,7 +393,7 @@ def render_dashboard(df, config):
                         )
                         st.plotly_chart(fig_matrix, width='stretch')
                     except Exception as e:
-                        st.error(f"Error generating Nullity Matrix: {e}")
+                        st.error(f"Error generating Nullity Matrix: {plain(e, limit=500)}")
                         
                     # --- Distribution Plot ---
                     st.markdown("##### Distribution of Row Missingness")
@@ -458,7 +459,7 @@ def render_dashboard(df, config):
                             # Reorder matrix
                             corr_matrix = corr_matrix.loc[new_order, new_order]
                         except Exception as e:
-                            st.warning(f"Could not cluster variables: {e}")
+                            st.warning(f"Could not cluster variables: {plain(e, limit=500)}")
 
                     # 2. Triangular Mask
                     mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
@@ -614,7 +615,7 @@ def render_dashboard(df, config):
                                     )
                                     results.append(res)
                                 except Exception as e:
-                                    st.error(f"Error analyzing {pred}: {e}")
+                                    st.error(f"Error analyzing {plain(pred)}: {plain(e, limit=500)}")
                                     
                                 progress.progress((i + 1) / len(predictors))
                                 

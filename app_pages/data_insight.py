@@ -268,7 +268,7 @@ def app():
                 st.toast(f"Saved Version v{next_v}!", icon="")
                 st.rerun() 
             except Exception as e:
-                st.sidebar.error(f"Save failed: {e}")
+                st.sidebar.error(f"Save failed: {plain(e, limit=500)}")
 
         # Overwrite Option
         loaded_path = st.session_state.get("loaded_path")
@@ -287,7 +287,7 @@ def app():
                          json.dump(formulas_registry, f, indent=2)
                     st.toast(f"Overwritten {current_v_name}!", icon="")
                 except Exception as e:
-                    st.sidebar.error(f"Overwrite failed: {e}")
+                    st.sidebar.error(f"Overwrite failed: {plain(e, limit=500)}")
     else:
         col_p2.button("Save", disabled=True)
 
@@ -1048,7 +1048,7 @@ def app():
                                             embeddings, dim_info = run_pca(prep_data, n_components=2)
                                             dim_method = "PCA (fallback)"
                                         except Exception as e:
-                                            st.error(f"FAMD Error: {e}")
+                                            st.error(f"FAMD Error: {plain(e, limit=500)}")
                                             embeddings, dim_info = run_pca(prep_data, n_components=2)
                                             dim_method = "PCA (fallback)"
                                     
@@ -1074,7 +1074,7 @@ def app():
                                     st.success(f"Analysis complete! Found {len(set(labels)) - (1 if -1 in labels else 0)} clusters.")
                             
                             except Exception as e:
-                                st.error(f"Error: {e!s}")
+                                st.error(f"Error: {plain(e, limit=500)}")
                     
                     # Display results if available
                     if 'clustering_results' in st.session_state:

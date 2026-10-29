@@ -231,7 +231,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
                         st.success("Enrichment dataset successfully loaded from upload.")
                     return df, file_path
             except Exception as e:
-                st.error(f"Error loading file: {e!s}")
+                st.error(f"Error loading file: {plain(e, limit=500)}")
                 return None, None
     else:
         # Get folder path and file name from user input
@@ -252,7 +252,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
                 st.success("Enrichment dataset successfully loaded from provided path.")
                 return df, file_name
             except Exception as e:
-                st.error(f"Error loading file: {e!s}")
+                st.error(f"Error loading file: {plain(e, limit=500)}")
                 return None, None
     return None, None
 
@@ -454,7 +454,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 else:
                     enriched_df = None
             except Exception as e:
-                st.error(f"Error performing enrichment: {e!s}")
+                st.error(f"Error performing enrichment: {plain(e, limit=500)}")
     else:
         col1, col2 = st.columns(2)
         
@@ -521,7 +521,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 else:
                     enriched_df = None
             except Exception as e:
-                st.error(f"Error performing enrichment: {e!s}")
+                st.error(f"Error performing enrichment: {plain(e, limit=500)}")
     
     return enriched_df
 
@@ -1278,7 +1278,7 @@ def define_new_variables(main_data):
                                     "strategy, or tick *Include suggestions with missing variables*."
                                 )
                         except Exception as e:
-                            st.error(f"Error parsing suggestions: {e}")
+                            st.error(f"Error parsing suggestions: {plain(e, limit=500)}")
                             st.code(str(suggestions_text)[:5000], language="text")  # as written
 
             # Display Domain Analysis
@@ -1549,10 +1549,10 @@ def define_new_variables(main_data):
                         'temp_data': temp_main_data  # Storing for immediate preview
                     }
                 else:
-                    st.error(f"Computation failed: {e}")
+                    st.error(f"Computation failed: {plain(e, limit=500)}")
             
             except Exception as e:
-                st.error(f"Error computing variable: {e!s}")
+                st.error(f"Error computing variable: {plain(e, limit=500)}")
                 st.info("Make sure your formula uses valid column names and operators (+, -, *, /, etc.).")
 
     # Display Preview and Add Button
@@ -1959,10 +1959,10 @@ def compute_transformations(dataframe):
         try:
             result_df = apply_variable_transformation(dataframe, params)
         except ValueError as e:  # missing values, too few columns or rows: the message says what to do
-            st.error(str(e))
+            st.error(plain(e, limit=500))
             return None
         except Exception as e:
-            st.error(f"Error applying transformation: {e!s}")
+            st.error(f"Error applying transformation: {plain(e, limit=500)}")
             return None
         if result_df is None:
             st.warning("No transformations were applied.")
@@ -2348,9 +2348,9 @@ def app():
                             else:
                                 st.warning("Formula computed successfully but didn't fill any missing values (check data overlap).")
                     except ValueError as e:  # the formula cannot be computed on the data (fill_with_formula)
-                        st.error(f"Formula Error: {e}")
+                        st.error(f"Formula Error: {plain(e, limit=500)}")
                     except Exception as e:
-                        st.error(f"Execution Error: {e!s}")
+                        st.error(f"Execution Error: {plain(e, limit=500)}")
 
 
         # --- TAB 2: Global Imputation ---

@@ -13,6 +13,7 @@ from manage.reproduction_manager import run_trace
 
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
+from ui.components.text import plain
 from ui.progress import current_trace_session, mark_step
 from ui.services import services
 from ui.session_scope import get_current_scope
@@ -104,7 +105,7 @@ def app():
             # If uploaded, use the uploaded file's directory as a pseudo trace path if needed, or None
             trace_path = os.path.join(_uploads_dir(), safe_filename(uploaded_trace.name))
         except Exception as e:
-            st.error(f"Error parsing JSON: {e}")
+            st.error(f"Error parsing JSON: {plain(e, limit=500)}")
             trace_path = None
     else:
         trace_dir = _traces_dir()
@@ -294,7 +295,7 @@ def app():
                         with st.expander(f"View files in `{os.path.basename(artifact_folder)}` ({len(folder_files)} files)", expanded=False):
                             st.write(folder_files)
                     except Exception as e:
-                        st.error(f"Could not list files: {e}")
+                        st.error(f"Could not list files: {plain(e, limit=500)}")
 
                     resolved_count = 0
                     files_to_remove = []
@@ -465,7 +466,7 @@ def app():
                 args=("report", "Word report exported") if session_id == current_trace_session() else None,
             )
         except Exception as e:
-            st.warning(f"Report generation unavailable: {e}")
+            st.warning(f"Report generation unavailable: {plain(e, limit=500)}")
         
         steps = trace_data.get('steps', [])
         
@@ -546,7 +547,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
                 st.success(f"Successfully loaded state at Step {target_step_index+1} (Fast Mode)")
                 return
         except Exception as e:
-            st.warning(f"Failed to load snapshot: {e}. Falling back to replay.")
+            st.warning(f"Failed to load snapshot: {plain(e, limit=500)}. Falling back to replay.")
             # Fallback to replay
     
     # 2. Full replay through the single engine (manage.reproduction_manager, audit E10)

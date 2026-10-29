@@ -31,6 +31,7 @@ from core.registry import as_code
 from core.session import PopulationError
 from enrich.derived import DERIVED_METHOD, derivation_steps, impute_and_derive, recomputed
 from ui.components import error_card, help_popover
+from ui.components.text import plain
 from ui.state import get_state
 
 DO_NOT_IMPUTE = "do not impute"
@@ -73,7 +74,7 @@ def render_multiple_imputation() -> None:
     try:
         frame = state.analysis_frame()
     except PopulationError as exc:
-        st.error(f"The analysis population cannot be evaluated: {exc}")
+        st.error(f"The analysis population cannot be evaluated: {plain(exc, limit=500)}")
         return
 
     st.markdown("### Multiple imputation (for inference)")
