@@ -101,7 +101,7 @@ def test_a_code_the_event_cannot_hold_is_refused_before_the_run() -> None:
     df.loc[df.index[:4], "death"] = 2.0
     plan = plan_time_to_event(df, "fu_days", "death", "arm", [], group=True)
     assert plan.status == "violated" and not plan.steps
-    assert "`death`" in plan.advice[0].text and "0 (censored)" in plan.advice[0].text
+    assert "`death`" in plan.advice[0].text and r"0 \(censored\)" in plan.advice[0].text  # as text
 
 
 def test_a_numeric_comparison_draws_one_curve_and_a_model_without_variables_none() -> None:
@@ -263,3 +263,13 @@ def test_a_variable_with_one_value_and_exact_and_strong_collinearity() -> None:
     )  # one line per pair
     calm = plan_count(df, "visits", "years", "arm", ["age", "sex"], "poisson")
     assert not any("collinear" in t for t in _advice(calm, "caution"))
+
+
+def test_an_event_code_from_the_file_is_drawn_as_text() -> None:
+    """The refusal quotes the codes it found: drawn as Markdown, an image among them made the browser fetch it."""
+    df = _cohort(40)
+    df["death"] = df["death"].astype(object)
+    df.loc[df.index[:2], "death"] = "![i](https://z.invalid/p.png)"
+    plan = plan_time_to_event(df, "fu_days", "death", "arm", [], group=True)
+    (text,) = _advice(plan, "violated")
+    assert "![i](" not in text and r"\!\[i\]" in text

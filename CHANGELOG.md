@@ -1102,6 +1102,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   hollow and grey. A level's text in a chart's legend or labels is shown as text (it could draw a link). A warning
   that the curves and the model both give is shown once; a median whose interval is never reached reads "not
   reached"; "1 row with a negative follow-up time was left out" (was "1 row(s) ... were").
+- **What the data and the models say is drawn as text:** an event code the plan quotes, a model's warning (which can
+  name a level or a term), a level in a chart's hover label. Drawn as Markdown, an image among them made the browser
+  fetch its address. lifelines' own warnings, which printed the design's column names (levels included) to the
+  server's log, are kept in. A Kaplan-Meier group skipped for having fewer than 2 rows is counted in the result, and
+  so in the Word dossier, where it was named; the plan names it on screen.
 - **The numbers do not change:** the same functions on the same rows; the model is the comparison plus the
   adjustment, so the same covariates give the same fit. Stored results and the study dossier are unchanged. Median
   survival times read without an exponent (1,119 days, not 1.12e+03).

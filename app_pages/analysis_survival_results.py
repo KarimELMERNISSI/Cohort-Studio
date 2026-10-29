@@ -202,7 +202,10 @@ def km_figure(
                 mode="lines",
                 line={"shape": "hv", "width": 2, "color": colour[curve.label]},
                 name=html.escape(curve.name),
-                hovertemplate="%{x:.4g}: %{y:.3f}<extra>" + html.escape(curve.label) + "</extra>",
+                meta=html.escape(
+                    curve.label
+                ),  # not in the template itself, where %{...} would be read
+                hovertemplate="%{x:.4g}: %{y:.3f}<extra>%{meta}</extra>",
             )
         )
         t = times[known]
@@ -413,7 +416,7 @@ def show_km_observed(km: Any) -> None:
     st.plotly_chart(km_figure(_curves(km, False), time_label="time"), width="stretch")
     _group_table(km, False)
     for warning in km.warnings:
-        st.warning(warning)
+        st.warning(plain(warning))
 
 
 def _logrank(km: Any, pooled: bool) -> Metric | None:
@@ -512,7 +515,7 @@ def show_time_to_event(
             )
     else:
         for warning in notes:
-            st.warning(warning)
+            st.warning(plain(warning))
     if cox is not None:
         with st.expander("Model details: every term of the Cox model"):
             if pooled:
@@ -597,7 +600,7 @@ def _show_model(
         show_mi_notes(res, complete_case=lambda cc: _table(cc.table, formats))
     else:
         for warning in res.warnings:
-            st.warning(warning)
+            st.warning(plain(warning))
     with st.expander("Model details: every term"):
         if pooled:
             show_pooled_terms(res, ratio_label=ratio, alt=f"Pooled {name.lower()}s")

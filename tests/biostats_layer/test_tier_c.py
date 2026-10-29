@@ -268,3 +268,31 @@ def test_rubin_pooling_reference_values_and_multiple_imputation() -> None:
     table = pooled_statistics(completed, ["y"])
     assert table.loc[0, "m"] == 4 and table.loc[0, "between_variance"] > 0
     assert abs(table.loc[0, "estimate"] - y.mean()) < 2.0
+
+
+def test_a_skipped_group_is_counted_not_named() -> None:
+    """The warning goes into the Word dossier: a level held by one row is a participant's value (the plan names it on
+    screen)."""
+    frame = _gehan().assign(arm=["6-MP"] * 41 + ["Luxembourgg"])
+    res = compare_survival(frame, "time", "event", "arm")
+    assert res.warnings[0] == "1 group with fewer than 2 observations was skipped"
+    assert not any("Luxembourgg" in w for w in res.warnings)
+
+
+def test_lifelines_warnings_naming_a_column_stay_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """lifelines' warnings print the design's column names, levels included, to the server's stderr."""
+    import warnings
+
+    from lifelines import CoxPHFitter
+
+    original = CoxPHFitter.fit
+
+    def noisy(self, *args, **kwargs):
+        warnings.warn("Column arm_:red[x] have very low variance", stacklevel=2)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(CoxPHFitter, "fit", noisy)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cox_regression(_gehan(), "time", "event", ["arm"])
+    assert not any("red[x]" in str(w.message) for w in caught)

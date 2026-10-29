@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from warnings import catch_warnings, simplefilter
 
 import numpy as np
 import pandas as pd
@@ -262,11 +263,17 @@ def compare_survival(
     groups = [
         (str(level), part) for level, part in frame.groupby(group_col, observed=True, sort=True)
     ]
+    skipped = 0  # counted, not named: a level held by one row is a participant's value, and the dossier travels
     for label, part in groups:
         if len(part) >= 2:
             curves.append(kaplan_meier(part[time_col], part[event_col], label, alpha=alpha))
         else:
-            warnings.append(f"group {label} has fewer than 2 observations and was skipped")
+            skipped += 1
+    if skipped:
+        warnings.append(
+            f"{skipped} group{'s' if skipped > 1 else ''} with fewer than 2 observations "
+            f"{'were' if skipped > 1 else 'was'} skipped"
+        )
     if len(curves) < 2:
         return SurvivalComparison(
             curves=curves,
@@ -375,9 +382,13 @@ def cox_regression(
 
         data = x.copy()
         data["_time"], data["_event"] = t, e
-        cph = CoxPHFitter().fit(data, duration_col="_time", event_col="_event")
-        concordance = float(cph.concordance_index_)
-        ph = proportional_hazard_test(cph, data, time_transform="rank")
+        with (
+            catch_warnings()
+        ):  # lifelines' own warnings print the design's column names (levels) to stderr
+            simplefilter("ignore")
+            cph = CoxPHFitter().fit(data, duration_col="_time", event_col="_event")
+            concordance = float(cph.concordance_index_)
+            ph = proportional_hazard_test(cph, data, time_transform="rank")
         summary = ph.summary
         ph_table = pd.DataFrame(
             {

@@ -195,6 +195,13 @@ def _too_few(events: int, terms: int | None, what: str, ratios: str) -> Advice |
     )
 
 
+def _said(text: object) -> str:
+    """A message that can quote the data (a model's error, an event code) as text: no Markdown drawn from it."""
+    from ui.components.text import plain
+
+    return plain(text, limit=400)
+
+
 def _some(levels: Sequence[Any], limit: int = 4) -> str:
     """
     At most ``limit`` levels as code, then how many more; a hidden space shows as the lists show it ("F␣", which
@@ -364,7 +371,7 @@ def plan_time_to_event(
     try:
         event = pd.Series(event_indicator(df[event_col]), index=df.index)
     except ValueError as exc:
-        return ModelPlan(rows, (), (Advice("violated", f"{as_code(event_col)}: {exc}"),))
+        return ModelPlan(rows, (), (Advice("violated", f"{as_code(event_col)}: {_said(exc)}"),))
     time = pd.to_numeric(df[time_col], errors="coerce")
     advice: list[Advice] = []
     negative = int((time < 0).sum())
@@ -435,7 +442,7 @@ def plan_time_to_event(
             )
         )
         if problem:
-            advice.append(Advice("violated", f"The Cox model cannot be built: {problem}."))
+            advice.append(Advice("violated", f"The Cox model cannot be built: {_said(problem)}."))
         else:
             advice += _design_advice(
                 df.loc[kept], covariates, ratios="hazard ratios", events=event[kept]
@@ -483,7 +490,7 @@ def plan_binary(
     terms, problem = _terms(df.loc[kept], covariates)
     advice: list[Advice] = []
     if problem:
-        advice.append(Advice("violated", f"The logistic model cannot be built: {problem}."))
+        advice.append(Advice("violated", f"The logistic model cannot be built: {_said(problem)}."))
     else:
         advice += _design_advice(df.loc[kept], covariates, ratios="odds ratios")
     fewer, what = (events, "events") if events <= others else (others, "rows without the event")
@@ -568,7 +575,7 @@ def plan_count(
         )
     terms, problem = _terms(df.loc[kept], covariates)
     if problem:
-        advice.append(Advice("violated", f"The count model cannot be built: {problem}."))
+        advice.append(Advice("violated", f"The count model cannot be built: {_said(problem)}."))
     else:
         advice += _design_advice(df.loc[kept], covariates, ratios="rate ratios", events=y)
     left_out = _left_out(

@@ -16,6 +16,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from ui.components.text import plain
+
 MODE_KEY = "analysis_data_mode"
 ALLOW_SUBSET_KEY = "mi_allow_subset"
 OBSERVED = "observed"
@@ -212,7 +214,7 @@ def show_mi_notes(
     for note in result.notes:
         st.caption(note)
     for warning in result.warnings:
-        st.warning(warning)
+        st.warning(plain(warning))  # a model's message can name a level or a term: as text
     if complete_case is not None and result.complete_case is not None:
         with st.expander(label):
             complete_case(result.complete_case)

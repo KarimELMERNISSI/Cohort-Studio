@@ -105,3 +105,37 @@ def test_the_forest_puts_the_comparison_first_and_leaves_out_an_infinite_interva
     )  # the top of the axis is the end of the list
     assert list(fig.layout.xaxis.tickvals) == _ratio_ticks(0.48, 2.2)
     assert [t.name for t in fig.data] == ["Comparison", "Adjustment terms"]
+
+
+def test_a_level_is_not_read_as_a_hover_template() -> None:
+    """plotly fills %{...} across the whole template, <extra> included: a level "%{y}" showed a number."""
+    fig = km_figure([_curve("%{y}")], time_label="t")
+    line = fig.data[0]
+    assert line.meta == "%{y}" and line.hovertemplate.endswith("<extra>%{meta}</extra>")
+    assert "%{y}<" not in line.hovertemplate
+
+
+def _warnings_app() -> None:
+    from types import SimpleNamespace
+
+    from ui.components.mi_mode import show_mi_notes
+
+    show_mi_notes(
+        SimpleNamespace(
+            m=3,
+            partial=False,
+            notes=[],
+            complete_case=None,
+            warnings=["![i](https://z.invalid/p.png)"],
+        )
+    )
+
+
+def test_a_models_warning_is_drawn_as_text() -> None:
+    """A warning can name a level or a term: drawn as Markdown, an image in it made the browser fetch its address."""
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_warnings_app, default_timeout=60).run()
+    assert not at.exception
+    (warning,) = at.warning
+    assert "![i](" not in warning.value and r"\!\[i\]" in warning.value
