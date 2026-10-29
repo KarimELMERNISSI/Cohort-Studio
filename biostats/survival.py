@@ -113,7 +113,12 @@ def _usable(frame: pd.DataFrame, time_col: str, event_col: str) -> tuple[pd.Data
     negative = int((t < 0).sum())
     keep = ~(np.isnan(t) | np.isnan(e)) & (t >= 0)
     warnings = (
-        [f"{negative} row(s) with a negative follow-up time were left out"] if negative else []
+        [
+            f"{negative} row{'s' if negative > 1 else ''} with a negative follow-up time "
+            f"{'were' if negative > 1 else 'was'} left out"
+        ]
+        if negative
+        else []
     )
     return frame.loc[keep], warnings
 
@@ -332,6 +337,14 @@ def cox_regression(
     z = stats.norm.ppf(1 - alpha / 2)
     params = np.asarray(res.params, dtype=float)
     bse = np.asarray(res.bse, dtype=float)
+    if not (np.isfinite(params).all() and np.isfinite(bse).all()):
+        # a level without events sends its log hazard ratio to minus infinity (monotone likelihood): the fit then
+        # returns no finite estimate, for any term, and a table of missing values would read as a result
+        raise ValueError(
+            "the Cox model has no finite estimate: a level of a categorical covariate without events or held by very "
+            "few rows, or a covariate that orders the event times perfectly, makes a hazard ratio infinite (monotone "
+            "likelihood). Merge or clean such levels, then fit again."
+        )
     table = pd.DataFrame(
         {
             "term": list(x.columns),
@@ -377,8 +390,11 @@ def cox_regression(
         warnings.append(
             "install the 'survival' extra (lifelines) for the proportional-hazards test and the concordance index"
         )
-    except Exception as exc:  # diagnostics are optional
-        warnings.append(f"proportional-hazards diagnostic unavailable: {exc}")
+    except (
+        Exception
+    ) as exc:  # diagnostics are optional; lifelines' message goes on with advice and a link
+        reason = str(exc).split("https://")[0].split(". ")[0].strip().rstrip(".")[:160]
+        warnings.append(f"proportional-hazards diagnostic unavailable: {reason}")
     return CoxResult(
         table=table,
         n=int(len(t)),

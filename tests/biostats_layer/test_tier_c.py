@@ -87,7 +87,7 @@ def test_a_negative_follow_up_time_is_left_out_with_groups_and_covariates() -> N
         compare_survival(clean, "time", "event", "arm"),
     )
     assert km.logrank_statistic == pytest.approx(km_clean.logrank_statistic)
-    assert km.warnings == ["1 row(s) with a negative follow-up time were left out"]
+    assert km.warnings == ["1 row with a negative follow-up time was left out"]
     cox, cox_clean = (
         cox_regression(dirty, "time", "event", ["arm"]),
         cox_regression(clean, "time", "event", ["arm"]),
@@ -95,7 +95,31 @@ def test_a_negative_follow_up_time_is_left_out_with_groups_and_covariates() -> N
     assert cox.n == 42 and cox.table["log_hr"].iloc[0] == pytest.approx(
         cox_clean.table["log_hr"].iloc[0]
     )
-    assert "1 row(s) with a negative follow-up time were left out" in cox.warnings
+    assert "1 row with a negative follow-up time was left out" in cox.warnings
+    two = pd.concat(
+        [dirty, pd.DataFrame([{"time": -5, "event": 1, "arm": "6-MP"}])], ignore_index=True
+    )
+    assert compare_survival(two, "time", "event", "arm").warnings == [
+        "2 rows with a negative follow-up time were left out"
+    ]
+
+
+def test_a_cox_model_without_a_finite_estimate_stops_with_the_reason() -> None:
+    """
+    The tutorial's sex holds one value written ten ways, eight of them on one row and four without an event: a hazard
+    ratio goes to infinity, and the fit returned missing values for every term, the arm's included.
+    """
+    from pathlib import Path
+
+    df = pd.read_csv(
+        Path(__file__).resolve().parents[2] / "assets" / "tutorial" / "tutorial_cohort.csv"
+    )
+    with pytest.raises(ValueError, match="no finite estimate.*monotone likelihood"):
+        cox_regression(df, "fu_days", "death", ["arm", "sex"])
+    cleaned = df.assign(sex=df["sex"].str.strip().str.lower().str[0])
+    assert np.isfinite(
+        cox_regression(cleaned, "fu_days", "death", ["arm", "sex"]).table["hr"]
+    ).all()
 
 
 def test_logistic_regression_spector() -> None:
