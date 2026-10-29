@@ -42,13 +42,13 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     os.environ.setdefault("CMP_IAM_PROVIDER", "local")
     reads: list[int] = []
-    readings = validate_dates._readings
+    reports = validate_dates._reports
 
-    def counted(df, chosen):
+    def counted(df, chosen, extraction, planned):
         reads.append(1)
-        return readings(df, chosen)
+        return reports(df, chosen, extraction, planned)
 
-    monkeypatch.setattr(validate_dates, "_readings", counted)
+    monkeypatch.setattr(validate_dates, "_reports", counted)
     at = AppTest.from_file(MAIN, default_timeout=300)
     at.run()
     at.session_state["user_authenticated"] = True
@@ -102,13 +102,25 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
         "values": 1206,
         "unreadable": 0,
         "partial": 0,
+        "two_digit_years": 0,
+        "with_time": 0,
+        "placeholders": 0,
+        "before_1900": 0,
+        "after_extraction": 0,
+        "january_first": False,
+        "month_first_day": False,
     }
+    ambiguous = {
+        "enrol_date": 438,
+        "last_contact_date": 156,
+    }  # 5/3 or 3/5: read day first, as the data show
     assert step["params"] == {
         "columns": DATES,
         "new_type": "datetime",
         "method": "parse_dates",
-        "formats": dict.fromkeys(DATES, read),
+        "formats": {c: {**read, "ambiguous": ambiguous[c]} for c in DATES},
         "dayfirst": True,
+        "extraction": pd.Timestamp.today().date().isoformat(),  # the day the dataset was loaded
     }
     after = at.session_state["data"]
     assert all(pd.api.types.is_datetime64_any_dtype(after[c]) for c in DATES)

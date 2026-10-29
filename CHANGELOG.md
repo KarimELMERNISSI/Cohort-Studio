@@ -1079,6 +1079,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   and the counts of values, of unreadable and of partial ones; the replay reads the columns with them and never
   detects again. A conversion recorded before replays as it did.
 - Every format is read whole, never value by value: 24,000 values in 0.3 s.
+- **Date checks says what reading the dates found**, column by column: the values that cannot be read and the
+  partial dates among them (with up to five examples, on the screen only); the dates that read otherwise in the
+  other order, and who decided the order; two-digit years; dates with a time of day; placeholder dates; dates
+  before 1900; dates after the extraction date, which is pre-filled with the day the dataset was loaded (a column
+  that may hold planned dates, such as a next appointment, is not counted); the earliest and latest dates (on the
+  screen only); and a note when dates heap on 1 January or on the 1st of a month, as dates the source completed
+  from a month or a year would.
+- The conversion records these counts with each column, never a date or a value of the data, and the extraction
+  date with the step.
 - The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
 
 ### Validate: Date checks, a tab of its own (M6)

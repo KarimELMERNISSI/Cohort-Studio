@@ -22,10 +22,11 @@ from ingest.dates import (
     DATE_FORMATS,
     METHOD,
     PLACEHOLDERS,
+    DateReport,
     Detection,
     convert,
+    date_report,
     detect,
-    partial_dates,
     placeholders_found,
     read_dates,
 )
@@ -49,6 +50,15 @@ _ORDER_FROM = {
     "user": "your choice",
     "shape": "",
 }
+
+
+def _loaded_on(state) -> date:
+    """The day the dataset was loaded: the extraction date proposed."""
+    ref = state.dataset
+    try:
+        return date.fromisoformat(str(ref.loaded_at)[:10]) if ref is not None else date.today()
+    except ValueError:
+        return date.today()
 
 
 def _dayfirst(state) -> bool:
@@ -160,11 +170,28 @@ def _choose(column: str, detection: Detection) -> dict[str, Any] | None:
     return how
 
 
-def _readings(df: pd.DataFrame, chosen: dict[str, dict[str, Any]]) -> dict[str, pd.Series]:
-    """Each chosen column read as it would be converted (before the placeholders are set to missing)."""
-    return {
-        c: read_dates(df[c], how["format"], pivot=how.get("pivot")) for c, how in chosen.items()
-    }
+def _reports(
+    df: pd.DataFrame, chosen: dict[str, dict[str, Any]], extraction: date | None, planned: list[str]
+) -> tuple[dict[str, DateReport], dict[str, pd.Series]]:
+    """
+    Each chosen column read as it would be converted (before the placeholders are set to missing), and what the
+    reading found; a column that may hold planned dates is not counted after the extraction date.
+    """
+    readings, reports = {}, {}
+    for column, how in chosen.items():
+        readings[column] = read_dates(df[column], how["format"], pivot=how.get("pivot"))
+        reports[column] = date_report(
+            df[column],
+            how["format"],
+            pivot=how.get("pivot"),
+            extraction=None if column in planned else extraction,
+            dates=readings[column],
+        )
+    return reports, readings
+
+
+def _day(value) -> str:
+    return "" if pd.isna(value) else pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
 def render_date_checks() -> None:
@@ -196,30 +223,73 @@ def render_date_checks() -> None:
     if not chosen:
         st.caption("No column is chosen to be read as dates.")
         return
-    key = tuple(sorted((c, how["format"], how.get("pivot")) for c, how in chosen.items()))
-    readings = state.session.memo("date_readings", key, lambda: _readings(df, chosen))
-    counts = {
-        c: {
-            "values": found[c].values,
-            "unreadable": found[c].values - int(readings[c].notna().sum()),
-            "partial": partial_dates(df[c]),
-        }
-        for c in chosen
-    }
+    left, right = st.columns(2)
+    extraction = left.date_input(
+        "Extraction date",
+        value=_loaded_on(state),
+        format="DD/MM/YYYY",
+        key="date_extraction",
+        persist_state="page",
+        help="The day the data were taken from their source: the dates after it are counted. Pre-filled with the day "
+        "the dataset was loaded.",
+    )
+    planned = right.multiselect(
+        "Columns that may hold planned dates",
+        list(chosen),
+        key="date_planned",
+        persist_state="page",
+        help="A next appointment or a planned end: their dates after the extraction date are not counted.",
+    )
+    key = tuple(
+        sorted((c, how["format"], how.get("pivot"), c in planned) for c, how in chosen.items())
+    )
+    reports, readings = state.session.memo(
+        "date_readings", (key, str(extraction)), lambda: _reports(df, chosen, extraction, planned)
+    )
+    # the earliest and latest dates are shown here only, never recorded
     st.dataframe(
         pd.DataFrame(
             {
                 "Column": list(chosen),
                 "Read as": [_label(how["format"]) for how in chosen.values()],
                 "Order from": [_ORDER_FROM[how["order_source"]] for how in chosen.values()],
-                "Values": [counts[c]["values"] for c in chosen],
-                "Cannot be read": [counts[c]["unreadable"] for c in chosen],
-                "Partial dates": [counts[c]["partial"] for c in chosen],
+                "Values": [reports[c].values for c in chosen],
+                "Cannot be read": [reports[c].unreadable for c in chosen],
+                "Partial dates": [reports[c].partial for c in chosen],
+                "Ambiguous": [reports[c].ambiguous for c in chosen],
+                "Two-digit years": [reports[c].two_digit_years for c in chosen],
+                "With a time": [reports[c].with_time for c in chosen],
+                "Before 1900": [reports[c].before_1900 for c in chosen],
+                "After extraction": [reports[c].after_extraction for c in chosen],
+                "Earliest": [_day(readings[c].min()) for c in chosen],
+                "Latest": [_day(readings[c].max()) for c in chosen],
             }
         ),
         hide_index=True,
         width="stretch",
     )
+    st.caption(
+        "Ambiguous: dates that read otherwise in the other order (5 March or 3 May), read as *Order from* says. "
+        "Partial dates are among those that cannot be read."
+    )
+    for column, report in reports.items():
+        if report.january_first or report.month_first_day:
+            where = "1 January" if report.january_first else "the 1st of a month"
+            st.caption(
+                f":material/info: {as_code(column)}: many dates fall on {where}. Did the source complete dates it "
+                "knew only by their month or year?"
+            )
+        if report.unreadable:  # on screen only, never recorded
+            text = df[column].astype("string").str.strip()
+            unread = (
+                text[text.notna() & (text != "") & readings[column].isna()]
+                .drop_duplicates()
+                .head(5)
+            )
+            st.caption(
+                f"{as_code(column)} cannot read, for example: "
+                + ", ".join(as_code(v) for v in unread)
+            )
 
     placeholders = {c: placeholders_found(readings[c]) for c in chosen}
     totals: dict[str, int] = {}
@@ -241,9 +311,9 @@ def render_date_checks() -> None:
         )
 
     anyway = True
-    over = [c for c in chosen if counts[c]["unreadable"] > UNREADABLE * counts[c]["values"]]
+    over = [c for c in chosen if reports[c].unreadable > UNREADABLE * reports[c].values]
     for column in over:
-        unread, values = counts[column]["unreadable"], counts[column]["values"]
+        unread, values = reports[column].unreadable, reports[column].values
         st.warning(
             f"{unread:,} of the {values:,} recorded values of {as_code(column)} ({unread / values:.0%}) cannot be read "
             "as dates and would become missing."
@@ -257,11 +327,13 @@ def render_date_checks() -> None:
         type="primary",
         disabled=not anyway,
     ):
+        # counts only: never a date of the data (the extraction date is the study's)
         formats = {
             c: {
                 **how,
                 "placeholders_to_missing": [d for d in to_missing if d in placeholders[c]],
-                **counts[c],
+                **({"planned": True} if c in planned else {}),
+                **reports[c].to_record(),
             }
             for c, how in chosen.items()
         }
@@ -274,6 +346,7 @@ def render_date_checks() -> None:
                 "method": METHOD,
                 "formats": formats,
                 "dayfirst": _dayfirst(state),
+                "extraction": extraction.isoformat() if extraction else None,
             },
             f"Converted {n} column{'s' if n != 1 else ''} to dates",
         )

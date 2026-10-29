@@ -2846,7 +2846,15 @@ detecting again. Its own tab since M6: above Validate's tabs, the conversion rea
 opened on new data, whichever tab was wanted._
 
 **Imports**:
-`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.detect`, `ingest.dates.partial_dates`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+
+### def `_loaded_on` (validate_dates.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `date`
+
+The day the dataset was loaded: the extraction date proposed.
 
 ### def `_dayfirst` (validate_dates.py)
 
@@ -2913,13 +2921,22 @@ Why a column's reading is asked: counts only, never a value.
 
 How a column is read: as detected when the data decide, else as chosen here. None: left as text.
 
-### def `_readings` (validate_dates.py)
+### def `_reports` (validate_dates.py)
 
-- **Arguments**: `df: pd.DataFrame, chosen: dict[ComplexType]`
+- **Arguments**: `df: pd.DataFrame, chosen: dict[ComplexType], extraction: ComplexType, planned: list[str]`
 
-- **Returns**: `dict[ComplexType]`
+- **Returns**: `tuple[ComplexType]`
 
-Each chosen column read as it would be converted (before the placeholders are set to missing).
+Each chosen column read as it would be converted (before the placeholders are set to missing), and what the
+reading found; a column that may hold planned dates is not counted after the extraction date.
+
+### def `_day` (validate_dates.py)
+
+- **Arguments**: `value`
+
+- **Returns**: `str`
+
+No description available.
 
 ### def `render_date_checks` (validate_dates.py)
 

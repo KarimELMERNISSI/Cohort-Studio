@@ -11,7 +11,8 @@ conversions recorded with it.
 import math
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -472,6 +473,85 @@ def placeholders_found(dates: pd.Series) -> dict[str, int]:
     return {day: n for day, n in found.items() if n}
 
 
+HEAPING_MIN = 5  # values on one day before they are told heaped there
+_JANUARY_FIRST = 5 / 365.25  # the share of 1 January among dates spread over the year
+_MONTH_FIRST = 2 * 12 / 365.25  # twice the share of the 1st of a month among them
+
+
+@dataclass(frozen=True)
+class DateReport:
+    """
+    What reading a column found: counts only, which the conversion records; never a date of the data, a value, or
+    the earliest or latest date (those are shown on screen only).
+    """
+
+    values: int  # recorded values (a blank is missing)
+    unreadable: int  # recorded, but not read as a real date with the format: they become missing
+    partial: int  # a month and a year, or a year alone (among the unreadable: never completed)
+    ambiguous: int  # read otherwise in the other order (05/03 is 5 March or 3 May; 04/04 is not)
+    two_digit_years: int
+    with_time: int  # read with a time of day
+    placeholders: int  # read on a placeholder date (PLACEHOLDERS), before any is set missing
+    before_1900: int
+    after_extraction: (
+        int | None
+    )  # None: no extraction date given, or a column that may hold planned dates
+    january_first: (
+        bool  # more than 5/365.25 of the read dates on 1 January (and at least HEAPING_MIN)
+    )
+    month_first_day: (
+        bool  # more than 2 x 12/365.25 of them on the 1st of a month (and at least HEAPING_MIN)
+    )
+
+    def to_record(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def date_report(
+    series: pd.Series,
+    format_id: str,
+    *,
+    pivot: int | None = None,
+    extraction: date | None = None,
+    dates: pd.Series | None = None,
+) -> DateReport:
+    """
+    What reading ``series`` with a format finds. ``extraction`` is the date the data were extracted: dates after it
+    are counted (None: not counted, as for a column of planned dates). Heaping on 1 January or on the 1st of a month
+    hints at partial dates the source completed. ``dates``: the column already read with that format and pivot.
+    """
+    if dates is None:
+        dates = read_dates(series, format_id, pivot=pivot)
+    read = dates.dropna()
+    values = int(_text(series).notna().sum())
+    other = DATE_FORMATS.get(format_id).other_order
+    ambiguous = 0
+    if other:
+        swapped = read_dates(series, other, pivot=pivot)
+        ambiguous = int((dates.notna() & swapped.notna() & (swapped != dates)).sum())
+    two_digit = 0
+    if format_id in ("day_first", "month_first"):
+        two_digit = int((_extract(series, _SLASH)["y"].str.len() == 2).sum())
+    days = read.dt.normalize()
+    january = int(((read.dt.month == 1) & (read.dt.day == 1)).sum())
+    first = int((read.dt.day == 1).sum())
+    return DateReport(
+        values=values,
+        unreadable=values - len(read),
+        partial=partial_dates(series),
+        ambiguous=ambiguous,
+        two_digit_years=two_digit,
+        with_time=int((read != days).sum()),
+        placeholders=sum(placeholders_found(read).values()),
+        before_1900=int((read < pd.Timestamp("1900-01-01")).sum()),
+        after_extraction=None
+        if extraction is None
+        else int((days > pd.Timestamp(extraction)).sum()),
+        january_first=january >= HEAPING_MIN and january > _JANUARY_FIRST * len(read),
+        month_first_day=first >= HEAPING_MIN and first > _MONTH_FIRST * len(read),
+    )
+
+
 def convert(df: pd.DataFrame, formats: Mapping[str, Mapping[str, Any]]) -> pd.DataFrame:
     """
     The table with each named column read as dates. ``formats`` maps a column to how it is read, as a conversion
@@ -490,15 +570,18 @@ def convert(df: pd.DataFrame, formats: Mapping[str, Mapping[str, Any]]) -> pd.Da
 __all__ = [
     "CHOSEN",
     "DATE_FORMATS",
+    "HEAPING_MIN",
     "LEGACY_METHOD",
     "METHOD",
     "ORDER_EVIDENCE",
     "PLACEHOLDERS",
     "PROPOSED",
     "DateFormat",
+    "DateReport",
     "Detection",
     "Placeholder",
     "convert",
+    "date_report",
     "detect",
     "partial_dates",
     "placeholders_found",

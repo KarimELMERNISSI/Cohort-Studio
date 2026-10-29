@@ -7,6 +7,7 @@ Each answer is recorded with the step, so the replay reads the column the same w
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -137,3 +138,26 @@ def test_a_column_losing_more_than_5_percent_converts_only_when_told() -> None:
     recorded = step["params"]["formats"]["onset"]
     assert (recorded["values"], recorded["unreadable"]) == (4, 1)
     assert at.session_state["data"]["onset"].isna().tolist() == [False, False, False, True]
+
+
+def test_the_screen_shows_what_the_record_never_holds() -> None:
+    """Values that cannot be read, and the earliest and latest dates, are shown; the step records counts only."""
+    at = _open(
+        {"visit": ["17/08/2019", "13/03/2021", "15/04/2021", "unknown P-0042", "20/05/2021"]}
+    )
+    assert any("P-0042" in c.value for c in at.caption)  # an example, drawn as code
+    (table,) = at.dataframe
+    assert table.value["Earliest"].tolist() == ["17/08/2019"]
+    at.checkbox(key="dates_convert_anyway").check().run()
+    recorded = json.dumps(_convert(at)["params"])
+    for value in ("P-0042", "17/08/2019", "2019-08-17", "20/05/2021", "2021-05-20"):
+        assert value not in recorded, value
+
+
+def test_planned_dates_are_not_counted_after_the_extraction_date() -> None:
+    at = _open({"next_visit": ["15/03/2031", "13/04/2032", "20/05/2021"]})
+    (table,) = at.dataframe
+    assert table.value["After extraction"].tolist() == [2]
+    at.multiselect(key="date_planned").select("next_visit").run()
+    recorded = _convert(at)["params"]["formats"]["next_visit"]
+    assert recorded["planned"] is True and recorded["after_extraction"] is None

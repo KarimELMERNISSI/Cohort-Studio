@@ -8,6 +8,7 @@ request. The reader before M6 (smart_parse_dates) is pinned by test_dates_golden
 from __future__ import annotations
 
 import time
+from datetime import date
 
 import pandas as pd
 import pytest
@@ -18,6 +19,7 @@ from ingest.dates import (
     PLACEHOLDERS,
     Detection,
     convert,
+    date_report,
     detect,
     partial_dates,
     placeholders_found,
@@ -186,3 +188,55 @@ def test_a_large_column_reads_without_parsing_value_by_value() -> None:
     detect(values, dayfirst=True)
     read_dates(values, "day_first")
     assert time.perf_counter() - start < 5  # 0.3 s measured; dateutil took seconds per column
+
+
+def test_the_report_counts_what_reading_found() -> None:
+    values = S(
+        [
+            "05/03/2021",
+            "04/04/2021",
+            "13/03/21",
+            "15/03/2030 10:00",
+            "01/01/1900",
+            "1899",
+            "01/01/1883",
+            None,
+        ]
+    )
+    report = date_report(values, "day_first", pivot=26, extraction=date(2026, 10, 29))
+    assert report.to_record() == {
+        "values": 7,
+        "unreadable": 1,  # 1899, a year alone
+        "partial": 1,
+        "ambiguous": 1,  # 05/03; 04/04 and 01/01 read the same both ways
+        "two_digit_years": 1,
+        "with_time": 1,
+        "placeholders": 1,  # 1900-01-01
+        "before_1900": 1,  # 1883
+        "after_extraction": 1,  # 2030
+        "january_first": False,
+        "month_first_day": False,
+    }
+    assert (
+        date_report(values, "day_first", pivot=26).after_extraction is None
+    )  # no extraction date given
+
+
+@pytest.mark.parametrize(
+    ("values", "january", "month"),
+    [
+        (["01/01/2020"] * 5 + ["15/06/2020"] * 10, True, True),
+        (["01/01/2020"] * 4 + ["15/06/2020"], False, False),  # fewer than 5 on the day
+        (["01/03/2020"] * 5 + ["15/06/2020"] * 20, False, True),
+        (
+            ["01/03/2020"] * 5 + ["15/06/2020"] * 100,
+            False,
+            False,
+        ),  # 4.8 %: what the 1st of a month holds anyway
+    ],
+)
+def test_dates_heaped_on_a_first_day_are_told(
+    values: list[str], january: bool, month: bool
+) -> None:
+    report = date_report(S(values), "day_first")
+    assert (report.january_first, report.month_first_day) == (january, month)
