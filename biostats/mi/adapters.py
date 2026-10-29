@@ -480,8 +480,11 @@ class SurvivalAdapter(Adapter):
         pooled = {}
         medians = {}
         intervals = {}
+        sizes = {}
         for label in labels:
             curves = [e.extra["curves"][label] for e in extracts if label in e.extra["curves"]]
+            # the smallest: a group read from imputed values can differ in size
+            sizes[label] = min(c.n for c in curves)
             if any(c.se is None for c in curves):
                 raise ValueError(
                     "the Kaplan-Meier curves carry no standard error and cannot be pooled"
@@ -496,7 +499,7 @@ class SurvivalAdapter(Adapter):
                 median_from_curve(curve, "lower", last=last),
                 median_from_curve(curve, "upper", last=last),
             )
-        return {"curves": pooled, "medians": medians, "median_ci": intervals}
+        return {"curves": pooled, "medians": medians, "median_ci": intervals, "sizes": sizes}
 
 
 def adapter_for(result: Any) -> Adapter:

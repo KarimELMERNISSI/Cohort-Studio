@@ -165,6 +165,18 @@ def _median_ci(lower: Any, upper: Any) -> str:
     return "not reached" if lower is None and upper is None else f"{_median(lower)} to {_median(upper)}"
 
 
+# a group's median and its interval go into the dossier from this many participants: in smaller groups they are event
+# times (the interval's lower limit the shortest), a participant's duration in a document that travels; the page keeps
+# them
+DOSSIER_MIN_N = 10
+SMALL = f"not shown: fewer than {DOSSIER_MIN_N}"
+
+
+def _shown(n: Any) -> bool:
+    """Whether a group's median goes into the dossier (a result pooled before the sizes were kept: as it was)."""
+    return n is None or n >= DOSSIER_MIN_N
+
+
 def _survival_blocks(res: Any) -> ResultBlocks:
     table = pd.DataFrame(
         [
@@ -172,8 +184,10 @@ def _survival_blocks(res: Any) -> ResultBlocks:
                 "Group": c.label,
                 "n": c.n,
                 "Events": c.events,
-                "Median survival": _median(c.median),
-                f"Median {c.level:.0%} CI": _median_ci(c.median_lower, c.median_upper),
+                "Median survival": _median(c.median) if _shown(c.n) else SMALL,
+                f"Median {c.level:.0%} CI": _median_ci(c.median_lower, c.median_upper)
+                if _shown(c.n)
+                else SMALL,
             }
             for c in res.curves
         ]
@@ -224,24 +238,20 @@ def _pooled_blocks(res: Any) -> ResultBlocks:
         curves = res.extra.get("curves") or {}
         medians = res.extra.get("medians") or {}
         intervals = res.extra.get("median_ci") or {}  # a result pooled before: none
-        blocks.tables.append(
-            (
-                "Kaplan-Meier, pooled (log(-log) scale)",
-                pd.DataFrame(
-                    [
-                        {
-                            "Group": label,
-                            "Median survival (pooled curve)": _median(medians.get(label)),
-                            "Median 95% CI (pooled band)": _median_ci(*intervals[label])
-                            if label in intervals
-                            else "n/a",
-                            "Survival at last time": _num(curve["survival"].iloc[-1]),
-                        }
-                        for label, curve in curves.items()
-                    ]
-                ),
+        sizes = res.extra.get("sizes") or {}  # likewise
+        rows = []
+        for label, curve in curves.items():
+            shown = _shown(sizes.get(label))
+            interval = _median_ci(*intervals[label]) if label in intervals else "n/a"
+            rows.append(
+                {
+                    "Group": label,
+                    "Median survival (pooled curve)": _median(medians.get(label)) if shown else SMALL,
+                    "Median 95% CI (pooled band)": interval if shown else SMALL,
+                    "Survival at last time": _num(curve["survival"].iloc[-1]),
+                }
             )
-        )
+        blocks.tables.append(("Kaplan-Meier, pooled (log(-log) scale)", pd.DataFrame(rows)))
         blocks.figure = km_png([(label, c["time"], c["survival"]) for label, c in curves.items()])
     else:
         frame = _pooled_frame(res)
@@ -538,4 +548,4 @@ def result_blocks(value: Any) -> ResultBlocks:
     return ResultBlocks(lines=[f"{type(value).__name__} (no report layout)"])
 
 
-__all__ = ["ResultBlocks", "km_png", "result_blocks"]
+__all__ = ["DOSSIER_MIN_N", "ResultBlocks", "km_png", "result_blocks"]
