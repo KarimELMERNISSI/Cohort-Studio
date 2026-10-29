@@ -1038,6 +1038,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.
 
+### Validate: the nullity correlation matrix orders its columns again
+
+- **Data Quality Dashboard > Completeness (Missing) > Visual Diagnosis: the nullity correlation matrix clusters its
+  columns again.** It showed "Could not cluster variables: module 'scipy.cluster.hierarchy' has no attribute
+  'distance'" and kept the columns in file order: SciPy 1.18 no longer makes `scipy.spatial.distance` available
+  under `scipy.cluster.hierarchy`. With "Filter Complete Columns" unticked, it also failed with any SciPy: a column
+  that has no missing value, or no value at all, has no correlation, not even with itself, and SciPy refused the
+  distances. Such a column is now at distance 1 from every other column, and 0 from itself.
+
 ## [2.4.1] - 2026-10-17
 
 Security work, fixes found by code scanning and in use, and one addition to imputation. The first release archived

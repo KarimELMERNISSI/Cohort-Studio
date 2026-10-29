@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import scipy.cluster.hierarchy as sch
 import statsmodels.stats.multitest as smt
 import streamlit as st
+from scipy.spatial.distance import squareform
 
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
@@ -135,6 +136,17 @@ def anomaly_columns(rules) -> dict[str, set[str]]:
     where the rule fired: a rule named like a column was the only one highlighted, so an expression's cells never were.
     """
     return {str(name): set(criterion_columns(str(name), spec)) for name, spec in rules.items() if name != "operator"}
+
+
+def missingness_linkage(corr_matrix: pd.DataFrame) -> np.ndarray:
+    """
+    The average-linkage clustering of the columns, at the distance 1 - |r| between their missingness indicators. A
+    column whose missingness never varies (complete, or empty) has no correlation, not even with itself: it is 1
+    from every other column and 0 from itself, where the 1 on the diagonal made SciPy refuse the matrix.
+    """
+    distances = (1 - corr_matrix.fillna(0).abs()).to_numpy(copy=True)
+    np.fill_diagonal(distances, 0)
+    return sch.linkage(squareform(distances), method="average")
 
 
 def render_dashboard(df, config):
@@ -431,10 +443,8 @@ def render_dashboard(df, config):
                     # 1. Clustering for Ordering
                     if enable_clustering and len(corr_matrix) > 2:
                         try:
-                            # Use 1 - correlation as distance
-                            dist_matrix = 1 - corr_matrix.fillna(0).abs()
-                            # Hierarchical clustering
-                            linkage = sch.linkage(sch.distance.squareform(dist_matrix), method='average')
+                            # Hierarchical clustering, at the distance 1 - |r|
+                            linkage = missingness_linkage(corr_matrix)
                             
                             # Show Dendrogram if requested
                             if show_dendrogram:
