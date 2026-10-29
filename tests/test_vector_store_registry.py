@@ -61,8 +61,8 @@ def test_the_engine_follows_the_session_the_preference_the_setting_then_the_reco
     assert pick(settings=server, preference="lancedb", session="qdrant") == ("qdrant", "session")
     automatic = select_engine(settings=VectorStoreSettings(), advice=laptop)
     assert (automatic.chosen, automatic.reasons) == ("lancedb", laptop.reasons)
-    stale = select_engine(settings=VectorStoreSettings(), preference="chroma", advice=laptop)
-    assert stale.chosen == "lancedb" and "`chroma` is not offered here" in stale.warnings[0]
+    stale = select_engine(settings=VectorStoreSettings(), preference="retired", advice=laptop)
+    assert stale.chosen == "lancedb" and "`retired` is not offered here" in stale.warnings[0]
 
 
 def test_an_unknown_setting_is_refused_without_its_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,7 +74,7 @@ def test_an_unknown_setting_is_refused_without_its_value(monkeypatch: pytest.Mon
     monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant:6333")
     server = VectorStoreSettings.from_env()
     assert (server.engine, server.qdrant_url) == ("qdrant", "http://qdrant:6333")
-    monkeypatch.setenv("CMP_VECTOR_STORE", "zz9-chroma")
+    monkeypatch.setenv("CMP_VECTOR_STORE", "zz9-store")
     with pytest.raises(SettingsError, match="CMP_VECTOR_STORE is not a vector database") as refused:
         VectorStoreSettings.from_env()
     assert "zz9" not in str(refused.value)

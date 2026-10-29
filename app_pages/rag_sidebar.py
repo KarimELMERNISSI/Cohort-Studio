@@ -11,7 +11,6 @@ because other pages read them from the session.
 """
 
 import os
-import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -710,24 +709,6 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             )
         else:
             st.caption(":material/inventory_2: No index for this engine yet: initialise the engine to build it.")
-
-        scope = get_current_scope()
-        legacy = scope.legacy_chroma_dir() if scope else None
-        if legacy is not None and legacy.is_dir() and not any(legacy.iterdir()):
-            legacy.rmdir()  # an empty folder left by earlier versions: nothing to keep
-        if legacy is not None and legacy.exists():
-            st.info(
-                "An index from ChromaDB (earlier versions) is still in your workspace. It is no longer used: "
-                "initialise the engine to rebuild the index with the selected database. Your PDFs are kept.",
-                icon=":material/history:",
-            )
-            if st.button("Remove the old ChromaDB index", key="rag_remove_chroma", icon=":material/delete:"):
-                confirm(
-                    "Remove the old ChromaDB index?",
-                    "Deletes the ChromaDB folder of your workspace. Your PDFs and the new index are not affected.",
-                    lambda: shutil.rmtree(legacy, ignore_errors=True),
-                    confirm_label="Remove",
-                )
     return {"vector_engine": engine, "qdrant_url": qdrant_url, "qdrant_api_key": qdrant_key}
 
 

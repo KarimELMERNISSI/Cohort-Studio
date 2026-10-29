@@ -4,8 +4,7 @@ Engine-agnostic document index used by the RAG code.
 :class:`DocumentIndex` wraps a :class:`~manage.vectorstores.base.BaseVectorIndex` and the embedding
 model. It exposes the LangChain vector-store calls the application uses (``similarity_search``,
 ``max_marginal_relevance_search``, ``as_retriever``), so the RAG code is identical whatever the
-engine. Filtering by document is expressed as a list of sources; the legacy Chroma filter
-(``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted.
+engine. Filtering by document is expressed as a list of sources.
 
 A chunk is stored under its document's name, never its path on the server: a Qdrant server receives the index, and
 the path names the user's account and the server's folders. A filter sent to a server names documents only; a local
@@ -32,20 +31,6 @@ from core.workspace import file_name_of
 from .base import BaseVectorIndex, ChunkRow, Hit, IndexManifest, VectorStoreError
 
 ProgressCallback = Callable[[int, int], None]  # (chunks done, chunks total)
-
-
-def _sources_from_filter(filter_: Any) -> list[str] | None:
-    """Translate the legacy Chroma filter on ``source`` into a list of sources."""
-    if not isinstance(filter_, dict) or "source" not in filter_:
-        return None
-    value = filter_["source"]
-    if isinstance(value, dict):
-        value = value.get("$in") or value.get("$eq")
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, (list, tuple)):
-        return [str(v) for v in value]
-    return None
 
 
 def _matching(sources: list[str] | None, *, remote: bool = False) -> list[str] | None:
@@ -203,9 +188,7 @@ class DocumentIndex:
     def similarity_search(
         self, query: str, k: int = 4, sources: list[str] | None = None, **kwargs: Any
     ) -> list[Document]:
-        sources = _matching(
-            sources or _sources_from_filter(kwargs.get("filter")), remote=self.backend.remote
-        )
+        sources = _matching(sources, remote=self.backend.remote)
         vector = self.embeddings.embed_query(query)
         return [_to_document(h) for h in self.backend.query(vector, k, sources)]
 
@@ -219,9 +202,7 @@ class DocumentIndex:
         **kwargs: Any,
     ) -> list[Document]:
         """Relevant and diverse chunks: the ``k`` best of the ``fetch_k`` nearest, penalising near-duplicates."""
-        sources = _matching(
-            sources or _sources_from_filter(kwargs.get("filter")), remote=self.backend.remote
-        )
+        sources = _matching(sources, remote=self.backend.remote)
         vector = self.embeddings.embed_query(query)
         hits = self.backend.query(vector, max(fetch_k, k), sources)
         candidates = [h for h in hits if h.vector is not None]
@@ -239,7 +220,7 @@ class DocumentIndex:
         self, search_type: str = "similarity", search_kwargs: dict | None = None, **_: Any
     ):
         kwargs = dict(search_kwargs or {})
-        sources = kwargs.pop("sources", None) or _sources_from_filter(kwargs.pop("filter", None))
+        sources = kwargs.pop("sources", None)
         return IndexRetriever(
             index=self,
             search_type=search_type,

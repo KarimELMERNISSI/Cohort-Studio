@@ -138,7 +138,7 @@ def test_a_connector_setting_that_names_nothing_stops_the_app(
 
     monkeypatch.setenv("CMP_IAM_PROVIDER", "https://admin:zz9@sso.example.org")
     monkeypatch.setenv("CMP_GRAPH_RENDERER", "plotlyy-zz9")
-    monkeypatch.setenv("CMP_VECTOR_STORE", "chroma-zz9")
+    monkeypatch.setenv("CMP_VECTOR_STORE", "zz9-store")
     monkeypatch.setenv("CMP_AI_PROVIDER", "sk-zz9-pasted-key")
     reset_settings()
     at = AppTest.from_file(str(ROOT / "main.py"), default_timeout=120).run()

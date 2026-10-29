@@ -104,12 +104,10 @@ def test_search_finds_the_nearest_chunks(index: DocumentIndex) -> None:
     assert docs[0].metadata["page"] in (4, 5) and 0 < docs[0].metadata["score"] <= 1.0
 
 
-def test_filter_by_document_including_quotes_and_legacy_filter(index: DocumentIndex) -> None:
+def test_filter_by_document_including_quotes(index: DocumentIndex) -> None:
     index.build(CHUNKS, embedding_label="fake:words")
     only_bp = index.similarity_search("kidney", k=5, sources=["c/it's bp.pdf"])
     assert only_bp and {d.metadata["source"] for d in only_bp} == {"it's bp.pdf"}
-    legacy = index.similarity_search("obesity", k=5, filter={"source": {"$in": ["a/bmi.pdf"]}})
-    assert {d.metadata["source"] for d in legacy} == {"bmi.pdf"}
     by_name = index.similarity_search("obesity", k=5, sources=["bmi.pdf"])
     assert {d.metadata["source"] for d in by_name} == {"bmi.pdf"}
 

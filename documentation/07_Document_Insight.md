@@ -97,7 +97,6 @@ Settings > AI engine > **Vector database** offers two engines; the app recommend
 With *Reuse the existing index* on, the index is reused only when it holds the documents selected: after a
 document is added or removed, **Initialise / reindex** rebuilds it. Changing the engine or the embedding model needs a
 new index too: turn off *Reuse the existing index* and click **Initialise / reindex**. The card shows what the current index holds (chunks, documents, embedding model, date).
-Indexes from earlier versions (ChromaDB) are no longer used; your PDFs are kept and the index is rebuilt from them.
 
 ---
 

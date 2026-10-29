@@ -309,12 +309,12 @@ def test_a_saved_choice_this_server_cannot_use_is_named(
     monkeypatch.setenv("CMP_OFFLINE", "1")  # yFiles needs internet access
     monkeypatch.setattr(gm, "_GLOBAL_MANAGER", None)
     _prefs(
-        tmp_path, '{"ai_provider": "cohere", "vector_store": "chroma", "graph_renderer": "yfiles"}'
+        tmp_path, '{"ai_provider": "cohere", "vector_store": "retired", "graph_renderer": "yfiles"}'
     )
     later = _new_session()
     captions = " ".join(c.value for c in later.caption)
     assert "`cohere` is not offered here" in captions
-    assert "`chroma` is not offered here" in captions
+    assert "`retired` is not offered here" in captions
     assert later.selectbox(key="rag_provider_select").value == "ollama"
     from ui.graph_view import RENDERER_OVERRIDE_KEY
 

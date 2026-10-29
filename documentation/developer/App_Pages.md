@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1217,6 +1217,54 @@ The text columns that look like dates, their parsing, the format found and the v
 Text columns that look like dates: preview the parsing, convert them as one traced step on request.
 
 Dates used to be re-parsed in place on every visit of this page, untraced and invisible to the replay.
+
+### def `_dashboard_tab` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_anomalies_tab` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_inclusion_tab` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_outliers_tab` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_population_tab` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_compare_tab` (data_monitoring.py)
+
+- **Arguments**: `opened: bool`
+
+- **Returns**: `None`
+
+No description available.
 
 ### def `process_dataset` (data_monitoring.py)
 

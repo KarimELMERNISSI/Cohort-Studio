@@ -1027,6 +1027,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   parsing is pinned by tests, its wrong readings included, since traces that recorded it replay with it.
 - Validate's tabs are a registry (`ui/components/tabs.py`): each tab a function, and only the open one runs, as
   before. A link can now open one of them, which the date checks use.
+
+### Removed: what remained of ChromaDB
+
+- ChromaDB, which LanceDB and Qdrant replaced, was no longer installed. Settings no longer looks for a ChromaDB index
+  left by an earlier version, nor offers to remove it, and the document index no longer reads a ChromaDB filter, which
+  nothing sent. A leftover `chroma_db` folder, in the data folder or in a workspace, can be deleted by hand: neither
+  the documents nor the current index use it.
 - qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.

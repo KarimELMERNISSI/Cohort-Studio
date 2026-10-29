@@ -982,8 +982,7 @@ _Engine-agnostic document index used by the RAG code.
 :class:`DocumentIndex` wraps a :class:`~manage.vectorstores.base.BaseVectorIndex` and the embedding
 model. It exposes the LangChain vector-store calls the application uses (``similarity_search``,
 ``max_marginal_relevance_search``, ``as_retriever``), so the RAG code is identical whatever the
-engine. Filtering by document is expressed as a list of sources; the legacy Chroma filter
-(``{"source": x}`` or ``{"source": {"$in": [...]}}``) is still accepted.
+engine. Filtering by document is expressed as a list of sources.
 
 A chunk is stored under its document's name, never its path on the server: a Qdrant server receives the index, and
 the path names the user's account and the server's folders. A filter sent to a server names documents only; a local
@@ -1039,14 +1038,6 @@ LangChain retriever over a :class:`DocumentIndex` (plain similarity or MMR).
 
 - **_get_relevant_documents**(`self, query: str`) -> `list[Document]`
   > No description available.
-
-### def `_sources_from_filter` (document_index.py)
-
-- **Arguments**: `filter_: Any`
-
-- **Returns**: `ComplexType`
-
-Translate the legacy Chroma filter on ``source`` into a list of sources.
 
 ### def `_matching` (document_index.py)
 

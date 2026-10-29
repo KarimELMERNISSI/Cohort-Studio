@@ -1,7 +1,7 @@
 """
 The conda environment (environments/environment.yml) installs the locked packages of requirements.txt.
 
-It kept a list of its own, which drifted from pyproject.toml: it still installed ChromaDB and three LangChain
+It kept a list of its own, which drifted from pyproject.toml: it still installed a vector database and three LangChain
 packages that the application no longer uses, and none of the vector databases (LanceDB, Qdrant), the OpenAI,
 Anthropic and Ollama (httpx) connectors, pyarrow, xlrd or lifelines.
 """
