@@ -76,9 +76,11 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
    they keep. The dataset itself still has its 1,206 rows, and you can untick a rule at any time. In a real study
    you would correct these values at the source; here, excluding them keeps the tutorial simple.
 4. **Add your own rule.** In *New Plausibility Rule*, create an expression rule named *Possible undiagnosed
-   diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the check again: **16 patients** are
-   flagged. Their values are plausible: these are patients to review clinically, not data-entry errors, so **leave
-   this rule unticked** in the sidebar.
+   diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the check again: **32 rows** are flagged,
+   the 16 of the 8 rules and **16 patients** this rule flags. Their values are plausible: the recorded diagnosis may
+   be incomplete, so they are patients to review clinically, not data-entry errors, and such a rule does not belong
+   among the plausibility rules. **Leave it unticked** in the sidebar. As long as it is declared, the dashboard
+   counts it: Domain Validity reads 97.35% instead of 98.67%, and the rule leads the list of rules broken.
 
 ### 2.3 Inclusion criteria
 

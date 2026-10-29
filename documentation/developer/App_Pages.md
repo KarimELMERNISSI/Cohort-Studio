@@ -1034,7 +1034,23 @@ Collect numeric mask inputs from the user.
 
 - **Returns**: `None`
 
-Collect expression mask inputs from the user.
+Collect expression mask inputs from the user (``base_key``: the family the rule joins).
+
+### def `rules_column` (data_monitoring.py)
+
+- **Arguments**: `family_name: str`
+
+- **Returns**: `str`
+
+The column of a check's view that lists the rules each row matches: shown, never added to the dataset.
+
+### def `result_column` (data_monitoring.py)
+
+- **Arguments**: `family_name: str, operator: str, threshold: Any`
+
+- **Returns**: `str`
+
+The column of a check's view that holds the family's result on each row: shown, never added to the dataset.
 
 ### def `apply_family_mask` (data_monitoring.py)
 

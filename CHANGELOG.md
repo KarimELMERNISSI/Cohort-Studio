@@ -950,6 +950,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   are text, as are the column names and the AI engine's suggested names there, and the column names in the boxes of
   variables by type and the criteria's headings on Validate.
 - **A formula drawn by the variable map** can no longer end its formula block and continue as Markdown.
+- **Validate shows a rule that cannot be evaluated as text.** Its name and the reason, which can quote a cell, were
+  drawn as Markdown: a cell such as `![x](http://…)` in a rule's column would have been fetched. The names of the
+  rules and criteria added on Validate are shown as code.
 
 ### AI engine: suggested formulas are read and tried as the application computes them
 
@@ -1046,6 +1049,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Start page's Validate card links to it. The tab shows how each column would be read, the format found and the
   values that would become missing, and converts them on request as one step of the trace, recorded and replayed as
   before.
+- The warning of a column that would lose dates counts them among its recorded values ("40 of the 80 recorded
+  values"). It compared them with all the rows, so a sparse column could lose half its dates without a word.
 
 ### Removed: what remained of ChromaDB
 
@@ -1080,6 +1085,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   be right) rather than for rows to flag as suspicious.
 - The dashboard's table of the rows that break a rule names its first column *Rules broken*, and downloads as
   `implausible_values.csv`.
+- The check's counts read *Rows flagged* and *Rows not flagged* (no row is removed), its view names its columns in
+  words (*Rules matched (implausible values)*), and the examples of the expression form and of the AI assistant
+  are plausibility rules (a heart rate out of range, a discharge before admission), or inclusion criteria on the
+  inclusion tab, where they suggested a blood pressure above 140 and a check for missing values. The outlier
+  dimension of the dashboard is *Statistical Validity* in its tab and its advice, as on the scorecard.
 
 ## [2.4.1] - 2026-10-17
 

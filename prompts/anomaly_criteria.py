@@ -1,5 +1,36 @@
 """Prompt for generating plausibility rules and inclusion criteria."""
 
+import json
+
+# the examples the model sees, by the kind of rule asked for: a plausibility rule flags what cannot be or is very
+# unlikely, an inclusion criterion selects whom the study is about
+_EXAMPLES = {
+    "anomaly": [
+        {
+            "name": "implausible_heart_rate",
+            "expression": "(df['heart_rate'] < 20) | (df['heart_rate'] > 250)",
+            "explanation": "Flags heart rates out of the range a living patient can have.",
+        },
+        {
+            "name": "discharge_before_admission",
+            "expression": "pd.to_datetime(df['discharge_date'], dayfirst=True) < pd.to_datetime(df['admission_date'], dayfirst=True)",
+            "explanation": "Flags rows where the discharge is recorded before the admission.",
+        },
+    ],
+    "inclusion": [
+        {
+            "name": "adults_up_to_85",
+            "expression": "(df['age'] >= 18) & (df['age'] <= 85)",
+            "explanation": "Keeps patients aged 18 to 85.",
+        },
+        {
+            "name": "written_consent",
+            "expression": "df['consent'] == 'Yes'",
+            "explanation": "Keeps patients who gave written consent.",
+        },
+    ],
+}
+
 def anomaly_criteria_prompt(
     description: str,
     columns_info: str,
@@ -8,18 +39,19 @@ def anomaly_criteria_prompt(
 ) -> str:
     """
     Generates a prompt for converting natural language to boolean expressions.
-    
+
     Args:
         description: User's natural language description of the criteria.
         columns_info: List of available columns in the dataframe.
         mode: 'anomaly' or 'inclusion'.
-        
+
     Returns:
         Formatted prompt string.
     """
-    
+
     task_desc = "write PLAUSIBILITY RULES (rows whose values, alone or together, domain knowledge says cannot be right)" if mode == "anomaly" else "define INCLUSION CRITERIA (rows to KEEP in the study)"
-    
+    examples = json.dumps({"criteria": _EXAMPLES["anomaly" if mode == "anomaly" else "inclusion"]}, indent=4)
+
     return f"""Role: Data Science Expert.
 
 Task: You are helping a user {task_desc}. converting their natural language description into valid Python Pandas boolean expressions.
@@ -49,18 +81,5 @@ Instructions:
 5. Provide a brief explanation.
 
 Output Format (JSON):
-{{
-    "criteria": [
-        {{
-            "name": "high_blood_pressure",
-            "expression": "(df['systolic'] > 140) | (df['diastolic'] > 90)",
-            "explanation": "Flags rows where systolic BP > 140 or diastolic BP > 90."
-        }},
-        {{
-            "name": "invalid_age_gap",
-            "expression": "(pd.to_datetime(df['visit_date']) - pd.to_datetime(df['birth_date'])) < pd.Timedelta(days=0)",
-            "explanation": "Flags rows where visit date is before birth date."
-        }}
-    ]
-}}
+{examples}
 """

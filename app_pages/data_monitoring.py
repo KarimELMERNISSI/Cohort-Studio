@@ -810,7 +810,7 @@ def validate_mask_name(config: dict[str, Any], family_name: str, mask_name: str,
         return False
     if mask_name in config["mask_families"][family_name]:
         overwrite = st_container.radio(
-            f"Mask {as_code(mask_name)} already exists in family {as_code(family_name)}. Overwrite?",
+            f"A rule named {as_code(mask_name)} already exists ({family_words(family_name)}). Overwrite?",
             ["No", "Yes"],
             key=f"mask_overwrite_{family_name}", index=0,  # a confirmation: not kept when the tab is left
             help="Select 'Yes' to overwrite the existing mask.",
@@ -858,18 +858,22 @@ def handle_numeric_mask_input(st_container, base_key:str):
 
 
 def handle_expression_mask_input(st_container, base_key: str):
-    """Collect expression mask inputs from the user."""
-    
+    """Collect expression mask inputs from the user (``base_key``: the family the rule joins)."""
+    # examples of the family's kind of rule: a plausibility rule flags what cannot be or is very unlikely (a missing
+    # value is the completeness score's), an inclusion criterion selects whom the study is about
+    examples = (
+        "- `(df['heart_rate'] < 20) | (df['heart_rate'] > 250)` (a heart rate out of range)\n"
+        "- `df['dbp'] >= df['sbp']` (a diastolic pressure at or above the systolic: the fields swapped)\n"
+        "- `(df['sex'] == 'M') & (df['pregnant'] == 'Yes')` (a combination that cannot be)"
+        if base_key == "clinical_anomalies"
+        else "- `(df['age'] >= 18) & (df['age'] <= 85)` (adults up to 85)\n"
+        "- `df['consent'] == 'Yes'` (written consent)\n"
+        "- `df['nyha'].isin(['II', 'III', 'IV'])` (one of several levels)"
+    )
     with st_container.expander("Expression Help & Examples", expanded=False):
-        st.markdown("""
-        Write a Python boolean expression. Use `df` to refer to the dataframe.
-        
-        **Examples:**
-        - `df['Age'] < 18` (Selects rows where Age is under 18)
-        - `(df['Systolic_BP'] > 140) & (df['Diastolic_BP'] > 90)` (Complex condition)
-        - `df['Status'].isin(['Active', 'Pending'])` (Categorical check)
-        - `df['Lab_Val'].isna()` (Check for missing values)
-        """)
+        st.markdown(
+            "Write a Python boolean expression. Use `df` to refer to the dataframe.\n\n**Examples:**\n" + examples
+        )
 
     expression = st_container.text_area(
         "Expression", 
@@ -890,6 +894,21 @@ def handle_expression_mask_input(st_container, base_key: str):
     if use_simplified_mask_expression:
         expression = transform_expression(expression)  # Example placeholder function
     return expression_rule(expression)
+
+
+def rules_column(family_name: str) -> str:
+    """The column of a check's view that lists the rules each row matches: shown, never added to the dataset."""
+    return f"Rules matched ({family_words(family_name)})"
+
+
+def result_column(family_name: str, operator: str, threshold: Any = None) -> str:
+    """The column of a check's view that holds the family's result on each row: shown, never added to the dataset."""
+    words = family_words(family_name)
+    return {
+        "any": f"Any rule matched ({words})",
+        "all": f"Every criterion met ({words})",
+        "threshold": f"At least {threshold} rules matched ({words})",
+    }[operator]
 
 
 def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, st_container):
@@ -913,21 +932,18 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
     masks = family_masks(df, family_config)
     for rule, message in masks.errors.items():
         st_container.error(
-            f"Rule '{rule}' ({family_words(family_name)}) cannot be evaluated: {message}. Correct it or untick it: the "
+            f"Rule {as_code(rule)} ({family_words(family_name)}) cannot be evaluated: {plain(message, limit=300)}. "
+            "Correct it or untick it: the "
             "analysis population refuses it while it is ticked."
         )
     masks_df = pd.DataFrame(masks.rules, index=df.index)
     st_container.dataframe(masks_df)
-    # the rules each row meets
-    df[f"{family_name}_list"] = masks_df.apply(lambda row: ", ".join(str(c) for c in row.index if row[c]), axis=1)
-    masks_family_cols = [f"{family_name}_list"]
+    # the rules each row meets, and the family's result
+    df[rules_column(family_name)] = masks_df.apply(lambda row: ", ".join(str(c) for c in row.index if row[c]), axis=1)
+    masks_family_cols = [rules_column(family_name)]
     if masks.flag is None:
         return df, masks_family_cols
-    column = {
-        "any": f"{family_name}_any",
-        "all": f"{family_name}_all",
-        "threshold": f"{family_name}_above_{masks.threshold}",
-    }[masks.operator]
+    column = result_column(family_name, masks.operator, masks.threshold)
     df[column] = masks.flag
     masks_family_cols.append(column)
     return df, masks_family_cols
@@ -1220,7 +1236,11 @@ def render_ai_criteria_assistant(st_container, config, family_name, mode="anomal
             with col_input:
                 description = st.text_area(
                     "Describe Criteria", 
-                    placeholder="e.g. Patients with Systolic BP > 140 or Age under 18",
+                    placeholder=(
+                        "e.g. a heart rate below 20 or above 250, or a discharge before admission"
+                        if mode == "anomaly"
+                        else "e.g. adults aged 18 to 85 who gave written consent"
+                    ),
                     persist_state="page", key=f"ai_desc_{family_name}",
                     label_visibility="collapsed"
                 )
@@ -1317,9 +1337,10 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
         """
         **What is an implausible value?**
         
-        A value, or a combination of values, that domain knowledge says cannot be right: a potassium of 25 mmol/L,
-        a discharge before admission. A plausibility rule describes it.
-        * **Action:** Rows matching these criteria are **flagged** but kept in the dataset.
+        A value, or a combination of values, that domain knowledge says is impossible or very unlikely: a potassium
+        of 25 mmol/L, a discharge before admission. A plausibility rule describes it; check the rows it flags at the
+        source.
+        * **Action:** Rows matching these rules are **flagged** but kept in the dataset.
         
         **How to use:**
         * **Numeric Mode:** Use this for simple range checks on a single column.
@@ -1351,7 +1372,7 @@ def add_domain_expert_based_anomaly_mask(config: dict[str, Any], st_container):
     if mask_details and st_container.button("Add Plausibility Rule"):
         config["mask_families"][family_name][mask_name] = mask_details
         #st.session_state.config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"Plausibility rule '{mask_name}' added.")
+        st_container.success(f"Plausibility rule {as_code(mask_name)} added.")
     
     #st_container.json(config["mask_families"][family_name])
 
@@ -1364,24 +1385,23 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
     col1, col2 = st.columns(2)
     with col1:
         st.metric(
-            label="Irregular Rows (%)", 
+            label="Rows flagged (%)", 
             delta=len(filtered_df), 
             value=f"{(len(filtered_df) / len(df)) * 100:.2f}%",
             help=(
-                "This metric indicates the number of rows with implausible values and their percentage of the entire dataset. "
-                "The 'Value' represents the percentage of such rows among all rows, while 'Delta' shows their count."
+                "The rows with implausible values, as a share of the whole dataset ('Value'), and their number "
+                "('Delta')."
             )
         )
 
     with col2:
         st.metric(
-            label="Valid Rows", 
+            label="Rows not flagged", 
             value=len(df) - len(filtered_df),
             delta=f"-{len(filtered_df)}",
             help=(
-                "This metric shows the number of rows that break no plausibility rule. "
-                "The 'Value' indicates the count of valid rows, while 'Delta' represents "
-                "the decrease in rows due to the implausible values found."
+                "The rows that break no plausibility rule. No row is removed: tick the rules in the sidebar to "
+                "leave the flagged rows out of the analyses."
             )
         )
     
@@ -1429,7 +1449,7 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
 
     if mask_details and st_container.button("Add Inclusion Criterion"):
         config["mask_families"][family_name][mask_name] = mask_details
-        st_container.success(f"Inclusion mask '{mask_name}' added to family '{family_name}'.")
+        st_container.success(f"Inclusion criterion {as_code(mask_name)} added.")
 
 
 def display_results_with_inclusion(df: pd.DataFrame, inclusion_col: str, st):
@@ -1522,11 +1542,12 @@ def _anomalies_tab() -> None:
                 st.write("Updated Dataset:")
                 st.dataframe(styled_df, width="stretch")
         else:
-            st.error(f"Family '{anomaly_family}' not found in the configuration.")
+            st.error(f"The configuration has no family {as_code(anomaly_family)} ({family_words(anomaly_family)}).")
 
-    if anomaly_view is not None and f"{anomaly_family}_any" in anomaly_view.columns:  # absent while a rule cannot be evaluated
+    anomaly_col = result_column(anomaly_family, "any")
+    if anomaly_view is not None and anomaly_col in anomaly_view.columns:  # absent while a rule cannot be evaluated
         with st.expander("Results", expanded=True):
-            display_results_with_anomaly(df=anomaly_view,anomaly_col=f"{anomaly_family}_any", st=st)
+            display_results_with_anomaly(df=anomaly_view, anomaly_col=anomaly_col, st=st)
 
 
 def _inclusion_tab() -> None:
@@ -1560,11 +1581,12 @@ def _inclusion_tab() -> None:
                 st.write("Updated Dataset:")
                 st.dataframe(styled_df, width="stretch")
         else:
-            st.error(f"Family '{inclusion_family}' not found in the configuration.")
+            st.error(f"The configuration has no family {as_code(inclusion_family)} ({family_words(inclusion_family)}).")
 
-    if inclusion_view is not None and f"{inclusion_family}_all" in inclusion_view.columns:  # absent while a rule cannot be evaluated
+    inclusion_col = result_column(inclusion_family, "all")
+    if inclusion_view is not None and inclusion_col in inclusion_view.columns:  # absent while a rule cannot be evaluated
         with st.expander("Results", expanded=True):
-            display_results_with_inclusion(df=inclusion_view,inclusion_col=f"{inclusion_family}_all", st=st)
+            display_results_with_inclusion(df=inclusion_view, inclusion_col=inclusion_col, st=st)
 
 
 def _outliers_tab() -> None:

@@ -7,6 +7,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
+from app_pages.data_monitoring import result_column
 from ui import nav
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -68,7 +69,7 @@ def test_validate_applies_the_inclusion_criteria(app: AppTest) -> None:
     _click(app, "Run Inclusion Criteria Check")
     # the check shows its counts; it no longer writes flag columns into the dataset
     assert _metric(app, "Rows to include in the study (%)").delta == "939"
-    assert "study_inclusion_all" not in app.session_state["data"].columns
+    assert result_column("study_inclusion", "all") not in app.session_state["data"].columns
     # the Results panel (and its Apply button) survives any later rerun: it used to vanish, so Apply never worked
     app.run()
     _ok(app)
@@ -88,7 +89,7 @@ def test_anomaly_detection_flags_the_planted_errors(app: AppTest) -> None:
     assert "anomaly_check_done" not in app.session_state
     _open(app, "Handle Implausible Values")
     _click(app, "Run the Plausibility Check")
-    assert _metric(app, "Irregular Rows (%)").delta == "16"
+    assert _metric(app, "Rows flagged (%)").delta == "16"
     app.run()
     app.button(key="anomaly_data_apply_criteria").click().run()
     _ok(app)

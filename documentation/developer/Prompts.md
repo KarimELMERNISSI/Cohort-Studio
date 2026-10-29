@@ -4,6 +4,9 @@
 
 _Prompt for generating plausibility rules and inclusion criteria._
 
+**Imports**:
+`json`
+
 ### def `anomaly_criteria_prompt` (anomaly_criteria.py)
 
 - **Arguments**: `description: str, columns_info: str, sample_data: str, mode: str`

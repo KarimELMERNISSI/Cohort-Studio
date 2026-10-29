@@ -196,7 +196,7 @@ def render_population_panel(state) -> None:
         [
             {
                 "Criterion": c.criterion.name,
-                "Family": c.criterion.family,
+                "Family": family_words(c.criterion.family),
                 "Excludes (whole table)": c.marginal_base,
                 "Excludes at its step": c.marginal_in_stage,
                 "First reason for": c.sequential,

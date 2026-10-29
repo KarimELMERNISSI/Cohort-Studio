@@ -26,10 +26,11 @@ Analyzes missing values and helps diagnose the mechanism of missingness (MCAR, M
 
 ## Implausible Values
 
-The system checks your dataset for values that domain knowledge says are impossible or suspect, such as a potassium
-of 25 mmol/L or a discharge before admission, using the plausibility rules of your study configuration. Declare the
-rules on the **Handle Implausible Values** tab, or load a configuration file (JSON) from the sidebar (**Action** >
-*Load Existing Config*); **Download Configuration File** saves it for a later session.
+The system checks your dataset for values that domain knowledge says are impossible or very unlikely, such as a
+potassium of 25 mmol/L or a discharge before admission, using the plausibility rules of your study configuration;
+check the rows they flag at the source. Declare the rules on the **Handle Implausible Values** tab, or load a
+configuration file (JSON) from the sidebar (**Action** > *Load Existing Config*); **Download Configuration File**
+saves it for a later session.
 A loaded file adds the families and rules this session lacks, each whole. A rule this session already holds keeps its
 definition here, and the page names those whose definition in the file differs.
 For someone else, use **Download for Sharing** (`config_for_sharing.json`). It holds the criteria and the derived
@@ -53,8 +54,9 @@ such as `df['patient_id'] == 'P-0042'`).
 
 Every plausibility rule belongs to the family of implausible values (operator `any`): a row is flagged when at least
 one rule fires. The rules have no severity classes (such as impossible or suspect). In configuration files and traces
-the family keeps its id, *clinical_anomalies* (its name until CohortStudio 2.4), so files written before load as
-they did.
+the family keeps its id, *clinical_anomalies* (its name in CohortStudio 2.4.1 and before), so files written before
+load as they did. A rule that flags plausible values to review (a diagnosis that may be missing) does not belong
+here: the quality score counts every declared rule, ticked or not.
 
 ---
 
@@ -258,7 +260,7 @@ double by default, and is left out when no plausibility rule is declared). It is
 - **Where the score loses points** — one bar per dimension that loses points, the most costly on top. Click a bar to
   list where the points go: the columns with empty cells, the columns with outliers (or the rows flagged by a
   multivariate method), the text columns that hold numbers or dates, the columns with spacing or capitalisation
-  issues, the duplicated rows, or the clinical rules that flag rows.
+  issues, the duplicated rows, or the plausibility rules that flag rows.
 - **Score across the checks of this dataset** — one point per version of the data: as loaded, then after each change
   (merge, computed or transformed variable, imputation, renamed column, date conversion, kept population). The line
   uses the current weights; click a

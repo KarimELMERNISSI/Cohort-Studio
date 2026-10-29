@@ -53,7 +53,7 @@ def test_the_outlier_tab_does_not_see_the_flags_of_the_criteria_tabs(app: AppTes
     _ok(app)
     columns = next(m for m in app.multiselect if m.label == "Select columns for outlier handling")
     dataset = set(app.session_state["_data_session"].base.columns)
-    assert columns.value and set(columns.value) <= dataset  # no clinical_anomalies_any or _list
+    assert columns.value and set(columns.value) <= dataset  # no column of a check's view
 
 
 def test_the_analysis_tab_transforms_the_variables_as_before() -> None:

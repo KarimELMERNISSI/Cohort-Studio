@@ -82,8 +82,13 @@ def render_date_checks() -> None:
         width="stretch",
     )
     for col, count in lost.items():
-        if count > len(df) * 0.05:
-            st.warning(f"High data loss in {as_code(col)}: {count} values could not be parsed.")
+        # a share of the values recorded: a sparse column can lose half its dates and few of its rows
+        recorded = int(df[col].notna().sum())
+        if recorded and count > recorded * 0.05:
+            st.warning(
+                f"{count} of the {recorded} recorded values of {as_code(col)} ({count / recorded:.0%}) cannot be "
+                "read as dates and would become missing."
+            )
     if st.button(
         f"Convert {n} column{'s' if n != 1 else ''} to dates", key="convert_dates", type="primary"
     ):

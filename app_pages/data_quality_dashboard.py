@@ -276,7 +276,7 @@ def render_dashboard(df, config):
                 **1. Completeness**
                 Aim for >95%. Use *MICE* or *MissForest* imputation for critical variables instead of dropping rows.
                 
-                **2. Validity**
+                **2. Statistical Validity**
                 Investigate all outliers. Are they errors or rare biological events? Use the *Outlier Detection* module to filter or cap them.
                 
                 **3. Consistency**
@@ -291,7 +291,7 @@ def render_dashboard(df, config):
     # --- 3. Detailed Analysis Tabs ---
     tab1, tab2, tab3, tab4 = st.tabs([
         "Completeness (Missing)", 
-        "Validity (Outliers)", 
+        "Statistical Validity (Outliers)", 
         "Domain Validity",
         "Conformity"
     ])

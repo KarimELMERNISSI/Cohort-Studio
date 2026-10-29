@@ -1,5 +1,5 @@
 """
-Unit Tests for Date Parser (utils/date_parser.py) and Statistics Utilities (utils/statistics_utils.py).
+Unit Tests for Date Parser (ingest/dates.py) and Statistics Utilities (utils/statistics_utils.py).
 
 Tests automated clinical datetime format discovery, Excel serial conversion,
 and normality screening methods (Shapiro-Wilk, D'Agostino, KS, Anderson-Darling).
@@ -17,7 +17,7 @@ from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 
 
 class TestSmartDateParser:
-    """Test suite for utils/date_parser.py."""
+    """Test suite for ingest/dates.py."""
 
     def test_empty_series_handling(self) -> None:
         """Empty series returns with explanation note."""
