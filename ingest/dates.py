@@ -10,7 +10,7 @@ conversions recorded with it.
 
 import math
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
 from typing import Any
@@ -466,6 +466,14 @@ PLACEHOLDERS = (
 )
 
 
+def set_to_missing(dates: pd.Series, days: Sequence[str]) -> int:
+    """How many read values fall on one of ``days``, the placeholder dates set to missing (their calendar day)."""
+    if not days:
+        return 0
+    normal = pd.to_datetime(dates, errors="coerce").dt.normalize()
+    return int(normal.isin([pd.Timestamp(day) for day in days]).sum())
+
+
 def placeholders_found(dates: pd.Series) -> dict[str, int]:
     """How many read values fall on each placeholder date (their calendar day), the dates none falls on left out."""
     days = pd.to_datetime(dates, errors="coerce").dt.normalize()
@@ -585,6 +593,7 @@ __all__ = [
     "detect",
     "partial_dates",
     "placeholders_found",
+    "set_to_missing",
     "read_dates",
     "smart_parse_dates",
 ]

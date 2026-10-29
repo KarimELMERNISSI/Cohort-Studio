@@ -18,6 +18,7 @@ import utils.data_paths as dp
 from app_pages import data_monitoring as dm
 from app_pages import validate_dates
 from core.fingerprint import frame_fingerprint
+from ingest.dates import PLACEHOLDERS
 from manage.reproduction_manager import apply_steps
 from ui import nav
 
@@ -98,7 +99,8 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     read = {
         "format": "day_first",
         "order_source": "data",
-        "placeholders_to_missing": [],
+        "placeholders_to_missing": [p.date for p in PLACEHOLDERS if p.preselected],  # the rule
+        "set_to_missing": 0,
         "values": 1206,
         "unreadable": 0,
         "partial": 0,

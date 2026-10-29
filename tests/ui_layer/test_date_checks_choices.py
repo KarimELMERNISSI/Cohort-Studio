@@ -15,6 +15,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
+from ingest.dates import PLACEHOLDERS
 from manage.reproduction_manager import apply_steps
 
 T = pd.Timestamp
@@ -113,13 +114,18 @@ def test_whole_numbers_are_read_as_excel_dates_only_when_accepted() -> None:
     ]
 
 
+PRESELECTED = [p.date for p in PLACEHOLDERS if p.preselected]
+
+
 def test_the_placeholder_dates_no_one_has_are_ticked_to_go_missing() -> None:
     at = _open({"death_date": ["01/01/1900", "15/03/2021", "01/01/1970", "13/04/2022"]})
-    assert at.multiselect(key="date_placeholders").value == [
-        "1900-01-01"
-    ]  # 1970 may be a real date
+    picked = at.multiselect(key="date_placeholders::death_date")
+    assert (
+        picked.value == PRESELECTED and "1970-01-01" not in picked.value
+    )  # 1970 may be a real date
     step = _convert(at)
-    assert step["params"]["formats"]["death_date"]["placeholders_to_missing"] == ["1900-01-01"]
+    recorded = step["params"]["formats"]["death_date"]
+    assert (recorded["placeholders_to_missing"], recorded["set_to_missing"]) == (PRESELECTED, 1)
     read = at.session_state["data"]["death_date"]
     assert pd.isna(read[0]) and read.tolist()[1:] == [
         T("2021-03-15"),
@@ -161,3 +167,33 @@ def test_planned_dates_are_not_counted_after_the_extraction_date() -> None:
     at.multiselect(key="date_planned").select("next_visit").run()
     recorded = _convert(at)["params"]["formats"]["next_visit"]
     assert recorded["planned"] is True and recorded["after_extraction"] is None
+
+
+def test_the_record_holds_the_rule_not_the_dates_a_column_holds() -> None:
+    """A list of the placeholder dates found told the trace that a participant was born on 1 January 1970."""
+    plain = _convert(_open({"birth": ["15/03/1950", "13/04/1962", "20/05/1971"]}))["params"][
+        "formats"
+    ]["birth"]
+    planted = _convert(_open({"birth": ["15/03/1950", "01/01/1970", "20/05/1971"]}))["params"][
+        "formats"
+    ]["birth"]
+    assert planted["placeholders_to_missing"] == plain["placeholders_to_missing"] == PRESELECTED
+    assert (plain["placeholders"], planted["placeholders"]) == (
+        0,
+        1,
+    )  # a count changes, nothing names the date
+    assert {k for k in plain if plain[k] != planted[k]} == {"placeholders"}
+
+
+def test_each_column_has_its_own_placeholder_dates() -> None:
+    at = _open({"birth": ["01/01/1970", "13/04/1962"], "visit": ["01/01/1970", "13/04/2022"]})
+    at.multiselect(key="date_placeholders::visit").select(
+        "1970-01-01"
+    ).run()  # no visit in 1970: a placeholder
+    formats = _convert(at)["params"]["formats"]
+    assert "1970-01-01" in formats["visit"]["placeholders_to_missing"]
+    assert (
+        "1970-01-01" not in formats["birth"]["placeholders_to_missing"]
+    )  # a real birth date stays
+    data = at.session_state["data"]
+    assert pd.isna(data["visit"][0]) and data["birth"][0] == T("1970-01-01")

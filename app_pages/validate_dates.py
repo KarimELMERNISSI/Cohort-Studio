@@ -29,6 +29,7 @@ from ingest.dates import (
     detect,
     placeholders_found,
     read_dates,
+    set_to_missing,
 )
 from ui.components import no_dataset
 from ui.state import get_state
@@ -194,6 +195,43 @@ def _day(value) -> str:
     return "" if pd.isna(value) else pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
+def _placeholders(chosen: dict[str, Any], readings: dict[str, pd.Series]) -> dict[str, list[str]]:
+    """
+    Per column, the placeholder dates set to missing, chosen from the whole catalogue: a list of only the dates a
+    column holds told the trace that a participant was born on 1 January 1970, and one choice for every column set a
+    real birth date to missing with a placeholder visit. The counts are this column's, on screen only.
+    """
+    catalogue = {p.date: p for p in PLACEHOLDERS}
+    found = {c: placeholders_found(readings[c]) for c in chosen}
+    chosen_days: dict[str, list[str]] = {}
+    with st.expander(
+        "Placeholder dates set to missing",
+        icon=":material/event_busy:",
+        expanded=any(found.values()),
+    ):
+        st.caption(
+            "Dates some systems write for an unknown one. Those no person really has are ticked in every column; "
+            "1 January 1970, 1960 or 1904 can be a real birth date, and stay unless you tick them."
+        )
+        for column in chosen:
+            here = found[column]
+            picked = st.multiselect(
+                as_code(column),
+                list(catalogue),
+                default=[day for day, p in catalogue.items() if p.preselected],
+                format_func=lambda day, here=here: (
+                    f"{day} ({catalogue[day].source})"
+                    + (f": {here[day]:,} here" if day in here else "")
+                ),
+                key=f"date_placeholders::{column}",
+                persist_state="page",
+            )
+            chosen_days[column] = [
+                day for day in catalogue if day in picked
+            ]  # in the catalogue's order
+    return chosen_days
+
+
 def render_date_checks() -> None:
     """
     The Date checks tab: how the text columns that look like dates would be read, what is asked, and their conversion,
@@ -291,24 +329,7 @@ def render_date_checks() -> None:
                 + ", ".join(as_code(v) for v in unread)
             )
 
-    placeholders = {c: placeholders_found(readings[c]) for c in chosen}
-    totals: dict[str, int] = {}
-    for found_in in placeholders.values():
-        for day, n in found_in.items():
-            totals[day] = totals.get(day, 0) + n
-    to_missing: list[str] = []
-    if totals:
-        catalogue = {p.date: p for p in PLACEHOLDERS}
-        to_missing = st.multiselect(
-            "Placeholder dates to set to missing",
-            sorted(totals),
-            default=[day for day in sorted(totals) if catalogue[day].preselected],
-            format_func=lambda day: f"{day} ({catalogue[day].source}: {totals[day]:,} values)",
-            key="date_placeholders",
-            persist_state="page",
-            help="Dates some systems write for an unknown one. Those no person really has are ticked; 1 January 1970, "
-            "1960 or 1904 can be a real birth date, and are left as they are unless you tick them.",
-        )
+    to_missing = _placeholders(chosen, readings)
 
     anyway = True
     over = [c for c in chosen if reports[c].unreadable > UNREADABLE * reports[c].values]
@@ -331,7 +352,9 @@ def render_date_checks() -> None:
         formats = {
             c: {
                 **how,
-                "placeholders_to_missing": [d for d in to_missing if d in placeholders[c]],
+                # the rule, the same whatever the column holds: the dates found are counted, never listed
+                "placeholders_to_missing": to_missing[c],
+                "set_to_missing": set_to_missing(readings[c], to_missing[c]),
                 **({"planned": True} if c in planned else {}),
                 **reports[c].to_record(),
             }

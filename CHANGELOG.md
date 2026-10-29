@@ -1187,6 +1187,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - whole numbers are read as Excel serial dates only when you choose it;
   - a month and a year, or a year alone, stays missing, never completed;
   - the placeholder dates no one has (1900-01-01, 9999-12-31...) are ticked to be set missing; 1970-01-01 is not;
+    each column has its own choice from the whole catalogue (1970-01-01 can be a real birth date and a placeholder
+    visit), and the conversion records it as the rule, with how many values it set to missing: it recorded only the
+    placeholder dates the column held, which told the trace that a participant was born on 1 January 1970;
   - a column that would lose more than 5 % of its values converts only when you say *Convert anyway*.
 - The conversion records each column's format, where its order came from, the pivot, the placeholders set missing
   and the counts of values, of unreadable and of partial ones; the replay reads the columns with them and never

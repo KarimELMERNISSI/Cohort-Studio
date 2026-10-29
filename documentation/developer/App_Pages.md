@@ -3163,7 +3163,7 @@ detecting again. Its own tab since M6: above Validate's tabs, the conversion rea
 opened on new data, whichever tab was wanted._
 
 **Imports**:
-`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ui.components.no_dataset`, `ui.state.get_state`
+`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.state.get_state`
 
 ### def `_loaded_on` (validate_dates.py)
 
@@ -3254,6 +3254,16 @@ reading found; a column that may hold planned dates is not counted after the ext
 - **Returns**: `str`
 
 No description available.
+
+### def `_placeholders` (validate_dates.py)
+
+- **Arguments**: `chosen: dict[ComplexType], readings: dict[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Per column, the placeholder dates set to missing, chosen from the whole catalogue: a list of only the dates a
+column holds told the trace that a participant was born on 1 January 1970, and one choice for every column set a
+real birth date to missing with a placeholder visit. The counts are this column's, on screen only.
 
 ### def `render_date_checks` (validate_dates.py)
 
