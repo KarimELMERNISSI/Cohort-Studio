@@ -278,6 +278,13 @@ def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_id
     check = eed.key_check(main_df, enrichment_df, left_ids, right_ids)
     if check is None:  # the identifiers cannot be compared: the merge says why
         return "all"
+    if check.rows_without_key:
+        n = check.rows_without_key
+        st.info(
+            f"{'1 row' if n == 1 else f'{n:,} rows'} of the dataset {'has' if n == 1 else 'have'} no identifier: "
+            f"{'it takes' if n == 1 else 'they take'} nothing from the file (a missing identifier matches no other).",
+            icon=":material/info:",
+        )
     if not check.repeats:
         return "unique" if check.file_keys_repeated == 0 else "all"
     rows, keys, more = check.rows_repeated, check.file_keys_repeated, check.rows_added
@@ -317,6 +324,7 @@ def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd
         ("rows_added", "rows added from the file"),
         ("main_rows_dropped", "rows of the dataset left out"),
         ("file_rows_left_out", "rows of the file left out (one per identifier)"),
+        ("main_rows_without_key", "rows of the dataset without an identifier (nothing from the file)"),
     ):
         if counts.get(key):
             said.append(f"{counts[key]:,} {words}")
@@ -422,7 +430,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     additional_cols=additional_columns,
                     strategy=strategy,
                     conflict_resolution=conflict_resolution,
-                    file_rows=file_rows)
+                    file_rows=file_rows, missing_keys="never")
 
                 if _merged(enriched_df, main_df, enrichment_df):
                     # Save snapshot
@@ -435,6 +443,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "identifier": identifier,
                         "add_choice": add_choice,
                         "file_rows": file_rows,
+                        "missing_keys": "never",
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),
@@ -480,7 +489,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     additional_cols=additional_columns,
                     strategy=strategy,
                     conflict_resolution=conflict_resolution,
-                    file_rows=file_rows)
+                    file_rows=file_rows, missing_keys="never")
 
                 save_enrichment_config(enrichment_name=enrichment_name,
                                        strategy=strategy,
@@ -502,6 +511,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "right_id_names": right_identifier,
                         "add_choice": add_choice,
                         "file_rows": file_rows,
+                        "missing_keys": "never",
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),

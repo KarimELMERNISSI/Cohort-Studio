@@ -72,6 +72,7 @@ def _record(
     path: Path,
     identifier: list[str],
     file_rows: str | None = None,
+    missing_keys: str | None = None,
 ):
     """
     A session that merges ``enrichment`` (read from ``path``) as the Enrich page does: align, merge, stage.
@@ -109,6 +110,8 @@ def _record(
     }
     if file_rows is not None:
         params["file_rows"] = file_rows
+    if missing_keys is not None:
+        params["missing_keys"] = missing_keys
     merged = eed.add_data(
         df=working,
         additional_df=enrichment,
@@ -118,6 +121,7 @@ def _record(
         strategy="left",
         conflict_resolution="keep",
         file_rows=file_rows or "all",
+        missing_keys=missing_keys or "match",
     )
     session.stage(merged, "enrichment", params, "Enriched with external data")
     session.commit_staging()
@@ -132,6 +136,20 @@ def _replays(tm, session) -> None:
     result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)), paths=PathResolver.unconfined())
     assert result.error is None and result.reproducible, result.warnings
     assert frame_fingerprint(result.df) == session.data_fp
+
+
+@pytest.mark.parametrize("missing_keys", [None, "never"])
+def test_a_missing_identifier_replays_as_it_was_merged(tmp_path: Path, missing_keys: str | None) -> None:
+    """A participant without an id took the file's row without one ("match", recorded before) or nothing ("never")."""
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,potassium\n1,4.1\n,4.6\n3,5.2\n", encoding="utf-8")
+    main = pd.DataFrame({"id": [1, None, 3], "age": [50, 61, 72]})
+    tm, session = _record(
+        tmp_path, main, load_dataframe(str(labs)), labs, ["id"], file_rows="unique", missing_keys=missing_keys
+    )
+    took = session.base.loc[session.base["id"].isna(), "potassium"]
+    assert took.isna().all() if missing_keys == "never" else took.tolist() == [4.6]
+    _replays(tm, session)
 
 
 def test_a_merge_the_file_no_longer_allows_stops_the_replay_at_its_step(tmp_path: Path) -> None:

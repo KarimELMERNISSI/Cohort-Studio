@@ -1063,6 +1063,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   which still gives each row of the dataset one row of the file. A file with no rows says so.
 - A merge that the replay cannot do again (the file now repeats an identifier the step took once) stops the replay
   at that step, where it went on and failed one step later on a missing column.
+- **A missing identifier matches no other.** pandas merges missing keys with one another: a participant without an
+  identifier took the values of the file's rows without one (all of them, the first or the last), with nothing asked.
+  Enrich now merges with `missing_keys="never"`, recorded with the step: such a row takes nothing from the file,
+  says so before the merge and after it, and a row of the file without an identifier is no one's (an outer merge adds
+  it as a row of its own). A merge recorded before replays as it did.
 
 ### Survival & regression: the outcome first, the effect first
 

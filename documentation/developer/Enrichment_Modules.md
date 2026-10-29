@@ -543,7 +543,7 @@ _No module description._
 
 ### class `KeyCheck` (external_data.py)
 
-What a merge on keys would do to the rows of the dataset, before it is done.
+What a merge on keys would do to the rows of the dataset, before it is done (missing keys never match).
 
 **Methods:**
 
@@ -557,8 +557,16 @@ What a merge on keys would do to the rows of the dataset, before it is done.
 - **Returns**: `ComplexType`
 
 How a merge on these keys would repeat the rows of the dataset: a row whose key more than one row of the file
-holds comes out once per such row. Missing keys match one another, as pandas merges them. None when the keys
-cannot be compared (a column missing, or of another type): the merge says why.
+holds comes out once per such row. A missing key matches nothing (``missing_keys="never"``, as Enrich merges
+now). None when the keys cannot be compared (a column missing, or of another type): the merge says why.
+
+### def `_unmatchable` (external_data.py)
+
+- **Arguments**: `values: pd.Series, others: pd.Series`
+
+- **Returns**: `None`
+
+A value of ``values``' kind that ``others`` and ``values`` never hold, for a missing key to match nothing.
 
 ### def `align_date_keys` (external_data.py)
 
@@ -572,7 +580,7 @@ tables, so they merge the same rows.
 
 ### def `add_data` (external_data.py)
 
-- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, file_rows`
+- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, file_rows, missing_keys`
 
 - **Returns**: `None`
 
@@ -581,8 +589,9 @@ Enrich the dataset by either merging on common identifiers (columns) or appendin
 Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
 right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
 ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
-``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys.
-Same parameters and result as :func:`_merge`.
+``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys;
+``missing_keys`` (:data:`MISSING_KEYS`) whether a missing key matches another ("match", pandas' way, kept for
+the steps recorded before; Enrich merges with "never"). Same parameters and result as :func:`_merge`.
 
 ### def `_merge` (external_data.py)
 

@@ -220,6 +220,8 @@ def _enrichment(df, step, index, paths, warnings):
         conflict_resolution=params.get("conflict_resolution", "keep"),
         # how many rows of the file each row took (a step recorded before chose none: all of them)
         file_rows=params.get("file_rows", "all"),
+        # whether a missing identifier matched another (a step recorded before: as pandas merges, it did)
+        missing_keys=params.get("missing_keys", "match"),
     )
     if merged is main:  # refused (the merge returns the dataset unchanged): said here, not one step later
         raise ValueError(

@@ -14,16 +14,21 @@ logger = logging.getLogger(__name__)
 # row once per matching row of the file (a long table), "first" and "last" keep one, in the file's order, "unique"
 # expects one and refuses a file that repeats a key. A step recorded before had none: "all".
 FILE_ROWS = ("all", "unique", "first", "last")
+# Whether a missing key matches another, recorded with the step: "never" (a row without an identifier takes nothing
+# from the file, and a row of the file without one is no one's), or "match", as pandas merges them, which a step
+# recorded before did.
+MISSING_KEYS = ("never", "match")
 _KEYED = ("left", "right", "outer", "inner")
 
 
 @dataclass(frozen=True)
 class KeyCheck:
-    """What a merge on keys would do to the rows of the dataset, before it is done."""
+    """What a merge on keys would do to the rows of the dataset, before it is done (missing keys never match)."""
 
     file_keys_repeated: int  # keys that more than one row of the file holds
     rows_repeated: int  # rows of the dataset whose key more than one row of the file holds
     rows_added: int  # the rows the merge would add by repeating them, one per extra row of the file
+    rows_without_key: int = 0  # rows of the dataset with a missing key: they take nothing from the file
 
     @property
     def repeats(self) -> bool:
@@ -33,23 +38,39 @@ class KeyCheck:
 def key_check(df, additional_df, left_id_names, right_id_names) -> KeyCheck | None:
     """
     How a merge on these keys would repeat the rows of the dataset: a row whose key more than one row of the file
-    holds comes out once per such row. Missing keys match one another, as pandas merges them. None when the keys
-    cannot be compared (a column missing, or of another type): the merge says why.
+    holds comes out once per such row. A missing key matches nothing (``missing_keys="never"``, as Enrich merges
+    now). None when the keys cannot be compared (a column missing, or of another type): the merge says why.
     """
     left = [left_id_names] if isinstance(left_id_names, str) else list(left_id_names or [])
     right = [right_id_names] if isinstance(right_id_names, str) else list(right_id_names or [])
     if not left or len(left) != len(right):
         return None
     try:
-        per_key = additional_df.groupby(right, dropna=False, sort=False).size()
+        complete = df[left].notna().all(axis=1)
+        per_key = additional_df.dropna(subset=right).groupby(right, sort=False).size()
         repeated = per_key[per_key > 1].rename("__matches").reset_index()
         if repeated.empty:
-            return KeyCheck(0, 0, 0)
-        keys = df[left].set_axis(right, axis=1)
+            return KeyCheck(0, 0, 0, int((~complete).sum()))
+        keys = df.loc[complete, left].set_axis(right, axis=1)
         matches = keys.merge(repeated, on=right, how="left")["__matches"].dropna()
     except (KeyError, TypeError, ValueError):
         return None
-    return KeyCheck(len(repeated), int(len(matches)), int((matches - 1).sum()))
+    return KeyCheck(len(repeated), int(len(matches)), int((matches - 1).sum()), int((~complete).sum()))
+
+
+def _unmatchable(values: pd.Series, others: pd.Series):
+    """A value of ``values``' kind that ``others`` and ``values`` never hold, for a missing key to match nothing."""
+    if pd.api.types.is_numeric_dtype(values) and not pd.api.types.is_bool_dtype(values):
+        known = pd.concat([pd.to_numeric(values, errors="coerce"), pd.to_numeric(others, errors="coerce")])
+        top = known.max()
+        return float(top) + 1.0 if pd.notna(top) else 0.0
+    if pd.api.types.is_datetime64_any_dtype(values):
+        return pd.Timestamp("1677-09-22")  # before any date a cohort holds
+    taken = set(values.dropna().astype(str)) | set(others.dropna().astype(str))
+    marker = "\x00no identifier"
+    while marker in taken:
+        marker += "\x00"
+    return marker
 
 
 def align_date_keys(main_df, additional_df):
@@ -66,31 +87,64 @@ def align_date_keys(main_df, additional_df):
     return aligned
 
 
-def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, file_rows="all"):
+def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, file_rows="all", missing_keys="match"):
     """
     Enrich the dataset by either merging on common identifiers (columns) or appending rows.
 
     Rows of ``df`` keep their row id (``__row_id``, the index) through the merge; rows added by an outer or
     right join, appended rows and repeats of a row (one-to-many join) get fresh ids. The merged frame's
     ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
-    ``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys.
-    Same parameters and result as :func:`_merge`.
+    ``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys;
+    ``missing_keys`` (:data:`MISSING_KEYS`) whether a missing key matches another ("match", pandas' way, kept for
+    the steps recorded before; Enrich merges with "never"). Same parameters and result as :func:`_merge`.
     """
     if file_rows not in FILE_ROWS:
         raise ValueError(f"file_rows is one of {', '.join(FILE_ROWS)}, not {file_rows!r}")
+    if missing_keys not in MISSING_KEYS:
+        raise ValueError(f"missing_keys is one of {', '.join(MISSING_KEYS)}, not {missing_keys!r}")
     carries_ids = df.index.name == ROW_ID
     left = df.reset_index() if carries_ids else df
     right = additional_df.drop(columns=[ROW_ID], errors="ignore")  # ids of another table mean nothing here
-    keyed = str(strategy).lower() in _KEYED and file_rows != "all"
+    on_keys = str(strategy).lower() in _KEYED
+    keyed = on_keys and file_rows != "all"
+    left_ids = [left_id_names] if isinstance(left_id_names, str) else list(left_id_names or [])
+    right_ids = [right_id_names] if isinstance(right_id_names, str) else list(right_id_names or [])
+    never = on_keys and missing_keys == "never" and bool(left_ids) and len(left_ids) == len(right_ids)
+    identified = right[right_ids].notna().all(axis=1) if never else pd.Series(True, index=right.index)
     file_rows_left_out = 0
-    if keyed and file_rows in ("first", "last"):
-        right_ids = [right_id_names] if isinstance(right_id_names, str) else list(right_id_names)
-        kept = right.drop_duplicates(subset=right_ids, keep=file_rows)
+    if keyed and file_rows in ("first", "last"):  # one row per identifier; rows without one are no one's
+        kept = pd.concat([right[identified].drop_duplicates(subset=right_ids, keep=file_rows), right[~identified]])
+        kept = kept.loc[right.index.intersection(kept.index)]  # in the file's order
         file_rows_left_out, right = len(right) - len(kept), kept
+        identified = identified.loc[kept.index]
+    validate = "many_to_one" if keyed else None
+    without_key = 0
+    restored: dict[str, tuple[object, object]] = {}  # key column -> (its marker, its dtype)
+    if never:
+        if keyed and file_rows == "unique" and right.loc[identified, right_ids].duplicated().any():
+            logger.error("The merge failed (an identifier repeated in the file)")  # the keys are patient data
+            return df
+        validate = None  # checked above on the identified rows: rows without an identifier match no one
+        missing = left[left_ids].isna().any(axis=1)
+        without_key = int(missing.sum())
+        if without_key:
+            left = left.copy()
+            for lcol, rcol in zip(left_ids, right_ids, strict=True):
+                dtype = left[lcol].dtype
+                if isinstance(dtype, pd.CategoricalDtype):  # a category cannot take the marker: merged as text
+                    left[lcol] = left[lcol].astype(object)
+                marker = _unmatchable(left[lcol], right[rcol])
+                restored[lcol] = (marker, dtype)
+                left.loc[missing & left[lcol].isna(), lcol] = marker
     combined = _merge(left, right, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution,
-                      validate="many_to_one" if keyed else None)
+                      validate=validate)
     if combined is left:  # the merge failed: the main dataset is returned unchanged
         return df
+    for col, (marker, dtype) in restored.items():  # the missing keys back, in their own kind
+        if col in combined.columns:
+            combined[col] = combined[col].mask(combined[col] == marker)
+            if isinstance(dtype, pd.CategoricalDtype):
+                combined[col] = combined[col].astype(dtype)
     if not carries_ids or ROW_ID not in combined.columns:
         return combined
     ids = pd.to_numeric(combined[ROW_ID], errors="coerce")
@@ -103,6 +157,7 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
         "main_rows_repeated": int(ids.dropna().duplicated().sum()),
         "file_rows": file_rows,
         "file_rows_left_out": int(file_rows_left_out),
+        "main_rows_without_key": without_key,
     }
     combined = extend_row_ids(combined, used=df.index)
     combined.attrs["join_counts"] = counts

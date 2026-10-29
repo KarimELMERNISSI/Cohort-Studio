@@ -19,7 +19,7 @@ from core.population import evaluate_population
 from enrich.external_data import KeyCheck, add_data, key_check
 
 MAIN = ensure_row_ids(pd.DataFrame({"pid": [1.0, 2.0, 3.0, np.nan], "age": [50, 60, 70, 80]}))
-# pid 2 on two rows, a missing pid on two rows (pandas matches missing keys), pid 5 for no one
+# pid 2 on two rows, a missing pid on two rows (pandas matches missing keys; Enrich no longer), pid 5 for no one
 LABS = pd.DataFrame(
     {"pid": [2.0, 2.0, 3.0, np.nan, np.nan, 5.0], "hb": [11.0, 12.0, 13.0, 9.0, 9.5, 14.0]}
 )
@@ -27,7 +27,7 @@ LABS = pd.DataFrame(
 
 def test_the_check_counts_the_rows_a_merge_would_repeat() -> None:
     assert key_check(MAIN, LABS, ["pid"], ["pid"]) == KeyCheck(
-        file_keys_repeated=2, rows_repeated=2, rows_added=2
+        file_keys_repeated=1, rows_repeated=1, rows_added=1, rows_without_key=1
     )
     assert not key_check(MAIN, LABS.drop_duplicates("pid"), "pid", "pid").repeats  # type: ignore[union-attr]
     two_keys = key_check(
@@ -117,7 +117,7 @@ def _choice_app() -> None:
 
     from app_pages.data_enrichment import file_rows_choice
 
-    main = pd.DataFrame({"pid": [1, 2, 3]})
+    main = st.session_state.get("main", pd.DataFrame({"pid": [1, 2, 3]}))
     file = st.session_state.get("file", pd.DataFrame({"pid": [2, 2, 3], "hb": [11.0, 12.0, 13.0]}))
     st.session_state["chosen"] = file_rows_choice(
         main, file, ["pid"], ["pid"], st.session_state.get("how", "left")
@@ -148,10 +148,11 @@ def test_the_page_asks_before_a_merge_that_repeats_rows() -> None:
             "rows",
             "all",
         ),  # rows appended, no keys
-        # the file repeats only an identifier no row of the dataset holds, or holds two rows without one: "unique"
-        # was refused (pandas checks every identifier of the file), the merge failed with no way round
+        # the file repeats only an identifier no row of the dataset holds: "unique" was refused (pandas checks every
+        # identifier of the file), the merge failed with no way round
         (pd.DataFrame({"pid": [2, 3, 9, 9], "hb": [11.0, 13.0, 8.0, 8.5]}), "left", "all"),
-        (pd.DataFrame({"pid": [2, 3, None, None], "hb": [11.0, 13.0, 8.0, 8.5]}), "left", "all"),
+        # two rows without an identifier are no one's: one row per identifier, checked on the identified rows
+        (pd.DataFrame({"pid": [2, 3, None, None], "hb": [11.0, 13.0, 8.0, 8.5]}), "left", "unique"),
     ],
 )
 def test_the_page_asks_nothing_when_nothing_repeats(file, how, chosen) -> None:
@@ -159,6 +160,65 @@ def test_the_page_asks_nothing_when_nothing_repeats(file, how, chosen) -> None:
     at.session_state["file"], at.session_state["how"] = file, how
     at.run()
     assert not at.exception and not at.warning and at.session_state["chosen"] == chosen
+
+
+@pytest.mark.parametrize(("file_rows", "rows"), [("all", 5), ("first", 4), ("last", 4)])
+def test_a_missing_identifier_matches_no_other(file_rows: str, rows: int) -> None:
+    """The row without a pid took the file's rows without one (hb 9.0 and 9.5), with nothing asked."""
+    merged = add_data(
+        MAIN,
+        LABS,
+        ["pid"],
+        ["pid"],
+        ["hb"],
+        strategy="left",
+        file_rows=file_rows,
+        missing_keys="never",
+    )
+    assert len(merged) == rows and merged.loc[merged["pid"].isna(), "hb"].isna().all()
+    assert merged.attrs["join_counts"]["main_rows_without_key"] == 1
+    before = add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], strategy="left", file_rows=file_rows)
+    assert (
+        before.loc[before["pid"].isna(), "hb"].notna().all()
+    )  # a step recorded before replays as it did
+
+
+def test_rows_without_an_identifier_in_the_file_are_no_ones() -> None:
+    outer = add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], strategy="outer", missing_keys="never")
+    assert sorted(outer.loc[outer["pid"].isna(), "hb"].fillna(0).tolist()) == [
+        0.0,
+        9.0,
+        9.5,
+    ]  # added, apart
+    once = pd.DataFrame({"pid": [2.0, 3.0, np.nan, np.nan], "hb": [11.0, 13.0, 9.0, 9.5]})
+    unique = add_data(
+        MAIN, once, ["pid"], ["pid"], ["hb"], file_rows="unique", missing_keys="never"
+    )
+    assert unique["hb"].tolist() == pytest.approx([np.nan, 11.0, 13.0, np.nan], nan_ok=True)
+    assert (
+        add_data(MAIN, once, ["pid"], ["pid"], ["hb"], file_rows="unique") is MAIN
+    )  # pandas refused it
+    sites = ensure_row_ids(pd.DataFrame({"site": pd.Categorical(["a", "b", None]), "x": [1, 2, 3]}))
+    file = pd.DataFrame({"site": ["a", None], "y": [10, 20]})
+    merged = add_data(sites, file, ["site"], ["site"], ["y"], missing_keys="never")
+    assert merged["y"].tolist() == pytest.approx([10, np.nan, np.nan], nan_ok=True)
+    assert (
+        isinstance(merged["site"].dtype, pd.CategoricalDtype) and merged["site"].isna().sum() == 1
+    )
+    with pytest.raises(ValueError, match="missing_keys is one of"):
+        add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], missing_keys="sometimes")
+
+
+def test_the_page_says_how_many_rows_have_no_identifier() -> None:
+    at = AppTest.from_function(_choice_app, default_timeout=120)
+    at.session_state["main"] = pd.DataFrame({"pid": [1, 2, None, None]})
+    at.session_state["file"] = pd.DataFrame({"pid": [1, 2, None], "hb": [11.0, 12.0, 9.0]})
+    at.run()
+    assert not at.exception and at.session_state["chosen"] == "unique"
+    (info,) = at.info
+    assert info.value.startswith(
+        "2 rows of the dataset have no identifier: they take nothing from the file"
+    )
 
 
 def test_a_file_repeating_only_identifiers_the_dataset_lacks_merges_again() -> None:
