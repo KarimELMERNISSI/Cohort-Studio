@@ -28,7 +28,7 @@ from enrich.formulas import (
     try_formula,
     usable_values,
 )
-from utils.data_analyzer import DataAnalyzer
+from ingest.analyzer import DataAnalyzer
 
 # the verdicts: ids kept with a check, and their words
 AGREES, MOSTLY, DISAGREES, TOO_FEW, CANNOT = "agrees", "mostly", "disagrees", "too_few", "cannot"

@@ -67,7 +67,7 @@ class DataAnalyzer:
         self.analyze_columns()
 
     @classmethod
-    def from_profile(cls, df: pd.DataFrame, profile: DatasetProfile) -> "DataAnalyzer":
+    def from_profile(cls, df: pd.DataFrame, profile: DatasetProfile) -> DataAnalyzer:
         """An analyzer of ``df`` from the profile of the same data, without analysing it again (M5b: the
         profile is kept until the data changes, AppState.analyzer)."""
         if profile.total_rows != len(df) or profile.total_columns != len(df.columns):
@@ -218,11 +218,9 @@ class DataAnalyzer:
 
                         if isinstance(val, str):
                             m = re.match(r"(\d{1,2})[-/](\d{1,2})[-/]\d{2,4}", val)
-                            if m:
-                                d, m_val = int(m.group(1)), int(m.group(2))
-                                if d > 12:
-                                    is_dayfirst_strong_signal = True
-                                    break
+                            if m and int(m.group(1)) > 12:
+                                is_dayfirst_strong_signal = True
+                                break
 
                     if is_dayfirst_strong_signal:
                         # Prioritize Day-First formats

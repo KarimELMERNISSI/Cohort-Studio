@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 
 from app_pages.analysis_config import grouping_options
-from utils.data_analyzer import DataAnalyzer
+from ingest.analyzer import DataAnalyzer
 
 
 def test_a_two_level_text_column_is_offered_once() -> None:

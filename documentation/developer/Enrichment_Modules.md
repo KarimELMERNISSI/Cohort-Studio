@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `utils.data_analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
+`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `ingest.analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
 
 ### class `MissForestTransformer` (data_imputation.py)
 
@@ -209,7 +209,7 @@ A definition the data disagree with, or one that cannot be checked, is never use
 accepts it; agreeing with the data says nothing of the published reference, which a definition's note names._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `dataclasses.replace`, `typing.Any`, `numpy`, `pandas`, `biostats.mi.spec.DERIVED`, `core.derived.DerivedVariable`, `core.derived.fill_order`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.is_text_column`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.usable_values`, `utils.data_analyzer.DataAnalyzer`
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `dataclasses.replace`, `typing.Any`, `numpy`, `pandas`, `biostats.mi.spec.DERIVED`, `core.derived.DerivedVariable`, `core.derived.fill_order`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.is_text_column`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.usable_values`, `ingest.analyzer.DataAnalyzer`
 
 ### class `DerivedCheck` (derived.py)
 
@@ -539,7 +539,7 @@ reads the declared list.
 _No module description._
 
 **Imports**:
-`logging`, `os`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.loaders.read_path`, `utils.date_parser.smart_parse_dates`
+`logging`, `os`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.dates.smart_parse_dates`, `ingest.loaders.read_path`
 
 ### def `align_date_keys` (external_data.py)
 
@@ -627,7 +627,7 @@ give days, and evaluates it through the whitelisted evaluator (``core.expression
 it as well, so a derived variable is recomputed exactly as it was created._
 
 **Imports**:
-`ast`, `datetime`, `logging`, `re`, `collections.abc.Iterable`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `core.expressions.DEFAULT_POLICY`, `core.expressions.evaluate_tree`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.logging_config.single_line`
+`ast`, `datetime`, `logging`, `re`, `collections.abc.Iterable`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `core.expressions.DEFAULT_POLICY`, `core.expressions.evaluate_tree`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `utils.logging_config.single_line`
 
 ### class `FormulaReading` (formulas.py)
 

@@ -469,7 +469,7 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 _No module description._
 
 **Imports**:
-`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
+`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -860,7 +860,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.data_analyzer.DataAnalyzer`, `utils.date_parser.smart_parse_dates`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1139,6 +1139,27 @@ variables are added whole, each one: a rule or a definition the session holds ke
 when the file's differs (core.population.merge_families, core.derived.merge_definitions). The other keys are added
 when the session lacks them.
 
+### def `read_uploaded_config` (data_monitoring.py)
+
+- **Arguments**: `config: dict[ComplexType], file: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+An uploaded configuration file merged into ``config`` (:func:`_merge_uploaded`): whether it was loaded, and what to
+tell. A file that cannot be read, or whose rules or operators would be read one way here and another there, is
+refused with why.
+
+### def `_on_config_upload` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Callback of the configuration upload: the file is merged once, before the page and the sidebar are drawn. Merged in
+the page, it was merged again on every run while it stayed in the uploader (a rule changed since came back from the
+file), and the sidebar, drawn before the page, showed the criteria of the run before: "every row" right after a
+configuration with criteria was loaded.
+
 ### def `render_ai_criteria_assistant` (data_monitoring.py)
 
 - **Arguments**: `st_container, config, family_name, mode`
@@ -1367,7 +1388,7 @@ enrich.derived). Optional: with no definition nothing changes, and a definition 
 it or ticks it in an imputation tab._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.replace`, `pandas`, `streamlit`, `core.derived.KINDS`, `core.derived.NOTE_LENGTH`, `core.derived.DerivedVariable`, `core.derived.cycles`, `core.derived.note_text`, `core.registry.as_code`, `enrich.derived.AGREES`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.DerivedCheck`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `manage.ai_payload.column_kinds`, `manage.ai_payload.typical_ranges`, `ui.components.help_popover`, `ui.components.text.plain`, `ui.state.get_state`, `utils.data_analyzer.DataAnalyzer`
+`__future__.annotations`, `dataclasses.replace`, `pandas`, `streamlit`, `core.derived.KINDS`, `core.derived.NOTE_LENGTH`, `core.derived.DerivedVariable`, `core.derived.cycles`, `core.derived.note_text`, `core.registry.as_code`, `enrich.derived.AGREES`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.DerivedCheck`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `ingest.analyzer.DataAnalyzer`, `manage.ai_payload.column_kinds`, `manage.ai_payload.typical_ranges`, `ui.components.help_popover`, `ui.components.text.plain`, `ui.state.get_state`
 
 ### def `_badge` (enrichment_derived.py)
 

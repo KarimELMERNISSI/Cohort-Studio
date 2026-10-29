@@ -49,12 +49,12 @@ from core.session import (
 from core.state import DatasetRef, ParseOptions, dataset_base_name, file_checksum
 from core.steps import FITTED, FORMULA
 from core.steps import ids as step_ids
+from ingest.analyzer import DataAnalyzer
 from manage.snapshots import delete_unreferenced
 from manage.snapshots import folders as snapshot_folders
 from manage.snapshots import save as save_snapshot_to
 from ui.keys import KEYS
 from ui.session_scope import get_current_scope
-from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_data_root, get_traces_dir
 from utils.environment import environment
 from utils.settings import get_settings

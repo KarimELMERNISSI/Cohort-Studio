@@ -25,6 +25,8 @@ from core.population import (
     merge_families,
 )
 from core.registry import as_code
+from ingest.analyzer import DataAnalyzer
+from ingest.dates import smart_parse_dates
 from ingest.loaders import UPLOAD_TYPES
 from ui.components import no_dataset
 from ui.components.criteria import criterion_cards
@@ -34,8 +36,6 @@ from ui.components.text import plain
 from ui.session_scope import get_current_scope
 from ui.state import get_state
 from utils.config_loader import create_empty_config, transform_expression
-from utils.data_analyzer import DataAnalyzer
-from utils.date_parser import smart_parse_dates
 from utils.export_utils import to_excel
 from utils.multipage import load_dataframe
 from utils.optional import available_methods

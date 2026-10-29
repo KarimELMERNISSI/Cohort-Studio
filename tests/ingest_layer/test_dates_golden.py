@@ -18,10 +18,10 @@ import pytest
 
 from core.fingerprint import frame_fingerprint
 from core.state import ParseOptions
+from ingest.analyzer import DataAnalyzer
+from ingest.dates import smart_parse_dates
 from ingest.loaders import read_path, read_table
 from manage.reproduction_manager import apply_steps
-from utils.data_analyzer import DataAnalyzer
-from utils.date_parser import smart_parse_dates
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ROOT = Path(__file__).resolve().parents[2]

@@ -37,7 +37,7 @@ def test_a_reset_clears_the_statistics_of_this_session_only(
     from streamlit.runtime.caching import cache_data_api
 
     import app_pages.home as home
-    from utils.data_analyzer import DataAnalyzer
+    from ingest.analyzer import DataAnalyzer
 
     session = {"id": "alice"}
     monkeypatch.setattr(cache_data_api, "get_session_id_or_throw", lambda: session["id"])

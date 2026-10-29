@@ -18,8 +18,8 @@ import numpy as np
 import pandas as pd
 
 from core.expressions import DEFAULT_POLICY, evaluate_tree
-from utils.data_analyzer import DataAnalyzer
-from utils.date_parser import smart_parse_dates
+from ingest.analyzer import DataAnalyzer
+from ingest.dates import smart_parse_dates
 from utils.logging_config import single_line
 
 logger = logging.getLogger(__name__)

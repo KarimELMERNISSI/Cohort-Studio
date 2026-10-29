@@ -394,7 +394,7 @@ Robust JSON parsing pipeline for LLM responses:
 
 ## Data Analysis Utilities
 
-### `utils/data_analyzer.py` — DataAnalyzer
+### `ingest/analyzer.py` — DataAnalyzer
 
 Classifies DataFrame columns into semantic types:
 

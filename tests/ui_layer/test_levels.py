@@ -43,9 +43,9 @@ def test_look_alike_levels_and_the_formula_that_merges_them() -> None:
 
 def _groups_script() -> None:
     from app_pages.analysis_config import render_analysis_configuration
+    from ingest.analyzer import DataAnalyzer
     from ingest.loaders import read_path
     from ui.state import TUTORIAL_COHORT_PATH
-    from utils.data_analyzer import DataAnalyzer
 
     df = read_path(str(TUTORIAL_COHORT_PATH)).df
     analyzer = DataAnalyzer(df)
@@ -75,9 +75,9 @@ def test_groups_to_include_tells_the_tutorial_sites_apart() -> None:
 
 def _power_script() -> None:
     from app_pages.epidemiology import run_power_analysis
+    from ingest.analyzer import DataAnalyzer
     from ingest.loaders import read_path
     from ui.state import TUTORIAL_COHORT_PATH
-    from utils.data_analyzer import DataAnalyzer
 
     df = read_path(str(TUTORIAL_COHORT_PATH)).df
     run_power_analysis(df, DataAnalyzer(df))

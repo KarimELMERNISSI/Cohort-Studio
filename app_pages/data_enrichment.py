@@ -44,6 +44,7 @@ from enrich.transformation_logic import RANDOM_STATE, apply_variable_transformat
 from graph.builders.formula import build_formula_graph
 from graph.model import RenderOptions
 from graph.renderers.graphviz import GraphvizGraphRenderer
+from ingest.analyzer import DataAnalyzer
 from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_kinds, column_profile
 from manage.snapshots import folders as snapshot_folders
@@ -55,7 +56,6 @@ from ui.components.text import plain
 from ui.graph_view import current_theme, render_graph
 from ui.session_scope import get_current_scope
 from ui.state import get_state
-from utils.data_analyzer import DataAnalyzer
 from utils.data_paths import get_traces_dir
 from utils.export_utils import to_excel
 from utils.logging_config import single_line

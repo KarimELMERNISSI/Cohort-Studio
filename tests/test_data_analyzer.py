@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from utils.data_analyzer import DataAnalyzer, DatasetProfile
+from ingest.analyzer import DataAnalyzer, DatasetProfile
 
 
 @pytest.fixture

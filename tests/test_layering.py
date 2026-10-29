@@ -84,8 +84,6 @@ UTILS_PLATFORM = {
 UTILS_GROUPS = {
     "utils.analysis_utils": "explore",
     "utils.clustering_utils": "enrich",
-    "utils.data_analyzer": "enrich",  # moves into ingest with the date work (M6)
-    "utils.date_parser": "ingest",  # moves into ingest (M6)
     "utils.epidemiology_utils": "explore",
     "utils.llm_utils": "manage",
     "utils.miss_forest": "enrich",

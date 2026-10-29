@@ -32,6 +32,14 @@ Highlight rows where 'modification' column is True, or common_id is only in df1 
 Filter out rows where 'modification' column is False and where common_id (tuple) is not in
 common_id_only_in_df1 or common_id_only_in_df2.
 
+### def `_differs` (changes.py)
+
+- **Arguments**: `a, b`
+
+- **Returns**: `bool`
+
+Two cells differ: one is missing and the other is not, or both hold values that differ.
+
 ### def `compare_dataframes` (changes.py)
 
 - **Arguments**: `df1, df2, id_column, exception_list`

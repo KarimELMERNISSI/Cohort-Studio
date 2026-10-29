@@ -43,8 +43,8 @@ from enrich.imputation_service import (
     left_missing,
 )
 from enrich.transformation_logic import apply_variable_transformation
+from ingest.dates import smart_parse_dates
 from manage.paths import PathResolver, read_version
-from utils.date_parser import smart_parse_dates
 
 logger = logging.getLogger(__name__)
 

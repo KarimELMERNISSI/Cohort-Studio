@@ -4,8 +4,8 @@ import os
 import pandas as pd  # for Dataframes manipulation
 
 from core.fingerprint import ROW_ID, extend_row_ids
+from ingest.dates import smart_parse_dates
 from ingest.loaders import read_path
-from utils.date_parser import smart_parse_dates
 
 logger = logging.getLogger(__name__)
 

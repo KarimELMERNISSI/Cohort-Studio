@@ -1019,6 +1019,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - Ready for pandas 4: the quality dashboard, Validate's charts, Enrich and the data insight page select text columns
   by their type. pandas 4 leaves them out of a selection of "object" columns, so these checks would have skipped every
   text column without a word. A use of pandas that pandas 4 removes now fails the tests.
+
+### Internal structure: the date work in one place (M6)
+
+- Date parsing and the column profile moved into `ingest`, where files are read: `utils/date_parser.py` is now
+  `ingest/dates.py`, and `utils/data_analyzer.py` is `ingest/analyzer.py`. Nothing is left at the old paths. Today's
+  parsing is pinned by tests, its wrong readings included, since traces that recorded it replay with it.
 - qdrant-client 1.20.0 writes the index file of the local document store in one step, so that a crash no longer
   leaves it half written. On Windows, that step can fail while another program holds the file (an antivirus scanning
   it): it happened once in the tests, right after the installation, and not in 140 runs since.

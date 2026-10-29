@@ -16,11 +16,11 @@ from core.derived import KINDS, NOTE_LENGTH, DerivedVariable, cycles, note_text
 from core.registry import as_code
 from enrich.derived import AGREES, CANNOT, DISAGREES, MOSTLY, TOO_FEW, DerivedCheck
 from enrich.formulas import evaluate_formula_safely, read_formula
+from ingest.analyzer import DataAnalyzer
 from manage.ai_payload import column_kinds, typical_ranges
 from ui.components import help_popover
 from ui.components.text import plain
 from ui.state import get_state
-from utils.data_analyzer import DataAnalyzer
 
 _BADGES = {
     AGREES: (":material/check_circle:", "green"),

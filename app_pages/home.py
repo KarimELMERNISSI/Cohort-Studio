@@ -368,7 +368,7 @@ def get_statistics_dataframe(_df, _analyzer, nb_top_categories=4, exclude_column
         df = df.drop(columns=exclude_columns, errors='ignore')
     
     # Handle date columns by converting to datetime using smart parser
-    from utils.date_parser import smart_parse_dates
+    from ingest.dates import smart_parse_dates
     for col in analyzer.date_cols:
         if col in df:
             parsed_series, _ = smart_parse_dates(df[col])

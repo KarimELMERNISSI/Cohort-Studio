@@ -11,8 +11,8 @@ import pyarrow as pa
 import pytest
 
 from app_pages.home import get_statistics_dataframe as home_get_stats
-from utils.data_analyzer import DataAnalyzer
-from utils.date_parser import smart_parse_dates
+from ingest.analyzer import DataAnalyzer
+from ingest.dates import smart_parse_dates
 from utils.statistics_utils import normality_test, sanitize_dataframe_for_arrow
 
 

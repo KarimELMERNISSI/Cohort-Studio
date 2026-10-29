@@ -50,7 +50,7 @@ def _results() -> None:
     import streamlit as st
 
     from app_pages import home
-    from utils.data_analyzer import DataAnalyzer
+    from ingest.analyzer import DataAnalyzer
 
     if "as_user" not in st.session_state:  # the session was ended: nothing of it is left
         return
@@ -151,7 +151,7 @@ def test_the_saved_statistics_follow_the_number_of_top_values() -> None:
     """A saved dataset's statistics were saved under its name and content only: the number of top values asked
     after the first had no effect."""
     from app_pages import home
-    from utils.data_analyzer import DataAnalyzer
+    from ingest.analyzer import DataAnalyzer
 
     table = pd.DataFrame({"site": list("ABCDEFGH") * 5, "age": np.arange(40.0)})
     store = _Store()

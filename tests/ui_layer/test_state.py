@@ -260,7 +260,7 @@ def test_the_column_profile_is_computed_once_per_data_and_population(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every page analysed the columns on every run (dates tried in a dozen formats); now once per data."""
-    import utils.data_analyzer as da
+    import ingest.analyzer as da
 
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     analysed: list[int] = []

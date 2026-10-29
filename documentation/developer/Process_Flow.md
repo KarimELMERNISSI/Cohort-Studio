@@ -158,7 +158,7 @@ A simplified view of how key modules interact.
 * **`app_pages.*`**
   * depend on `ui.state` (`AppState`: data changes and traceability)
   * depend on `manage.db_manager` (Persistence)
-  * depend on `utils.data_analyzer` (Column typing)
+  * depend on `ingest.analyzer` (Column typing)
   * depend on `utils.visualization_utils` (Plotting)
 
 * **`ui.state` / `core.session`**

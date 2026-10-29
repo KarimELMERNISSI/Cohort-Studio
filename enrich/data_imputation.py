@@ -15,7 +15,7 @@ from sklearn.preprocessing import (  # preprocess non numerical variables and sc
 )
 
 from biostats._types import RANDOM_STATE
-from utils.data_analyzer import DataAnalyzer
+from ingest.analyzer import DataAnalyzer
 
 #from missforest import MissForest # our MissForest adaptation is based on this package
 from utils.miss_forest.missforest import MissForest
