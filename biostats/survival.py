@@ -26,6 +26,10 @@ REFERENCES.setdefault(
     "Kaplan EL, Meier P (1958). Nonparametric estimation from incomplete observations. JASA 53:457-481.",
 )
 REFERENCES.setdefault(
+    "brookmeyer1982",
+    "Brookmeyer R, Crowley J (1982). A confidence interval for the median survival time. Biometrics 38:29-41.",
+)
+REFERENCES.setdefault(
     "mantel1966",
     "Mantel N (1966). Evaluation of survival data and two new rank order statistics arising in its consideration. Cancer Chemother Rep 50:163-170.",
 )
@@ -129,6 +133,10 @@ class KMCurve:
     se: np.ndarray | None = (
         None  # Greenwood standard error of the survival probability at ``times``
     )
+    # the median's interval: the same rule on the band's lower and upper curves (None: not reached)
+    median_lower: float | None = None
+    median_upper: float | None = None
+    level: float = 0.95  # of the band and of the median's interval
 
 
 @dataclass
@@ -141,10 +149,40 @@ class SurvivalComparison:
     warnings: list[str] = field(default_factory=list)
 
 
+QUANTILE_TOLERANCE = 1e-8  # a survival equal to 1 - p within this is on a flat stretch at 1 - p
+
+
+def km_quantile(
+    times: Sequence, survival: Sequence, p: float = 0.5, *, last: float | None = None
+) -> float | None:
+    """
+    The p-quantile of a survival curve, read as R's quantile.survfit reads it (Brookmeyer & Crowley 1982): the
+    first time at which S(t) <= 1 - p. Where the curve stays at exactly 1 - p, from the time it reaches it to the
+    next time it falls (or to ``last``, the last follow-up time, when it never does), the midpoint of that stretch:
+    times 1 to 10, every one an event, give a median of 5.5, where the first time at or below 0.5 gives 5. None
+    when the curve never reaches 1 - p.
+    """
+    t = np.asarray(times, dtype=float)
+    s = np.asarray(survival, dtype=float)
+    target = 1.0 - p
+    reached = np.flatnonzero(s <= target + QUANTILE_TOLERANCE)
+    if reached.size == 0:
+        return None
+    first = int(reached[0])
+    if abs(s[first] - target) >= QUANTILE_TOLERANCE:
+        return float(t[first])
+    falls = np.flatnonzero(s[first:] < target - QUANTILE_TOLERANCE)
+    end = t[first + int(falls[0])] if falls.size else (t[-1] if last is None else max(last, t[-1]))
+    return float((t[first] + end) / 2)
+
+
 def kaplan_meier(
     times: Sequence, events: Sequence, label: str = "all", *, alpha: float = 0.05
 ) -> KMCurve:
-    """Kaplan-Meier estimate with Greenwood (log-log) confidence band and the median survival time."""
+    """
+    Kaplan-Meier estimate with Greenwood (log-log) confidence band, and the median survival time with its interval
+    (km_quantile on the curve and on the band's curves).
+    """
     t, e = _clean(times, events)
     if len(t) == 0:
         raise ValueError("no usable follow-up times")
@@ -160,23 +198,28 @@ def kaplan_meier(
         se_c = se[inside] / (surv[inside] * np.abs(np.log(surv[inside])))
         lower[inside] = np.exp(-np.exp(c + z * se_c))
         upper[inside] = np.exp(-np.exp(c - z * se_c))
-    median = sf.quantile(0.5)
-    if median is not None and not np.isfinite(median):
-        median = None
     unique_times = np.asarray(sf.surv_times, dtype=float)
+    lower, upper = np.clip(lower, 0, 1), np.clip(upper, 0, 1)
+    last = float(
+        t.max()
+    )  # the curve's times are its event times; a stretch at 0.5 may run past the last one
+    median = km_quantile(unique_times, surv, last=last)
     at_risk = np.array([(t >= u).sum() for u in unique_times])
     return KMCurve(
         label=str(label),
         times=unique_times,
         survival=np.asarray(sf.surv_prob, dtype=float),
-        lower=np.clip(lower, 0, 1),
-        upper=np.clip(upper, 0, 1),
+        lower=lower,
+        upper=upper,
         n=int(len(t)),
         events=int(e.sum()),
-        median=None if median is None else float(median),
+        median=median,
         at_risk_times=unique_times,
         at_risk=at_risk,
         se=se,
+        median_lower=km_quantile(unique_times, lower, last=last),
+        median_upper=km_quantile(unique_times, upper, last=last),
+        level=1 - alpha,
     )
 
 
@@ -200,7 +243,7 @@ def compare_survival(
             logrank_statistic=None,
             logrank_df=0,
             logrank_p=None,
-            references=[REFERENCES["kaplan1958"]],
+            references=[REFERENCES["kaplan1958"], REFERENCES["brookmeyer1982"]],
             warnings=warnings,
         )
     groups = [
@@ -217,7 +260,7 @@ def compare_survival(
             logrank_statistic=None,
             logrank_df=0,
             logrank_p=None,
-            references=[REFERENCES["kaplan1958"]],
+            references=[REFERENCES["kaplan1958"], REFERENCES["brookmeyer1982"]],
             warnings=warnings + ["log-rank needs at least two groups"],
         )
     t, e = _clean(frame[time_col], frame[event_col])
@@ -230,7 +273,11 @@ def compare_survival(
         logrank_statistic=float(stat),
         logrank_df=len(curves) - 1,
         logrank_p=float(p),
-        references=[REFERENCES["kaplan1958"], REFERENCES["mantel1966"]],
+        references=[
+            REFERENCES["kaplan1958"],
+            REFERENCES["brookmeyer1982"],
+            REFERENCES["mantel1966"],
+        ],
         warnings=warnings,
     )
 
@@ -360,4 +407,5 @@ __all__ = [
     "compare_survival",
     "cox_regression",
     "kaplan_meier",
+    "km_quantile",
 ]

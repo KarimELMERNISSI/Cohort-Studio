@@ -445,8 +445,10 @@ def pool_km_curves(curves: list[Any], *, alpha: float = 0.05) -> pd.DataFrame:
 
 
 def median_from_curve(curve: pd.DataFrame) -> float | None:
-    below = curve.loc[curve["survival"] <= 0.5, "time"]
-    return None if below.empty else float(below.iloc[0])
+    """The median of a pooled curve, by the rule of every median (biostats.survival.km_quantile)."""
+    from biostats.survival import km_quantile
+
+    return km_quantile(curve["time"], curve["survival"])
 
 
 class SurvivalAdapter(Adapter):

@@ -161,7 +161,13 @@ def _median(value: Any) -> str:
 def _survival_blocks(res: Any) -> ResultBlocks:
     table = pd.DataFrame(
         [
-            {"Group": c.label, "n": c.n, "Events": c.events, "Median survival": _median(c.median)}
+            {
+                "Group": c.label,
+                "n": c.n,
+                "Events": c.events,
+                "Median survival": _median(c.median),
+                f"Median {c.level:.0%} CI": f"{_median(c.median_lower)} to {_median(c.median_upper)}",
+            }
             for c in res.curves
         ]
     )

@@ -104,6 +104,11 @@ def _median_text(median: float | None) -> str:
     return "not reached" if median is None else f"{median:.3g}"
 
 
+def _median_ci_text(curve) -> str:
+    """The median's interval; an end the band never reaches is 'not reached'."""
+    return f"{_median_text(curve.median_lower)} to {_median_text(curve.median_upper)}"
+
+
 def _table(df: pd.DataFrame, formats: dict) -> None:
     st.dataframe(df.style.format(formats, na_rep=""), hide_index=True, width="stretch")
 
@@ -134,6 +139,7 @@ def _show_survival(res) -> None:
                     "n": c.n,
                     "events": c.events,
                     "median survival": _median_text(c.median),
+                    f"median {c.level:.0%} CI": _median_ci_text(c),
                     "survival at last time": float(c.survival[-1]),
                 }
                 for c in res.curves

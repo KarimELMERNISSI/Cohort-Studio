@@ -413,6 +413,14 @@ No description available.
 
 The median survival time, or 'not reached' when the curve stays above 0.5.
 
+### def `_median_ci_text` (analysis_survival.py)
+
+- **Arguments**: `curve`
+
+- **Returns**: `str`
+
+The median's interval; an end the band never reaches is 'not reached'.
+
 ### def `_table` (analysis_survival.py)
 
 - **Arguments**: `df: pd.DataFrame, formats: dict`

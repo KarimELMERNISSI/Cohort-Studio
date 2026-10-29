@@ -32,12 +32,13 @@ jobs:
         run: |
           Rscript tests/reference/r/make_mi_fixtures.R tests/reference/fixtures/mi
           Rscript tests/reference/r/make_rates_fixtures.R tests/reference/fixtures/rates
+          Rscript tests/reference/r/make_survival_fixtures.R tests/reference/fixtures/survival
 
       - name: Push them to the r-fixtures branch
         run: |
           git config user.name "Karim Elmernissi"
           git config user.email "karim.elmernissi.75@gmail.com"
           git checkout -B r-fixtures
-          git add -f tests/reference/fixtures/mi tests/reference/fixtures/rates
-          git commit -m "test: R reference values, mice/mitml and poisson.test (workflow run ${{ github.run_id }})"
+          git add -f tests/reference/fixtures/mi tests/reference/fixtures/rates tests/reference/fixtures/survival
+          git commit -m "test: R reference values, mice/mitml, poisson.test and survfit quantiles (workflow run ${{ github.run_id }})"
           git push --force origin r-fixtures

@@ -1058,6 +1058,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The participant flow tells the rows a merge repeated from the rows its file added.
 - A merge that pandas refuses no longer writes into the log the identifiers it found repeated.
 
+### Survival: one rule for every median (M6, results)
+
+- **Every median of a survival curve is read by one rule, R's** (Brookmeyer and Crowley): the first time the curve
+  falls to 0.5 or below, and the midpoint of a stretch where it stays at exactly 0.5. Three rules gave three medians
+  of one curve: a Kaplan-Meier curve took the first time strictly below 0.5 (6.0 for times 1 to 10, every one an
+  event), a curve pooled over imputations the first time at or below it (5.0), and R 5.5. A median moves only where
+  the curve stays at exactly 0.5; the Gehan leukaemia data keep 23 and 8.
+- The Kaplan-Meier median comes with its 95 % interval, the same rule on the band's curves, on Survival &
+  regression and in the dossier.
+
 ### Dates: read by the day-first choice or a declared format (M6, results)
 
 - **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
