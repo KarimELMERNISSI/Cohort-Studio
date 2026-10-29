@@ -188,9 +188,10 @@ on how many rows and events, and what to check first. It names:
   only with one it belongs with on subject-matter grounds, chosen without looking at the outcome; a real level without
   events needs Firth's penalised likelihood, not available here;
 - levels with fewer than 10 events (logistic: events or rows without one), whose ratios may be imprecise;
-- variables that are exact combinations of others, or strongly collinear (variance inflation above 10; for a
-  categorical variable, the generalised VIF of Fox and Monette on the same scale), with the variable each is most
-  correlated with;
+- variables that are exact combinations of one another (all of them named), or strongly collinear (variance
+  inflation above 10; for a categorical variable, the generalised VIF of Fox and Monette on the same scale), named as
+  a set: when the comparison is among them, its own ratio is imprecise; when it is not, only the adjustment terms'
+  ratios are, which are not read, and the comparison's ratio is not affected;
 - a count model without person-time.
 
 It advises; what runs is what you chose. After the fit, terms with an extreme estimate (a ratio near 0 or infinite,

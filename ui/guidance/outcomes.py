@@ -234,10 +234,14 @@ def _spellings(col: str, values: pd.Series) -> Advice | None:
     )
 
 
-def _collinearity(frame: pd.DataFrame, covariates: Sequence[str], ratios: str) -> list[Advice]:
+def _collinearity(
+    frame: pd.DataFrame, covariates: Sequence[str], ratios: str, compare: str | None = None
+) -> list[Advice]:
     """
-    Terms that are an exact combination of the others (a pivoted QR of the standardised design), else the variables
-    whose variance inflation exceeds VIF_MAX, each with the variable it is most correlated with.
+    Terms that are an exact combination of others (a pivoted QR of the standardised design), named with the
+    variables they combine; else the set of variables whose variance inflation exceeds VIF_MAX. What it means depends
+    on whether the comparison is among them: its own ratio is imprecise, or it is not affected, the imprecise ratios
+    being adjustment terms, which are not read (the Table 2 fallacy).
     """
     owner: dict[str, str] = {}  # design column -> its variable
     parts = []
@@ -256,18 +260,25 @@ def _collinearity(frame: pd.DataFrame, covariates: Sequence[str], ratios: str) -
     diag = np.abs(np.diag(r))
     rank = int((diag > diag.max() * max(z.shape) * np.finfo(float).eps * 100).sum())
     if rank < len(names):
-        exact = list(dict.fromkeys(owner[names[i]] for i in pivot[rank:]))
+        kept = list(pivot[:rank])
+        exact: list[str] = []
+        for j in pivot[rank:]:  # each dependent term, with the variables it is a combination of
+            coef, *_ = np.linalg.lstsq(z[:, kept], z[:, j], rcond=None)
+            exact += [
+                owner[names[j]],
+                *(owner[names[kept[i]]] for i in np.flatnonzero(np.abs(coef) > 1e-6)),
+            ]
+        involved = list(dict.fromkeys(exact))
         return [
             Advice(
                 "violated",
-                f"{listing(exact)} {'is an exact combination' if len(exact) == 1 else 'are exact combinations'} of "
-                "the other variables: the model cannot separate them. Leave one out.",
+                f"{listing(involved)} are exact combinations of one another (one variable in two units, or one the "
+                "others add up to): the model cannot separate them. Leave one out.",
             )
         ]
     corr = np.corrcoef(z, rowvar=False)
     whole = np.linalg.det(corr)
-    advice: list[Advice] = []
-    seen: set[frozenset[str]] = set()
+    inflated: dict[str, float] = {}
     for var in dict.fromkeys(owner[n] for n in names):
         own = [i for i, n in enumerate(names) if owner[n] == var]
         rest = [i for i in range(len(names)) if i not in own]
@@ -277,19 +288,32 @@ def _collinearity(frame: pd.DataFrame, covariates: Sequence[str], ratios: str) -
         vif = float(
             gvif ** (1 / len(own))
         )  # GVIF^(1/(2 df)), squared: the scale of a single term's VIF
-        partner = owner[names[max(rest, key=lambda j: max(abs(corr[i, j]) for i in own))]]
-        pair = frozenset((var, partner))
-        if vif > VIF_MAX and pair not in seen:
-            seen.add(pair)
-            advice.append(
-                Advice(
-                    "caution",
-                    f"{as_code(var)} and {as_code(partner)} are strongly collinear (variance inflation {vif:.0f}): "
-                    f"their {ratios} are imprecise and cannot be read apart. Keep the one that answers your "
-                    "question, or combine them.",
-                )
+        if vif > VIF_MAX:
+            inflated[var] = vif
+    if len(inflated) < 2:  # one inflated term without a second leaves nothing to tell apart
+        return []
+    together = (
+        f"{listing(list(inflated))} are strongly collinear (variance inflation {_vifs(inflated)})"
+    )
+    if compare in inflated:
+        return [
+            Advice(
+                "caution",
+                f"{together}: the comparison's {ratios[:-1]} is imprecise, hard to tell apart from the others'. "
+                "Adjust for fewer of them, chosen on subject-matter grounds, or for one that sums them up.",
             )
-    return advice
+        ]
+    return [
+        Advice(
+            "info",
+            f"{together}: their own {ratios} are imprecise, but they are adjustment terms, not read; the "
+            "comparison's ratio is not affected. Keep them if they are needed as confounders.",
+        )
+    ]
+
+
+def _vifs(inflated: dict[str, float]) -> str:
+    return ", ".join(f"{v:.0f}" for v in inflated.values())
 
 
 REMEDY = (
@@ -344,6 +368,7 @@ def _design_advice(
     ratios: str,
     events: pd.Series | None = None,
     binary: bool = False,
+    compare: str | None = None,
 ) -> list[Advice]:
     """
     What would make the terms of a model fitted on ``frame`` (the rows it uses) unstable or impossible to estimate:
@@ -377,7 +402,7 @@ def _design_advice(
             advice += _levels(col, values, events, ratios=ratios, binary=binary)
     if len(varying) >= 2:  # a design that cannot be built is said where the terms are counted
         with contextlib.suppress(ValueError, np.linalg.LinAlgError):
-            advice.extend(_collinearity(frame, varying, ratios))
+            advice.extend(_collinearity(frame, varying, ratios, compare))
     return advice
 
 
@@ -503,7 +528,11 @@ def plan_time_to_event(
             advice.append(Advice("violated", f"The Cox model cannot be built: {_said(problem)}."))
         else:
             advice += _design_advice(
-                df.loc[kept], covariates, ratios="hazard ratios", events=event[kept]
+                df.loc[kept],
+                covariates,
+                ratios="hazard ratios",
+                events=event[kept],
+                compare=compare,
             )
         advice.extend(
             a
@@ -552,7 +581,12 @@ def plan_binary(
     else:  # separation: a level (or a 0/1 code's value) where every row or none has the event
         is_event = (y == str(event_level)).astype(int)
         advice += _design_advice(
-            df.loc[kept], covariates, ratios="odds ratios", events=is_event, binary=True
+            df.loc[kept],
+            covariates,
+            ratios="odds ratios",
+            events=is_event,
+            binary=True,
+            compare=compare,
         )
     fewer, what = (events, "events") if events <= others else (others, "rows without the event")
     advice.extend(
@@ -625,7 +659,9 @@ def plan_count(
     if problem:
         advice.append(Advice("violated", f"The count model cannot be built: {_said(problem)}."))
     else:
-        advice += _design_advice(df.loc[kept], covariates, ratios="rate ratios", events=y)
+        advice += _design_advice(
+            df.loc[kept], covariates, ratios="rate ratios", events=y, compare=compare
+        )
     left_out = _left_out(
         df, df[count_col].notna(), [*covariates, *([offset] if offset else [])], "count model"
     )

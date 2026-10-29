@@ -257,13 +257,20 @@ def test_a_variable_with_one_value_and_exact_and_strong_collinearity() -> None:
     exact = plan_binary(df, "hosp", "Yes", "arm", ["age", "age_months"])
     assert any("exact combination" in t for t in _advice(exact, "violated"))
     df["age_noisy"] = df["age"] + rng.normal(0, 1, len(df))
+    # two adjustment terms collinear: the comparison's ratio is not affected, and is not to be dropped for it
     strong = plan_count(df, "visits", "years", "arm", ["age", "age_noisy"], "poisson")
-    collinear = [t for t in _advice(strong, "caution") if "strongly collinear" in t]
+    (collinear,) = [t for t in _advice(strong, "info") if "strongly collinear" in t]
     assert (
-        len(collinear) == 1 and "`age`" in collinear[0] and "`age_noisy`" in collinear[0]
-    )  # one line per pair
+        "`age` and `age_noisy`" in collinear
+        and "the comparison's ratio is not affected" in collinear
+    )
+    assert not any("collinear" in t for t in _advice(strong, "caution"))
+    # the comparison among them: its own ratio is imprecise
+    involved = plan_count(df, "visits", "years", "age", ["age_noisy", "arm"], "poisson")
+    (said,) = [t for t in _advice(involved, "caution") if "strongly collinear" in t]
+    assert "the comparison's rate ratio is imprecise" in said
     calm = plan_count(df, "visits", "years", "arm", ["age", "sex"], "poisson")
-    assert not any("collinear" in t for t in _advice(calm, "caution"))
+    assert not any("collinear" in a.text for a in calm.advice)
 
 
 def test_an_event_code_from_the_file_is_drawn_as_text() -> None:
@@ -345,4 +352,18 @@ def test_a_numeric_code_drawn_per_value_is_read_per_unit_by_the_cox_model() -> N
     plan = plan_time_to_event(df, "fu_days", "death", "nyha", [], group=True)
     assert any(
         "`nyha` is numeric (3 values)" in t and "per unit" in t for t in _advice(plan, "info")
+    )
+
+
+def test_an_exact_combination_names_every_variable_it_combines() -> None:
+    """The tutorial's smoker_baseline is smoking_status == Current: the advice named smoking_status alone."""
+    df = pd.read_csv(
+        Path(__file__).resolve().parents[1] / "assets" / "tutorial" / "tutorial_cohort.csv"
+    )
+    plan = plan_time_to_event(
+        df, "fu_days", "death", "arm", ["smoking_status", "smoker_baseline"], group=True
+    )
+    (text,) = _advice(plan, "violated")
+    assert text.startswith(
+        "`smoking_status` and `smoker_baseline` are exact combinations of one another"
     )

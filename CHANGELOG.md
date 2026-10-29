@@ -1138,6 +1138,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   colour where rows were censored: they stopped at the last event (the tutorial's Intervention arm at 1,138 days,
   though 66 rows were followed to 1,448, its row at risk showing 41 under no curve), and the help mentioned ticks that
   were not drawn.
+- **Collinearity is read for what it does to the comparison:** strongly collinear variables are named as a set (they
+  were named in pairs, two of three), and the advice says whether the comparison is among them: if so, its own ratio is
+  imprecise; if not, only the adjustment terms' ratios are, which are not read, and the comparison's ratio is not
+  affected. It no longer invites dropping a confounder ("keep the one that answers your question"). Exact combinations
+  name every variable they combine (`smoking_status` and `smoker_baseline`, where only the first was named).
 - The plan and the rows at risk are kept until the data, the analysis population or a choice changes: computed on
   every rerun, a plan took 0.5 to 0.7 s on 100,000 rows, at each click.
 - Each stored result's "Add to the study dossier" says which result it is; with imputed data, the pooling line and
