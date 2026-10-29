@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-import core.protocol as protocol_module
 from core.lineage import canonical_json
 from core.protocol import (
     ProtocolMeta,
@@ -254,7 +253,7 @@ def test_a_new_reading_of_the_rules_changes_the_fingerprint_and_reads_the_old_fi
     saved = json.loads(json.dumps(StudyProtocol(_body(), ProtocolMeta("cohort")).to_file()))
     derived_only = {"derived_variables": copy.deepcopy(DERIVED)}
     before = protocol_hash(derived_only)
-    monkeypatch.setattr(protocol_module, "RULES_VERSION", 2)
+    monkeypatch.setattr("core.protocol.RULES_VERSION", 2)
     read, problems = StudyProtocol.from_file(saved)
     assert read is not None and problems == []
     assert read.hash != BASE and protocol_hash(derived_only) == before

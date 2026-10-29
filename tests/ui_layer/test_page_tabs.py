@@ -43,7 +43,9 @@ def test_only_the_open_tab_runs_and_one_that_always_runs_is_told_it_is_closed() 
 
 def test_a_link_opens_its_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        nav, "opened_tabs", lambda page, value: ("Second",) if page == "page_tabs_test" else ()
+        nav,
+        "opened_tabs",
+        lambda page, value: tuple(["Second"] if page == "page_tabs_test" else []),
     )
     at = AppTest.from_function(_script)
     at.run()

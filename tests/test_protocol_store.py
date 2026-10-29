@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-import manage.protocol_store as store_module
 import utils.data_paths as dp
 from core.protocol import ProtocolMeta, StudyProtocol
 from core.workspace import UserScope
@@ -228,7 +227,7 @@ def test_a_file_that_cannot_be_written_is_told_without_its_path(
             13, "Access is denied", r"C:\Users\someone\protocols\cohort\working.json"
         )
 
-    monkeypatch.setattr(store_module, "write_atomic", refused)
+    monkeypatch.setattr("manage.protocol_store.write_atomic", refused)
     with caplog.at_level(logging.WARNING, logger="manage.protocol_store"):
         with pytest.raises(ProtocolFileError) as raised:
             store.save_working(_protocol(), expected=None)

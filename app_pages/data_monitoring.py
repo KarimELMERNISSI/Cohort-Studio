@@ -1721,7 +1721,7 @@ VALIDATE_TABS = (
     PageTab("inclusion", "Handle Inclusion Criteria", lambda opened: _inclusion_tab()),
     PageTab("outliers", "Handle Outliers", lambda opened: _outliers_tab()),
     PageTab("population", "Analysis population", lambda opened: _population_tab()),
-    PageTab("compare", "Compare Data Files", lambda opened: _compare_tab(opened), always_runs=True),
+    PageTab("compare", "Compare Data Files", _compare_tab, always_runs=True),
 )
 TABS = tuple(tab.label for tab in VALIDATE_TABS)
 TAB_KEY = "validate_tab"

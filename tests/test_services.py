@@ -78,7 +78,8 @@ def test_a_sessions_stores_are_built_on_first_use_with_its_scope(root: Path) -> 
     assert mine.datasets is datasets and mine.trace is trace  # built once
     assert Path(mine.trace.trace_dir) == alice.traces_dir()
     assert mine.paths.scope == alice and mine.shared is shared
-    assert mine.protocols.root == alice.protocols_dir() and mine.protocols is mine.protocols
+    first = mine.protocols
+    assert first.root == alice.protocols_dir() and mine.protocols is first  # built once
     with pytest.raises(ValueError, match="no user"):  # no shared folder of study definitions
         _ = build_services(shared, None, PathResolver.for_files([])).protocols
 
