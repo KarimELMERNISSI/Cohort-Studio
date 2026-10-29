@@ -137,7 +137,8 @@ def _choose(column: str, detection: Detection) -> dict[str, Any] | None:
     with st.container(border=True):
         st.markdown(f"{as_code(column)}: {_why(detection)}")
         options = [*_CHOICES[str(detection.format)], TEXT]
-        default = TEXT if detection.format == "excel_serial" else detection.format
+        # read from numbers (an Excel serial, eight digits): ambiguous, left as text until chosen
+        default = TEXT if not detection.order_source else detection.format
         left, right = st.columns([3, 2])
         chosen = left.selectbox(
             "Read as",
@@ -164,7 +165,12 @@ def _choose(column: str, detection: Detection) -> dict[str, Any] | None:
     if chosen not in _ORDERED:
         source = "user" if chosen == "excel_serial" else "shape"
     else:
-        source = detection.order_source if chosen == detection.format else "user"
+        # the data's order when they showed it; a proposal read from numbers, accepted, is the user's choice
+        source = (
+            detection.order_source
+            if chosen == detection.format and detection.order_source
+            else "user"
+        )
     how: dict[str, Any] = {"format": chosen, "order_source": source}
     if pivot is not None:
         how["pivot"] = int(pivot)
@@ -253,9 +259,22 @@ def render_date_checks() -> None:
         "replay reads it again the same way. A value is never completed: a month and a year, or a year alone, stays "
         "missing."
     )
+    decided = [c for c, d in found.items() if d.decided]
+    as_text = (
+        st.multiselect(
+            "Leave as text",
+            decided,
+            key="date_leave_text",
+            persist_state="page",
+            help="The columns the data decided to read as dates: one listed here stays text (an identifier made of "
+            "digits, a column you will not analyse as dates).",
+        )
+        if decided
+        else []
+    )
     chosen = {}
     for column, detection in found.items():
-        how = _choose(column, detection)
+        how = None if column in as_text else _choose(column, detection)
         if how is not None:
             chosen[column] = how
     if not chosen:
@@ -331,22 +350,24 @@ def render_date_checks() -> None:
 
     to_missing = _placeholders(chosen, readings)
 
-    anyway = True
-    over = [c for c in chosen if reports[c].unreadable > UNREADABLE * reports[c].values]
-    for column in over:
+    held = []  # a column losing more than UNREADABLE converts only when told, apart from the others
+    for column in [c for c in chosen if reports[c].unreadable > UNREADABLE * reports[c].values]:
         unread, values = reports[column].unreadable, reports[column].values
         st.warning(
             f"{unread:,} of the {values:,} recorded values of {as_code(column)} ({unread / values:.0%}) cannot be read "
             "as dates and would become missing."
         )
-    if over:
-        anyway = st.checkbox("Convert anyway", key="dates_convert_anyway")
+        if not st.checkbox(
+            f"Convert {as_code(column)} anyway", key=f"dates_convert_anyway::{column}"
+        ):
+            held.append(column)
+    chosen = {c: how for c, how in chosen.items() if c not in held}
     n = len(chosen)
     if st.button(
         f"Convert {n} column{'s' if n != 1 else ''} to dates",
         key="convert_dates",
         type="primary",
-        disabled=not anyway,
+        disabled=n == 0,
     ):
         # counts only: never a date of the data (the extraction date is the study's)
         formats = {

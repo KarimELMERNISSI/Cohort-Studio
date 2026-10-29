@@ -10,6 +10,7 @@ conversions recorded with it.
 
 import math
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -185,9 +186,41 @@ _COMPACT = r"(?P<x>\d{8})"
 _PARTIAL = r"\d{1,2}[/.-]\d{4}|\d{4}[-/.]\d{1,2}|\d{4}"
 _EXCEL_ORIGIN = pd.Timestamp("1899-12-30")
 _EXCEL_LAST = 2958465  # 9999-12-31
-# the names of columns that may hold dates written as Excel serial numbers
+# the names of columns that may hold dates written as numbers (Excel serials, eight digits), accents folded
 _DATE_NAME = re.compile(
-    r"date|dt_|_dt|dob|birth|naiss|deces|death|admission|sortie|visit|enrol|onset", re.I
+    r"date|dt_|_dt|dob|ddn|birth|naiss|deces|death|admission|entree|sortie|visit|enrol|inclusion|randomi|diagnos|"
+    r"onset",
+    re.I,
+)
+# and the words of a measure, never a date, whatever else the name holds (birth_weight, enrol_age, visit_number):
+# whole words, so that stage_date stays a date
+_MEASURE_WORDS = frozenset(
+    [
+        "age",
+        "weight",
+        "poids",
+        "number",
+        "num",
+        "count",
+        "nb",
+        "n",
+        "duration",
+        "duree",
+        "days",
+        "jours",
+        "year",
+        "years",
+        "annee",
+        "month",
+        "months",
+        "mois",
+        "score",
+        "size",
+        "taille",
+    ]
+)
+_SERIAL_1910 = (
+    3654  # 1910-01-01: years, ages and durations in days sit below it, dates of a cohort above
 )
 
 
@@ -274,9 +307,20 @@ def _compact_parts(digits: pd.Series, day_first: bool) -> tuple[pd.Series, pd.Se
     return year.where(year.between(1800, 2199)), _number(month), _number(day)
 
 
+def _eight_digits(series: pd.Series) -> pd.Series:
+    """Whole numbers as eight digits: 5032021 was 05032021, its leading zero lost when it was read as a number."""
+    if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
+        number = pd.to_numeric(series, errors="coerce")
+        whole = number.where(number == number.round()).astype("Int64")
+        return whole.astype("string").str.zfill(8)
+    return series
+
+
 def _read_compact(day_first: bool) -> Callable[[pd.Series, int | None], pd.Series]:
     def read(series: pd.Series, pivot: int | None) -> pd.Series:
-        return _datetimes(*_compact_parts(_extract(series, _COMPACT)["x"], day_first))
+        return _datetimes(
+            *_compact_parts(_extract(_eight_digits(series), _COMPACT)["x"], day_first)
+        )
 
     return read
 
@@ -369,16 +413,39 @@ def _ordered(
     return Detection(chosen, decided, n, shape, day_only, month_only, source)
 
 
+def _dated(name: str) -> bool:
+    """A column named like a date and not like a measure: birth_weight, enrol_age and visit_number are not dates."""
+    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+    return bool(_DATE_NAME.search(folded)) and not _MEASURE_WORDS & set(
+        re.split(r"[^a-z0-9]+", folded)
+    )
+
+
 def _serials(series: pd.Series, name: str, n: int) -> Detection:
-    """Excel serial numbers, proposed only for a column named like a date whose values nearly all are whole numbers
-    between 1 January 1900 and today: a duration in days or an age is not a date."""
-    if not _DATE_NAME.search(name):
+    """
+    Numbers written for dates, proposed (never chosen) only for a column named like a date: whole numbers of eight
+    digits, or seven with the leading zero lost, as compact dates (20210305, 5032021); else Excel serial numbers, when
+    nearly all are whole numbers from 1910 (serial 3,654) to today: a year, an age or a duration in days is lower.
+    """
+    if not _dated(name):
         return Detection(None, False, n, 0)
-    serial = pd.to_numeric(series, errors="coerce").dropna()
+    number = pd.to_numeric(series, errors="coerce").dropna()
+    whole = number[number == number.round()]
+    if len(whole[whole.between(1_000_000, 99_999_999)]) >= CHOSEN * n:
+        digits = _eight_digits(whole).dropna()
+        day_reads = _datetimes(*_compact_parts(digits, True)).notna()
+        month_reads = _datetimes(*_compact_parts(digits, False)).notna()
+        if int((day_reads | month_reads).sum()) >= CHOSEN * n:
+            prefer = (
+                "dmy_compact"
+                if (day_reads & ~month_reads).sum() > (month_reads & ~day_reads).sum()
+                else "ymd_compact"
+            )
+            return Detection(prefer, False, n, int((day_reads | month_reads).sum()))
     today = (pd.Timestamp.today().normalize() - _EXCEL_ORIGIN).days
-    whole = int(((serial == serial.round()) & serial.between(2, today)).sum())
-    if whole >= CHOSEN * n:
-        return Detection("excel_serial", False, n, whole)
+    serial = int(whole.between(_SERIAL_1910, today).sum())
+    if serial >= CHOSEN * n:
+        return Detection("excel_serial", False, n, serial)
     return Detection(None, False, n, 0)
 
 
@@ -392,16 +459,25 @@ def detect(series: pd.Series, *, dayfirst: bool, name: str = "") -> Detection:
     """
     if pd.api.types.is_datetime64_any_dtype(series):
         return Detection(None, False, int(series.notna().sum()), 0)
+    if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
+        n = int(
+            series.notna().sum()
+        )  # counted as numbers: made text, 100,000 values took 74 ms per column
+        return _serials(series, name, n) if n else Detection(None, False, 0, 0)
     text = _text(series).dropna()
     n = len(text)
     if n == 0:
         return Detection(None, False, 0, 0)
-    if pd.api.types.is_numeric_dtype(series):
-        return _serials(series, name, n)
     iso = int(text.str.fullmatch(_ISO).sum())
     slash = _extract(text, _SLASH)
     n_slash = int(slash["a"].notna().sum())
     digits = _extract(text, _COMPACT)["x"].dropna()
+    # eight digits are a date's shape only when they read as a real date in one order: 20230001 is an identifier
+    real = (
+        _datetimes(*_compact_parts(digits, True)).notna()
+        | _datetimes(*_compact_parts(digits, False)).notna()
+    )
+    digits = digits[real.to_numpy()]
     best = max(iso, n_slash, len(digits))
     if best < PROPOSED * n:
         return _serials(series, name, n)

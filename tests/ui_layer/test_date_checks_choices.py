@@ -138,7 +138,7 @@ def test_a_column_losing_more_than_5_percent_converts_only_when_told() -> None:
     at = _open({"onset": ["15/03/2021", "13/04/2022", "20/05/2023", "pending"]})
     assert any("1 of the 4 recorded values" in w.value for w in at.warning)
     assert at.button(key="convert_dates").disabled
-    at.checkbox(key="dates_convert_anyway").check().run()
+    at.checkbox(key="dates_convert_anyway::onset").check().run()
     assert not at.button(key="convert_dates").disabled
     step = _convert(at)
     recorded = step["params"]["formats"]["onset"]
@@ -154,7 +154,7 @@ def test_the_screen_shows_what_the_record_never_holds() -> None:
     assert any("P-0042" in c.value for c in at.caption)  # an example, drawn as code
     (table,) = at.dataframe
     assert table.value["Earliest"].tolist() == ["17/08/2019"]
-    at.checkbox(key="dates_convert_anyway").check().run()
+    at.checkbox(key="dates_convert_anyway::visit").check().run()
     recorded = json.dumps(_convert(at)["params"])
     for value in ("P-0042", "17/08/2019", "2019-08-17", "20/05/2021", "2021-05-20"):
         assert value not in recorded, value
@@ -197,3 +197,42 @@ def test_each_column_has_its_own_placeholder_dates() -> None:
     )  # a real birth date stays
     data = at.session_state["data"]
     assert pd.isna(data["visit"][0]) and data["birth"][0] == T("1970-01-01")
+
+
+def test_convert_anyway_is_asked_per_column() -> None:
+    """One "Convert anyway" for every column: an identifier column losing values blocked a real date column."""
+    at = _open(
+        {
+            "onset": ["15/03/2021", "13/04/2022", "20/05/2023", "pending"],
+            "visit": ["17/08/2019", "13/03/2021", "15/04/2021", "20/05/2021"],
+        }
+    )
+    assert not at.button(
+        key="convert_dates"
+    ).disabled  # the visit converts; the onset waits for its own answer
+    step = _convert(at)
+    assert step["params"]["columns"] == ["visit"]
+
+
+def test_a_column_the_data_decided_can_be_left_as_text() -> None:
+    at = _open(
+        {
+            "visit": ["17/08/2019", "13/03/2021", "15/04/2021"],
+            "onset": ["15/03/2021", "13/04/2022", "20/05/2023"],
+        }
+    )
+    at.multiselect(key="date_leave_text").select("onset").run()
+    assert _convert(at)["params"]["columns"] == ["visit"]
+
+
+def test_whole_numbers_written_as_eight_digits_are_proposed_left_as_text() -> None:
+    """20210305 read as a number never reached the tab; proposed now, as text until chosen (numbers are ambiguous)."""
+    at = _open({"visit_date": [20210305, 20220414, 20230101]})
+    assert at.selectbox(key="date_format::visit_date").value == "text"
+    at.selectbox(key="date_format::visit_date").set_value("ymd_compact").run()
+    _convert(at)
+    assert at.session_state["data"]["visit_date"].tolist() == [
+        T("2021-03-05"),
+        T("2022-04-14"),
+        T("2023-01-01"),
+    ]

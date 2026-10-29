@@ -1190,7 +1190,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     each column has its own choice from the whole catalogue (1970-01-01 can be a real birth date and a placeholder
     visit), and the conversion records it as the rule, with how many values it set to missing: it recorded only the
     placeholder dates the column held, which told the trace that a participant was born on 1 January 1970;
-  - a column that would lose more than 5 % of its values converts only when you say *Convert anyway*.
+  - a column that would lose more than 5 % of its values converts only when you say *Convert anyway*, asked per
+    column (one answer for every column let a column of identifiers block a column of real dates);
+  - eight digits are a date only when they read as a real date in one order: text identifiers 20230001... were
+    decided as dates; whole numbers of eight digits (seven when the leading zero was lost: 5032021) are proposed in a
+    column named like a date, where they never reached Date checks;
+  - Excel serial numbers are proposed only from 1910 on (serial 3,654) and never for a measure named like a date
+    (birth_weight, enrol_age, visit_number, days_to_death, annee_naissance); more names are read as dates' (ddn,
+    inclusion, entrée, décès, randomisation, diagnosis); a proposal read from numbers starts as text;
+  - a column the data decided can be left as text (*Leave as text*).
 - The conversion records each column's format, where its order came from, the pivot, the placeholders set missing
   and the counts of values, of unreadable and of partial ones; the replay reads the columns with them and never
   detects again. A conversion recorded before replays as it did.

@@ -240,3 +240,36 @@ def test_dates_heaped_on_a_first_day_are_told(
 ) -> None:
     report = date_report(S(values), "day_first")
     assert (report.january_first, report.month_first_day) == (january, month)
+
+
+@pytest.mark.parametrize(
+    ("values", "name", "found"),
+    [
+        (
+            [f"2023{i:04d}" for i in range(1, 400)] + ["pending"],
+            "patient_code",
+            None,
+        ),  # identifiers, not dates
+        (
+            [20210305, 20220414, 20230101] * 10,
+            "visit_date",
+            "ymd_compact",
+        ),  # whole numbers, eight digits
+        ([5032021, 14042022, 1012023] * 10, "date_visite", "dmy_compact"),  # a leading zero lost
+        ([3200, 2800, 4100] * 10, "birth_weight", None),  # a measure named like a date
+        ([1950, 1962, 1971] * 10, "annee_naissance", None),  # years, below 1910 as serials
+        ([120, 3000, 45] * 10, "days_to_death", None),  # a duration
+        (
+            [44197, 44562, 45657] * 10,
+            "stage_date",
+            "excel_serial",
+        ),  # "stage" holds "age", but is no measure
+        ([44197, 44562, 45657] * 10, "décès", "excel_serial"),
+    ],
+)
+def test_numbers_and_digits_are_dates_only_when_they_read_as_dates(values, name, found) -> None:
+    detection = detect(pd.Series(values), dayfirst=True, name=name)
+    assert detection.format == found
+    assert (
+        not detection.decided or found is None or isinstance(values[0], str)
+    )  # numbers are only proposed
