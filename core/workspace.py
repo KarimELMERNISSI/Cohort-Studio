@@ -312,6 +312,10 @@ def write_atomic(path: Path, text: str, *, prefix: str = ".tmp.") -> None:
     try:
         with os.fdopen(handle, "w", encoding="utf-8", newline="") as stream:
             stream.write(text)
+            stream.flush()
+            os.fsync(
+                stream.fileno()
+            )  # on the disk before the move: a power cut never leaves the file empty
         for attempt in range(5):
             try:
                 os.replace(tmp, path)

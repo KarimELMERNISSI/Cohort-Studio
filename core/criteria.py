@@ -32,6 +32,11 @@ import pandas as pd
 from core.expressions import UnsafeExpressionError, column_references, evaluate
 from core.registry import Catalogue
 
+# What a rule selects, as this module reads and evaluates the definitions. A study definition's fingerprint holds it
+# (core.protocol): a change to what the same definition selects (how a missing value meets "!=" or "~", say) is a new
+# number, which changes the fingerprint of every study with criteria, as their rows may change.
+RULES_VERSION = 1
+
 
 class CriterionError(ValueError):
     """A criterion could not be evaluated on the data (unknown column, wrong type, invalid expression...)."""
@@ -861,6 +866,7 @@ __all__ = [
     "METHOD_WORDS",
     "NEVER",
     "NOT_READ",
+    "RULES_VERSION",
     "CriterionError",
     "CriterionKind",
     "combined_rules",

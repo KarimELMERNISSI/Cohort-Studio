@@ -2005,22 +2005,33 @@ _The study definitions of a user's workspace (M6): a working copy saved as the u
 are never rewritten.
 
     <workspace>/protocols/<study_id>/
-        working.json                             replaced in one step at each save
-        revisions/r0001-<hash12>.json            written once; read back with its fingerprint checked
-        history/working-<YYYYmmddTHHMMSS>-NNN.json the last 10 working copies that another session had saved
+        working.json                                replaced in one step at each save
+        revisions/r0001.number                      the number taken, before its revision is written; never deleted
+        revisions/r0001-<checksum12>.json           written once; read back with its checksum checked
+        history/working-<YYYYmmddTHHMMSS>-NNN.json  copies another session had saved: the last 10, none over 30 days
 
 There is one store, with no setting and no selector: a Git or a database store would be a second class of
 :class:`ProtocolStore`. A store needs the user's workspace, or a folder given explicitly (the tests, a command line):
-there is no shared folder of study definitions. A file is read up to 5 MB; one that cannot be read gives none, logged
-with the study and the reason, never with its content. Files keep the order of the families and of their rules, which
-the fingerprint covers._
+there is no shared folder of study definitions. A file is read up to 5 MB, and none larger is written; one that cannot
+be read gives none, logged with the study and the reason, never with its content. A file that cannot be written or
+deleted raises ProtocolFileError, whose message names no path. Files keep the order of the families and of their rules,
+which the fingerprint covers. A revision's number is taken by creating its ``.number`` file, which only one save can
+do, in any process, and which stays when the revision is deleted: a number is never given twice. The working copy's tag
+and its history are kept in one process (the application's).
+
+A copy in the history holds what the working copy held when another session replaced it: a text corrected since (a
+name typed into a rule) stays there until :meth:`ProtocolStore.discard_history` deletes the copies, or for 30 days._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `itertools`, `json`, `logging`, `re`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.dataclass`, `dataclasses.replace`, `datetime.datetime`, `pathlib.Path`, `core.protocol.StudyProtocol`, `core.protocol.is_study_id`, `core.protocol.next_revision`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.resolve_within`, `core.workspace.write_atomic`, `utils.environment.app_version`
+`__future__.annotations`, `contextlib`, `hashlib`, `itertools`, `json`, `logging`, `os`, `re`, `time`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.dataclass`, `dataclasses.replace`, `datetime.datetime`, `pathlib.Path`, `core.protocol.StudyProtocol`, `core.protocol.is_study_id`, `core.protocol.next_revision`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.resolve_within`, `core.workspace.write_atomic`, `utils.environment.app_version`
 
 ### class `ProtocolUnchanged` (protocol_store.py)
 
 A revision would repeat the latest one.
+
+### class `ProtocolFileError` (protocol_store.py)
+
+A file of a study definition could not be written or deleted. The message names no path.
 
 ### class `Stored` (protocol_store.py)
 
@@ -2055,6 +2066,12 @@ Where the study definitions are kept.
   > Save the working copy. ``expected`` is the tag of the copy this session read or saved last (None for none):
   > a copy another session saved since is kept in the history, and named in the result.
 
+- **history**(`self, study_id: str`) -> `list[str]`
+  > The copies kept from other sessions, oldest first.
+
+- **discard_history**(`self, study_id: str`) -> `int`
+  > Delete the kept copies, so that a text corrected in the working copy is gone from them too; how many.
+
 - **revisions**(`self, study_id: str`) -> `list[RevisionInfo]`
   > The study's readable revisions, by number.
 
@@ -2079,8 +2096,14 @@ The study definitions as JSON files in the user's workspace (``protocols``).
 - **_read**(`self, path: Path, study_id: str`) -> `ComplexType`
   > No description available.
 
+- **_parse**(`self, data: bytes, name: str, study_id: str`) -> `ComplexType`
+  > No description available.
+
 - **_load**(`self, path: Path, study_id: str`) -> `ComplexType`
   > No description available.
+
+- **_sized**(`self, text: str, study_id: str, name: str`) -> `str`
+  > ``text``, unless it is larger than a file the store reads back.
 
 - **studies**(`self`) -> `list[StudyInfo]`
   > No description available.
@@ -2092,10 +2115,24 @@ The study definitions as JSON files in the user's workspace (``protocols``).
   > No description available.
 
 - **_keep**(`self, folder: Path, data: bytes`) -> `str`
-  > Keep a working copy another session saved in the history (the last HISTORY), and name its file.
+  > Keep a working copy another session saved in the history, and name its file.
+
+- **_prune**(`self, folder: Path`) -> `None`
+  > The history's copies beyond the last HISTORY or older than HISTORY_DAYS, and the temporary files of writes
+  > that never ended, are deleted at each save.
+
+- **history**(`self, study_id: str`) -> `list[str]`
+  > No description available.
+
+- **discard_history**(`self, study_id: str`) -> `int`
+  > No description available.
 
 - **_numbers**(`self, folder: Path`) -> `list[int]`
-  > The numbers of the study's revision files, readable or not (a number is never given twice).
+  > The numbers taken: by a revision's file, readable or not, or by its ``.number`` file.
+
+- **_take_number**(`self, folder: Path, first: int`) -> `int`
+  > The first number from ``first`` that no save has taken, taken by creating its ``.number`` file: only one
+  > save can, in any process.
 
 - **_revision_file**(`self, folder: Path, number: int`) -> `ComplexType`
   > No description available.
@@ -2132,6 +2169,14 @@ No description available.
 - **Returns**: `str`
 
 No description available.
+
+### def `_file_error` (protocol_store.py)
+
+- **Arguments**: `study_id: str, name: str, exc: OSError, done: str`
+
+- **Returns**: `ProtocolFileError`
+
+The error to raise for a file that could not be written or deleted: logged and told without its path.
 
 ---
 

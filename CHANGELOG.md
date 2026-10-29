@@ -1029,11 +1029,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   before. A link can now open one of them, which the date checks use.
 - The study definition has a model and a store, for the steps that follow; nothing is saved yet.
   `core/protocol.py` holds its body (the criteria, the ticked population, the follow-up, the derived variables)
-  apart from its metadata, with a fingerprint that leaves out the labels and the order of keys and ticks but keeps
-  the order of the families and of their rules. `manage/protocol_store.py` keeps it in the user's workspace: a
-  working copy written in one step, numbered revisions that are never rewritten, and the last 10 copies another
-  session had saved. There is no shared folder of study definitions. A file written in one step, such as
-  `preferences.json`, now holds the same bytes on every system.
+  apart from its metadata. Its fingerprint reads each rule as it selects rows (a bound of 18.0 is 18; the labels and
+  the order of keys and of ticks are left out) and keeps the order of the families, of their rules and of the
+  derived variables. A file is checked by a checksum of its body as written, so that a study saved by an earlier
+  version is always read. `manage/protocol_store.py` keeps it in the user's workspace: a working copy written in
+  one step, numbered revisions that are never rewritten and whose numbers are never given twice, and the copies
+  another session had saved (the last 10, for 30 days, until discarded). There is no shared folder of study
+  definitions. A file written in one step, such as `preferences.json`, now holds the same bytes on every system,
+  and reaches the disk before it replaces the previous one.
 
 ### Validate: Date checks, a tab of its own (M6)
 

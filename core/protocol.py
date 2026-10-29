@@ -9,10 +9,17 @@ follows, when and with which version it was saved.
 
 The fingerprint (``protocol_hash``) is a SHA-256 of a canonical view of the body. The view leaves out the labels (a
 rule's description, a derived variable's note, origin and kind, the follow-up's note), the order of keys and the order
-of the ticks, but keeps the order of the families and of their rules, which decides the stages and the counts of the
-participant flow, and reads a family's operator as the population does ("All" is "all"). It changes when a criterion,
-an operator, that order, a tick, a definition or the follow-up changes. The hash stays in the workspace and the trace;
-documents name a revision by its number.
+of the ticks, and reads each rule as it selects rows (a bound of 18.0 is 18; see :func:`_canonical`). It keeps the
+order of the families and of their rules, which decides the stages and the counts of the participant flow, and the
+order of the derived variables, which decides which one fills a variable when two can; it reads a family's operator as
+the population does ("All" is "all"), and holds the version of how rules are evaluated (core.criteria.RULES_VERSION).
+It changes when a criterion, an operator, an order, a tick, a definition, the follow-up or that version changes. The
+hash stays in the workspace and the trace; documents name a revision by its number.
+
+The fingerprint is computed again whenever it is needed: a later version may read a study more finely, and its
+fingerprint then changes. A file is checked by its *checksum* instead (:func:`body_checksum`), a SHA-256 of the body
+exactly as written, whose computation never changes: a file saved by an earlier version is always read, and a body
+changed outside the application never is. A revision is named, and linked to the one it follows, by its checksum.
 """
 
 from __future__ import annotations
@@ -29,8 +36,8 @@ from functools import cached_property
 from types import MappingProxyType
 from typing import Any
 
+from core.criteria import RULES_VERSION
 from core.derived import CONFIG_KEY as DERIVED_KEY
-from core.derived import DerivedVariable
 from core.lineage import canonical_json, normalise
 from core.population import catalogue, family_operator
 from core.workspace import is_device_name
@@ -57,6 +64,15 @@ def _frozen(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return tuple(_frozen(v) for v in value)
     return value
+
+
+def body_checksum(body: Mapping[str, Any]) -> str:
+    """
+    The checksum of a body as written: SHA-256 of its compact JSON, in the order written (the order of the families and
+    their rules is part of a study), in full. Never change how it is computed: every saved file is checked with it.
+    """
+    text = json.dumps(normalise(body), ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def is_study_id(text: object) -> bool:
@@ -90,7 +106,7 @@ class ProtocolMeta:
     title: str = ""
     description: str = ""
     revision: int | None = None  # None: the working copy
-    parent: str | None = None  # the fingerprint of the revision this one follows
+    parent: str | None = None  # the checksum of the revision this one follows
     parent_revision: int | None = None
     saved_at: str = ""  # local time, to the minute
     app_version: str = ""
@@ -127,7 +143,7 @@ class ProtocolMeta:
             numbers[name] = value
         parent = data.get("parent")
         if parent is not None and not (isinstance(parent, str) and _HASH.fullmatch(parent)):
-            raise ValueError("its parent is not the fingerprint of a revision")
+            raise ValueError("its parent is not the checksum of a revision")
         texts = {name: str(data.get(name) or "") for name in _META_TEXT}
         return cls(study_id=str(study_id), parent=parent, **numbers, **texts)
 
@@ -144,14 +160,19 @@ class StudyProtocol:
 
     @cached_property
     def hash(self) -> str:
-        """The body's fingerprint (:func:`protocol_hash`)."""
+        """The body's fingerprint (:func:`protocol_hash`), as this version reads it."""
         return protocol_hash(self.body)
+
+    @cached_property
+    def checksum(self) -> str:
+        """The body's checksum as written (:func:`body_checksum`)."""
+        return body_checksum(self.body)
 
     def to_file(self) -> dict[str, Any]:
         """The file form of the working copy and of every revision."""
         return {
             "schema": SCHEMA,
-            "hash": self.hash,
+            "checksum": self.checksum,
             "meta": self.meta.to_file(),
             "body": normalise(self.body),
         }
@@ -160,8 +181,8 @@ class StudyProtocol:
     def from_file(cls, data: Any) -> tuple[StudyProtocol | None, list[str]]:
         """
         A study definition read from its file, or none with the reasons: a file of another schema or of a later
-        version, metadata that place it wrongly, or a body that no longer matches its fingerprint (edited outside the
-        application). The reasons quote nothing from the file.
+        version, metadata that place it wrongly, or a body that no longer matches its checksum (changed outside the
+        application). The reasons quote nothing from the file, and nothing in it raises.
         """
         if not isinstance(data, Mapping) or not isinstance(data.get("body"), Mapping):
             return None, ["not a study definition"]
@@ -169,21 +190,33 @@ class StudyProtocol:
             return None, [
                 f"written for another version of the study definition (this version reads schema {SCHEMA})"
             ]
-        later = sorted(set(data["body"]) - set(BODY_KEYS))
+        # counted, never named: a key of the file could hold anything
+        later = len(set(data["body"]) - set(BODY_KEYS))
         if later:
-            return None, [f"written by a later version: it holds {', '.join(later)}"]
+            sections = f"{later} section{'s' if later != 1 else ''}"
+            return None, [
+                f"written by a later version: it holds {sections} this version does not read"
+            ]
         meta = data.get("meta")
         if not isinstance(meta, Mapping):
             return None, ["it names no study"]
         try:
-            protocol = cls(data["body"], ProtocolMeta.from_file(meta))
+            meta = ProtocolMeta.from_file(meta)
         except ValueError as exc:
             return None, [str(exc)]
-        if data.get("hash") != protocol.hash:
-            return None, [
-                "its body no longer matches its fingerprint: it was changed outside CohortStudio"
-            ]
-        return protocol, []
+        try:  # the body as written, before this version reads it
+            if data.get("checksum") != body_checksum(data["body"]):
+                return None, [
+                    "its body no longer matches its checksum: it was changed outside CohortStudio"
+                ]
+            return cls(data["body"], meta), []
+        except (
+            ArithmeticError,
+            RecursionError,
+            TypeError,
+            ValueError,
+        ):  # nested too deep, a number too large
+            return None, ["not a study definition this version can read"]
 
 
 def body_of(
@@ -191,19 +224,19 @@ def body_of(
 ) -> dict[str, Any]:
     """
     The study definition a configuration holds: its sections that are not empty, as a copy. ``ticked`` replaces the
-    population's ticked criteria (the session keeps them apart from the configuration); they are kept sorted.
+    population's ticked criteria (the session keeps them apart from the configuration); they are kept sorted, and are
+    all the population holds: a count or a note there would be a finding, which the fingerprint would not cover.
     """
     sections = {
         key: normalise(config[key]) for key in BODY_KEYS if config and _filled(config.get(key))
     }
-    population = sections.get("population")
-    population = dict(population) if isinstance(population, Mapping) else {}
-    ids = population.get("ticked") if ticked is None else ticked
-    if isinstance(ids, (list, tuple, set, frozenset)) and ids:
-        population["ticked"] = sorted({str(i) for i in ids})
+    if ticked is None:
+        population = sections.get("population")
+        found = population.get("ticked") if isinstance(population, Mapping) else None
+        ids = list(found) if isinstance(found, (list, tuple)) else []
     else:
-        population.pop("ticked", None)
-    sections["population"] = population
+        ids = list(ticked)
+    sections["population"] = {"ticked": sorted({str(i) for i in ids})} if ids else {}
     return {key: sections[key] for key in BODY_KEYS if _filled(sections.get(key))}
 
 
@@ -220,29 +253,55 @@ def with_body(config: Mapping[str, Any] | None, body: Mapping[str, Any]) -> dict
     return out
 
 
+def _canonical(value: Any, key: str = "") -> Any:
+    """
+    A rule's definition as it selects rows, whatever its writing: without its descriptions (at any depth: a combined
+    rule's members have theirs), a whole number written as one (a bound of 18.0 is 18), an expression without spaces
+    at its ends, and no ``"numeric": false``, which is what a rule says by leaving it out.
+    """
+    if isinstance(value, dict):
+        return {
+            k: _canonical(v, k)
+            for k, v in value.items()
+            if k != "description" and not (k == "numeric" and v is False)
+        }
+    if isinstance(value, list):
+        return [_canonical(v) for v in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if key == "expression" and isinstance(value, str):
+        return value.strip()
+    return value
+
+
 def _definition(definition: Any, labels: bool) -> Any:
-    if isinstance(definition, Mapping) and not labels:
-        definition = {key: value for key, value in definition.items() if key != "description"}
-    return normalise(definition)
+    return normalise(definition) if labels else _canonical(normalise(definition))
 
 
-def _derived(target: str, definition: Any, labels: bool) -> Any:
-    """A derived variable as its fingerprint reads it: what it computes and how it is used, without its labels."""
+def _derived(definition: Any, labels: bool) -> Any:
+    """
+    A derived variable as its fingerprint reads it: what it computes and how it is used, without its labels, read
+    from the stored definition as written (formulas without spaces at their ends, a whole tolerance as an integer, an
+    acceptance only when true), so that how the application parses a definition never moves it.
+    """
     if labels or not isinstance(definition, Mapping):
         return normalise(definition)
-    try:
-        parsed = DerivedVariable.from_config(target, definition)
-    except KeyError, TypeError, ValueError:
-        # a malformed definition: as written, without its labels
-        kept = {key: value for key, value in definition.items() if key not in _DERIVED_LABELS}
-        return normalise(kept)
-    out: dict[str, Any] = {"formula": parsed.formula.strip()}
-    if parsed.inverses:
-        out["inverses"] = {name: formula.strip() for name, formula in parsed.inverses.items()}
-    if parsed.tolerance is not None:
-        out["tolerance"] = parsed.tolerance
-    if parsed.accepted:
+    kept = {key: value for key, value in definition.items() if key not in _DERIVED_LABELS}
+    formula, inverses = kept.pop("formula", None), kept.pop("inverses", None)
+    accepted = kept.pop("accepted", None)
+    out: dict[str, Any] = {}
+    if formula is not None:
+        out["formula"] = formula.strip() if isinstance(formula, str) else normalise(formula)
+    if isinstance(inverses, Mapping) and inverses:
+        out["inverses"] = {
+            str(name): text.strip() if isinstance(text, str) else normalise(text)
+            for name, text in inverses.items()
+        }
+    elif inverses:
+        out["inverses"] = normalise(inverses)
+    if accepted is True:
         out["accepted"] = True
+    out.update(_canonical(normalise({k: v for k, v in kept.items() if v is not None})))
     return out
 
 
@@ -266,9 +325,11 @@ def _view(body: Mapping[str, Any], *, labels: bool) -> dict[str, Any]:
         ]
     elif families:  # malformed: hashed as written, so that a change still shows
         view["mask_families"] = normalise(families)
+    if families:
+        view["rules_version"] = RULES_VERSION
     population = body.get("population")
     ids = population.get("ticked") if isinstance(population, Mapping) else None
-    ticked = sorted({str(i) for i in ids}) if isinstance(ids, (list, tuple)) else []
+    ticked = sorted({str(i) for i in ids}) if isinstance(ids, (list, tuple, set, frozenset)) else []
     if not labels:  # a tick naming no criterion of the body selects nothing
         known = (
             {c.id for c in catalogue({"mask_families": families})}
@@ -285,8 +346,9 @@ def _view(body: Mapping[str, Any], *, labels: bool) -> dict[str, Any]:
         view["follow_up"] = normalise(follow_up)
     derived = body.get(DERIVED_KEY)
     if derived:
+        # in the order declared: when two definitions can fill one variable equally well, the first one does
         view[DERIVED_KEY] = (
-            {str(target): _derived(str(target), spec, labels) for target, spec in derived.items()}
+            [[str(target), _derived(spec, labels)] for target, spec in derived.items()]
             if isinstance(derived, Mapping)
             else normalise(derived)
         )
@@ -325,8 +387,8 @@ def next_revision(
     number: int | None = None,
 ) -> StudyProtocol:
     """
-    The revision that follows ``latest`` (the first when there is none), its parent the latest's fingerprint. Its
-    number is the next one, or ``number``: the store's next free number, when a revision it cannot read holds one.
+    The revision that follows ``latest`` (the first when there is none), its parent the latest's checksum. Its number
+    is the next one, or ``number``: the store's next free number, when a revision it cannot read holds one.
     """
     if number is None:
         number = (latest.meta.revision or 0) + 1 if latest is not None else 1
@@ -335,7 +397,7 @@ def next_revision(
         replace(
             meta,
             revision=number,
-            parent=latest.hash if latest is not None else None,
+            parent=latest.checksum if latest is not None else None,
             parent_revision=latest.meta.revision if latest is not None else None,
         ),
     )
@@ -347,6 +409,7 @@ __all__ = [
     "STUDY_ID",
     "ProtocolMeta",
     "StudyProtocol",
+    "body_checksum",
     "body_of",
     "diff_lines",
     "hashed_view",
