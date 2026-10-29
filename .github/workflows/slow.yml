@@ -7,6 +7,10 @@ on:
     - cron: "0 3 * * 1"  # Mondays, 03:00 UTC
   workflow_dispatch:
 
+# The token only reads the repository: this job pushes nothing
+permissions:
+  contents: read
+
 jobs:
   slow:
     name: Simulation suites

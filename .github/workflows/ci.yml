@@ -7,6 +7,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# The token only reads the repository: these jobs push nothing
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Lint, types and offline tests

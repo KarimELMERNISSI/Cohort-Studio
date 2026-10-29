@@ -5,6 +5,10 @@ name: Integration tests (manual)
 on:
   workflow_dispatch:
 
+# The token only reads the repository: this job, which holds the providers' keys, pushes nothing
+permissions:
+  contents: read
+
 jobs:
   integration:
     name: Integration tests
