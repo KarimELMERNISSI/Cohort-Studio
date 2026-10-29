@@ -1,0 +1,88 @@
+{
+ "total_rows": 1206,
+ "total_columns": 41,
+ "numeric_cols": [
+  "age",
+  "height_cm",
+  "weight_kg",
+  "bmi_kg_m2",
+  "lvef_pct",
+  "lvef_reader2_pct",
+  "sbp_baseline",
+  "dbp_baseline",
+  "sbp_ambulatory",
+  "heart_rate",
+  "creatinine_umol_l",
+  "egfr_ml_min_1_73m2",
+  "potassium_mmol_l",
+  "hba1c_pct",
+  "ldl_mmol_l",
+  "nt_probnp_pg_ml",
+  "troponin_ng_l",
+  "adherence_pct",
+  "sbp_6m",
+  "n_hospital_visits",
+  "fu_days"
+ ],
+ "categorical_cols": [
+  "patient_id",
+  "site",
+  "consent",
+  "arm",
+  "sex",
+  "smoking_status",
+  "diabetes",
+  "hypertension",
+  "prior_mi",
+  "nyha_class",
+  "nyha_class_central",
+  "hf_phenotype",
+  "mi_adjudicated",
+  "smoker_baseline",
+  "smoker_6m",
+  "hf_hospitalisation",
+  "death",
+  "angioedema"
+ ],
+ "date_cols": [
+  "enrol_date",
+  "last_contact_date"
+ ],
+ "binary_cols": [
+  "consent",
+  "arm",
+  "diabetes",
+  "hypertension",
+  "prior_mi",
+  "mi_adjudicated",
+  "smoker_baseline",
+  "smoker_6m",
+  "hf_hospitalisation",
+  "death",
+  "angioedema"
+ ],
+ "low_cardinality_numeric_cols": [],
+ "high_cardinality_cat_cols": [
+  "patient_id"
+ ],
+ "timedelta_cols": [],
+ "date_formats": {
+  "enrol_date": "%d/%m/%Y",
+  "last_contact_date": "%d/%m/%Y"
+ },
+ "num_binary_cols": [],
+ "non_num_binary_cols": [
+  "consent",
+  "arm",
+  "diabetes",
+  "hypertension",
+  "prior_mi",
+  "mi_adjudicated",
+  "smoker_baseline",
+  "smoker_6m",
+  "hf_hospitalisation",
+  "death",
+  "angioedema"
+ ],
+ "non_binary_low_cardinality_numeric_cols": []
+}
