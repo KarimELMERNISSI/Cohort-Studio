@@ -334,9 +334,12 @@ def _levels(
     """
     text = values.astype(str)
     per = events.groupby(text).agg(["sum", "size"])
-    informative = np.minimum(per["sum"], per["size"] - per["sum"]) if binary else per["sum"]
-    empty = [str(level) for level, k in informative.items() if k == 0]
-    thin = [str(level) for level, k in informative.items() if 0 < k < LEVEL_MIN]
+    informative = {
+        str(level): int(min(k, n - k) if binary else k)
+        for level, k, n in zip(per.index, per["sum"], per["size"], strict=True)
+    }
+    empty = [level for level, k in informative.items() if k == 0]
+    thin = [level for level, k in informative.items() if 0 < k < LEVEL_MIN]
     ratio = ratios[:-1]  # "hazard ratios" -> "hazard ratio"
     advice: list[Advice] = []
     if empty:

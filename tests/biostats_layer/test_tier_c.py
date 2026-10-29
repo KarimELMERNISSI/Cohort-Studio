@@ -283,6 +283,7 @@ def test_lifelines_warnings_naming_a_column_stay_in(monkeypatch: pytest.MonkeyPa
     """lifelines' warnings print the design's column names, levels included, to the server's stderr."""
     import warnings
 
+    pytest.importorskip("lifelines", reason="lifelines is in the optional 'survival' extra")
     from lifelines import CoxPHFitter
 
     original = CoxPHFitter.fit
