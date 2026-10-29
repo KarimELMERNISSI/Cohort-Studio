@@ -384,7 +384,7 @@ With multiply imputed data (``mi``), every analysis is run on the m imputed data
 curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.EVENT_WORDS`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.curve_rows`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.EVENT_WORDS`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_group_candidates` (analysis_survival.py)
 
@@ -451,6 +451,15 @@ What Run will do, checked on the data (while Guidance is on): a status, each ste
 - **Returns**: `None`
 
 An error card whose first line says why: the models' messages are written for the reader (as text).
+
+### def `_kept` (analysis_survival.py)
+
+- **Arguments**: `name: str, key: tuple, compute`
+
+- **Returns**: `None`
+
+A plan or a count of rows kept until the data, the analysis population or ``key`` (the panel's choices, the
+imputation) changes: computed on every rerun, a plan took 0.5 to 0.7 s on 100,000 rows, at each click.
 
 ### def `_planned` (analysis_survival.py)
 
@@ -614,7 +623,7 @@ No description available.
 Round ticks from 0 to ``top``, about ``count`` of them: 1, 2, 2.5 or 5 times a power of ten apart (1,450 days:
 every 250, not every 500).
 
-### def `_follow_up` (analysis_survival_results.py)
+### def `curve_rows` (analysis_survival_results.py)
 
 - **Arguments**: `frame: pd.DataFrame, time_col: str, event_col: str, group: ComplexType`
 
@@ -714,8 +723,9 @@ No description available.
 - **Returns**: `None`
 
 The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first.
-``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing one
-has not been fitted with these variables (or could not be).
+``follow_up`` (curve_rows, observed data): the rows the curves read, for the numbers at risk and the censoring
+ticks. ``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing
+one has not been fitted with these variables (or could not be).
 
 ### def `_diagnostics` (analysis_survival_results.py)
 

@@ -160,7 +160,7 @@ class Curve:
     )
 
 
-def _follow_up(
+def curve_rows(
     frame: pd.DataFrame, time_col: str, event_col: str, group: str | None
 ) -> dict[str, tuple[np.ndarray, np.ndarray]] | None:
     """Per group, the times and events of the rows the curves read (a known time >= 0, a known event)."""
@@ -499,16 +499,16 @@ def show_time_to_event(
     comparison: Comparison,
     pooled: bool,
     time_col: str,
-    frame: pd.DataFrame | None = None,
     event_col: str = "",
-    group: str | None = None,
+    follow_up: dict[str, tuple[np.ndarray, np.ndarray]] | None = None,
     cox_chosen: bool = False,
     cox_fits: bool = False,
 ) -> None:
     """
     The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first.
-    ``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing one
-    has not been fitted with these variables (or could not be).
+    ``follow_up`` (curve_rows, observed data): the rows the curves read, for the numbers at risk and the censoring
+    ticks. ``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing
+    one has not been fitted with these variables (or could not be).
     """
     if km is None and cox is None:
         return
@@ -559,12 +559,8 @@ def show_time_to_event(
         words = "Kaplan-Meier curves only: choose the Cox model above for a hazard ratio."
     _headline(metrics, words, len(notes))
     if km is not None:
-        at_risk = follow_up = None
-        if (
-            not pooled
-            and frame is not None
-            and (follow_up := _follow_up(frame, time_col, event_col, group))
-        ):
+        at_risk = None
+        if not pooled and follow_up:
             top = max(
                 (float(times.max()) for times, _ in follow_up.values() if len(times)), default=0.0
             )
@@ -762,6 +758,7 @@ __all__ = [
     "PH_TEST_IMPUTATIONS",
     "Comparison",
     "Curve",
+    "curve_rows",
     "forest_figure",
     "km_figure",
     "show_count",

@@ -162,6 +162,27 @@ def test_guidance_can_be_turned_off(app: AppTest) -> None:
     app.run()
 
 
+def test_the_plan_is_kept_until_a_choice_changes(
+    app: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Computed on every rerun, a plan took 0.5 to 0.7 s on 100,000 rows at each click."""
+    calls: list[int] = []
+    original = page.plan_time_to_event
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(page, "plan_time_to_event", counted)
+    _outcome(app, "time_to_event")
+    before = len(calls)
+    app.run()
+    assert len(calls) == before  # nothing changed: the plan kept
+    app.multiselect(key="surv_adjust").set_value(["age", "sex"]).run()
+    assert len(calls) == before + 1  # a choice changed: planned again
+    app.multiselect(key="surv_adjust").set_value(["age"]).run()
+
+
 def test_paired_rates_tab_and_multiple_imputation_render(app: AppTest) -> None:
     app.switch_page(nav.page_path("analyze")).run()
     assert not app.exception, [str(e.value)[:300] for e in app.exception]

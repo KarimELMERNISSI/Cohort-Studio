@@ -1138,6 +1138,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   colour where rows were censored: they stopped at the last event (the tutorial's Intervention arm at 1,138 days,
   though 66 rows were followed to 1,448, its row at risk showing 41 under no curve), and the help mentioned ticks that
   were not drawn.
+- The plan and the rows at risk are kept until the data, the analysis population or a choice changes: computed on
+  every rerun, a plan took 0.5 to 0.7 s on 100,000 rows, at each click.
 - Each stored result's "Add to the study dossier" says which result it is; with imputed data, the pooling line and
   the warnings are shown once. The checks say that the concordance and the AUC measure prediction (a well-adjusted
   comparison can sit near 0.5), and the glossary that censoring is assumed non-informative and a competing event is

@@ -21,6 +21,7 @@ import streamlit as st
 from app_pages.analysis_survival_results import (
     PH_TEST_IMPUTATIONS,
     Comparison,
+    curve_rows,
     show_count,
     show_logistic,
     show_time_to_event,
@@ -167,6 +168,18 @@ def _render_plan(plan: ModelPlan, *, note: str = "") -> None:
 def _failed(what: str, exc: Exception) -> None:
     """An error card whose first line says why: the models' messages are written for the reader (as text)."""
     error_card(f"{what}: {plain(exc, limit=400)}", exc)
+
+
+def _kept(name: str, key: tuple, compute):
+    """
+    A plan or a count of rows kept until the data, the analysis population or ``key`` (the panel's choices, the
+    imputation) changes: computed on every rerun, a plan took 0.5 to 0.7 s on 100,000 rows, at each click.
+    """
+    state = get_state()
+    identity = state.identity()
+    if identity is None:
+        return compute()
+    return state.session.memo(name, (identity.population_fp, key), compute)
 
 
 def _planned(mi, frame: pd.DataFrame, columns: Sequence[str]) -> tuple[pd.DataFrame, str]:
@@ -334,18 +347,24 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
     covariates = covariates_of(compare, adjust)
     curves, model = KM in analyses, COX in analyses and bool(covariates)
     if guided:
-        frame, note = _planned(mi, df, [time_col, event_col, *covariates])
-        plan = plan_time_to_event(
-            frame,
-            time_col,
-            event_col,
-            compare,
-            adjust,
-            group=group is not None,
-            curves=KM in analyses,
-            model=COX in analyses,
-        )
-        _render_plan(plan, note=note)
+        choices = (time_col, event_col, compare, tuple(adjust), group, tuple(analyses), token)
+
+        def plan() -> tuple[ModelPlan, str]:
+            frame, note = _planned(mi, df, [time_col, event_col, *covariates])
+            planned = plan_time_to_event(
+                frame,
+                time_col,
+                event_col,
+                compare,
+                adjust,
+                group=group is not None,
+                curves=KM in analyses,
+                model=COX in analyses,
+            )
+            return planned, note
+
+        planned, note = _kept("sr_plan_time_to_event", choices, plan)
+        _render_plan(planned, note=note)
     pooled = mi is not None
     km_key, km_config = (
         ("survival_mi", (time_col, event_col, group or NONE, token))
@@ -377,9 +396,14 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
         comparison=_comparison(mi, df, compare, adjust, cox),
         pooled=pooled,
         time_col=time_col,
-        frame=None if pooled else df,
         event_col=event_col,
-        group=group,
+        follow_up=None
+        if pooled
+        else _kept(
+            "sr_follow_up",
+            (time_col, event_col, group),
+            lambda: curve_rows(df, time_col, event_col, group),
+        ),
         cox_chosen=COX in analyses,
         cox_fits=bool(covariates),
     )
@@ -413,7 +437,12 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
     covs = covariates_of(compare, adjust)
     if guided:
         frame, note = _planned(mi, df, [outcome, *covs])
-        _render_plan(plan_binary(frame, outcome, event_level, compare, adjust), note=note)
+        planned = _kept(
+            "sr_plan_binary",
+            (outcome, event_level, compare, tuple(adjust), token),
+            lambda: plan_binary(frame, outcome, event_level, compare, adjust),
+        )
+        _render_plan(planned, note=note)
     pooled = mi is not None
     key, config = (
         ("logistic_mi", (outcome, event_level, tuple(covs), token))
@@ -497,7 +526,12 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
     covs = covariates_of(compare, adjust)
     if guided:
         frame, note = _planned(mi, df, [count_col, exposure_col or "", *covs])
-        _render_plan(plan_count(frame, count_col, exposure, compare, adjust, family), note=note)
+        planned = _kept(
+            "sr_plan_count",
+            (count_col, exposure, compare, tuple(adjust), family, token),
+            lambda: plan_count(frame, count_col, exposure, compare, adjust, family),
+        )
+        _render_plan(planned, note=note)
     pooled = mi is not None
     key, config = (
         ("count_mi", (count_col, exposure, family, tuple(covs), token))
