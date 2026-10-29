@@ -1107,6 +1107,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   fetch its address. lifelines' own warnings, which printed the design's column names (levels included) to the
   server's log, are kept in. A Kaplan-Meier group skipped for having fewer than 2 rows is counted in the result, and
   so in the Word dossier, where it was named; the plan names it on screen.
+- **How a ratio reads:**
+  - a numeric comparison with two values reads "b vs a" only when they are a unit apart (0/1, a boolean): a dose of
+    0 or 50 read "50 vs 0" beside the model's ratio per unit;
+  - the events beside a hazard ratio are its model's (adjusted for a variable with missing values, it had shown the
+    curves' 300 of 928 beside a ratio fitted on 718 rows), the curves' said beside when they differ, and the
+    log-rank test reads "(unadjusted)" beside an adjusted ratio;
+  - without person-time, a count model's ratio reads "ratio of mean counts", not "incidence-rate ratio".
+- **With imputed data, only its variables are offered:** comparing by a variable created after the imputation stopped
+  the page.
+- A level written with a hidden space reads as the lists show it ("Esch-sur-Alzette␣") in two more messages.
 - **The numbers do not change:** the same functions on the same rows; the model is the comparison plus the
   adjustment, so the same covariates give the same fit. Stored results and the study dossier are unchanged. Median
   survival times read without an exponent (1,119 days, not 1.12e+03).

@@ -79,6 +79,24 @@ def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[s
     return out
 
 
+def _variables(df: pd.DataFrame, analyzer, mi) -> tuple[list[str], list[str], list[str]]:
+    """
+    The numeric, binary and grouping variables the panels offer; with imputed data, only those it holds: a variable
+    created after the imputation is not in it, and reading it stopped the page.
+    """
+    numeric = list(analyzer.numeric_cols)
+    binary = list(analyzer.binary_cols)
+    groups = _group_candidates(df, analyzer)
+    if mi is None:
+        return numeric, binary, groups
+    held = set(mi.base.columns)
+    return (
+        [c for c in numeric if c in held],
+        [c for c in binary if c in held],
+        [c for c in groups if c in held],
+    )
+
+
 def _default_index(options: list[str], hints: tuple[str, ...]) -> int:
     """Index of the first option whose name contains a hint (e.g. 'time', 'died'), else 0."""
     for i, name in enumerate(options):
@@ -149,9 +167,7 @@ def _planned(mi, frame: pd.DataFrame, columns: Sequence[str]) -> tuple[pd.DataFr
 
 
 def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
-    numeric = list(analyzer.numeric_cols)
-    binary = list(analyzer.binary_cols)
-    groups = _group_candidates(df, analyzer)
+    numeric, binary, groups = _variables(df, analyzer, mi)
     token = mi_token(get_state()) if mi is not None else ""
 
     with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
@@ -510,7 +526,13 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
         except Exception as exc:
             _failed("The count model could not be fitted", exc)
     res = recall(key, config=config)
-    show_count(res, key=key, comparison=_comparison(mi, df, compare, adjust, res), pooled=pooled)
+    show_count(
+        res,
+        key=key,
+        comparison=_comparison(mi, df, compare, adjust, res),
+        pooled=pooled,
+        rates=exposure_col is not None,
+    )
 
 
 __all__ = ["run_survival"]

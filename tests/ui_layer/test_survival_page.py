@@ -77,9 +77,9 @@ def test_one_run_draws_the_curves_and_fits_the_cox_model(app: AppTest) -> None:
     assert set(table["term"]) == {"arm_Treatment", "age"}  # the comparison and the adjustment
     assert float(table.loc[table["term"] == "arm_Treatment", "hr"].iloc[0]) < 1
     labels = _labels(app)
-    assert (
-        labels[0] == "Hazard ratio · Treatment vs Placebo" and "Log-rank test" in labels
-    )  # the effect first
+    assert labels[0] == "Hazard ratio · Treatment vs Placebo"  # the effect first
+    assert "Log-rank test (unadjusted)" in labels  # beside an adjusted ratio
+    assert any("rows in the Cox model" in c.value for c in app.caption)  # the ratio's own rows
     assert any("Adjusted for `age`" in c.value for c in app.caption)
     spec = app.get("plotly_chart")[0].proto.spec
     assert "At risk" in spec  # the numbers at risk under the curves
@@ -115,6 +115,13 @@ def test_the_count_outcome_compares_rates_per_person_time(app: AppTest) -> None:
     _ok(app)
     assert _stored(app, "count").kind == "poisson"
     assert _labels(app)[0] == "Incidence-rate ratio · Treatment vs Placebo"
+    app.selectbox(key="count_time").select("(none)").run()
+    app.button(key="count_run").click().run()
+    _ok(app)
+    assert (
+        _labels(app)[0] == "Ratio of mean counts · Treatment vs Placebo"
+    )  # no person-time: no rates
+    app.selectbox(key="count_time").select("fu_days").run()
 
 
 def test_each_outcome_keeps_its_choices_and_only_the_open_one_runs(
@@ -159,3 +166,24 @@ def test_paired_rates_tab_and_multiple_imputation_render(app: AppTest) -> None:
     assert any(b.key == "mi_run" for b in app.button), (
         "multiple imputation control missing on the Enrich page"
     )
+
+
+def test_with_imputed_data_only_its_variables_are_offered() -> None:
+    """A variable created after the imputation is not in it: comparing by it stopped the page (KeyError)."""
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "t": [1.0, 2.0, 3.0],
+            "e": [1, 0, 1],
+            "arm": ["a", "b", "a"],
+            "made_after": ["x", "y", "x"],
+        }
+    )
+    analyzer = SimpleNamespace(numeric_cols=["t"], binary_cols=["e", "arm", "made_after"])
+    mi = SimpleNamespace(base=df.drop(columns=["made_after"]))
+    numeric, binary, groups = page._variables(df, analyzer, mi)
+    assert "made_after" not in [*numeric, *binary, *groups] and "arm" in groups
+    assert "made_after" in page._variables(df, analyzer, None)[2]

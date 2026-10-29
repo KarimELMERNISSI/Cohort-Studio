@@ -464,15 +464,30 @@ def show_time_to_event(
     if cox is not None:
         table = pooled_frame(cox, ratio_label="hr") if pooled else cox.table
         metrics += _effects(table, "hr", comparison, "Hazard ratio")
+    adjusted = cox is not None and any(a != comparison.compare for a in comparison.adjust)
     if km is not None and (test := _logrank(km, pooled)) is not None:
+        if adjusted:  # beside an adjusted ratio, the curves and their test are not
+            test = Metric(f"{test.label} (unadjusted)", test.value, test.caption, test.help)
         metrics.append(test)
-    if not pooled:  # the curves' rows when they are drawn, else the model's (the plan gives both)
-        n, events = (
+    if (
+        not pooled
+    ):  # the rows of the ratio beside it: the model's, which can be fewer than the curves'
+        curves = (
             (sum(c.n for c in km.curves), sum(c.events for c in km.curves))
             if km is not None
-            else (cox.n, cox.events)
+            else None
         )
-        metrics.append(Metric("Events", f"{events:,}", f"of {n:,} rows analysed"))
+        if cox is not None:
+            also = (
+                f"; the curves: {curves[1]:,} of {curves[0]:,}"
+                if curves and curves[0] != cox.n
+                else ""
+            )
+            metrics.append(
+                Metric("Events", f"{cox.events:,}", f"of {cox.n:,} rows in the Cox model{also}")
+            )
+        elif curves is not None:
+            metrics.append(Metric("Events", f"{curves[1]:,}", f"of {curves[0]:,} rows analysed"))
     # the curves and the model read the same rows: a warning both give (a negative time left out) is shown once
     notes = (
         []
@@ -639,14 +654,17 @@ def show_logistic(res: Any, *, key: str, comparison: Comparison, pooled: bool) -
     )
 
 
-def show_count(res: Any, *, key: str, comparison: Comparison, pooled: bool) -> None:
+def show_count(
+    res: Any, *, key: str, comparison: Comparison, pooled: bool, rates: bool = True
+) -> None:
+    """``rates``: person-time was given, so the ratios compare rates; without it they compare mean counts."""
     _show_model(
         res,
         key=key,
         comparison=comparison,
         pooled=pooled,
         ratio="rate_ratio",
-        name="Incidence-rate ratio",
+        name="Incidence-rate ratio" if rates else "Ratio of mean counts",
         formats=COUNT_FORMATS,
         summary=lambda r: (
             f"n = {r.n:,}, events = {r.events:,}"

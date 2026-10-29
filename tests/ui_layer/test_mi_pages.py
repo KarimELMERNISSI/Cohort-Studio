@@ -81,7 +81,7 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
     assert any("Complete-case analysis" in e.label for e in app.expander)
     assert [m.label for m in app.metric][:2] == [
         "Hazard ratio · Intervention vs Control",
-        "Log-rank test, pooled",
+        "Log-rank test, pooled (unadjusted)",
     ]
 
 

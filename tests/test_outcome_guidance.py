@@ -191,6 +191,9 @@ def test_the_count_plan_matches_the_count_model_and_asks_for_person_time() -> No
         ),
         ("age", ["age", "sex_M"], [60.0, 71.5, 80.0], None, [("age", "per unit of age")]),
         ("smoker", ["smoker"], [0, 1, 1], None, [("smoker", "1 vs 0")]),
+        # two values more than a unit apart: the ratio is still per unit (0/50 read "50 vs 0" with a per-unit ratio)
+        ("dose", ["dose"], [0, 50, 50], None, [("dose", "per unit of dose")]),
+        ("coded", ["coded"], [-1, 1], None, [("coded", "per unit of coded")]),
         ("flag", ["flag"], [True, False], None, [("flag", "1 vs 0")]),
         (NONE, ["arm_B"], ["A", "B"], None, []),
         ("age", ["arm_B"], [1.0, 2.0, 3.0], None, []),  # not among the model's terms
@@ -273,3 +276,13 @@ def test_an_event_code_from_the_file_is_drawn_as_text() -> None:
     plan = plan_time_to_event(df, "fu_days", "death", "arm", [], group=True)
     (text,) = _advice(plan, "violated")
     assert "![i](" not in text and r"\!\[i\]" in text
+
+
+def test_a_level_with_a_hidden_space_reads_as_the_lists_show_it() -> None:
+    """The tutorial's site holds "Esch-sur-Alzette " on one row: the advice named `Esch-sur-Alzette`, a 315-row site."""
+    df = pd.read_csv(
+        Path(__file__).resolve().parents[1] / "assets" / "tutorial" / "tutorial_cohort.csv"
+    )
+    plan = plan_time_to_event(df, "fu_days", "death", "site", [], group=True, model=False)
+    (no_curve,) = [t for t in _advice(plan, "info") if t.startswith("Fewer than 2 rows")]
+    assert "`Esch-sur-Alzette\N{OPEN BOX}`" in no_curve

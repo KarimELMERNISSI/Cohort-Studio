@@ -394,6 +394,15 @@ curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules 
 
 No description available.
 
+### def `_variables` (analysis_survival.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer, mi`
+
+- **Returns**: `tuple[ComplexType]`
+
+The numeric, binary and grouping variables the panels offer; with imputed data, only those it holds: a variable
+created after the imputation is not in it, and reading it stopped the page.
+
 ### def `_default_index` (analysis_survival.py)
 
 - **Arguments**: `options: list[str], hints: tuple[ComplexType]`
@@ -727,7 +736,7 @@ No description available.
 
 - **Returns**: `None`
 
-No description available.
+``rates``: person-time was given, so the ratios compare rates; without it they compare mean counts.
 
 ---
 

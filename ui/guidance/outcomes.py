@@ -397,7 +397,7 @@ def plan_time_to_event(
                 advice.append(
                     Advice(
                         "info",
-                        f"Fewer than 2 rows, so no curve: {listing(small)} of {as_code(by)}.",
+                        f"Fewer than 2 rows, so no curve: {_some(small)} of {as_code(by)}.",
                     )
                 )
             spelt = _spellings(by, df.loc[kept, by])
@@ -511,7 +511,7 @@ def plan_binary(
             advice.append(
                 Advice(
                     "caution",
-                    f"Every row or none has the event at {listing(pure[:3])} of {as_code(col)}: the odds ratio of "
+                    f"Every row or none has the event at {_some(pure, 3)} of {as_code(col)}: the odds ratio of "
                     "such a level cannot be estimated (separation). Merge it with another level, or leave it out.",
                 )
             )
@@ -604,7 +604,8 @@ def comparison_terms(
     """
     The terms of the comparison among a model's ``terms``, and how each reads. A factor's terms are named
     "<variable>_<level>" (biostats.design.design_matrix), each against the reference level (the first, sorted); a
-    numeric variable is one term, read per unit, or as "b vs a" when it takes two values (a 0/1 code, a boolean).
+    numeric variable is one term, read per unit, or as "b vs a" when it takes two values one unit apart (a 0/1 code, a
+    boolean): a dose of 0 or 50 still reads per unit, the ratio being the model's per unit.
     ``values`` are the comparison's values in the data the model read.
     """
     compare = chosen(compare)
@@ -615,9 +616,10 @@ def comparison_terms(
         if compare not in present:
             return []
         distinct = sorted(pd.Series(values).dropna().astype(float).unique())
+        # the model's ratio is per unit: "b vs a" only when b is a + 1 (0/1, a boolean); 0/50 is still per unit
         label = (
             f"{distinct[1]:g} vs {distinct[0]:g}"
-            if len(distinct) == 2
+            if len(distinct) == 2 and distinct[1] - distinct[0] == 1
             else f"per unit of {compare}"
         )
         return [ComparisonTerm(compare, label)]
