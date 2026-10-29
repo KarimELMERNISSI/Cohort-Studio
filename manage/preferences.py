@@ -13,19 +13,14 @@ unreadable file gives no preference; a field that is not valid is left out, and 
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
-import os
-import tempfile
-import threading
-import time
 from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
-from core.workspace import UserScope
+from core.workspace import UserScope, path_lock, write_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +50,6 @@ class Preferences(BaseModel):
 
 # the fields kept by provider: a change to one provider's model keeps the others'
 _BY_PROVIDER = ("ai_chat_model", "ai_embedding_model")
-
-_locks: dict[str, threading.Lock] = {}
-_locks_guard = threading.Lock()
-
-
-def _lock(path: Path) -> threading.Lock:
-    with _locks_guard:
-        return _locks.setdefault(str(path), threading.Lock())
 
 
 def preferences_path(scope: UserScope) -> Path:
@@ -107,25 +94,6 @@ def load_preferences(scope: UserScope) -> Preferences:
     return Preferences.model_validate(_valid_fields(raw))
 
 
-def _write_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle, tmp = tempfile.mkstemp(prefix=".preferences.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            stream.write(text)
-        for attempt in range(5):
-            try:
-                os.replace(tmp, path)
-                return
-            except PermissionError:  # Windows: the file open elsewhere for a moment
-                if attempt == 4:
-                    raise
-                time.sleep(0.05)
-    finally:
-        with contextlib.suppress(OSError):
-            os.remove(tmp)
-
-
 def update_preferences(scope: UserScope, **changes: Any) -> Preferences | None:
     """
     Keep these choices for the next session. ``None`` forgets a choice; for the models, a mapping changes the
@@ -136,7 +104,7 @@ def update_preferences(scope: UserScope, **changes: Any) -> Preferences | None:
     if unknown:
         raise TypeError(f"not a preference: {', '.join(unknown)}")
     path = preferences_path(scope)
-    with _lock(path):
+    with path_lock(path):
         current = load_preferences(scope).model_dump()
         for name, value in changes.items():
             if name in _BY_PROVIDER and value is not None:
@@ -159,8 +127,10 @@ def update_preferences(scope: UserScope, **changes: Any) -> Preferences | None:
             if value is not None and value != {}
         }
         try:
-            _write_atomic(
-                path, json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
+            write_atomic(
+                path,
+                json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n",
+                prefix=".preferences.",
             )
         except OSError as exc:
             logger.warning("Preferences not saved (%s)", type(exc).__name__)

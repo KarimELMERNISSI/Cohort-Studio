@@ -12,10 +12,14 @@ session state.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import ntpath
 import os
 import re
+import tempfile
+import threading
+import time
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,7 +51,13 @@ KINDS: tuple[str, ...] = (
     "documents",
     "vectors",
     "rag_eval_logs",
+    "protocols",
 )
+
+
+def is_device_name(name: str) -> bool:
+    """A name Windows keeps for a device (CON, NUL, COM1...), with or without an extension: no folder can have it."""
+    return name.split(".")[0].lower() in _DEVICE_NAMES
 
 
 def data_root() -> Path:
@@ -86,7 +96,7 @@ def safe_dirname(username: str | None) -> str:
     name = (username or "").strip()
     if not name:
         raise ValueError("A workspace directory needs a username.")
-    if _FOLDER_NAME.fullmatch(name) and name.split(".")[0].lower() not in _DEVICE_NAMES:
+    if _FOLDER_NAME.fullmatch(name) and not is_device_name(name):
         return name
     code = _code(name)
     if len(code) <= 64:
@@ -281,6 +291,40 @@ def resolve_within(base: Path, candidate: str | Path) -> Path:
     return Path(path)
 
 
+_locks: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def path_lock(path: Path) -> threading.Lock:
+    """The lock of one file, shared by the sessions of this process: hold it to read a file and write it again."""
+    with _locks_guard:
+        return _locks.setdefault(str(path), threading.Lock())
+
+
+def write_atomic(path: Path, text: str, *, prefix: str = ".tmp.") -> None:
+    """
+    Replace ``path`` with ``text`` in one step: written beside it, then moved over it, so that a crash never leaves it
+    half written. The file holds exactly ``text`` (UTF-8, its line ends as given, on every system). On Windows the
+    move is tried again for a moment while another program holds the file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, tmp = tempfile.mkstemp(prefix=prefix, suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8", newline="") as stream:
+            stream.write(text)
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:  # Windows: the file open elsewhere for a moment
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+
+
 def remove_pdf(folder: str | Path, name: str) -> bool:
     """Delete the PDF ``name`` of ``folder`` (a document of the library), never a file outside it; False when
     there is no such PDF."""
@@ -360,6 +404,10 @@ class UserScope:
     def rag_eval_logs_dir(self) -> Path:
         return self.dir("rag_eval_logs")
 
+    def protocols_dir(self) -> Path:
+        """The study definitions (manage.protocol_store), one folder per study."""
+        return self.dir("protocols")
+
     def resolve_within(self, candidate: str | Path, kind: str | None = None) -> Path:
         """A path the user may read: inside the whole workspace, or inside one storage kind."""
         base = self.dir(kind) if kind else self.root
@@ -392,13 +440,16 @@ __all__ = [
     "data_root",
     "earlier_folders",
     "earlier_workspaces",
+    "is_device_name",
     "move_earlier_workspace",
     "move_workspace",
     "planned_move",
     "network_share",
+    "path_lock",
     "resolve_within",
     "safe_dirname",
     "safe_filename",
     "validate_username",
     "workspace_exists",
+    "write_atomic",
 ]

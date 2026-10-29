@@ -1957,19 +1957,11 @@ The file is ``<workspace>/preferences.json``, read whole and written whole, atom
 unreadable file gives no preference; a field that is not valid is left out, and the others are kept._
 
 **Imports**:
-`__future__.annotations`, `contextlib`, `json`, `logging`, `os`, `tempfile`, `threading`, `time`, `pathlib.Path`, `typing.Annotated`, `typing.Any`, `pydantic.BaseModel`, `pydantic.ConfigDict`, `pydantic.Field`, `pydantic.StringConstraints`, `pydantic.ValidationError`, `core.workspace.UserScope`
+`__future__.annotations`, `json`, `logging`, `pathlib.Path`, `typing.Annotated`, `typing.Any`, `pydantic.BaseModel`, `pydantic.ConfigDict`, `pydantic.Field`, `pydantic.StringConstraints`, `pydantic.ValidationError`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.write_atomic`
 
 ### class `Preferences` (preferences.py)
 
 The choices kept for the next session. Every field is optional: unset, the setting or the default applies.
-
-### def `_lock` (preferences.py)
-
-- **Arguments**: `path: Path`
-
-- **Returns**: `threading.Lock`
-
-No description available.
 
 ### def `preferences_path` (preferences.py)
 
@@ -1995,14 +1987,6 @@ The fields of ``raw`` that are valid on their own: one wrong field does not lose
 
 The user's preferences; none when the file is missing or unreadable (logged without its content).
 
-### def `_write_atomic` (preferences.py)
-
-- **Arguments**: `path: Path, text: str`
-
-- **Returns**: `None`
-
-No description available.
-
 ### def `update_preferences` (preferences.py)
 
 - **Arguments**: `scope: UserScope`
@@ -2012,6 +1996,142 @@ No description available.
 Keep these choices for the next session. ``None`` forgets a choice; for the models, a mapping changes the
 providers it names (``None`` for a provider forgets its model). Never raises for the file: a preference that
 cannot be saved is logged, the session goes on, and None is returned. An unknown name is a programming error.
+
+---
+
+## protocol_store.py
+
+_The study definitions of a user's workspace (M6): a working copy saved as the user works, and numbered revisions that
+are never rewritten.
+
+    <workspace>/protocols/<study_id>/
+        working.json                             replaced in one step at each save
+        revisions/r0001-<hash12>.json            written once; read back with its fingerprint checked
+        history/working-<YYYYmmddTHHMMSS>-NNN.json the last 10 working copies that another session had saved
+
+There is one store, with no setting and no selector: a Git or a database store would be a second class of
+:class:`ProtocolStore`. A store needs the user's workspace, or a folder given explicitly (the tests, a command line):
+there is no shared folder of study definitions. A file is read up to 5 MB; one that cannot be read gives none, logged
+with the study and the reason, never with its content. Files keep the order of the families and of their rules, which
+the fingerprint covers._
+
+**Imports**:
+`__future__.annotations`, `hashlib`, `itertools`, `json`, `logging`, `re`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.dataclass`, `dataclasses.replace`, `datetime.datetime`, `pathlib.Path`, `core.protocol.StudyProtocol`, `core.protocol.is_study_id`, `core.protocol.next_revision`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.resolve_within`, `core.workspace.write_atomic`, `utils.environment.app_version`
+
+### class `ProtocolUnchanged` (protocol_store.py)
+
+A revision would repeat the latest one.
+
+### class `Stored` (protocol_store.py)
+
+A working copy and the tag of its file, given back on the next save.
+
+### class `Saved` (protocol_store.py)
+
+A saved working copy: its new tag, and the history file of the copy it replaced when another session had saved
+one since the tag given (None otherwise).
+
+### class `StudyInfo` (protocol_store.py)
+
+No description available.
+
+### class `RevisionInfo` (protocol_store.py)
+
+No description available.
+
+### class `ProtocolStore` (protocol_store.py)
+
+Where the study definitions are kept.
+
+**Methods:**
+
+- **studies**(`self`) -> `list[StudyInfo]`
+  > The studies, by id.
+
+- **working**(`self, study_id: str`) -> `ComplexType`
+  > The study's working copy, none when there is none or it cannot be read.
+
+- **save_working**(`self, protocol: StudyProtocol`) -> `Saved`
+  > Save the working copy. ``expected`` is the tag of the copy this session read or saved last (None for none):
+  > a copy another session saved since is kept in the history, and named in the result.
+
+- **revisions**(`self, study_id: str`) -> `list[RevisionInfo]`
+  > The study's readable revisions, by number.
+
+- **revision**(`self, study_id: str, number: int`) -> `ComplexType`
+  > One revision, none when it does not exist or cannot be read.
+
+- **save_revision**(`self, protocol: StudyProtocol`) -> `StudyProtocol`
+  > Save the body as the next revision and return it; ProtocolUnchanged when it repeats the latest.
+
+### class `WorkspaceProtocolStore` (protocol_store.py)
+
+The study definitions as JSON files in the user's workspace (``protocols``).
+
+**Methods:**
+
+- **__init__**(`self, scope: ComplexType`) -> `None`
+  > No description available.
+
+- **_folder**(`self, study_id: str`) -> `Path`
+  > No description available.
+
+- **_read**(`self, path: Path, study_id: str`) -> `ComplexType`
+  > No description available.
+
+- **_load**(`self, path: Path, study_id: str`) -> `ComplexType`
+  > No description available.
+
+- **studies**(`self`) -> `list[StudyInfo]`
+  > No description available.
+
+- **working**(`self, study_id: str`) -> `ComplexType`
+  > No description available.
+
+- **save_working**(`self, protocol: StudyProtocol`) -> `Saved`
+  > No description available.
+
+- **_keep**(`self, folder: Path, data: bytes`) -> `str`
+  > Keep a working copy another session saved in the history (the last HISTORY), and name its file.
+
+- **_numbers**(`self, folder: Path`) -> `list[int]`
+  > The numbers of the study's revision files, readable or not (a number is never given twice).
+
+- **_revision_file**(`self, folder: Path, number: int`) -> `ComplexType`
+  > No description available.
+
+- **revision**(`self, study_id: str, number: int`) -> `ComplexType`
+  > No description available.
+
+- **revisions**(`self, study_id: str`) -> `list[RevisionInfo]`
+  > No description available.
+
+- **save_revision**(`self, protocol: StudyProtocol`) -> `StudyProtocol`
+  > No description available.
+
+### def `_etag` (protocol_store.py)
+
+- **Arguments**: `data: bytes`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_now` (protocol_store.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_text` (protocol_store.py)
+
+- **Arguments**: `protocol: StudyProtocol`
+
+- **Returns**: `str`
+
+No description available.
 
 ---
 
@@ -3454,8 +3574,8 @@ _The services of the application, built in one place (M5b step 5, the compositio
   loaded instead.
 
 - :class:`Services`, one per session (a user in a browser tab, or one command-line run): the user's scope, the
-  resolver of the files a trace names, and the dataset store and the trace, built on first use with that scope, so
-  that a command line that saves nothing creates no folder.
+  resolver of the files a trace names, and the dataset store, the trace and the study definitions, built on first use
+  with that scope, so that a command line that saves nothing creates no folder.
 
 The module is headless (rule R5): it reaches neither Streamlit nor the AI packages. The session builds the AI engine
 (``ui.services.ai_engine``), which needs them, and ``main.py`` checks the connector settings._
@@ -3493,6 +3613,10 @@ line), whose stores use the shared folders. Never passed to a worker process: th
 
 - **trace**(`self`) -> `TransformationManager`
   > The session's trace, in the user's workspace.
+
+- **protocols**(`self`) -> `ProtocolStore`
+  > The study definitions, in the user's workspace. There is no shared folder of them: without a user (a test, a
+  > command line) this raises ValueError, and the caller builds a store on a folder of its own.
 
 ### def `build_shared` (services.py)
 

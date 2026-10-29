@@ -1027,6 +1027,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   parsing is pinned by tests, its wrong readings included, since traces that recorded it replay with it.
 - Validate's tabs are a registry (`ui/components/tabs.py`): each tab a function, and only the open one runs, as
   before. A link can now open one of them, which the date checks use.
+- The study definition has a model and a store, for the steps that follow; nothing is saved yet.
+  `core/protocol.py` holds its body (the criteria, the ticked population, the follow-up, the derived variables)
+  apart from its metadata, with a fingerprint that leaves out the labels and the order of keys and ticks but keeps
+  the order of the families and of their rules. `manage/protocol_store.py` keeps it in the user's workspace: a
+  working copy written in one step, numbered revisions that are never rewritten, and the last 10 copies another
+  session had saved. There is no shared folder of study definitions. A file written in one step, such as
+  `preferences.json`, now holds the same bytes on every system.
 
 ### Validate: Date checks, a tab of its own (M6)
 

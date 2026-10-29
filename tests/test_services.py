@@ -78,6 +78,9 @@ def test_a_sessions_stores_are_built_on_first_use_with_its_scope(root: Path) -> 
     assert mine.datasets is datasets and mine.trace is trace  # built once
     assert Path(mine.trace.trace_dir) == alice.traces_dir()
     assert mine.paths.scope == alice and mine.shared is shared
+    assert mine.protocols.root == alice.protocols_dir() and mine.protocols is mine.protocols
+    with pytest.raises(ValueError, match="no user"):  # no shared folder of study definitions
+        _ = build_services(shared, None, PathResolver.for_files([])).protocols
 
 
 def test_a_session_keeps_the_stores_it_already_holds(root: Path) -> None:
@@ -112,6 +115,8 @@ def test_a_command_line_builds_the_services_without_streamlit_or_the_ai_packages
         "from utils.settings import load_settings; "
         "services = build_services(build_shared(load_settings()), None, PathResolver.for_files([])); "
         "services.trace.initialize_session('cohort.csv'); services.datasets; "
+        "from manage.protocol_store import WorkspaceProtocolStore; "
+        "WorkspaceProtocolStore(None, root=__import__('pathlib').Path('protocols')).studies(); "
         "print(sorted(m for m in ('streamlit', 'langchain_core', 'lancedb', 'qdrant_client', 'google.genai', "
         "'anthropic', 'openai', 'mistralai', 'ollama') if m in sys.modules))"
     )

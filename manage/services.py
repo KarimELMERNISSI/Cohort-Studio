@@ -6,8 +6,8 @@ The services of the application, built in one place (M5b step 5, the composition
   test that installs another finds it; a copy kept here would be stale). A command line passes the settings it
   loaded instead.
 - :class:`Services`, one per session (a user in a browser tab, or one command-line run): the user's scope, the
-  resolver of the files a trace names, and the dataset store and the trace, built on first use with that scope, so
-  that a command line that saves nothing creates no folder.
+  resolver of the files a trace names, and the dataset store, the trace and the study definitions, built on first use
+  with that scope, so that a command line that saves nothing creates no folder.
 
 The module is headless (rule R5): it reaches neither Streamlit nor the AI packages. The session builds the AI engine
 (``ui.services.ai_engine``), which needs them, and ``main.py`` checks the connector settings.
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from manage.compute import WorkerBudget
     from manage.db_manager import DBManager
     from manage.iam.manager import IAMManager
+    from manage.protocol_store import ProtocolStore
     from manage.transformation_manager import TransformationManager
 
 
@@ -97,6 +98,16 @@ class Services:
         from manage.transformation_manager import TransformationManager
 
         return TransformationManager(scope=self.scope)
+
+    @cached_property
+    def protocols(self) -> ProtocolStore:
+        """
+        The study definitions, in the user's workspace. There is no shared folder of them: without a user (a test, a
+        command line) this raises ValueError, and the caller builds a store on a folder of its own.
+        """
+        from manage.protocol_store import WorkspaceProtocolStore
+
+        return WorkspaceProtocolStore(scope=self.scope)
 
 
 def build_services(

@@ -184,13 +184,13 @@ def test_pages_never_build_services() -> None:
     assert not _count(r"\b(DBManager|TransformationManager|RAGManager)\(", "app_pages")
 
 
-_SERVICE = r"(?<!class )\b(DBManager|TransformationManager|RAGManager)\("
+_SERVICE = r"(?<!class )\b(DBManager|TransformationManager|RAGManager|WorkspaceProtocolStore)\("
 
 
 def test_the_session_builds_its_services_with_the_users_workspace() -> None:
-    """Only the composition root (manage/services.py, ui/services.py) builds the dataset store, the trace and the AI
-    engine, always passing the user's scope: these services never ask the session for the user, and without a scope
-    they use the shared folders."""
+    """Only the composition root (manage/services.py, ui/services.py) builds the dataset store, the trace, the study
+    definitions and the AI engine, always passing the user's scope: these services never ask the session for the user,
+    and without a scope they use the shared folders (the study definitions have none)."""
     roots = ("manage/services.py", "ui/services.py")
     assert not _count(_SERVICE, *SOURCE_DIRS, exclude=roots)
     assert _count(_SERVICE, *roots)
