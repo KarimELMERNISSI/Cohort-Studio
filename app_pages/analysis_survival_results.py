@@ -20,6 +20,7 @@ import streamlit as st
 
 from biostats.regression import APPARENT_AUC_NOTE
 from biostats.survival import event_indicator
+from core.registry import as_code
 from ui.components import help_popover, status_chip
 from ui.components.mi_mode import pooled_frame, show_mi_notes, show_pooled_terms, show_tests
 from ui.components.text import plain
@@ -451,11 +452,13 @@ def show_time_to_event(
     frame: pd.DataFrame | None = None,
     event_col: str = "",
     group: str | None = None,
-    model: bool = False,
+    cox_chosen: bool = False,
+    cox_fits: bool = False,
 ) -> None:
     """
-    The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first. ``model``:
-    a Cox model is chosen, so a missing one has not been fitted with these variables (or could not be).
+    The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first.
+    ``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing one
+    has not been fitted with these variables (or could not be).
     """
     if km is None and cox is None:
         return
@@ -489,18 +492,18 @@ def show_time_to_event(
         elif curves is not None:
             metrics.append(Metric("Events", f"{curves[1]:,}", f"of {curves[0]:,} rows analysed"))
     # the curves and the model read the same rows: a warning both give (a negative time left out) is shown once
-    notes = (
-        []
-        if pooled
-        else list(
-            dict.fromkeys(
-                [*(getattr(km, "warnings", None) or []), *(getattr(cox, "warnings", None) or [])]
-            )
+    notes = list(
+        dict.fromkeys(
+            [*(getattr(km, "warnings", None) or []), *(getattr(cox, "warnings", None) or [])]
         )
     )
     if cox is not None:
-        words = comparison.words
-    elif model:
+        words = (
+            f"Hazard of {as_code(event_col)}. {comparison.words}" if event_col else comparison.words
+        )
+    elif cox_chosen and not cox_fits:
+        words = "The Cox model needs a variable to compare by or to adjust for."
+    elif cox_chosen:
         words = "No Cox model with these variables yet: Run analysis fits it (a message above says why if it failed)."
     else:
         words = "Kaplan-Meier curves only: choose the Cox model above for a hazard ratio."
@@ -515,22 +518,24 @@ def show_time_to_event(
             width="stretch",
         )
         _group_table(km, pooled)
-    if pooled:
+    if pooled:  # one pooling line and the warnings once, then each complete-case comparison
         if km is not None:
             show_mi_notes(
                 km,
                 complete_case=show_km_observed,
                 label="Complete-case analysis, for comparison: curves",
+                warnings=False,
             )
         if cox is not None:
             show_mi_notes(
                 cox,
                 complete_case=lambda cc: _table(cc.table, COX_FORMATS),
                 label="Complete-case analysis, for comparison: Cox model",
+                caption=km is None,
+                warnings=False,
             )
-    else:
-        for warning in notes:
-            st.warning(plain(warning))
+    for warning in notes:
+        st.warning(plain(warning))
     if cox is not None:
         with st.expander("Model details: every term of the Cox model"):
             if pooled:
@@ -566,8 +571,13 @@ def show_time_to_event(
             help_popover(HELP["read_km"], label="How to read the curves")
         if cox is not None:
             help_popover(HELP["read_cox"], label="How to read the hazard ratios")
-    for key, result in zip(keys, (km, cox), strict=True):
-        if result is not None:
+    for key, result, name in zip(
+        keys, (km, cox), ("Kaplan-Meier curves", "Cox model"), strict=True
+    ):
+        if (
+            result is not None
+        ):  # each stored result, said which: each has its own button for the dossier
+            st.caption(f"**{name}**")
             provenance(key)
 
 
@@ -597,6 +607,7 @@ def _show_model(
     summary: Callable[[Any], str],
     read: str,
     notes: tuple[str, ...] = (),
+    subject: str = "",
 ) -> None:
     """A logistic or count model: the comparison's ratios first, the forest of every ratio, then details and checks."""
     if res is None:
@@ -605,7 +616,7 @@ def _show_model(
     metrics = _effects(table, ratio, comparison, name)
     if not pooled:
         metrics.append(Metric("Events", f"{res.events:,}", f"of {res.n:,} rows analysed"))
-    _headline(metrics, comparison.words, 0 if pooled else len(res.warnings))
+    _headline(metrics, f"{subject} {comparison.words}".strip(), len(res.warnings))
     highlight = {t.term for t in comparison.terms(list(table["term"]))}
     st.plotly_chart(
         forest_figure(table, ratio=ratio, highlight=highlight, axis_title=f"{name} (log scale)"),
@@ -637,7 +648,16 @@ def _reference_words(res: Any) -> str:
     return "; ".join(f"{plain(k)}: {plain(v)}" for k, v in res.reference_levels.items())
 
 
-def show_logistic(res: Any, *, key: str, comparison: Comparison, pooled: bool) -> None:
+def show_logistic(
+    res: Any,
+    *,
+    key: str,
+    comparison: Comparison,
+    pooled: bool,
+    outcome: str = "",
+    event: Any = None,
+) -> None:
+    """``outcome`` and ``event``: what the odds are of, said with the result."""
     _show_model(
         res,
         key=key,
@@ -651,11 +671,18 @@ def show_logistic(res: Any, *, key: str, comparison: Comparison, pooled: bool) -
         ),
         read=HELP["read_logistic"],
         notes=(APPARENT_AUC_NOTE,),
+        subject=f"Odds of {as_code(outcome)} = {as_code(event)}." if outcome else "",
     )
 
 
 def show_count(
-    res: Any, *, key: str, comparison: Comparison, pooled: bool, rates: bool = True
+    res: Any,
+    *,
+    key: str,
+    comparison: Comparison,
+    pooled: bool,
+    rates: bool = True,
+    outcome: str = "",
 ) -> None:
     """``rates``: person-time was given, so the ratios compare rates; without it they compare mean counts."""
     _show_model(
@@ -671,6 +698,7 @@ def show_count(
             + (f"; reference levels: {_reference_words(r)}" if r.reference_levels else "")
         ),
         read=HELP["read_count"],
+        subject=f"{'Rate' if rates else 'Mean count'} of {as_code(outcome)}." if outcome else "",
     )
 
 

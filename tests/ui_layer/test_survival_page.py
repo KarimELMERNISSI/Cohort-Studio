@@ -87,6 +87,9 @@ def test_one_run_draws_the_curves_and_fits_the_cox_model(app: AppTest) -> None:
         sum("Computed on" in c.value for c in app.caption) == 2
     )  # provenance under each stored result
     assert {"report_add::survival", "report_add::cox"} <= {b.key for b in app.button}
+    assert {"**Kaplan-Meier curves**", "**Cox model**"} <= {
+        c.value for c in app.caption
+    }  # each button's result
 
 
 def test_the_binary_outcome_reads_its_odds_ratio_first(app: AppTest) -> None:
@@ -100,6 +103,9 @@ def test_the_binary_outcome_reads_its_odds_ratio_first(app: AppTest) -> None:
     assert {"arm_Treatment", "age", "sex_M"} == set(fitted.table["term"])
     assert _labels(app)[0] == "Odds ratio · Treatment vs Placebo"
     assert any("Adjusted for `age` and `sex`" in c.value for c in app.caption)
+    assert any(
+        c.value.startswith("Odds of `event` = `") for c in app.caption
+    )  # what the odds are of
     assert any(e.label == "Model details: every term" for e in app.expander)
 
 
@@ -187,3 +193,17 @@ def test_with_imputed_data_only_its_variables_are_offered() -> None:
     numeric, binary, groups = page._variables(df, analyzer, mi)
     assert "made_after" not in [*numeric, *binary, *groups] and "arm" in groups
     assert "made_after" in page._variables(df, analyzer, None)[2]
+
+
+@pytest.mark.parametrize(
+    ("levels", "event"),
+    [
+        (["Died", "Survived"], "Died"),
+        (["No", "Yes"], "Yes"),
+        (["Event", "No event"], "Event"),
+        (["A", "B"], "B"),
+    ],
+)
+def test_the_event_level_is_the_one_that_reads_as_an_event(levels, event) -> None:
+    """The last sorted level took "Survived" for Died/Survived and "No event" for Event/No event."""
+    assert levels[page._event_index(levels)] == event

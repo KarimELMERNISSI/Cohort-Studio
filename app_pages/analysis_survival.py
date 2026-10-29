@@ -26,7 +26,7 @@ from app_pages.analysis_survival_results import (
     show_time_to_event,
 )
 from biostats.regression import count_regression, logistic_regression
-from biostats.survival import compare_survival, cox_regression
+from biostats.survival import EVENT_WORDS, compare_survival, cox_regression
 from ui.components import error_card, glossary_popover, page_link, status_chip
 from ui.components.mi_mode import mi_token
 from ui.components.text import plain
@@ -63,6 +63,7 @@ _ICON = {
     "violated": ":material/error:",
 }
 _STATUS = {
+    "idle": ("nothing to run", "neutral"),
     "ok": ("ready", "ok"),
     "caution": ("check the warnings", "caution"),
     "violated": ("fix before running", "violated"),
@@ -97,6 +98,17 @@ def _variables(df: pd.DataFrame, analyzer, mi) -> tuple[list[str], list[str], li
     )
 
 
+def _event_index(levels: list[str]) -> int:
+    """
+    The level a binary outcome's event most likely is: the first that reads as an event (Yes, 1, Died, Event: the
+    words the event indicator reads), else the last sorted. The last sorted alone took "Survived" for Died/Survived.
+    """
+    for i, level in enumerate(levels):
+        if str(level).strip().lower() in EVENT_WORDS:
+            return i
+    return len(levels) - 1
+
+
 def _default_index(options: list[str], hints: tuple[str, ...]) -> int:
     """Index of the first option whose name contains a hint (e.g. 'time', 'died'), else 0."""
     for i, name in enumerate(options):
@@ -124,7 +136,7 @@ def _compare_and_adjust(
     )
     adjust = right.multiselect(
         "Adjust for",
-        [c for c in candidates if c != compare],
+        candidates,  # the comparison too: covariates_of reads it once, and a variable picked twice is kept
         key=keys[1],
         persist_state="page",
         help=HELP["adjust"],
@@ -368,7 +380,8 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
         frame=None if pooled else df,
         event_col=event_col,
         group=group,
-        model=model,
+        cox_chosen=COX in analyses,
+        cox_fits=bool(covariates),
     )
 
 
@@ -387,7 +400,7 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
     event_level = c2.selectbox(
         "Event",
         levels_of_outcome,
-        index=len(levels_of_outcome) - 1,
+        index=_event_index(levels_of_outcome),
         key="logit_event",
         persist_state="page",
         help=HELP["event_level"],
@@ -437,7 +450,14 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
         except Exception as exc:
             _failed("The logistic model could not be fitted", exc)
     res = recall(key, config=config)
-    show_logistic(res, key=key, comparison=_comparison(mi, df, compare, adjust, res), pooled=pooled)
+    show_logistic(
+        res,
+        key=key,
+        comparison=_comparison(mi, df, compare, adjust, res),
+        pooled=pooled,
+        outcome=outcome,
+        event=event_level,
+    )
 
 
 # ----------------------------------------------------------------------------- count outcome
@@ -532,6 +552,7 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
         comparison=_comparison(mi, df, compare, adjust, res),
         pooled=pooled,
         rates=exposure_col is not None,
+        outcome=count_col,
     )
 
 

@@ -63,7 +63,7 @@ GLOSSARY: dict[str, str] = {
     "Kaplan-Meier curve": "The survival probability over time estimated from censored follow-up; censored subjects leave the risk set without counting as events.",
     "Log-rank test": "Compares survival curves between groups across the whole follow-up; sensitive to proportional differences, not to crossing curves.",
     "Hazard ratio (HR)": "Ratio of instantaneous event rates between groups from a Cox model; assumes the ratio is constant over time (proportional hazards).",
-    "Censoring": "A participant's follow-up ends without the event (end of the study, lost to follow-up): the time to the event is only known to be longer. Survival methods use these times without counting them as events.",
+    "Censoring": "A participant's follow-up ends without the event (end of the study, lost to follow-up): the time to the event is only known to be longer. Survival methods use these times without counting them as events, assuming censoring is unrelated to the risk of the event (non-informative); a competing event (death from another cause) is not censoring.",
     "Proportional hazards": "The assumption of the Cox model that the hazard ratio between two groups stays the same over follow-up; the Grambsch-Therneau test checks it term by term.",
     "Incidence rate": "Events divided by the person-time at risk, usually expressed per 1000 person-years, with an exact Poisson interval.",
     "Incidence rate ratio (IRR)": "Ratio of the event rates (events per person-time) of two groups, from a Poisson or negative binomial model with person-time as offset.",

@@ -384,7 +384,7 @@ With multiply imputed data (``mi``), every analysis is run on the m imputed data
 curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.EVENT_WORDS`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_group_candidates` (analysis_survival.py)
 
@@ -402,6 +402,15 @@ No description available.
 
 The numeric, binary and grouping variables the panels offer; with imputed data, only those it holds: a variable
 created after the imputation is not in it, and reading it stopped the page.
+
+### def `_event_index` (analysis_survival.py)
+
+- **Arguments**: `levels: list[str]`
+
+- **Returns**: `int`
+
+The level a binary outcome's event most likely is: the first that reads as an event (Yes, 1, Died, Event: the
+words the event indicator reads), else the last sorted. The last sorted alone took "Survived" for Died/Survived.
 
 ### def `_default_index` (analysis_survival.py)
 
@@ -517,7 +526,7 @@ scale), the warnings of the fit, then every term of the model and its checks (ui
 under each stored result what it was computed on. Observed and pooled (multiply imputed) results read the same way._
 
 **Imports**:
-`__future__.annotations`, `html`, `math`, `collections.abc.Callable`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.regression.APPARENT_AUC_NOTE`, `biostats.survival.event_indicator`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.mi_mode.pooled_frame`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.components.text.plain`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.ComparisonTerm`, `ui.guidance.outcomes.comparison_terms`, `ui.guidance.outcomes.diagnostics`, `ui.guidance.outcomes.listing`, `ui.results.provenance`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `html`, `math`, `collections.abc.Callable`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats.regression.APPARENT_AUC_NOTE`, `biostats.survival.event_indicator`, `core.registry.as_code`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.mi_mode.pooled_frame`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.components.text.plain`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.ComparisonTerm`, `ui.guidance.outcomes.comparison_terms`, `ui.guidance.outcomes.diagnostics`, `ui.guidance.outcomes.listing`, `ui.results.provenance`, `ui.theme.OKABE_ITO`
 
 ### class `Comparison` (analysis_survival_results.py)
 
@@ -695,8 +704,9 @@ No description available.
 
 - **Returns**: `None`
 
-The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first. ``model``:
-a Cox model is chosen, so a missing one has not been fitted with these variables (or could not be).
+The curves and the Cox model of one time-to-event analysis: hazard ratios and the log-rank test first.
+``cox_chosen``: the Cox model is among the analyses; ``cox_fits``: it has a variable to read, so a missing one
+has not been fitted with these variables (or could not be).
 
 ### def `_diagnostics` (analysis_survival_results.py)
 
@@ -728,7 +738,7 @@ No description available.
 
 - **Returns**: `None`
 
-No description available.
+``outcome`` and ``event``: what the odds are of, said with the result.
 
 ### def `show_count` (analysis_survival_results.py)
 

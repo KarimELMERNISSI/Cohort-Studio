@@ -330,3 +330,19 @@ def test_exact_combinations_are_refused_with_their_own_reason() -> None:
     df["age_months"] = df["age"] * 12
     with pytest.raises(ValueError, match="exact combinations of others"):
         cox_regression(df, "t", "e", ["arm", "age", "age_months"])
+
+
+def test_nothing_to_run_is_not_ready() -> None:
+    clean = _cohort().assign(fu_days=lambda d: d["fu_days"].abs())  # no negative time to warn about
+    plan = plan_time_to_event(
+        clean, "fu_days", "death", "arm", [], group=True, curves=False, model=False
+    )
+    assert plan.status == "idle" and any("Choose an analysis" in t for t in _advice(plan, "info"))
+
+
+def test_a_numeric_code_drawn_per_value_is_read_per_unit_by_the_cox_model() -> None:
+    df = _cohort().assign(nyha=lambda d: np.resize([2, 3, 4], len(d)))
+    plan = plan_time_to_event(df, "fu_days", "death", "nyha", [], group=True)
+    assert any(
+        "`nyha` is numeric (3 values)" in t and "per unit" in t for t in _advice(plan, "info")
+    )

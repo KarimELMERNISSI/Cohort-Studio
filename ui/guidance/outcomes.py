@@ -95,7 +95,8 @@ HELP: dict[str, str] = {
     "adjust": "Variables measured at or before the start of follow-up that may confound the comparison (age, sex, "
     "severity), never its consequences (mediators). Their own ratios are adjustment terms, not effects to "
     "interpret. Numeric variables enter linearly; categorical ones by level, the first being the reference.",
-    "binary_outcome": "A variable with two levels (yes/no, dead/alive).",
+    "binary_outcome": "A variable with two levels (yes/no, dead/alive), recorded over the same follow-up for "
+    "everyone; when follow-up differs and some were censored, use Time to event.",
     "event_level": "The level counted as the event: the odds ratios compare the odds of this level.",
     "count": "Events per participant or unit: whole numbers, 0 or more.",
     "person_time": "Each row's time at risk. It enters as log(person-time), so that the ratios compare event rates; "
@@ -144,7 +145,11 @@ class ModelPlan:
     @property
     def status(self) -> str:
         levels = {a.level for a in self.advice}
-        return "violated" if "violated" in levels else "caution" if "caution" in levels else "ok"
+        if "violated" in levels:
+            return "violated"
+        if "caution" in levels:
+            return "caution"
+        return "ok" if self.steps else "idle"  # nothing to run: not "ready"
 
 
 def chosen(name: str | None) -> str | None:
@@ -442,6 +447,15 @@ def plan_time_to_event(
             spelt = _spellings(by, df.loc[kept, by])
             if spelt is not None:
                 advice.append(spelt)
+            if pd.api.types.is_numeric_dtype(df[by]) and len(sizes) > 2 and model:
+                advice.append(
+                    Advice(
+                        "info",
+                        f"{as_code(by)} is numeric ({len(sizes)} values): the curves are drawn per value, but the "
+                        "Cox model reads it per unit, as a trend. To compare its values, make it categorical first "
+                        "(Enrich > Create new variables).",
+                    )
+                )
             if len(sizes) - len(small) < 2:
                 advice.append(
                     Advice(
@@ -461,6 +475,10 @@ def plan_time_to_event(
                 )
         steps.append(PlanStep(text, int(kept.sum()), int(event[kept].sum())))
     covariates = covariates_of(compare, adjust)
+    if not curves and not model:
+        advice.append(
+            Advice("info", "Choose an analysis above: the curves, the Cox model or both.")
+        )
     if model and not covariates:
         advice.append(
             Advice(
@@ -680,7 +698,7 @@ def diagnostics(result: Any) -> list[tuple[str, str, str]]:
                     "Concordance (apparent)",
                     f"{result.concordance:.3f}",
                     "How well the model orders the event times, on the data it was fitted to (optimistic): "
-                    "0.5 = chance, 1 = perfect.",
+                    "0.5 = chance, 1 = perfect. It measures prediction: a well-adjusted comparison can sit near 0.5.",
                 )
             )
         rows.append(("Ties", result.ties.capitalize(), "How tied event times are handled."))
@@ -706,8 +724,8 @@ def diagnostics(result: Any) -> list[tuple[str, str, str]]:
                     (
                         APPARENT_AUC[0].upper() + APPARENT_AUC[1:],
                         f"{result.auc:.3f}{ci}",
-                        "Discrimination on the data the model was fitted to: it overstates the discrimination in "
-                        "new patients.",
+                        "Discrimination on the data the model was fitted to: it tends to overstate the "
+                        "discrimination in new data. It measures prediction, not the comparison.",
                     )
                 )
             if result.pseudo_r2 is not None:
@@ -724,8 +742,8 @@ def diagnostics(result: Any) -> list[tuple[str, str, str]]:
                 (
                     "Dispersion (Pearson chi²/df)",
                     f"{result.dispersion:.2f}",
-                    "About 1 when the Poisson variance fits; well above 1 (over-dispersion), the intervals are too "
-                    "narrow: fit the negative binomial model.",
+                    "About 1 when the Poisson variance fits; above about 1.5 (over-dispersion, the warning's "
+                    "threshold), the intervals are too narrow: consider the negative binomial model.",
                 )
             )
         elif result.kind == "negative_binomial" and result.dispersion is not None:

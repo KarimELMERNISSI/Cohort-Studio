@@ -79,6 +79,7 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
         cox.complete_case is not None and cox.complete_case.n < 1206
     )  # complete cases drop the missing HbA1c
     assert any("Complete-case analysis" in e.label for e in app.expander)
+    assert sum("Pooled over 3 imputed datasets" in c.value for c in app.caption) == 1  # said once
     assert [m.label for m in app.metric][:2] == [
         "Hazard ratio · Intervention vs Control",
         "Log-rank test, pooled (unadjusted)",

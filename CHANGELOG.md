@@ -1126,6 +1126,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - without person-time, a count model's ratio reads "ratio of mean counts", not "incidence-rate ratio".
 - **With imputed data, only its variables are offered:** comparing by a variable created after the imputation stopped
   the page.
+- **Each result says what it is about:** the hazard of the event, the odds of the outcome at its event level, the rate
+  (or mean count) of the count. A binary outcome's event level is, by default, the level that reads as an event (Yes,
+  Died, Event, 1: the event indicator's words), where the last level in sorted order took "Survived" for Died/Survived
+  and "No event" for Event/No event.
+- A numeric code of three values or more (NYHA 2, 3, 4) draws curves per value but enters the Cox model per unit, as a
+  trend: the plan says so, and how to compare its values (make it categorical).
+- Choosing to compare by a variable no longer drops it from the adjustment for good; the Cox model chosen without any
+  variable says it needs one; with no analysis chosen, the plan reads "nothing to run", not "ready".
+- Each stored result's "Add to the study dossier" says which result it is; with imputed data, the pooling line and
+  the warnings are shown once. The checks say that the concordance and the AUC measure prediction (a well-adjusted
+  comparison can sit near 0.5), and the glossary that censoring is assumed non-informative and a competing event is
+  not censoring.
 - A level written with a hidden space reads as the lists show it ("Esch-sur-Alzette␣") in two more messages.
 - **The numbers do not change:** the same functions on the same rows; the model is the comparison plus the
   adjustment, so the same covariates give the same fit. Stored results and the study dossier are unchanged. Median

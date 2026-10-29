@@ -205,15 +205,21 @@ def show_mi_notes(
     *,
     complete_case: Callable[[Any], None] | None = None,
     label: str = "Complete-case analysis, for comparison",
+    caption: bool = True,
+    warnings: bool = True,
 ) -> None:
-    """Pooling caption, preview note, warnings counted across imputations and the complete-case analysis."""
-    st.caption(
-        f":material/stacks: Pooled over {result.m} imputed datasets with Rubin's rules (Barnard-Rubin df)."
-        + (" Preview: not every imputed dataset was analysed." if result.partial else "")
-    )
+    """
+    Pooling caption, preview note, warnings counted across imputations and the complete-case analysis; ``caption``
+    and ``warnings`` False leave the pooling line and the warnings to a caller showing several pooled results.
+    """
+    if caption:
+        st.caption(
+            f":material/stacks: Pooled over {result.m} imputed datasets with Rubin's rules (Barnard-Rubin df)."
+            + (" Preview: not every imputed dataset was analysed." if result.partial else "")
+        )
     for note in result.notes:
         st.caption(note)
-    for warning in result.warnings:
+    for warning in result.warnings if warnings else ():
         st.warning(plain(warning))  # a model's message can name a level or a term: as text
     if complete_case is not None and result.complete_case is not None:
         with st.expander(label):
