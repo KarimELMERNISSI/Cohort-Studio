@@ -1181,7 +1181,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - a format is chosen when nearly all values (95 %) have its shape, and proposed when half do;
   - the values decide day first or month first when some can be read only one way, all the same way (at least 5 % of
     them); otherwise the order is asked, pre-filled from the import's day-first setting, which was recorded but never
-    read;
+    read; fewer values showing it, all one way, pre-fill it instead (30 of 1,000 read only day first, none only month
+    first: the import's month first read 888 others with day and month swapped); with no value showing it (dates on
+    the 1st), the page says what each order gives ("month first, every date in one month");
   - a two-digit year is read with a pivot you confirm (with 26: 21 is 2021, 68 is 1968);
   - eight digits are read year first or day first, as their values show (20210305, 05032021);
   - whole numbers are read as Excel serial dates only when you choose it;

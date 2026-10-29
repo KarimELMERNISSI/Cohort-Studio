@@ -3222,9 +3222,17 @@ How many text columns look like dates, in the line above Validate's tabs and at 
 
 No description available.
 
+### def `_spread` (validate_dates.py)
+
+- **Arguments**: `dates: pd.Series`
+
+- **Returns**: `str`
+
+No description available.
+
 ### def `_why` (validate_dates.py)
 
-- **Arguments**: `detection: Detection`
+- **Arguments**: `detection: Detection, values: ComplexType`
 
 - **Returns**: `str`
 
@@ -3232,7 +3240,7 @@ Why a column's reading is asked: counts only, never a value.
 
 ### def `_choose` (validate_dates.py)
 
-- **Arguments**: `column: str, detection: Detection`
+- **Arguments**: `column: str, detection: Detection, values: ComplexType`
 
 - **Returns**: `ComplexType`
 

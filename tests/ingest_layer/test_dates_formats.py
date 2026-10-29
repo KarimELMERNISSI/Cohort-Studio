@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from datetime import date
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -109,7 +110,12 @@ def test_the_data_decide_the_order_only_when_they_show_it(
     detection = detect(_slash(day_only, month_only, ambiguous), dayfirst=True)
     assert (detection.format, detection.decided) == (found, decided)
     assert (detection.day_first_only, detection.month_first_only) == (day_only, month_only)
-    assert detection.order_source == ("data" if decided else "import_setting")
+    one_way = bool(day_only) != bool(
+        month_only
+    )  # under 5 %, one way only: pre-filled from those values
+    assert detection.order_source == (
+        "data" if decided else "few_values" if one_way else "import_setting"
+    )
 
 
 def test_an_order_not_shown_is_pre_filled_from_the_import_setting() -> None:
@@ -273,3 +279,22 @@ def test_numbers_and_digits_are_dates_only_when_they_read_as_dates(values, name,
     assert (
         not detection.decided or found is None or isinstance(values[0], str)
     )  # numbers are only proposed
+
+
+def test_an_order_shown_one_way_by_a_few_values_is_pre_filled_from_them() -> None:
+    """30 of 1,000 values read only day first, none only month first: the import's month first swapped 888 others."""
+    gen = np.random.default_rng(1)
+    ambiguous = [
+        f"{d:02d}/{m:02d}/2021"
+        for d, m in zip(gen.integers(1, 13, 970), gen.integers(1, 13, 970), strict=True)
+    ]
+    day_only = [
+        f"{d}/{m:02d}/2021"
+        for d, m in zip(gen.integers(13, 29, 30), gen.integers(1, 13, 30), strict=True)
+    ]
+    found = detect(pd.Series(ambiguous + day_only), dayfirst=False, name="visit")
+    assert (found.format, found.order_source, found.decided) == (
+        "day_first",
+        "few_values",
+        False,
+    )  # asked

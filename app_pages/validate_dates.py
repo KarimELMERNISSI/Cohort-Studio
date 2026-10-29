@@ -47,6 +47,7 @@ _CHOICES = {
 }
 _ORDER_FROM = {
     "data": "the data",
+    "few_values": "a few values",
     "import_setting": "the import setting",
     "user": "your choice",
     "shape": "",
@@ -105,7 +106,12 @@ def _label(format_id: str) -> str:
     return "Leave as text" if format_id == TEXT else DATE_FORMATS.get(format_id).label
 
 
-def _why(detection: Detection) -> str:
+def _spread(dates: pd.Series) -> str:
+    months = int(dates.dropna().dt.month.nunique())
+    return "every date in one month" if months == 1 else f"the dates over {months} months"
+
+
+def _why(detection: Detection, values: pd.Series | None = None) -> str:
     """Why a column's reading is asked: counts only, never a value."""
     if detection.format == "excel_serial":
         return "whole numbers in a column named like a date. Read them as dates only if they are Excel serial numbers."
@@ -120,22 +126,35 @@ def _why(detection: Detection) -> str:
                 f"{detection.day_first_only:,} values read only day first and {detection.month_first_only:,} only "
                 "month first: the order chosen leaves the others missing."
             )
-        else:
+        else:  # no value shows the order: what each gives (dates completed to the 1st read the same both ways)
             reasons.append(
-                "Too few values show whether the day or the month comes first: the order of the import setting is "
+                "No value shows whether the day or the month comes first: the order of the import setting is "
                 "proposed."
             )
+            if values is not None and detection.format in ("day_first", "month_first"):
+                reasons.append(
+                    f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
+                    f"{_spread(read_dates(values, 'month_first'))}."
+                )
+    if detection.order_source == "few_values":
+        shown = detection.day_first_only or detection.month_first_only
+        way = "day" if detection.day_first_only else "month"
+        reasons.append(
+            f"Only {shown:,} values show the order, {way} first, fewer than 5 %: it is pre-filled from them. Check it."
+        )
     if detection.two_digit_years:
         reasons.append(f"{detection.two_digit_years:,} values have a two-digit year.")
     return " ".join(reasons)
 
 
-def _choose(column: str, detection: Detection) -> dict[str, Any] | None:
+def _choose(
+    column: str, detection: Detection, values: pd.Series | None = None
+) -> dict[str, Any] | None:
     """How a column is read: as detected when the data decide, else as chosen here. None: left as text."""
     if detection.decided:
         return {"format": detection.format, "order_source": detection.order_source or "shape"}
     with st.container(border=True):
-        st.markdown(f"{as_code(column)}: {_why(detection)}")
+        st.markdown(f"{as_code(column)}: {_why(detection, values)}")
         options = [*_CHOICES[str(detection.format)], TEXT]
         # read from numbers (an Excel serial, eight digits): ambiguous, left as text until chosen
         default = TEXT if not detection.order_source else detection.format
@@ -274,7 +293,7 @@ def render_date_checks() -> None:
     )
     chosen = {}
     for column, detection in found.items():
-        how = None if column in as_text else _choose(column, detection)
+        how = None if column in as_text else _choose(column, detection, df[column])
         if how is not None:
             chosen[column] = how
     if not chosen:

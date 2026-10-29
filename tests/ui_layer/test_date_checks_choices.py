@@ -236,3 +236,10 @@ def test_whole_numbers_written_as_eight_digits_are_proposed_left_as_text() -> No
         T("2022-04-14"),
         T("2023-01-01"),
     ]
+
+
+def test_dates_on_the_first_say_what_each_order_gives() -> None:
+    """01/MM/YYYY reads both ways: month first, every date fell in January, silently (367 of 400 read wrong)."""
+    at = _open({"visit": [f"01/{m:02d}/2021" for m in range(1, 13)] * 3}, dayfirst=False)
+    said = " ".join(m.value for m in at.markdown)
+    assert "Read day first, the dates over 12 months; month first, every date in one month." in said

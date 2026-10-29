@@ -388,9 +388,7 @@ class Detection:
         0  # values only the day-first order reads (first number 13-31, second 1-12)
     )
     month_first_only: int = 0
-    order_source: str = (
-        ""  # "data" when the values show the order; "import_setting" when it is asked, pre-filled
-    )
+    order_source: str = ""  # "data" when the values show the order; "few_values" when fewer than ORDER_EVIDENCE show it, one way  # only (asked, pre-filled from them); "import_setting" when none or both ways do (asked, pre-filled from it)
     two_digit_years: int = 0  # read only with a pivot, which is always asked
 
 
@@ -407,6 +405,10 @@ def _ordered(
         chosen, source = formats[0], "data"
     elif _order(month_only, day_only, n):
         chosen, source = formats[1], "data"
+    elif day_only and not month_only:  # under 5 % but one way only: pre-filled from them, asked
+        chosen, source = formats[0], "few_values"
+    elif month_only and not day_only:
+        chosen, source = formats[1], "few_values"
     else:
         chosen, source = formats[0 if dayfirst else 1], "import_setting"
     decided = shape >= CHOSEN * n and source == "data"
