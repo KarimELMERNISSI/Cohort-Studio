@@ -1085,6 +1085,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   own, with the formula of a cleaned copy), levels held by fewer than 10 rows or without an event, variables that are
   exact combinations of others, and strong collinearity (variance inflation above 10, the generalised VIF of Fox and
   Monette for a categorical variable), each with the variable it is most correlated with.
+- **A level without events is named whatever its size, and an extreme estimate is flagged.** The plan looked for
+  event-free levels among levels under 10 rows only: a 40-row level without deaths gave "ready" and a hazard ratio of
+  7.6e-11 (standard error 29,174, an interval from 0 to infinity) with no warning, as did a count model, and a 0/1 code
+  held only by events gave an odds ratio of 1.1e11. The plan now reads every level by its events: without an event (for
+  a binary outcome, every row or none with it) its ratio goes to 0 or to infinity and cannot be estimated; with fewer
+  than 10, it may be imprecise. It names the remedies: clean spelling variants, merge a level only on subject-matter
+  grounds chosen without looking at the outcome, Firth's penalised likelihood for a real event-free level. After the
+  fit, Cox, logistic and count models flag terms with a log ratio beyond 10 and a standard error above 100 (counted,
+  not named); a Cox fit that did not converge says so; covariates that are exact combinations of others are refused
+  before the Cox fit, with that reason rather than the monotone likelihood's.
 - **A Cox model with no finite estimate stops with the reason.** In the tutorial, `sex` holds one value written ten
   ways, eight of them on one row and four without an event: adjusting for it sent a hazard ratio to infinity,
   statsmodels returned missing values for every term (the arm's included), and the proportional-hazards test said

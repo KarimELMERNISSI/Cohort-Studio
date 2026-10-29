@@ -236,10 +236,8 @@ def test_one_value_written_several_ways_is_named_before_the_cox_model_fails() ->
     caution = _advice(plan, "caution")
     assert any(t.startswith("`sex` holds one value written several ways") for t in caution)
     assert any("`F␣`" in t for t in caution)  # "F " reads as the lists show it, not as "F"
-    assert any(
-        "`sex`: 8 levels held by fewer than 10 rows" in t and "4 of them without an event" in t
-        for t in caution
-    )
+    assert any(t.startswith("`sex`: no event at") and "monotone likelihood" in t for t in caution)
+    assert any(t.startswith("`sex`: fewer than 10 events at") for t in _advice(plan, "info"))
     assert not any("collinear" in t for t in caution)  # the design is of full rank
     with pytest.raises(ValueError, match="no finite estimate"):
         cox_regression(df, "fu_days", "death", ["arm", "hypertension", "sex"])
@@ -286,3 +284,49 @@ def test_a_level_with_a_hidden_space_reads_as_the_lists_show_it() -> None:
     plan = plan_time_to_event(df, "fu_days", "death", "site", [], group=True, model=False)
     (no_curve,) = [t for t in _advice(plan, "info") if t.startswith("Fewer than 2 rows")]
     assert "`Esch-sur-Alzette\N{OPEN BOX}`" in no_curve
+
+
+def _event_free_level(n: int = 400) -> pd.DataFrame:
+    """40 rows of a level without events: the plan looked for them among levels under 10 rows only."""
+    gen = np.random.default_rng(5)
+    df = pd.DataFrame(
+        {
+            "t": gen.exponential(100, n).round() + 1,
+            "e": (gen.random(n) < 0.4).astype(int),
+            "arm": np.where(np.arange(n) % 2, "A", "B"),
+            "grp": np.where(np.arange(n) < 40, "free", np.where(np.arange(n) % 3, "x", "y")),
+        }
+    )
+    df.loc[df["grp"] == "free", "e"] = 0
+    return df
+
+
+def test_a_level_without_events_is_named_whatever_its_size() -> None:
+    df = _event_free_level()
+    plan = plan_time_to_event(df, "t", "e", "arm", ["grp"], group=True, curves=False)
+    (text,) = [t for t in _advice(plan, "caution") if t.startswith("`grp`")]
+    assert "no event at `free`" in text and "Firth" in text and "subject-matter grounds" in text
+    model = cox_regression(df, "t", "e", ["arm", "grp"])
+    assert any(
+        w.startswith("2 terms have an extreme estimate") for w in model.warnings
+    )  # counted, not named
+    assert not any("free" in w for w in model.warnings)
+
+
+def test_a_two_valued_code_held_only_by_events_is_separation() -> None:
+    df = _event_free_level().assign(flag=0)
+    df.loc[df.index[:30], ["flag", "e"]] = 1
+    plan = plan_binary(df.assign(e=df["e"].astype(str)), "e", "1", "arm", ["flag"])
+    assert any(
+        t.startswith("`flag`: every row or none has the event at `1`")
+        for t in _advice(plan, "caution")
+    )
+    fitted = logistic_regression(df, "e", ["arm", "flag"], event_level="1")
+    assert any("extreme estimate" in w for w in fitted.warnings)
+
+
+def test_exact_combinations_are_refused_with_their_own_reason() -> None:
+    df = _event_free_level().assign(age=lambda d: np.arange(len(d)) % 50 + 30.0)
+    df["age_months"] = df["age"] * 12
+    with pytest.raises(ValueError, match="exact combinations of others"):
+        cox_regression(df, "t", "e", ["arm", "age", "age_months"])

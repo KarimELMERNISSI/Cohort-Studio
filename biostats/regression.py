@@ -63,6 +63,30 @@ def _design(
     return design_matrix(df, covariates, levels=levels)
 
 
+EXTREME_LOG = 10.0  # a log ratio beyond this (a ratio below 5e-5 or above 22,000) with...
+EXTREME_SE = 100.0  # ...a standard error above this: the likelihood has no maximum there
+
+
+def extreme_estimates(log_estimates, se) -> str | None:
+    """
+    A warning when terms have a log ratio beyond EXTREME_LOG with a standard error above EXTREME_SE: a level without
+    events (or where every row has the event) sends its ratio to 0 or to infinity (monotone likelihood, separation),
+    and the fit stops at a finite but meaningless value with an interval without bound. The terms are counted, not
+    named: a level held by a few rows is a participant's value, and the warning reaches the study dossier.
+    """
+    log = np.abs(np.asarray(log_estimates, dtype=float))
+    spread = np.asarray(se, dtype=float)
+    k = int(((log > EXTREME_LOG) & (spread > EXTREME_SE)).sum())
+    if not k:
+        return None
+    return (
+        f"{k} term{'s' if k > 1 else ''} {'have' if k > 1 else 'has'} an extreme estimate (a ratio near 0 or "
+        "infinite, an interval without bound): a level without events, or where every row has the event (monotone "
+        "likelihood, separation); such a ratio cannot be read. Clean or merge such levels on subject-matter grounds, "
+        "or use Firth's penalised likelihood (not available here)."
+    )
+
+
 def _coefficients(res, x: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame | None]:
     """Regression coefficients and their covariance, restricted to the design columns."""
     k = x.shape[1]
@@ -79,18 +103,21 @@ def _table(res, x: pd.DataFrame, alpha: float, ratio_label: str) -> pd.DataFrame
     z = stats.norm.ppf(1 - alpha / 2)
     params = np.asarray(res.params, dtype=float)
     bse = np.asarray(res.bse, dtype=float)
-    table = pd.DataFrame(
-        {
-            "term": list(x.columns),
-            "coef": params,
-            "se": bse,
-            ratio_label: np.exp(params),
-            "ci_low": np.exp(params - z * bse),
-            "ci_high": np.exp(params + z * bse),
-            "z": params / bse,
-            "p": 2 * stats.norm.sf(np.abs(params / bse)),
-        }
-    )
+    with np.errstate(
+        over="ignore"
+    ):  # an extreme estimate's interval runs to infinity (extreme_estimates says so)
+        table = pd.DataFrame(
+            {
+                "term": list(x.columns),
+                "coef": params,
+                "se": bse,
+                ratio_label: np.exp(params),
+                "ci_low": np.exp(params - z * bse),
+                "ci_high": np.exp(params + z * bse),
+                "z": params / bse,
+                "p": 2 * stats.norm.sf(np.abs(params / bse)),
+            }
+        )
     return table[table["term"] != "const"].reset_index(drop=True)
 
 
@@ -145,9 +172,12 @@ def logistic_regression(
         warnings.append(
             "fewer than 10 events per parameter: odds ratios may be unstable (Peduzzi rule of thumb)"
         )
+    table = _table(res, x, alpha, "odds_ratio")
+    if (extreme := extreme_estimates(table["coef"], table["se"])) is not None:
+        warnings.append(extreme)
     return RegressionResult(
         kind="logistic",
-        table=_table(res, x, alpha, "odds_ratio"),
+        table=table,
         n=int(len(y)),
         events=events,
         llf=float(res.llf),
@@ -209,22 +239,25 @@ def count_regression(
         z = stats.norm.ppf(1 - alpha / 2)
         params = np.asarray(res.params, dtype=float)[: x.shape[1]]
         bse = np.asarray(res.bse, dtype=float)[: x.shape[1]]
-        table = pd.DataFrame(
-            {
-                "term": list(x.columns),
-                "coef": params,
-                "se": bse,
-                "rate_ratio": np.exp(params),
-                "ci_low": np.exp(params - z * bse),
-                "ci_high": np.exp(params + z * bse),
-                "z": params / bse,
-                "p": 2 * stats.norm.sf(np.abs(params / bse)),
-            }
-        )
+        with np.errstate(over="ignore"):  # an extreme estimate's interval runs to infinity
+            table = pd.DataFrame(
+                {
+                    "term": list(x.columns),
+                    "coef": params,
+                    "se": bse,
+                    "rate_ratio": np.exp(params),
+                    "ci_low": np.exp(params - z * bse),
+                    "ci_high": np.exp(params + z * bse),
+                    "z": params / bse,
+                    "p": 2 * stats.norm.sf(np.abs(params / bse)),
+                }
+            )
         table = table[table["term"] != "const"].reset_index(drop=True)
     else:
         table = _table(res, x, alpha, "rate_ratio")
     params, vcov = _coefficients(res, x)
+    if (extreme := extreme_estimates(table["coef"], table["se"])) is not None:
+        warnings.append(extreme)
     return RegressionResult(
         kind=family,
         table=table,
@@ -249,6 +282,7 @@ __all__ = [
     "APPARENT_AUC",
     "APPARENT_AUC_NOTE",
     "RegressionResult",
+    "extreme_estimates",
     "count_regression",
     "logistic_regression",
 ]

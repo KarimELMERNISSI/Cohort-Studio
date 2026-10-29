@@ -190,8 +190,8 @@ def _too_few(events: int, terms: int | None, what: str, ratios: str) -> Advice |
     return Advice(
         "caution",
         f"{events:,} {what} for {terms} term{'s' if terms > 1 else ''} ({events / terms:.1f} per term): {ratios} "
-        f"may be unstable below about {EPV_MIN} per term (Peduzzi rule of thumb). Fewer adjustment variables, or "
-        "fewer levels, help.",
+        f"may be unstable below about {EPV_MIN} per term (Peduzzi rule of thumb). Fewer adjustment variables, chosen "
+        "on subject-matter grounds and not by p-value, or fewer levels, help.",
     )
 
 
@@ -286,13 +286,64 @@ def _collinearity(frame: pd.DataFrame, covariates: Sequence[str], ratios: str) -
     return advice
 
 
+REMEDY = (
+    "Clean spelling variants first; merge a level only with one it belongs with on subject-matter grounds, chosen "
+    "without looking at the outcome. A real level without events needs Firth's penalised likelihood (Heinze & "
+    "Schemper 2001), not available here."
+)
+
+
+def _levels(
+    col: str, values: pd.Series, events: pd.Series, *, ratios: str, binary: bool
+) -> list[Advice]:
+    """
+    The levels of a categorical covariate, or the two values of a 0/1 code, read by their events: a level without an
+    event (for a binary outcome, every row or none with it) cannot be estimated, its ratio going to 0 or to infinity
+    (monotone likelihood, separation), whatever its size; one with fewer than LEVEL_MIN events (the fewer of events
+    and rows without one, for a binary outcome) may be imprecise.
+    """
+    text = values.astype(str)
+    per = events.groupby(text).agg(["sum", "size"])
+    informative = np.minimum(per["sum"], per["size"] - per["sum"]) if binary else per["sum"]
+    empty = [str(level) for level, k in informative.items() if k == 0]
+    thin = [str(level) for level, k in informative.items() if 0 < k < LEVEL_MIN]
+    ratio = ratios[:-1]  # "hazard ratios" -> "hazard ratio"
+    advice: list[Advice] = []
+    if empty:
+        where = "every row or none has the event" if binary else "no event"
+        cause = "separation" if binary else "monotone likelihood"
+        advice.append(
+            Advice(
+                "caution",
+                f"{as_code(col)}: {where} at {_some(empty)}: {'its' if len(empty) == 1 else 'their'} {ratio} goes "
+                f"to 0 or to infinity and cannot be estimated ({cause}), and the model may not converge. {REMEDY}",
+            )
+        )
+    if thin:
+        what = "events or rows without one" if binary else "events"
+        advice.append(
+            Advice(
+                "info",
+                f"{as_code(col)}: fewer than {LEVEL_MIN} {what} at {_some(thin)}: "
+                f"{'its' if len(thin) == 1 else 'their'} {ratio} may be imprecise.",
+            )
+        )
+    return advice
+
+
 def _design_advice(
-    frame: pd.DataFrame, covariates: Sequence[str], *, ratios: str, events: pd.Series | None = None
+    frame: pd.DataFrame,
+    covariates: Sequence[str],
+    *,
+    ratios: str,
+    events: pd.Series | None = None,
+    binary: bool = False,
 ) -> list[Advice]:
     """
     What would make the terms of a model fitted on ``frame`` (the rows it uses) unstable or impossible to estimate:
-    a variable left with one value (the model drops it), one value written several ways, levels held by fewer than
-    LEVEL_MIN rows or, with ``events`` (per row), without an event, and collinearity.
+    a variable left with one value (the model drops it), one value written several ways, the events of each level
+    (``events`` per row; ``binary``: an event indicator, read by the fewer of events and rows without one), and
+    collinearity.
     """
     advice: list[Advice] = []
     varying: list[str] = []
@@ -307,29 +358,17 @@ def _design_advice(
             )
             continue
         varying.append(col)
-        if pd.api.types.is_numeric_dtype(values):
+        numeric = pd.api.types.is_numeric_dtype(values)
+        if (
+            numeric and values.nunique(dropna=True) != 2
+        ):  # a measurement: no levels (a 0/1 code has two)
             continue
-        spelt = _spellings(col, values)
-        if spelt is not None:
-            advice.append(spelt)
-        text = values.astype(str)
-        sizes = text.value_counts()
-        few = [str(level) for level, n in sizes.items() if n < LEVEL_MIN]
-        if not few:
-            continue
-        per_level = events.groupby(text).sum() if events is not None else None
-        empty = [lvl for lvl in few if per_level is not None and per_level.get(lvl, 0) == 0]
-        advice.append(
-            Advice(
-                "caution",
-                f"{as_code(col)}: {len(few)} level{'s' if len(few) > 1 else ''} held by fewer than {LEVEL_MIN} rows "
-                f"({_some(few)})"
-                + (f", {len(empty)} of them without an event" if empty else "")
-                + f": their {ratios} are unstable"
-                + (" or cannot be estimated, and the model may not converge" if empty else "")
-                + ". Merge them with another level, or clean the variable first.",
-            )
-        )
+        if not numeric:
+            spelt = _spellings(col, values)
+            if spelt is not None:
+                advice.append(spelt)
+        if events is not None:
+            advice += _levels(col, values, events, ratios=ratios, binary=binary)
     if len(varying) >= 2:  # a design that cannot be built is said where the terms are counted
         with contextlib.suppress(ValueError, np.linalg.LinAlgError):
             advice.extend(_collinearity(frame, varying, ratios))
@@ -491,8 +530,11 @@ def plan_binary(
     advice: list[Advice] = []
     if problem:
         advice.append(Advice("violated", f"The logistic model cannot be built: {_said(problem)}."))
-    else:
-        advice += _design_advice(df.loc[kept], covariates, ratios="odds ratios")
+    else:  # separation: a level (or a 0/1 code's value) where every row or none has the event
+        is_event = (y == str(event_level)).astype(int)
+        advice += _design_advice(
+            df.loc[kept], covariates, ratios="odds ratios", events=is_event, binary=True
+        )
     fewer, what = (events, "events") if events <= others else (others, "rows without the event")
     advice.extend(
         a
@@ -502,19 +544,6 @@ def plan_binary(
         )
         if a is not None
     )
-    for col in covariates:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            continue
-        share = (y == str(event_level)).groupby(df.loc[kept, col].astype(str)).mean()
-        pure = [str(level) for level, s in share.items() if s in (0.0, 1.0)]
-        if pure:
-            advice.append(
-                Advice(
-                    "caution",
-                    f"Every row or none has the event at {_some(pure, 3)} of {as_code(col)}: the odds ratio of "
-                    "such a level cannot be estimated (separation). Merge it with another level, or leave it out.",
-                )
-            )
     text = f"A logistic model of {as_code(outcome)} = {as_code(event_level)}, {_model_words(compare, adjust)}"
     return ModelPlan(rows, (PlanStep(text, int(kept.sum()), events, terms),), tuple(advice))
 

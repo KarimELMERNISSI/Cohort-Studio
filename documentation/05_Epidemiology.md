@@ -183,16 +183,20 @@ on how many rows and events, and what to check first. It names:
 - fewer than 10 events per estimated term;
 - a variable left with one value in the rows used (the model leaves it out);
 - one value written several ways ("F", "F␣", "female"), each a group of its own, with the formula of a cleaned copy;
-- levels held by fewer than 10 rows, or without an event: their ratios are unstable or cannot be estimated, and the
-  model may not converge;
-- a level where every row or none has the event (logistic);
+- a level without an event (logistic: where every row or none has it), whatever its size: its ratio goes to 0 or
+  to infinity and cannot be estimated (monotone likelihood, separation). Clean spelling variants first; merge a level
+  only with one it belongs with on subject-matter grounds, chosen without looking at the outcome; a real level without
+  events needs Firth's penalised likelihood, not available here;
+- levels with fewer than 10 events (logistic: events or rows without one), whose ratios may be imprecise;
 - variables that are exact combinations of others, or strongly collinear (variance inflation above 10; for a
   categorical variable, the generalised VIF of Fox and Monette on the same scale), with the variable each is most
   correlated with;
 - a count model without person-time.
 
-It advises; what runs is what you chose. A Cox model with no finite estimate (a level without events sends a hazard
-ratio to infinity) stops with that reason rather than showing a table of missing values.
+It advises; what runs is what you chose. After the fit, terms with an extreme estimate (a ratio near 0 or infinite,
+an interval without bound) are flagged, and a fit that did not converge says so. A Cox model with no finite estimate
+stops with that reason rather than showing a table of missing values, and one whose covariates are exact combinations
+of others (a variable in two units) is refused before the fit.
 
 **Run analysis** runs it. For a time-to-event outcome, one click draws the Kaplan-Meier curves (by the comparison
 when it is a grouping variable, with the log-rank test) and fits the Cox model of the comparison and the adjustment;

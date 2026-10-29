@@ -21,6 +21,7 @@ from statsmodels.duration.survfunc import SurvfuncRight
 from biostats._types import CI
 from biostats.design import design_matrix
 from biostats.references import REFERENCES
+from biostats.regression import extreme_estimates
 
 REFERENCES.setdefault(
     "kaplan1958",
@@ -347,31 +348,47 @@ def cox_regression(
     x, refs = design_matrix(frame, covariates, levels=levels, intercept=False)
     if x.shape[1] == 0:
         raise ValueError("no covariate with variation")
+    if np.linalg.matrix_rank(x.to_numpy(dtype=float)) < x.shape[1]:
+        raise ValueError(
+            "some covariates are exact combinations of others (one variable in two units, or one the others add up "
+            "to): the model cannot separate them; leave one out"
+        )
     model = PHReg(t, x.to_numpy(), status=e, ties=ties)
-    res = model.fit()
+    with catch_warnings(record=True) as caught:
+        simplefilter("always")
+        res = model.fit()
+    if any("Convergence" in type(w.message).__name__ for w in caught):
+        warnings.append(
+            "the fit did not converge: its estimates may not be the maximum of the likelihood"
+        )
     z = stats.norm.ppf(1 - alpha / 2)
     params = np.asarray(res.params, dtype=float)
     bse = np.asarray(res.bse, dtype=float)
     if not (np.isfinite(params).all() and np.isfinite(bse).all()):
-        # a level without events sends its log hazard ratio to minus infinity (monotone likelihood): the fit then
-        # returns no finite estimate, for any term, and a table of missing values would read as a result
+        # a level without events sends its log hazard ratio towards minus infinity (monotone likelihood): the fit can
+        # return no finite estimate, for any term, and a table of missing values would read as a result
         raise ValueError(
             "the Cox model has no finite estimate: a level of a categorical covariate without events or held by very "
-            "few rows, or a covariate that orders the event times perfectly, makes a hazard ratio infinite (monotone "
-            "likelihood). Merge or clean such levels, then fit again."
+            "few rows, or a covariate that orders the event times perfectly, sends a hazard ratio to 0 or to "
+            "infinity (monotone likelihood). Clean or merge such levels on subject-matter grounds, then fit again."
         )
-    table = pd.DataFrame(
-        {
-            "term": list(x.columns),
-            "log_hr": params,
-            "se": bse,
-            "hr": np.exp(params),
-            "ci_low": np.exp(params - z * bse),
-            "ci_high": np.exp(params + z * bse),
-            "z": params / bse,
-            "p": 2 * stats.norm.sf(np.abs(params / bse)),
-        }
-    )
+    if (extreme := extreme_estimates(params, bse)) is not None:
+        warnings.append(extreme)
+    with np.errstate(
+        over="ignore"
+    ):  # an extreme estimate's interval runs to infinity: said above, not on stderr
+        table = pd.DataFrame(
+            {
+                "term": list(x.columns),
+                "log_hr": params,
+                "se": bse,
+                "hr": np.exp(params),
+                "ci_low": np.exp(params - z * bse),
+                "ci_high": np.exp(params + z * bse),
+                "z": params / bse,
+                "p": 2 * stats.norm.sf(np.abs(params / bse)),
+            }
+        )
     concordance = None
     ph_table = None
     try:
