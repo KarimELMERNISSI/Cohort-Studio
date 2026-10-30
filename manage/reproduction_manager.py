@@ -42,6 +42,7 @@ from enrich.imputation_service import (
     impute_rows,
     left_missing,
 )
+from enrich.recode import recode_column
 from enrich.transformation_logic import apply_variable_transformation
 from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
@@ -388,6 +389,22 @@ def _rename_columns(df, step, index, paths, warnings):
     return df.rename(columns=(step.get("params", {}) or {}).get("mapping", {}) or {}), None
 
 
+def _recode_levels(df, step, index, paths, warnings):
+    params = step.get("params", {}) or {}
+    source = params.get("source")
+    new_df, _ = recode_column(
+        df, source, params.get("target"), params.get("mapping") or {}, replaces=bool(params.get("replaces"))
+    )
+    # the values the recorded mapping does not list were kept as written: said by their number, never named
+    distinct, recorded = int(df[source].dropna().astype(str).nunique()), params.get("values_before")
+    if recorded is not None and distinct != recorded:
+        warnings.append(
+            f"step {index + 1}: {source} holds {distinct} distinct values, {recorded} when the step was recorded; "
+            "those the recorded mapping does not list were kept as written"
+        )
+    return new_df, None
+
+
 def _apply_filter(df, step, index, paths, warnings):
     kept = (step.get("params", {}) or {}).get("kept_index")
     if kept is None:
@@ -465,6 +482,7 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
     "data_type_conversion": _data_type_conversion,
     "missing_value_handling": _missing_value_handling,
     "rename_columns": _rename_columns,
+    "recode_levels": _recode_levels,
     "apply_filter": _apply_filter,
     "population_definition": _population_definition,
     "freeze_population": _freeze_population,

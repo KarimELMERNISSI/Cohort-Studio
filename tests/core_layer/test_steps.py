@@ -198,6 +198,7 @@ def test_the_sets_the_modules_kept_are_derived_unchanged() -> None:
         "multiple_imputation",
         "apply_filter",
         "outlier_clipping",
+        "recode_levels",
         "freeze_population",
         "external_write",
         "missing_value_handling",

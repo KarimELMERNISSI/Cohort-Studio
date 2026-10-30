@@ -90,6 +90,8 @@ _register(
         "data_type_conversion", "Data Type Conversion", VALIDATE, RECOMPUTE, changes_data=False
     )
 )
+# Data > Clean: a categorical variable's values recoded into a new column, the original kept
+_register(StepKind("recode_levels", "Values Recoded", VALIDATE, RECOMPUTE, changes_data=True))
 _register(
     StepKind(
         "outlier_clipping",
