@@ -22,6 +22,7 @@ from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
 from ui.results import (
     CURRENT,
+    STALE_CODE,
     STALE_DATA,
     ReportItem,
     remove_from_report,
@@ -67,6 +68,8 @@ def analysis_counts(items: list[ReportItem]) -> list[AnalysisCount]:
 
 
 def _stale_text(status: str) -> str:
+    if status == STALE_CODE:
+        return "computed before CohortStudio was updated"
     if status == STALE_DATA:
         return "computed on data that have changed since"
     return "computed on another analysis population"
@@ -210,7 +213,7 @@ def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dic
     kept, omitted = [], []
     for item in items:
         status = report_status(item)
-        if status == CURRENT or include_stale:
+        if status == CURRENT or (include_stale and status != STALE_CODE):  # an outdated object cannot be drawn
             kept.append((item, status))
         else:
             omitted.append(f"{item.title} ({_stale_text(status)})")

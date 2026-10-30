@@ -1159,6 +1159,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The numbers do not change:** the same functions on the same rows; the model is the comparison plus the
   adjustment, so the same covariates give the same fit. Stored results and the study dossier are unchanged. Median
   survival times read without an exponent (1,119 days, not 1.12e+03).
+- A result computed before CohortStudio was updated on a running server (its code reloaded) is no longer shown: the
+  page says so and asks to run the analysis again, and the study dossier leaves it out, even with the stale results
+  included. Such a result was an object of the old code, and the page or the dossier stopped on a field it lacked.
 
 ### Survival: one rule for every median (M6, results)
 

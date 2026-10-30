@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,6 +31,9 @@ CURRENT, STALE_DATA, STALE_POPULATION, STALE_CONFIG, MISSING = (
     "stale_population",
     "stale_config",
     "missing",
+)
+STALE_CODE = (
+    "stale_code"  # computed before the application was updated: never shown, never in the dossier
 )
 
 
@@ -169,10 +173,29 @@ def remember(
     return stamp
 
 
+def _outdated(value: Any) -> bool:
+    """
+    Whether ``value`` is of a class its module no longer defines: the application was updated (its modules reloaded)
+    since the result was computed, and the page or the dossier would read fields the old object lacks.
+    """
+    cls = type(value)
+    module = sys.modules.get(cls.__module__)
+    if module is None or cls.__module__ == "builtins":
+        return False
+    current: Any = module
+    for part in cls.__qualname__.split(
+        "."
+    ):  # a class defined in a function cannot be looked up: kept
+        current = getattr(current, part, None)
+    return current is not None and current is not cls
+
+
 def status(key: str, *, config: Any) -> str:
     stored = _store().get(key)
     if stored is None:
         return MISSING
+    if _outdated(stored.value):
+        return STALE_CODE
     from ui.state import get_state
 
     identity = get_state().identity()
@@ -197,6 +220,11 @@ def recall(key: str, *, config: Any, notice: bool = True) -> Any | None:
     state = status(key, config=config)
     if state == CURRENT:
         return _store()[key].value
+    if notice and state == STALE_CODE:
+        st.warning(
+            "CohortStudio was updated since this result was computed; it is no longer shown. Run the analysis again.",
+            icon=":material/update:",
+        )
     if notice and state in (STALE_DATA, STALE_POPULATION):
         stamp = _store()[key].stamp
         if state == STALE_DATA:
@@ -290,8 +318,14 @@ def report_items() -> list[ReportItem]:
 
 
 def report_status(item: ReportItem) -> str:
-    """CURRENT, or STALE_DATA / STALE_POPULATION when the data or the population changed since it was computed."""
+    """
+    CURRENT, or STALE_DATA / STALE_POPULATION when the data or the population changed since it was computed, or
+    STALE_CODE when the application was updated since.
+    """
     from ui.state import get_state
+
+    if _outdated(item.value):
+        return STALE_CODE
 
     identity = get_state().identity()
     if identity is None:
