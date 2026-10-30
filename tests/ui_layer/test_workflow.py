@@ -232,7 +232,7 @@ def test_progress_ticks_stale_badges_and_the_next_step() -> None:
     assert any(r.getAttribute("class") == "pill" for r in varmap.getElementsByTagName("rect"))
     assert svg.count("AI off") == 1
     assert default_hint(progress).startswith(
-        "Suggested next: Validate. Checked before the last 1 change"
+        "Suggested next: Validate & clean. Checked before the last 1 change"
     )
 
 
@@ -276,7 +276,7 @@ def test_model_carries_details_for_the_hint_line() -> None:
     assert model["nodes"]["docs"]["needs_ai"] is True
     assert "Incremental" in model["nodes"]["enrich"]["description"]
     assert ["docs", "varmap"] in model["edges"] and ["enrich", "analyse"] in model["edges"]
-    assert model["hint"].startswith("Suggested next: Validate.")
+    assert model["hint"].startswith("Suggested next: Validate & clean.")
     # The version follows the drawing: stable for a state, different when the state changes.
     assert model["version"] == workflow_model(LOADED, ai_on=False)["version"]
     assert model["version"] != workflow_model(NO_DATA, ai_on=False)["version"]

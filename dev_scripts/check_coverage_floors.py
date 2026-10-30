@@ -31,12 +31,14 @@ from pathlib import Path
 # opening the new tab; enrich to 83 at 85.0 and manage to 77 at 79.8, which were at the margin (M6, 2026-10-29).
 # app_pages to 62 at 64.7 in CI, with the tests of the Enrich page with a draft, the merge's question on the first or
 # last row, and the Date checks tab's columns already dates and extraction date (M6, 2026-10-30).
+# enrich to 85 at 87.7 with the tests of the recoding (Data > Clean), explore to 77 at 79.1 with those of Domain
+# Validity's checks (M6, 2026-10-30, measured locally: CI stopped at two failing tests before its floors).
 FLOORS: dict[str, float] = {
     "app_pages": 62.0,
     "biostats": 93.0,
     "core": 94.0,
-    "enrich": 83.0,
-    "explore": 75.0,
+    "enrich": 85.0,
+    "explore": 77.0,
     "graph": 92.0,
     "ingest": 89.0,
     "manage": 77.0,
