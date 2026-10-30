@@ -16,7 +16,7 @@ from streamlit.testing.v1 import AppTest
 from core.attrition import participant_flow
 from core.fingerprint import ensure_row_ids
 from core.population import evaluate_population
-from enrich.external_data import KeyCheck, add_data, align_date_keys, key_check
+from enrich.external_data import KeyCheck, add_data, align_date_keys, date_key_formats, key_check
 from ingest.dates import convert
 
 MAIN = ensure_row_ids(pd.DataFrame({"pid": [1.0, 2.0, 3.0, np.nan], "age": [50, 60, 70, 80]}))
@@ -247,7 +247,11 @@ def test_a_date_key_is_read_as_the_dataset_s_dates_were() -> None:
     )
     file = pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS, "hb": [12.1, 13.4, 11.8]})
     keys = ["pid", "visit_date"]
-    aligned = align_date_keys(main, file, MONTH_FIRST)
+    formats = date_key_formats(
+        main, file, MONTH_FIRST, dayfirst=True
+    )  # the recorded order, not the import's
+    assert formats == MONTH_FIRST
+    aligned = align_date_keys(main, file, formats)
     assert aligned.attrs["date_formats"] == MONTH_FIRST
     merged = add_data(main, aligned, keys, keys, ["hb"], missing_keys="never")
     assert merged["hb"].tolist() == [12.1, 13.4, 11.8]
@@ -256,14 +260,42 @@ def test_a_date_key_is_read_as_the_dataset_s_dates_were() -> None:
     assert before["hb"].isna().all() and before.attrs["join_counts"]["main_rows_unmatched"] == 3
 
 
-def test_date_cells_of_the_file_are_kept() -> None:
-    main = convert(pd.DataFrame({"visit_date": VISITS}), MONTH_FIRST)
-    file = pd.DataFrame(
-        {"visit_date": pd.to_datetime(["2024-03-01", "2024-04-02"]), "hb": [12.1, 13.4]}
+@pytest.mark.parametrize(
+    ("written", "how"),
+    [
+        (["2024-01-03", "2024-02-04", "2024-03-05"], {"format": "iso"}),  # a lab export
+        (["03/01/2024 ", "04/02/2024", "05/03/2024"], {"format": "day_first"}),
+        (
+            pd.to_datetime(["2024-01-03", "2024-02-04", "2024-03-05"]),
+            {"format": "dates"},
+        ),  # date cells kept
+        ([45294, 45326, 45356], None),  # Excel serial numbers: read as before
+    ],
+)
+def test_a_file_writing_its_dates_in_another_shape_still_matches(written, how) -> None:
+    """The dataset's visit_date read day first. Read with that format, an ISO export or Excel serials matched no row,
+    where the reading before matched them all; the file's own values now decide its format, the recorded one only
+    the order of day and month they do not show."""
+    day_first = {"visit_date": {"format": "day_first"}}
+    main = ensure_row_ids(
+        convert(pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS}), day_first)
     )
-    aligned = align_date_keys(main, file, MONTH_FIRST)
-    pd.testing.assert_series_equal(aligned["visit_date"], file["visit_date"])
-    assert aligned.attrs["date_formats"] == MONTH_FIRST  # recorded: the replay keeps them too
+    file = pd.DataFrame({"pid": [1, 2, 3], "visit_date": written, "hb": [12.1, 13.4, 11.8]})
+    formats = date_key_formats(main, file, day_first, dayfirst=False)
+    assert formats.get("visit_date") == how
+    keys = ["pid", "visit_date"]
+    merged = add_data(
+        main, align_date_keys(main, file, formats), keys, keys, ["hb"], missing_keys="never"
+    )
+    assert merged["hb"].tolist() == [12.1, 13.4, 11.8]
+
+
+def test_an_identifier_named_as_the_count_s_own_column_is_counted() -> None:
+    main = ensure_row_ids(pd.DataFrame({"_found": [1, 2, 3]}))
+    merged = add_data(
+        main, pd.DataFrame({"_found": [2, 3], "hb": [1.0, 2.0]}), ["_found"], ["_found"], ["hb"]
+    )
+    assert merged.attrs["join_counts"]["main_rows_unmatched"] == 1
 
 
 def test_rows_without_a_match_are_counted_apart_from_rows_without_an_identifier() -> None:
@@ -274,7 +306,8 @@ def test_rows_without_a_match_are_counted_apart_from_rows_without_an_identifier(
         1,
     )  # pid nan; pid 1
     inner = add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], strategy="inner", file_rows="first")
-    assert inner.attrs["join_counts"]["main_rows_unmatched"] == 0  # left out, counted as dropped
+    counts = inner.attrs["join_counts"]
+    assert (counts["main_rows_unmatched"], counts["main_rows_dropped"]) == (1, 1)  # pid 1, left out
 
 
 def _merged_app() -> None:
@@ -306,3 +339,19 @@ def test_the_page_warns_when_no_row_of_the_dataset_matched() -> None:
     )
     at.run()
     assert not at.warning and at.success[0].value == "Enrichment completed: 3 rows before, 3 after."
+    # an inner merge matching nothing leaves no row: it was told a success
+    at.session_state["merged"] = add_data(
+        main,
+        align_date_keys(main, file),
+        keys,
+        keys,
+        ["hb"],
+        strategy="inner",
+        missing_keys="never",
+    )
+    at.run()
+    assert not at.success and at.warning[0].value.startswith(
+        "No row of the dataset matched a row of the file"
+    )
+    assert "3 rows of the dataset left out" in at.warning[0].value
+    assert "matched no row of the file (nothing" not in at.warning[0].value  # said once

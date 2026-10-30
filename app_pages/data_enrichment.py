@@ -320,16 +320,17 @@ def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd
         return False
     counts = enriched_df.attrs.get("join_counts") or {}
     said = [f"{counts['rows_before']:,} rows before, {counts['rows_after']:,} after"] if counts else []
-    for key, words in (
-        ("main_rows_repeated", "rows of the dataset repeated"),
-        ("rows_added", "rows added from the file"),
-        ("main_rows_dropped", "rows of the dataset left out"),
-        ("file_rows_left_out", "rows of the file left out (one per identifier)"),
-        ("main_rows_without_key", "rows of the dataset without an identifier (nothing from the file)"),
-        ("main_rows_unmatched", "rows of the dataset matched no row of the file (nothing from it)"),
-    ):
-        if counts.get(key):
-            said.append(f"{counts[key]:,} {words}")
+    words = {
+        "main_rows_repeated": "rows of the dataset repeated",
+        "rows_added": "rows added from the file",
+        "main_rows_dropped": "rows of the dataset left out",
+        "file_rows_left_out": "rows of the file left out (one per identifier)",
+        "main_rows_without_key": "rows of the dataset without an identifier (nothing from the file)",
+        "main_rows_unmatched": "rows of the dataset matched no row of the file (nothing from it)",
+    }
+    if counts.get("main_rows_dropped"):  # an inner or right merge left them out: said once, as left out
+        words.pop("main_rows_unmatched")
+    said += [f"{counts[key]:,} {text}" for key, text in words.items() if counts.get(key)]
     keyed = counts.get("rows_before", 0) - counts.get("main_rows_without_key", 0)
     if keyed and counts.get("main_rows_unmatched", 0) >= keyed:
         st.warning(
@@ -341,10 +342,21 @@ def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd
     return True
 
 
-def _date_formats() -> dict:
-    """How Date checks read the dataset's date columns: a merge reads the file's columns of those names the same way."""
+def _date_formats(main_df: pd.DataFrame, enrichment_df: pd.DataFrame) -> dict:
+    """
+    How the file's columns named as the dataset's date columns are read (enrich.external_data.date_key_formats): the
+    shape of their own values, the order of day and month from the format Date checks recorded for the dataset's
+    column, else the import's setting. Date checks commits its conversions: the trace holds them, the draft never.
+    """
     state = get_state()
-    return recorded_formats([*state.transformation_manager.history, *state.pending_steps()])
+    ref = state.dataset
+    dayfirst = (
+        bool(ref.parse.dayfirst)
+        if ref is not None and ref.parse is not None
+        else bool(st.session_state.get("import_default_dayfirst"))
+    )
+    recorded = recorded_formats(state.transformation_manager.history)
+    return eed.date_key_formats(main_df, enrichment_df, recorded, dayfirst=dayfirst)
 
 
 def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
@@ -422,7 +434,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             return None
         
         # date keys read as Date checks read the dataset's (the replay of the step does the same)
-        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats())
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats(main_df, enrichment_df))
 
         identifier = st.multiselect(
             "Select Common Row Identifier",
@@ -475,7 +487,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
         col1, col2 = st.columns(2)
         
         # date keys read as Date checks read the dataset's (the replay of the step does the same)
-        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats())
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats(main_df, enrichment_df))
 
         with col1:
             left_identifier = st.multiselect(

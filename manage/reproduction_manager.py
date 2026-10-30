@@ -202,7 +202,11 @@ def _enrichment(df, step, index, paths, warnings):
     enrichment_df = _read_any(resolved, ParseOptions.from_dict(recorded) if recorded else None, paths)
     if enrichment_df is None:
         raise ValueError(f"could not read enrichment file {resolved}")
-    enrichment_df = eed.align_date_keys(df, enrichment_df, params.get("date_formats"))
+    main = df
+    if params.get("retained_main_columns"):
+        main = df[[c for c in df.columns if str(c) in set(params["retained_main_columns"])]]
+    # aligned on the columns the merge keeps, as the page aligned them
+    enrichment_df = eed.align_date_keys(main, enrichment_df, params.get("date_formats"))
     identifier = params.get("identifier") or params.get("left_id_names")
     left_ids = [identifier] if isinstance(identifier, str) else list(identifier or [])
     right = params.get("right_id_names") or left_ids
@@ -210,9 +214,6 @@ def _enrichment(df, step, index, paths, warnings):
     retained = params.get("retained_enrichment_columns")
     if retained:
         enrichment_df = enrichment_df[[c for c in enrichment_df.columns if str(c) in set(retained)]]
-    main = df
-    if params.get("retained_main_columns"):
-        main = df[[c for c in df.columns if str(c) in set(params["retained_main_columns"])]]
     additional_columns = [c for c in enrichment_df.columns if c not in set(right_ids)]
     merged = eed.add_data(
         df=main, additional_df=enrichment_df, left_id_names=left_ids, right_id_names=right_ids,

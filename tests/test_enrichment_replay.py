@@ -107,7 +107,10 @@ def _record(
         session.stage(converted, "data_type_conversion", params, "Dates")
         session.commit_staging()
         working = session.draft_frame()
-    enrichment = eed.align_date_keys(working, enrichment, recorded_formats(tm.history) if date_format else None)
+    formats = None
+    if date_format:  # as the page reads them: the file's own values, the order recorded for the dataset's column
+        formats = eed.date_key_formats(working, enrichment, recorded_formats(tm.history), dayfirst=True)
+    enrichment = eed.align_date_keys(working, enrichment, formats)
     params = {
         "enrichment_file_path": str(path),
         "parse_options": enrichment.attrs.get("parse_options"),

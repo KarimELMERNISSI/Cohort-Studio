@@ -352,6 +352,14 @@ def test_a_merge_reads_the_format_the_last_conversion_recorded() -> None:
         "b": {"format": "iso"},
     }
     assert recorded_formats(steps[:1]) == {}  # a conversion recorded before M6 holds no format
+    renamed = [
+        *steps,
+        {"function": "rename_columns", "params": {"mapping": {"a": "visit", "b": "a"}}},
+    ]
+    assert recorded_formats(renamed) == {
+        "visit": {"format": "month_first", "pivot": 30},
+        "a": {"format": "iso"},  # the column now named a: b's format, never a's
+    }
 
 
 def test_a_column_already_dates_is_checked_as_it_is() -> None:

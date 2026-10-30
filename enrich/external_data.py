@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pandas as pd  # for Dataframes manipulation
 
 from core.fingerprint import ROW_ID, extend_row_ids
-from ingest.dates import read_dates, smart_parse_dates
+from ingest.dates import AS_DATES, CHOSEN, detect, read_dates, smart_parse_dates
 from ingest.loaders import read_path
 
 logger = logging.getLogger(__name__)
@@ -73,14 +73,50 @@ def _unmatchable(values: pd.Series, others: pd.Series):
     return marker
 
 
+# the order of day and month each recorded format reads; the others (ISO, Excel serials) read none
+_DAY_FIRST = {"day_first": True, "dmy_compact": True, "month_first": False, "ymd_compact": False}
+
+
+def date_key_formats(main_df, additional_df, recorded, *, dayfirst=False):
+    """
+    How the Enrich page reads the file's columns named as a date column of the main table, so that date keys match:
+    the file's date cells as they are ("dates"); a column of text with the format the shape of its own values gives
+    (ingest.dates.detect: an ISO export reads as ISO whatever the dataset's), the order of day and month, where its
+    values do not show it, that of the main column's recorded format (``recorded``, from
+    :func:`ingest.dates.recorded_formats`), else ``dayfirst`` (the import's setting). A column whose values have no
+    date shape, Excel serial numbers, and two-digit years without the main column's pivot are left out: read with
+    smart_parse_dates, as before. Recorded with the step: the replay reads them, never detects again.
+    """
+    found = {}
+    for col in additional_df.columns:
+        if col not in main_df.columns or not pd.api.types.is_datetime64_any_dtype(main_df[col]):
+            continue
+        values = additional_df[col]
+        if pd.api.types.is_datetime64_any_dtype(values):
+            if getattr(values.dt, "tz", None) is None:
+                found[str(col)] = {"format": AS_DATES}
+            continue
+        mine = (recorded or {}).get(str(col)) or {}
+        how = detect(values, dayfirst=_DAY_FIRST.get(mine.get("format"), dayfirst), name=str(col))
+        if how.format in (None, "excel_serial") or how.shape < CHOSEN * how.values:
+            continue
+        read = {"format": how.format}
+        if how.two_digit_years:
+            if mine.get("pivot") is None:
+                continue
+            read["pivot"] = int(mine["pivot"])
+        found[str(col)] = read
+    return found
+
+
 def align_date_keys(main_df, additional_df, formats=None):
     """
     The additional table with its columns parsed as dates where the main table holds dates under the same name,
-    so that date keys match in the merge. A column is read with the format Date checks recorded for the main table's
-    column (``formats``, from :func:`ingest.dates.recorded_formats`); a column without one, and every column of a step
-    recorded before (``formats`` None), with smart_parse_dates, day first by position, as before. The formats applied
-    are in ``attrs["date_formats"]``, recorded with the step. The Enrich page and the replay of the step both call it,
-    on the same tables, so they merge the same rows.
+    so that date keys match in the merge: each with its format in ``formats`` (from :func:`date_key_formats` on the
+    page, from the step on replay); a column without one, and every column of a step recorded before (``formats``
+    None), with smart_parse_dates, day first by position, as before. The formats applied are in
+    ``attrs["date_formats"]``, recorded with the step. The Enrich page and the replay of the step both call it, on the
+    same tables, so they merge the same rows.
     """
     aligned = additional_df.copy()
     aligned.attrs = dict(additional_df.attrs)
@@ -92,8 +128,7 @@ def align_date_keys(main_df, additional_df, formats=None):
                 aligned[col], _ = smart_parse_dates(aligned[col])
                 continue
             applied[str(col)] = dict(how)
-            if not pd.api.types.is_datetime64_any_dtype(aligned[col]):  # date cells of the file stay as they are
-                aligned[col] = read_dates(aligned[col], str(how["format"]), pivot=how.get("pivot"))
+            aligned[col] = read_dates(aligned[col], str(how["format"]), pivot=how.get("pivot"))
     aligned.attrs["date_formats"] = applied
     return aligned
 
@@ -103,8 +138,11 @@ def _unmatched(left, right, left_ids, right_ids) -> int:
     if not left_ids or len(left_ids) != len(right_ids):
         return 0
     keys = right[right_ids].drop_duplicates().set_axis(left_ids, axis=1)
+    flag = "_found"
+    while flag in left_ids:  # an identifier of that name: the indicator takes another
+        flag += "_"
     try:
-        found = left[left_ids].merge(keys, how="left", on=left_ids, indicator="_found")["_found"].eq("both")
+        found = left[left_ids].merge(keys, how="left", on=left_ids, indicator=flag)[flag].eq("both")
     except (ValueError, TypeError):  # identifiers pandas cannot compare: the merge itself said so
         return 0
     return int((~found).sum())
@@ -163,8 +201,8 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
                       validate=validate)
     if combined is left:  # the merge failed: the main dataset is returned unchanged
         return df
-    # rows of the dataset kept without a row of the file (an inner or right join leaves them out: counted as dropped)
-    unmatched = _unmatched(left, right, left_ids, right_ids) if str(strategy).lower() in ("left", "outer") else 0
+    # rows of the dataset no row of the file matched (an inner or right merge leaves them out: dropped as well)
+    unmatched = _unmatched(left, right, left_ids, right_ids) if on_keys else 0
     for col, (marker, dtype) in restored.items():  # the missing keys back, in their own kind
         if col in combined.columns:
             combined[col] = combined[col].mask(combined[col] == marker)

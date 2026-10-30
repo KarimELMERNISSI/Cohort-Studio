@@ -392,6 +392,63 @@ def _enrich_page_script() -> None:
     app()
 
 
+def _merge_page_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from core.state import DatasetRef
+    from ingest.dates import METHOD, convert
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        state.set_dataset(
+            pd.DataFrame(
+                {"pid": [1, 2, 3], "visit_date": ["03/01/2024", "04/02/2024", "05/03/2024"]}
+            ),
+            DatasetRef(name="d", origin="upload", file_hash="h"),
+        )
+        formats = {"visit_date": {"format": "month_first"}}
+        state.commit_change(
+            convert(state.base, formats),
+            "data_type_conversion",
+            {
+                "columns": ["visit_date"],
+                "new_type": "datetime",
+                "method": METHOD,
+                "formats": formats,
+            },
+            "Converted 1 column to dates",
+        )
+        frame = state.draft_frame()  # a change in the Enrich draft
+        state.stage(
+            frame.assign(k=1), "variable_computation", {"variable_name": "k", "formula": "1"}, "k"
+        )
+    from app_pages.data_enrichment import app
+
+    app()
+
+
+def test_a_merge_is_configured_while_the_draft_holds_a_change(data_root: Path) -> None:
+    """The dates the trace recorded were looked for in the draft's steps too, which are no dictionaries: the page
+    stopped with an AttributeError as soon as the draft held a change and a file was chosen."""
+    folder = data_root / "users" / "merge_draft"
+    folder.mkdir(parents=True)
+    (folder / "visits.csv").write_text(
+        "pid,visit_date,hb\n1,03/01/2024,12.1\n2,04/02/2024,13.4\n", encoding="utf-8"
+    )
+    at = AppTest.from_function(_merge_page_script, default_timeout=180)
+    at.session_state["username"] = "merge_draft"
+    at.session_state["user_authenticated"] = True
+    at.session_state["user_role"] = "researcher"
+    at.run()
+    at.radio(key="enrichment_data_method").set_value("Enter File Path").run()
+    at.text_input(key="enrichment_data_path").set_value("visits.csv").run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert "Select Common Row Identifier" in [m.label for m in at.multiselect]
+
+
 def test_the_draft_banner_is_at_the_top_of_the_enrich_page(data_root: Path) -> None:
     """It used to be rendered after the tabs, so it appeared at the bottom of the page, under every tab."""
     at = AppTest.from_function(_enrich_page_script, default_timeout=180)

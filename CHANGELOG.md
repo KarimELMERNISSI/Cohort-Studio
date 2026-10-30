@@ -1071,9 +1071,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **A date identifier is read as the dataset's dates were.** A file's date column of the same name was read day
   first by position, whatever Date checks had decided for the dataset's: with the dates read month first, a merge on
   (participant, visit date) matched nothing while Enrich said "3 rows before, 3 after". The file's column is now
-  read with the format recorded for the dataset's (date cells of the file are kept), and the formats are recorded
-  with the merge and replayed; a column converted before, without a recorded format, is read as before.
-- After a merge, Enrich counts the rows of the dataset that matched no row of the file, and warns when none matched.
+  read with the format its own values show (an ISO export as ISO; its date cells as they are), the order of day and
+  month, where its values do not show it, taken from the format Date checks recorded for the dataset's column (else
+  the import's setting). The formats are recorded with the merge and replayed. Excel serial numbers, and a column
+  whose values show no date format, are read as before; a merge recorded before replays as it did.
+- After a merge, Enrich counts the rows of the dataset that matched no row of the file, and warns when none matched,
+  whatever the kind of merge: an inner merge that matched nothing left no row and said it had completed.
 
 ### Survival & regression: the outcome first, the effect first
 
