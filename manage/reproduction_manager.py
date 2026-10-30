@@ -223,6 +223,8 @@ def _enrichment(df, step, index, paths, warnings):
         file_rows=params.get("file_rows", "all"),
         # whether a missing identifier matched another (a step recorded before: as pandas merges, it did)
         missing_keys=params.get("missing_keys", "match"),
+        # which row is the first or the last (a step recorded before: the file's order)
+        order_by=params.get("order_by"),
     )
     if merged is main:  # refused (the merge returns the dataset unchanged): said here, not one step later
         raise ValueError(

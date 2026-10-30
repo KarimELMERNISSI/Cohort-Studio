@@ -355,3 +355,84 @@ def test_the_page_warns_when_no_row_of_the_dataset_matched() -> None:
     )
     assert "3 rows of the dataset left out" in at.warning[0].value
     assert "matched no row of the file (nothing" not in at.warning[0].value  # said once
+
+
+VISIT_ROWS = pd.DataFrame(
+    {
+        "pid": [1, 1, 1, 2, 2],
+        "visit": ["15/03/2021", "02/01/2021", "", "05/05/2022", "01/02/2020"],
+        "hb": [12.0, 11.0, 9.0, 13.0, 14.0],
+    }
+)
+BY_VISIT = {"column": "visit", "format": "day_first"}
+
+
+@pytest.mark.parametrize(
+    ("file_rows", "order_by", "hb"),
+    [
+        ("first", None, [12.0, 13.0]),  # the file's order, as before
+        ("last", None, [9.0, 14.0]),
+        ("first", BY_VISIT, [11.0, 14.0]),  # the earliest
+        ("last", BY_VISIT, [12.0, 13.0]),  # the latest: never the undated row while one has a date
+    ],
+)
+def test_the_first_or_last_row_by_a_column_of_dates(file_rows, order_by, hb) -> None:
+    """The first or the last row in the file's order is as reproducible as that order, which nothing records."""
+    main = ensure_row_ids(pd.DataFrame({"pid": [1, 2]}))
+    merged = add_data(
+        main, VISIT_ROWS, ["pid"], ["pid"], ["hb"], file_rows=file_rows, order_by=order_by
+    )
+    assert merged["hb"].tolist() == hb
+
+
+def test_rows_ordered_by_a_column_need_its_dates() -> None:
+    main = ensure_row_ids(pd.DataFrame({"pid": [1, 2]}))
+    with pytest.raises(ValueError, match="holds no dates"):  # text, and no format given
+        add_data(
+            main,
+            VISIT_ROWS,
+            ["pid"],
+            ["pid"],
+            ["hb"],
+            file_rows="first",
+            order_by={"column": "visit"},
+        )
+    with pytest.raises(ValueError, match="names no column of the file"):
+        add_data(
+            main,
+            VISIT_ROWS,
+            ["pid"],
+            ["pid"],
+            ["hb"],
+            file_rows="last",
+            order_by={"column": "when"},
+        )
+
+
+def _order_app() -> None:
+    import streamlit as st
+
+    from app_pages.data_enrichment import file_rows_order
+
+    st.session_state["order"] = file_rows_order(st.session_state["file"], st.session_state["rows"])
+
+
+def test_the_page_asks_which_row_is_the_first_when_the_file_holds_dates() -> None:
+    at = AppTest.from_function(_order_app, default_timeout=120)
+    at.session_state["file"] = VISIT_ROWS
+    at.session_state["rows"] = "first"
+    at.run()
+    assert (
+        not at.exception and at.session_state["order"] is None
+    )  # its place in the file, until chosen
+    box = at.selectbox(key="enrich_file_rows_order")
+    assert box.options == ["By its place in the file", "The earliest visit"]
+    box.set_value("visit").run()
+    assert at.session_state["order"] == BY_VISIT
+    at.session_state["rows"] = "all"  # every row: nothing to order
+    at.run()
+    assert at.session_state["order"] is None and not at.selectbox
+    at.session_state["rows"] = "first"
+    at.session_state["file"] = VISIT_ROWS.drop(columns="visit")  # no dates: nothing asked
+    at.run()
+    assert at.session_state["order"] is None and not at.selectbox

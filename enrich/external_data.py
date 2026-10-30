@@ -133,6 +133,18 @@ def align_date_keys(main_df, additional_df, formats=None):
     return aligned
 
 
+def _order_dates(rows, order_by) -> pd.Series:
+    """The dates that order a file's rows for "first" or "last": its column, read with the format recorded for it."""
+    column = order_by.get("column")
+    if column not in rows.columns:
+        raise ValueError(f"order_by names no column of the file: {column!r}")
+    if order_by.get("format"):
+        return read_dates(rows[column], str(order_by["format"]), pivot=order_by.get("pivot"))
+    if not pd.api.types.is_datetime64_any_dtype(rows[column]):
+        raise ValueError(f"{column!r} holds no dates: the format it is written in is needed")
+    return rows[column]
+
+
 def _unmatched(left, right, left_ids, right_ids) -> int:
     """Rows of the dataset whose identifier no row of the file holds, the rows without one included."""
     if not left_ids or len(left_ids) != len(right_ids):
@@ -148,7 +160,7 @@ def _unmatched(left, right, left_ids, right_ids) -> int:
     return int((~found).sum())
 
 
-def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, file_rows="all", missing_keys="match"):
+def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=None, strategy='left', conflict_resolution=None, file_rows="all", missing_keys="match", order_by=None):
     """
     Enrich the dataset by either merging on common identifiers (columns) or appending rows.
 
@@ -157,7 +169,11 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
     ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
     ``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys;
     ``missing_keys`` (:data:`MISSING_KEYS`) whether a missing key matches another ("match", pandas' way, kept for
-    the steps recorded before; Enrich merges with "never"). Same parameters and result as :func:`_merge`.
+    the steps recorded before; Enrich merges with "never"). ``order_by`` ({"column", "format", "pivot"}): with "first"
+    or "last", a participant's rows of the file are taken in the order of that column's dates, the earliest or the
+    latest (rows on the same date in the file's order; a row without a date only when none has one), not in the file's
+    order; "format" reads a text column (ingest.dates), None a column of dates. Recorded with the step; a step
+    recorded before (None) took the file's order. Same parameters and result as :func:`_merge`.
     """
     if file_rows not in FILE_ROWS:
         raise ValueError(f"file_rows is one of {', '.join(FILE_ROWS)}, not {file_rows!r}")
@@ -174,7 +190,12 @@ def add_data(df, additional_df, left_id_names, right_id_names, additional_cols=N
     identified = right[right_ids].notna().all(axis=1) if never else pd.Series(True, index=right.index)
     file_rows_left_out = 0
     if keyed and file_rows in ("first", "last"):  # one row per identifier; rows without one are no one's
-        kept = pd.concat([right[identified].drop_duplicates(subset=right_ids, keep=file_rows), right[~identified]])
+        candidates = right[identified]
+        if order_by:  # the earliest or the latest date first or last; undated rows behind the dated ones
+            when = _order_dates(candidates, order_by).reset_index(drop=True)
+            undated = "last" if file_rows == "first" else "first"
+            candidates = candidates.iloc[when.sort_values(kind="stable", na_position=undated).index]
+        kept = pd.concat([candidates.drop_duplicates(subset=right_ids, keep=file_rows), right[~identified]])
         kept = kept.loc[right.index.intersection(kept.index)]  # in the file's order
         file_rows_left_out, right = len(right) - len(kept), kept
         identified = identified.loc[kept.index]

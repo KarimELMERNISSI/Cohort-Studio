@@ -74,6 +74,7 @@ def _record(
     file_rows: str | None = None,
     missing_keys: str | None = None,
     date_format: str | None = None,
+    order_by: dict | None = None,
 ):
     """
     A session that merges ``enrichment`` (read from ``path``) as the Enrich page does: align, merge, stage.
@@ -124,6 +125,8 @@ def _record(
         params["file_rows"] = file_rows
     if missing_keys is not None:
         params["missing_keys"] = missing_keys
+    if order_by is not None:
+        params["order_by"] = order_by
     if date_format is not None:
         params["date_formats"] = enrichment.attrs["date_formats"]
     merged = eed.add_data(
@@ -136,6 +139,7 @@ def _record(
         conflict_resolution="keep",
         file_rows=file_rows or "all",
         missing_keys=missing_keys or "match",
+        order_by=order_by,
     )
     session.stage(merged, "enrichment", params, "Enriched with external data")
     session.commit_staging()
@@ -275,3 +279,16 @@ def test_missing_values_stay_missing_through_the_merge(files: dict[str, Path]) -
     main = pd.DataFrame({"id": [1, 2, 3, 4]})
     merged = eed.add_data(main, load_dataframe(str(files["tokens"])), ["id"], ["id"], additional_cols=["score"])
     assert merged["score"].tolist()[0] == 80 and np.isnan(merged["score"].tolist()[1])
+
+
+def test_the_earliest_row_by_a_column_of_dates_replays(tmp_path: Path) -> None:
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,taken,potassium\n1,15/03/2021,4.1\n1,02/01/2021,4.6\n2,05/05/2022,5.2\n", encoding="utf-8")
+    main = pd.DataFrame({"id": [1, 2], "age": [50, 61]})
+    order_by = {"column": "taken", "format": "day_first"}
+    tm, session = _record(
+        tmp_path, main, load_dataframe(str(labs)), labs, ["id"], file_rows="first", order_by=order_by
+    )
+    assert session.base["potassium"].tolist() == [4.6, 5.2]  # the earliest, not the first in the file
+    assert tm.history[-1]["params"]["order_by"] == order_by
+    _replays(tm, session)

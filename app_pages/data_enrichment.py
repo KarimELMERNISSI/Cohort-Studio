@@ -45,7 +45,7 @@ from graph.builders.formula import build_formula_graph
 from graph.model import RenderOptions
 from graph.renderers.graphviz import GraphvizGraphRenderer
 from ingest.analyzer import DataAnalyzer
-from ingest.dates import recorded_formats
+from ingest.dates import detect, recorded_formats
 from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_kinds, column_profile
 from manage.snapshots import folders as snapshot_folders
@@ -296,15 +296,67 @@ def file_rows_choice(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, left_id
         f"the file's repeats would add {'1 row' if more == 1 else f'{more:,} rows'}, which the analyses would count "
         "as participants."
     )
+    st.caption(
+        "Repeated measurements usually need one value per participant defined against the index date (the last "
+        "before inclusion, say) or a summary of them, not a row picked by its place in the file."
+    )
     return st.radio(
         "Rows of the file for each row of the dataset",
         options=list(_FILE_ROWS_WORDS),
         format_func=_FILE_ROWS_WORDS.__getitem__,
         index=None,
         key="enrich_file_rows",
-        help="The first and the last follow the order of the file's rows, not their dates: sort the file first when "
-        "it holds visits.",
+        help="The first and the last follow the order of the file's rows, unless a column of dates orders them "
+        "(asked below when the file holds dates).",
     )
+
+
+def _file_dates(enrichment_df: pd.DataFrame) -> dict[str, dict]:
+    """
+    The file's columns of dates, and how each is read: its date cells as they are; a text column whose values decide
+    its format and the order of day and month (Date checks' detection; none with two-digit years or Excel serials).
+    """
+    dayfirst = bool((enrichment_df.attrs.get("parse_options") or {}).get("dayfirst"))
+    found: dict[str, dict] = {}
+    for column in enrichment_df.columns:
+        values = enrichment_df[column]
+        if pd.api.types.is_datetime64_any_dtype(values):
+            if getattr(values.dt, "tz", None) is None:
+                found[str(column)] = {"format": None}
+            continue
+        if not (pd.api.types.is_object_dtype(values) or pd.api.types.is_string_dtype(values)):
+            continue
+        how = detect(values, dayfirst=dayfirst, name=str(column))
+        if (
+            how.decided
+            and how.format not in (None, "excel_serial")
+            and not how.two_digit_years
+            and how.order_source in ("", "data")
+        ):
+            found[str(column)] = {"format": how.format}
+    return found
+
+
+def file_rows_order(enrichment_df: pd.DataFrame, file_rows: str | None) -> dict | None:
+    """
+    Which of a participant's rows of the file is the first or the last: by its place in the file (None, as before), or
+    by a column of dates of the file, the earliest or the latest ({"column", "format"}, recorded with the merge).
+    """
+    if file_rows not in ("first", "last"):
+        return None
+    dated = _file_dates(enrichment_df)
+    if not dated:
+        return None
+    word = "earliest" if file_rows == "first" else "latest"
+    column = st.selectbox(
+        f"Which row is the {file_rows}",
+        [None, *dated],
+        format_func=lambda c: "By its place in the file" if c is None else f"The {word} {c}",
+        key="enrich_file_rows_order",
+        help=f"Each row of the dataset takes the row of the file with the {word} date in this column; rows on the "
+        "same date in the file's order, a row without a date only when none has one. Recorded with the merge.",
+    )
+    return None if column is None else {"column": column, **dated[column]}
 
 
 def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd.DataFrame | None = None) -> bool:
@@ -442,6 +494,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             help="Choose the column that exists in both datasets"
         )
         file_rows = file_rows_choice(main_df, enrichment_df, identifier, identifier, strategy)
+        order_by = file_rows_order(enrichment_df, file_rows)
 
         if st.button("Perform Enrichment", disabled=file_rows is None):
             try:
@@ -457,7 +510,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     additional_cols=additional_columns,
                     strategy=strategy,
                     conflict_resolution=conflict_resolution,
-                    file_rows=file_rows, missing_keys="never")
+                    file_rows=file_rows, missing_keys="never", order_by=order_by)
 
                 if _merged(enriched_df, main_df, enrichment_df):
                     # Save snapshot
@@ -470,6 +523,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "identifier": identifier,
                         "add_choice": add_choice,
                         "file_rows": file_rows,
+                        "order_by": order_by,
                         "missing_keys": "never",
                         "date_formats": enrichment_df.attrs.get("date_formats") or {},
                         "retained_main_columns": [str(c) for c in main_df.columns],
@@ -502,6 +556,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                 help="Choose the column from enrichment dataset"
             )
         file_rows = file_rows_choice(main_df, enrichment_df, left_identifier, right_identifier, strategy)
+        order_by = file_rows_order(enrichment_df, file_rows)
 
         if st.button("Perform Enrichment", disabled=file_rows is None):
             try:
@@ -517,7 +572,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     additional_cols=additional_columns,
                     strategy=strategy,
                     conflict_resolution=conflict_resolution,
-                    file_rows=file_rows, missing_keys="never")
+                    file_rows=file_rows, missing_keys="never", order_by=order_by)
 
                 save_enrichment_config(enrichment_name=enrichment_name,
                                        strategy=strategy,
@@ -539,6 +594,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "right_id_names": right_identifier,
                         "add_choice": add_choice,
                         "file_rows": file_rows,
+                        "order_by": order_by,
                         "missing_keys": "never",
                         "date_formats": enrichment_df.attrs.get("date_formats") or {},
                         "retained_main_columns": [str(c) for c in main_df.columns],

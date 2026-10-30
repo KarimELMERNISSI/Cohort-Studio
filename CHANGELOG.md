@@ -1077,6 +1077,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   whose values show no date format, are read as before; a merge recorded before replays as it did.
 - After a merge, Enrich counts the rows of the dataset that matched no row of the file, and warns when none matched,
   whatever the kind of merge: an inner merge that matched nothing left no row and said it had completed.
+- **The first or the last row of the file can be the earliest or the latest by a column of dates.** The first or
+  the last row a file holds for a participant followed the file's order, which nothing recorded: the choice was as
+  reproducible as that order. When the file holds dates (its date cells, or a text column whose values decide their
+  format and the order of day and month), Enrich asks which row is the first or the last: by its place in the file, as
+  before, or by the earliest or latest date of a column. Rows on the same date keep the file's order, and a row
+  without a date is taken only when none has one. The choice is recorded with the merge and replayed; a merge recorded
+  before replays as it did. Enrich also says that repeated measurements usually need one value per participant
+  defined against the index date (the last before inclusion, say) or a summary of them.
 
 ### Survival & regression: the outcome first, the effect first
 
