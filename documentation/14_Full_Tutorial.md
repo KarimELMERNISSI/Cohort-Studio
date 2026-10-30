@@ -39,11 +39,12 @@ Open **Data > Validate**.
 
 ### 2.1 Data Quality Dashboard
 
-The global score is about **97/100** (*excellent*). Hover the segments of the ring, then click the bars of
+The global score is about **98/100** (*excellent*). Hover the segments of the ring, then click the bars of
 **Where the score loses points**:
 
 - **Uniqueness 99.5%**: 6 rows are exact duplicates of another row.
-- **Domain Validity 98.67%**: 16 of the 1,206 rows break at least one plausibility rule of the configuration.
+- **Domain Validity 99.83%**: the 8 plausibility rules make 9,593 checks on the rows that hold their values (the
+  height rule skips the 55 rows without `height_cm`); 16 fail, on 16 rows.
 - **Uniformity**: the `sex` column mixes codes (*male*, *Female*, *f*, *M* with a trailing space, ...) and 8 `site`
   values end with a space. You will clean both in step 3. Until then, the lists of groups on Analyze show such a
   space as ␣ (*Luxembourg␣*), and warn that these groups differ only by spaces or capitals.
@@ -80,7 +81,8 @@ The global score is about **97/100** (*excellent*). Hover the segments of the ri
    the 16 of the 8 rules and **16 patients** this rule flags. Their values are plausible: the recorded diagnosis may
    be incomplete, so they are patients to review clinically, not data-entry errors, and such a rule does not belong
    among the plausibility rules. **Leave it unticked** in the sidebar. As long as it is declared, the dashboard
-   counts it: Domain Validity reads 97.35% instead of 98.67%, and the rule leads the list of rules broken.
+   counts it: Domain Validity reads 99.70% instead of 99.83% (the rule fails on 16 of the 940 rows recording both
+   values), and the rule leads the list of rules broken.
 
 ### 2.3 Inclusion criteria
 

@@ -7,7 +7,7 @@ import pandas as pd
 
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.derived import from_config
-from core.population import family_masks
+from core.population import family_checks, family_masks
 from core.registry import as_code
 from enrich.derived import CANNOT, DISAGREES, MIN_ROWS, MOSTLY, TOO_FEW, check_derived
 
@@ -33,7 +33,8 @@ class DataQualityAuditor:
     - Uniqueness: Presence of duplicate rows.
     - Validity: Presence of outliers in numerical data.
     - Consistency: Basic type consistency checks.
-    - Domain Validity: rows that break none of the declared plausibility rules.
+    - Domain Validity: the share of the plausibility checks that pass (each rule checked on the rows holding the
+      values it reads).
     """
 
     def __init__(
@@ -47,6 +48,8 @@ class DataQualityAuditor:
         self.advice: list[dict[str, str]] = []
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
+        # Domain Validity's (checks that fail, checks made, rows flagged); None while it is N/A
+        self.domain_checks: tuple[int, int, int] | None = None
         self.uniformity_details: list[dict[str, str]] = []
         # Per dimension: the columns, rows or rules behind the points it loses (see DETAIL_COLUMNS).
         self.details: dict[str, pd.DataFrame] = {}
@@ -182,14 +185,17 @@ class DataQualityAuditor:
 
     def compute_domain_validity(self) -> float | None:
         """
-        Calculates a score based on the declared plausibility rules (if any).
-        Score = 100 - (% of rows the family of implausible values, clinical_anomalies, flags). The rules are read as the analysis
-        population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
-        evaluated is listed in the details, and the score uses the rules that can.
-        Returns None if no plausibility rule is declared (shows as N/A in dashboard).
+        The share of the plausibility checks that pass, 100 x (1 - F/C) (core.population.family_checks): a check is
+        one rule on one row that holds the values the rule reads, never a missing value, which Completeness counts; a
+        bounds rule makes one check per column, and a family read with "all" or "at least k" one per row where its
+        rules settle it. Before, every row counted, so a row missing a rule's value passed it. A rule that cannot be
+        evaluated, or that no row can check, is listed in the details and not counted. The rows the family flags, as
+        the analysis population reads it (core.population.family_masks), are listed apart. None (N/A) when no rule is
+        declared or no check can be made.
         """
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
+        self.domain_checks = None
 
         # If no config or no mask_families, return None (N/A - rules not configured)
         if not self.config or "mask_families" not in self.config:
@@ -230,21 +236,29 @@ class DataQualityAuditor:
                 anomalies_list = self.clinical_anomalies_booleans.apply(get_active_anomalies, axis=1)
                 self.clinical_anomalies_df.insert(0, "Rules broken", anomalies_list)
 
-            total_rows = len(self.df)
-            if total_rows == 0:
-                return 100.0
-
-            self.details["Domain Validity"] = _details(
-                [
-                    (str(rule), "rows flagged by this rule", int(mask.sum()), float(mask.sum()) / total_rows)
-                    for rule, mask in anomaly_data.items()
-                    if mask.sum()
-                ]
-                + broken
-            )
-            anomaly_count = any_anomaly_mask.sum()
-            score = (1 - (anomaly_count / total_rows)) * 100
-            return round(score, 2)
+            found = family_checks(self.df, anomaly_config)  # a rule in error is left out, and listed above
+            rows = []
+            for unit, check in found.units.items():
+                checked, fired = int(check.checked.sum()), int(check.fired.sum())
+                if not checked:
+                    rows.append((unit, "not checked: no row holds its values", None, None))
+                elif fired:
+                    rows.append((unit, f"flagged, of {checked:,} rows holding its values", fired, fired / checked))
+            if found.operator != "any" and found.checks:
+                words = "every rule" if found.operator == "all" else "enough rules"
+                rows.append(
+                    (
+                        "the family",
+                        f"rows where {words} fire, of {found.checks:,} rows where the rules settle it",
+                        found.fails,
+                        found.fails / found.checks,
+                    )
+                )
+            self.details["Domain Validity"] = _details(rows + broken)
+            if not found.checks:
+                return None
+            self.domain_checks = (found.fails, found.checks, int(any_anomaly_mask.sum()))
+            return round((1 - found.fails / found.checks) * 100, 2)
             
         except Exception as e:
             logger.error("Error computing domain validity: %s", e)
@@ -520,13 +534,19 @@ class DataQualityAuditor:
         # 5. Domain Validity Advice
         if "Domain Validity" in self.metrics and self.metrics["Domain Validity"] < 100:
             msg = f"Some rows break the declared plausibility rules (Domain Validity: {self.metrics['Domain Validity']}%)."
+            if self.domain_checks is not None:
+                fails, checks, rows = self.domain_checks
+                msg = (
+                    f"{fails:,} of {checks:,} plausibility checks fail, on {rows:,} row{'s' if rows != 1 else ''} "
+                    f"(Domain Validity: {self.metrics['Domain Validity']}%)."
+                )
             
             # Try to find top violated rule
             if hasattr(self, 'clinical_anomalies_booleans') and self.clinical_anomalies_booleans is not None:
                 rule_counts = self.clinical_anomalies_booleans.sum().sort_values(ascending=False)
                 if not rule_counts.empty:
                     top_rule = rule_counts.index[0]
-                    msg += f" Most frequent violation: **{top_rule}**."
+                    msg += f" Most frequent violation: {as_code(top_rule)}."
             
             msg += " Review them on the Handle Implausible Values tab."
 

@@ -272,7 +272,8 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 - Consistency: Basic type consistency checks.
 
-- Domain Validity: rows that break none of the declared plausibility rules.
+- Domain Validity: the share of the plausibility checks that pass (each rule checked on the rows holding the
+  values it reads).
 
 **Methods:**
 

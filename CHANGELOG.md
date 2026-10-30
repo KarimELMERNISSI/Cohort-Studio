@@ -1302,6 +1302,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   that has no missing value, or no value at all, has no correlation, not even with itself, and SciPy refused the
   distances. Such a column is now at distance 1 from every other column, and 0 from itself.
 
+### Validate: Domain Validity counts the checks a rule can make (M6, results)
+
+- **Domain Validity is the share of the plausibility checks that pass.** A check is one rule on one row that holds
+  the values the rule reads, so a row missing a value no longer passes the rule that reads it (Completeness counts
+  that value). Before, every row counted: on the tutorial cohort the height rule passed the 55 rows without a height.
+  A bounds rule makes one check per column; a family read with *all* or *at least k* makes one check per row where
+  its rules settle the result; a rule that tests missingness itself checks every row; a row where a rule fires is
+  always checked.
+- On the tutorial cohort, 16 of 9,593 checks fail: **99.83%** (98.67% by rows before). With the tutorial's diabetes
+  rule, 32 of 10,533: **99.70%** (97.35% before). The global score moves from 97.3 to 97.6. The rows listed as
+  breaking a rule, and those the population excludes, are unchanged (16, and 32).
+- The details list each check as "flagged, of N rows holding its values", and a rule no row can check as "not
+  checked". Domain Validity reads N/A when no check can be made; an empty table scored 100. The advice says how
+  many checks fail, and on how many rows.
+
 ### Validate: clinical anomalies are now implausible values
 
 - **The rules that flag what domain knowledge says cannot be are plausibility rules, and the rows they flag hold

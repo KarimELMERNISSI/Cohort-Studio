@@ -246,7 +246,7 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
 | **Statistical Validity** | Proportion of non-outlier values (based on selected method). |
-| **Domain Validity** | Percentage of rows that break none of the plausibility rules you declare. |
+| **Domain Validity** | Share of the plausibility checks that pass: each rule you declare is checked on the rows holding the values it reads, never on a missing value (Completeness counts those); a bounds rule makes one check per column. |
 | **Consistency** | Percentage of columns with correct data type definitions. |
 | **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
 | **Uniqueness** | Percentage of unique (non-duplicate) rows. |

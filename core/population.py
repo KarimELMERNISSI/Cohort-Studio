@@ -28,10 +28,12 @@ import pandas as pd
 
 from core.criteria import (
     CriterionError,
+    RuleCheck,
     criterion_columns,
     criterion_mask,
     criterion_problems,
     holds_row_list,
+    rule_checks,
     shared_definition,
     threshold_rule,
 )
@@ -200,6 +202,60 @@ def family_masks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyMasks:
         else:
             flag = fired.sum(axis=1) >= int(k)
     return FamilyMasks(operator, k, rules, errors, flag)
+
+
+@dataclass(frozen=True)
+class FamilyChecks:
+    """
+    The checks of a family of plausibility rules (Domain Validity): with "any", each rule's checks; with "all" or
+    "at least k", one check per row, on the rows where the rules settle the family's result (Kleene logic).
+    """
+
+    operator: str
+    checks: int  # C: the checks made
+    fails: int  # F: those where the rule, or the family, fires
+    units: Mapping[str, RuleCheck]  # each check of each rule ("rule: column" for bounds)
+    errors: Mapping[str, str]  # rule name -> why it cannot be evaluated: listed, not counted
+
+
+def family_checks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyChecks:
+    """
+    Domain Validity's checks of a family on ``df``: a check is one rule on one row that holds the values the rule
+    reads (core.criteria.rule_checks), so that the score, 100 x (1 - fails / checks), never counts a missing value as
+    a pass. A rule that cannot be evaluated is left out and listed.
+    """
+    operator, k = family_operator(members)
+    units: dict[str, RuleCheck] = {}
+    results: dict[str, tuple[pd.Series, pd.Series]] = {}
+    errors: dict[str, str] = {}
+    for name, spec in _rules(members).items():
+        try:
+            found = rule_checks(df, name, spec)
+            fires = criterion_mask(df, name, spec)
+        except CriterionError as exc:
+            errors[name] = str(exc)
+            continue
+        known = pd.Series(True, index=df.index)
+        for check in found:
+            units[check.unit] = check
+            known &= check.checked
+        results[name] = (fires, fires | known)
+    if operator == "threshold" and (isinstance(k, bool) or not isinstance(k, int | float)):
+        errors["operator"] = 'a threshold family needs a number of rules, as {"threshold": 2}'
+        return FamilyChecks(operator, 0, 0, units, errors)
+    if operator == "any" or not results:
+        checks = sum(int(c.checked.sum()) for c in units.values())
+        fails = sum(int(c.fired.sum()) for c in units.values())
+        return FamilyChecks(operator, checks, fails, units, errors)
+    need = len(results) if operator == "all" else int(k)
+    fired = pd.Series(0, index=df.index)
+    unknown = pd.Series(0, index=df.index)
+    for fires, known in results.values():
+        fired += fires.astype(int)
+        unknown += (~known).astype(int)
+    flagged = fired >= need
+    settles = flagged | (fired + unknown < need)
+    return FamilyChecks(operator, int(settles.sum()), int(flagged.sum()), units, errors)
 
 
 # What a configuration shared with someone else holds. The other keys are this installation's settings: its folders
