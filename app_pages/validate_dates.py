@@ -4,12 +4,14 @@ format (ingest.dates): detected from the shape of its values, the order of day a
 it, else asked and pre-filled from the import's day-first setting; two-digit years with a pivot; Excel serial numbers
 only when accepted; the placeholder dates the user keeps ticked set to missing. The conversion is one step of the
 trace (method parse_dates, each column's format recorded), which the replay reads with the same function, never
-detecting again. Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
+detecting again. The columns already dates (date cells read on load, or converted here) are counted the same way, and
+their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
 opened on new data, whichever tab was wanted.
 """
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import date
 from typing import Any
 
@@ -18,6 +20,7 @@ import streamlit as st
 
 from core.registry import as_code
 from ingest.dates import (
+    AS_DATES,
     CHOSEN,
     DATE_FORMATS,
     METHOD,
@@ -220,7 +223,7 @@ def _day(value) -> str:
     return "" if pd.isna(value) else pd.Timestamp(value).strftime("%d/%m/%Y")
 
 
-def _placeholders(chosen: dict[str, Any], readings: dict[str, pd.Series]) -> dict[str, list[str]]:
+def _placeholders(chosen: Collection[str], readings: dict[str, pd.Series]) -> dict[str, list[str]]:
     """
     Per column, the placeholder dates set to missing, chosen from the whole catalogue: a list of only the dates a
     column holds told the trace that a participant was born on 1 January 1970, and one choice for every column set a
@@ -257,11 +260,64 @@ def _placeholders(chosen: dict[str, Any], readings: dict[str, pd.Series]) -> dic
     return chosen_days
 
 
+def _study_dates(state, options: list[str]) -> tuple[date | None, list[str]]:
+    """The extraction date and the columns that may hold planned dates: asked once, for both kinds of columns."""
+    left, right = st.columns(2)
+    extraction = left.date_input(
+        "Extraction date",
+        value=_loaded_on(state),
+        format="DD/MM/YYYY",
+        key="date_extraction",
+        persist_state="page",
+        help="The day the data were taken from their source: the dates after it are counted. Pre-filled with the day "
+        "the dataset was loaded.",
+    )
+    planned = right.multiselect(
+        "Columns that may hold planned dates",
+        options,
+        key="date_planned",
+        persist_state="page",
+        help="A next appointment or a planned end: their dates after the extraction date are not counted.",
+    )
+    return extraction, planned
+
+
+def _heaping(reports: dict[str, DateReport]) -> None:
+    for column, report in reports.items():
+        if report.january_first or report.month_first_day:
+            where = "1 January" if report.january_first else "the 1st of a month"
+            st.caption(
+                f":material/info: {as_code(column)}: many dates fall on {where}. Did the source complete dates it "
+                "knew only by their month or year?"
+            )
+
+
+def already_dates(df: pd.DataFrame) -> list[str]:
+    """The columns that already hold dates without a time zone: date cells read on load, or a conversion's."""
+    return [
+        str(c)
+        for c in df.columns
+        if pd.api.types.is_datetime64_any_dtype(df[c]) and getattr(df[c].dt, "tz", None) is None
+    ]
+
+
+def _dated_reports(
+    df: pd.DataFrame, dated: list[str], extraction: date | None, planned: list[str]
+) -> dict[str, DateReport]:
+    """What each column already dates holds, counted as for a conversion: nothing to read, the dates themselves."""
+    return {
+        c: date_report(
+            df[c], AS_DATES, extraction=None if c in planned else extraction, dates=df[c]
+        )
+        for c in dated
+    }
+
+
 def render_date_checks() -> None:
     """
     The Date checks tab: how the text columns that look like dates would be read, what is asked, and their conversion,
-    one traced step, on request. Dates used to be re-parsed in place on every visit of the page, untraced and invisible
-    to the replay.
+    one traced step, on request; then what the columns already dates hold. Dates used to be re-parsed in place on
+    every visit of the page, untraced and invisible to the replay.
     """
     state = get_state()
     df = state.base
@@ -269,9 +325,23 @@ def render_date_checks() -> None:
         no_dataset()
         return
     found = _detected(state)
-    if not found:
+    dated = already_dates(df)
+    study = None
+    if found:
+        study = _text_columns(state, df, found, dated)
+    else:
         st.caption("No text column looks like dates.")
-        return
+    if dated:
+        _date_columns(state, df, dated, study)
+
+
+def _text_columns(
+    state, df: pd.DataFrame, found: dict[str, Detection], dated: list[str]
+) -> tuple[date | None, list[str]] | None:
+    """
+    The text columns that look like dates: how each would be read, and their conversion. Returns the extraction date
+    and the planned-date columns it asked for (None: no column chosen, nothing asked).
+    """
     st.subheader(dates_found(len(found)), anchor=False)
     st.caption(
         "They stay as text until you convert them. Each is read with one format, recorded with the conversion: the "
@@ -298,24 +368,8 @@ def render_date_checks() -> None:
             chosen[column] = how
     if not chosen:
         st.caption("No column is chosen to be read as dates.")
-        return
-    left, right = st.columns(2)
-    extraction = left.date_input(
-        "Extraction date",
-        value=_loaded_on(state),
-        format="DD/MM/YYYY",
-        key="date_extraction",
-        persist_state="page",
-        help="The day the data were taken from their source: the dates after it are counted. Pre-filled with the day "
-        "the dataset was loaded.",
-    )
-    planned = right.multiselect(
-        "Columns that may hold planned dates",
-        list(chosen),
-        key="date_planned",
-        persist_state="page",
-        help="A next appointment or a planned end: their dates after the extraction date are not counted.",
-    )
+        return None
+    extraction, planned = _study_dates(state, [*chosen, *dated])
     key = tuple(
         sorted((c, how["format"], how.get("pivot"), c in planned) for c, how in chosen.items())
     )
@@ -349,13 +403,8 @@ def render_date_checks() -> None:
         "Partial dates are among those that cannot be read: left missing, never completed. For an age or a time since "
         "diagnosis, the usual way is a stated completion (the 15th, or 1 July) as a derived variable."
     )
+    _heaping(reports)
     for column, report in reports.items():
-        if report.january_first or report.month_first_day:
-            where = "1 January" if report.january_first else "the 1st of a month"
-            st.caption(
-                f":material/info: {as_code(column)}: many dates fall on {where}. Did the source complete dates it "
-                "knew only by their month or year?"
-            )
         if report.unreadable:  # on screen only, never recorded, and only when asked for
             text = df[column].astype("string").str.strip()
             unread = (
@@ -413,6 +462,88 @@ def render_date_checks() -> None:
             f"Converted {n} column{'s' if n != 1 else ''} to dates",
         )
         st.rerun()
+    return extraction, planned
 
 
-__all__ = ["UNREADABLE", "date_candidates", "dates_found", "detections", "render_date_checks"]
+def _date_columns(
+    state, df: pd.DataFrame, dated: list[str], study: tuple[date | None, list[str]] | None
+) -> None:
+    """
+    The columns already dates (date cells read on load, or converted here): what they hold, counted as for a
+    conversion, and the placeholder dates ticked set to missing on request, one step recorded as a conversion with the
+    format "dates", which the replay reads the same way. They had no check: an Excel file's 1900-01-01, or a date after
+    the extraction, stayed uncounted.
+    """
+    n = len(dated)
+    st.subheader(f"{n} column{'s hold' if n != 1 else ' holds'} dates", anchor=False)
+    st.caption(
+        "Read as dates on load (date cells) or converted here: what they hold. Their placeholder dates can be set to "
+        "missing, one step of the trace."
+    )
+    extraction, planned = study if study is not None else _study_dates(state, dated)
+    key = (tuple(dated), tuple(c in planned for c in dated), str(extraction))
+    reports = state.session.memo(
+        "date_reports_dated", key, lambda: _dated_reports(df, dated, extraction, planned)
+    )
+    # the earliest and latest dates are shown here only, never recorded
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "Column": dated,
+                "Values": [reports[c].values for c in dated],
+                "With a time": [reports[c].with_time for c in dated],
+                "Placeholders": [reports[c].placeholders for c in dated],
+                "Before 1900": [reports[c].before_1900 for c in dated],
+                "After extraction": [reports[c].after_extraction for c in dated],
+                "Earliest": [_day(df[c].min()) for c in dated],
+                "Latest": [_day(df[c].max()) for c in dated],
+            }
+        ),
+        hide_index=True,
+        width="stretch",
+    )
+    _heaping(reports)
+    to_missing = _placeholders(dated, {c: df[c] for c in dated})
+    counts = {c: set_to_missing(df[c], to_missing[c]) for c in dated}
+    total = sum(counts.values())
+    if st.button(
+        f"Set {total:,} placeholder date{'s' if total != 1 else ''} to missing",
+        key="dates_set_placeholders",
+        disabled=total == 0,
+    ):
+        columns = [c for c in dated if counts[c]]
+        # counts only, as for a conversion: the rule, never a date of the data
+        formats = {
+            c: {
+                "format": AS_DATES,
+                "placeholders_to_missing": to_missing[c],
+                "set_to_missing": counts[c],
+                **({"planned": True} if c in planned else {}),
+                **reports[c].to_record(),
+            }
+            for c in columns
+        }
+        state.commit_change(
+            convert(df, formats),
+            "data_type_conversion",
+            {
+                "columns": columns,
+                "new_type": "datetime",
+                "method": METHOD,
+                "formats": formats,
+                "dayfirst": _dayfirst(state),
+                "extraction": extraction.isoformat() if extraction else None,
+            },
+            f"Set {total} placeholder date{'s' if total != 1 else ''} to missing",
+        )
+        st.rerun()
+
+
+__all__ = [
+    "UNREADABLE",
+    "already_dates",
+    "date_candidates",
+    "dates_found",
+    "detections",
+    "render_date_checks",
+]

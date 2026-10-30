@@ -16,6 +16,7 @@ import pytest
 
 from core.state import ParseOptions
 from ingest.dates import (
+    AS_DATES,
     DATE_FORMATS,
     METHOD,
     PLACEHOLDERS,
@@ -72,6 +73,7 @@ def test_the_formats_are_a_catalogue_of_ids_never_renamed() -> None:
         "ymd_compact",
         "dmy_compact",
         "excel_serial",
+        "dates",
     )
     assert DATE_FORMATS.get("day_first").other_order == "month_first"
 
@@ -350,3 +352,29 @@ def test_a_merge_reads_the_format_the_last_conversion_recorded() -> None:
         "b": {"format": "iso"},
     }
     assert recorded_formats(steps[:1]) == {}  # a conversion recorded before M6 holds no format
+
+
+def test_a_column_already_dates_is_checked_as_it_is() -> None:
+    """Date cells read on load are counted as a conversion counts, and their placeholders set to missing; never read
+    again from text."""
+    held = S([T("1900-01-01"), T("2021-03-15 10:30"), pd.NaT, T("2099-12-31")], name="visit")
+    assert read_dates(held, AS_DATES) is held
+    report = date_report(held, AS_DATES, extraction=date(2024, 1, 1), dates=held)
+    assert (report.values, report.unreadable, report.partial, report.ambiguous) == (3, 0, 0, 0)
+    assert (report.with_time, report.placeholders, report.after_extraction) == (1, 2, 1)
+    days = ["1900-01-01", "2099-12-31"]
+    out = convert(
+        pd.DataFrame({"visit": held}),
+        {"visit": {"format": AS_DATES, "placeholders_to_missing": days}},
+    )
+    assert out["visit"].isna().tolist() == [True, False, True, True]
+    with pytest.raises(ValueError, match="'visit' does not hold dates"):
+        read_dates(S(["2021-03-15"], name="visit"), AS_DATES)
+    conversion = {"function": "data_type_conversion"}
+    steps = [
+        {**conversion, "params": {"method": METHOD, "formats": {"visit": {"format": "day_first"}}}},
+        {**conversion, "params": {"method": METHOD, "formats": {"visit": {"format": AS_DATES}}}},
+    ]
+    assert recorded_formats(steps) == {
+        "visit": {"format": "day_first"}
+    }  # how a merge reads a file's visit

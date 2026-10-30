@@ -366,6 +366,21 @@ DATE_FORMATS.register(
     DateFormat("excel_serial", "Excel serial numbers (45657 is 31/12/2024)", _read_excel)
 )
 
+AS_DATES = "dates"  # a column that already holds dates: checked, its placeholders set to missing, never read again
+
+
+def _read_as_dates(series: pd.Series, pivot: int | None) -> pd.Series:
+    """A column already holding dates (date cells read on load, or a conversion's), as it is."""
+    if (
+        not pd.api.types.is_datetime64_any_dtype(series)
+        or getattr(series.dt, "tz", None) is not None
+    ):
+        raise ValueError(f"{series.name!r} does not hold dates without a time zone")
+    return series
+
+
+DATE_FORMATS.register(DateFormat(AS_DATES, "Already dates", _read_as_dates))
+
 
 def read_dates(series: pd.Series, format_id: str, *, pivot: int | None = None) -> pd.Series:
     """
@@ -679,6 +694,10 @@ def recorded_formats(steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, 
         if step.get("function") != "data_type_conversion" or params.get("method") != METHOD:
             continue
         for column, how in (params.get("formats") or {}).items():
+            if (
+                how["format"] == AS_DATES
+            ):  # no way of writing: a file's column of that name is read as before
+                continue
             read = {"format": str(how["format"])}
             if how.get("pivot") is not None:
                 read["pivot"] = int(how["pivot"])
@@ -687,6 +706,7 @@ def recorded_formats(steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, 
 
 
 __all__ = [
+    "AS_DATES",
     "CHOSEN",
     "DATE_FORMATS",
     "HEAPING_MIN",

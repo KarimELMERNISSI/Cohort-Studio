@@ -1224,6 +1224,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   derived variable).
 - The conversion records these counts with each column, never a date or a value of the data, and the extraction
   date with the step.
+- **The columns already dates are checked too:** date cells read on load (an Excel file's) and the columns converted
+  here. They had no check, so an Excel file's 1900-01-01, or a date after the extraction date, stayed uncounted.
+  Date checks now counts what they hold as it counts a conversion (dates with a time of day, placeholder dates, dates
+  before 1900 or after the extraction date, heaping; the earliest and latest on the screen only), and sets the
+  placeholder dates you tick to missing: one step of the trace, recorded as a conversion with the format "dates"
+  (counts only), which the replay reads the same way. One extraction date and one list of columns that may hold
+  planned dates serve both kinds of columns.
 - The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
 
 ### Validate: Date checks, a tab of its own (M6)

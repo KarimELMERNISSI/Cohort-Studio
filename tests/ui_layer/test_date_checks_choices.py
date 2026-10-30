@@ -243,3 +243,52 @@ def test_dates_on_the_first_say_what_each_order_gives() -> None:
     at = _open({"visit": [f"01/{m:02d}/2021" for m in range(1, 13)] * 3}, dayfirst=False)
     said = " ".join(m.value for m in at.markdown)
     assert "Read day first, the dates over 12 months; month first, every date in one month." in said
+
+
+def test_columns_already_dates_are_checked_and_their_placeholders_set_to_missing() -> None:
+    """Date cells read on load (an Excel file's) had no check: a 1900-01-01, or a date after the extraction, stayed
+    uncounted, and no placeholder could be set to missing."""
+    visits = [T("1900-01-01"), T("2021-03-15 10:30"), T("2099-12-31"), T("2022-04-13")]
+    at = _open({"visit": visits, "site": ["a", "b", "c", "d"]})
+    assert "No text column looks like dates." in [c.value for c in at.caption]
+    assert [s.value for s in at.subheader] == ["1 column holds dates"]
+    row = at.dataframe[0].value.set_index("Column").loc["visit"]
+    assert (row["Values"], row["With a time"], row["Placeholders"], row["After extraction"]) == (
+        4,
+        1,
+        2,
+        1,
+    )
+    assert at.multiselect(key="date_placeholders::visit").value == PRESELECTED
+    button = at.button(key="dates_set_placeholders")
+    assert button.label == "Set 2 placeholder dates to missing" and not button.disabled
+    before = at.session_state["data"].copy()
+    button.click().run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    step = at.session_state["transformation_manager"].history[-1]
+    recorded = step["params"]["formats"]["visit"]
+    assert (step["params"]["columns"], recorded["format"]) == (["visit"], "dates")
+    assert (recorded["placeholders_to_missing"], recorded["set_to_missing"]) == (PRESELECTED, 2)
+    read = at.session_state["data"]["visit"]
+    assert read.isna().tolist() == [True, False, True, False] and read[1] == T("2021-03-15 10:30")
+    replayed = apply_steps(before, [step])  # the replay reads the step as recorded
+    assert replayed.error is None and replayed.divergence is None
+    assert at.button(key="dates_set_placeholders").disabled  # nothing left to set to missing
+
+
+def test_one_extraction_date_serves_both_kinds_of_columns() -> None:
+    at = _open(
+        {"death_date": ["15/03/2021", "13/04/2022"], "visit": [T("2021-03-15"), T("2099-12-31")]}
+    )
+    assert [s.value for s in at.subheader] == [
+        "1 text column looks like dates",
+        "1 column holds dates",
+    ]
+    assert len(at.date_input) == 1
+    assert at.multiselect(key="date_planned").options == ["death_date", "visit"]
+    at.multiselect(key="date_planned").set_value(["visit"]).run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    row = at.dataframe[1].value.set_index("Column").loc["visit"]
+    assert pd.isna(
+        row["After extraction"]
+    )  # a column of planned dates: its later dates are not counted
