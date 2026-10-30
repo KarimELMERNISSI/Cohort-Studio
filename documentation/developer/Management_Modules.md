@@ -3109,6 +3109,14 @@ midpoint ends in .5: 1,119.5, which three figures rounded to 1,120).
 
 The median's interval: "not reached" alone when neither end is reached (the lower one is reached first).
 
+### def `_shown` (report_tables.py)
+
+- **Arguments**: `n: Any`
+
+- **Returns**: `bool`
+
+Whether a group's median goes into the dossier (a result pooled before the sizes were kept: as it was).
+
 ### def `_survival_blocks` (report_tables.py)
 
 - **Arguments**: `res: Any`
@@ -3176,7 +3184,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.recode_column`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`
 
 ### class `StepRecord` (reproduction_manager.py)
 
@@ -3329,6 +3337,15 @@ No description available.
 - **Returns**: `None`
 
 No description available.
+
+### def `_recode_levels` (reproduction_manager.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+The recode redone: the recorded fold rule recomputed on the values read (a trace without one recorded every
+change in its mapping), the recorded choices over it. Differences are said by their number, never by a value.
 
 ### def `_apply_filter` (reproduction_manager.py)
 
@@ -3867,7 +3884,7 @@ kept.
 _No module description._
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.population.family_words`, `core.steps.step_title`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.population.family_words`, `core.steps.step_title`, `enrich.recode.report_params`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 

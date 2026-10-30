@@ -539,7 +539,7 @@ reads the declared list.
 _No module description._
 
 **Imports**:
-`logging`, `os`, `dataclasses.dataclass`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.dates.smart_parse_dates`, `ingest.loaders.read_path`
+`logging`, `os`, `dataclasses.dataclass`, `pandas`, `core.fingerprint.ROW_ID`, `core.fingerprint.extend_row_ids`, `ingest.dates.AS_DATES`, `ingest.dates.CHOSEN`, `ingest.dates.detect`, `ingest.dates.read_dates`, `ingest.dates.smart_parse_dates`, `ingest.loaders.read_path`
 
 ### class `KeyCheck` (external_data.py)
 
@@ -568,19 +568,52 @@ now). None when the keys cannot be compared (a column missing, or of another typ
 
 A value of ``values``' kind that ``others`` and ``values`` never hold, for a missing key to match nothing.
 
+### def `date_key_formats` (external_data.py)
+
+- **Arguments**: `main_df, additional_df, recorded`
+
+- **Returns**: `None`
+
+How the Enrich page reads the file's columns named as a date column of the main table, so that date keys match:
+the file's date cells as they are ("dates"); a column of text with the format the shape of its own values gives
+(ingest.dates.detect: an ISO export reads as ISO whatever the dataset's), the order of day and month, where its
+values do not show it, that of the main column's recorded format (``recorded``, from
+:func:`ingest.dates.recorded_formats`), else ``dayfirst`` (the import's setting). A column whose values have no
+date shape, Excel serial numbers, and two-digit years without the main column's pivot are left out: read with
+smart_parse_dates, as before. Recorded with the step: the replay reads them, never detects again.
+
 ### def `align_date_keys` (external_data.py)
 
-- **Arguments**: `main_df, additional_df`
+- **Arguments**: `main_df, additional_df, formats`
 
 - **Returns**: `None`
 
 The additional table with its columns parsed as dates where the main table holds dates under the same name,
-so that date keys match in the merge. The Enrich page and the replay of the step both call it, on the same
-tables, so they merge the same rows.
+so that date keys match in the merge: each with its format in ``formats`` (from :func:`date_key_formats` on the
+page, from the step on replay); a column without one, and every column of a step recorded before (``formats``
+None), with smart_parse_dates, day first by position, as before. The formats applied are in
+``attrs["date_formats"]``, recorded with the step. The Enrich page and the replay of the step both call it, on the
+same tables, so they merge the same rows.
+
+### def `_order_dates` (external_data.py)
+
+- **Arguments**: `rows, order_by`
+
+- **Returns**: `pd.Series`
+
+The dates that order a file's rows for "first" or "last": its column, read with the format recorded for it.
+
+### def `_unmatched` (external_data.py)
+
+- **Arguments**: `left, right, left_ids, right_ids`
+
+- **Returns**: `int`
+
+Rows of the dataset whose identifier no row of the file holds, the rows without one included.
 
 ### def `add_data` (external_data.py)
 
-- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, file_rows, missing_keys`
+- **Arguments**: `df, additional_df, left_id_names, right_id_names, additional_cols, strategy, conflict_resolution, file_rows, missing_keys, order_by`
 
 - **Returns**: `None`
 
@@ -591,7 +624,11 @@ right join, appended rows and repeats of a row (one-to-many join) get fresh ids.
 ``attrs["join_counts"]`` says how many rows came from the main dataset, were added, dropped or repeated.
 ``file_rows`` (:data:`FILE_ROWS`) says how many rows of the file a row of the dataset takes in a merge on keys;
 ``missing_keys`` (:data:`MISSING_KEYS`) whether a missing key matches another ("match", pandas' way, kept for
-the steps recorded before; Enrich merges with "never"). Same parameters and result as :func:`_merge`.
+the steps recorded before; Enrich merges with "never"). ``order_by`` ({"column", "format", "pivot"}): with "first"
+or "last", a participant's rows of the file are taken in the order of that column's dates, the earliest or the
+latest (rows on the same date in the file's order; a row without a date only when none has one), not in the file's
+order; "format" reads a text column (ingest.dates), None a column of dates. Recorded with the step; a step
+recorded before (None) took the file's order. Same parameters and result as :func:`_merge`.
 
 ### def `_merge` (external_data.py)
 
@@ -1044,6 +1081,306 @@ The trace's description of a targeted imputation; ``n_rows``: the analysis popul
 ``left``: the missing values an exact formula left, and the variables without a value there (:func:`left_missing`);
 ``derived_of``: the declared derived variable whose definition computed it (its own, or an inverse); ``single``:
 the values an exact formula computed from imputed ones, single-imputed as they are.
+
+---
+
+## recode.py
+
+_The values of a categorical variable as written, recoded (Data > Clean > Categories): each value given a clean value
+or set to missing, and written into a new text column beside the original, which is kept. One traced step
+(``recode_levels``) that the replay redoes.
+
+What the step records, and what the replay recomputes:
+
+- the fold rule (:data:`FOLD`), never the values it folds. Values that differ by spaces take their group's spelling,
+  the one most rows hold. So do values that differ by capitals in words of 4 letters or more (Male, MALE, male).
+  In shorter codes, case can carry meaning (genotypes AA, Aa, aa; Rh haplotypes Cde, cde; pH): a variant there is
+  folded only when it holds under :data:`CASE_SHARE` of its group's rows and the group writes none of its spellings
+  in mixed case (M and m, NR and nr); otherwise it is offered. The replay folds the values it reads with this rule;
+
+- the user's choices (``mapping``): a ticked offer or a renamed value applies to its spelling's whole group, a value
+  given its own clean value to itself only, and ``kept`` lists the folded values put back as written;
+
+- what each choice is (``kinds``), what each value set to missing means (``missing_meaning``), and why two values
+  that each hold :data:`GROUPING_SHARE` of the rows were merged (``groupings``);
+
+- counts, never a count per value.
+
+The offers, never applied:
+
+- a one-letter code and the only longer value it begins (the rarer joins the more frequent);
+
+- a rare near spelling of a frequent value (a one-row "Luxembourgg" beside 397 "Luxembourg");
+
+- a case variant the fold leaves apart;
+
+- the codes that may mean missing. Some are read as unknown; for others the user must say what they mean ("n/a" can
+  mean not applicable, "none" an absence, "NR" non-reactive).
+
+One edit apart can be two categories, so a near spelling is never offered in these cases:
+
+- across a token holding a digit, a short token or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b);
+
+- when the words differ in their first four letters (Unstable and Stable, Abnormal and Normal, Hypotension and
+  Hypertension);
+
+- between two values that are not rare against each other.
+
+Nothing here reads an outcome: the values and their rows only._
+
+**Imports**:
+`__future__.annotations`, `difflib`, `re`, `unicodedata`, `collections.defaultdict`, `collections.abc.Collection`, `collections.abc.Iterable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `typing.Any`, `pandas`
+
+### class `Offer` (recode.py)
+
+A spelling that could join another, or become missing (``clean`` None): offered, never applied.
+
+### class `Suggestions` (recode.py)
+
+No description available.
+
+### class `Candidate` (recode.py)
+
+A text column the Categories tab lists.
+
+### def `_spaced` (recode.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_folded` (recode.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_plain` (recode.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_words` (recode.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_why` (recode.py)
+
+- **Arguments**: `value: str, spelling: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_case_rank` (recode.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `int`
+
+Capitalised first (Female), then lower case (male), then the rest (MALE).
+
+### def `_plain_case` (recode.py)
+
+- **Arguments**: `word: str`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_case_free` (recode.py)
+
+- **Arguments**: `variant: str, spelling: str`
+
+- **Returns**: `bool`
+
+Whether two spellings differ only in words whose capitals carry no meaning: 4 letters or more, each in lower
+case, capitals or capitalised.
+
+### def `level_counts` (recode.py)
+
+- **Arguments**: `values: pd.Series`
+
+- **Returns**: `dict[ComplexType]`
+
+The values as written (their text) and their rows, the most frequent first (ties by value); missing values
+left out.
+
+### def `_spelling` (recode.py)
+
+- **Arguments**: `rows: Mapping[ComplexType]`
+
+- **Returns**: `str`
+
+A group's spelling: the most rows; on a tie, capitalised, then lower case, then the first in order.
+
+### def `_groups` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType]`
+
+- **Returns**: `list[dict[ComplexType]]`
+
+The spellings (spaces collapsed) that differ by capitals only, and their rows: one dict per group.
+
+### def `fold` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The rule :data:`FOLD` on the values as written (``level_counts``): each value -> the spelling it takes, where
+they differ.
+
+### def `_marked` (recode.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `bool`
+
+Holds a digit, a sign or a Roman numeral: what names a category of its own.
+
+### def `_strict` (recode.py)
+
+- **Arguments**: `token: str`
+
+- **Returns**: `bool`
+
+A token that names a category by itself: a digit, four characters or fewer, or capitals inside (HFmrEF).
+
+### def `_apart` (recode.py)
+
+- **Arguments**: `a: str, b: str`
+
+- **Returns**: `bool`
+
+Whether two spellings differ by what names a category: digits, Roman numerals, signs, a strict token.
+
+### def `_near` (recode.py)
+
+- **Arguments**: `rare: str, common: str`
+
+- **Returns**: `bool`
+
+A near spelling: no category apart, a first difference past a word's first four letters, difflib >= 0.85.
+
+### def `suggest` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType]`
+
+- **Returns**: `Suggestions`
+
+What each value as written could become (``level_counts``): the fold, pre-filled, and the offers (near spellings
+only with ``near``: they compare every rare value with every frequent one).
+
+### def `clean_value` (recode.py)
+
+- **Arguments**: `value: str, spellings: Mapping[ComplexType], mapping: Mapping[ComplexType], kept: Collection[str]`
+
+- **Returns**: `ComplexType`
+
+What one value as written becomes: as written when ``kept``; its own choice when the fold gave it a spelling and
+the mapping names it; else the choice for its spelling (its group's), or that spelling.
+
+### def `_spellings` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], fold_rule: ComplexType`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `plan` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each value as written that a recode changes -> its clean value (None: missing). ``fold_rule`` None: no fold
+(the mapping lists every change).
+
+### def `recode` (recode.py)
+
+- **Arguments**: `values: pd.Series, full: Mapping[ComplexType]`
+
+- **Returns**: `pd.Series`
+
+The text of ``values`` with each value ``full`` lists replaced by its clean value (None: missing), as a text
+column: 2 and "2" are one value, as ``level_counts`` counts them.
+
+### def `recode_column` (recode.py)
+
+- **Arguments**: `df: pd.DataFrame, source: str, target: str, mapping: Mapping[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The table with ``target``, the recoded copy of ``source``, right after it (``replaces``: an earlier copy of that
+name is written anew). Returns the table and how many distinct values were kept as written.
+
+### def `groupings` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], full: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The clean values that merge two spellings (after the fold) each holding :data:`GROUPING_SHARE` of the rows or
+more (NYHA III and IV): a grouping of categories, not a correction. Clean value -> those spellings.
+
+### def `changes` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType], kinds: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The values a recode changes, counted, never named: ``{"by_kind": {kind: [values, rows]}, "set_to_missing":
+{meaning: [values, rows]}}``. A value takes the kind of the choice it follows, or the fold's reason.
+
+### def `report_params` (recode.py)
+
+- **Arguments**: `params: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The step's parameters as the trace report prints them: the choices counted, never named (the trace keeps them
+for the replay).
+
+### def `recoded_columns` (recode.py)
+
+- **Arguments**: `steps: Iterable[Mapping[ComplexType]]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each column recoded in a trace's steps -> the copy its last recode wrote.
+
+### def `last_record` (recode.py)
+
+- **Arguments**: `steps: Iterable[Mapping[ComplexType]], source: str, target: str`
+
+- **Returns**: `ComplexType`
+
+The parameters of the last recode of ``source`` into ``target`` in a trace's steps: cleaning again starts from
+its choices.
+
+### def `candidates` (recode.py)
+
+- **Arguments**: `df: pd.DataFrame, recoded: ComplexType`
+
+- **Returns**: `list[Candidate]`
+
+The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
+(source -> copy) left out: those with values to check first, then the cleaned ones, then the others, each in the
+dataset's order. Near spellings are not looked for here (they compare every pair of values): only in the open
+variable.
 
 ---
 

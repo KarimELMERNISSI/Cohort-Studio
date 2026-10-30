@@ -125,6 +125,21 @@ KEYS: tuple[Key, ...] = (
         note="what the last recode added, said once after the rerun",
     ),
     Key(
+        "clean_column",
+        "app_pages.clean_categories",
+        "page",
+        note="Clean > Categories: the variable open in the editor; its selector is a new widget after each change of "
+        "the data, so that its label says what Apply did",
+        reset_on_dataset=True,
+    ),
+    Key(
+        "clean_manual",
+        "app_pages.clean_categories",
+        "dataset",
+        note="Clean > Categories: each column's choices (clean values, folds put back, what missing means, why a "
+        "grouping) until Apply; cleared when another dataset is loaded, so a choice never follows the user there",
+    ),
+    Key(
         "home_tab",
         "app_pages.home",
         "page",

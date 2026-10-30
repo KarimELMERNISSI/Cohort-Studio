@@ -494,7 +494,8 @@ def app():
                 
                 # Step Details
                 with col2:
-                    st.markdown(f"**{step.get('description', 'Operation')}**")
+                    # a description names columns and values, which a file can fill with markup: drawn as text
+                    st.markdown(f"**{plain(step.get('description', 'Operation'), limit=500)}**")
                     st.caption(f"Function: `{step['function']}` | Time: {step['timestamp']}")
                     
                     # Show available data links (Artifacts)
@@ -585,7 +586,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     progress_bar = st.progress(0, text="Starting reproduction...")
 
     def _on_progress(pct, msg):
-        progress_bar.progress(min(max(int(pct), 0), 100) / 100, text=msg)
+        progress_bar.progress(min(max(int(pct), 0), 100) / 100, text=plain(msg, limit=300))
 
     with st.spinner(f"Replaying analysis up to Step {target_step_index + 1}..."):
         result = run_trace(trace_data, upto=target_step_index, paths=_resolver().with_named(overrides),

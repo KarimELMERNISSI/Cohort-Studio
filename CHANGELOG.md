@@ -1260,17 +1260,26 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   checks, the rules, the criteria and the population. No row is removed on Clean, and each fix is one step of the
   trace. The Start page's Validate box is now *Validate & clean*, with links to both.
 - **Categories:** a variable's values as written, each with its rows, are given a clean value or set to missing, and
-  written into a new column right after the original, which is kept (`sex_clean` beside `sex`). Values that differ only
-  by spaces or capitals are pre-filled with the spelling most rows hold. A one-letter code and the only word it begins
-  (*f* and *female*), a rare near spelling of a frequent value (*Luxembourgg*) and the codes that usually mean unknown
-  are offered, never applied: one letter can separate two categories (HFmrEF and HFrEF). Several values are mapped
-  together with the buttons, or by typing the same clean value; a chart shows the groups before and after. The page
-  shows each value's rows only, never an outcome beside them. The step records the values it changed, what each
-  became and why, and how many results already used the variable; the replay redoes it, keeps as written a value the
-  mapping does not list, and says how many. Before, the analysis pages suggested an Enrich formula
-  (`sex.str.strip().str.lower()`), which kept *f* and *female* apart.
+  written into a new text column right after the original, which is kept (`sex_clean` beside `sex`). Values that
+  differ only by spaces, and words that differ only by capitals (*Male*, *MALE*, *male*), take the spelling most rows
+  hold; in a short code, where case can carry meaning (genotypes *AA*, *Aa*, *aa*), a case variant is offered instead.
+  Offered, never applied: a one-letter code and the only longer value it begins (*F* and *Female*), a rare near
+  spelling of a frequent value (*Luxembourgg*), and the codes that may mean missing. A near spelling is never offered
+  between two categories (*Normal* and *Abnormal*, *HFrEF* and *HFmrEF*, *Stage IIIA* and *IIIB*). A value set to
+  missing says what missing means there (unknown or not done, not applicable, declined), since *n/a*, *none* or *NR*
+  can be a value; merging two values that each hold 5 % of the rows is a grouping, and says why. The table of values
+  sits beside a chart of the groups before and after; the page shows each value's rows only, never an outcome beside
+  them. Before, the analysis pages suggested an Enrich formula (`sex.str.strip().str.lower()`), which kept *f* and
+  *female* apart.
+- **What the trace keeps:** the fold of spaces and capitals as a rule, which the replay recomputes, and only the
+  values the user chose, with what each became, why, what missing means and why a grouping; counts by kind, never
+  per value. The trace report prints the counts only. The copy keeps the imputation marks of the values it copies (an
+  imputed value recoded is still imputed), 2 and "2" are one value in it, and it is written again only while no later
+  step changed it. The replay says how many values it kept as written that the step did not see. The choices are
+  kept per variable until they are applied, and never follow the user to another dataset.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
-  tabs counts the text columns that look like dates and the variables with values to look at, and opens Clean.
+  tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
+  tab.
 
 ### Validate: Date checks, a tab of its own (M6)
 

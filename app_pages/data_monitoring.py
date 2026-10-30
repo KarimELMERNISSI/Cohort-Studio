@@ -1814,4 +1814,7 @@ def app():
         if said:
             with hint, st.container(horizontal=True, vertical_alignment="center"):
                 st.caption(f":material/cleaning_services: {' · '.join(said)}.")
-                page_link("clean", "Open Clean", tab="date_checks" if n else "categories")
+                if n:
+                    page_link("clean", "Clean dates", tab="date_checks")
+                if written:
+                    page_link("clean", "Clean categories", tab="categories")

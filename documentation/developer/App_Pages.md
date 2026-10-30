@@ -778,12 +778,208 @@ _Analyze page: hypothesis tests, epidemiological measures, ANCOVA, power, z-scor
 
 ---
 
+## clean.py
+
+_Clean page: how values are written, fixed (a variable's values recoded into a new column; text read as dates)._
+
+**Imports**:
+`app_pages.data_cleaning.app`, `ui.components.page_header`
+
+---
+
+## clean_categories.py
+
+_Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
+written into a new column beside the original, which is kept (enrich.recode). Values that differ by spaces, and words
+that differ by capitals, take their group's spelling (the fold rule, recorded as a rule); a one-letter code, a rare
+near spelling, a case variant and a code that may mean missing are offered, never applied. A value set to missing says
+what missing means there; two values that each hold 5 % of the rows, merged, say why. The page shows each value's own
+rows, on all rows, never an outcome beside them: merging values after seeing results is a choice the intervals ignore.
+Apply is one traced step, ``recode_levels``, which the replay redoes.
+
+The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column;
+the widgets that edit them carry a short id of the dataset's trace and fold what they change into it as they change,
+so that no choice is lost on a page change and none follows the user to another dataset._
+
+**Imports**:
+`__future__.annotations`, `hashlib`, `html`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.CHOSEN`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.suggest`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
+
+### def `_rows` (clean_categories.py)
+
+- **Arguments**: `n: int`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_scope` (clean_categories.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `str`
+
+A short id of the dataset's trace: the widget keys carry it, so a widget's state never meets another dataset.
+
+### def `_empty` (clean_categories.py)
+
+- **Arguments**: ``
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_seeded` (clean_categories.py)
+
+- **Arguments**: `steps: list, column: str, target: str`
+
+- **Returns**: `dict[ComplexType]`
+
+The choices of the last recode of ``column`` into ``target``: cleaning again starts from them, kinds kept.
+
+### def `_choices` (clean_categories.py)
+
+- **Arguments**: `column: str`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_keys` (clean_categories.py)
+
+- **Arguments**: `scope: str, column: str, revision: int`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_give` (clean_categories.py)
+
+- **Arguments**: `choices: dict[ComplexType], value: str, clean: ComplexType, spelling: str`
+
+- **Returns**: `None`
+
+One value given a clean value (None: missing): a spelling's choice is its group's, a folded value's its own.
+
+### def `_table_changed` (clean_categories.py)
+
+- **Arguments**: `column: str, key: str, values: list[str], spellings: dict[ComplexType]`
+
+- **Returns**: `None`
+
+The table's edits into the store, as they are made; the table then starts again from it.
+
+### def `_offers_changed` (clean_categories.py)
+
+- **Arguments**: `column: str, key: str, offers: dict[ComplexType]`
+
+- **Returns**: `None`
+
+A ticked offer fills the table (its group's choice); unticked, its values take their spelling again.
+
+### def `_buttons` (clean_categories.py)
+
+- **Arguments**: `column: str, keys: dict[ComplexType], spellings: dict[ComplexType], how: str`
+
+- **Returns**: `None`
+
+Map, Set to missing and Keep as written: the picked values given a clean value.
+
+### def `_rows_shown` (clean_categories.py)
+
+- **Arguments**: `counts: dict[ComplexType], spellings: dict[ComplexType], reasons: dict[ComplexType], choices: dict[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each value as written: its clean value (None: missing), why, and what its missing value means.
+
+### def `_figure` (clean_categories.py)
+
+- **Arguments**: `counts: dict[ComplexType], full: dict[ComplexType]`
+
+- **Returns**: `go.Figure`
+
+One bar per clean value (after) or per value as written (before); the values set to missing apart, in grey.
+The values are drawn as text: a level holding markup is shown, never rendered.
+
+### def `_replaceable` (clean_categories.py)
+
+- **Arguments**: `df: pd.DataFrame, steps: list, column: str, target: str`
+
+- **Returns**: `str`
+
+Why ``target`` cannot be written again ("" when it can): it is the copy of ``column`` that the last recode
+wrote, and no later step changed it (its fingerprint, or the recode of the source as it is now, still gives it).
+
+### def `_recorded` (clean_categories.py)
+
+- **Arguments**: `counts: dict[ComplexType], choices: dict[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The choices that change something over the fold rule (a choice its group or the fold already makes is left
+out, never recorded), and the folds put back.
+
+### def `category_editor` (clean_categories.py)
+
+- **Arguments**: `state, df: pd.DataFrame, column: str`
+
+- **Returns**: `None`
+
+The editor of one variable's values: the offers, what each value becomes, a preview, and Apply. ``header``:
+the container beside the variable's choice that holds the new column's name.
+
+### def `_apply` (clean_categories.py)
+
+- **Arguments**: `state, df: pd.DataFrame, column: str, target: str, counts: dict[ComplexType], choices: dict[ComplexType], grouped: dict[ComplexType]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_choice_label` (clean_categories.py)
+
+- **Arguments**: `c: Candidate`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `render_categories` (clean_categories.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+The Categories tab: a variable and the new column's name on one row, then its editor.
+
+---
+
+## data_cleaning.py
+
+_Data > Clean: how values are written, fixed. Categories recodes a variable's values into a new column, the original
+kept; Dates reads the text columns that look like dates (Validate's Date checks tab until 2026-10; its link id
+``date_checks`` kept). Each fix is one traced step, and no row is removed here: Validate checks the data and chooses
+the rows, Clean fixes how values are written, Enrich adds information._
+
+**Imports**:
+`__future__.annotations`, `app_pages.clean_categories.render_categories`, `app_pages.validate_dates.render_date_checks`, `ui.components.no_dataset`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.state.get_state`
+
+### def `app` (data_cleaning.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+---
+
 ## data_enrichment.py
 
 _No module description._
 
 **Imports**:
-`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
+`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.detect`, `ingest.dates.recorded_formats`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -844,6 +1040,24 @@ page says how many and asks; None until the user chooses. A file with one row pe
 takes one row of the file for each row of the dataset all the same: the merge's check covers every identifier of
 the file, so "unique" would refuse it.
 
+### def `_file_dates` (data_enrichment.py)
+
+- **Arguments**: `enrichment_df: pd.DataFrame`
+
+- **Returns**: `dict[ComplexType]`
+
+The file's columns of dates, and how each is read: its date cells as they are; a text column whose values decide
+its format and the order of day and month (Date checks' detection; none with two-digit years or Excel serials).
+
+### def `file_rows_order` (data_enrichment.py)
+
+- **Arguments**: `enrichment_df: pd.DataFrame, file_rows: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Which of a participant's rows of the file is the first or the last: by its place in the file (None, as before), or
+by a column of dates of the file, the earliest or the latest ({"column", "format"}, recorded with the merge).
+
 ### def `_merged` (data_enrichment.py)
 
 - **Arguments**: `enriched_df: ComplexType, main_df: pd.DataFrame, file_df: ComplexType`
@@ -851,6 +1065,16 @@ the file, so "unique" would refuse it.
 - **Returns**: `bool`
 
 Whether the merge ran (it returns the dataset unchanged when it could not), said on the page either way.
+
+### def `_date_formats` (data_enrichment.py)
+
+- **Arguments**: `main_df: pd.DataFrame, enrichment_df: pd.DataFrame`
+
+- **Returns**: `dict`
+
+How the file's columns named as the dataset's date columns are read (enrich.external_data.date_key_formats): the
+shape of their own values, the order of day and month from the format Date checks recorded for the dataset's
+column, else the import's setting. Date checks commits its conversions: the trace holds them, the draft never.
 
 ### def `configure_enrichment` (data_enrichment.py)
 
@@ -1195,7 +1419,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `app_pages.validate_dates.render_date_checks`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.registry.as_code`, `enrich.recode.candidates`, `enrich.recode.recoded_columns`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1599,14 +1823,6 @@ No description available.
 
 No description available.
 
-### def `_open_date_checks` (data_monitoring.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Callback: open the Date checks tab (it runs before the tabs are drawn).
-
 ### def `process_dataset` (data_monitoring.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -1637,7 +1853,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
+`html`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.data_quality_auditor.NO_RULE`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.text.plain`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.dimension_color`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -1692,6 +1908,15 @@ where the rule fired: a rule named like a column was the only one highlighted, s
 The average-linkage clustering of the columns, at the distance 1 - |r| between their missingness indicators. A
 column whose missingness never varies (complete, or empty) has no correlation, not even with itself: it is 1
 from every other column and 0 from itself, where the 1 on the diagonal made SciPy refuse the matrix.
+
+### def `_domain_notes` (data_quality_dashboard.py)
+
+- **Arguments**: `auditor`
+
+- **Returns**: `dict[ComplexType]`
+
+Beside the Domain Validity score, the rows it pools: a rule that never fails raises the score, so the rows tell
+how much of the table a failing rule touches.
 
 ### def `render_dashboard` (data_quality_dashboard.py)
 
@@ -2047,7 +2272,7 @@ The imputation never changes the dataset: it is kept beside it (``AppState.set_m
 and re-computed by the replay. The panel runs as a fragment so its widgets do not rerun the whole page._
 
 **Imports**:
-`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.RANDOM_STATE`, `biostats.mi.report.default_model_columns`, `biostats.mi.report.incomplete_share`, `biostats.mi.report.methods_paragraph`, `biostats.mi.report.missingness_summary`, `biostats.mi.spec.ImputationSpec`, `biostats.mi.spec.default_method`, `biostats.mi.spec.is_numeric`, `biostats.mi.spec.suggest_m`, `core.derived.decided_on_data`, `core.derived.record`, `core.registry.as_code`, `core.session.PopulationError`, `enrich.derived.DERIVED_METHOD`, `enrich.derived.derivation_steps`, `enrich.derived.impute_and_derive`, `enrich.derived.recomputed`, `ui.components.error_card`, `ui.components.help_popover`, `ui.state.get_state`
+`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.RANDOM_STATE`, `biostats.mi.report.default_model_columns`, `biostats.mi.report.incomplete_share`, `biostats.mi.report.methods_paragraph`, `biostats.mi.report.missingness_summary`, `biostats.mi.spec.ImputationSpec`, `biostats.mi.spec.default_method`, `biostats.mi.spec.is_numeric`, `biostats.mi.spec.suggest_m`, `core.derived.decided_on_data`, `core.derived.record`, `core.registry.as_code`, `core.session.PopulationError`, `enrich.derived.DERIVED_METHOD`, `enrich.derived.derivation_steps`, `enrich.derived.impute_and_derive`, `enrich.derived.recomputed`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.text.plain`, `ui.state.get_state`
 
 ### def `_status_badge` (enrichment_mi.py)
 
@@ -2113,7 +2338,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -2865,7 +3090,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.components.text.plain`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 
@@ -2974,7 +3199,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -3159,11 +3384,12 @@ format (ingest.dates): detected from the shape of its values, the order of day a
 it, else asked and pre-filled from the import's day-first setting; two-digit years with a pivot; Excel serial numbers
 only when accepted; the placeholder dates the user keeps ticked set to missing. The conversion is one step of the
 trace (method parse_dates, each column's format recorded), which the replay reads with the same function, never
-detecting again. Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
+detecting again. The columns already dates (date cells read on load, or converted here) are counted the same way, and
+their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
 opened on new data, whichever tab was wanted._
 
 **Imports**:
-`__future__.annotations`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Collection`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.AS_DATES`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.state.get_state`
 
 ### def `_loaded_on` (validate_dates.py)
 
@@ -3265,13 +3491,54 @@ No description available.
 
 ### def `_placeholders` (validate_dates.py)
 
-- **Arguments**: `chosen: dict[ComplexType], readings: dict[ComplexType]`
+- **Arguments**: `chosen: Collection[str], readings: dict[ComplexType]`
 
 - **Returns**: `dict[ComplexType]`
 
 Per column, the placeholder dates set to missing, chosen from the whole catalogue: a list of only the dates a
 column holds told the trace that a participant was born on 1 January 1970, and one choice for every column set a
 real birth date to missing with a placeholder visit. The counts are this column's, on screen only.
+
+### def `_study_dates` (validate_dates.py)
+
+- **Arguments**: `state, options: list[str]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The extraction date and the columns that may hold planned dates: asked once, for both kinds of columns.
+
+### def `_heaping` (validate_dates.py)
+
+- **Arguments**: `reports: dict[ComplexType]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_extraction_held` (validate_dates.py)
+
+- **Arguments**: `extraction: ComplexType, dates: list[pd.Series]`
+
+- **Returns**: `None`
+
+A warning when 1 to 4 values of the data fall on the extraction date: a participant's date typed in the box is
+recorded with the step as typed. A count, on screen only.
+
+### def `already_dates` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `list[str]`
+
+The columns that already hold dates without a time zone: date cells read on load, or a conversion's.
+
+### def `_dated_reports` (validate_dates.py)
+
+- **Arguments**: `df: pd.DataFrame, dated: list[str], extraction: ComplexType, planned: list[str]`
+
+- **Returns**: `dict[ComplexType]`
+
+What each column already dates holds, counted as for a conversion: nothing to read, the dates themselves.
 
 ### def `render_date_checks` (validate_dates.py)
 
@@ -3280,8 +3547,28 @@ real birth date to missing with a placeholder visit. The counts are this column'
 - **Returns**: `None`
 
 The Date checks tab: how the text columns that look like dates would be read, what is asked, and their conversion,
-one traced step, on request. Dates used to be re-parsed in place on every visit of the page, untraced and invisible
-to the replay.
+one traced step, on request; then what the columns already dates hold. Dates used to be re-parsed in place on
+every visit of the page, untraced and invisible to the replay.
+
+### def `_text_columns` (validate_dates.py)
+
+- **Arguments**: `state, df: pd.DataFrame, found: dict[ComplexType], dated: list[str]`
+
+- **Returns**: `ComplexType`
+
+The text columns that look like dates: how each would be read, and their conversion. Returns the extraction date
+and the planned-date columns it asked for (None: no column chosen, nothing asked).
+
+### def `_date_columns` (validate_dates.py)
+
+- **Arguments**: `state, df: pd.DataFrame, dated: list[str], study: ComplexType`
+
+- **Returns**: `None`
+
+The columns already dates (date cells read on load, or converted here): what they hold, counted as for a
+conversion, and the placeholder dates ticked set to missing on request, one step recorded as a conversion with the
+format "dates", which the replay reads the same way. They had no check: an Excel file's 1900-01-01, or a date after
+the extraction, stayed uncounted.
 
 ---
 
@@ -3299,7 +3586,7 @@ _Variable map page: taxonomy of variables, formulas, clustering and the knowledg
 _No module description._
 
 **Imports**:
-`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `ui.components.no_dataset`, `ui.state.get_state`
+`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `ui.components.no_dataset`, `ui.components.text.plain`, `ui.state.get_state`
 
 ### def `hover_columns_input` (visualization.py)
 

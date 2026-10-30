@@ -1,12 +1,14 @@
 """
-Validate > Date checks: the text columns that look like dates, and their conversion. Each column is read with one
+Clean > Dates (Validate's Date checks tab until M6's Clean page): the text columns that look like dates, and their
+conversion. Each column is read with one
 format (ingest.dates): detected from the shape of its values, the order of day and month from the values that show
 it, else asked and pre-filled from the import's day-first setting; two-digit years with a pivot; Excel serial numbers
 only when accepted; the placeholder dates the user keeps ticked set to missing. The conversion is one step of the
 trace (method parse_dates, each column's format recorded), which the replay reads with the same function, never
 detecting again. The columns already dates (date cells read on load, or converted here) are counted the same way, and
-their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
-opened on new data, whichever tab was wanted.
+their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". A tab
+of its own since M6: above Validate's tabs, the conversion read those columns whenever Validate opened on new data,
+whichever tab was wanted.
 """
 
 from __future__ import annotations
@@ -95,7 +97,8 @@ def _detected(state) -> dict[str, Detection]:
 def date_candidates(state) -> list[str]:
     """
     The text columns that look like dates, by the shape of their values: nothing is read as a date, and the result is
-    kept until the data change, so that the line above Validate's tabs can count them on every click.
+    kept until the data change, so that the line above Validate's tabs can count them on every click (it links to
+    Clean > Dates).
     """
     return list(_detected(state)) if state.base is not None else []
 
@@ -464,7 +467,7 @@ def _text_columns(
     chosen = {c: how for c, how in chosen.items() if c not in held}
     n = len(chosen)
     if st.button(
-        f"Convert {n} column{'s' if n != 1 else ''} to dates",
+        f"Convert {n} column{'s' if n != 1 else ''} to dates (in place)",
         key="convert_dates",
         type="primary",
         disabled=n == 0,
