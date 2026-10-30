@@ -71,6 +71,9 @@ MAX_VALUES = 200  # more distinct values: free text or an identifier, not listed
 SPACES, CAPITALS, SPACES_AND_CAPITALS = "spaces", "capitals", "spaces and capitals"
 FIRST_LETTER, VARIANT, SPELLING, CLOSE = "first letter", "variant", "spelling", "close spelling"
 MISSING_CODE, CHOSEN, GROUPING = "missing code", "chosen", "grouping"
+AI = "ai"  # proposed by the AI engine (a synonym, a translation): checked here, ticked by the user
+# the rules' offers: never a grouping. An AI proposal is not among them: a merge it proposes of two values that each
+# hold 5 % of the rows is a grouping, which says why (its reason pre-filled)
 OFFER_KINDS = frozenset({CAPITALS, FIRST_LETTER, VARIANT, SPELLING, CLOSE, MISSING_CODE})
 # what a value set to missing means (stored with the step: never renamed)
 UNKNOWN, NOT_APPLICABLE, DECLINED = "unknown or not done", "not applicable", "declined"
@@ -115,10 +118,11 @@ class Offer:
 
     value: str  # a spelling, after the fold
     clean: str | None
-    why: str  # one of OFFER_KINDS
+    why: str  # one of OFFER_KINDS, or AI
     meaning: str | None = (
         None  # a missing code read as unknown: UNKNOWN; one whose meaning must be said: None
     )
+    reason: str = ""  # an AI proposal's reason, in a few words (the model's text: drawn as text)
 
 
 @dataclass(frozen=True)
@@ -576,6 +580,10 @@ def tick(choices: MutableMapping[str, Any], counts: Mapping[str, int], offer: Of
     choices["kinds"][offer.value] = offer.why
     if offer.clean is None and offer.meaning:
         choices["meanings"][offer.value] = offer.meaning
+    if offer.why == AI and offer.reason and offer.clean is not None:
+        choices["reasons"].setdefault(
+            offer.clean, offer.reason
+        )  # a grouping's reason, pre-filled for the user
 
 
 def untick(choices: MutableMapping[str, Any], offer: Offer) -> None:
@@ -745,6 +753,57 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def free_text(counts: Mapping[str, int]) -> bool:
+    """Values that read as free text (long, or several words each): the AI engine is not asked about them."""
+    if not counts:
+        return False
+    lengths = [len(_spaced(v)) for v in counts]
+    wordy = sum(1 for v in counts if len(v.split()) >= 5)
+    return sum(lengths) / len(lengths) > 40 or wordy > len(counts) / 2
+
+
+def _numbered_apart(a: str, b: str) -> bool:
+    """Whether a number, a sign or two different Roman numerals set two values apart (Type 1 and 2, HER2- and HER2+,
+    NYHA II and III): a translation or an abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where
+    "MI" reads as a numeral only when the other value holds one too)."""
+    digits = re.sub(r"\D", "", a) != re.sub(r"\D", "", b)
+    roman_a, roman_b = sorted(_ROMAN.findall(a.casefold())), sorted(_ROMAN.findall(b.casefold()))
+    signs = sorted(_SIGNS.findall(a)) != sorted(_SIGNS.findall(b))
+    return digits or signs or (bool(roman_a) and bool(roman_b) and roman_a != roman_b)
+
+
+def ai_offers(
+    proposals: Iterable[Mapping[str, Any]],
+    counts: Mapping[str, int],
+    *,
+    sent: Collection[str],
+    taken: Collection[str] = (),
+) -> tuple[Offer, ...]:
+    """
+    The AI engine's proposals, read: only a value it was sent (as written, or its spelling), given another value or a
+    short standard name, never to missing, never across a number, a sign or a Roman numeral (NYHA II and III, Type
+    1 and 2: the prompt forbids the rest, and the user ticks each); one per value, in the order of the values' rows, those an offer of the rules already names (``taken``)
+    left out. The model's text is kept to a short reason, drawn as text.
+    """
+    spellings = fold(counts)
+    allowed = {spellings.get(v, v) for v in sent if v in counts}
+    held: dict[str, int] = defaultdict(int)
+    for value, n in counts.items():
+        held[spellings.get(value, value)] += n
+    found: dict[str, Offer] = {}
+    for proposal in proposals:
+        value = str(proposal.get("value", ""))
+        spelling = spellings.get(value, value)
+        clean = " ".join(str(proposal.get("clean", "")).split())
+        if spelling not in allowed or spelling in taken or spelling in found:
+            continue
+        if not clean or len(clean) > 60 or clean == spelling or _numbered_apart(spelling, clean):
+            continue
+        reason = " ".join(str(proposal.get("reason", "")).split())[:80]
+        found[spelling] = Offer(spelling, clean, AI, reason=reason)
+    return tuple(sorted(found.values(), key=lambda o: (-held[o.value], o.value)))
+
+
 def recoded_columns(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     """Each column recoded in a trace's steps -> the copy its last recode wrote."""
     out: dict[str, str] = {}
@@ -874,6 +933,7 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
 
 
 __all__ = [
+    "AI",
     "CAPITALS",
     "CASE_SHARE",
     "CHOSEN",
@@ -897,11 +957,13 @@ __all__ = [
     "Candidate",
     "Offer",
     "Suggestions",
+    "ai_offers",
     "candidates",
     "changes",
     "choices_of",
     "clean_value",
     "fold",
+    "free_text",
     "give",
     "groupings",
     "last_record",

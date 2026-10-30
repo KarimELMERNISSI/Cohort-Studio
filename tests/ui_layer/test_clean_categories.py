@@ -52,9 +52,28 @@ PARAMS = {
 }
 
 
-def _app(frame: dict, other: dict | None = None) -> None:
+def _app(frame: dict, other: dict | None = None, ai: dict | None = None) -> None:
     import pandas as pd
     import streamlit as st
+
+    if ai is not None and "rag_manager" not in st.session_state:  # a running AI engine, faked
+
+        class _Engine:
+            initialized = True
+
+            def __init__(self) -> None:
+                self.provider, self.base_url = ai["provider"], ai["base_url"]
+                self.llm = type("Model", (), {"model_name": "fake-model"})()
+                self.sent: list = []
+
+            def recipients(self) -> frozenset:
+                return frozenset(ai["recipients"])
+
+            def suggest_category_groups(self, column, values, max_proposals=30):
+                self.sent.append((column, list(values)))
+                return ai["proposals"], None
+
+        st.session_state["rag_manager"] = _Engine()
 
     from app_pages.clean_categories import render_categories
     from core.state import DatasetRef
@@ -96,8 +115,10 @@ def _data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
 
 
-def _open(frame: dict, other: dict | None = None) -> AppTest:
-    at = AppTest.from_function(_app, kwargs={"frame": frame, "other": other}, default_timeout=120)
+def _open(frame: dict, other: dict | None = None, ai: dict | None = None) -> AppTest:
+    at = AppTest.from_function(
+        _app, kwargs={"frame": frame, "other": other, "ai": ai}, default_timeout=120
+    )
     at.run()
     _ok(at)
     return at
@@ -356,3 +377,44 @@ def test_a_grouping_s_question_draws_its_values_as_text() -> None:
     _ok(at)
     label = _one(at.text_input, "clean_reason::").label
     assert "`![g](http://canary.invalid/g.png)`" in label
+
+
+def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_proposed() -> None:
+    """A cloud provider is sent the values held by 5 rows or more, no count; its proposals are offered, never
+    applied; the record names the provider and the model, never the prompt or the answer."""
+    frame = {"sex": ["Female"] * 40 + ["Male"] * 40 + ["Femme"] * 6 + ["Homme"] * 3}
+    ai = {
+        "provider": "anthropic",
+        "base_url": None,
+        "recipients": ["anthropic"],
+        "proposals": [
+            {"value": "Femme", "clean": "Female", "reason": "French for female"},
+            {"value": "Homme", "clean": "Male", "reason": "French for male"},
+        ],
+    }
+    at = _open(frame, ai=ai)
+    assert any("1 value held by fewer than 5 rows is not sent." in c.value for c in at.caption)
+    _one(at.button, "clean_ai_send::").click().run()
+    _ok(at)
+    assert at.session_state["rag_manager"].sent == [
+        ("sex", ["Female", "Male", "Femme"])
+    ]  # no Homme, no count
+    group = _group(at, "ai")
+    assert group.options == [
+        "`Femme` → `Female` · French for female · 6 rows"
+    ]  # Homme was not sent
+    assert not group.value  # offered, never applied
+    group.select("Femme").run()
+    _ok(at)
+    at.button(key="clean_apply::sex").click().run()
+    _ok(at)
+    params = _step(at)["params"]
+    assert params["kinds"] == {"Femme": "ai"}
+    assert params["ai"] == {"provider": "anthropic", "model": "fake-model"}
+    # Femme (6 rows) and Female (40) each hold 5 %: a grouping, its reason pre-filled for the user
+    assert params["groupings"]["Female"]["reason"] == "French for female"
+
+
+def test_no_ai_engine_no_request() -> None:
+    at = _open({"sex": SEX})
+    assert not [b for b in at.button if str(b.key).startswith("clean_ai_send::")]

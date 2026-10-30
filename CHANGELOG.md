@@ -1276,6 +1276,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   A to Z, a value's spellings side by side, or by rows; the table sits beside a chart of the groups before and after;
   the page shows each value's rows only, never an outcome beside them. Before, the analysis pages suggested an Enrich
   formula (`sex.str.strip().str.lower()`), which kept *f* and *female* apart.
+- **The AI engine can propose more** (Settings > AI engine): *Ask the AI engine* shows what it would send, the
+  variable's name and its values as written, no count and no row (to any recipient but an Ollama on this machine, only
+  the values held by 5 rows or more), and sends it on a second click. Its proposals, a synonym, a translation or an
+  abbreviation that no spelling rule finds (*Femme* and *Female*, *MI* and *myocardial infarction*), are offered in a
+  group of their own, with its reason, never applied; a proposal naming a value it was not sent, setting one to
+  missing, or crossing a number, a sign or a Roman numeral is left out. A ticked proposal is recorded with the kind
+  *ai*, the provider and the model, never the prompt or the answer; one that merges two values of 5 % of the rows each
+  is a grouping, its reason pre-filled. Free text is never sent.
 - **What the trace keeps:** the fold of spaces and capitals as a rule, which the replay recomputes, and only the
   values the user chose, with what each became, why, what missing means and why each grouping; what it records always
   gives the preview. Counts by kind and meaning, the rows already missing apart from those set to missing, and

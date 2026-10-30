@@ -376,6 +376,10 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
             ),
             "- **No row of your dataset.**",
             (
+                "- **Data > Clean, when you ask the AI engine:** the name of the variable and its values as written, "
+                "only values held by at least 5 rows, without their counts; never free text."
+            ),
+            (
                 "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index "
                 "(each passage with its PDF's name), the names of the PDFs you ask Document insight about, and your "
                 "chat messages; never the folder a PDF is in."

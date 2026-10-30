@@ -28,6 +28,7 @@ import streamlit as st
 from core.fingerprint import frame_fingerprint
 from core.registry import as_code
 from enrich.recode import (
+    AI,
     CAPITALS,
     CHOSEN,
     CLOSE,
@@ -45,9 +46,11 @@ from enrich.recode import (
     VARIANT,
     Candidate,
     Offer,
+    ai_offers,
     candidates,
     changes,
     choices_of,
+    free_text,
     give,
     groupings,
     last_record,
@@ -69,6 +72,7 @@ from enrich.recode import (
     untick,
     values_fp,
 )
+from manage.ai_payload import category_values, provider_label
 from ui.components.levels import show_level
 from ui.components.text import plain
 from ui.quality_charts import chart_config
@@ -76,6 +80,7 @@ from ui.state import get_state
 from ui.theme import OKABE_ITO
 
 STORE = "clean_manual"  # {column: choices}, declared in ui.keys (lifetime "dataset")
+AI_STORE = "clean_ai"  # {column: what the AI engine was sent and proposed}, declared in ui.keys (lifetime "dataset")
 DONE = "clean_done"  # what the last Apply did, said once after the rerun
 COLUMN = "clean_column"  # the variable open in the editor, declared in ui.keys
 _BAR = OKABE_ITO[0]
@@ -102,12 +107,14 @@ WORDS = {
     MISSING_CODE: "code for missing",
     CHOSEN: "chosen",
     GROUPING: "grouping",
+    AI: "proposed by the AI engine",
 }
 # the offers, in groups, each with its "Tick all"
 GROUPS = (
     ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER)),
     ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE)),
     ("missing", "Codes that may mean missing", (MISSING_CODE,)),
+    ("ai", "Proposed by the AI engine: check that both name the same category", (AI,)),
 )
 
 
@@ -308,7 +315,6 @@ def _offer_groups(
     spellings = suggest(counts, near=False).spellings
     for value, n in counts.items():
         held[spellings.get(value, value)] += n
-    st.markdown("**Check before changing**")
     for name, title, kinds in GROUPS:
         group = {o.value: o for o in offers if o.why in kinds}
         if not group:
@@ -317,7 +323,12 @@ def _offer_groups(
         def label(value: str, group: dict[str, Offer] = group) -> str:
             offer = group[value]
             clean = as_code(show_level(offer.clean)) if offer.clean is not None else "missing"
-            return f"{as_code(show_level(value))} → {clean} · {WORDS[offer.why]} · {_rows(held.get(value, 0))}"
+            why = (
+                plain(offer.reason, limit=80)
+                if offer.why == AI and offer.reason
+                else WORDS[offer.why]
+            )
+            return f"{as_code(show_level(value))} → {clean} · {why} · {_rows(held.get(value, 0))}"
 
         key = f"clean_offers::{scope}::{column}::{name}::{choices['revision']}"
         left = sum(1 for o in group.values() if not ticked(choices, counts, o))
@@ -384,9 +395,14 @@ def category_editor(
         ).strip()
     replaces = bool(target) and target in df.columns and target == cleaned_into
     name = target or f"{column}_clean"  # drawn through as_code, which escapes it
-    if hints.offers:
+    proposed = _ai_proposals(column, counts, hints.offers)
+    with st.container(horizontal=True, vertical_alignment="center"):
+        if hints.offers or proposed:
+            st.markdown("**Check before changing**")
+        _ask_ai(column, scope, counts)
+    if hints.offers or proposed:
         into = f"write {as_code(name)} again" if replaces else f"add {as_code(name)}"
-        _offer_groups(column, scope, choices, counts, hints.offers, into)
+        _offer_groups(column, scope, choices, counts, (*hints.offers, *proposed), into)
 
     shown = _shown(counts, spellings, reasons, choices)
     full = plan(
@@ -619,8 +635,13 @@ def _apply(
     replaces: bool,
 ) -> None:
     mapping, kinds, kept, meanings = record
-    for key, clean in mapping.items():
-        if clean in grouped and kinds[key] not in OFFER_KINDS:
+    for (
+        key,
+        clean,
+    ) in (
+        mapping.items()
+    ):  # a hand-made merge into a grouping is one; an AI proposal keeps who proposed
+        if clean in grouped and kinds[key] not in OFFER_KINDS and kinds[key] != AI:
             kinds[key] = GROUPING
     spellings = suggest(counts, near=False).spellings
     held: dict[str, int] = defaultdict(int)
@@ -661,6 +682,11 @@ def _apply(
         "values_fp": values_fp(counts),
         "target_fp": frame_fingerprint(new[[target]]),
     }
+    asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
+    if any(
+        kind == AI for kind in kinds.values()
+    ):  # who proposed: never the prompt, never the answer
+        params["ai"] = {"provider": asked.get("provider", ""), "model": asked.get("model", "")}
     summary = f"{len(after)} values instead of {len(counts)}" + (
         f", {_rows(gone)} set to missing" if gone else ""
     )
@@ -674,6 +700,83 @@ def _apply(
     else:
         st.session_state[DONE] = f"Nothing written: {as_code(target)} already holds these values."
     st.rerun()
+
+
+def _engine():
+    """The AI engine when it runs (Settings > AI engine), else None."""
+    engine = st.session_state.get("rag_manager")
+    return engine if engine is not None and getattr(engine, "initialized", False) else None
+
+
+def _ai_proposals(
+    column: str, counts: dict[str, int], offers: tuple[Offer, ...]
+) -> tuple[Offer, ...]:
+    """What the AI engine proposed for this column's values as they are now (a change of the values asks again)."""
+    asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
+    if asked.get("fp") != values_fp(counts):
+        return ()
+    taken = {o.value for o in offers}
+    return ai_offers(
+        asked.get("proposals") or (), counts, sent=asked.get("sent") or (), taken=taken
+    )
+
+
+def _ask_ai(column: str, scope: str, counts: dict[str, int]) -> None:
+    """
+    "Ask the AI engine": a preview of exactly what is sent (the variable's name and its values, no count, no row;
+    to any recipient but an Ollama on this machine, only the values held by 5 rows or more), then a second click.
+    Never for free text.
+    """
+    if free_text(counts):
+        return
+    engine = _engine()
+    with st.popover(
+        "Ask the AI engine",
+        type="tertiary",
+        icon=":material/auto_awesome:",
+        disabled=engine is None,
+        help="Start the AI engine in Settings > AI engine first." if engine is None else None,
+    ):
+        if engine is None:
+            return
+        sent, held = category_values(counts, engine.provider, engine.base_url)
+        to = (
+            ", ".join(provider_label(r) for r in sorted(engine.recipients()))
+            or "the AI engine on this machine"
+        )
+        st.caption(
+            f"Sent to {plain(to)}: the name {as_code(column)} and these {len(sent):,} values, as written; no count, "
+            "no row."
+            + (
+                f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} "
+                "not sent."
+                if held
+                else ""
+            )
+        )
+        st.markdown(
+            " ".join(as_code(show_level(v)) for v in sent[:60]) + (" ..." if len(sent) > 60 else "")
+        )
+        if st.button(
+            "Send", key=f"clean_ai_send::{scope}::{column}", type="primary", disabled=not sent
+        ):
+            with st.spinner("The AI engine reads the values..."):
+                proposals, error = engine.suggest_category_groups(column, sent)
+            model = (
+                getattr(engine.llm, "model_name", None) or getattr(engine.llm, "model", None) or ""
+            )
+            st.session_state.setdefault(AI_STORE, {})[column] = {
+                "fp": values_fp(counts),
+                "sent": sent,
+                "proposals": proposals,
+                "error": error,
+                "provider": str(engine.provider or ""),
+                "model": str(model)[:80],
+            }
+            st.rerun()
+    asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
+    if asked.get("error") and asked.get("fp") == values_fp(counts):
+        st.caption(f"The AI engine could not answer: {plain(asked['error'], limit=200)}")
 
 
 def _choice_label(c: Candidate) -> str:

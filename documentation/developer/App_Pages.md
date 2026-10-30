@@ -804,7 +804,7 @@ the dataset's trace and fold what they change into it as they change, so that no
 none follows the user to another dataset._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `html`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.CAPITALS`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPACES_AND_CAPITALS`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `hashlib`, `html`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.AI`, `enrich.recode.CAPITALS`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPACES_AND_CAPITALS`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.ai_offers`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.free_text`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `manage.ai_payload.category_values`, `manage.ai_payload.provider_label`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
 
 ### def `_rows` (clean_categories.py)
 
@@ -929,6 +929,32 @@ Why Apply waits ("" when it does not).
 - **Returns**: `None`
 
 No description available.
+
+### def `_engine` (clean_categories.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+The AI engine when it runs (Settings > AI engine), else None.
+
+### def `_ai_proposals` (clean_categories.py)
+
+- **Arguments**: `column: str, counts: dict[ComplexType], offers: tuple[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+What the AI engine proposed for this column's values as they are now (a change of the values asks again).
+
+### def `_ask_ai` (clean_categories.py)
+
+- **Arguments**: `column: str, scope: str, counts: dict[ComplexType]`
+
+- **Returns**: `None`
+
+"Ask the AI engine": a preview of exactly what is sent (the variable's name and its values, no count, no row;
+to any recipient but an Ollama on this machine, only the values held by 5 rows or more), then a second click.
+Never for free text.
 
 ### def `_choice_label` (clean_categories.py)
 

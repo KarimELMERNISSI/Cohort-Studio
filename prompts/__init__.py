@@ -10,6 +10,7 @@ Usage:
 """
 
 from .anomaly_criteria import anomaly_criteria_prompt as anomaly_criteria_prompt
+from .category_harmonisation import category_harmonisation
 from .column_renaming import column_renaming
 from .context_analysis import context_analysis
 from .contextualize_variables import contextualize_variables
@@ -55,6 +56,7 @@ __all__ = [
     "map_formulas",
     "imputation_formulas",
     "derived_variables",
+    "category_harmonisation",
     "fix_formula_variables",
     "markdown_formula",
     "refine_taxonomy",

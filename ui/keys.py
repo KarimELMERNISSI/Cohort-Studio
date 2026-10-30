@@ -133,6 +133,13 @@ KEYS: tuple[Key, ...] = (
         reset_on_dataset=True,
     ),
     Key(
+        "clean_ai",
+        "app_pages.clean_categories",
+        "dataset",
+        note="Clean > Categories: per column, what the AI engine was sent and proposed, the provider and model (the "
+        "record names those two when a proposal is ticked); asked again once the column's values change",
+    ),
+    Key(
         "clean_manual",
         "app_pages.clean_categories",
         "dataset",

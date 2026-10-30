@@ -542,3 +542,38 @@ class ComputedVarsMixin:
             ):
                 found.append(candidate)
         return found[:max_candidates], None
+
+    def suggest_category_groups(
+        self, column: str, values: list[str], max_proposals: int = 30
+    ) -> tuple[list[dict[str, str]], str | None]:
+        """
+        Which values of a categorical variable are one category written another way (a synonym, a translation, an
+        abbreviation): proposals {"value", "clean", "reason"}, read here as text and nothing else; enrich.recode
+        keeps those that name a value sent and never join two categories, and the page offers them, never applies
+        them. Sent: the column's name and ``values`` (manage.ai_payload.category_values decides which); no count, no
+        row. Nothing about the values is logged; an error is named by its type.
+        """
+        if not self.initialized:
+            return [], "The AI engine is not running."
+        shown = [" ".join(str(v).split())[:80] for v in values]  # one line per value, whatever it holds
+        from prompts import category_harmonisation
+
+        lines = "\n".join(f"- {v}" for v in shown)
+        prompt = category_harmonisation(" ".join(str(column).split())[:80], lines, max_proposals)
+        try:
+            response = self.llm.invoke(prompt)
+        except Exception as exc:
+            logger.warning("The category groups could not be proposed (%s)", type(exc).__name__)
+            return [], f"The AI engine could not answer ({type(exc).__name__})."
+        if failure := provider_error(response.content):
+            return [], failure
+        parsed = parse_json_safe(self._clean_json_response(response.content), default={"proposals": []})
+        entries = parsed.get("proposals") if isinstance(parsed, dict) else parsed
+        found: list[dict[str, str]] = []
+        for entry in (entries if isinstance(entries, list) else [])[: 2 * max_proposals]:
+            if isinstance(entry, dict) and all(isinstance(entry.get(k), str) for k in ("value", "clean")):
+                found.append(
+                    {"value": entry["value"], "clean": entry["clean"], "reason": str(entry.get("reason") or "")[:120]}
+                )
+        logger.info("The AI engine proposed %d category groups from %d values", len(found), len(values))
+        return found[:max_proposals], None

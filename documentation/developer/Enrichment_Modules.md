@@ -1511,6 +1511,35 @@ The step's parameters as the trace report prints them: the choices counted, neve
 the replay), and each grouping with its reason, naming its values only when each held 5 rows or more. The
 fingerprints are left out: one of a single column can be tested against a guessed cell.
 
+### def `free_text` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType]`
+
+- **Returns**: `bool`
+
+Values that read as free text (long, or several words each): the AI engine is not asked about them.
+
+### def `_numbered_apart` (recode.py)
+
+- **Arguments**: `a: str, b: str`
+
+- **Returns**: `bool`
+
+Whether a number, a sign or two different Roman numerals set two values apart (Type 1 and 2, HER2- and HER2+,
+NYHA II and III): a translation or an abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where
+"MI" reads as a numeral only when the other value holds one too).
+
+### def `ai_offers` (recode.py)
+
+- **Arguments**: `proposals: Iterable[Mapping[ComplexType]], counts: Mapping[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The AI engine's proposals, read: only a value it was sent (as written, or its spelling), given another value or a
+short standard name, never to missing, never across a number, a sign or a Roman numeral (NYHA II and III, Type
+1 and 2: the prompt forbids the rest, and the user ticks each); one per value, in the order of the values' rows, those an offer of the rules already names (``taken``)
+left out. The model's text is kept to a short reason, drawn as text.
+
 ### def `recoded_columns` (recode.py)
 
 - **Arguments**: `steps: Iterable[Mapping[ComplexType]]`

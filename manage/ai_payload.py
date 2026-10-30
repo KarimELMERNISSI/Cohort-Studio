@@ -203,6 +203,20 @@ def document_name(metadata: Mapping[str, Any] | None) -> str:
     return file_name_of((metadata or {}).get("source")) or "Unknown"  # a folder is never named
 
 
+def category_values(
+    counts: Mapping[str, int], provider: str | None, base_url: str | None
+) -> tuple[list[str], int]:
+    """
+    The values of a categorical variable that may be sent to the AI engine for it to propose which are one category
+    (Data > Clean): every value to an Ollama on this machine; to any other recipient, an Ollama of the private network
+    included, only those held by MIN_COUNT rows or more, since a rarer one can single out a participant. The most
+    frequent first; with how many were held back. No count is ever sent.
+    """
+    local = provider in local_providers() and on_this_machine(base_url)
+    sent = [str(v) for v, n in counts.items() if local or n >= MIN_COUNT]
+    return sent, len(counts) - len(sent)
+
+
 def host_of(url: str | None) -> str:
     """The host of a service address ("" when there is none), as an HTTP client reads it: a backslash counts as a
     slash, so a name and an "@" before it cannot hide the host the client connects to."""

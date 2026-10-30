@@ -107,6 +107,17 @@ user's map itself is unchanged.
 The document a passage comes from, as a prompt names it: the file's name, never its path on the server, which
 names the user's account and the server's folders. Both separators are read: an index can move between systems.
 
+### def `category_values` (ai_payload.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], provider: ComplexType, base_url: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The values of a categorical variable that may be sent to the AI engine for it to propose which are one category
+(Data > Clean): every value to an Ollama on this machine; to any other recipient, an Ollama of the private network
+included, only those held by MIN_COUNT rows or more, since a rarer one can single out a participant. The most
+frequent first; with how many were held back. No count is ever sent.
+
 ### def `host_of` (ai_payload.py)
 
 - **Arguments**: `url: ComplexType`
@@ -2438,6 +2449,13 @@ Methods:
   > values (manage.ai_payload.typical_ranges); never a row. A proposal that cannot be read, names a column the
   > data do not have or uses the column it computes is dropped here; the page checks the others against the data
   > before it offers them, and adds none by itself.
+
+- **suggest_category_groups**(`self, column: str, values: list[str], max_proposals: int`) -> `tuple[ComplexType]`
+  > Which values of a categorical variable are one category written another way (a synonym, a translation, an
+  > abbreviation): proposals {"value", "clean", "reason"}, read here as text and nothing else; enrich.recode
+  > keeps those that name a value sent and never join two categories, and the page offers them, never applies
+  > them. Sent: the column's name and ``values`` (manage.ai_payload.category_values decides which); no count, no
+  > row. Nothing about the values is logged; an error is named by its type.
 
 ### def `_passages` (rag_computed_vars.py)
 

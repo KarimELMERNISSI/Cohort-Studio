@@ -25,6 +25,29 @@ Returns:
 
 ---
 
+## category_harmonisation.py
+
+_Prompt for proposing which values of a categorical variable are one category written another way._
+
+### def `category_harmonisation` (category_harmonisation.py)
+
+- **Arguments**: `column: str, values_text: str, max_proposals: int`
+
+- **Returns**: `str`
+
+Asks which values as written are the same category: a synonym, a translation, an abbreviation, a brand and a
+generic name. Nothing is applied: each proposal is checked here, then offered to the user.
+
+Args:
+    column: the variable's name
+    values_text: one line per value as written (the values the payload policy lets be sent; no count, no row)
+    max_proposals: the most proposals to return
+
+Returns:
+    The prompt.
+
+---
+
 ## column_renaming.py
 
 _Prompt for suggesting standard medical terminology for column names._
