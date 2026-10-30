@@ -56,6 +56,7 @@ class StepKind:
     changes_data: bool
     flow: str = ""  # the noun of the participant flow; empty: the id in words
     fills: str = ""  # FITTED or FORMULA for a step that fills missing values with one value each
+    copies: bool = False  # writes params["target"], a recoded copy of params["source"]: it keeps the source's marks
 
     def __post_init__(self) -> None:
         if self.category not in CATEGORIES:
@@ -91,7 +92,9 @@ _register(
     )
 )
 # Data > Clean: a categorical variable's values recoded into a new column, the original kept
-_register(StepKind("recode_levels", "Values Recoded", VALIDATE, RECOMPUTE, changes_data=True))
+_register(
+    StepKind("recode_levels", "Values Recoded", VALIDATE, RECOMPUTE, changes_data=True, copies=True)
+)
 _register(
     StepKind(
         "outlier_clipping",
@@ -219,6 +222,7 @@ def ids(
     category: str | None = None,
     changes_data: bool | None = None,
     fills: str | None = None,
+    copies: bool | None = None,
 ) -> frozenset[str]:
     """The ids of the kinds that match every condition given (legacy kinds included: old traces hold them)."""
     return frozenset(
@@ -228,6 +232,7 @@ def ids(
         and (category is None or k.category == category)
         and (changes_data is None or k.changes_data == changes_data)
         and (fills is None or k.fills == fills)
+        and (copies is None or k.copies == copies)
     )
 
 

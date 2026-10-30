@@ -390,18 +390,28 @@ def _rename_columns(df, step, index, paths, warnings):
 
 
 def _recode_levels(df, step, index, paths, warnings):
+    """The recode redone: the recorded fold rule recomputed on the values read (a trace without one recorded every
+    change in its mapping), the recorded choices over it. Differences are said by their number, never by a value."""
     params = step.get("params", {}) or {}
-    source = params.get("source")
-    new_df, _ = recode_column(
-        df, source, params.get("target"), params.get("mapping") or {}, replaces=bool(params.get("replaces"))
+    source, target = params.get("source"), params.get("target")
+    new_df, kept = recode_column(
+        df,
+        source,
+        target,
+        params.get("mapping") or {},
+        fold_rule=params.get("fold"),
+        kept=params.get("kept") or (),
+        replaces=bool(params.get("replaces")),
     )
-    # the values the recorded mapping does not list were kept as written: said by their number, never named
-    distinct, recorded = int(df[source].dropna().astype(str).nunique()), params.get("values_before")
-    if recorded is not None and distinct != recorded:
+    recorded = params.get("kept_as_written")
+    if recorded is not None and kept > recorded:
         warnings.append(
-            f"step {index + 1}: {source} holds {distinct} distinct values, {recorded} when the step was recorded; "
-            "those the recorded mapping does not list were kept as written"
+            f"step {index + 1}: {kept - recorded} more value(s) of {source} kept as written in {target} than when the "
+            "step was recorded: values it did not see"
         )
+    after, recorded = int(new_df[target].dropna().nunique()), params.get("values_after")
+    if recorded is not None and after != recorded:
+        warnings.append(f"step {index + 1}: {target} holds {after} distinct values, {recorded} when it was recorded")
     return new_df, None
 
 

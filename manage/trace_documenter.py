@@ -10,6 +10,7 @@ from docx.shared import Pt, RGBColor
 from core.lineage import verify_trace
 from core.population import family_words
 from core.steps import step_title
+from enrich.recode import report_params
 
 
 class TraceDocumenter:
@@ -166,6 +167,8 @@ class TraceDocumenter:
             self._add_mi_methods(doc, params)
 
         # Parameters Table
+        if step.get("function") == "recode_levels" and isinstance(params, dict):
+            params = report_params(params)  # the choices counted, never named: the trace keeps them for the replay
         if params:
             p = doc.add_paragraph()
             p.add_run("Parameters:").bold = True

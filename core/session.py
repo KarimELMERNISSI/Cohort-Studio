@@ -68,6 +68,8 @@ EMPTY, OK, BASE_CHANGED, POPULATION_CHANGED = "empty", "ok", "base_changed", "po
 
 # steps that fill missing values with one value each (Enrich: global imputation, formula; the former MI panel)
 SINGLE_IMPUTATION_STEPS = step_ids(fills=FITTED) | step_ids(fills=FORMULA)
+# steps that write a recoded copy of a column (Data > Clean): the copy keeps the marks of the values it copies
+COPYING_STEPS = step_ids(copies=True)
 
 Cells = dict[str, np.ndarray]  # column -> row ids
 
@@ -110,6 +112,19 @@ def is_exact_imputation(function: str, params: Mapping[str, Any] | None) -> bool
     return function == "targeted_imputation" and bool((params or {}).get("exact"))
 
 
+def _copied(params: Mapping[str, Any] | None, after: pd.DataFrame, cells: Cells) -> Cells:
+    """``cells`` with the copy's marked as its source's, where the copy holds a value (an imputed value recoded is
+    still imputed; one set to missing is no longer a value), its earlier marks dropped (written anew)."""
+    source, target = str((params or {}).get("source")), str((params or {}).get("target"))
+    out = {col: ids for col, ids in cells.items() if col != target}
+    if source in cells and target in after.columns:
+        held = after.index[after[target].notna()].to_numpy()
+        copied = cells[source][np.isin(cells[source], held)]
+        if len(copied):
+            out[target] = copied
+    return out
+
+
 def sort_filled(
     function: str,
     params: Mapping[str, Any] | None,
@@ -118,8 +133,10 @@ def sort_filled(
     single: Cells,
     exact: Cells,
 ) -> tuple[Cells, Cells]:
-    """``(single, exact)`` with the cells an imputation step filled added to the right ones (the session and the
-    replay use this one rule)."""
+    """``(single, exact)`` with the cells an imputation step filled added to the right ones, and a copy's cells
+    marked as those of its source (the session and the replay use this one rule)."""
+    if function in COPYING_STEPS:
+        return _copied(params, after, single), _copied(params, after, exact)
     if function not in SINGLE_IMPUTATION_STEPS:
         return single, exact
     filled = filled_cells(before, after)

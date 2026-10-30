@@ -10,7 +10,6 @@ import streamlit as st
 import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
-from app_pages.clean_categories import candidates
 from app_pages.data_quality_dashboard import render_dashboard
 from app_pages.validate_dates import date_candidates, dates_found
 from core.criteria import expression_rule, listed_rows_rule, numeric_rule
@@ -28,6 +27,7 @@ from core.population import (
     merge_families,
 )
 from core.registry import as_code
+from enrich.recode import candidates, recoded_columns
 from ingest.analyzer import DataAnalyzer
 from ingest.loaders import UPLOAD_TYPES
 from ui.components import no_dataset, page_link
@@ -1805,7 +1805,9 @@ def app():
     if state.base is not None:
         base = state.base
         n = len(date_candidates(state))
-        written = sum(1 for _, _, k in state.session.memo("clean_candidates", None, lambda: candidates(base)) if k)
+        recoded = recoded_columns(state.transformation_manager.history)
+        found = state.session.memo("clean_candidates", None, lambda: candidates(base, recoded))
+        written = sum(1 for c in found if c.to_check and not c.cleaned_into)
         said = [dates_found(n)] if n else []
         if written:
             said.append(f"{written} variable{'s' if written != 1 else ''} with values to look at")

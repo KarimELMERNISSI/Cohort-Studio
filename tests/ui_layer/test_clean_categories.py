@@ -15,7 +15,7 @@ from streamlit.testing.v1 import AppTest
 import utils.data_paths as dp
 from manage.reproduction_manager import apply_steps
 
-SEX = ["F"] * 5 + ["M"] * 5 + ["F ", "f", "Female", "unknown"]
+SEX = ["F"] * 30 + ["M"] * 30 + ["F ", "f", "Female", "unknown"]  # f: 1 of 32, under 5 %: folded
 
 
 def _app(frame: dict) -> None:
@@ -57,7 +57,7 @@ def _ok(at: AppTest) -> None:
 
 
 def test_values_are_recoded_into_a_copy_and_the_step_replays() -> None:
-    at = _open({"sex": SEX, "age": list(range(14))})
+    at = _open({"sex": SEX, "age": list(range(len(SEX)))})
     assert at.selectbox(key="clean_variable").value == "sex"
     offers = [c for c in at.checkbox if c.key.startswith("clean_offer::sex::")]
     assert [c.key for c in offers] == ["clean_offer::sex::Female", "clean_offer::sex::unknown"]
@@ -93,7 +93,7 @@ def test_values_are_recoded_into_a_copy_and_the_step_replays() -> None:
     ]  # the copy right after the original, which is kept
     assert data["sex"].tolist() == SEX
     clean = [None if pd.isna(v) else v for v in data["sex_clean"]]
-    assert clean == ["F"] * 5 + ["M"] * 5 + ["F", "F", "F", None]
+    assert clean == ["F"] * 30 + ["M"] * 30 + ["F", "F", "F", None]
     assert at.success[0].value == "Added `sex_clean`: 6 values to 2, 1 row set to missing."
     replayed = apply_steps(before, [step])
     assert replayed.error is None and replayed.divergence is None and not replayed.warnings
@@ -110,7 +110,7 @@ def test_cleaning_again_starts_from_the_last_mapping_and_writes_the_copy_anew() 
     _ok(at)
     data = at.session_state["data"]
     assert list(data.columns) == ["sex", "sex_clean"]
-    assert data["sex_clean"].tolist() == ["F"] * 5 + ["M"] * 5 + ["F", "F", "F", "unknown"]
+    assert data["sex_clean"].tolist() == ["F"] * 30 + ["M"] * 30 + ["F", "F", "F", "unknown"]
 
 
 def test_a_column_of_that_name_is_never_written_over() -> None:

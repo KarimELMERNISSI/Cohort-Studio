@@ -16,7 +16,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core.registry import as_code
-from enrich.recode import Offer, level_counts, recode_column, suggest
+from enrich.recode import (
+    MAX_VALUES,
+    Offer,
+    candidates,
+    level_counts,
+    recode_column,
+    recoded_columns,
+    suggest,
+)
 from ui.components.levels import show_level
 from ui.components.text import plain
 from ui.quality_charts import chart_config
@@ -24,34 +32,11 @@ from ui.results import RESULTS_KEY
 from ui.state import get_state
 from ui.theme import OKABE_ITO
 
-MAX_VALUES = 200  # more distinct values: free text or an identifier, not listed
 CHOSEN = "chosen"  # a clean value typed, or given with the buttons
 AS_BEFORE = "as cleaned before"
 _BAR = OKABE_ITO[0]
 _MISSING_BAR = "rgba(128, 140, 145, 0.55)"
 WRITTEN, ROWS, CLEAN, MISSING, WHY = "Value as written", "Rows", "Clean value", "Missing", "Why"
-
-
-def candidates(df: pd.DataFrame) -> list[tuple[str, int, int]]:
-    """
-    The text and categorical columns with 2 to MAX_VALUES values as written: (column, values, values the suggestions
-    name), those with suggestions first, then in the dataset's order.
-    """
-    found = []
-    for position, column in enumerate(df.columns):
-        values = df[column]
-        if (
-            pd.api.types.is_bool_dtype(values)
-            or pd.api.types.is_numeric_dtype(values)
-            or pd.api.types.is_datetime64_any_dtype(values)
-        ):
-            continue
-        counts = level_counts(values)
-        if not 2 <= len(counts) <= MAX_VALUES:
-            continue
-        hints = suggest(counts)
-        found.append((position, str(column), len(counts), len(hints.spellings) + len(hints.offers)))
-    return [(column, n, k) for _, column, n, k in sorted(found, key=lambda f: (f[3] == 0, f[0]))]
 
 
 def _recoded_before(state, source: str, target: str) -> dict[str, Any] | None:
@@ -285,8 +270,10 @@ def category_editor(state, df: pd.DataFrame, column: str) -> None:
     reasons: dict[str, str] = {}
     empty: list[str] = []
     for row, value in enumerate(values):
-        missing = bool(edited.at[row, MISSING])
-        clean = None if missing else str(edited.at[row, CLEAN] or "").strip()
+        missing, typed = bool(edited.at[row, MISSING]), edited.at[row, CLEAN]
+        clean = (
+            None if missing else "" if pd.isna(typed) else str(typed).strip()
+        )  # a cleared cell is NaN
         if clean == "":
             empty.append(value)
             continue
@@ -333,7 +320,7 @@ def category_editor(state, df: pd.DataFrame, column: str) -> None:
         else f"Add {plain(target)} ({plain(column)} kept)"
     )
     if st.button(label, key=f"clean_apply::{column}", type="primary", disabled=bool(blocked)):
-        new, _ = recode_column(df, column, target, mapping, replaces=replaces)
+        new, _ = recode_column(df, column, target, mapping, fold_rule=None, replaces=replaces)
         clean_values = {mapping.get(v, v) for v in values} - {None}
         changed = sum(counts[v] for v in mapping)
         params = {
@@ -367,16 +354,21 @@ def render_categories() -> None:
     done = st.session_state.pop("clean_done", None)
     if done:
         st.success(done, icon=":material/check:")
-    found = state.session.memo("clean_candidates", None, lambda: candidates(df))
+    history = state.transformation_manager.history
+    found = state.session.memo(
+        "clean_candidates", None, lambda: candidates(df, recoded_columns(history))
+    )
     if not found:
         st.caption(f"No text column holds 2 to {MAX_VALUES} values: nothing to clean here.")
         return
-    about = {column: (n, k) for column, n, k in found}
+    about = {c.column: c for c in found}
     column = st.selectbox(
         "Variable",
         list(about),
         format_func=lambda c: (
-            f"{c} · {about[c][1]} to look at" if about[c][1] else f"{c} · {about[c][0]} values"
+            f"{c} · {about[c].to_check} to look at"
+            if about[c].to_check
+            else f"{c} · {about[c].values} values"
         ),
         key="clean_variable",
         persist_state="page",
@@ -385,4 +377,4 @@ def render_categories() -> None:
         category_editor(state, df, column)
 
 
-__all__ = ["MAX_VALUES", "candidates", "category_editor", "render_categories"]
+__all__ = ["category_editor", "render_categories"]
