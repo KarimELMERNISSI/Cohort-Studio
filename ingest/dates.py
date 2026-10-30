@@ -586,8 +586,8 @@ _OTHER_FIRSTS = 11 / 365.25
 @dataclass(frozen=True)
 class DateReport:
     """
-    What reading a column found: counts only, which the conversion records; never a date of the data, a value, or
-    the earliest or latest date (those are shown on screen only).
+    What reading a column found: counts only, which the conversion records (``placeholders`` apart); never a date of
+    the data, a value, or the earliest or latest date (those are shown on screen only).
     """
 
     values: int  # recorded values (a blank is missing)
@@ -609,7 +609,14 @@ class DateReport:
     )
 
     def to_record(self) -> dict[str, Any]:
-        return asdict(self)
+        """
+        What a step records. Not ``placeholders``, on screen only: beside the total set to missing it counted the
+        placeholder dates left unticked (with 1904 and 1960 ticked, one more told that a participant was born on
+        1 January 1970).
+        """
+        record = asdict(self)
+        del record["placeholders"]
+        return record
 
 
 def _heaped(k: int, n: int, share: float) -> bool:

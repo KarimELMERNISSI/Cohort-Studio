@@ -106,7 +106,6 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
         "partial": 0,
         "two_digit_years": 0,
         "with_time": 0,
-        "placeholders": 0,
         "before_1900": 0,
         "after_extraction": 0,
         "january_first": False,

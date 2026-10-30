@@ -221,12 +221,12 @@ def test_the_report_counts_what_reading_found() -> None:
         "ambiguous": 1,  # 05/03; 04/04 and 01/01 read the same both ways
         "two_digit_years": 1,
         "with_time": 1,
-        "placeholders": 1,  # 1900-01-01
         "before_1900": 1,  # 1883
         "after_extraction": 1,  # 2030
         "january_first": False,
         "month_first_day": False,
     }
+    assert report.placeholders == 1  # 1900-01-01: on screen only, never recorded
     assert (
         date_report(values, "day_first", pivot=26).after_extraction is None
     )  # no extraction date given

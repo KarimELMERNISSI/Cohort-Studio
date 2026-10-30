@@ -178,11 +178,9 @@ def test_the_record_holds_the_rule_not_the_dates_a_column_holds() -> None:
         "formats"
     ]["birth"]
     assert planted["placeholders_to_missing"] == plain["placeholders_to_missing"] == PRESELECTED
-    assert (plain["placeholders"], planted["placeholders"]) == (
-        0,
-        1,
-    )  # a count changes, nothing names the date
-    assert {k for k in plain if plain[k] != planted[k]} == {"placeholders"}
+    # the same record: the values on any placeholder date, counted beside the total set to missing, told how many
+    # unticked ones the column held
+    assert "placeholders" not in planted and plain == planted
 
 
 def test_each_column_has_its_own_placeholder_dates() -> None:
@@ -269,6 +267,8 @@ def test_columns_already_dates_are_checked_and_their_placeholders_set_to_missing
     recorded = step["params"]["formats"]["visit"]
     assert (step["params"]["columns"], recorded["format"]) == (["visit"], "dates")
     assert (recorded["placeholders_to_missing"], recorded["set_to_missing"]) == (PRESELECTED, 2)
+    assert "placeholders" not in recorded and "after_extraction" not in recorded
+    assert "extraction" not in step["params"]  # one extraction date per column: its conversion's
     read = at.session_state["data"]["visit"]
     assert read.isna().tolist() == [True, False, True, False] and read[1] == T("2021-03-15 10:30")
     replayed = apply_steps(before, [step])  # the replay reads the step as recorded
@@ -292,3 +292,14 @@ def test_one_extraction_date_serves_both_kinds_of_columns() -> None:
     assert pd.isna(
         row["After extraction"]
     )  # a column of planned dates: its later dates are not counted
+
+
+def test_an_extraction_date_some_values_hold_is_questioned() -> None:
+    """A participant's date typed as the extraction date is recorded as typed: the tab says when 1 to 4 values hold
+    it (a count, never which)."""
+    at = _open({"death_date": ["15/03/2021", "13/04/2022", "02/05/2023"]})
+    assert not at.warning
+    at.date_input(key="date_extraction").set_value(T("2022-04-13").date()).run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    (warning,) = at.warning
+    assert warning.value.startswith("1 value of the data falls on the extraction date")

@@ -1237,6 +1237,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   placeholder dates you tick to missing: one step of the trace, recorded as a conversion with the format "dates"
   (counts only), which the replay reads the same way. One extraction date and one list of columns that may hold
   planned dates serve both kinds of columns.
+- **What a date step records no longer tells which placeholder date a column held.** Each column recorded how many
+  of its values fell on any placeholder date beside how many were set to missing: the difference counted the
+  unticked ones, so with 1904 and 1960 ticked one more value said that a participant was born on 1 January 1970.
+  That count is now shown on the screen only. The step that sets the placeholders of columns already dates to missing
+  records no extraction date and no count after it: two extraction dates for one column would bound a date between
+  them. When 1 to 4 values of the data fall on the extraction date typed, Date checks asks you to check it: a
+  participant's date typed there would be recorded as typed.
 - The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
 
 ### Validate: Date checks, a tab of its own (M6)

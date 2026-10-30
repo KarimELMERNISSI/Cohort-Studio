@@ -9,8 +9,10 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from docx import Document
 from streamlit.testing.v1 import AppTest
@@ -394,3 +396,121 @@ def test_a_rare_level_or_a_note_never_reaches_a_shared_output_through_a_fill(
     assert CANARY_LEVEL not in report and CANARY_NOTE not in report
     dossier = _docx_text(at.session_state["dossier"])
     assert CANARY_LEVEL not in dossier and CANARY_NOTE not in dossier
+
+
+# dates of participants planted in columns already dates and in a text column: none reaches what is shared
+DATE_CANARIES = (
+    "1912-08-23",
+    "1970-01-01",
+    "2024-02-29",
+    "2031-11-19",
+)  # oldest birth, real 1970, latest visit, death
+
+
+def _written(day: str) -> list[str]:
+    """The ways a date is written."""
+    t = pd.Timestamp(day)
+    return [
+        t.strftime("%Y-%m-%d"),
+        t.strftime("%d/%m/%Y"),
+        t.strftime("%m/%d/%Y"),
+        t.strftime("%d.%m.%Y"),
+        t.strftime("%Y-%m"),
+        f"{t.day} {t.strftime('%B')} {t.year}",
+    ]
+
+
+def _dates_frame(real_1970: bool) -> dict:
+    t = pd.Timestamp
+    births = [t("1900-01-01")] * 6 + [
+        t("1912-08-23"),
+        t("1970-01-01") if real_1970 else t("1971-05-20"),
+    ]
+    births += [t(f"19{40 + i}-0{1 + i % 9}-1{i % 9}") for i in range(12)]
+    visits = [t("2024-02-29")] + [t(f"2023-0{1 + i % 9}-1{i % 9}") for i in range(19)]
+    deaths = [t("2031-11-19")] + [pd.NaT] * 19
+    return {
+        "birth_date": births,
+        "visit_date": visits,
+        "death_date": deaths,
+        "birth_text": [b.strftime("%d/%m/%Y") for b in births],
+    }
+
+
+def _dates_script(frame: dict, extra: list) -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.study_dossier import build_dossier_bytes
+    from app_pages.validate_dates import render_date_checks
+    from core.state import DatasetRef, ParseOptions
+    from ui.results import report_items
+    from ui.state import get_state
+
+    st.session_state.setdefault("username", "dates_canary")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        df = pd.DataFrame(frame)
+        state.set_dataset(
+            df,
+            DatasetRef(
+                name="dates", origin="upload", file_hash="d", parse=ParseOptions(dayfirst=True)
+            ),
+            source_bytes=df.to_csv(index=False).encode("utf-8"),
+            source_name="dates.csv",
+        )
+    render_date_checks()
+    st.session_state["trace"] = state.transformation_manager.get_trace()
+    st.session_state["dossier"] = build_dossier_bytes(
+        state, report_items(), include_stale=False, title="Canary", author="tester"
+    )
+
+
+def _dates_run(real_1970: bool, extra: list[str]) -> AppTest:
+    """The text column converted, then the placeholders of the columns already dates set to missing."""
+    at = AppTest.from_function(
+        _dates_script,
+        kwargs={"frame": _dates_frame(real_1970), "extra": extra},
+        default_timeout=180,
+    )
+    at.run()
+    at.button(key="convert_dates").click().run()
+    for day in extra:  # a SAS source: its date 0 and Excel's 1904 date 0 ticked as well
+        at.multiselect(key="date_placeholders::birth_date").select(day).run()
+    at.button(key="dates_set_placeholders").click().run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    return at
+
+
+@pytest.mark.parametrize("extra", [[], ["1904-01-01", "1960-01-01"]])
+def test_a_planted_date_never_reaches_a_shared_output(data_root: Path, extra: list[str]) -> None:
+    """
+    Dates of participants never reach the trace, its report or the dossier, in any written form, and the records of
+    the date steps are the same whether a birth date column held a real 1 January 1970 or an ordinary date: a count
+    of the placeholder dates beside the total set to missing told how many unticked ones it held.
+    """
+    from manage.trace_documenter import TraceDocumenter
+
+    at = _dates_run(True, extra)
+    trace = at.session_state["trace"]
+    trace_text = json.dumps(trace, default=str)
+    trace_file = data_root / "dates_trace.json"
+    trace_file.write_text(trace_text, encoding="utf-8")
+    shared = {
+        "trace": trace_text,
+        "report": _docx_text(TraceDocumenter(str(trace_file)).generate_report()),
+        "dossier": _docx_text(at.session_state["dossier"]),
+    }
+    for day in DATE_CANARIES:
+        serial = (pd.Timestamp(day) - pd.Timestamp("1899-12-30")).days
+        for where, text in shared.items():
+            assert not [w for w in _written(day) if w in text], (day, where)
+            assert not re.search(rf"\b{serial}\b", text), (day, where)
+    steps = [s["params"] for s in trace["steps"] if s["function"] == "data_type_conversion"]
+    assert [p["formats"][c]["format"] for p in steps for c in p["columns"]] == [
+        "day_first",
+        "dates",
+    ]
+    other = _dates_run(False, extra).session_state["trace"]
+    assert steps == [s["params"] for s in other["steps"] if s["function"] == "data_type_conversion"]

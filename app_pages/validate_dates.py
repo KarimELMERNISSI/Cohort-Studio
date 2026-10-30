@@ -292,6 +292,24 @@ def _heaping(reports: dict[str, DateReport]) -> None:
             )
 
 
+def _extraction_held(extraction: date | None, dates: list[pd.Series]) -> None:
+    """
+    A warning when 1 to 4 values of the data fall on the extraction date: a participant's date typed in the box is
+    recorded with the step as typed. A count, on screen only.
+    """
+    if extraction is None:
+        return
+    day = pd.Timestamp(extraction)
+    held = sum(int((values.dt.normalize() == day).sum()) for values in dates)
+    if 0 < held < 5:
+        st.warning(
+            f"{held} value{'s' if held != 1 else ''} of the data fall{'s' if held == 1 else ''} on the extraction "
+            "date, which is recorded with the step as typed: check that it is the day the data were extracted, not a "
+            "participant's date.",
+            icon=":material/event:",
+        )
+
+
 def already_dates(df: pd.DataFrame) -> list[str]:
     """The columns that already hold dates without a time zone: date cells read on load, or a conversion's."""
     return [
@@ -376,6 +394,7 @@ def _text_columns(
     reports, readings = state.session.memo(
         "date_readings", (key, str(extraction)), lambda: _reports(df, chosen, extraction, planned)
     )
+    _extraction_held(extraction, [*readings.values(), *(df[c] for c in dated)])
     # the earliest and latest dates are shown here only, never recorded
     st.dataframe(
         pd.DataFrame(
@@ -412,7 +431,9 @@ def _text_columns(
                 .drop_duplicates()
                 .head(5)
             )
-            with st.expander(f"Values of {column} that cannot be read", icon=":material/search:"):
+            with st.expander(
+                f"Values of {as_code(column)} that cannot be read", icon=":material/search:"
+            ):
                 st.caption("For example: " + ", ".join(as_code(v) for v in unread))
 
     to_missing = _placeholders(chosen, readings)
@@ -485,6 +506,8 @@ def _date_columns(
     reports = state.session.memo(
         "date_reports_dated", key, lambda: _dated_reports(df, dated, extraction, planned)
     )
+    if study is None:  # the text columns' section did not ask for the extraction date: checked here
+        _extraction_held(extraction, [df[c] for c in dated])
     # the earliest and latest dates are shown here only, never recorded
     st.dataframe(
         pd.DataFrame(
@@ -518,8 +541,9 @@ def _date_columns(
                 "format": AS_DATES,
                 "placeholders_to_missing": to_missing[c],
                 "set_to_missing": counts[c],
-                **({"planned": True} if c in planned else {}),
-                **reports[c].to_record(),
+                # no count after the extraction date: a conversion records its own, and two extraction dates for
+                # one column would bound a date between them
+                **{k: v for k, v in reports[c].to_record().items() if k != "after_extraction"},
             }
             for c in columns
         }
@@ -532,7 +556,6 @@ def _date_columns(
                 "method": METHOD,
                 "formats": formats,
                 "dayfirst": _dayfirst(state),
-                "extraction": extraction.isoformat() if extraction else None,
             },
             f"Set {total} placeholder date{'s' if total != 1 else ''} to missing",
         )

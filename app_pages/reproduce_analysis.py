@@ -614,11 +614,11 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             st.session_state['resolved_paths'][missing_path] = resolved
             st.toast("File located; click the step again to replay.")
         return
-    if result.error:
-        st.error(result.error)
+    if result.error:  # it can name a column of the data: drawn as text
+        st.error(plain(result.error, limit=500))
         return
     for note in result.warnings:
-        st.warning(note)
+        st.warning(plain(note, limit=500))
     if result.reproducible and result.verified_steps:
         st.success(
             f"Reproduced exactly: the replayed table matches the {result.verified_steps} recorded fingerprints.",
