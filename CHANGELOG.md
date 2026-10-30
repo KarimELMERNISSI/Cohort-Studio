@@ -1261,22 +1261,29 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   trace. The Start page's Validate box is now *Validate & clean*, with links to both.
 - **Categories:** a variable's values as written, each with its rows, are given a clean value or set to missing, and
   written into a new text column right after the original, which is kept (`sex_clean` beside `sex`). Values that
-  differ only by spaces, and words that differ only by capitals (*Male*, *MALE*, *male*), take the spelling most rows
-  hold; in a short code, where case can carry meaning (genotypes *AA*, *Aa*, *aa*), a case variant is offered instead.
-  Offered, never applied: a one-letter code and the only longer value it begins (*F* and *Female*), a rare near
-  spelling of a frequent value (*Luxembourgg*), and the codes that may mean missing. A near spelling is never offered
-  between two categories (*Normal* and *Abnormal*, *HFrEF* and *HFmrEF*, *Stage IIIA* and *IIIB*). A value set to
-  missing says what missing means there (unknown or not done, not applicable, declined), since *n/a*, *none* or *NR*
-  can be a value; merging two values that each hold 5 % of the rows is a grouping, and says why. The table of values
-  sits beside a chart of the groups before and after; the page shows each value's rows only, never an outcome beside
-  them. Before, the analysis pages suggested an Enrich formula (`sex.str.strip().str.lower()`), which kept *f* and
-  *female* apart.
+  differ only by spaces take the spelling most rows hold, and so does a word's case variant held by a typo's number of
+  rows (*MALE* beside 300 *Male*). In a code of three characters or fewer, or where capitals sit inside words, case can
+  mean something (Kell *K* and *k*, *g/l* and *G/L*, Rh *CcDee*): those variants are offered instead. Offered, never
+  applied, in groups that can each be ticked at once: a one-letter code and the only longer value it begins (*F* and
+  *Female*); a variant, the same spelling once accents are set aside and *ae* or *oe* read as *e* (*Pétange*,
+  *Petange*; *Anaemia*, *Anemia*); a spelling one letter apart (*Luxembourgg*), to check, since one letter can still
+  separate two terms (*Dysphasia*, *Dysphagia*); a case variant; the codes that may mean missing. A spelling is never
+  offered between two categories (*Normal* and *Abnormal*, *HFrEF* and *HFmrEF*, *Stage IIIA* and *IIIB*,
+  *Hypokalaemia* and *Hypocalcaemia*, *Craniectomy* and *Craniotomy*). A value set to missing says what missing means
+  there (unknown or not done, not applicable, declined), or that it is a result to keep (*ND*: not detected); a
+  merge of two categories by hand (NYHA IV into III), or of two values that each hold 5 % of the rows, is a grouping
+  and says why. A clean value that is itself given another is followed (*MALE* → *male* → *M*). The values are listed
+  A to Z, a value's spellings side by side, or by rows; the table sits beside a chart of the groups before and after;
+  the page shows each value's rows only, never an outcome beside them. Before, the analysis pages suggested an Enrich
+  formula (`sex.str.strip().str.lower()`), which kept *f* and *female* apart.
 - **What the trace keeps:** the fold of spaces and capitals as a rule, which the replay recomputes, and only the
-  values the user chose, with what each became, why, what missing means and why a grouping; counts by kind, never
-  per value. The trace report prints the counts only. The copy keeps the imputation marks of the values it copies (an
-  imputed value recoded is still imputed), 2 and "2" are one value in it, and it is written again only while no later
-  step changed it. The replay says how many values it kept as written that the step did not see. The choices are
-  kept per variable until they are applied, and never follow the user to another dataset.
+  values the user chose, with what each became, why, what missing means and why each grouping; what it records always
+  gives the preview. Counts by kind and meaning, the rows already missing apart from those set to missing, and
+  fingerprints of the values seen and of the copy. The trace report prints the counts, and each grouping with its
+  reason, naming its values only when each held 5 rows or more. The copy keeps the imputation marks of the values it
+  copies (an imputed value recoded is still imputed), 2 and "2" are one value in it, and it is written again only
+  while no later step changed it. The replay says when the values it reads differ from those the step saw. The choices
+  are kept per variable until they are applied, and never follow the user to another dataset.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

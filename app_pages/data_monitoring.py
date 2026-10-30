@@ -1800,7 +1800,7 @@ def app():
     hint = st.container()
     lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)
     # above the tabs, what Clean would fix: the text columns that look like dates (by the shape of their values) and
-    # the variables with values to look at (written several ways, codes for unknown), both kept until the data change
+    # the variables with values to check (written several ways, codes for unknown), both kept until the data change
     state = get_state()
     if state.base is not None:
         base = state.base
@@ -1810,7 +1810,7 @@ def app():
         written = sum(1 for c in found if c.to_check and not c.cleaned_into)
         said = [dates_found(n)] if n else []
         if written:
-            said.append(f"{written} variable{'s' if written != 1 else ''} with values to look at")
+            said.append(f"{written} variable{'s' if written != 1 else ''} with values to check")
         if said:
             with hint, st.container(horizontal=True, vertical_alignment="center"):
                 st.caption(f":material/cleaning_services: {' · '.join(said)}.")

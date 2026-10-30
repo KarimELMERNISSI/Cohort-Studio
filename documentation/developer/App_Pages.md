@@ -791,18 +791,20 @@ _Clean page: how values are written, fixed (a variable's values recoded into a n
 
 _Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
 written into a new column beside the original, which is kept (enrich.recode). Values that differ by spaces, and words
-that differ by capitals, take their group's spelling (the fold rule, recorded as a rule); a one-letter code, a rare
-near spelling, a case variant and a code that may mean missing are offered, never applied. A value set to missing says
-what missing means there; two values that each hold 5 % of the rows, merged, say why. The page shows each value's own
-rows, on all rows, never an outcome beside them: merging values after seeing results is a choice the intervals ignore.
-Apply is one traced step, ``recode_levels``, which the replay redoes.
+that differ by capitals in a typo's number of rows, take their group's spelling (the fold rule, recorded as a rule);
+a one-letter code, a variant (accents, British and American spellings), a spelling one letter apart, a case variant
+and a code that may mean missing are offered, never applied. A value set to missing says what missing means there; a
+grouping of categories says why. The page shows each value's own rows, on all rows, never an outcome beside them:
+merging values after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``,
+which the replay redoes; what it records always gives the preview (enrich.recode.recorded).
 
-The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column;
-the widgets that edit them carry a short id of the dataset's trace and fold what they change into it as they change,
-so that no choice is lost on a page change and none follows the user to another dataset._
+The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column,
+changed only through enrich.recode (give, tick, untick, unset_missing); the widgets that edit them carry a short id of
+the dataset's trace and fold what they change into it as they change, so that no choice is lost on a page change and
+none follows the user to another dataset._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `html`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.CHOSEN`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.suggest`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `hashlib`, `html`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.CAPITALS`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPACES_AND_CAPITALS`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
 
 ### def `_rows` (clean_categories.py)
 
@@ -820,22 +822,6 @@ No description available.
 
 A short id of the dataset's trace: the widget keys carry it, so a widget's state never meets another dataset.
 
-### def `_empty` (clean_categories.py)
-
-- **Arguments**: ``
-
-- **Returns**: `dict[ComplexType]`
-
-No description available.
-
-### def `_seeded` (clean_categories.py)
-
-- **Arguments**: `steps: list, column: str, target: str`
-
-- **Returns**: `dict[ComplexType]`
-
-The choices of the last recode of ``column`` into ``target``: cleaning again starts from them, kinds kept.
-
 ### def `_choices` (clean_categories.py)
 
 - **Arguments**: `column: str`
@@ -846,51 +832,61 @@ No description available.
 
 ### def `_keys` (clean_categories.py)
 
-- **Arguments**: `scope: str, column: str, revision: int`
+- **Arguments**: `scope: str, column: str, revision: int, order: str`
 
 - **Returns**: `dict[ComplexType]`
 
 No description available.
 
-### def `_give` (clean_categories.py)
+### def `_again` (clean_categories.py)
 
-- **Arguments**: `choices: dict[ComplexType], value: str, clean: ComplexType, spelling: str`
+- **Arguments**: `column: str`
 
 - **Returns**: `None`
 
-One value given a clean value (None: missing): a spelling's choice is its group's, a folded value's its own.
+No description available.
 
 ### def `_table_changed` (clean_categories.py)
 
-- **Arguments**: `column: str, key: str, values: list[str], spellings: dict[ComplexType]`
+- **Arguments**: `column: str, key: str, values: list[str], counts: dict[ComplexType]`
 
 - **Returns**: `None`
 
-The table's edits into the store, as they are made; the table then starts again from it.
+The table's edits into the store, as they are made (each edit is read against what the table showed).
 
-### def `_offers_changed` (clean_categories.py)
+### def `_ticked` (clean_categories.py)
 
-- **Arguments**: `column: str, key: str, offers: dict[ComplexType]`
+- **Arguments**: `column: str, key: str, offers: dict[ComplexType], counts: dict[ComplexType]`
 
 - **Returns**: `None`
 
-A ticked offer fills the table (its group's choice); unticked, its values take their spelling again.
+A group's pills: a ticked offer fills the table (its group's choice); unticked, its values take their spelling
+again.
+
+### def `_tick_all` (clean_categories.py)
+
+- **Arguments**: `column: str, offers: dict[ComplexType], counts: dict[ComplexType]`
+
+- **Returns**: `None`
+
+No description available.
 
 ### def `_buttons` (clean_categories.py)
 
-- **Arguments**: `column: str, keys: dict[ComplexType], spellings: dict[ComplexType], how: str`
+- **Arguments**: `column: str, keys: dict[ComplexType], counts: dict[ComplexType], how: str`
 
 - **Returns**: `None`
 
-Map, Set to missing and Keep as written: the picked values given a clean value.
+Map, Set to missing and Keep as written: the picked values given a clean value; the picks and the meaning are
+cleared after use.
 
-### def `_rows_shown` (clean_categories.py)
+### def `_shown` (clean_categories.py)
 
 - **Arguments**: `counts: dict[ComplexType], spellings: dict[ComplexType], reasons: dict[ComplexType], choices: dict[ComplexType]`
 
-- **Returns**: `dict[ComplexType]`
+- **Returns**: `None`
 
-Each value as written: its clean value (None: missing), why, and what its missing value means.
+Each value as written: its clean value (None: missing), what missing means there, and why.
 
 ### def `_figure` (clean_categories.py)
 
@@ -901,23 +897,13 @@ Each value as written: its clean value (None: missing), why, and what its missin
 One bar per clean value (after) or per value as written (before); the values set to missing apart, in grey.
 The values are drawn as text: a level holding markup is shown, never rendered.
 
-### def `_replaceable` (clean_categories.py)
+### def `_offer_groups` (clean_categories.py)
 
-- **Arguments**: `df: pd.DataFrame, steps: list, column: str, target: str`
+- **Arguments**: `column: str, scope: str, choices: dict[ComplexType], counts: dict[ComplexType], offers: tuple[ComplexType], into: str`
 
-- **Returns**: `str`
+- **Returns**: `None`
 
-Why ``target`` cannot be written again ("" when it can): it is the copy of ``column`` that the last recode
-wrote, and no later step changed it (its fingerprint, or the recode of the source as it is now, still gives it).
-
-### def `_recorded` (clean_categories.py)
-
-- **Arguments**: `counts: dict[ComplexType], choices: dict[ComplexType]`
-
-- **Returns**: `tuple[ComplexType]`
-
-The choices that change something over the fold rule (a choice its group or the fold already makes is left
-out, never recorded), and the folds put back.
+The offers in their groups, each with "Tick all"; ticking fills the table, never the data.
 
 ### def `category_editor` (clean_categories.py)
 
@@ -928,9 +914,17 @@ out, never recorded), and the folds put back.
 The editor of one variable's values: the offers, what each value becomes, a preview, and Apply. ``header``:
 the container beside the variable's choice that holds the new column's name.
 
+### def `_blocked` (clean_categories.py)
+
+- **Arguments**: `df, steps, column, target, cleaned_into, counts, choices, shown, full, grouped, record`
+
+- **Returns**: `str`
+
+Why Apply waits ("" when it does not).
+
 ### def `_apply` (clean_categories.py)
 
-- **Arguments**: `state, df: pd.DataFrame, column: str, target: str, counts: dict[ComplexType], choices: dict[ComplexType], grouped: dict[ComplexType]`
+- **Arguments**: `state, df: pd.DataFrame, column: str, target: str, counts: dict[ComplexType], choices: dict[ComplexType], record: tuple, grouped: dict[ComplexType]`
 
 - **Returns**: `None`
 
@@ -3379,14 +3373,16 @@ _Validate page: data quality dashboard, implausible values, inclusion criteria, 
 
 ## validate_dates.py
 
-_Validate > Date checks: the text columns that look like dates, and their conversion. Each column is read with one
+_Clean > Dates (Validate's Date checks tab until M6's Clean page): the text columns that look like dates, and their
+conversion. Each column is read with one
 format (ingest.dates): detected from the shape of its values, the order of day and month from the values that show
 it, else asked and pre-filled from the import's day-first setting; two-digit years with a pivot; Excel serial numbers
 only when accepted; the placeholder dates the user keeps ticked set to missing. The conversion is one step of the
 trace (method parse_dates, each column's format recorded), which the replay reads with the same function, never
 detecting again. The columns already dates (date cells read on load, or converted here) are counted the same way, and
-their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". Its own tab since M6: above Validate's tabs, the conversion read those columns whenever Validate
-opened on new data, whichever tab was wanted._
+their placeholder dates set to missing on request: one step recorded as a conversion with the format "dates". A tab
+of its own since M6: above Validate's tabs, the conversion read those columns whenever Validate opened on new data,
+whichever tab was wanted._
 
 **Imports**:
 `__future__.annotations`, `collections.abc.Collection`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.AS_DATES`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.state.get_state`
@@ -3430,7 +3426,8 @@ The dataset's detections, kept until the data or the day-first setting change.
 - **Returns**: `list[str]`
 
 The text columns that look like dates, by the shape of their values: nothing is read as a date, and the result is
-kept until the data change, so that the line above Validate's tabs can count them on every click.
+kept until the data change, so that the line above Validate's tabs can count them on every click (it links to
+Clean > Dates).
 
 ### def `dates_found` (validate_dates.py)
 

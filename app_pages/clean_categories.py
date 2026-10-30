@@ -1,21 +1,24 @@
 """
 Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
 written into a new column beside the original, which is kept (enrich.recode). Values that differ by spaces, and words
-that differ by capitals, take their group's spelling (the fold rule, recorded as a rule); a one-letter code, a rare
-near spelling, a case variant and a code that may mean missing are offered, never applied. A value set to missing says
-what missing means there; two values that each hold 5 % of the rows, merged, say why. The page shows each value's own
-rows, on all rows, never an outcome beside them: merging values after seeing results is a choice the intervals ignore.
-Apply is one traced step, ``recode_levels``, which the replay redoes.
+that differ by capitals in a typo's number of rows, take their group's spelling (the fold rule, recorded as a rule);
+a one-letter code, a variant (accents, British and American spellings), a spelling one letter apart, a case variant
+and a code that may mean missing are offered, never applied. A value set to missing says what missing means there; a
+grouping of categories says why. The page shows each value's own rows, on all rows, never an outcome beside them:
+merging values after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``,
+which the replay redoes; what it records always gives the preview (enrich.recode.recorded).
 
-The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column;
-the widgets that edit them carry a short id of the dataset's trace and fold what they change into it as they change,
-so that no choice is lost on a page change and none follows the user to another dataset.
+The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column,
+changed only through enrich.recode (give, tick, untick, unset_missing); the widgets that edit them carry a short id of
+the dataset's trace and fold what they change into it as they change, so that no choice is lost on a page change and
+none follows the user to another dataset.
 """
 
 from __future__ import annotations
 
 import hashlib
 import html
+from collections import defaultdict
 from typing import Any
 
 import pandas as pd
@@ -25,22 +28,46 @@ import streamlit as st
 from core.fingerprint import frame_fingerprint
 from core.registry import as_code
 from enrich.recode import (
+    CAPITALS,
     CHOSEN,
+    CLOSE,
+    FIRST_LETTER,
     FOLD,
     GROUPING,
     MAX_VALUES,
     MEANINGS,
+    MISSING_CODE,
+    OFFER_KINDS,
+    RESULT,
+    SPACES,
+    SPACES_AND_CAPITALS,
+    SPELLING,
+    VARIANT,
     Candidate,
     Offer,
     candidates,
     changes,
+    choices_of,
+    give,
     groupings,
     last_record,
     level_counts,
+    new_choices,
+    numeric_codes,
+    outcome,
     plan,
     recode_column,
     recoded_columns,
+    recorded,
+    replaceable,
+    resolve,
+    sort_key,
     suggest,
+    tick,
+    ticked,
+    unset_missing,
+    untick,
+    values_fp,
 )
 from ui.components.levels import show_level
 from ui.components.text import plain
@@ -51,7 +78,6 @@ from ui.theme import OKABE_ITO
 STORE = "clean_manual"  # {column: choices}, declared in ui.keys (lifetime "dataset")
 DONE = "clean_done"  # what the last Apply did, said once after the rerun
 COLUMN = "clean_column"  # the variable open in the editor, declared in ui.keys
-KEPT = "kept as written"  # the Why of a fold put back (shown, never stored)
 _BAR = OKABE_ITO[0]
 _MISSING_BAR = "rgba(128, 140, 145, 0.55)"
 WRITTEN, ROWS, CLEAN, MISSING, MEANS, WHY = (
@@ -61,6 +87,27 @@ WRITTEN, ROWS, CLEAN, MISSING, MEANS, WHY = (
     "Missing",
     "Means",
     "Why",
+)
+NOT_MISSING = "—"  # the Means of a value that is not set to missing
+A_TO_Z, MOST_ROWS = "A-Z", "Most rows"
+# what each kind of choice reads on the page (the stored ids never change)
+WORDS = {
+    CAPITALS: "capitals",
+    SPACES: "spaces",
+    SPACES_AND_CAPITALS: "spaces and capitals",
+    FIRST_LETTER: "first-letter code",
+    VARIANT: "accents or spelling variant",
+    SPELLING: "one letter apart: check",
+    CLOSE: "one letter apart: check first",
+    MISSING_CODE: "code for missing",
+    CHOSEN: "chosen",
+    GROUPING: "grouping",
+}
+# the offers, in groups, each with its "Tick all"
+GROUPS = (
+    ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER)),
+    ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE)),
+    ("missing", "Codes that may mean missing", (MISSING_CODE,)),
 )
 
 
@@ -74,44 +121,13 @@ def _scope(state) -> str:
     return hashlib.sha256(session_id.encode()).hexdigest()[:8]
 
 
-def _empty() -> dict[str, Any]:
-    # "shown": what the table shows, so that its edits are read against it
-    return {
-        "mapping": {},
-        "kinds": {},
-        "kept": [],
-        "meanings": {},
-        "reasons": {},
-        "revision": 0,
-        "shown": {},
-    }
-
-
-def _seeded(steps: list, column: str, target: str) -> dict[str, Any]:
-    """The choices of the last recode of ``column`` into ``target``: cleaning again starts from them, kinds kept."""
-    record = last_record(steps, column, target)
-    if record is None:
-        return _empty()
-    mapping = dict(record.get("mapping") or {})
-    kinds = dict(
-        record.get("kinds") or record.get("reasons") or {}
-    )  # "reasons": before the fold rule
-    return {
-        "mapping": mapping,
-        "kinds": {k: str(kinds.get(k, CHOSEN)) for k in mapping},
-        "kept": list(record.get("kept") or []),
-        "meanings": dict(record.get("missing_meaning") or {}),
-        "reasons": dict(record.get("groupings") or {}),
-        "revision": 0,
-        "shown": {},
-    }
-
-
 def _choices(column: str) -> dict[str, Any]:
-    return st.session_state.setdefault(STORE, {}).setdefault(column, _empty())
+    return st.session_state.setdefault(STORE, {}).setdefault(
+        column, {**new_choices(), "revision": 0, "shown": {}}
+    )
 
 
-def _keys(scope: str, column: str, revision: int) -> dict[str, str]:
+def _keys(scope: str, column: str, revision: int, order: str) -> dict[str, str]:
     base = f"{scope}::{column}"
     return {
         "target": f"clean_target::{base}",
@@ -119,137 +135,117 @@ def _keys(scope: str, column: str, revision: int) -> dict[str, str]:
         "into": f"clean_into::{base}",
         "means": f"clean_means::{base}",
         "view": f"clean_view::{base}",
-        "offers": f"clean_offers::{base}::{revision}",  # starts again from the store when it changes
-        "editor": f"clean_editor::{base}::{revision}",
+        "order": f"clean_order::{base}",
+        # starts again from the store when a pill, a button or the order changes it (not on the table's own edits,
+        # which would lose its scroll position and focus); the rows are matched to values by position: the order
+        # enters the key
+        "editor": f"clean_editor::{base}::{revision}::{order}",
     }
 
 
-def _give(
-    choices: dict[str, Any],
-    value: str,
-    clean: str | None,
-    spelling: str,
-    *,
-    meaning: str | None = None,
-) -> None:
-    """One value given a clean value (None: missing): a spelling's choice is its group's, a folded value's its own."""
-    mapping, kinds, kept = choices["mapping"], choices["kinds"], choices["kept"]
-    if value in kept:
-        kept.remove(value)
-    if clean is not None and value != spelling:
-        follows = mapping.get(spelling, spelling)
-        if clean == value:  # its fold put back
-            mapping.pop(value, None)
-            kinds.pop(value, None)
-            kept.append(value)
-            return
-        if clean == follows:  # its group's clean value again
-            mapping.pop(value, None)
-            kinds.pop(value, None)
-            return
-    if clean is not None and value == spelling and clean == value:  # as written: no choice
-        mapping.pop(value, None)
-        kinds.pop(value, None)
-        return
-    if mapping.get(value, "\0") != clean:
-        kinds[value] = CHOSEN
-    mapping[value] = clean
-    if clean is None:
-        if meaning:
-            choices["meanings"][value] = meaning
-    else:
-        choices["meanings"].pop(value, None)
+def _again(column: str) -> None:
+    _choices(column)["revision"] += 1
 
 
-def _table_changed(column: str, key: str, values: list[str], spellings: dict[str, str]) -> None:
-    """The table's edits into the store, as they are made; the table then starts again from it."""
+def _table_changed(column: str, key: str, values: list[str], counts: dict[str, int]) -> None:
+    """The table's edits into the store, as they are made (each edit is read against what the table showed)."""
     choices = _choices(column)
     shown = choices.get("shown") or {}
     for row, changed in ((st.session_state.get(key) or {}).get("edited_rows") or {}).items():
         value = values[int(row)]
-        spelling = spellings.get(value, value)
-        clean, missing, means = shown.get(value, (value, False, None))
+        clean, missing, means = shown.get(value, (value, False, NOT_MISSING))
         typed = changed.get(CLEAN, clean)
         clean = (
             "" if typed is None or pd.isna(typed) else str(typed).strip()
         )  # a cleared cell comes back NaN
-        missing = bool(changed.get(MISSING, missing))
         means = changed.get(MEANS, means)
-        means = str(means) if means in MEANINGS else None
-        if missing:
-            _give(choices, value, None, spelling, meaning=means)
-        elif MISSING in changed and not clean:  # missing unticked: back to what the fold gives
-            choices["mapping"].pop(value, None)
-            choices["kinds"].pop(value, None)
-        else:
-            _give(choices, value, clean, spelling)
-    choices["revision"] += 1
+        ticked_missing = changed.get(MISSING)
+        if MEANS in changed and means == RESULT:
+            give(
+                choices, counts, value, value
+            )  # a result (ND: not detected): kept as a value, as written
+        elif CLEAN in changed and clean and not ticked_missing:
+            give(choices, counts, value, clean)  # a clean value typed: a value
+        elif MEANS in changed and means in MEANINGS:
+            give(
+                choices, counts, value, None, meaning=means
+            )  # a meaning chosen sets the value to missing
+        elif (MEANS in changed and means == NOT_MISSING) or ticked_missing is False:
+            unset_missing(choices, counts, value)
+        elif ticked_missing:
+            give(choices, counts, value, None, meaning=means if means in MEANINGS else None)
+        elif CLEAN in changed:
+            give(choices, counts, value, clean)  # cleared: Apply waits for a clean value
 
 
-def _offers_changed(column: str, key: str, offers: dict[str, Offer]) -> None:
-    """A ticked offer fills the table (its group's choice); unticked, its values take their spelling again."""
+def _ticked(column: str, key: str, offers: dict[str, Offer], counts: dict[str, int]) -> None:
+    """A group's pills: a ticked offer fills the table (its group's choice); unticked, its values take their spelling
+    again."""
     choices = _choices(column)
     picked = set(st.session_state.get(key) or [])
     for value, offer in offers.items():
-        applied = value in choices["mapping"] and choices["mapping"][value] == offer.clean
-        if value in picked and not applied:
-            choices["mapping"][value] = offer.clean
-            choices["kinds"][value] = offer.why
-            if offer.clean is None and offer.meaning:
-                choices["meanings"][value] = offer.meaning
-            if value in choices["kept"]:
-                choices["kept"].remove(value)
-        elif applied and value not in picked:
-            for part in ("mapping", "kinds", "meanings"):
-                choices[part].pop(value, None)
-    choices["revision"] += 1
+        if value in picked and not ticked(choices, counts, offer):
+            tick(choices, counts, offer)
+        elif value not in picked and ticked(choices, counts, offer):
+            untick(choices, offer)
+    _again(column)
 
 
-def _buttons(column: str, keys: dict[str, str], spellings: dict[str, str], how: str) -> None:
-    """Map, Set to missing and Keep as written: the picked values given a clean value."""
+def _tick_all(column: str, offers: dict[str, Offer], counts: dict[str, int]) -> None:
+    choices = _choices(column)
+    for offer in offers.values():
+        if not ticked(choices, counts, offer):
+            tick(choices, counts, offer)
+    _again(column)
+
+
+def _buttons(column: str, keys: dict[str, str], counts: dict[str, int], how: str) -> None:
+    """Map, Set to missing and Keep as written: the picked values given a clean value; the picks and the meaning are
+    cleared after use."""
     choices = _choices(column)
     into = st.session_state.get(keys["into"])
     means = st.session_state.get(keys["means"])
     for value in st.session_state.get(keys["pick"]) or []:
-        spelling = spellings.get(value, value)
         if how == "missing":
-            _give(choices, value, None, spelling, meaning=means)
+            give(choices, counts, value, None, meaning=means)
         elif how == "keep":
-            _give(choices, value, value, spelling)
+            give(choices, counts, value, value)
         elif into is not None:
-            _give(choices, value, str(into).strip(), spelling)
+            give(choices, counts, value, str(into).strip())
     st.session_state[keys["pick"]] = []
-    choices["revision"] += 1
+    st.session_state[keys["means"]] = None
+    _again(column)
 
 
-def _rows_shown(
+def _shown(
     counts: dict[str, int],
     spellings: dict[str, str],
     reasons: dict[str, str],
     choices: dict[str, Any],
-) -> dict[str, tuple[str | None, str, str | None]]:
-    """Each value as written: its clean value (None: missing), why, and what its missing value means."""
+):
+    """Each value as written: its clean value (None: missing), what missing means there, and why."""
     mapping, kinds, kept, meanings = (
         choices["mapping"],
         choices["kinds"],
         choices["kept"],
         choices["meanings"],
     )
-    shown: dict[str, tuple[str | None, str, str | None]] = {}
+    shown: dict[str, tuple[str | None, str | None, str]] = {}
     for value in counts:
         spelling = spellings.get(value, value)
-        key = value if value != spelling and value in mapping else spelling
+        clean, first, last = resolve(value, spellings, mapping, kept)
+        meaning = meanings.get(last) if clean is None and last is not None else None
         if value in kept:
-            shown[value] = (value, KEPT, None)
-        elif key in mapping:
-            clean = mapping[key]
-            shown[value] = (
-                clean,
-                kinds.get(key, CHOSEN),
-                meanings.get(key) if clean is None else None,
-            )
+            why = "kept as written"
+        elif first is not None and first == value:
+            why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
+        elif value != spelling:
+            why = f"follows {show_level(spelling)}"
+        elif first is not None:
+            why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
         else:
-            shown[value] = (spelling, reasons.get(value, ""), None)
+            why = ""
+        shown[value] = (clean, meaning, why)
     return shown
 
 
@@ -289,7 +285,7 @@ def _figure(counts: dict[str, int], full: dict[str, Any], *, after: bool) -> go.
         )
     )
     fig.update_layout(
-        height=min(60 + 26 * len(labels), 480),
+        height=min(60 + 22 * len(labels), 320),  # capped: Apply stays in view above it
         margin={"l": 10, "r": 10, "t": 10, "b": 30},
         bargap=0.35,
         showlegend=False,
@@ -299,46 +295,60 @@ def _figure(counts: dict[str, int], full: dict[str, Any], *, after: bool) -> go.
     return fig
 
 
-def _replaceable(df: pd.DataFrame, steps: list, column: str, target: str) -> str:
-    """Why ``target`` cannot be written again ("" when it can): it is the copy of ``column`` that the last recode
-    wrote, and no later step changed it (its fingerprint, or the recode of the source as it is now, still gives it)."""
-    record = last_record(steps, column, target)
-    if record is None:
-        return f"{as_code(target)} is already a column: choose another name."
-    fp = record.get("target_fp")
-    if fp is None or frame_fingerprint(df[[target]]) == fp:
-        return ""
-    try:  # a later step removed rows from both (a freeze): the copy is still what the recode writes
-        again, _ = recode_column(
-            df,
-            column,
-            target,
-            record.get("mapping") or {},
-            fold_rule=record.get("fold"),
-            kept=record.get("kept") or (),
-            replaces=True,
+def _offer_groups(
+    column: str,
+    scope: str,
+    choices: dict[str, Any],
+    counts: dict[str, int],
+    offers: tuple[Offer, ...],
+    into: str,
+) -> None:
+    """The offers in their groups, each with "Tick all"; ticking fills the table, never the data."""
+    held: dict[str, int] = defaultdict(int)
+    spellings = suggest(counts, near=False).spellings
+    for value, n in counts.items():
+        held[spellings.get(value, value)] += n
+    st.markdown("**Check before changing**")
+    for name, title, kinds in GROUPS:
+        group = {o.value: o for o in offers if o.why in kinds}
+        if not group:
+            continue
+
+        def label(value: str, group: dict[str, Offer] = group) -> str:
+            offer = group[value]
+            clean = as_code(show_level(offer.clean)) if offer.clean is not None else "missing"
+            return f"{as_code(show_level(value))} → {clean} · {WORDS[offer.why]} · {_rows(held.get(value, 0))}"
+
+        key = f"clean_offers::{scope}::{column}::{name}::{choices['revision']}"
+        left = sum(1 for o in group.values() if not ticked(choices, counts, o))
+        with st.container(
+            horizontal=True, vertical_alignment="center", gap="small"
+        ):  # the title, then Tick all
+            st.caption(title)
+            st.button(
+                f"Tick all {len(group)}",
+                key=f"clean_tick_all::{scope}::{column}::{name}",
+                type="tertiary",
+                on_click=_tick_all,
+                args=(column, group, counts),
+                disabled=not left,
+            )
+        st.pills(  # the whole width: the pills wrap
+            title,
+            list(group),
+            selection_mode="multi",
+            default=[v for v, o in group.items() if ticked(choices, counts, o)],
+            format_func=label,
+            # drawn from the store (default=), not kept: its key changes with each revision of the choices
+            key=f"clean_offers::{scope}::{column}::{name}::{choices['revision']}",
+            on_change=_ticked,
+            args=(column, key, group, counts),
+            label_visibility="collapsed",
         )
-        if again[target].equals(df[target]):
-            return ""
-    except ValueError:
-        pass
-    return f"{as_code(target)} was changed by a later step: write the clean values into another column."
-
-
-def _recorded(counts: dict[str, int], choices: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """The choices that change something over the fold rule (a choice its group or the fold already makes is left
-    out, never recorded), and the folds put back."""
-    mapping = {k: v for k, v in choices["mapping"].items() if v != ""}
-    kept = [v for v in choices["kept"] if v in counts]
-    full = plan(counts, mapping, kept=kept)
-    needed = {}
-    for key, clean in mapping.items():
-        without = {k: v for k, v in mapping.items() if k != key}
-        if plan(counts, without, kept=kept) != full:
-            needed[key] = clean
-    return needed, [
-        v for v in kept if plan(counts, needed, kept=[k for k in kept if k != v]) != full
-    ]
+    st.caption(
+        f"Ticking fills the table; the data change when you {into}. A one-letter code, a variant, a spelling one "
+        "letter apart or a code for unknown can name a category of its own: check what it means in the source first."
+    )
 
 
 def category_editor(
@@ -349,16 +359,20 @@ def category_editor(
     steps = state.transformation_manager.history
     scope = _scope(state)
     counts = level_counts(df[column])
-    values = list(counts)
     hints = suggest(counts)
-    spellings = hints.spellings
+    spellings, reasons = hints.spellings, hints.reasons
     cleaned_into = recoded_columns(steps).get(column, "")
     store = st.session_state.setdefault(STORE, {})
     if column not in store:
         target = cleaned_into if cleaned_into in df.columns else f"{column}_clean"
-        store[column] = _seeded(steps, column, target)
+        store[column] = {
+            **choices_of(last_record(steps, column, target)),
+            "revision": 0,
+            "shown": {},
+        }
     choices = store[column]
-    keys = _keys(scope, column, choices["revision"])
+    order = str(st.session_state.get(f"clean_order::{scope}::{column}") or A_TO_Z)
+    keys = _keys(scope, column, choices["revision"], order)
 
     with header if header is not None else st.container():
         target = st.text_input(
@@ -368,59 +382,35 @@ def category_editor(
             persist_state="page",
             help="The clean values go into this column, right after the original, which is kept.",
         ).strip()
+    replaces = bool(target) and target in df.columns and target == cleaned_into
+    name = target or f"{column}_clean"  # drawn through as_code, which escapes it
+    if hints.offers:
+        into = f"write {as_code(name)} again" if replaces else f"add {as_code(name)}"
+        _offer_groups(column, scope, choices, counts, hints.offers, into)
 
-    held: dict[str, int] = {}
-    for value, n in counts.items():
-        spelling = spellings.get(value, value)
-        held[spelling] = held.get(spelling, 0) + n
-    offers = {offer.value: offer for offer in hints.offers}
-    if offers:
-        st.markdown("**Check before merging**")
-
-        def label(value: str) -> str:
-            offer = offers[value]
-            into = as_code(show_level(offer.clean)) if offer.clean is not None else "missing"
-            return (
-                f"{as_code(show_level(value))} → {into} · {offer.why} · {_rows(held.get(value, 0))}"
-            )
-
-        applied = [
-            v
-            for v, o in offers.items()
-            if v in choices["mapping"] and choices["mapping"][v] == o.clean
-        ]
-        st.pills(
-            "Possible changes",
-            list(offers),
-            selection_mode="multi",
-            default=applied,
-            format_func=label,
-            # drawn from the store (default=), not kept: its key changes with each revision of the choices
-            key=f"clean_offers::{scope}::{column}::{choices['revision']}",
-            on_change=_offers_changed,
-            args=(column, keys["offers"], offers),
-            label_visibility="collapsed",
-        )
-        st.caption(
-            f"Ticking fills the table; the data change when you add {as_code(target or column + '_clean')}. A "
-            "one-letter code, a near spelling, a case variant or a code for unknown can name a category of its own: "
-            "check what it means in the source first."
-        )
-
-    shown = _rows_shown(counts, spellings, hints.reasons, choices)
-    full_choices = {k: v for k, v in choices["mapping"].items() if v != ""}
-    full = plan(counts, full_choices, kept=[v for v in choices["kept"] if v in counts])
+    shown = _shown(counts, spellings, reasons, choices)
+    full = plan(
+        counts, {k: v for k, v in choices["mapping"].items() if v != ""}, kept=choices["kept"]
+    )
     table, preview = st.columns([3, 2], gap="medium")
 
     with table:
-        clean_values = sorted(
-            {c for c, _, _ in shown.values() if c},
-            key=lambda c: -sum(counts[v] for v, (cc, _, _) in shown.items() if cc == c),
+        st.segmented_control(
+            "Order",
+            [A_TO_Z, MOST_ROWS],
+            default=A_TO_Z,
+            key=keys["order"],
+            persist_state="page",
+            on_change=_again,
+            args=(column,),
+            help="A-Z sets case, spaces and accents aside, so that a value's spellings sit together.",
         )
+        values = sorted(counts, key=sort_key) if order == A_TO_Z else list(counts)
+        clean_values = sorted({c for c, _, _ in shown.values() if c}, key=sort_key)
         with st.container(horizontal=True, vertical_alignment="bottom"):
             picked = st.multiselect(
                 "Values",
-                values,
+                sorted(counts, key=sort_key),
                 format_func=show_level,
                 key=keys["pick"],
                 persist_state="page",
@@ -433,83 +423,78 @@ def category_editor(
                 key=keys["into"],
                 persist_state="page",
                 accept_new_options=True,
-                placeholder="What they become",
+                placeholder="Choose or type",
             )
-        n = len(picked)
-        with st.container(horizontal=True, vertical_alignment="bottom"):
+            n = len(picked)
             st.button(
                 f"Map {n} value{'s' if n != 1 else ''} to {plain(str(into))}"
                 if n and into
                 else "Map",
                 key=f"clean_map::{scope}::{column}",
                 on_click=_buttons,
-                args=(column, keys, spellings, "map"),
+                args=(column, keys, counts, "map"),
                 disabled=not (n and into),
             )
+        with st.container(horizontal=True, vertical_alignment="bottom"):
             means = st.selectbox(
-                "What missing means",
+                "Missing means",
                 MEANINGS,
                 index=None,
                 key=keys["means"],
                 persist_state="page",
                 placeholder="What missing means",
-                label_visibility="collapsed",
             )
             st.button(
                 "Set to missing",
                 key=f"clean_missing::{scope}::{column}",
                 on_click=_buttons,
-                args=(column, keys, spellings, "missing"),
+                args=(column, keys, counts, "missing"),
                 disabled=not (n and means),
-                help="Say first what missing means for these values.",
+                help="Choose the values and what missing means for them first.",
             )
             st.button(
                 "Keep as written",
                 key=f"clean_keep::{scope}::{column}",
                 on_click=_buttons,
-                args=(column, keys, spellings, "keep"),
+                args=(column, keys, counts, "keep"),
                 disabled=not n,
+                help="Undo the fold or a choice: the values stay as they are written.",
             )
         choices["shown"] = {
-            v: ("" if c is None else c, c is None, m) for v, (c, _, m) in shown.items()
+            v: ("" if c is None else c, c is None, (m or NOT_MISSING) if c is None else NOT_MISSING)
+            for v, (c, m, _) in shown.items()
         }
         st.data_editor(
             pd.DataFrame(
                 {
                     WRITTEN: [show_level(v) for v in values],
-                    ROWS: list(counts.values()),
-                    CLEAN: ["" if c is None else c for c, _, _ in shown.values()],
-                    MISSING: [c is None for c, _, _ in shown.values()],
-                    MEANS: [
-                        m or "" for _, _, m in shown.values()
-                    ],  # empty, not "None", where nothing is missing
-                    WHY: [why for _, why, _ in shown.values()],
+                    ROWS: [counts[v] for v in values],
+                    CLEAN: ["" if shown[v][0] is None else shown[v][0] for v in values],
+                    MISSING: [shown[v][0] is None for v in values],
+                    MEANS: [choices["shown"][v][2] for v in values],
+                    WHY: [shown[v][2] for v in values],
                 }
             ),
             key=keys["editor"],
             on_change=_table_changed,
-            args=(column, keys["editor"], values, spellings),
+            args=(column, keys["editor"], values, counts),
             hide_index=True,
             width="stretch",
-            # what missing means, once a value is set to missing: an empty choice draws "None" in every row
-            column_order=[
-                WRITTEN,
-                ROWS,
-                CLEAN,
-                MISSING,
-                *([MEANS] if any(c is None for c, _, _ in shown.values()) else []),
-                WHY,
-            ],
             disabled=[WRITTEN, ROWS, WHY],
-            column_config={
-                WRITTEN: st.column_config.TextColumn(help="A hidden space shows as ␣."),
-                ROWS: st.column_config.NumberColumn(format="%d"),
+            column_config={  # widths so that Why, the last, keeps the room it needs
+                WRITTEN: st.column_config.TextColumn(width=100, help="A hidden space shows as ␣."),
+                ROWS: st.column_config.NumberColumn(width=50, format="%d"),
                 CLEAN: st.column_config.TextColumn(
-                    help="The same clean value in several rows merges them."
+                    width=95, help="The same clean value in several rows merges them."
                 ),
-                MISSING: st.column_config.CheckboxColumn(help="Set this value to missing."),
+                MISSING: st.column_config.CheckboxColumn(
+                    width=75, help="Set this value to missing."
+                ),
                 MEANS: st.column_config.SelectboxColumn(
-                    options=list(MEANINGS), help="What missing means for a value set to missing."
+                    options=[NOT_MISSING, *MEANINGS, RESULT],
+                    width=135,
+                    help="What missing means for this value; a code such as ND (not detected) can be a result.",
+                    required=True,
                 ),
             },
         )
@@ -517,82 +502,108 @@ def category_editor(
             st.caption("␣ marks a hidden space.")
 
     with preview:
-        view = st.segmented_control(
-            "Show",
-            ["After", "Before"],
-            default="After",
-            key=keys["view"],
-            persist_state="page",
-            label_visibility="collapsed",
+        try:
+            record = recorded(counts, choices)
+        except ValueError:  # never: the record would not give the preview
+            record = None
+        grouped = (
+            groupings(counts, record[0], record[1], kept=record[2]) if record is not None else {}
         )
+        for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
+            typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
+            if typed is not None:
+                choices["reasons"][clean] = str(typed).strip()[:200]
+        blocked = _blocked(
+            df, steps, column, target, cleaned_into, counts, choices, shown, full, grouped, record
+        )
+        with st.container(horizontal=True, vertical_alignment="center"):
+            view = st.segmented_control(
+                "Show",
+                ["After", "Before"],
+                default="After",
+                key=keys["view"],
+                persist_state="page",
+                label_visibility="collapsed",
+            )
+            label = (
+                f"Write {plain(target)} again ({plain(column)} kept)"
+                if replaces
+                else f"Add {plain(target)} ({plain(column)} kept)"
+            )
+            applied = st.button(
+                label, key=f"clean_apply::{column}", type="primary", disabled=bool(blocked)
+            )
+        if blocked:
+            st.caption(blocked)
+        if done:
+            st.success(done, icon=":material/check:")
+        if state.pending_steps():
+            st.caption(
+                "An Enrich draft is open: this changes the data under it, and the draft will ask to be redone."
+            )
+        gone = sum(counts[v] for v, c in full.items() if c is None)
+        if gone:
+            st.caption(
+                f"{_rows(gone)} set to missing: complete-case analyses using {as_code(name)} leave them out, and a "
+                "multiple imputation fills them as missing at random given its variables. A value that means not "
+                "applicable or declined is often better kept as a value."
+            )
+        for clean, parts in grouped.items():
+            reason = st.text_input(
+                f"Why group {', '.join(as_code(show_level(p)) for p in parts)} as {as_code(show_level(clean))}?",
+                value=choices["reasons"].get(clean, ""),
+                key=f"clean_reason::{scope}::{column}::{clean}",
+                max_chars=200,
+                help="Merging categories is a grouping, not a correction: the methods say why.",
+            ).strip()[:200]  # the browser's limit, enforced here too
+            if reason:
+                choices["reasons"][clean] = reason
+            else:
+                choices["reasons"].pop(clean, None)
         st.plotly_chart(
             _figure(counts, full, after=view != "Before"),
             config=chart_config(),
             width="stretch",
             key=f"clean_chart::{scope}::{column}",
         )
-        gone = sum(counts[v] for v, c in full.items() if c is None)
-        if gone:
-            st.caption(
-                f"{_rows(gone)} set to missing: complete-case analyses using {as_code(target or column)} leave them "
-                "out, and a multiple imputation fills them as missing at random given its variables. A value that "
-                "means not applicable or declined is often better kept as a value."
-            )
-        grouped = groupings(counts, full)
-        for clean, parts in grouped.items():
-            reason = st.text_input(
-                f"Why are {', '.join(show_level(p) for p in parts)} grouped as {show_level(clean)}?",
-                value=choices["reasons"].get(clean, ""),
-                key=f"clean_reason::{scope}::{column}::{clean}",
-                max_chars=200,
-                help="Merging values that each hold 5 % of the rows or more is a grouping of categories, not a "
-                "correction: the methods say why.",
-            ).strip()
-            if reason:
-                choices["reasons"][clean] = reason
-            else:
-                choices["reasons"].pop(clean, None)
+        if applied and not blocked and record is not None:
+            _apply(state, df, column, target, counts, choices, record, grouped, replaces=replaces)
 
-        blocked = ""
-        replaces = bool(target) and target in df.columns and target == cleaned_into
-        unmeant = [
-            k for k, c in choices["mapping"].items() if c is None and not choices["meanings"].get(k)
-        ]
-        empty = [v for v, (c, _, _) in shown.items() if c == ""]
-        if not target or not target.isprintable():
-            blocked = "Name the new column."
-        elif target == column:
-            blocked = "The clean values go into a new column: the original is kept."
-        elif target in df.columns and not replaces:
-            blocked = f"{as_code(target)} is already a column: choose another name."
-        elif replaces and (why := _replaceable(df, steps, column, target)):
-            blocked = why
-        elif empty:
-            blocked = f"Give {as_code(show_level(empty[0]))} a clean value, or tick Missing."
-        elif unmeant:
-            blocked = (
-                f"Say what missing means for {as_code(show_level(unmeant[0]))}: its Means cell in the table, or "
-                "pick it with Values, choose what missing means, then Set to missing."
-            )
-        elif missing_reason := [c for c in grouped if not choices["reasons"].get(c)]:
-            blocked = f"Say why the values grouped as {as_code(show_level(missing_reason[0]))} are grouped."
-        elif not full:
-            blocked = "Nothing to change: every value keeps how it is written."
-        if blocked:
-            st.caption(blocked)
-        if state.pending_steps():
-            st.caption(
-                "An Enrich draft is open: this changes the data under it, and the draft will ask to be redone."
-            )
-        label = (
-            f"Write {plain(target)} again ({plain(column)} kept)"
-            if replaces
-            else f"Add {plain(target)} ({plain(column)} kept)"
-        )
-        if st.button(label, key=f"clean_apply::{column}", type="primary", disabled=bool(blocked)):
-            _apply(state, df, column, target, counts, choices, grouped, replaces=replaces)
-        if done:
-            st.success(done, icon=":material/check:")
+
+def _blocked(
+    df, steps, column, target, cleaned_into, counts, choices, shown, full, grouped, record
+) -> str:
+    """Why Apply waits ("" when it does not)."""
+    replaces = bool(target) and target in df.columns and target == cleaned_into
+    unmeant = [v for v, (c, m, _) in shown.items() if c is None and not m]
+    empty = [v for v, (c, _, _) in shown.items() if c == ""]
+    if not target or not target.isprintable():
+        return "Name the new column."
+    if target == column:
+        return "The clean values go into a new column: the original is kept."
+    if target in df.columns and not replaces:
+        return f"{as_code(target)} is already a column: choose another name."
+    if replaces and not replaceable(df, steps, column, target):
+        return f"{as_code(target)} was changed by a later step: write the clean values into another column."
+    if empty:
+        return f"Give {as_code(show_level(empty[0]))} a clean value, or tick Missing."
+    if unmeant:
+        return f"Choose what missing means for {as_code(show_level(unmeant[0]))} in the table's Means column."
+    if record is None:
+        return "These choices cannot be recorded as shown: undo the last one."
+    if waiting := [c for c in grouped if not choices["reasons"].get(c)]:
+        return f"Say below why the values grouped as {as_code(show_level(waiting[0]))} are grouped."
+    if not full:
+        return "Nothing to change: every value keeps how it is written."
+    last = last_record(steps, column, target) if replaces else None
+    if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
+        then = choices_of(
+            last
+        )  # the copy is what that recode wrote: the same choices would write it again
+        before = outcome(counts, then["mapping"], then["meanings"], kept=then["kept"])
+        if before == outcome(counts, record[0], record[3], kept=record[2]):
+            return f"Nothing changed since {as_code(target)} was written."
+    return ""
 
 
 def _apply(
@@ -602,16 +613,19 @@ def _apply(
     target: str,
     counts: dict[str, int],
     choices: dict[str, Any],
+    record: tuple,
     grouped: dict[str, list[str]],
     *,
     replaces: bool,
 ) -> None:
-    mapping, kept = _recorded(counts, choices)
-    kinds = {k: choices["kinds"].get(k, CHOSEN) for k in mapping}
+    mapping, kinds, kept, meanings = record
     for key, clean in mapping.items():
-        if clean in grouped:
+        if clean in grouped and kinds[key] not in OFFER_KINDS:
             kinds[key] = GROUPING
-    meanings = {k: choices["meanings"][k] for k, c in mapping.items() if c is None}
+    spellings = suggest(counts, near=False).spellings
+    held: dict[str, int] = defaultdict(int)
+    for value, n in counts.items():
+        held[spellings.get(value, value)] += n
     new, kept_as_written = recode_column(df, column, target, mapping, kept=kept, replaces=replaces)
     full = plan(counts, mapping, kept=kept)
     after = {full.get(v, v) for v in counts} - {None}
@@ -624,14 +638,27 @@ def _apply(
         "kinds": kinds,
         "kept": kept,
         "missing_meaning": meanings,
-        "groupings": {c: choices["reasons"][c] for c in grouped},
+        "groupings": {
+            clean: {
+                "reason": choices["reasons"][clean][:200],
+                "values": parts,
+                "each_5_rows": all(
+                    held.get(p, 0) >= 5 for p in parts
+                ),  # the report names them only then
+            }
+            for clean, parts in grouped.items()
+        },
         "replaces": replaces,
         "values_before": len(counts),
         "values_after": len(after),
         "kept_as_written": kept_as_written,
         "rows_changed": sum(counts[v] for v in full),
+        "rows_missing_before": int(
+            df[column].isna().sum()
+        ),  # recorded as missing, apart from those set to missing
         "rows_set_to_missing": gone,
         "changes": changes(counts, mapping, kinds, kept=kept, meanings=meanings),
+        "values_fp": values_fp(counts),
         "target_fp": frame_fingerprint(new[[target]]),
     }
     summary = f"{len(after)} values instead of {len(counts)}" + (
@@ -668,6 +695,7 @@ def render_categories() -> None:
     found = state.session.memo(
         "clean_candidates", None, lambda: candidates(df, recoded_columns(steps))
     )
+    codes = numeric_codes(df)
     if not found:
         st.caption(f"No text column holds 2 to {MAX_VALUES} values: nothing to clean here.")
         return
@@ -686,6 +714,9 @@ def render_categories() -> None:
             key=f"clean_variable::{state.session.data_fp}",
         )
     st.session_state[COLUMN] = column
+    if codes:
+        shown = ", ".join(as_code(c) for c in codes[:5]) + (" ..." if len(codes) > 5 else "")
+        st.caption(f"Columns of numbers are not listed, codes such as 1 and 2 included ({shown}).")
     if column is not None:
         category_editor(state, df, column, header=header, done=done)
 

@@ -15,6 +15,7 @@ from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
 from enrich.recode import (
+    CAPITALS,
     CHOSEN,
     FIRST_LETTER,
     FOLD,
@@ -27,7 +28,7 @@ from enrich.recode import (
 )
 from manage.reproduction_manager import apply_steps
 
-# f: 1 of 32, under 5 %, folded; n.a. asks what it means; unknown reads as unknown
+# F␣ folds into F; f, a code's case variant, is offered; n.a. asks what it means; unknown reads as unknown
 SEX = ["F"] * 30 + ["M"] * 30 + ["F ", "f", "Female", "unknown", "n.a.", "n.a."]
 PARAMS = {
     "source",
@@ -43,8 +44,10 @@ PARAMS = {
     "values_after",
     "kept_as_written",
     "rows_changed",
+    "rows_missing_before",
     "rows_set_to_missing",
     "changes",
+    "values_fp",
     "target_fp",
 }
 
@@ -110,6 +113,17 @@ def _one(widgets, prefix: str):
     return found[0]
 
 
+def _group(at: AppTest, name: str):
+    """The pills of one group of offers: written another way, one letter apart, codes for missing."""
+    found = [
+        w
+        for w in at.pills
+        if str(w.key).startswith("clean_offers::") and f"::{name}::" in str(w.key)
+    ]
+    assert len(found) == 1, [w.key for w in at.pills]
+    return found[0]
+
+
 def _set_to_missing(at: AppTest, values: list[str], meaning: str) -> None:
     _one(at.multiselect, "clean_pick::").set_value(values).run()
     _one(at.selectbox, "clean_means::").set_value(meaning).run()
@@ -126,14 +140,18 @@ def _step(at: AppTest) -> dict:
 def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
     at = _open({"sex": SEX, "age": list(range(len(SEX)))})
     assert _one(at.selectbox, "clean_variable::").value == "sex"
-    offers = _one(at.pills, "clean_offers::")
-    assert offers.options == [  # the drawn labels; n.a. names no meaning, unknown reads as unknown
-        "`n.a.` → missing · missing code · 2 rows",
-        "`Female` → `F` · first letter · 1 row",
-        "`unknown` → missing · missing code · 1 row",
+    written, missing = _group(at, "written"), _group(at, "missing")
+    assert written.options == [  # the drawn labels
+        "`Female` → `F` · first-letter code · 1 row",
+        "`f` → `F` · capitals · 1 row",
     ]
-    assert not offers.value  # offered, never applied
-    offers.select("Female").select("unknown").run()
+    assert missing.options == [  # n.a. names no meaning; unknown reads as unknown
+        "`n.a.` → missing · code for missing · 2 rows",
+        "`unknown` → missing · code for missing · 1 row",
+    ]
+    assert not written.value and not missing.value  # offered, never applied
+    written.select("Female").select("f").run()
+    _group(at, "missing").select("unknown").run()
     _ok(at)
     _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
     assert at.get("plotly_chart")
@@ -144,9 +162,14 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
     params = step["params"]
     assert set(params) == PARAMS
     assert params["fold"] == FOLD and params["kept"] == []
-    # the folds of "F " and "f" are the rule's: never recorded
-    assert params["mapping"] == {"Female": "F", "unknown": None, "n.a.": None}
-    assert params["kinds"] == {"Female": FIRST_LETTER, "unknown": MISSING_CODE, "n.a.": CHOSEN}
+    # the fold of "F " is the rule's: never recorded
+    assert params["mapping"] == {"Female": "F", "f": "F", "unknown": None, "n.a.": None}
+    assert params["kinds"] == {
+        "Female": FIRST_LETTER,
+        "f": CAPITALS,
+        "unknown": MISSING_CODE,
+        "n.a.": CHOSEN,
+    }
     assert params["missing_meaning"] == {"unknown": UNKNOWN, "n.a.": NOT_APPLICABLE}
     assert (params["values_before"], params["values_after"], params["rows_set_to_missing"]) == (
         7,
@@ -171,15 +194,15 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
 
 def test_cleaning_again_starts_from_the_last_choices_with_their_offers_ticked() -> None:
     at = _open({"sex": SEX})
-    _one(at.pills, "clean_offers::").select("Female").run()
+    _group(at, "written").select("Female").run()
     _set_to_missing(at, ["n.a.", "unknown"], UNKNOWN)
     at.button(key="clean_apply::sex").click().run()
     _ok(at)
     assert _one(at.selectbox, "clean_variable::").value == "sex"
     assert "cleaned into sex_clean" in _one(at.selectbox, "clean_variable::").format_func("sex")
     assert at.button(key="clean_apply::sex").label == "Write sex\\_clean again (sex kept)"
-    assert "Female" in (_one(at.pills, "clean_offers::").value or [])  # applied, so ticked
-    _one(at.pills, "clean_offers::").unselect("Female").run()  # unticked: back to its spelling
+    assert "Female" in (_group(at, "written").value or [])  # applied, so ticked
+    _group(at, "written").unselect("Female").run()  # unticked: back to its spelling
     _ok(at)
     at.button(key="clean_apply::sex").click().run()
     _ok(at)
@@ -191,12 +214,10 @@ def test_cleaning_again_starts_from_the_last_choices_with_their_offers_ticked() 
 
 def test_a_value_set_to_missing_says_what_missing_means() -> None:
     at = _open({"sex": SEX})
-    _one(at.pills, "clean_offers::").select(
-        "n.a."
-    ).run()  # n.a.: not applicable, an absence, a result?
+    _group(at, "missing").select("n.a.").run()  # n.a.: not applicable, an absence, a result?
     _ok(at)
     assert at.button(key="clean_apply::sex").disabled
-    assert any("Say what missing means for `n.a.`" in c.value for c in at.caption)
+    assert any("Choose what missing means for `n.a.`" in c.value for c in at.caption)
     assert _one(at.button, "clean_missing::").disabled  # nothing picked, no meaning yet
     _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
     assert not at.button(key="clean_apply::sex").disabled
@@ -219,7 +240,13 @@ def test_merging_two_categories_is_a_grouping_that_says_why() -> None:
     params = _step(at)["params"]
     assert params["mapping"] == {"IV": "III"}
     assert params["kinds"] == {"IV": GROUPING}
-    assert params["groupings"] == {"III": "advanced heart failure, as pre-specified"}
+    assert params["groupings"] == {
+        "III": {
+            "reason": "advanced heart failure, as pre-specified",
+            "values": ["III", "IV"],
+            "each_5_rows": True,
+        }
+    }
 
 
 def test_a_column_of_that_name_is_never_written_over() -> None:
@@ -234,11 +261,12 @@ def test_a_column_of_that_name_is_never_written_over() -> None:
 def test_a_copy_a_later_step_changed_is_never_written_again() -> None:
     """sex recoded, then sex_clean filled by a later step: writing it again would discard that without a word."""
     at = _open({"sex": SEX})
-    _one(at.pills, "clean_offers::").select("Female").run()
+    _group(at, "written").select("Female").run()
     _set_to_missing(at, ["n.a.", "unknown"], UNKNOWN)
     at.button(key="clean_apply::sex").click().run()
     _ok(at)
-    assert not at.button(key="clean_apply::sex").disabled  # its own copy, unchanged: written again
+    assert at.button(key="clean_apply::sex").disabled  # nothing changed: nothing to write again
+    assert any("Nothing changed since `sex_clean` was written." in c.value for c in at.caption)
     at.session_state["change_copy"] = True
     at.run()
     _ok(at)
@@ -287,8 +315,8 @@ def test_values_nobody_chose_reach_no_record_and_markup_is_drawn_as_text() -> No
     at = _open({"commune": commune})
     spec = at.get("plotly_chart")[0].proto.spec
     assert "<a href" not in spec and "&lt;a href" in spec
-    offers = _one(at.pills, "clean_offers::")
-    assert offers.options == ["`Luxembourgg` → `Luxembourg` · spelling · 1 row"]
+    offers = _group(at, "letter")
+    assert offers.options == ["`Luxembourgg` → `Luxembourg` · one letter apart: check · 1 row"]
     offers.select("Luxembourgg").run()
     _set_to_missing(at, ["CANARY-MISS-5B9"], UNKNOWN)
     at.button(key="clean_apply::commune").click().run()
@@ -302,3 +330,29 @@ def test_values_nobody_chose_reach_no_record_and_markup_is_drawn_as_text() -> No
     assert params["kinds"]["Luxembourgg"] == SPELLING
     shown = repr(report_params(params))
     assert "CANARY" not in shown and "Luxembourgg" not in shown
+
+
+def test_tick_all_ticks_every_offer_of_a_group() -> None:
+    at = _open({"sex": SEX})
+    (button,) = [
+        b
+        for b in at.button
+        if str(b.key).startswith("clean_tick_all::") and str(b.key).endswith("written")
+    ]
+    assert button.label == "Tick all 2"
+    button.click().run()
+    _ok(at)
+    assert set(_group(at, "written").value or []) == {"Female", "f"}
+    assert not _group(at, "missing").value  # the other groups untouched
+
+
+def test_a_grouping_s_question_draws_its_values_as_text() -> None:
+    """A value holding Markdown in the question's label: an image the browser would fetch."""
+    level = "![g](http://canary.invalid/g.png)"
+    at = _open({"x": ["Metz"] * 40 + [level] * 30 + ["Luxembourg"] * 30})
+    _one(at.multiselect, "clean_pick::").set_value([level]).run()
+    _one(at.selectbox, "clean_into::").set_value("Metz").run()
+    _one(at.button, "clean_map::").click().run()
+    _ok(at)
+    label = _one(at.text_input, "clean_reason::").label
+    assert "`![g](http://canary.invalid/g.png)`" in label

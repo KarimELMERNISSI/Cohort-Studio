@@ -42,7 +42,7 @@ from enrich.imputation_service import (
     impute_rows,
     left_missing,
 )
-from enrich.recode import recode_column
+from enrich.recode import level_counts, recode_column, values_fp
 from enrich.transformation_logic import apply_variable_transformation
 from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
@@ -403,6 +403,7 @@ def _recode_levels(df, step, index, paths, warnings):
         kept=params.get("kept") or (),
         replaces=bool(params.get("replaces")),
     )
+    said = len(warnings)
     recorded = params.get("kept_as_written")
     if recorded is not None and kept > recorded:
         warnings.append(
@@ -412,6 +413,13 @@ def _recode_levels(df, step, index, paths, warnings):
     after, recorded = int(new_df[target].dropna().nunique()), params.get("values_after")
     if recorded is not None and after != recorded:
         warnings.append(f"step {index + 1}: {target} holds {after} distinct values, {recorded} when it was recorded")
+    # the same counts can hide a value swapped for another, or a spelling that lost its majority: their fingerprint
+    seen = params.get("values_fp")
+    if seen is not None and len(warnings) == said and values_fp(level_counts(df[source])) != seen:
+        warnings.append(
+            f"step {index + 1}: the values of {source} differ from those the step saw (another value, or another "
+            f"spelling holding the most rows): check {target}"
+        )
     return new_df, None
 
 
