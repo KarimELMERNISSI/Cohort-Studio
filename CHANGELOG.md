@@ -1340,7 +1340,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   is listed and the others still count (before, some malformed rules blanked the whole dimension). The advice says
   how many checks fail, and on how many rows; it is *high* when one rule fails 10 % of its checks, whatever the pooled
   score. The scorecard and the ring's hover say how many rows break a rule. The Domain Validity tab charts the
-  failing checks of each rule, as shares of the rows each rule checks, instead of shares of all rows.
+  failing checks of each rule, as shares of the rows each rule checks, instead of shares of all rows; in an *all*
+  or *at least k* family it charts the family's line, which is what counts, and lists its rules apart.
+- A rule whose checks cannot be made on the recorded values is listed, never silently left out; a listed-rows rule
+  whose columns were renamed is not checked. The rows said to break a rule are those of the recorded values, and the
+  advice says how many break one only through an imputed value (an imputation that wrote implausible values says so
+  even when no recorded value fails). The advice is *high* when one rule fails 5 checks or more and 10 % of its
+  checks, or on a Wilson lower bound of 10 %, and the global score's sentence never says "ready for analysis" beside
+  a high-priority advice. A failing score never prints 100.0 (the ring, its hover, the breakdown, the card's change).
 
 ### Validate: clinical anomalies are now implausible values
 

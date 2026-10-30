@@ -111,3 +111,24 @@ def test_the_ring_s_hover_carries_a_dimension_s_note_as_text() -> None:
     (domain,) = [h for h in hovers if h.startswith("<b>Domain Validity</b>")]
     assert domain.endswith("<br>3 rows break a rule &lt;b&gt;")
     assert not any("rows break" in h for h in hovers if not h.startswith("<b>Domain Validity</b>"))
+
+
+def test_a_failing_score_never_prints_100() -> None:
+    from explore.quality_score import lost_text, score_text
+
+    assert (score_text(99.99), score_text(99.96), score_text(100.0), score_text(97.64)) == (
+        "99.99",
+        "99.96",
+        "100.0",
+        "97.6",
+    )
+    assert (lost_text(0.01), lost_text(0.004), lost_text(2.34)) == ("0.01", "0.01", "2.3")
+    q = weighted_score({"Completeness": 100.0, "Domain Validity": 99.99}, {})
+    fig = loss_figure(q)
+    assert fig is not None and list(fig.data[0].y) == ["Domain Validity"]  # a failing check is never hidden
+    assert ring_figure(q).layout.annotations[0].text == "<b>99.99</b>"
+
+
+def test_no_ready_for_analysis_beside_a_high_priority_advice() -> None:
+    assert interpretation(97.0) == "Excellent: ready for analysis."
+    assert "ready for analysis" not in interpretation(97.0, high_advice=True)

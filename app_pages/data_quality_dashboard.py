@@ -20,7 +20,9 @@ from explore.quality_score import (
     DIMENSION_HELP,
     DIMENSIONS,
     interpretation,
+    lost_text,
     ordered,
+    score_text,
     weighted_score,
 )
 from ui.components import page_link
@@ -69,11 +71,11 @@ def _score_breakdown(quality, details, checks, weights) -> None:
             event = st.plotly_chart(
                 fig, key="dq_loss", on_select="rerun", selection_mode="points", config=chart_config()
             )
-            names = [d.name for d in quality.by_loss() if d.lost >= 0.005]
+            names = [d.name for d in quality.by_loss() if d.lost > 0]
             chosen = _selected_dimension(event)
             name = chosen if chosen in names else names[0]
             dim = next(d for d in quality.dimensions if d.name == name)
-            st.markdown(f"**{name}** · score {dim.score:.1f}% · loses {dim.lost:.2f} points")
+            st.markdown(f"**{name}** · score {score_text(dim.score)}% · loses {dim.lost:.2f} points")
             st.caption(
                 DIMENSION_HELP.get(name, "")
                 + ("" if chosen else " Click a bar to see another dimension.")
@@ -206,7 +208,7 @@ def render_dashboard(df, config):
 
     quality = weighted_score(metrics, weights)
     global_score = quality.total
-    mark_step("validate", f"quality score {global_score:.1f}/100")
+    mark_step("validate", f"quality score {score_text(global_score)}/100")
     # one check per revision of the data: the history and the change since the last check
     checks = record_quality_check(metrics)
     previous = weighted_score(checks[-2]["metrics"], weights).total if len(checks) >= 2 else None
@@ -247,23 +249,25 @@ def render_dashboard(df, config):
                         color = "#ff4b4b" # Red
 
                     delta_val = value - 100
-                    delta_str = f"{delta_val:.1f}%" if value < 100 else "Perfect"
+                    delta_str = f"-{lost_text(-delta_val)}%" if value < 100 else "Perfect"
                     arrow = "↓" if value < 100 else ""
-                    # beside the change, what the score pools: the rows that break a rule, muted (no good or bad
-                    # colour), on the same line so that the cards keep one height
+                    # under the change, what the score pools: the rows that break a rule, on a muted line of its
+                    # own (beside the change it read as its cause); every card has that line, so they keep one height
                     note = _domain_notes(auditor).get(name)
-                    note_html = f'<span style="opacity: 0.7;"> · {html.escape(note)}</span>' if note else ""
+                    note_html = html.escape(note) if note else "&nbsp;"
 
                     st.markdown(f"""
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.875rem; opacity: 0.8;">{name}</span>
                             <span style="font-size: 2rem; font-weight: 600; line-height: 1.2;">{value}%</span>
-                            <span style="font-size: 0.875rem;"><span style="color: {color};">{arrow} {delta_str}</span>{note_html}</span>
+                            <span style="font-size: 0.875rem; color: {color};">{arrow} {delta_str}</span>
+                            <span style="font-size: 0.8rem; opacity: 0.7;">{note_html}</span>
                         </div>
                     """, unsafe_allow_html=True)
 
-        st.info(f"**Global Score Interpretation:** Your dataset has a quality score of **{global_score:.1f}/100** "
-                f"based on your custom weights. {interpretation(global_score)}")
+        high = any(a.get("severity") == "high" for a in advice_list)
+        st.info(f"**Global Score Interpretation:** Your dataset has a quality score of **{score_text(global_score)}/100** "
+                f"based on your custom weights. {interpretation(global_score, high_advice=high)}")
 
     _score_breakdown(quality, auditor.details, checks, weights)
 
@@ -1105,18 +1109,19 @@ def render_dashboard(df, config):
                 f"break{'s' if flagged == 1 else ''} at least one rule. A check is one rule on one row holding the "
                 "values it reads."
             )
-            if fails:  # never the rounded score: one failing check in 20,000 rounds to 100
-                st.warning("Some rows break the declared plausibility rules.")
-
+            if fails or flagged:  # never the rounded score: one failing check in 20,000 rounds to 100
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
-                    # --- Summary Report: each rule's checks, as the score counts them ---
+                    # --- Summary Report: the lines the score counts; in an "all" or "at least k" family, the
+                    # family's, its rules' apart ---
                     st.markdown("### Failing Checks by Rule")
                     details = auditor.details.get("Domain Validity")
-                    failing = (
-                        details[details["Count"].notna()].copy() if details is not None else pd.DataFrame()
-                    )
+                    lines = details[details["Count"].notna()].copy() if details is not None else pd.DataFrame()
+                    combined = bool(getattr(auditor, "domain_combined", False))
+                    family = lines["Where"] == "the family" if not lines.empty else None
+                    failing = lines[family] if combined and family is not None else lines
+                    members = lines[~family] if combined and family is not None else pd.DataFrame()
                     if not failing.empty:
-                        failing["Checked"] = (failing["Count"] / failing["Share"]).round().astype(int)
+                        failing["Checked"] = [f"{int(round(c / s)):,}" for c, s in zip(failing["Count"], failing["Share"])]
                         failing["Share"] = failing["Share"] * 100
                         col1, col2 = st.columns([3, 2], vertical_alignment="center")
                         with col1:
@@ -1127,7 +1132,7 @@ def render_dashboard(df, config):
                                 x="Count",
                                 orientation="h",
                                 text="Count",
-                                labels={"Where": "Rule", "Count": "Failing checks"},
+                                labels={"Where": "", "Count": "Failing checks"},
                             )
                             fig.update_traces(marker_color=dimension_color("Domain Validity"), textposition="outside")
                             fig.update_layout(  # the table's order, the most failing checks on top
@@ -1139,18 +1144,24 @@ def render_dashboard(df, config):
                         with col2:
                             st.dataframe(
                                 failing[["Where", "Count", "Checked", "Share"]].rename(
-                                    columns={"Where": "Rule", "Count": "Failing", "Share": "Of checked"}
+                                    columns={"Where": "Rule", "Count": "Failing", "Share": "Failing share"}
                                 ),
                                 width="stretch",
                                 hide_index=True,
                                 column_config={
-                                    "Checked": st.column_config.NumberColumn(format="localized"),
-                                    "Of checked": st.column_config.NumberColumn(format="%.2f%%"),
+                                    "Failing share": st.column_config.NumberColumn(format="%.2f%%"),
                                 },
                             )
                             st.caption(
                                 "Each rule's share is of the rows it checks: those holding the values it reads."
                             )
+                    if not members.empty:  # in an "all" family, a rule's hits are no failing checks of their own
+                        st.caption("The family's rules, which count only together:")
+                        st.dataframe(
+                            members[["Where", "Issue", "Count"]].rename(columns={"Where": "Rule", "Count": "Fires"}),
+                            width="stretch",
+                            hide_index=True,
+                        )
 
                     st.divider()
 

@@ -18,7 +18,7 @@ from collections.abc import Mapping, Sequence
 
 import plotly.graph_objects as go
 
-from explore.quality_score import QualityScore, band, ordered, weighted_score
+from explore.quality_score import QualityScore, band, lost_text, ordered, score_text, weighted_score
 from ui.theme import BRAND, OKABE_ITO, TOKENS
 
 DIMENSION_COLORS: dict[str, str] = {
@@ -66,7 +66,7 @@ def ring_figure(
         values.append(d.earned)
         colors.append(dimension_color(d.name))
         hovers.append(
-            f"<b>{d.name}</b><br>score {d.score:.1f}%<br>weight {d.weight:g}: {d.share:.0%} of the global score"
+            f"<b>{d.name}</b><br>score {score_text(d.score)}%<br>weight {d.weight:g}: {d.share:.0%} of the global score"
             f"<br>adds {d.earned:.2f} points, loses {d.lost:.2f}"
             + (f"<br>{html.escape(notes[d.name])}" if notes and d.name in notes else "")
         )
@@ -75,7 +75,7 @@ def ring_figure(
             values.append(d.lost)
             colors.append(LOST_COLOR)
             hovers.append(
-                f"<b>{d.name}: points lost</b><br>{d.lost:.2f} of 100<br>{100 - d.score:.1f}% of its checks fail"
+                f"<b>{d.name}: points lost</b><br>{d.lost:.2f} of 100<br>{lost_text(100 - d.score)}% of its checks fail"
             )
     if not values:  # every weight at zero
         labels, values, colors, hovers = (
@@ -100,7 +100,7 @@ def ring_figure(
     )
     level = band(quality.total)
     annotations = [
-        {"text": f"<b>{quality.total:.1f}</b>", "font": {"size": 40}, "y": 0.58},
+        {"text": f"<b>{score_text(quality.total)}</b>", "font": {"size": 40}, "y": 0.58},
         {"text": f"/ 100 · {level}", "font": {"size": 13, "color": BAND_COLORS[level]}, "y": 0.40},
     ]
     if previous is not None and abs(quality.total - previous) >= 0.05:
@@ -123,9 +123,10 @@ def ring_figure(
     return fig
 
 
-def loss_figure(quality: QualityScore, *, min_points: float = 0.005) -> go.Figure | None:
-    """Points lost per dimension, the most costly on top; ``None`` when no dimension loses points."""
-    dims = [d for d in quality.by_loss() if d.lost >= min_points]
+def loss_figure(quality: QualityScore) -> go.Figure | None:
+    """Points lost per dimension, the most costly on top (a loss that rounds to nothing included: a failing check
+    is never hidden); ``None`` when no dimension loses points."""
+    dims = [d for d in quality.by_loss() if d.lost > 0]
     if not dims:
         return None
     fig = go.Figure(
@@ -134,13 +135,13 @@ def loss_figure(quality: QualityScore, *, min_points: float = 0.005) -> go.Figur
             y=[d.name for d in dims],
             orientation="h",
             marker={"color": [dimension_color(d.name) for d in dims]},
-            text=[f"−{d.lost:.2f}" for d in dims],
+            text=[f"−{d.lost:.2f}" if d.lost >= 0.005 else "−0.01" for d in dims],
             textposition="outside",
             cliponaxis=False,
-            customdata=[[d.name, d.score, d.share] for d in dims],
+            customdata=[[d.name, score_text(d.score), d.share] for d in dims],
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>loses %{x:.2f} points of 100"
-                "<br>score %{customdata[1]:.1f}% · %{customdata[2]:.0%} of the global score"
+                "<br>score %{customdata[1]}% · %{customdata[2]:.0%} of the global score"
                 "<br>Click to see where<extra></extra>"
             ),
         )

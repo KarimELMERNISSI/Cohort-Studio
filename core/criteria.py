@@ -463,15 +463,17 @@ def _row_ids_checks(
 ) -> list[tuple[str, pd.Series, pd.Series]]:
     """
     The rows the method assessed: those holding a column the rows were flagged on, every one of them for a
-    multivariate method (it assesses only complete rows); every row when no column is recorded (older rules); only
-    the listed rows when a recorded column is no longer in the table (renamed: which rows it assessed is unknown).
+    multivariate method (it assesses only complete rows); every row when no column is recorded (older rules); none
+    when a recorded column is no longer in the table (renamed: which rows it assessed is unknown, so the rule is not
+    checked, though its rows stay flagged in the population).
     """
     fires = _row_ids_mask(df, name, definition)
     columns = _row_ids_columns(name, definition)
     if not columns:
         return [("", pd.Series(True, index=df.index), fires)]
     if any(c not in df.columns for c in columns):
-        return [("", pd.Series(False, index=df.index), fires)]
+        nothing = pd.Series(False, index=df.index)
+        return [("", nothing, nothing)]
     present = df[list(columns)].notna()
     multivariate = definition.get("method") in MULTIVARIATE_METHODS
     return [("", present.all(axis=1) if multivariate else present.any(axis=1), fires)]

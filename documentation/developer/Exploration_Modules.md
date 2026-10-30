@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.observed_values`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -359,6 +359,23 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > or there is nothing to say. Shown on screen only: an export would need the study package's disclosure rule
   > (k = 5 for each count and difference).
 
+### def `_share` (data_quality_auditor.py)
+
+- **Arguments**: `line: tuple[ComplexType]`
+
+- **Returns**: `float`
+
+No description available.
+
+### def `severe` (data_quality_auditor.py)
+
+- **Arguments**: `fails: int, checks: int`
+
+- **Returns**: `bool`
+
+A rule that fails often enough to make the advice high: 5 failing checks or more and SEVERE_SHARE of its
+checks, or a Wilson lower bound of SEVERE_SHARE (one failure among 4 checks is no evidence).
+
 ### def `failing_score` (data_quality_auditor.py)
 
 - **Arguments**: `fails: int, checks: int`
@@ -445,6 +462,22 @@ With every weight at zero the global score is 0, as before.
 
 - **Returns**: `str`
 
-No description available.
+The sentence under the global score; never "ready for analysis" beside a high-priority advice.
+
+### def `score_text` (quality_score.py)
+
+- **Arguments**: `score: float`
+
+- **Returns**: `str`
+
+A score to one decimal, as the dashboard prints it; a score under 100 never reads 100.0 (99.99 does).
+
+### def `lost_text` (quality_score.py)
+
+- **Arguments**: `points: float`
+
+- **Returns**: `str`
+
+Points or a share lost, to one decimal; a loss that rounds to nothing still shows (0.01).
 
 ---

@@ -136,9 +136,8 @@ def test_listed_rows_count_the_rows_their_method_assessed() -> None:
     renamed = {"row_ids": [[3, 3]], "method": "iqr", "columns": ["x", "gone"]}
     assert (family_checks(df, {"LOF": lof}).checks, family_checks(df, {"LOF": lof}).fails) == (2, 1)
     assert family_checks(df, {"IQR": iqr}).checks == 4
-    assert (
-        family_checks(df, {"Renamed": renamed}).checks == 1
-    )  # only the listed row: what was assessed is unknown
+    # what the method assessed is unknown: not checked (its rows stay flagged in the population)
+    assert family_checks(df, {"Renamed": renamed}).checks == 0
 
 
 def test_an_imputed_value_is_no_check() -> None:
@@ -305,3 +304,49 @@ def test_the_tutorial_reads_99_83_and_99_70_with_the_diabetes_rule() -> None:
     details = auditor.details["Domain Validity"].set_index("Where")
     assert details.loc["Possible undiagnosed diabetes", "Issue"] == "flagged, of 940 rows checked"
     assert details.loc["Possible undiagnosed diabetes", "Count"] == 16
+
+
+def test_a_rule_is_severe_on_enough_evidence() -> None:
+    """One implausible value among 4 checks is no evidence of a rule failing often."""
+    from explore.data_quality_auditor import severe
+
+    assert not severe(1, 4) and not severe(0, 50)
+    assert severe(5, 20) and severe(30, 100)
+    assert not severe(4, 1000)
+
+
+def test_rows_break_a_rule_on_recorded_values_and_an_imputed_one_is_said_apart() -> None:
+    df = pd.DataFrame({"a": [1.0, 99.0, 3.0, 98.0]}, index=pd.Index([0, 1, 2, 3], name="__row_id"))
+    family = {"A": {"expression": "df['a'] > 50"}}
+    auditor = DataQualityAuditor(
+        df, {"mask_families": {"clinical_anomalies": family}}, imputed={"a": np.array([1])}
+    )
+    auditor.run_audit()
+    assert auditor.domain_checks == (1, 3, 1)  # row 3 only: row 1's value was imputed
+    assert auditor.domain_imputed_rows == 1
+    (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
+    assert "1 row breaks a rule only through an imputed value." in advice["message"]
+    only = DataQualityAuditor(
+        df.iloc[:3], {"mask_families": {"clinical_anomalies": family}}, imputed={"a": np.array([1])}
+    )
+    only.run_audit()
+    (advice,) = [a for a in only.advice if a["category"] == "Domain Validity"]
+    assert advice["message"].startswith(
+        "1 row breaks a plausibility rule only through an imputed value"
+    )
+
+
+def test_a_rule_whose_checks_fail_on_the_recorded_values_is_listed() -> None:
+    """Before age was imputed, the rule could not be evaluated and was listed; after, its checks (on the recorded
+    values) raised, and it was neither counted nor listed."""
+    df = pd.DataFrame({"age": [30.0, 40.0, 120.0], "x": [1.0, 2.0, 3.0]})
+    family = {
+        "Age": {"expression": "df['age'].astype(int) > 110"},
+        "X": {"expression": "df['x'] > 2"},
+    }
+    auditor = DataQualityAuditor(
+        df, {"mask_families": {"clinical_anomalies": family}}, imputed={"age": np.array([0])}
+    )
+    assert auditor.compute_domain_validity() == failing_score(1, 3)
+    details = auditor.details["Domain Validity"].set_index("Where")
+    assert details.loc["Age", "Issue"].startswith("cannot be checked")

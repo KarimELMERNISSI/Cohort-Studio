@@ -229,7 +229,7 @@ def family_checks(
     evaluated is left out and listed.
     """
     operator, k = family_operator(members)
-    observed = _observed(df, imputed)
+    observed = observed_values(df, imputed)
     units: list[RuleCheck] = []
     evaluable: dict[str, Any] = {}
     errors: dict[str, str] = {}
@@ -258,7 +258,7 @@ def family_checks(
     )
 
 
-def _observed(df: pd.DataFrame, imputed: Mapping[str, Any] | None) -> pd.DataFrame:
+def observed_values(df: pd.DataFrame, imputed: Mapping[str, Any] | None) -> pd.DataFrame:
     """``df`` with its imputed cells missing: a check reads recorded values only."""
     if not imputed:
         return df

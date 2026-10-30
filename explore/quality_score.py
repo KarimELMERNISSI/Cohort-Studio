@@ -114,13 +114,27 @@ def band(score: float) -> str:
     return "poor"
 
 
-def interpretation(score: float) -> str:
+def interpretation(score: float, *, high_advice: bool = False) -> str:
+    """The sentence under the global score; never "ready for analysis" beside a high-priority advice."""
+    if high_advice and band(score) in ("excellent", "good"):
+        return f"{band(score).capitalize()} overall: review the high-priority advice below before analysis."
     return {
         "excellent": "Excellent: ready for analysis.",
         "good": "Good: review the dimensions that lose points before inference.",
         "fair": "Fair: fix the main issues before reliable analysis.",
         "poor": "Poor: the data need cleaning before any analysis.",
     }[band(score)]
+
+
+def score_text(score: float) -> str:
+    """A score to one decimal, as the dashboard prints it; a score under 100 never reads 100.0 (99.99 does)."""
+    text = f"{score:.1f}"
+    return f"{min(score, 99.99):.2f}" if score < 100 and text == "100.0" else text
+
+
+def lost_text(points: float) -> str:
+    """Points or a share lost, to one decimal; a loss that rounds to nothing still shows (0.01)."""
+    return f"{points:.1f}" if points >= 0.05 or points <= 0 else f"{max(points, 0.01):.2f}"
 
 
 __all__ = [
@@ -131,6 +145,8 @@ __all__ = [
     "QualityScore",
     "band",
     "interpretation",
+    "lost_text",
+    "score_text",
     "ordered",
     "weighted_score",
 ]
