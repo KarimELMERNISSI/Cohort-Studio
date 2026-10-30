@@ -51,11 +51,15 @@ CORE_STEPS: tuple[CoreStep, ...] = (
         2,
         "validate",
         ":material/fact_check:",
-        "Validate the data",
-        "Quality score, missingness pattern, implausible values, inclusion criteria and outliers.",
+        "Validate and clean the data",
+        "Quality score, missingness pattern, values written several ways, dates, implausible values, inclusion "
+        "criteria and outliers.",
         (
             Link("validate", "Open Validate"),
-            Link("validate", "Date checks", tab="date_checks", icon=":material/event:"),
+            Link(
+                "clean", "Clean categories", tab="categories", icon=":material/cleaning_services:"
+            ),
+            Link("clean", "Dates", tab="date_checks", icon=":material/event:"),
         ),
     ),
     CoreStep(
@@ -155,12 +159,13 @@ NODES: tuple[Node, ...] = (
     Node(
         "validate",
         "validate",
-        "2  Validate",
-        "quality · plausibility · outliers",
+        "2  Validate & clean",
+        "quality · cleaning · plausibility",
         "core",
         236,
         34,
-        "Quality score, missingness pattern, implausible values, inclusion criteria and outliers.",
+        "Quality score, missingness pattern, values written several ways and dates (Clean), implausible values, "
+        "inclusion criteria and outliers.",
     ),
     Node(
         "analyse",

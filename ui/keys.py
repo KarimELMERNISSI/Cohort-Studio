@@ -110,7 +110,19 @@ KEYS: tuple[Key, ...] = (
         "validate_tab",
         "app_pages.data_monitoring",
         "page",
-        note="the open tab of Validate: only that tab runs; the line above the tabs opens Date checks through it",
+        note="the open tab of Validate: only that tab runs",
+    ),
+    Key(
+        "clean_tab",
+        "app_pages.data_cleaning",
+        "page",
+        note="the open tab of Clean (Categories, Dates): only that tab runs",
+    ),
+    Key(
+        "clean_done",
+        "app_pages.clean_categories",
+        "page",
+        note="what the last recode added, said once after the rerun",
     ),
     Key(
         "home_tab",

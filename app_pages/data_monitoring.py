@@ -10,8 +10,9 @@ import streamlit as st
 import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
+from app_pages.clean_categories import candidates
 from app_pages.data_quality_dashboard import render_dashboard
-from app_pages.validate_dates import date_candidates, dates_found, render_date_checks
+from app_pages.validate_dates import date_candidates, dates_found
 from core.criteria import expression_rule, listed_rows_rule, numeric_rule
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
@@ -29,7 +30,7 @@ from core.population import (
 from core.registry import as_code
 from ingest.analyzer import DataAnalyzer
 from ingest.loaders import UPLOAD_TYPES
-from ui.components import no_dataset
+from ui.components import no_dataset, page_link
 from ui.components.criteria import criterion_cards
 from ui.components.csv_options import csv_options
 from ui.components.population import activate_family, render_population_panel
@@ -1716,7 +1717,6 @@ def _compare_tab(opened: bool) -> None:
 # test can replace one. The labels are part of the tabs' identity (Streamlit 1.66): keep them fixed, without counts.
 VALIDATE_TABS = (
     PageTab("dashboard", "Data Quality Dashboard", lambda opened: _dashboard_tab()),
-    PageTab("date_checks", "Date checks", lambda opened: render_date_checks()),
     PageTab("anomalies", "Handle Implausible Values", lambda opened: _anomalies_tab()),
     PageTab("inclusion", "Handle Inclusion Criteria", lambda opened: _inclusion_tab()),
     PageTab("outliers", "Handle Outliers", lambda opened: _outliers_tab()),
@@ -1725,11 +1725,6 @@ VALIDATE_TABS = (
 )
 TABS = tuple(tab.label for tab in VALIDATE_TABS)
 TAB_KEY = "validate_tab"
-
-
-def _open_date_checks() -> None:
-    """Callback: open the Date checks tab (it runs before the tabs are drawn)."""
-    st.session_state[TAB_KEY] = "Date checks"
 
 
 def process_dataset(df: pd.DataFrame) -> pd.DataFrame:
@@ -1804,12 +1799,17 @@ def app():
     
     hint = st.container()
     lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)
-    # above the tabs, the text columns that look like dates, by the shape of their values (kept until the data
-    # change); drawn once the tabs are, which then know the open one (a link opens Date checks on its first run)
+    # above the tabs, what Clean would fix: the text columns that look like dates (by the shape of their values) and
+    # the variables with values to look at (written several ways, codes for unknown), both kept until the data change
     state = get_state()
-    if state.base is not None and st.session_state.get(TAB_KEY) != "Date checks":
+    if state.base is not None:
+        base = state.base
         n = len(date_candidates(state))
-        if n:
+        written = sum(1 for _, _, k in state.session.memo("clean_candidates", None, lambda: candidates(base)) if k)
+        said = [dates_found(n)] if n else []
+        if written:
+            said.append(f"{written} variable{'s' if written != 1 else ''} with values to look at")
+        if said:
             with hint, st.container(horizontal=True, vertical_alignment="center"):
-                st.caption(f":material/calendar_month: {dates_found(n)}.")
-                st.button("Open Date checks", key="open_date_checks", type="tertiary", on_click=_open_date_checks)
+                st.caption(f":material/cleaning_services: {' · '.join(said)}.")
+                page_link("clean", "Open Clean", tab="date_checks" if n else "categories")

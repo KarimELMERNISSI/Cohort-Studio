@@ -61,7 +61,16 @@ PAGES: tuple[PageDef, ...] = (
         "Data",
         ":material/fact_check:",
         chapter="02_Data_Validation",
-        tabs=(("date_checks", ("Date checks",)),),
+    ),
+    PageDef(
+        "clean",
+        "clean.py",
+        "Clean",
+        "clean",
+        "Data",
+        ":material/cleaning_services:",
+        chapter="02_Data_Validation",
+        tabs=(("categories", ("Categories",)), ("date_checks", ("Dates",))),
     ),
     PageDef(
         "enrich",

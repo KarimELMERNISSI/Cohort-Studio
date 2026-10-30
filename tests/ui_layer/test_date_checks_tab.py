@@ -1,7 +1,8 @@
 """
-Validate > Date checks (M6): the text columns that look like dates, how they would be read, and their conversion as one
-step of the trace. The conversion sat above Validate's tabs and parsed every such column whenever Validate opened on
-new data; a line there now counts them by the shape of their values, without reading them as dates, and opens the tab.
+Clean > Dates (M6; Validate's Date checks tab until 2026-10): the text columns that look like dates, how they would be
+read, and their conversion as one step of the trace. The conversion sat above Validate's tabs and parsed every such
+column whenever Validate opened on new data; a line there now counts them by the shape of their values, without reading
+them as dates, and opens Clean.
 Each column is read with the format the data show or the user chooses, recorded with the step (method parse_dates).
 """
 
@@ -15,7 +16,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
-from app_pages import data_monitoring as dm
+from app_pages import data_cleaning as clean
 from app_pages import validate_dates
 from core.fingerprint import frame_fingerprint
 from ingest.dates import PLACEHOLDERS
@@ -31,10 +32,8 @@ def _ok(at: AppTest) -> None:
 
 
 def _line(at: AppTest) -> list[str]:
-    """The line above the tabs, when it is drawn: its caption."""
-    if not [b for b in at.button if b.key == "open_date_checks"]:
-        return []
-    return [c.value for c in at.caption if "like dates" in c.value]
+    """Validate's line above its tabs, when it counts the text columns that look like dates."""
+    return [c.value for c in at.caption if "look like dates" in c.value]
 
 
 def test_the_tab_reads_the_dates_on_request_and_records_one_step(
@@ -60,35 +59,27 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     at.button(key="start_tutorial").click().run()
     _ok(at)
 
-    # the dashboard: the line counts the columns by their shape, and nothing is read as a date
+    # Validate's line counts the columns by their shape, and nothing is read as a date
     at.switch_page(nav.page_path("validate")).run()
     _ok(at)
-    assert _line(at) == [":material/calendar_month: 2 text columns look like dates."]
+    (line,) = _line(at)
+    assert line.startswith(":material/cleaning_services: 2 text columns look like dates")
     assert reads == []
 
-    # its button opens the tab, which reads them once, until the data or the choices change
-    at.button(key="open_date_checks").click().run()
+    # a link (the line's, the Start page's) opens Clean on its Dates tab, which reads them once, until the data or the
+    # choices change
+    at.query_params[nav.TAB_PARAM] = "date_checks"
+    at.switch_page(nav.page_path("clean")).run()
     _ok(at)
-    assert at.session_state[dm.TAB_KEY] == "Date checks"
+    assert at.session_state[clean.TAB_KEY] == "Dates"
     headings = [s.value for s in at.subheader if "like dates" in s.value]
     assert headings == ["2 text columns look like dates"]
-    assert _line(at) == []
     assert reads == [1]
     assert not [
         s for s in at.selectbox if s.key.startswith("date_format::")
     ]  # the data decide: nothing asked
     at.run()
     assert reads == [1]
-
-    # a link (the Start page's) opens the tab on its first run, without the line
-    at.session_state[dm.TAB_KEY] = "Data Quality Dashboard"
-    at.run()
-    assert _line(at)
-    at.query_params[nav.TAB_PARAM] = "date_checks"
-    at.run()
-    _ok(at)
-    assert at.session_state[dm.TAB_KEY] == "Date checks"
-    assert _line(at) == []
 
     # the conversion: one step, each column's format recorded, which replays to the same table
     before = at.session_state["data"].copy()
@@ -133,7 +124,6 @@ def test_the_tab_reads_the_dates_on_request_and_records_one_step(
     assert reads == [1]
     assert "No text column looks like dates." in [c.value for c in at.caption]
     del at.query_params[nav.TAB_PARAM]
-    at.session_state[dm.TAB_KEY] = "Data Quality Dashboard"
-    at.run()
+    at.switch_page(nav.page_path("validate")).run()
     _ok(at)
-    assert _line(at) == []
+    assert _line(at) == []  # Validate's line no longer counts them

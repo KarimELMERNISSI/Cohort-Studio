@@ -1254,6 +1254,24 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   participant's date typed there would be recorded as typed.
 - The tutorial's two date columns read day first, as their values show (740 and 1,041 values only day first reads).
 
+### Data > Clean: one page for how values are written (M6)
+
+- **A new page, Data > Clean, between Validate and Enrich**, fixes how values are written; Validate keeps the quality
+  checks, the rules, the criteria and the population. No row is removed on Clean, and each fix is one step of the
+  trace. The Start page's Validate box is now *Validate & clean*, with links to both.
+- **Categories:** a variable's values as written, each with its rows, are given a clean value or set to missing, and
+  written into a new column right after the original, which is kept (`sex_clean` beside `sex`). Values that differ only
+  by spaces or capitals are pre-filled with the spelling most rows hold. A one-letter code and the only word it begins
+  (*f* and *female*), a rare near spelling of a frequent value (*Luxembourgg*) and the codes that usually mean unknown
+  are offered, never applied: one letter can separate two categories (HFmrEF and HFrEF). Several values are mapped
+  together with the buttons, or by typing the same clean value; a chart shows the groups before and after. The page
+  shows each value's rows only, never an outcome beside them. The step records the values it changed, what each
+  became and why, and how many results already used the variable; the replay redoes it, keeps as written a value the
+  mapping does not list, and says how many. Before, the analysis pages suggested an Enrich formula
+  (`sex.str.strip().str.lower()`), which kept *f* and *female* apart.
+- **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
+  tabs counts the text columns that look like dates and the variables with values to look at, and opens Clean.
+
 ### Validate: Date checks, a tab of its own (M6)
 
 - **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed

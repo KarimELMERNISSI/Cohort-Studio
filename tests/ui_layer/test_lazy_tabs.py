@@ -25,6 +25,7 @@ LAZY = (
     "app_pages/data_monitoring.py",
     "app_pages/data_quality_dashboard.py",
     "app_pages/validate_dates.py",
+    "app_pages/clean_categories.py",
     "app_pages/home.py",
     "app_pages/epidemiology.py",
     # the panels of its tabs
@@ -80,8 +81,7 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
 
     calls: list[str] = []
     for name in ("render_dashboard", "render_population_panel", "add_outlier_handling_ui",
-                 "add_domain_expert_based_anomaly_mask", "add_study_inclusion_mask",
-                 "render_date_checks"):  # fmt: skip
+                 "add_domain_expert_based_anomaly_mask", "add_study_inclusion_mask"):  # fmt: skip
         original = getattr(dm, name)
 
         def counted(*args, _name=name, _original=original, **kwargs):
@@ -93,7 +93,6 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
     _ok(app)
     assert calls == ["render_dashboard"]  # the first tab is open
     for label, work in (
-        ("Date checks", "render_date_checks"),
         ("Analysis population", "render_population_panel"),
         ("Handle Outliers", "add_outlier_handling_ui"),
         ("Handle Implausible Values", "add_domain_expert_based_anomaly_mask"),
@@ -104,6 +103,28 @@ def test_only_the_open_tab_of_validate_runs(app: AppTest, monkeypatch: pytest.Mo
         app.run()
         _ok(app)
         assert calls == [work], label
+
+
+def test_only_the_open_tab_of_clean_runs(app: AppTest, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app_pages import data_cleaning as clean
+
+    calls: list[str] = []
+    for name in ("render_categories", "render_date_checks"):
+        original = getattr(clean, name)
+
+        def counted(*args, _name=name, _original=original, **kwargs):
+            calls.append(_name)
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(clean, name, counted)
+    app.switch_page(nav.page_path("clean")).run()
+    _ok(app)
+    assert calls == ["render_categories"]  # the first tab is open
+    calls.clear()
+    app.session_state[clean.TAB_KEY] = "Dates"
+    app.run()
+    _ok(app)
+    assert calls == ["render_date_checks"]
 
 
 def test_a_widget_keeps_its_value_while_its_tab_is_closed(app: AppTest) -> None:
