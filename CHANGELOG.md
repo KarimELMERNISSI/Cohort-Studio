@@ -1068,6 +1068,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Enrich now merges with `missing_keys="never"`, recorded with the step: such a row takes nothing from the file,
   says so before the merge and after it, and a row of the file without an identifier is no one's (an outer merge adds
   it as a row of its own). A merge recorded before replays as it did.
+- **A date identifier is read as the dataset's dates were.** A file's date column of the same name was read day
+  first by position, whatever Date checks had decided for the dataset's: with the dates read month first, a merge on
+  (participant, visit date) matched nothing while Enrich said "3 rows before, 3 after". The file's column is now
+  read with the format recorded for the dataset's (date cells of the file are kept), and the formats are recorded
+  with the merge and replayed; a column converted before, without a recorded format, is read as before.
+- After a merge, Enrich counts the rows of the dataset that matched no row of the file, and warns when none matched.
 
 ### Survival & regression: the outcome first, the effect first
 

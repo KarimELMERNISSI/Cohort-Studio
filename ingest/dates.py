@@ -667,6 +667,25 @@ def convert(df: pd.DataFrame, formats: Mapping[str, Mapping[str, Any]]) -> pd.Da
     return out
 
 
+def recorded_formats(steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """
+    How the conversions among ``steps`` read each column as dates, the last one winning: {column: {"format", and
+    "pivot" when one was set}}. A merge reads a file's column of the same name the same way. A conversion recorded
+    before M6 (smart_parse_dates) holds no format.
+    """
+    formats: dict[str, dict[str, Any]] = {}
+    for step in steps:
+        params = step.get("params") or {}
+        if step.get("function") != "data_type_conversion" or params.get("method") != METHOD:
+            continue
+        for column, how in (params.get("formats") or {}).items():
+            read = {"format": str(how["format"])}
+            if how.get("pivot") is not None:
+                read["pivot"] = int(how["pivot"])
+            formats[str(column)] = read
+    return formats
+
+
 __all__ = [
     "CHOSEN",
     "DATE_FORMATS",
@@ -687,5 +706,6 @@ __all__ = [
     "placeholders_found",
     "set_to_missing",
     "read_dates",
+    "recorded_formats",
     "smart_parse_dates",
 ]

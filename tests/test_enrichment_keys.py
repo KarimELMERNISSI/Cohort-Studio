@@ -16,7 +16,8 @@ from streamlit.testing.v1 import AppTest
 from core.attrition import participant_flow
 from core.fingerprint import ensure_row_ids
 from core.population import evaluate_population
-from enrich.external_data import KeyCheck, add_data, key_check
+from enrich.external_data import KeyCheck, add_data, align_date_keys, key_check
+from ingest.dates import convert
 
 MAIN = ensure_row_ids(pd.DataFrame({"pid": [1.0, 2.0, 3.0, np.nan], "age": [50, 60, 70, 80]}))
 # pid 2 on two rows, a missing pid on two rows (pandas matches missing keys; Enrich no longer), pid 5 for no one
@@ -232,3 +233,76 @@ def test_a_file_repeating_only_identifiers_the_dataset_lacks_merges_again() -> N
     merged = add_data(main, file, ["pid"], ["pid"], ["hb"], strategy="left", file_rows="all")
     assert merged["hb"].tolist() == pytest.approx([np.nan, 11.0, 13.0], nan_ok=True)
     assert list(merged.index) == list(main.index)  # each row of the dataset once
+
+
+MONTH_FIRST = {"visit_date": {"format": "month_first"}}
+VISITS = ["03/01/2024", "04/02/2024", "05/03/2024"]
+
+
+def test_a_date_key_is_read_as_the_dataset_s_dates_were() -> None:
+    """Date checks read visit_date month first, and the file writes it the same way. Read day first by position, as
+    before, 03/01/2024 was 3 January: no row matched, while the page said "3 rows before, 3 after"."""
+    main = ensure_row_ids(
+        convert(pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS}), MONTH_FIRST)
+    )
+    file = pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS, "hb": [12.1, 13.4, 11.8]})
+    keys = ["pid", "visit_date"]
+    aligned = align_date_keys(main, file, MONTH_FIRST)
+    assert aligned.attrs["date_formats"] == MONTH_FIRST
+    merged = add_data(main, aligned, keys, keys, ["hb"], missing_keys="never")
+    assert merged["hb"].tolist() == [12.1, 13.4, 11.8]
+    assert merged.attrs["join_counts"]["main_rows_unmatched"] == 0
+    before = add_data(main, align_date_keys(main, file), keys, keys, ["hb"], missing_keys="never")
+    assert before["hb"].isna().all() and before.attrs["join_counts"]["main_rows_unmatched"] == 3
+
+
+def test_date_cells_of_the_file_are_kept() -> None:
+    main = convert(pd.DataFrame({"visit_date": VISITS}), MONTH_FIRST)
+    file = pd.DataFrame(
+        {"visit_date": pd.to_datetime(["2024-03-01", "2024-04-02"]), "hb": [12.1, 13.4]}
+    )
+    aligned = align_date_keys(main, file, MONTH_FIRST)
+    pd.testing.assert_series_equal(aligned["visit_date"], file["visit_date"])
+    assert aligned.attrs["date_formats"] == MONTH_FIRST  # recorded: the replay keeps them too
+
+
+def test_rows_without_a_match_are_counted_apart_from_rows_without_an_identifier() -> None:
+    merged = add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], file_rows="first", missing_keys="never")
+    counts = merged.attrs["join_counts"]
+    assert (counts["main_rows_without_key"], counts["main_rows_unmatched"]) == (
+        1,
+        1,
+    )  # pid nan; pid 1
+    inner = add_data(MAIN, LABS, ["pid"], ["pid"], ["hb"], strategy="inner", file_rows="first")
+    assert inner.attrs["join_counts"]["main_rows_unmatched"] == 0  # left out, counted as dropped
+
+
+def _merged_app() -> None:
+    import streamlit as st
+
+    from app_pages.data_enrichment import _merged
+
+    _merged(st.session_state["merged"], st.session_state["main"])
+
+
+def test_the_page_warns_when_no_row_of_the_dataset_matched() -> None:
+    main = ensure_row_ids(
+        convert(pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS}), MONTH_FIRST)
+    )
+    file = pd.DataFrame({"pid": [1, 2, 3], "visit_date": VISITS, "hb": [12.1, 13.4, 11.8]})
+    keys = ["pid", "visit_date"]
+    at = AppTest.from_function(_merged_app, default_timeout=120)
+    at.session_state["main"] = main
+    at.session_state["merged"] = add_data(
+        main, align_date_keys(main, file), keys, keys, ["hb"], missing_keys="never"
+    )
+    at.run()
+    assert not at.exception and not at.success
+    (warning,) = at.warning
+    assert warning.value.startswith("No row of the dataset matched a row of the file")
+    assert "3 rows of the dataset matched no row of the file" in warning.value
+    at.session_state["merged"] = add_data(
+        main, align_date_keys(main, file, MONTH_FIRST), keys, keys, ["hb"]
+    )
+    at.run()
+    assert not at.warning and at.success[0].value == "Enrichment completed: 3 rows before, 3 after."

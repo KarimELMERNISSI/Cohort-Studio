@@ -17,6 +17,7 @@ import pytest
 from core.state import ParseOptions
 from ingest.dates import (
     DATE_FORMATS,
+    METHOD,
     PLACEHOLDERS,
     Detection,
     convert,
@@ -25,6 +26,7 @@ from ingest.dates import (
     partial_dates,
     placeholders_found,
     read_dates,
+    recorded_formats,
 )
 from ingest.loaders import read_table
 from ui.state import TUTORIAL_COHORT_PATH
@@ -316,3 +318,35 @@ def test_dates_spread_over_the_year_are_not_told_heaped() -> None:
     even = pd.date_range("2020-01-01", periods=76, freq="4D19h").strftime("%d/%m/%Y").tolist()
     report = date_report(S(even), "day_first")
     assert (report.january_first, report.month_first_day) == (False, False)
+
+
+def test_a_merge_reads_the_format_the_last_conversion_recorded() -> None:
+    conversion = {"function": "data_type_conversion"}
+    steps = [
+        {**conversion, "params": {"method": "smart_parse_dates", "columns": ["a"]}},
+        {
+            **conversion,
+            "params": {
+                "method": METHOD,
+                "formats": {
+                    "a": {"format": "day_first", "order_source": "user"},
+                    "b": {"format": "iso"},
+                },
+            },
+        },
+        {"function": "enrichment", "params": {"formats": {"a": {"format": "iso"}}}},
+        {
+            **conversion,
+            "params": {
+                "method": METHOD,
+                "formats": {
+                    "a": {"format": "month_first", "pivot": 30, "placeholders_to_missing": []}
+                },
+            },
+        },
+    ]
+    assert recorded_formats(steps) == {
+        "a": {"format": "month_first", "pivot": 30},
+        "b": {"format": "iso"},
+    }
+    assert recorded_formats(steps[:1]) == {}  # a conversion recorded before M6 holds no format

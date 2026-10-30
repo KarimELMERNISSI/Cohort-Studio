@@ -73,13 +73,17 @@ def _record(
     identifier: list[str],
     file_rows: str | None = None,
     missing_keys: str | None = None,
+    date_format: str | None = None,
 ):
     """
     A session that merges ``enrichment`` (read from ``path``) as the Enrich page does: align, merge, stage.
-    ``file_rows`` None records no choice, as a merge did before it was asked.
+    ``file_rows`` None records no choice, as a merge did before it was asked. ``date_format``: the main dataset's
+    visit_date converted as Date checks converts it (the format recorded), and the file's read the same way; None, a
+    conversion and a merge recorded before.
     """
     from core.session import DataSession
     from core.state import ParseOptions
+    from ingest.dates import METHOD, convert, recorded_formats
     from ingest.loaders import read_path
     from manage.transformation_manager import TransformationManager
 
@@ -93,12 +97,17 @@ def _record(
     session.install(read_path(str(src), options).df, params={"source_path": str(src), "parse_options": options.to_dict()})
     working = session.draft_frame()
     if "visit_date" in working.columns:  # the main dataset holds dates (a recorded conversion)
-        converted = working.assign(visit_date=pd.to_datetime(working["visit_date"]))
-        params = {"columns": ["visit_date"], "new_type": "datetime"}
+        if date_format is None:
+            converted = working.assign(visit_date=pd.to_datetime(working["visit_date"]))
+            params = {"columns": ["visit_date"], "new_type": "datetime"}
+        else:
+            formats = {"visit_date": {"format": date_format}}
+            converted = convert(working, formats)
+            params = {"columns": ["visit_date"], "new_type": "datetime", "method": METHOD, "formats": formats}
         session.stage(converted, "data_type_conversion", params, "Dates")
         session.commit_staging()
         working = session.draft_frame()
-    enrichment = eed.align_date_keys(working, enrichment)
+    enrichment = eed.align_date_keys(working, enrichment, recorded_formats(tm.history) if date_format else None)
     params = {
         "enrichment_file_path": str(path),
         "parse_options": enrichment.attrs.get("parse_options"),
@@ -112,6 +121,8 @@ def _record(
         params["file_rows"] = file_rows
     if missing_keys is not None:
         params["missing_keys"] = missing_keys
+    if date_format is not None:
+        params["date_formats"] = enrichment.attrs["date_formats"]
     merged = eed.add_data(
         df=working,
         additional_df=enrichment,
@@ -222,6 +233,20 @@ def test_an_enrichment_on_a_date_key_replays(tmp_path: Path) -> None:
     main = pd.DataFrame({"visit_date": ["2024-01-03", "2024-02-07", "2024-03-01"], "age": [50, 61, 72]})
     tm, session = _record(tmp_path, main, load_dataframe(str(visits)), visits, ["visit_date"])
     assert session.base["ldl"].notna().sum() == 2  # the text dates of the file matched the dates of the main table
+    _replays(tm, session)
+
+
+def test_a_date_key_read_month_first_replays(tmp_path: Path) -> None:
+    """Date checks read the dataset's visit_date month first; the file's is read the same way on the page and on
+    replay, from the format recorded with the merge (smart_parse_dates read it day first: nothing matched)."""
+    visits = tmp_path / "visits.csv"
+    visits.write_text("visit_date,ldl\n03/01/2024,2.9\n04/02/2024,3.4\n", encoding="utf-8")
+    main = pd.DataFrame({"visit_date": ["03/01/2024", "04/02/2024", "05/03/2024"], "age": [50, 61, 72]})
+    tm, session = _record(
+        tmp_path, main, load_dataframe(str(visits)), visits, ["visit_date"], date_format="month_first"
+    )
+    assert session.base["ldl"].notna().sum() == 2
+    assert tm.history[-1]["params"]["date_formats"] == {"visit_date": {"format": "month_first"}}
     _replays(tm, session)
 
 

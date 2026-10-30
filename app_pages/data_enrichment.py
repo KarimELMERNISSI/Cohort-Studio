@@ -45,6 +45,7 @@ from graph.builders.formula import build_formula_graph
 from graph.model import RenderOptions
 from graph.renderers.graphviz import GraphvizGraphRenderer
 from ingest.analyzer import DataAnalyzer
+from ingest.dates import recorded_formats
 from ingest.loaders import UPLOAD_TYPES
 from manage.ai_payload import column_kinds, column_profile
 from manage.snapshots import folders as snapshot_folders
@@ -325,11 +326,25 @@ def _merged(enriched_df: pd.DataFrame | None, main_df: pd.DataFrame, file_df: pd
         ("main_rows_dropped", "rows of the dataset left out"),
         ("file_rows_left_out", "rows of the file left out (one per identifier)"),
         ("main_rows_without_key", "rows of the dataset without an identifier (nothing from the file)"),
+        ("main_rows_unmatched", "rows of the dataset matched no row of the file (nothing from it)"),
     ):
         if counts.get(key):
             said.append(f"{counts[key]:,} {words}")
+    keyed = counts.get("rows_before", 0) - counts.get("main_rows_without_key", 0)
+    if keyed and counts.get("main_rows_unmatched", 0) >= keyed:
+        st.warning(
+            f"No row of the dataset matched a row of the file ({'; '.join(said)}): check that the identifiers are "
+            "written the same way in both files (the same codes, dates in the same order). Discard the draft to undo."
+        )
+        return True
     st.success("Enrichment completed" + (f": {'; '.join(said)}." if said else "."))
     return True
+
+
+def _date_formats() -> dict:
+    """How Date checks read the dataset's date columns: a merge reads the file's columns of those names the same way."""
+    state = get_state()
+    return recorded_formats([*state.transformation_manager.history, *state.pending_steps()])
 
 
 def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
@@ -406,8 +421,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
             st.warning("No common columns found between datasets!")
             return None
         
-        # date keys parsed as in the main dataset (the replay of the step does the same)
-        enrichment_df = eed.align_date_keys(main_df, enrichment_df)
+        # date keys read as Date checks read the dataset's (the replay of the step does the same)
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats())
 
         identifier = st.multiselect(
             "Select Common Row Identifier",
@@ -444,6 +459,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "add_choice": add_choice,
                         "file_rows": file_rows,
                         "missing_keys": "never",
+                        "date_formats": enrichment_df.attrs.get("date_formats") or {},
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),
@@ -458,8 +474,8 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
     else:
         col1, col2 = st.columns(2)
         
-        # date keys parsed as in the main dataset (the replay of the step does the same)
-        enrichment_df = eed.align_date_keys(main_df, enrichment_df)
+        # date keys read as Date checks read the dataset's (the replay of the step does the same)
+        enrichment_df = eed.align_date_keys(main_df, enrichment_df, _date_formats())
 
         with col1:
             left_identifier = st.multiselect(
@@ -512,6 +528,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                         "add_choice": add_choice,
                         "file_rows": file_rows,
                         "missing_keys": "never",
+                        "date_formats": enrichment_df.attrs.get("date_formats") or {},
                         "retained_main_columns": [str(c) for c in main_df.columns],
                         "retained_enrichment_columns": [str(c) for c in enrichment_df.columns],
                         "join_counts": enriched_df.attrs.get("join_counts"),
