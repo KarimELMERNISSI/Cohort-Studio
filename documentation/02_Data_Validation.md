@@ -45,8 +45,9 @@ such as `df['patient_id'] == 'P-0042'`).
 
 ### How It Works
 
-1. **Rule Evaluation** — Each rule is checked on every row: a plausible range on one column (for example potassium
-   outside 2.5–7.0) or an expression (for example `df['BMI'] > 100`). See *Mask Types* below.
+1. **Rule Evaluation** — Each rule is checked on the rows holding the values it reads: a plausible range on one
+   column (for example potassium outside 2.5–7.0) or an expression (for example `df['BMI'] > 100`). A missing value is
+   no check (Completeness counts it). See *Mask Types* below.
 2. **Flagging** — Rows with implausible values are flagged, with the broken rule displayed per variable.
 3. **Impact Score** — They lower the *Domain Validity* dimension of the Data Quality Score.
 
@@ -246,7 +247,7 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
 | **Statistical Validity** | Proportion of non-outlier values (based on selected method). |
-| **Domain Validity** | Share of the plausibility checks that pass: each rule you declare is checked on the rows holding the values it reads, never on a missing value (Completeness counts those); a bounds rule makes one check per column. |
+| **Domain Validity** | Share of the plausibility checks that pass: each rule you declare is checked on the rows holding the values it reads, never on a missing or imputed value (Completeness counts those); a bounds rule makes one check per column. Each check counts once, so a rule that never fails raises the score: the scorecard and the Domain Validity tab say how many rows break a rule, and the tab lists them. A failing check never reads 100 % (the score stops at 99.99). A rule written with `!=` or `~` also fires on a missing value. |
 | **Consistency** | Percentage of columns with correct data type definitions. |
 | **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
 | **Uniqueness** | Percentage of unique (non-duplicate) rows. |

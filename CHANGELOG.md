@@ -1308,14 +1308,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   the values the rule reads, so a row missing a value no longer passes the rule that reads it (Completeness counts
   that value). Before, every row counted: on the tutorial cohort the height rule passed the 55 rows without a height.
   A bounds rule makes one check per column; a family read with *all* or *at least k* makes one check per row where
-  its rules settle the result; a rule that tests missingness itself checks every row; a row where a rule fires is
-  always checked.
+  its rules settle the result; a row where a rule fires is always checked. How a rule is written no longer matters:
+  a `.notna()` guard or `fillna(170)` checks only the rows holding the value, and a date that `pd.to_datetime(...,
+  errors="coerce")` cannot read is no pass. An imputed value is no check. Listed rows found by a multivariate method
+  count the rows holding all its columns. Every criterion kind gets these checks by default, so a kind added later
+  cannot go back to counting every row.
 - On the tutorial cohort, 16 of 9,593 checks fail: **99.83%** (98.67% by rows before). With the tutorial's diabetes
   rule, 32 of 10,533: **99.70%** (97.35% before). The global score moves from 97.3 to 97.6. The rows listed as
   breaking a rule, and those the population excludes, are unchanged (16, and 32).
-- The details list each check as "flagged, of N rows holding its values", and a rule no row can check as "not
-  checked". Domain Validity reads N/A when no check can be made; an empty table scored 100. The advice says how
-  many checks fail, and on how many rows.
+- **A failing check never reads 100 %.** The score was rounded before the dashboard compared it with 100, so one
+  failing check in more than 20,000 read "Perfect" and hid the row; a failing score now stops at 99.99, and the
+  advice and the tab test the failing checks.
+- The details list each check as "flagged, of N rows checked", and a rule no row can check as "not checked". Domain
+  Validity reads N/A when no check can be made, and says why; an empty table scored 100. A rule that cannot be checked
+  is listed and the others still count (before, some malformed rules blanked the whole dimension). The advice says
+  how many checks fail, and on how many rows; it is *high* when one rule fails 10 % of its checks, whatever the pooled
+  score. The scorecard and the ring's hover say how many rows break a rule. The Domain Validity tab charts the
+  failing checks of each rule, as shares of the rows each rule checks, instead of shares of all rows.
 
 ### Validate: clinical anomalies are now implausible values
 

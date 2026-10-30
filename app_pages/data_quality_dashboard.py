@@ -1,3 +1,5 @@
+import html
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -12,7 +14,7 @@ import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.criteria import criterion_columns
-from explore.data_quality_auditor import DERIVED_CATEGORY
+from explore.data_quality_auditor import DERIVED_CATEGORY, NO_RULE
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
     DIMENSION_HELP,
@@ -25,7 +27,13 @@ from ui.components import page_link
 from ui.components.criteria import criterion_cards
 from ui.components.text import plain
 from ui.progress import mark_step, record_quality_check
-from ui.quality_charts import chart_config, history_figure, loss_figure, ring_figure
+from ui.quality_charts import (
+    chart_config,
+    dimension_color,
+    history_figure,
+    loss_figure,
+    ring_figure,
+)
 from ui.state import get_state
 
 
@@ -150,6 +158,16 @@ def missingness_linkage(corr_matrix: pd.DataFrame) -> np.ndarray:
     return sch.linkage(squareform(distances), method="average")
 
 
+def _domain_notes(auditor) -> dict[str, str]:
+    """Beside the Domain Validity score, the rows it pools: a rule that never fails raises the score, so the rows tell
+    how much of the table a failing rule touches."""
+    domain = getattr(auditor, "domain_checks", None)
+    if not domain or not domain[0]:
+        return {}
+    rows = domain[2]
+    return {"Domain Validity": f"{rows:,} row{'s' if rows != 1 else ''} break{'s' if rows == 1 else ''} a rule"}
+
+
 def render_dashboard(df, config):
     """
     Renders the Data Quality Dashboard of ``df``, the session's dataset (every row) with its ``config``.
@@ -198,7 +216,9 @@ def render_dashboard(df, config):
 
     with col_gauge:
         st.markdown("**Global Quality Score**")
-        st.plotly_chart(ring_figure(quality, previous), key="dq_ring", config=chart_config())
+        st.plotly_chart(
+            ring_figure(quality, previous, notes=_domain_notes(auditor)), key="dq_ring", config=chart_config()
+        )
         st.caption(
             "Each coloured segment is one dimension, sized by its weight; the grey gap after it is the points "
             "it loses. Hover a segment for details; change the weights above to see the ring follow."
@@ -229,14 +249,16 @@ def render_dashboard(df, config):
                     delta_val = value - 100
                     delta_str = f"{delta_val:.1f}%" if value < 100 else "Perfect"
                     arrow = "↓" if value < 100 else ""
+                    # beside the change, what the score pools: the rows that break a rule, muted (no good or bad
+                    # colour), on the same line so that the cards keep one height
+                    note = _domain_notes(auditor).get(name)
+                    note_html = f'<span style="opacity: 0.7;"> · {html.escape(note)}</span>' if note else ""
 
                     st.markdown(f"""
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.875rem; opacity: 0.8;">{name}</span>
                             <span style="font-size: 2rem; font-weight: 600; line-height: 1.2;">{value}%</span>
-                            <span style="font-size: 0.875rem; color: {color};">
-                                {arrow} {delta_str}
-                            </span>
+                            <span style="font-size: 0.875rem;"><span style="color: {color};">{arrow} {delta_str}</span>{note_html}</span>
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -1074,78 +1096,62 @@ def render_dashboard(df, config):
     # --- Tab 3: Domain Validity ---
     with tab3:
         st.subheader("Rows That Break the Plausibility Rules")
-        if "Domain Validity" in metrics:
+        domain = getattr(auditor, "domain_checks", None)
+        if "Domain Validity" in metrics and domain is not None:
+            fails, made, flagged = domain
             st.metric("Domain Validity Score", f"{metrics['Domain Validity']}%")
-            if metrics['Domain Validity'] < 100:
+            st.caption(
+                f"{fails:,} of {made:,} checks fail; {flagged:,} row{'s' if flagged != 1 else ''} "
+                f"break{'s' if flagged == 1 else ''} at least one rule. A check is one rule on one row holding the "
+                "values it reads."
+            )
+            if fails:  # never the rounded score: one failing check in 20,000 rounds to 100
                 st.warning("Some rows break the declared plausibility rules.")
-                
+
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
-                    # --- Summary Report ---
-                    st.markdown("### Violations Summary")
-                    
-                    # Calculate stats
-                    summary_stats = []
-                    total_rows = len(df)
-                    
-                    # Iterate over columns (rules) in the boolean dataframe
-                    for col in auditor.clinical_anomalies_booleans.columns:
-                        count = int(auditor.clinical_anomalies_booleans[col].sum())
-                        if count > 0:
-                            summary_stats.append({
-                                "Criteria": col,
-                                "Violations Count": count,
-                                "Percentage": round((count / total_rows) * 100, 2)
-                            })
-                    
-                    if summary_stats:
-                        summary_df = pd.DataFrame(summary_stats).sort_values("Violations Count", ascending=False)
-                        
-                        # Reorder columns
-                        summary_df = summary_df[["Criteria", "Violations Count", "Percentage"]]
-                        
-                        # Prepare Table DataFrame with Total Row
-                        total_violations = summary_df["Violations Count"].sum()
-                        total_percentage = summary_df["Percentage"].sum()
-                        
-                        total_row = pd.DataFrame([{
-                            "Criteria": "TOTAL", 
-                            "Violations Count": total_violations, 
-                            "Percentage": total_percentage
-                        }])
-                        table_df = pd.concat([summary_df, total_row], ignore_index=True)
-                        
-                        # Use vertical_alignment="center" for better layout
-                        col1, col2 = st.columns([2, 1], vertical_alignment="center")
-                        
+                    # --- Summary Report: each rule's checks, as the score counts them ---
+                    st.markdown("### Failing Checks by Rule")
+                    details = auditor.details.get("Domain Validity")
+                    failing = (
+                        details[details["Count"].notna()].copy() if details is not None else pd.DataFrame()
+                    )
+                    if not failing.empty:
+                        failing["Checked"] = (failing["Count"] / failing["Share"]).round().astype(int)
+                        failing["Share"] = failing["Share"] * 100
+                        col1, col2 = st.columns([3, 2], vertical_alignment="center")
                         with col1:
-                            # Horizontal Bar Chart for better label readability
+                            # one colour, the dimension's: the bar's length is the count
                             fig = px.bar(
-                                summary_df, 
-                                y='Criteria', 
-                                x='Violations Count',
-                                orientation='h',
-                                title="Violations by Criteria",
-                                text='Violations Count',
-                                color='Violations Count',
-                                color_continuous_scale='Reds'
+                                failing,
+                                y="Where",
+                                x="Count",
+                                orientation="h",
+                                text="Count",
+                                labels={"Where": "Rule", "Count": "Failing checks"},
                             )
-                            fig.update_layout(yaxis={'categoryorder':'total ascending'}) # Sort bars
-                            st.plotly_chart(fig, width='stretch')
-                        
+                            fig.update_traces(marker_color=dimension_color("Domain Validity"), textposition="outside")
+                            fig.update_layout(  # the table's order, the most failing checks on top
+                                yaxis={"categoryorder": "array", "categoryarray": list(failing["Where"])[::-1]},
+                                margin={"t": 10},
+                                showlegend=False,
+                            )
+                            st.plotly_chart(fig, width="stretch")
                         with col2:
                             st.dataframe(
-                                table_df,
-                                width='stretch',
+                                failing[["Where", "Count", "Checked", "Share"]].rename(
+                                    columns={"Where": "Rule", "Count": "Failing", "Share": "Of checked"}
+                                ),
+                                width="stretch",
                                 hide_index=True,
                                 column_config={
-                                    "Percentage": st.column_config.NumberColumn(
-                                        "Percentage",
-                                        format="%.2f%%"
-                                    )
-                                }
+                                    "Checked": st.column_config.NumberColumn(format="localized"),
+                                    "Of checked": st.column_config.NumberColumn(format="%.2f%%"),
+                                },
                             )
-                            st.caption("Note: *Total Percentage* is the sum of all violations. It may be higher than the *Domain Validity Score* gap because a single row can violate multiple criteria.")
-                    
+                            st.caption(
+                                "Each rule's share is of the rows it checks: those holding the values it reads."
+                            )
+
                     st.divider()
 
                     st.markdown("### Rows with Implausible Values")
@@ -1192,9 +1198,14 @@ def render_dashboard(df, config):
                 else:
                     st.info("Open the **Handle Implausible Values** tab to inspect the rows and the rules.")
             else:
-                st.success("No row breaks the declared plausibility rules.")
-        else:
+                st.success("No check fails: no row breaks the declared plausibility rules.")
+        elif getattr(auditor, "domain_na", None) in (None, NO_RULE):
             st.info("No plausibility rule is declared yet. Declare them on the **Handle Implausible Values** tab.")
+        else:
+            st.info(f"Domain Validity is not scored: {auditor.domain_na}.")
+            details = auditor.details.get("Domain Validity")
+            if details is not None and not details.empty:
+                st.dataframe(details[["Where", "Issue"]], width="stretch", hide_index=True)
 
     # --- Tab 4: Conformity ---
     with tab4:

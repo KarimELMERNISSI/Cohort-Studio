@@ -214,48 +214,59 @@ class FamilyChecks:
     operator: str
     checks: int  # C: the checks made
     fails: int  # F: those where the rule, or the family, fires
-    units: Mapping[str, RuleCheck]  # each check of each rule ("rule: column" for bounds)
+    units: tuple[RuleCheck, ...]  # each check of each rule (one per column for bounds)
     errors: Mapping[str, str]  # rule name -> why it cannot be evaluated: listed, not counted
 
 
-def family_checks(df: pd.DataFrame, members: Mapping[str, Any]) -> FamilyChecks:
+def family_checks(
+    df: pd.DataFrame, members: Mapping[str, Any], *, imputed: Mapping[str, Any] | None = None
+) -> FamilyChecks:
     """
     Domain Validity's checks of a family on ``df``: a check is one rule on one row that holds the values the rule
     reads (core.criteria.rule_checks), so that the score, 100 x (1 - fails / checks), never counts a missing value as
-    a pass. A rule that cannot be evaluated is left out and listed.
+    a pass; an imputed value (``imputed``: row ids per column) is no recorded value either. With "all" or "at least
+    k", one check per row where the rules settle the family, read as a rule "at least k of" them. A rule that cannot be
+    evaluated is left out and listed.
     """
     operator, k = family_operator(members)
-    units: dict[str, RuleCheck] = {}
-    results: dict[str, tuple[pd.Series, pd.Series]] = {}
+    observed = _observed(df, imputed)
+    units: list[RuleCheck] = []
+    evaluable: dict[str, Any] = {}
     errors: dict[str, str] = {}
     for name, spec in _rules(members).items():
         try:
-            found = rule_checks(df, name, spec)
-            fires = criterion_mask(df, name, spec)
+            units += rule_checks(observed, name, spec)
         except CriterionError as exc:
             errors[name] = str(exc)
             continue
-        known = pd.Series(True, index=df.index)
-        for check in found:
-            units[check.unit] = check
-            known &= check.checked
-        results[name] = (fires, fires | known)
+        evaluable[name] = spec
     if operator == "threshold" and (isinstance(k, bool) or not isinstance(k, int | float)):
         errors["operator"] = 'a threshold family needs a number of rules, as {"threshold": 2}'
-        return FamilyChecks(operator, 0, 0, units, errors)
-    if operator == "any" or not results:
-        checks = sum(int(c.checked.sum()) for c in units.values())
-        fails = sum(int(c.fired.sum()) for c in units.values())
-        return FamilyChecks(operator, checks, fails, units, errors)
-    need = len(results) if operator == "all" else int(k)
-    fired = pd.Series(0, index=df.index)
-    unknown = pd.Series(0, index=df.index)
-    for fires, known in results.values():
-        fired += fires.astype(int)
-        unknown += (~known).astype(int)
-    flagged = fired >= need
-    settles = flagged | (fired + unknown < need)
-    return FamilyChecks(operator, int(settles.sum()), int(flagged.sum()), units, errors)
+        return FamilyChecks(operator, 0, 0, tuple(units), errors)
+    if operator == "any" or not evaluable:
+        checks = sum(int(c.checked.sum()) for c in units)
+        fails = sum(int(c.fired.sum()) for c in units)
+        return FamilyChecks(operator, checks, fails, tuple(units), errors)
+    need = len(evaluable) if operator == "all" else int(k)
+    family = {
+        "threshold": need,
+        "members": evaluable,
+    }  # Kleene logic, as a rule "at least k of" reads it
+    (whole,) = rule_checks(observed, "the family", family)
+    return FamilyChecks(
+        operator, int(whole.checked.sum()), int(whole.fired.sum()), tuple(units), errors
+    )
+
+
+def _observed(df: pd.DataFrame, imputed: Mapping[str, Any] | None) -> pd.DataFrame:
+    """``df`` with its imputed cells missing: a check reads recorded values only."""
+    if not imputed:
+        return df
+    out = df.copy()
+    for column, ids in imputed.items():
+        if column in out.columns:
+            out[column] = out[column].mask(out.index.isin(np.asarray(ids)))
+    return out
 
 
 # What a configuration shared with someone else holds. The other keys are this installation's settings: its folders

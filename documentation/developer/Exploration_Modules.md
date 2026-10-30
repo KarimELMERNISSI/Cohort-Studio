@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_masks`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -311,11 +311,13 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > If a column is text but contains mostly numbers, it might be inconsistent formatting.
 
 - **compute_domain_validity**(`self`) -> `ComplexType`
-  > Calculates a score based on the declared plausibility rules (if any).
-  > Score = 100 - (% of rows the family of implausible values, clinical_anomalies, flags). The rules are read as the analysis
-  > population reads them (core.population.family_masks), with the family's operator; a rule that cannot be
-  > evaluated is listed in the details, and the score uses the rules that can.
-  > Returns None if no plausibility rule is declared (shows as N/A in dashboard).
+  > The share of the plausibility checks that pass, 100 x (1 - F/C) (core.population.family_checks): a check is
+  > one rule on one row that holds the values the rule reads, never a missing value, which Completeness counts; a
+  > bounds rule makes one check per column, and a family read with "all" or "at least k" one per row where its
+  > rules settle it. Before, every row counted, so a row missing a rule's value passed it. A rule that cannot be
+  > evaluated, or that no row can check, is listed in the details and not counted. The rows the family flags, as
+  > the analysis population reads it (core.population.family_masks), are listed apart. None (N/A) when no rule is
+  > declared or no check can be made.
 
 - **compute_uniformity**(`self`) -> `float`
   > Checks for string uniformity issues:
@@ -356,6 +358,15 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > check's tolerance, never a row's value nor a check's reason (it can quote one); none when nothing is declared
   > or there is nothing to say. Shown on screen only: an export would need the study package's disclosure rule
   > (k = 5 for each count and difference).
+
+### def `failing_score` (data_quality_auditor.py)
+
+- **Arguments**: `fails: int, checks: int`
+
+- **Returns**: `float`
+
+100 x (1 - fails / checks) to 2 decimals; a failing score never above 99.99: one failing check in more than
+20,000 rounded to 100.00, which read "Perfect".
 
 ### def `_details` (data_quality_auditor.py)
 

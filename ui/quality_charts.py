@@ -13,6 +13,7 @@ to Streamlit's chart theme, so they follow light and dark mode.
 
 from __future__ import annotations
 
+import html
 from collections.abc import Mapping, Sequence
 
 import plotly.graph_objects as go
@@ -47,8 +48,13 @@ def chart_config() -> dict:
 
 
 def ring_figure(
-    quality: QualityScore, previous: float | None = None, *, height: int = 270
+    quality: QualityScore,
+    previous: float | None = None,
+    *,
+    height: int = 270,
+    notes: Mapping[str, str] | None = None,
 ) -> go.Figure:
+    """The global score as a ring of its dimensions; ``notes``: a line added to a dimension's hover."""
     labels: list[str] = []
     values: list[float] = []
     colors: list[str] = []
@@ -62,6 +68,7 @@ def ring_figure(
         hovers.append(
             f"<b>{d.name}</b><br>score {d.score:.1f}%<br>weight {d.weight:g}: {d.share:.0%} of the global score"
             f"<br>adds {d.earned:.2f} points, loses {d.lost:.2f}"
+            + (f"<br>{html.escape(notes[d.name])}" if notes and d.name in notes else "")
         )
         if d.lost > 0:
             labels.append(f"{d.name}: points lost")

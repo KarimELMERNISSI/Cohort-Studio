@@ -40,6 +40,7 @@ from core.criteria import (
     is_text,
     listed_rows_rule,
     numeric_rule,
+    rule_checks,
     rule_kind,
     shared_definition,
     threshold_rule,
@@ -408,6 +409,21 @@ def test_each_kind_treats_a_missing_value_as_it_declares(
         partly = df.copy()
         partly.loc[df.index[::2], columns] = np.nan
         assert not (criterion_mask(partly, name, definition) & ~before).any()
+
+
+@pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))
+def test_no_kind_counts_a_blank_row_as_a_pass(kind: str, name: str, definition: dict) -> None:
+    """
+    Domain Validity (rule_checks): a row whose values the rule reads are all blank is never a check that passes, so a
+    kind added later (M6's date_order) cannot go back to counting every row by registering no checks of its own.
+    """
+    df = _frame()
+    columns = [c for c in criterion_columns(name, definition) if c in df.columns]
+    blank = df.assign(**dict.fromkeys(columns, np.nan))
+    if not columns:
+        return  # listed rows recorded without their columns: every row, as before
+    for check in rule_checks(blank, name, definition):
+        assert not (check.checked & ~check.fired).any(), check.unit
 
 
 @pytest.mark.parametrize(("kind", "name", "definition"), _every(EXAMPLES))

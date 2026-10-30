@@ -562,6 +562,10 @@ which read the kind:
 - `criterion_mask(df, name, definition)`: the rows where it fires. It raises `CriterionError` and nothing else.
 - `criterion_columns(name, definition)`: the columns it reads, those of the rules it combines included; `()` when they
   cannot be read.
+- `rule_checks(df, name, definition)`: its Domain Validity checks, each a `RuleCheck(rule, column, checked, fired)`.
+  A check is one rule on one row holding the values it reads; a row where it fires is always checked. By default, the
+  rows holding every column the kind reads and, for a kind that combines rules, where each of them is settled
+  (`settled`): a missing value is never counted as a pass. It raises `CriterionError` and nothing else.
 - `describe_definition(name, definition)`: what makes it fire, in the words of the participant flow, the dossier and
   Validate's boxes ("18 <= age <= 85", "one of the 3 listed rows (flagged by |z| > 3 on sbp)"). A rule that the
   checks refuse reads "cannot be evaluated" and why. It never raises.
@@ -590,11 +594,17 @@ M6's `date_order` and M9's `concept` are one registration each.
 1. Write its functions in a module of its own (`core/temporal_checks.py`), which must not import `core.criteria` (rule
    R2): `mask(df, name, definition)`, `columns(name, definition)`, `describe(name, definition)` and
    `problems(name, definition)`. Raise `ValueError` for what cannot be evaluated: `criterion_mask` names the criterion.
+   When the rows it checks are not the rows holding every column it reads, write `plausibility_checks(df, name,
+   definition, members)` too: per check, `(column or "", the rows holding the values it reads, the rows where it
+   fires)`, plain boolean Series, with `members` the (fires, settled) of the rules it combines. A numeric range reads
+   only the numbers, bounds make one check per column, listed rows count the rows their method assessed.
 2. Register it in `core/criteria.py`, after the five, without a recogniser:
    `CRITERION_KINDS.register(CriterionKind("date_order", "Date order", mask=..., columns=..., describe=...,
    problems=..., keys={"first": is_text, "then": is_text, "tolerance": is_scalar, "description": is_text}))`. A kind
    that combines rules names the key it keeps them under (`members_key`): the free functions add their checks and
-   columns. Say how it treats a missing value (`missing`).
+   columns. Say how it treats a missing value (`missing`), and give `plausibility_checks=` when the default is not
+   its checks. `tests/core_layer/test_criterion_kinds.py` blanks each example's columns: no blank row may count as a
+   pass.
 3. Add a writer that states the kind (`{"kind": "date_order", ...}`), used by every page that writes the rule.
 4. Give it examples, the rows each selects (`ROWS`), a read-back of its words and malformed examples in
    `tests/core_layer/test_criterion_kinds.py`, which fails until they are there. Its definitions hold none of the keys

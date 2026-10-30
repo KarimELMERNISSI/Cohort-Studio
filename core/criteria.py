@@ -19,9 +19,9 @@ keys the population memos and is written in every population block of a trace.
 
 from __future__ import annotations
 
+import ast
 import copy
 import math
-import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -30,7 +30,8 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from core.expressions import UnsafeExpressionError, column_references, evaluate
+from biostats.outliers import MULTIVARIATE_METHODS
+from core.expressions import UnsafeExpressionError, column_references, evaluate, evaluate_tree
 from core.registry import Catalogue
 
 # What a rule selects, as this module reads and evaluates the definitions. A study definition's fingerprint holds it
@@ -154,8 +155,8 @@ def _is_bounds(value: Any) -> bool:
     )
 
 
-# an expression that tests missingness itself reads every row (Domain Validity checks it on all of them)
-_TESTS_MISSING = re.compile(r"\b(?:isna|notna|isnull|notnull|fillna)\b")
+# the conversions whose missing results are values the rule cannot read (errors="coerce")
+_CONVERSIONS = frozenset({"to_datetime", "to_numeric"})
 
 
 @dataclass(frozen=True)
@@ -166,9 +167,15 @@ class RuleCheck:
     one field does.
     """
 
-    unit: str  # the rule; for bounds, "rule: column"
+    rule: str
+    column: str  # the column of a check made per column (bounds); "" for the whole rule
     checked: pd.Series
     fired: pd.Series
+
+    @property
+    def unit(self) -> str:
+        """The check's name on the screens: the rule, or "rule: column"."""
+        return f"{self.rule}: {self.column}" if self.column else self.rule
 
 
 @dataclass(frozen=True)
@@ -208,8 +215,18 @@ class CriterionKind:
     lists_rows: bool = False
     # how it treats a missing value: NEVER, ASKED, NOT_READ or MEMBERS
     missing: Missing = NEVER
-    # its Domain Validity checks (rule_checks): the rows each reads and where each fires; None, every row is checked
-    checks: Callable[[pd.DataFrame, str, Mapping[str, Any]], list[RuleCheck]] | None = None
+    # its own Domain Validity checks (rule_checks), when they are not the default: the rows holding every column it
+    # reads and, for a kind that combines rules, where each of its rules is settled. Called with the table, the name,
+    # the definition and its rules' (fires, settled), each a boolean Series; returns, per check, (column or "", the
+    # rows holding the values it reads, the rows where it fires): plain Series, so that a kind written in a module of
+    # its own needs nothing from this one. A row where it fires is always checked; it may raise as ``mask`` does.
+    plausibility_checks: (
+        Callable[
+            [pd.DataFrame, str, Mapping[str, Any], Mapping[str, tuple[pd.Series, pd.Series]]],
+            list[tuple[str, pd.Series, pd.Series]],
+        ]
+        | None
+    ) = None
 
     def __post_init__(self) -> None:
         # read only, as the rest of the kind
@@ -261,18 +278,20 @@ def _threshold_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
 
 
 def _threshold_checks(
-    df: pd.DataFrame, name: str, definition: Mapping[str, Any]
-) -> list[RuleCheck]:
+    df: pd.DataFrame,
+    name: str,
+    definition: Mapping[str, Any],
+    members: Mapping[str, tuple[pd.Series, pd.Series]],
+) -> list[tuple[str, pd.Series, pd.Series]]:
     """Read as Kleene logic reads "at least k": checked where k members fire, or where too few can still fire."""
     fires = _threshold_mask(df, name, definition)  # raises when it cannot be read
     k = int(definition["threshold"])
     fired = pd.Series(0, index=df.index)
     unknown = pd.Series(0, index=df.index)
-    for member, spec in (definition.get("members") or {}).items():
-        member_fires, known = settled(df, str(member), spec)
+    for member_fires, known in members.values():
         fired += member_fires.astype(int)
         unknown += (~known).astype(int)
-    return [RuleCheck(name, fires | (fired + unknown < k), fires)]
+    return [("", fired + unknown < k, fires)]
 
 
 CRITERION_KINDS.register(
@@ -287,7 +306,7 @@ CRITERION_KINDS.register(
         members_key="members",
         keys={"threshold": is_scalar, "description": is_text},
         missing=MEMBERS,
-        checks=_threshold_checks,
+        plausibility_checks=_threshold_checks,
     )
 )
 
@@ -339,8 +358,14 @@ def _row_ids_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) ->
 
 
 def _row_ids_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]:
-    # the outlier rules record the columns they were found on
-    return tuple(str(c) for c in definition.get("columns") or ())
+    # the outlier rules record the columns they were found on; the names of columns only: a loaded file can list
+    # anything there
+    recorded = definition.get("columns")
+    return (
+        tuple(c for c in recorded if isinstance(c, str))
+        if isinstance(recorded, (list, tuple))
+        else ()
+    )
 
 
 def _figure(value: Any) -> str | None:
@@ -430,12 +455,26 @@ def _row_ids_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
     return [f"rule '{name}': row_ids must list [first, last] pairs of row numbers"]
 
 
-def _row_ids_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
-    """The rows holding a column the rows were flagged on (every row when none is recorded), and the listed rows."""
+def _row_ids_checks(
+    df: pd.DataFrame,
+    name: str,
+    definition: Mapping[str, Any],
+    members: Mapping[str, tuple[pd.Series, pd.Series]],
+) -> list[tuple[str, pd.Series, pd.Series]]:
+    """
+    The rows the method assessed: those holding a column the rows were flagged on, every one of them for a
+    multivariate method (it assesses only complete rows); every row when no column is recorded (older rules); only
+    the listed rows when a recorded column is no longer in the table (renamed: which rows it assessed is unknown).
+    """
     fires = _row_ids_mask(df, name, definition)
-    columns = [c for c in _row_ids_columns(name, definition) if c in df.columns]
-    held = df[columns].notna().any(axis=1) if columns else pd.Series(True, index=df.index)
-    return [RuleCheck(name, held | fires, fires)]
+    columns = _row_ids_columns(name, definition)
+    if not columns:
+        return [("", pd.Series(True, index=df.index), fires)]
+    if any(c not in df.columns for c in columns):
+        return [("", pd.Series(False, index=df.index), fires)]
+    present = df[list(columns)].notna()
+    multivariate = definition.get("method") in MULTIVARIATE_METHODS
+    return [("", present.all(axis=1) if multivariate else present.any(axis=1), fires)]
 
 
 CRITERION_KINDS.register(
@@ -456,7 +495,7 @@ CRITERION_KINDS.register(
         },
         lists_rows=True,
         missing=NOT_READ,
-        checks=_row_ids_checks,
+        plausibility_checks=_row_ids_checks,
     )
 )
 
@@ -513,13 +552,18 @@ def _bounds_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
     return [f"rule '{name}': bounds must map each column to [lower, upper], numbers or null"]
 
 
-def _bounds_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
+def _bounds_checks(
+    df: pd.DataFrame,
+    name: str,
+    definition: Mapping[str, Any],
+    members: Mapping[str, tuple[pd.Series, pd.Series]],
+) -> list[tuple[str, pd.Series, pd.Series]]:
     """One check per column, on the rows holding its number."""
     found = []
     for column, (low, high) in (definition.get("bounds") or {}).items():
         series = _numeric_series(df, column)
         held = series.notna()
-        found.append(RuleCheck(f"{name}: {column}", held, held & ~_inside(series, low, high)))
+        found.append((str(column), held, held & ~_inside(series, low, high)))
     return found
 
 
@@ -533,7 +577,7 @@ CRITERION_KINDS.register(
         recognise=lambda name, definition: "bounds" in definition,
         problems=_bounds_problems,
         keys={"bounds": _is_bounds, "description": is_text},
-        checks=_bounds_checks,
+        plausibility_checks=_bounds_checks,
     )
 )
 
@@ -621,12 +665,15 @@ def _numeric_problems(name: str, definition: Mapping[str, Any]) -> list[str]:
     return problems
 
 
-def _numeric_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
-    """The rows holding the column's number."""
+def _numeric_checks(
+    df: pd.DataFrame,
+    name: str,
+    definition: Mapping[str, Any],
+    members: Mapping[str, tuple[pd.Series, pd.Series]],
+) -> list[tuple[str, pd.Series, pd.Series]]:
+    """The rows holding the column's number: a text that is no number is a value the rule cannot read."""
     fires = _numeric_mask(df, name, definition)
-    return [
-        RuleCheck(name, _numeric_series(df, str(definition.get("column") or name)).notna(), fires)
-    ]
+    return [("", _numeric_series(df, str(definition.get("column") or name)).notna(), fires)]
 
 
 CRITERION_KINDS.register(
@@ -646,7 +693,7 @@ CRITERION_KINDS.register(
             "strategy": is_scalar,
             "description": is_text,
         },
-        checks=_numeric_checks,
+        plausibility_checks=_numeric_checks,
     )
 )
 
@@ -673,16 +720,35 @@ def _expression_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, 
 
 
 def _expression_checks(
-    df: pd.DataFrame, name: str, definition: Mapping[str, Any]
-) -> list[RuleCheck]:
-    """The rows holding every column it reads; every row when it tests missingness itself (isna, fillna...)."""
+    df: pd.DataFrame,
+    name: str,
+    definition: Mapping[str, Any],
+    members: Mapping[str, tuple[pd.Series, pd.Series]],
+) -> list[tuple[str, pd.Series, pd.Series]]:
+    """
+    The rows holding every column it reads, however it is written (a guard such as ``.notna()`` or ``fillna`` reads no
+    missing value either), and where a conversion (``pd.to_datetime``, ``pd.to_numeric``) gives a value: a date that
+    cannot be read is not a pass. An expression testing missingness checks the rows it fires on, as every rule.
+    """
     fires = _expression_mask(df, name, definition)
     held = pd.Series(True, index=df.index)
-    if not _TESTS_MISSING.search(_expression_of(definition)):
-        for column in _expression_columns(name, definition):
-            if column in df.columns:
-                held &= df[column].notna()
-    return [RuleCheck(name, held | fires, fires)]
+    for column in _expression_columns(name, definition):
+        if column in df.columns:
+            held &= df[column].notna()
+    try:
+        tree = ast.parse(_expression_of(definition), mode="eval")
+    except SyntaxError:
+        return [("", held, fires)]
+    for node in ast.walk(tree):
+        func = node.func if isinstance(node, ast.Call) else None
+        if isinstance(func, ast.Attribute) and func.attr in _CONVERSIONS:
+            try:
+                converted = evaluate_tree(ast.Expression(body=node), df)
+            except Exception:
+                continue  # a part that cannot be read alone: its columns decide
+            if isinstance(converted, pd.Series) and converted.index.equals(df.index):
+                held &= converted.notna()
+    return [("", held, fires)]
 
 
 CRITERION_KINDS.register(
@@ -695,7 +761,7 @@ CRITERION_KINDS.register(
         recognise=lambda name, definition: bool(_expression_of(definition)),
         keys={"numeric": is_flag, "expression": is_text, "description": is_text},
         missing=ASKED,
-        checks=_expression_checks,
+        plausibility_checks=_expression_checks,
     )
 )
 
@@ -789,19 +855,35 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
 
 def rule_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
     """
-    The Domain Validity checks of a criterion on ``df``: per check, the rows holding every value it reads, as its kind
-    reads them (a numeric range or bounds: the recorded numbers, one check per column for bounds; an expression: its
-    columns recorded, every row when it tests missingness itself; listed rows: the rows holding a column they were
-    flagged on; at least k rules: where Kleene logic settles them), and the rows where it fires, always checked. A
-    missing value is never counted as a pass: Completeness counts it. Raises :class:`CriterionError` as
+    The Domain Validity checks of a criterion on ``df``: per check, the rows holding every value it reads and the rows
+    where it fires, always checked. By default, the rows holding every column its kind reads and, for a kind that
+    combines rules, where each of them is settled; a kind gives its own (``plausibility_checks``): a numeric range or
+    bounds read the recorded numbers, one check per column for bounds; an expression its columns and its conversions;
+    listed rows the rows the method assessed; at least k rules where Kleene logic settles them. A missing value is
+    never counted as a pass: Completeness counts it. Raises :class:`CriterionError` and nothing else, as
     :func:`criterion_mask` does.
     """
-    kind = rule_kind(name, definition)
-    if kind.checks is None:
-        return [
-            RuleCheck(name, pd.Series(True, index=df.index), criterion_mask(df, name, definition))
-        ]
-    return kind.checks(df, name, definition)
+    try:
+        kind = rule_kind(name, definition)
+        fires = kind.mask(df, name, definition)
+        members = {
+            str(member): settled(df, str(member), spec)
+            for member, spec in _members(kind, definition).items()
+        }
+        if kind.plausibility_checks is not None:
+            found = kind.plausibility_checks(df, name, definition, members)
+            return [RuleCheck(name, column, held | fired, fired) for column, held, fired in found]
+        held = pd.Series(True, index=df.index)
+        for _, known in members.values():
+            held &= known
+        for column in kind.columns(name, definition):
+            if column in df.columns:
+                held &= df[column].notna()
+        return [RuleCheck(name, "", held | fires, fires)]
+    except CriterionError:
+        raise
+    except Exception as exc:
+        raise CriterionError(f"criterion '{name}': {exc}") from exc
 
 
 def settled(

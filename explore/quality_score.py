@@ -26,7 +26,9 @@ DIMENSION_HELP: dict[str, str] = {
     "Completeness": "Share of cells that are not empty.",
     "Statistical Validity": "Share of numeric values not flagged as outliers by the method chosen in Handle Outliers.",
     "Domain Validity": "Share of the plausibility checks that pass: each rule is checked on the rows holding the "
-    "values it reads, never on a missing value (Completeness counts those).",
+    "values it reads, never on a missing or imputed value (Completeness counts those). Each check counts once, so a "
+    "rule that never fails raises the score: the Domain Validity tab lists the rows. A rule written with != or ~ "
+    "also fires on a missing value.",
     "Consistency": "Share of text columns whose values do not look like numbers or dates stored as text.",
     "Uniformity": "Share of text columns without stray spaces or mixed capitalisation.",
     "Uniqueness": "Share of rows that are not an exact duplicate of another row.",

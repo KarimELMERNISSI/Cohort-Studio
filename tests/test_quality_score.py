@@ -102,3 +102,12 @@ def test_loss_bars_and_history() -> None:
     assert totals[1] - totals[0] == pytest.approx(2.0 / 4)  # completeness +2 points with a 1/4 share
     assert len(fig.data) == 1 + len(METRICS) and fig.data[1].visible == "legendonly"
     assert fig.layout.xaxis.ticktext[1] == "1. Imputation (KNN)"
+
+
+def test_the_ring_s_hover_carries_a_dimension_s_note_as_text() -> None:
+    q = weighted_score({"Completeness": 90.0, "Domain Validity": 99.0}, {})
+    fig = ring_figure(q, notes={"Domain Validity": "3 rows break a rule <b>"})
+    hovers = list(fig.data[0].customdata)
+    (domain,) = [h for h in hovers if h.startswith("<b>Domain Validity</b>")]
+    assert domain.endswith("<br>3 rows break a rule &lt;b&gt;")
+    assert not any("rows break" in h for h in hovers if not h.startswith("<b>Domain Validity</b>"))
