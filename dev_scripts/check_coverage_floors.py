@@ -29,8 +29,10 @@ from pathlib import Path
 # core to 94 at 95.8 with the catalogue of criterion kinds and its tests (M5b step 6, 2026-10-28).
 # app_pages to 60 at 62.2, with the tests of the Date checks tab and of the missingness clustering, and the smoke test
 # opening the new tab; enrich to 83 at 85.0 and manage to 77 at 79.8, which were at the margin (M6, 2026-10-29).
+# app_pages to 62 at 64.7 in CI, with the tests of the Enrich page with a draft, the merge's question on the first or
+# last row, and the Date checks tab's columns already dates and extraction date (M6, 2026-10-30).
 FLOORS: dict[str, float] = {
-    "app_pages": 60.0,
+    "app_pages": 62.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 83.0,
