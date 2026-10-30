@@ -342,6 +342,7 @@ class DateFormat:
         [pd.Series, int | None], pd.Series
     ]  # (values, two-digit-year pivot) -> datetimes, NaT unread
     other_order: str = ""  # the format that reads the same values with day and month swapped
+    writing: bool = True  # a way of writing dates in text; False: a column already of dates ("dates"), no text read
 
 
 DATE_FORMATS: Catalogue[DateFormat] = Catalogue("date format")
@@ -379,7 +380,7 @@ def _read_as_dates(series: pd.Series, pivot: int | None) -> pd.Series:
     return series
 
 
-DATE_FORMATS.register(DateFormat(AS_DATES, "Already dates", _read_as_dates))
+DATE_FORMATS.register(DateFormat(AS_DATES, "Already dates", _read_as_dates, writing=False))
 
 
 def read_dates(series: pd.Series, format_id: str, *, pivot: int | None = None) -> pd.Series:
@@ -708,9 +709,10 @@ def recorded_formats(steps: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, 
         if step.get("function") != "data_type_conversion" or params.get("method") != METHOD:
             continue
         for column, how in (params.get("formats") or {}).items():
+            known = DATE_FORMATS.find(str(how["format"]))
             if (
-                how["format"] == AS_DATES
-            ):  # no way of writing: a file's column of that name is read as before
+                known is None or not known.writing
+            ):  # no way of writing: a file's column of that name read as before
                 continue
             read = {"format": str(how["format"])}
             if how.get("pivot") is not None:

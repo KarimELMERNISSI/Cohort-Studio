@@ -303,3 +303,25 @@ def test_an_extraction_date_some_values_hold_is_questioned() -> None:
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     (warning,) = at.warning
     assert warning.value.startswith("1 value of the data falls on the extraction date")
+
+
+def test_a_planned_column_left_as_text_keeps_its_flag() -> None:
+    """The planned-dates list offered only the columns read as dates: one left as text left the list, and Streamlit
+    dropped it from the choice, so reading it again lost its flag."""
+    at = _open({"next_visit": ["15/03/2030", "13/04/2022"], "death": ["14/05/2021", "16/06/2022"]})
+    at.multiselect(key="date_planned").select("next_visit").run()
+    at.multiselect(key="date_leave_text").select("next_visit").run()
+    assert at.multiselect(key="date_planned").value == ["next_visit"]
+    at.multiselect(key="date_leave_text").unselect("next_visit").run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert at.multiselect(key="date_planned").value == ["next_visit"]
+
+
+def test_dates_with_a_time_zone_are_said_not_checked() -> None:
+    zoned = pd.to_datetime(["2021-03-15 10:00", "2022-04-13 09:30"]).tz_localize(
+        "Europe/Luxembourg"
+    )
+    at = _open({"visit": zoned})
+    assert "1 column holds dates with a time zone (`visit`): not checked here." in [
+        c.value for c in at.caption
+    ]

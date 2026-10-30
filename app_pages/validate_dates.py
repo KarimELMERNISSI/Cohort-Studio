@@ -351,6 +351,17 @@ def render_date_checks() -> None:
         st.caption("No text column looks like dates.")
     if dated:
         _date_columns(state, df, dated, study)
+    zoned = [
+        str(c)
+        for c in df.columns
+        if pd.api.types.is_datetime64_any_dtype(df[c]) and getattr(df[c].dt, "tz", None) is not None
+    ]
+    if zoned:
+        n = len(zoned)
+        st.caption(
+            f"{n} column{'s hold' if n != 1 else ' holds'} dates with a time zone "
+            f"({', '.join(as_code(c) for c in zoned[:5])}{' ...' if n > 5 else ''}): not checked here."
+        )
 
 
 def _text_columns(
@@ -387,7 +398,8 @@ def _text_columns(
     if not chosen:
         st.caption("No column is chosen to be read as dates.")
         return None
-    extraction, planned = _study_dates(state, [*chosen, *dated])
+    # every text column, those left as text too: an option that disappears takes its choice with it
+    extraction, planned = _study_dates(state, [*found, *dated])
     key = tuple(
         sorted((c, how["format"], how.get("pivot"), c in planned) for c, how in chosen.items())
     )

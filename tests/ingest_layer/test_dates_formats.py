@@ -76,6 +76,7 @@ def test_the_formats_are_a_catalogue_of_ids_never_renamed() -> None:
         "dates",
     )
     assert DATE_FORMATS.get("day_first").other_order == "month_first"
+    assert [f.id for f in DATE_FORMATS if not f.writing] == ["dates"]  # it reads no text
 
 
 def test_years_from_1_to_9999_hold_and_a_blank_is_missing() -> None:
