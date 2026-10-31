@@ -5,12 +5,11 @@ or set to missing, and written into a new text column beside the original, which
 
 What the step records, and what the replay recomputes:
 
-- the fold rule (:data:`FOLD`), never the values it folds. Values that differ by spaces take their group's spelling,
-  the one most rows hold. A word (4 letters or more) that differs from it by capitals takes it too when it is the
-  size of a typo (:data:`RARE_ROWS` rows or fewer, under :data:`CASE_SHARE` of its group), unless the column writes
-  capitals inside a word (CcDee, HFmrEF, mg/dL), where case carries meaning. In a code of three characters or fewer,
-  case can carry meaning too (Kell K and k; g/l and G/L): its case variants, like the other ones, are offered. The replay folds
-  the values it reads with this rule; a changed rule takes a new id;
+- the fold rule (:data:`FOLD`), never the values it folds: a value written with spaces before, after or repeated
+  inside takes its spelling with the spaces collapsed. Capitals are never folded: case can name a category (Kell K
+  and k, anti-k and anti-K, g/L and G/L, Rh Ccdee and ccdee), so a case variant is offered. The replay folds the
+  values it reads with the rule the step recorded; a changed rule takes a new id, and the two earlier rules recorded
+  under :data:`LEGACY_FOLD` are told apart by the record (``rule_of``);
 - the user's choices (``mapping``): a choice for a spelling applies to its whole group, a folded value's own choice
   to itself, a clean value that is itself given another is followed (MALE → male → M), and ``kept`` lists the folds
   put back as written;
@@ -54,8 +53,15 @@ from rapidfuzz.distance import OSA
 
 from core.fingerprint import frame_fingerprint
 
-FOLD = "spaces_and_capitals"  # the fold rule's id, recorded with the step: a changed rule takes a new id
-CASE_SHARE = 0.05  # a case variant under this share of its group's rows, and RARE_ROWS rows or fewer, is a typo
+FOLD = "spaces"  # the fold rule's id, recorded with the step: a changed rule takes a new id
+# the id of the two rules of 30 October 2026, which folded capitals too: kept for the replay of their steps
+LEGACY_FOLD = "spaces_and_capitals"
+_FIRST_FOLD = (
+    "spaces_and_capitals, first rule"  # never recorded: the first of the two (``rule_of``)
+)
+CASE_SHARE = (
+    0.05  # the earlier rules: a case variant under this share of its group's rows could be a typo
+)
 RARE_SHARE, RARE_ROWS = (
     0.01,
     5,
@@ -72,9 +78,9 @@ SPACES, CAPITALS, SPACES_AND_CAPITALS = "spaces", "capitals", "spaces and capita
 FIRST_LETTER, VARIANT, SPELLING, CLOSE = "first letter", "variant", "spelling", "close spelling"
 MISSING_CODE, CHOSEN, GROUPING = "missing code", "chosen", "grouping"
 AI = "ai"  # proposed by the AI engine (a synonym, a translation): checked here, ticked by the user
-# the rules' offers: never a grouping. An AI proposal is not among them: a merge it proposes of two values that each
-# hold 5 % of the rows is a grouping, which says why (its reason pre-filled)
-OFFER_KINDS = frozenset({CAPITALS, FIRST_LETTER, VARIANT, SPELLING, CLOSE, MISSING_CODE})
+# the offers, never a grouping: a variant, a spelling, a synonym the AI engine proposes (one category written two
+# ways); a merge of two categories is made by hand, and says why
+OFFER_KINDS = frozenset({CAPITALS, FIRST_LETTER, VARIANT, SPELLING, CLOSE, MISSING_CODE, AI})
 # what a value set to missing means (stored with the step: never renamed)
 UNKNOWN, NOT_APPLICABLE, DECLINED = "unknown or not done", "not applicable", "declined"
 MEANINGS = (UNKNOWN, NOT_APPLICABLE, DECLINED)
@@ -101,12 +107,100 @@ _UNKNOWN_CODES = frozenset(
 )
 # codes that may mean missing, or not applicable, an absence, a result: NK (not known, or natural killer), NR
 # (non-reactive), ND (not detected). "NA" is not here: the import reads it as missing, and "Na" is sodium
-_ASKED_CODES = frozenset({"n/a", "n.a.", "nan", "none", "nk", "nr", "nd", "-", "--", "."})
+_ASKED_CODES = frozenset(
+    {
+        "n/a",
+        "n.a.",
+        "nan",
+        "none",
+        "nk",
+        "nr",
+        "nd",
+        "nc",
+        "so",
+        "-",
+        "--",
+        ".",
+        "not tested",
+        "untested",
+        "refused",
+        "refus",
+        "sans objet",
+        "non communique",
+    }
+)
+# what is no value of its own: the AI engine never joins it to one, or one to it ("Not tested" is not "Negative")
+_NOT_VALUES = (
+    _UNKNOWN_CODES | _ASKED_CODES | {"declined", "not applicable", "unknown or not done", "other"}
+)
+# prefixes that negate or oppose a word: a proposal never joins two words a prefix sets apart (Unstable, Stable;
+# Hypotension, Hypertension), a broader class neither (STEMI and MI)
+_OPPOSITE_PREFIXES = (
+    "",
+    "un",
+    "non",
+    "a",
+    "an",
+    "anti",
+    "ab",
+    "dis",
+    "in",
+    "im",
+    "ir",
+    "il",
+    "ex",
+    "hypo",
+    "hyper",
+    "micro",
+    "macro",
+    "brady",
+    "tachy",
+    "pre",
+    "post",
+    "intra",
+    "extra",
+    "sub",
+    "supra",
+    "mono",
+    "poly",
+    "hemi",
+    "oligo",
+    "pan",
+    "de",
+    "n",
+)
+# words that name opposite categories: the AI engine never joins them
+_OPPOSITES = frozenset(
+    frozenset(pair)
+    for pair in (
+        ("positive", "negative"),
+        ("present", "absent"),
+        ("yes", "no"),
+        ("oui", "non"),
+        ("high", "low"),
+        ("increased", "decreased"),
+        ("left", "right"),
+        ("benign", "malignant"),
+        ("acute", "chronic"),
+        ("primary", "secondary"),
+        ("early", "late"),
+        ("mild", "severe"),
+        ("upper", "lower"),
+        ("alive", "dead"),
+        ("true", "false"),
+        ("reactive", "non reactive"),
+        ("detected", "not detected"),
+    )
+)
+# letters NFKD does not decompose; the minus sign read as a hyphen (a sign, for _SIGNS)
+_TRANSLITERATE = str.maketrans(
+    {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ø": "o", "Ø": "O", "ł": "l", "Ł": "L", "ß": "ss"}
+)
 _ROMAN = re.compile(  # a whole token; the lookbehind refuses the empty match before a word such as "male"
     r"\b(?=[mdclxvi])m{0,4}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})\b(?<=[mdclxvi])"
 )
-_SIGNS = re.compile(
-    r"[+<>=]|(?<![^\W\d_])-|-(?![^\W\d_])"
+_SIGNS = re.compile(  # ± ≤ ≥ and the minus sign − too
+    r"[+<>=±≤≥−]|(?<![^\W\d_])-|-(?![^\W\d_])"
 )  # a hyphen between two letters joins words: no sign
 _JOINING_HYPHEN = re.compile(r"(?<=[^\W\d_])-(?=[^\W\d_])")
 _NONE = object()  # no choice: a mapping can hold None (missing)
@@ -153,7 +247,14 @@ def _folded(value: str) -> str:
 
 
 def _plain(value: str) -> str:
-    return unicodedata.normalize("NFKD", _folded(value)).encode("ascii", "ignore").decode()
+    return _unaccented(_folded(value))
+
+
+def _unaccented(text: str) -> str:
+    """Accents set aside (Pétange, Petange; Mère, Mere), every other character kept: a Greek letter, µ, ≤ and ≥ name
+    categories (α- and β-blocker, IgG κ and λ, µg/L and g/L), so the ASCII form, which drops them, is never used."""
+    decomposed = unicodedata.normalize("NFKD", text.translate(_TRANSLITERATE))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
 def sort_key(value: str) -> tuple[str, str]:
@@ -164,9 +265,10 @@ def sort_key(value: str) -> tuple[str, str]:
 
 def _key(value: str) -> str:
     """Two spellings of one word compare equal: spaces, capitals, accents and hyphens set aside, ae and oe read as e
-    (Anaemia, Anemia; Oedema, Edema)."""
-    text = unicodedata.normalize("NFKD", " ".join(value.replace("-", " ").split()).casefold())
-    return re.sub(r"[ao]e", "e", text.encode("ascii", "ignore").decode())
+    before two letters or a vowel (Anaemia, Anemia; Oedema, Œdème, Edema; Diarrhoea, Diarrhea), never before a
+    word's last letter (Michael and Michel, Noel and Nel stay apart)."""
+    text = " ".join(_unaccented(value).replace("-", " ").split()).casefold()
+    return re.sub(r"[ao]e(?=[^\W\d_]{2}|[aeiouy])", "e", text)
 
 
 def _words(text: str) -> list[str]:
@@ -219,8 +321,62 @@ def _groups(counts: Mapping[str, int]) -> list[dict[str, int]]:
 def fold(counts: Mapping[str, int]) -> dict[str, str]:
     """
     The rule :data:`FOLD` on the values as written (``level_counts``): each value -> the spelling it takes, where
-    they differ.
+    they differ. Spaces only: a value that differs from another by capitals is offered, never folded (case names
+    categories in codes, antibodies and units: Kell K and k, anti-k and anti-K, g/L and G/L, Rh Ccdee and ccdee).
     """
+    return {value: _spaced(value) for value in counts if _spaced(value) != value}
+
+
+def rule_of(params: Mapping[str, Any]) -> str | None:
+    """
+    The fold rule a recorded step used (None: none, its mapping lists every change). Two rules were recorded under
+    :data:`LEGACY_FOLD` on 30 October 2026: the first (3ea6198, 747ccc3), then the second (191a550 on), whose records
+    alone hold ``values_fp``; each replays as it wrote.
+    """
+    rule = params.get("fold")
+    return _FIRST_FOLD if rule == LEGACY_FOLD and "values_fp" not in params else rule
+
+
+def _first_fold(counts: Mapping[str, int]) -> dict[str, str]:
+    """
+    The first rule recorded under :data:`LEGACY_FOLD` (replays only): spaces, and a case variant of a group's spelling
+    (the most rows; on a tie capitalised, then lower case) whose differing words hold 4 letters or more, each in lower
+    case, capitals or capitalised; in a group written in lower case or capitals only, any variant under
+    :data:`CASE_SHARE` of its rows. No chain.
+    """
+    takes: dict[str, str] = {}
+    for rows in _groups(counts):
+        spelling, total = (
+            min(rows, key=lambda s: (-rows[s], _first_case_rank(s), s)),
+            sum(rows.values()),
+        )
+        cased = all(s in (s.lower(), s.upper()) for s in rows)
+        for variant, n in rows.items():
+            free = _case_free(variant, spelling) or (cased and n < CASE_SHARE * total)
+            takes[variant] = spelling if free else variant
+    return {value: takes[_spaced(value)] for value in counts if takes[_spaced(value)] != value}
+
+
+def _first_case_rank(text: str) -> int:
+    letters = [c for c in text if c.isalpha()]
+    if letters and letters[0].isupper() and any(c.islower() for c in letters):
+        return 0
+    return 1 if text == text.lower() else 2
+
+
+def _case_free(variant: str, spelling: str) -> bool:
+    def plain_case(word: str) -> bool:
+        return word in (word.lower(), word.upper(), word.capitalize())
+
+    return all(
+        a == b or (sum(c.isalpha() for c in a) >= 4 and plain_case(a) and plain_case(b))
+        for a, b in zip(_words(variant), _words(spelling), strict=False)
+    )
+
+
+def _legacy_fold(counts: Mapping[str, int]) -> dict[str, str]:
+    """The second rule recorded under :data:`LEGACY_FOLD` (replays only): spaces, and a word's case variant in a
+    typo's number of rows."""
     meaningful = any(
         _inner_capital(value) for value in counts
     )  # the column's capitals carry meaning
@@ -262,8 +418,8 @@ def _apart(a: str, b: str) -> bool:
 
 
 def _ascii(text: str) -> str:
-    """Accents set aside, case kept (Mère, Mere; but HFrEF, HFREF stay two tokens)."""
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    """Accents set aside, case and every other character kept (Mère, Mere; HFrEF and HFREF, κ and λ stay apart)."""
+    return _unaccented(text)
 
 
 def _into_word(a: str, b: str) -> int:
@@ -295,6 +451,7 @@ def _first_letter(short: str, word: str) -> bool:
     """A one-letter code and a word of 3 letters or more it begins, which holds no digit, sign or Roman numeral."""
     return (
         len(short) == 1
+        and short.isascii()  # a Latin letter: a Greek one names a category (α, β, κ)
         and short.isalpha()
         and sum(c.isalpha() for c in word) >= 3
         and not _marked(word)
@@ -327,7 +484,7 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
             if variant != spelling and variant not in offers:
                 offers[variant] = Offer(variant, spelling, CAPITALS)
     for short in order:
-        if len(short) != 1 or not short.isalpha() or short in offers:
+        if len(short) != 1 or not short.isascii() or not short.isalpha() or short in offers:
             continue
         longer = {main[s] for s in order if len(s) > 1 and _key(s).startswith(_key(short))}
         if len(longer) != 1:
@@ -426,9 +583,17 @@ def clean_value(
 
 
 def _spellings(counts: Mapping[str, int], fold_rule: str | None) -> dict[str, str]:
-    if fold_rule not in (None, FOLD):
-        raise ValueError(f"unknown fold rule {fold_rule!r}; the rule is {FOLD!r}")
-    return fold(counts) if fold_rule == FOLD else {}
+    rules = {FOLD: fold, LEGACY_FOLD: _legacy_fold, _FIRST_FOLD: _first_fold}
+    if fold_rule is not None and fold_rule not in rules:
+        raise ValueError(
+            f"unknown fold rule {fold_rule!r}; the rules are {FOLD!r} and {LEGACY_FOLD!r}"
+        )
+    return rules[fold_rule](counts) if fold_rule is not None else {}
+
+
+def _chains(fold_rule: str | None) -> bool:
+    """Whether a clean value that is itself given another is followed: from the second rule of 30 October 2026 on."""
+    return fold_rule in (FOLD, LEGACY_FOLD)
 
 
 def plan(
@@ -441,7 +606,7 @@ def plan(
     """Each value as written that a recode changes -> its clean value (None: missing). ``fold_rule`` None: no fold and
     no chain (a step recorded before the fold rule listed every change)."""
     spellings, kept = _spellings(counts, fold_rule), set(kept)
-    chain = fold_rule is not None
+    chain = _chains(fold_rule)
     full = {value: clean_value(value, spellings, mapping, kept, chain=chain) for value in counts}
     return {value: clean for value, clean in full.items() if clean != value}
 
@@ -452,12 +617,14 @@ def outcome(
     meanings: Mapping[str, str],
     *,
     kept: Collection[str] = (),
+    fold_rule: str | None = FOLD,
 ) -> dict[str, tuple[str | None, str | None]]:
-    """Each value as written -> what it becomes, and what missing means when it becomes missing (the preview)."""
-    spellings, kept = fold(counts), set(kept)
+    """Each value as written -> what it becomes, and what missing means when it becomes missing (the preview; of a
+    recorded step, with the rule it recorded)."""
+    spellings, kept = _spellings(counts, fold_rule), set(kept)
     out: dict[str, tuple[str | None, str | None]] = {}
     for value in counts:
-        clean, _, last = resolve(value, spellings, mapping, kept)
+        clean, _, last = resolve(value, spellings, mapping, kept, chain=_chains(fold_rule))
         out[value] = (clean, meanings.get(last) if clean is None and last is not None else None)
     return out
 
@@ -496,10 +663,11 @@ def recode_column(
     return out, sum(1 for value in counts if value not in full)
 
 
-def values_fp(counts: Mapping[str, int]) -> str:
-    """A fingerprint of the values as written and the spelling the fold gives each: the replay says when the values
-    it reads differ from those the step saw (a value swapped for another, a spelling that lost its majority)."""
-    spellings = fold(counts)
+def values_fp(counts: Mapping[str, int], fold_rule: str | None = FOLD) -> str:
+    """A fingerprint of the values as written and the spelling the fold gives each (with the rule a step recorded):
+    the replay says when the values it reads differ from those the step saw (a value swapped for another; under the
+    rules of 30 October 2026, a spelling that lost its majority)."""
+    spellings = _spellings(counts, fold_rule)
     text = json.dumps(sorted((v, spellings.get(v, v)) for v in counts), ensure_ascii=False)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -509,12 +677,13 @@ def values_fp(counts: Mapping[str, int]) -> str:
 
 
 def new_choices() -> dict[str, Any]:
-    return {"mapping": {}, "kinds": {}, "kept": [], "meanings": {}, "reasons": {}}
+    # "ai_by": who proposed each AI choice ({provider, model, where, values_sent, values_held}), recorded with the step
+    return {"mapping": {}, "kinds": {}, "kept": [], "meanings": {}, "reasons": {}, "ai_by": {}}
 
 
 def _drop(choices: MutableMapping[str, Any], key: str) -> None:
-    for part in ("mapping", "kinds", "meanings"):
-        choices[part].pop(key, None)
+    for part in ("mapping", "kinds", "meanings", "ai_by"):
+        choices.setdefault(part, {}).pop(key, None)
 
 
 def give(
@@ -567,8 +736,15 @@ def unset_missing(choices: MutableMapping[str, Any], counts: Mapping[str, int], 
         choices["kept"].append(value)
 
 
-def tick(choices: MutableMapping[str, Any], counts: Mapping[str, int], offer: Offer) -> None:
-    """An offer ticked: its spelling's choice, for the whole group; the members' own choices that agree with it go."""
+def tick(
+    choices: MutableMapping[str, Any],
+    counts: Mapping[str, int],
+    offer: Offer,
+    *,
+    by: Mapping[str, Any] | None = None,
+) -> None:
+    """An offer ticked: its spelling's choice, for the whole group; the members' own choices that agree with it go.
+    ``by``: who proposed an AI offer ({provider, model, where, values_sent, values_held}), kept with the choice."""
     spellings = fold(counts)
     for value in counts:
         same = value != offer.value and spellings.get(value, value) == offer.value
@@ -580,15 +756,38 @@ def tick(choices: MutableMapping[str, Any], counts: Mapping[str, int], offer: Of
     choices["kinds"][offer.value] = offer.why
     if offer.clean is None and offer.meaning:
         choices["meanings"][offer.value] = offer.meaning
-    if offer.why == AI and offer.reason and offer.clean is not None:
-        choices["reasons"].setdefault(
-            offer.clean, offer.reason
-        )  # a grouping's reason, pre-filled for the user
+    if offer.why == AI and by:
+        choices.setdefault("ai_by", {})[offer.value] = dict(by)
 
 
-def untick(choices: MutableMapping[str, Any], offer: Offer) -> None:
-    if choices["mapping"].get(offer.value, _NONE) == offer.clean:
-        _drop(choices, offer.value)
+def untick(choices: MutableMapping[str, Any], counts: Mapping[str, int], offer: Offer) -> None:
+    """An offer unticked, as ``tick`` ticks it: its spelling's choice goes, and the members' own choices that give what
+    it proposes (a row given that clean value in the table), so that it reads unticked."""
+    spellings = fold(counts)
+    for value in (offer.value, *counts):
+        if (
+            spellings.get(value, value) == offer.value
+            and choices["mapping"].get(value, _NONE) == offer.clean
+        ):
+            _drop(choices, value)
+
+
+def swaps(counts: Mapping[str, int], choices: Mapping[str, Any]) -> list[str]:
+    """The values whose choices lead back to themselves (Oui → Yes → Oui): the copy would swap their names, not merge
+    them; the page asks for one name first."""
+    spellings, mapping, kept = fold(counts), choices["mapping"], set(choices["kept"])
+    found = []
+    for value in counts:
+        node, path = value, [value]
+        clean, key = _hop(value, spellings, mapping, kept)
+        while key is not None and clean is not None and clean != node:
+            if clean in path:
+                found.append(value)
+                break
+            path.append(clean)
+            node = clean
+            clean, key = _hop(node, spellings, mapping, kept)
+    return found
 
 
 def ticked(choices: Mapping[str, Any], counts: Mapping[str, int], offer: Offer) -> bool:
@@ -650,9 +849,10 @@ def groupings(
 ) -> dict[str, list[str]]:
     """
     The clean values that group categories: a spelling merged by hand (a choice, not an offer) with another that
-    something naming a category sets apart (``_apart``: NYHA IV into III, Stage IVA into IV), unless an offer would
-    join them (a first letter, a variant); or two spellings that each hold :data:`GROUPING_SHARE` of the rows. Clean
-    value -> the spellings it merges.
+    something naming a category sets apart (``_apart``: NYHA IV into III, Stage IVA into IV; ``_named_apart``:
+    Unstable angina into Stable angina, Type 2 diabetes into Diabetes), unless an offer would join them (a first
+    letter, a variant); or two spellings that each hold :data:`GROUPING_SHARE` of the rows. Clean value -> the
+    spellings it merges.
     """
     spellings, kept = fold(counts), set(kept)
     held: dict[str, int] = defaultdict(int)
@@ -674,7 +874,7 @@ def groupings(
         if _key(a) == _key(b):
             return False  # one word, written two ways
         big = min(held.get(a, 0), held.get(b, 0)) >= GROUPING_SHARE * total
-        return big or (_apart(a, b) and not _related(a, b))
+        return big or ((_apart(a, b) or _named_apart(a, b)) and not _related(a, b))
 
     return {
         clean: sorted(into[clean])
@@ -701,7 +901,7 @@ def changes(
     by_kind: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     missing: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for value, n in counts.items():
-        clean, first, last = resolve(value, spellings, mapping, kept, chain=fold_rule is not None)
+        clean, first, last = resolve(value, spellings, mapping, kept, chain=_chains(fold_rule))
         if clean == value:
             continue
         kind = (
@@ -743,33 +943,136 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     }
     out["folds put back as written"] = len(params.get("kept") or ())
     grouped = params.get("groupings") or {}
+    # a reason is free text, which may name the values: printed only beside values each held by 5 rows or more
     out["groupings"] = [
         f"{', '.join(g['values'])} grouped as {clean}: {g['reason']}"
         if isinstance(g, Mapping) and g.get("each_5_rows")
-        else f"{len(g.get('values', ())) if isinstance(g, Mapping) else 'some'} values grouped: "
-        f"{g.get('reason', '') if isinstance(g, Mapping) else g}"
+        else f"{len(g.get('values', ())) if isinstance(g, Mapping) else 'some'} values grouped (the reason is in "
+        "the trace)"
         for clean, g in grouped.items()
     ]
+    proposed: dict[tuple[str, str], int] = defaultdict(int)
+    for by in (params.get("ai_by") or {}).values():
+        if isinstance(by, Mapping):
+            proposed[(str(by.get("provider", "")), str(by.get("model", "")))] += 1
+    if proposed:  # who proposed, how many choices: never which values
+        out["proposed by the AI engine"] = [
+            f"{provider or 'unknown provider'} {model or 'unknown model'}: {n} value{'s' if n != 1 else ''}"
+            for (provider, model), n in sorted(proposed.items())
+        ]
+    out.pop("ai_by", None)
     return out
 
 
 def free_text(counts: Mapping[str, int]) -> bool:
-    """Values that read as free text (long, or several words each): the AI engine is not asked about them."""
+    """
+    Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
+    held by fewer than 5 rows cover half the rows), or an identifier (many values, none frequent: names, numbers).
+    """
     if not counts:
         return False
     lengths = [len(_spaced(v)) for v in counts]
     wordy = sum(1 for v in counts if len(v.split()) >= 5)
-    return sum(lengths) / len(lengths) > 40 or wordy > len(counts) / 2
+    rows = sum(counts.values())
+    rare = sum(n for n in counts.values() if n < 5)
+    identifier = len(counts) > 30 and max(counts.values()) < 0.05 * rows
+    return (
+        sum(lengths) / len(lengths) > 40
+        or wordy > len(counts) / 2
+        or rare * 2 >= rows
+        or identifier
+    )
+
+
+def _ai_refused(value: str, clean: str) -> bool:
+    """
+    Whether a proposal of the AI engine joins what the rules keep apart: a number, a sign or two Roman numerals (Type
+    1 and 2, NYHA II and III); words that name two categories (``_named_apart``); a value that is no value of its own
+    on either side (Not tested and Negative, Refused and Unknown, Homme and unknown).
+    """
+    a, b = _key(value), _key(clean)
+    return (
+        _numbered_apart(value, clean)
+        or a in _NOT_VALUES
+        or b in _NOT_VALUES
+        or _named_apart(value, clean)
+    )
+
+
+def _named_apart(value: str, clean: str) -> bool:
+    """
+    Whether the words of two values name two categories: a word in common and others apart (Stage IIIA and IIIB,
+    Hepatitis B and C, Ex-smoker and Current smoker), unless those differ by a typo (a letter, in words of 5 letters
+    or more: Diabetes melitus); two codes a letter or two apart (HFmrEF and HFrEF, pT1a and pT1b, IgG and IgM); two
+    units (mg/dL and mmol/L); opposites (Positive and Negative); a prefix that negates or opposes (Unstable and
+    Stable, Hypotension and Hypertension); a broader class, or a word inside the other (STEMI and MI, Type 2 diabetes
+    and Diabetes, Female and Male). A translation, a synonym or an abbreviation crosses none (Femme and Female, Oui
+    and Yes, MI and Myocardial infarction).
+    """
+    a, b = _key(value), _key(clean)
+    if a == b:
+        return False
+    words_a, words_b = set(a.split()), set(b.split())
+    only_a, only_b = words_a - words_b, words_b - words_a
+    if all(w.isdigit() or _ROMAN.fullmatch(w) for w in (*only_a, *only_b)) and not _numbered_apart(
+        value, clean
+    ):
+        only_a = only_b = set()  # one number written two ways (NYHA 3 and NYHA III)
+    typo = (
+        len(only_a) == len(only_b) == 1
+        and min(len(w) for w in (*only_a, *only_b)) >= 5
+        and OSA.distance(next(iter(only_a)), next(iter(only_b))) == 1
+    )
+    if words_a & words_b and only_a and only_b and not typo:
+        return True
+    codes = all(_code(t) for t in _words(value)) and all(_code(t) for t in _words(clean))
+    if (codes and OSA.distance(a, b) <= 2) or ("/" in a and "/" in b):
+        return True  # two codes a letter or two apart; two ratios (units: mg/dL and mmol/L)
+    if frozenset((a, b)) in _OPPOSITES or words_a < words_b or words_b < words_a:
+        return True
+    if min(len(a), len(b)) >= 2 and (a.endswith(b) or b.endswith(a)):
+        return True
+
+    def stems(word: str) -> set[str]:
+        return {
+            word[len(p) :]
+            for p in _OPPOSITE_PREFIXES
+            if word.startswith(p) and len(word) - len(p) >= 4
+        }
+
+    return any(stems(x) & stems(y) for x in words_a for y in words_b if x != y)
+
+
+def _code(token: str) -> bool:
+    """A code rather than a word: a digit, or a capital after its first character (HFmrEF, pT1a, IgG, MI, NYHA); Oui,
+    Yes and Female are words."""
+    return any(c.isdigit() for c in token) or any(c.isupper() for c in token[1:])
 
 
 def _numbered_apart(a: str, b: str) -> bool:
-    """Whether a number, a sign or two different Roman numerals set two values apart (Type 1 and 2, HER2- and HER2+,
-    NYHA II and III): a translation or an abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where
-    "MI" reads as a numeral only when the other value holds one too)."""
-    digits = re.sub(r"\D", "", a) != re.sub(r"\D", "", b)
-    roman_a, roman_b = sorted(_ROMAN.findall(a.casefold())), sorted(_ROMAN.findall(b.casefold()))
+    """Whether a number or a sign sets two values apart (Type 1 and 2, NYHA II and III, HER2- and HER2+), a Roman
+    numeral read as the number it names (NYHA 3 and NYHA III, Grade 2 and II are one class): a translation or an
+    abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where "MI" reads as a numeral only when the
+    other value holds a number too)."""
+    digits_a, digits_b = (
+        [int(n) for n in re.findall(r"\d+", a)],
+        [int(n) for n in re.findall(r"\d+", b)],
+    )
+    roman_a, roman_b = _ROMAN.findall(a.casefold()), _ROMAN.findall(b.casefold())
+    if digits_b or roman_b:
+        digits_a += [_roman_value(r) for r in roman_a]
+    if digits_a or roman_a:
+        digits_b += [_roman_value(r) for r in roman_b]
     signs = sorted(_SIGNS.findall(a)) != sorted(_SIGNS.findall(b))
-    return digits or signs or (bool(roman_a) and bool(roman_b) and roman_a != roman_b)
+    return signs or sorted(digits_a) != sorted(digits_b)
+
+
+def _roman_value(numeral: str) -> int:
+    values = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+    total = 0
+    for here, after in zip(numeral, [*numeral[1:], ""], strict=True):
+        total += -values[here] if after and values[after] > values[here] else values[here]
+    return total
 
 
 def ai_offers(
@@ -781,9 +1084,11 @@ def ai_offers(
 ) -> tuple[Offer, ...]:
     """
     The AI engine's proposals, read: only a value it was sent (as written, or its spelling), given another value or a
-    short standard name, never to missing, never across a number, a sign or a Roman numeral (NYHA II and III, Type
-    1 and 2: the prompt forbids the rest, and the user ticks each); one per value, in the order of the values' rows, those an offer of the rules already names (``taken``)
-    left out. The model's text is kept to a short reason, drawn as text.
+    short standard name, never to missing, never across what the rules keep apart (``_ai_refused``: the prompt
+    forbids the rest, and the user ticks each); one per value, those an offer of the rules already names (``taken``)
+    left out. A value proposed both ways (Oui → Yes, Yes → Oui) or along a chain (MALE → Male → M) keeps one direction,
+    into the value holding the most rows, so that ticking them all never swaps two names. The model's text is kept to a
+    short reason, drawn as text. In the order of the values' rows.
     """
     spellings = fold(counts)
     allowed = {spellings.get(v, v) for v in sent if v in counts}
@@ -797,11 +1102,27 @@ def ai_offers(
         clean = " ".join(str(proposal.get("clean", "")).split())
         if spelling not in allowed or spelling in taken or spelling in found:
             continue
-        if not clean or len(clean) > 60 or clean == spelling or _numbered_apart(spelling, clean):
+        if not clean or len(clean) > 60 or clean == spelling or _ai_refused(spelling, clean):
             continue
-        reason = " ".join(str(proposal.get("reason", "")).split())[:80]
+        reason = _shortened(" ".join(str(proposal.get("reason", "")).split()), 80)
         found[spelling] = Offer(spelling, clean, AI, reason=reason)
-    return tuple(sorted(found.values(), key=lambda o: (-held[o.value], o.value)))
+    kept: dict[str, Offer] = {}
+    into: set[str] = set()
+    for offer in sorted(
+        found.values(), key=lambda o: (-held.get(o.clean or "", 0), -held[o.value], o.value)
+    ):
+        if offer.value not in into and offer.clean not in kept:
+            kept[offer.value] = offer
+            into.add(offer.clean or "")
+    return tuple(sorted(kept.values(), key=lambda o: (-held[o.value], o.value)))
+
+
+def _shortened(text: str, limit: int) -> str:
+    """At most ``limit`` characters, cut after a whole word."""
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0] if " " in text[: limit - 1] else text[: limit - 1]
+    return cut.rstrip(" ,;:") + "…"
 
 
 def recoded_columns(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
@@ -851,6 +1172,7 @@ def choices_of(record: Mapping[str, Any] | None) -> dict[str, Any]:
             c: (g.get("reason", "") if isinstance(g, Mapping) else str(g))
             for c, g in grouped.items()
         },
+        "ai_by": {k: dict(v) for k, v in (record.get("ai_by") or {}).items() if k in mapping},
     }
 
 
@@ -875,7 +1197,7 @@ def replaceable(
             source,
             target,
             record.get("mapping") or {},
-            fold_rule=record.get("fold"),
+            fold_rule=rule_of(record),
             kept=record.get("kept") or (),
             replaces=True,
         )
@@ -899,8 +1221,8 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
     """
     The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
     (source -> copy) left out: those with values to check first, then the cleaned ones, then the others, each in the
-    dataset's order. Variants and spellings one letter apart are not looked for here (they compare the spellings two
-    by two): only in the open variable.
+    dataset's order. The count of values to check holds every offer the page makes, variants and spellings one letter
+    apart included (rapidfuzz keeps the two-by-two comparison to milliseconds).
     """
     recoded = {s: t for s, t in (recoded or {}).items() if s in df.columns and t in df.columns}
     copies = set(recoded.values())
@@ -917,7 +1239,9 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
         counts = level_counts(values)
         if not 2 <= len(counts) <= MAX_VALUES:
             continue
-        hints = suggest(counts, near=False)
+        hints = suggest(
+            counts
+        )  # variants and spellings one letter apart too: what the page will offer
         into = recoded.get(str(column), "")
         found.append(
             (
@@ -943,6 +1267,7 @@ __all__ = [
     "FOLD",
     "GROUPING",
     "GROUPING_SHARE",
+    "LEGACY_FOLD",
     "MAX_VALUES",
     "MEANINGS",
     "MISSING_CODE",
@@ -979,8 +1304,10 @@ __all__ = [
     "replaceable",
     "report_params",
     "resolve",
+    "rule_of",
     "sort_key",
     "suggest",
+    "swaps",
     "tick",
     "ticked",
     "unset_missing",

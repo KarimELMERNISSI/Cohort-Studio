@@ -1,17 +1,18 @@
 """
 Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
-written into a new column beside the original, which is kept (enrich.recode). Values that differ by spaces, and words
-that differ by capitals in a typo's number of rows, take their group's spelling (the fold rule, recorded as a rule);
-a one-letter code, a variant (accents, British and American spellings), a spelling one letter apart, a case variant
-and a code that may mean missing are offered, never applied. A value set to missing says what missing means there; a
-grouping of categories says why. The page shows each value's own rows, on all rows, never an outcome beside them:
-merging values after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``,
-which the replay redoes; what it records always gives the preview (enrich.recode.recorded).
+written into a new column beside the original, which is kept (enrich.recode). A value written with extra spaces takes
+its spelling with the spaces collapsed (the fold rule, recorded as a rule); a case variant, a one-letter code, a variant
+(accents, British and American spellings), a spelling one letter apart, a code that may mean missing and what the AI
+engine proposes are offered, never applied. A value set to missing says what missing means there; a grouping of
+categories says why. The page shows each value's own rows, on all rows, never an outcome beside them: merging values
+after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``, which the replay
+redoes; what it records always gives the preview (enrich.recode.recorded).
 
 The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column,
 changed only through enrich.recode (give, tick, untick, unset_missing); the widgets that edit them carry a short id of
 the dataset's trace and fold what they change into it as they change, so that no choice is lost on a page change and
-none follows the user to another dataset.
+none follows the user to another dataset. The table is drawn from the store: it reads each edit once, and starts
+again from the store whenever the store and what the browser shows of its edits differ.
 """
 
 from __future__ import annotations
@@ -64,18 +65,21 @@ from enrich.recode import (
     recorded,
     replaceable,
     resolve,
+    rule_of,
     sort_key,
     suggest,
+    swaps,
     tick,
     ticked,
     unset_missing,
     untick,
     values_fp,
 )
-from manage.ai_payload import category_values, provider_label
+from manage.ai_payload import category_values, host_of, on_this_machine, provider_label, recipient
 from ui.components.levels import show_level
 from ui.components.text import plain
 from ui.quality_charts import chart_config
+from ui.services import engine_model, running_engine
 from ui.state import get_state
 from ui.theme import OKABE_ITO
 
@@ -85,15 +89,10 @@ DONE = "clean_done"  # what the last Apply did, said once after the rerun
 COLUMN = "clean_column"  # the variable open in the editor, declared in ui.keys
 _BAR = OKABE_ITO[0]
 _MISSING_BAR = "rgba(128, 140, 145, 0.55)"
-WRITTEN, ROWS, CLEAN, MISSING, MEANS, WHY = (
-    "Value as written",
-    "Rows",
-    "Clean value",
-    "Missing",
-    "Means",
-    "Why",
-)
-NOT_MISSING = "—"  # the Means of a value that is not set to missing
+WRITTEN, ROWS, CLEAN, MISSING, WHY = "Value as written", "Rows", "Clean value", "Missing", "Why"
+# the Missing column: not missing, missing and what it means, missing until the user says what it means, a result
+NOT_MISSING = "—"
+ASK = "missing: say what it means"
 A_TO_Z, MOST_ROWS = "A-Z", "Most rows"
 # what each kind of choice reads on the page (the stored ids never change)
 WORDS = {
@@ -101,21 +100,25 @@ WORDS = {
     SPACES: "spaces",
     SPACES_AND_CAPITALS: "spaces and capitals",
     FIRST_LETTER: "first-letter code",
-    VARIANT: "accents or spelling variant",
-    SPELLING: "one letter apart: check",
-    CLOSE: "one letter apart: check first",
+    VARIANT: "spelling variant",
+    SPELLING: "one letter apart",
+    CLOSE: "one letter apart",
     MISSING_CODE: "code for missing",
     CHOSEN: "chosen",
     GROUPING: "grouping",
-    AI: "proposed by the AI engine",
+    AI: "AI proposal",
 }
-# the offers, in groups, each with its "Tick all"
+# the offers, in groups; "Tick all" only where each offer is the same value written another way, never where two
+# values may be two categories (one letter apart, the AI engine's), each of which the user checks one by one
 GROUPS = (
-    ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER)),
-    ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE)),
-    ("missing", "Codes that may mean missing", (MISSING_CODE,)),
-    ("ai", "Proposed by the AI engine: check that both name the same category", (AI,)),
+    ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER), True),
+    ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE), False),
+    ("missing", "Codes that may mean missing", (MISSING_CODE,), True),
+    ("ai", "Proposed by the AI engine: check that both name the same category", (AI,), False),
 )
+# a group's title already says why: its pills do not repeat it
+SAID = frozenset({SPELLING, CLOSE, MISSING_CODE})
+_UNSEEN = object()  # a cell of the table no earlier edit set
 
 
 def _rows(n: int) -> str:
@@ -154,33 +157,53 @@ def _again(column: str) -> None:
     _choices(column)["revision"] += 1
 
 
+def _cell(value: Any) -> Any:
+    """A cell as the browser sends it: a cleared one comes back None or NaN."""
+    return None if value is None or (isinstance(value, float) and pd.isna(value)) else value
+
+
+def _edits(key: str) -> dict[int, dict[str, Any]]:
+    return {
+        int(row): {name: _cell(v) for name, v in cells.items()}
+        for row, cells in ((st.session_state.get(key) or {}).get("edited_rows") or {}).items()
+    }
+
+
 def _table_changed(column: str, key: str, values: list[str], counts: dict[str, int]) -> None:
-    """The table's edits into the store, as they are made (each edit is read against what the table showed)."""
+    """
+    The table's last edit into the store. The browser sends every edit made since the table was drawn, by row: only
+    the cells that changed since the last call are read, so that an earlier edit is never read again over a later one
+    (which, read in row order against a store the later one already changed, could undo it).
+    """
     choices = _choices(column)
     shown = choices.get("shown") or {}
-    for row, changed in ((st.session_state.get(key) or {}).get("edited_rows") or {}).items():
-        value = values[int(row)]
-        clean, missing, means = shown.get(value, (value, False, NOT_MISSING))
+    edits = _edits(key)
+    seen = choices.get("seen") or {}
+    before = seen.get("rows", {}) if seen.get("key") == key else {}
+    choices["seen"] = {"key": key, "rows": edits}
+    for row, cells in edits.items():
+        changed = {
+            name: v for name, v in cells.items() if before.get(row, {}).get(name, _UNSEEN) != v
+        }
+        if not changed or row >= len(values):
+            continue
+        value = values[row]
+        clean, cell = shown.get(value, (value, NOT_MISSING))
         typed = changed.get(CLEAN, clean)
-        clean = (
-            "" if typed is None or pd.isna(typed) else str(typed).strip()
-        )  # a cleared cell comes back NaN
-        means = changed.get(MEANS, means)
-        ticked_missing = changed.get(MISSING)
-        if MEANS in changed and means == RESULT:
+        clean = "" if typed is None else str(typed).strip()
+        cell = changed.get(MISSING, cell)
+        if MISSING in changed and cell in MEANINGS:
+            give(choices, counts, value, None, meaning=cell)  # set to missing, and what it means
+        elif MISSING in changed and cell == ASK:
+            give(choices, counts, value, None)  # missing: Apply waits for what it means
+        elif MISSING in changed and cell == RESULT:
             give(
                 choices, counts, value, value
             )  # a result (ND: not detected): kept as a value, as written
-        elif CLEAN in changed and clean and not ticked_missing:
+        elif CLEAN in changed and clean:
             give(choices, counts, value, clean)  # a clean value typed: a value
-        elif MEANS in changed and means in MEANINGS:
-            give(
-                choices, counts, value, None, meaning=means
-            )  # a meaning chosen sets the value to missing
-        elif (MEANS in changed and means == NOT_MISSING) or ticked_missing is False:
+        elif MISSING in changed and cell == NOT_MISSING:
             unset_missing(choices, counts, value)
-        elif ticked_missing:
-            give(choices, counts, value, None, meaning=means if means in MEANINGS else None)
         elif CLEAN in changed:
             give(choices, counts, value, clean)  # cleared: Apply waits for a clean value
 
@@ -192,9 +215,9 @@ def _ticked(column: str, key: str, offers: dict[str, Offer], counts: dict[str, i
     picked = set(st.session_state.get(key) or [])
     for value, offer in offers.items():
         if value in picked and not ticked(choices, counts, offer):
-            tick(choices, counts, offer)
+            tick(choices, counts, offer, by=_proposed_by(column) if offer.why == AI else None)
         elif value not in picked and ticked(choices, counts, offer):
-            untick(choices, offer)
+            untick(choices, counts, offer)
     _again(column)
 
 
@@ -246,8 +269,9 @@ def _shown(
             why = "kept as written"
         elif first is not None and first == value:
             why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
-        elif value != spelling:
-            why = f"follows {show_level(spelling)}"
+        elif value != spelling:  # folded: why, or the spelling whose choice it follows
+            folded = WORDS.get(reasons.get(value, SPACES), SPACES)
+            why = folded if clean == spelling else f"follows {show_level(spelling)}"
         elif first is not None:
             why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
         else:
@@ -315,7 +339,10 @@ def _offer_groups(
     spellings = suggest(counts, near=False).spellings
     for value, n in counts.items():
         held[spellings.get(value, value)] += n
-    for name, title, kinds in GROUPS:
+    many = len(offers) > 8
+    # many offers: a box that scrolls, so that the table, which each offer fills, stays near
+    area = st.container(height=260, border=False) if many else st.container()
+    for name, title, kinds, all_at_once in GROUPS:
         group = {o.value: o for o in offers if o.why in kinds}
         if not group:
             continue
@@ -323,39 +350,44 @@ def _offer_groups(
         def label(value: str, group: dict[str, Offer] = group) -> str:
             offer = group[value]
             clean = as_code(show_level(offer.clean)) if offer.clean is not None else "missing"
-            why = (
-                plain(offer.reason, limit=80)
-                if offer.why == AI and offer.reason
-                else WORDS[offer.why]
-            )
-            return f"{as_code(show_level(value))} → {clean} · {why} · {_rows(held.get(value, 0))}"
+            if offer.why == AI:
+                why = f" · {plain(offer.reason, limit=80)}" if offer.reason else ""
+            else:
+                why = "" if offer.why in SAID else f" · {WORDS[offer.why]}"
+            return f"{as_code(show_level(value))} → {clean}{why} · {_rows(held.get(value, 0))}"
 
-        key = f"clean_offers::{scope}::{column}::{name}::{choices['revision']}"
-        left = sum(1 for o in group.values() if not ticked(choices, counts, o))
-        with st.container(
-            horizontal=True, vertical_alignment="center", gap="small"
-        ):  # the title, then Tick all
-            st.caption(title)
-            st.button(
-                f"Tick all {len(group)}",
-                key=f"clean_tick_all::{scope}::{column}::{name}",
-                type="tertiary",
-                on_click=_tick_all,
-                args=(column, group, counts),
-                disabled=not left,
+        on = [v for v, o in group.items() if ticked(choices, counts, o)]
+        # drawn from the store (default=), never kept: its key follows the store's revision and what it shows ticked,
+        # so that an edit of the table (which leaves the revision) can never leave a pill stale, to be undone by the
+        # next click on another
+        drawn = hashlib.sha256("\x1f".join(on).encode()).hexdigest()[:8]
+        key = f"clean_offers::{scope}::{column}::{name}::{choices['revision']}::{drawn}"
+        with area:
+            st.pills(  # the whole width: the pills wrap
+                title,
+                list(group),
+                selection_mode="multi",
+                default=on,
+                format_func=label,
+                key=f"clean_offers::{scope}::{column}::{name}::{choices['revision']}::{drawn}",
+                on_change=_ticked,
+                args=(column, key, group, counts),
             )
-        st.pills(  # the whole width: the pills wrap
-            title,
-            list(group),
-            selection_mode="multi",
-            default=[v for v, o in group.items() if ticked(choices, counts, o)],
-            format_func=label,
-            # drawn from the store (default=), not kept: its key changes with each revision of the choices
-            key=f"clean_offers::{scope}::{column}::{name}::{choices['revision']}",
-            on_change=_ticked,
-            args=(column, key, group, counts),
-            label_visibility="collapsed",
-        )
+            if all_at_once and len(group) > 1:
+                left = len(group) - len(on)
+                st.button(
+                    f"Tick all {len(group)}"
+                    if not on
+                    else f"Tick the other {left}"
+                    if left
+                    else "All ticked",
+                    key=f"clean_tick_all::{scope}::{column}::{name}",
+                    type="tertiary",
+                    icon=":material/done_all:",
+                    on_click=_tick_all,
+                    args=(column, group, counts),
+                    disabled=not left,
+                )
     st.caption(
         f"Ticking fills the table; the data change when you {into}. A one-letter code, a variant, a spelling one "
         "letter apart or a code for unknown can name a category of its own: check what it means in the source first."
@@ -477,20 +509,30 @@ def category_editor(
                 help="Undo the fold or a choice: the values stay as they are written.",
             )
         choices["shown"] = {
-            v: ("" if c is None else c, c is None, (m or NOT_MISSING) if c is None else NOT_MISSING)
+            v: ("" if c is None else c, (m or ASK) if c is None else NOT_MISSING)
             for v, (c, m, _) in shown.items()
         }
+        frame = pd.DataFrame(
+            {
+                WRITTEN: [show_level(v) for v in values],
+                ROWS: [counts[v] for v in values],
+                CLEAN: [choices["shown"][v][0] for v in values],
+                MISSING: [choices["shown"][v][1] for v in values],
+                WHY: [shown[v][2] for v in values],
+            }
+        )
+        # the browser paints the edits it made since the table was drawn over the values sent: where one no longer
+        # matches the store (a choice that changed other rows, a result kept as written), the table starts again
+        if any(
+            row >= len(values) or str(frame.at[row, name] or "") != str(v or "")
+            for row, cells in _edits(keys["editor"]).items()
+            for name, v in cells.items()
+            if name in (CLEAN, MISSING)
+        ):
+            _again(column)
+            keys = _keys(scope, column, choices["revision"], order)
         st.data_editor(
-            pd.DataFrame(
-                {
-                    WRITTEN: [show_level(v) for v in values],
-                    ROWS: [counts[v] for v in values],
-                    CLEAN: ["" if shown[v][0] is None else shown[v][0] for v in values],
-                    MISSING: [shown[v][0] is None for v in values],
-                    MEANS: [choices["shown"][v][2] for v in values],
-                    WHY: [shown[v][2] for v in values],
-                }
-            ),
+            frame,
             key=keys["editor"],
             on_change=_table_changed,
             args=(column, keys["editor"], values, counts),
@@ -498,18 +540,17 @@ def category_editor(
             width="stretch",
             disabled=[WRITTEN, ROWS, WHY],
             column_config={  # widths so that Why, the last, keeps the room it needs
-                WRITTEN: st.column_config.TextColumn(width=100, help="A hidden space shows as ␣."),
-                ROWS: st.column_config.NumberColumn(width=50, format="%d"),
+                WRITTEN: st.column_config.TextColumn(width=115, help="A hidden space shows as ␣."),
+                ROWS: st.column_config.NumberColumn(width=45, format="%d"),
                 CLEAN: st.column_config.TextColumn(
-                    width=95, help="The same clean value in several rows merges them."
+                    width=100, help="The same clean value in several rows merges them."
                 ),
-                MISSING: st.column_config.CheckboxColumn(
-                    width=75, help="Set this value to missing."
-                ),
-                MEANS: st.column_config.SelectboxColumn(
-                    options=[NOT_MISSING, *MEANINGS, RESULT],
+                WHY: st.column_config.TextColumn(width=120),
+                MISSING: st.column_config.SelectboxColumn(
+                    options=[NOT_MISSING, *MEANINGS, ASK, RESULT],
                     width=135,
-                    help="What missing means for this value; a code such as ND (not detected) can be a result.",
+                    help="Set a value to missing by saying what missing means there; a code such as ND (not "
+                    "detected) can be a result, kept as a value.",
                     required=True,
                 ),
             },
@@ -559,14 +600,16 @@ def category_editor(
             )
         gone = sum(counts[v] for v, c in full.items() if c is None)
         if gone:
+            them = "it" if gone == 1 else "them"
             st.caption(
-                f"{_rows(gone)} set to missing: complete-case analyses using {as_code(name)} leave them out, and a "
-                "multiple imputation fills them as missing at random given its variables. A value that means not "
+                f"{_rows(gone)} set to missing: complete-case analyses using {as_code(name)} leave {them} out, and a "
+                f"multiple imputation fills {them} as missing at random given its variables. A value that means not "
                 "applicable or declined is often better kept as a value."
             )
         for clean, parts in grouped.items():
+            listed = [as_code(show_level(p)) for p in parts]
             reason = st.text_input(
-                f"Why group {', '.join(as_code(show_level(p)) for p in parts)} as {as_code(show_level(clean))}?",
+                f"Why group {', '.join(listed[:-1])} and {listed[-1]} as {as_code(show_level(clean))}?",
                 value=choices["reasons"].get(clean, ""),
                 key=f"clean_reason::{scope}::{column}::{clean}",
                 max_chars=200,
@@ -602,21 +645,28 @@ def _blocked(
     if replaces and not replaceable(df, steps, column, target):
         return f"{as_code(target)} was changed by a later step: write the clean values into another column."
     if empty:
-        return f"Give {as_code(show_level(empty[0]))} a clean value, or tick Missing."
+        return f"Give {as_code(show_level(empty[0]))} a clean value, or set it to missing in the Missing column."
     if unmeant:
-        return f"Choose what missing means for {as_code(show_level(unmeant[0]))} in the table's Means column."
+        return f"Say what missing means for {as_code(show_level(unmeant[0]))} in the table's Missing column."
+    if swapped := swaps(counts, choices):
+        named = " and ".join(as_code(show_level(v)) for v in swapped[:2])
+        return (
+            f"{named} take each other's name: the copy would swap them, not merge them. Give both one clean value, or "
+            "keep one as written."
+        )
     if record is None:
         return "These choices cannot be recorded as shown: undo the last one."
     if waiting := [c for c in grouped if not choices["reasons"].get(c)]:
-        return f"Say below why the values grouped as {as_code(show_level(waiting[0]))} are grouped."
+        return f"Say below why {as_code(show_level(waiting[0]))} groups several categories."
     if not full:
         return "Nothing to change: every value keeps how it is written."
     last = last_record(steps, column, target) if replaces else None
     if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
-        then = choices_of(
-            last
-        )  # the copy is what that recode wrote: the same choices would write it again
-        before = outcome(counts, then["mapping"], then["meanings"], kept=then["kept"])
+        # the copy is what that recode wrote, with its rule: the same outcome would write it again
+        then = choices_of(last)
+        before = outcome(
+            counts, then["mapping"], then["meanings"], kept=then["kept"], fold_rule=rule_of(last)
+        )
         if before == outcome(counts, record[0], record[3], kept=record[2]):
             return f"Nothing changed since {as_code(target)} was written."
     return ""
@@ -682,30 +732,30 @@ def _apply(
         "values_fp": values_fp(counts),
         "target_fp": frame_fingerprint(new[[target]]),
     }
-    asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
-    if any(
-        kind == AI for kind in kinds.values()
-    ):  # who proposed: never the prompt, never the answer
-        params["ai"] = {"provider": asked.get("provider", ""), "model": asked.get("model", "")}
+    # who proposed each AI choice (provider, model, where it runs), kept when the copy is written again: never the
+    # prompt, never the answer
+    proposed = {k: choices.get("ai_by", {}).get(k, {}) for k, kind in kinds.items() if kind == AI}
+    if proposed:
+        params["ai_by"] = proposed
     summary = f"{len(after)} values instead of {len(counts)}" + (
         f", {_rows(gone)} set to missing" if gone else ""
     )
     wrote = state.commit_change(
         new, "recode_levels", params, f"Recoded {column} into {target}: {summary}"
     )
-    st.session_state.setdefault(STORE, {}).pop(column, None)  # the trace holds the choices now
+    # the trace holds the choices now: the store starts again from them, its revision moving on (the table, drawn
+    # again under a key it had before, would bring back the browser's edits)
+    st.session_state.setdefault(STORE, {})[column] = {
+        **choices_of(params),
+        "revision": choices["revision"] + 1,
+        "shown": {},
+    }
     if wrote:
         verb = "Wrote" if replaces else "Added"
         st.session_state[DONE] = f"{verb} {as_code(target)} beside {as_code(column)}: {summary}."
     else:
         st.session_state[DONE] = f"Nothing written: {as_code(target)} already holds these values."
     st.rerun()
-
-
-def _engine():
-    """The AI engine when it runs (Settings > AI engine), else None."""
-    engine = st.session_state.get("rag_manager")
-    return engine if engine is not None and getattr(engine, "initialized", False) else None
 
 
 def _ai_proposals(
@@ -724,59 +774,120 @@ def _ai_proposals(
 def _ask_ai(column: str, scope: str, counts: dict[str, int]) -> None:
     """
     "Ask the AI engine": a preview of exactly what is sent (the variable's name and its values, no count, no row;
-    to any recipient but an Ollama on this machine, only the values held by 5 rows or more), then a second click.
-    Never for free text.
+    to any recipient but an Ollama that runs its model on this machine, only the values held by 5 rows or more), then
+    Send, which closes it; what came back is said under the heading. Never for free text.
     """
     if free_text(counts):
         return
-    engine = _engine()
+    engine = running_engine()
+    popover = f"clean_ai_open::{scope}::{column}"
     with st.popover(
         "Ask the AI engine",
         type="tertiary",
         icon=":material/auto_awesome:",
         disabled=engine is None,
         help="Start the AI engine in Settings > AI engine first." if engine is None else None,
-    ):
-        if engine is None:
-            return
-        sent, held = category_values(counts, engine.provider, engine.base_url)
-        to = (
-            ", ".join(provider_label(r) for r in sorted(engine.recipients()))
-            or "the AI engine on this machine"
-        )
-        st.caption(
-            f"Sent to {plain(to)}: the name {as_code(column)} and these {len(sent):,} values, as written; no count, "
-            "no row."
-            + (
-                f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} "
-                "not sent."
-                if held
-                else ""
-            )
-        )
-        st.markdown(
-            " ".join(as_code(show_level(v)) for v in sent[:60]) + (" ..." if len(sent) > 60 else "")
-        )
-        if st.button(
-            "Send", key=f"clean_ai_send::{scope}::{column}", type="primary", disabled=not sent
-        ):
-            with st.spinner("The AI engine reads the values..."):
-                proposals, error = engine.suggest_category_groups(column, sent)
-            model = (
-                getattr(engine.llm, "model_name", None) or getattr(engine.llm, "model", None) or ""
-            )
-            st.session_state.setdefault(AI_STORE, {})[column] = {
-                "fp": values_fp(counts),
-                "sent": sent,
-                "proposals": proposals,
-                "error": error,
-                "provider": str(engine.provider or ""),
-                "model": str(model)[:80],
-            }
-            st.rerun()
+        key=popover,
+        on_change="rerun",  # its preview is made only while it is open; Send closes it
+    ) as box:
+        if engine is not None and box.open:
+            _preview(engine, column, scope, counts, popover)
     asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
-    if asked.get("error") and asked.get("fp") == values_fp(counts):
-        st.caption(f"The AI engine could not answer: {plain(asked['error'], limit=200)}")
+    if asked.get("fp") == values_fp(counts):  # what came back, once
+        if asked.get("error"):
+            st.caption(f"The AI engine could not answer: {plain(asked['error'], limit=200)}")
+        else:
+            n = len(_ai_proposals(column, counts, ()))
+            st.caption(
+                f"The AI engine proposed {n} correspondence{'s' if n != 1 else ''}: under Proposed by the AI engine."
+                if n
+                else "The AI engine proposed no correspondence the rules accept for these values."
+            )
+
+
+def _preview(engine, column: str, scope: str, counts: dict[str, int], popover: str) -> None:
+    """Exactly what Send gives the engine, then Send."""
+    model = engine_model(engine)
+    sent, held = category_values(counts, engine.provider, engine.base_url, model)
+    to, _ = _receiver(engine, model)
+    rare = (
+        f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} not sent."
+        if held
+        else ""
+    )
+    if not sent:
+        st.caption(f"No value is held by 5 rows or more: nothing can be sent to {plain(to)}.")
+        return
+    st.caption(
+        f"Send to {plain(to)}: the name {as_code(column)} and these {len(sent):,} values, as written, A to Z; no "
+        f"count, no row.{rare}"
+    )
+    st.dataframe(  # every value sent, as it is sent: drawn as text, never as markup
+        pd.DataFrame({"Values sent": [" ".join(v.split())[:80] for v in sent]}),
+        hide_index=True,
+        height=min(38 + 35 * len(sent), 260),
+    )
+    st.button(
+        "Send",
+        key=f"clean_ai_send::{scope}::{column}",
+        type="primary",
+        on_click=_send,
+        args=(column, counts, sent, held, popover),
+    )
+
+
+def _send(column: str, counts: dict[str, int], sent: list[str], held: int, popover: str) -> None:
+    """
+    Send, as the click's callback: the previewed values, to the engine that runs now, once the rule run again on it
+    gives the same values (an engine changed since the preview sends nothing); its answer into the store, said under
+    the heading, and the popover closed.
+    """
+    engine = running_engine()
+    st.session_state[popover] = False
+    if engine is None:
+        return
+    model = engine_model(engine)
+    if category_values(counts, engine.provider, engine.base_url, model) != (sent, held):
+        error, proposals = (
+            "the AI engine changed since the preview: open it again to see what is sent",
+            [],
+        )
+    else:
+        with st.spinner("The AI engine reads the values..."):
+            proposals, error = engine.suggest_category_groups(column, sent)
+    st.session_state.setdefault(AI_STORE, {})[column] = {
+        "fp": values_fp(counts),
+        "sent": sent,
+        "proposals": [
+            {k: str(p.get(k, ""))[:120] for k in ("value", "clean", "reason")} for p in proposals
+        ],
+        "error": error,
+        "provider": str(engine.provider or ""),
+        "model": model,
+        "where": _receiver(engine, model)[1],
+        "values_sent": len(sent),
+        "values_held": held,
+    }
+
+
+def _receiver(engine, model: str) -> tuple[str, str]:
+    """Who receives a request, and where it runs: the chat recipient only (the embedding provider receives none)."""
+    found = recipient(engine.provider, engine.base_url, model)
+    if found:
+        return provider_label(found), "cloud"
+    if on_this_machine(engine.base_url):
+        return "the AI engine on this machine", "this machine"
+    return f"the AI engine at {host_of(engine.base_url)}, on your network", "your network"
+
+
+def _proposed_by(column: str) -> dict[str, Any]:
+    """Who proposed (provider, model, where it runs) and how many values it was sent and not sent: kept with each AI
+    choice, recorded with the step."""
+    asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
+    return {
+        **{k: str(asked.get(k, "")) for k in ("provider", "model", "where")},
+        **{k: int(asked.get(k) or 0) for k in ("values_sent", "values_held")},
+    }
 
 
 def _choice_label(c: Candidate) -> str:

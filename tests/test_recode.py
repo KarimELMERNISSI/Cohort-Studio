@@ -19,11 +19,11 @@ from enrich.recode import (
     DECLINED,
     FIRST_LETTER,
     FOLD,
+    LEGACY_FOLD,
     MEANINGS,
     MISSING_CODE,
     NOT_APPLICABLE,
     SPACES,
-    SPACES_AND_CAPITALS,
     SPELLING,
     UNKNOWN,
     VARIANT,
@@ -43,8 +43,10 @@ from enrich.recode import (
     recoded_columns,
     recorded,
     report_params,
+    rule_of,
     sort_key,
     suggest,
+    swaps,
     tick,
     ticked,
     unset_missing,
@@ -76,26 +78,40 @@ def _offers(counts: dict[str, int]) -> dict[str, tuple[str | None, str, str | No
     return {o.value: (o.clean, o.why, o.meaning) for o in suggest(counts).offers}
 
 
-def test_spaces_always_fold_into_the_spelling_most_rows_hold() -> None:
+def test_spaces_fold_into_the_value_with_its_spaces_collapsed() -> None:
     found = suggest(SEX)
     assert found.spellings == {"F ": "F", "M ": "M"}
     assert found.reasons == {"F ": SPACES, "M ": SPACES}
-    assert fold({"Luxembourg": 300, " LUXEMBOURG ": 2}) == {" LUXEMBOURG ": "Luxembourg"}
-    assert suggest({"Luxembourg": 300, " LUXEMBOURG ": 2}).reasons == {
-        " LUXEMBOURG ": SPACES_AND_CAPITALS
+    assert fold({"Luxembourg": 300, " LUXEMBOURG ": 2}) == {" LUXEMBOURG ": "LUXEMBOURG"}
+    assert suggest({"Luxembourg": 300, " LUXEMBOURG ": 2}).reasons == {" LUXEMBOURG ": SPACES}
+    # its capitals, offered
+    assert _offers({"Luxembourg": 300, " LUXEMBOURG ": 2}) == {
+        "LUXEMBOURG": ("Luxembourg", CAPITALS, None)
+    }
+    assert plan({"Luxembourg": 300, " LUXEMBOURG ": 2}, {"LUXEMBOURG": "Luxembourg"}) == {
+        " LUXEMBOURG ": "Luxembourg"
     }
 
 
-def test_capitals_fold_only_in_a_word_and_only_in_a_typo_s_number_of_rows() -> None:
-    """A word's case variant of 5 rows or fewer and under 5 % of its group folds; the others are offered."""
-    assert fold({"Luxembourg": 300, "luxembourg": 2}) == {"luxembourg": "Luxembourg"}
-    assert fold({"Luxembourg": 300, "luxembourg": 200}) == {}
+def test_capitals_never_fold_they_are_offered() -> None:
+    """Case can name a category (Kell K and k, anti-k and anti-K, Rh Ccdee and ccdee): a case variant is offered at
+    any row count, never folded (the rules of 30 October folded anti-k into anti-K, MALE into Male)."""
+    assert fold({"Luxembourg": 300, "luxembourg": 2}) == {}
+    assert _offers({"Luxembourg": 300, "luxembourg": 2})["luxembourg"] == (
+        "Luxembourg",
+        CAPITALS,
+        None,
+    )
     assert _offers({"Luxembourg": 300, "luxembourg": 200})["luxembourg"] == (
         "Luxembourg",
         CAPITALS,
         None,
     )
-    assert fold({"male": 2, "MALE": 2}) == {}  # half of its group: offered
+    assert (
+        fold({"anti-K": 40, "anti-k": 2}) == {}
+        and fold({"Male": 300, "MALE": 200, "male": 3}) == {}
+    )
+    assert fold({"male": 2, "MALE": 2}) == {}
     assert _offers({"male": 2, "MALE": 2}) == {
         "MALE": ("male", CAPITALS, None)
     }  # a word's tie: lower case
@@ -271,7 +287,7 @@ def test_codes_for_unknown_are_offered_as_unknown_and_the_others_ask_what_they_m
         "Ne sait pas": (None, MISSING_CODE, UNKNOWN),
         "Non renseigné": (None, MISSING_CODE, UNKNOWN),
     }
-    for code in ("n.a.", "NR", "none", "ND", "NK", "-", "N/A"):
+    for code in ("n.a.", "NR", "none", "ND", "NK", "-", "N/A", "NC", "SO", "Refus", "Not tested"):
         assert _offers({"pre": 300, "post": 200, code: 40})[code] == (None, MISSING_CODE, None), (
             code
         )
@@ -402,7 +418,7 @@ def test_unticking_missing_on_a_member_row_keeps_it_as_written() -> None:
         "unknown ",
         None,
     )
-    untick(choices, offer)
+    untick(choices, counts, offer)
     assert not ticked(choices, counts, offer)
 
 
@@ -450,7 +466,7 @@ def test_the_record_always_gives_the_preview() -> None:
             if action[0] == "tick":
                 tick(choices, counts, action[1])
             elif action[0] == "untick":
-                untick(choices, action[1])
+                untick(choices, counts, action[1])
             elif action[0] == "give":
                 give(choices, counts, action[1], action[2])
             elif action[0] == "missing":
@@ -490,6 +506,16 @@ def test_merging_categories_by_hand_is_a_grouping_and_an_offer_is_not() -> None:
     assert (
         groupings({"Male": 300, "MALE": 200}, {"MALE": "Male"}, {"MALE": CHOSEN}) == {}
     )  # one word
+    # words that name two categories, merged by hand, whatever their rows; a typo's fix is no grouping
+    stable = {"Stable angina": 300, "Unstable angina": 4}
+    assert groupings(stable, {"Unstable angina": "Stable angina"}, {"Unstable angina": CHOSEN}) == {
+        "Stable angina": ["Stable angina", "Unstable angina"]
+    }
+    typo = {"Diabetes mellitus": 300, "Diabetes melitus": 2}
+    assert (
+        groupings(typo, {"Diabetes melitus": "Diabetes mellitus"}, {"Diabetes melitus": CHOSEN})
+        == {}
+    )
 
 
 def test_the_changes_are_counted_by_kind_and_meaning() -> None:
@@ -539,8 +565,9 @@ def test_the_trace_report_counts_the_choices_names_no_value_and_says_each_groupi
     assert shown["folds put back as written"] == 1
     assert shown["groupings"] == [
         "III, IV grouped as III-IV: advanced heart failure",
-        "2 values grouped: rare ones",
+        "2 values grouped (the reason is in the trace)",
     ]
+    assert "rare ones" not in repr(shown)  # free text, perhaps naming the rare values
     # a step recorded before the fold rule listed every change, and why
     older = report_params({"mapping": {"CANARY-1 ": "F"}, "reasons": {"CANARY-1 ": SPACES}})
     assert "CANARY" not in repr(older) and older["choices"] == {SPACES: 1}
@@ -621,6 +648,125 @@ def test_a_step_without_a_fold_rule_replays_its_mapping_alone() -> None:
     }
     replayed = apply_steps(pd.DataFrame({"sex": ["F", "f", "M "]}), [step])
     assert replayed.df is not None and replayed.df["sex_clean"].tolist() == ["F", "F", "M "]
+
+
+# the two rules recorded under LEGACY_FOLD on 30 October 2026: what 747ccc3 and 751ad38 wrote
+FIRST, SECOND = {"fold": LEGACY_FOLD}, {"fold": LEGACY_FOLD, "values_fp": "86c22e35b51a72cb"}
+
+
+@pytest.mark.parametrize(
+    ("counts", "first", "second"),
+    [
+        ({"Male": 300, "MALE": 200, "male": 3}, {"MALE": "Male", "male": "Male"}, {"male": "Male"}),
+        ({"K": 300, "k": 5}, {"k": "K"}, {}),
+        ({"anti-K": 40, "anti-k": 2}, {}, {"anti-k": "anti-K"}),
+        (
+            {"ccdee": 400, "Ccdee": 3, "CCDEE": 2, "CcDee": 100},
+            {"Ccdee": "ccdee", "CCDEE": "ccdee"},
+            {},
+        ),
+        (
+            {"F": 489, "F ": 1, "f": 1, "Female": 1, "female": 1},
+            {"F ": "F", "f": "F", "female": "Female"},
+            {"F ": "F"},
+        ),
+    ],
+)
+def test_the_two_rules_of_30_october_replay_as_they_wrote(
+    counts: dict[str, int], first: dict[str, str], second: dict[str, str]
+) -> None:
+    """One id, two rules: the record that holds values_fp (191a550 on) used the second."""
+    assert plan(counts, {}, fold_rule=rule_of(FIRST)) == first
+    assert plan(counts, {}, fold_rule=rule_of(SECOND)) == second
+    assert outcome(counts, {}, {}, fold_rule=rule_of(FIRST)) == {
+        v: (first.get(v, v), None) for v in counts
+    }
+
+
+def test_only_the_second_rule_of_30_october_and_the_rule_now_follow_a_chain() -> None:
+    counts, mapping = {"MALE": 1, "male": 1, "M": 5}, {"MALE": "male", "male": "M"}
+    assert plan(counts, mapping, fold_rule=rule_of(FIRST)) == {"MALE": "male", "male": "M"}
+    assert plan(counts, mapping, fold_rule=rule_of(SECOND)) == {"MALE": "M", "male": "M"}
+    assert plan(counts, mapping) == {"MALE": "M", "male": "M"}
+    assert rule_of({}) is None and rule_of({"fold": FOLD}) == FOLD
+
+
+def test_a_step_of_30_october_replays_with_its_rule_and_its_fingerprint() -> None:
+    from manage.reproduction_manager import apply_steps
+
+    params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": []}
+    sex = ["Male"] * 300 + ["MALE"] * 200 + ["Female"] * 280
+    replayed = apply_steps(
+        pd.DataFrame({"sex": sex}), [{"function": "recode_levels", "params": {**params, **FIRST}}]
+    )
+    assert replayed.df is not None and set(replayed.df["sex_clean"]) == {
+        "Male",
+        "Female",
+    }  # MALE folded
+    sex = ["Male"] * 300 + ["MALE"] * 2 + ["Female"] * 280
+    step = {"function": "recode_levels", "params": {**params, **SECOND}}
+    replayed = apply_steps(pd.DataFrame({"sex": sex}), [step])
+    assert (
+        replayed.error is None and not replayed.warnings
+    )  # the fingerprint it recorded, under its rule
+    assert replayed.df is not None and set(replayed.df["sex_clean"]) == {
+        "Male",
+        "Female",
+    }  # a typo's 2 rows
+    assert (
+        values_fp(level_counts(pd.Series(sex))) != SECOND["values_fp"]
+    )  # the rule now folds no capitals
+
+
+@pytest.mark.parametrize(
+    "counts",
+    [
+        {"IgG κ": 300, "IgG λ": 40},
+        {"α-blocker": 300, "β-blocker": 40},
+        {"α-thalassaemia trait": 300, "β-thalassaemia trait": 3},
+        {"µg/L": 300, "g/L": 40},
+        {"≤ 2 cm": 300, "≥ 2 cm": 40},
+        {"HER2": 300, "HER2−": 40},
+        {"Normal": 300, "β": 4},
+    ],
+)
+def test_greek_letters_units_and_signs_name_categories(counts: dict[str, int]) -> None:
+    """Dropped by an ASCII form, they made two categories one "variant" (and β the first letter of Normal)."""
+    assert _offers(counts) == {}
+
+
+def test_ae_and_oe_read_as_e_inside_a_word_only() -> None:
+    assert _offers({"Œdème": 300, "Oedème": 3}) == {"Oedème": ("Œdème", VARIANT, None)}
+    assert _offers({"Diarrhoea": 300, "Diarrhea": 3}) == {"Diarrhea": ("Diarrhoea", VARIANT, None)}
+    assert _offers({"Michel": 300, "Michael": 3}) == {
+        "Michael": ("Michel", SPELLING, None)
+    }  # to check
+
+
+def test_values_that_take_each_other_s_name_are_a_swap() -> None:
+    counts = {"Oui": 40, "Yes": 300, "No": 200}
+    choices = new_choices()
+    give(choices, counts, "Oui", "Yes")
+    assert swaps(counts, choices) == []
+    give(choices, counts, "Yes", "Oui")
+    assert sorted(swaps(counts, choices)) == ["Oui", "Yes"]
+    chain = new_choices()
+    give(chain, SEX, "MALE", "male")
+    give(chain, SEX, "male", "M")
+    assert swaps(SEX, chain) == []
+
+
+def test_an_offer_read_ticked_from_a_typed_row_unticks() -> None:
+    """The typed row's own choice made the offer read ticked; unticking dropped only the spelling's choice, so the
+    pill came back ticked."""
+    counts = {"Luxembourg": 400, "Metz": 40, "Luxembourgg ": 1}
+    choices = new_choices()
+    give(choices, counts, "Luxembourgg ", "Luxembourg")
+    (offer,) = [o for o in suggest(counts).offers if o.value == "Luxembourgg"]
+    assert ticked(choices, counts, offer)
+    untick(choices, counts, offer)
+    assert not ticked(choices, counts, offer)
+    assert plan(counts, choices["mapping"], kept=choices["kept"]) == {"Luxembourgg ": "Luxembourgg"}
 
 
 def test_the_copy_keeps_the_marks_of_the_imputed_values_it_copies() -> None:

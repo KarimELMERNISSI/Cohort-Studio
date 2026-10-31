@@ -42,7 +42,7 @@ from enrich.imputation_service import (
     impute_rows,
     left_missing,
 )
-from enrich.recode import level_counts, recode_column, values_fp
+from enrich.recode import level_counts, recode_column, rule_of, values_fp
 from enrich.transformation_logic import apply_variable_transformation
 from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
@@ -391,15 +391,16 @@ def _rename_columns(df, step, index, paths, warnings):
 
 def _recode_levels(df, step, index, paths, warnings):
     """The recode redone: the recorded fold rule recomputed on the values read (a trace without one recorded every
-    change in its mapping), the recorded choices over it. Differences are said by their number, never by a value."""
+    change in its mapping; two rules share an id, told apart by the record), the recorded choices over it. Differences
+    are said by their number, never by a value."""
     params = step.get("params", {}) or {}
-    source, target = params.get("source"), params.get("target")
+    source, target, rule = params.get("source"), params.get("target"), rule_of(params)
     new_df, kept = recode_column(
         df,
         source,
         target,
         params.get("mapping") or {},
-        fold_rule=params.get("fold"),
+        fold_rule=rule,
         kept=params.get("kept") or (),
         replaces=bool(params.get("replaces")),
     )
@@ -415,7 +416,7 @@ def _recode_levels(df, step, index, paths, warnings):
         warnings.append(f"step {index + 1}: {target} holds {after} distinct values, {recorded} when it was recorded")
     # the same counts can hide a value swapped for another, or a spelling that lost its majority: their fingerprint
     seen = params.get("values_fp")
-    if seen is not None and len(warnings) == said and values_fp(level_counts(df[source])) != seen:
+    if seen is not None and len(warnings) == said and values_fp(level_counts(df[source]), rule) != seen:
         warnings.append(
             f"step {index + 1}: the values of {source} differ from those the step saw (another value, or another "
             f"spelling holding the most rows): check {target}"

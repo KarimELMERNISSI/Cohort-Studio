@@ -20,6 +20,7 @@ from ingest.analyzer import DataAnalyzer
 from manage.ai_payload import column_kinds, typical_ranges
 from ui.components import help_popover
 from ui.components.text import plain
+from ui.services import running_engine
 from ui.state import get_state
 
 _BADGES = {
@@ -366,12 +367,6 @@ def _form(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
                 st.button("Cancel", key="derived_cancel", on_click=_clear_form)
 
 
-def _engine():
-    """The AI engine when it runs (Settings > AI engine), else None."""
-    engine = st.session_state.get("rag_manager")
-    return engine if engine is not None and getattr(engine, "initialized", False) else None
-
-
 def _find(data: pd.DataFrame, engine) -> None:
     """One request for the whole dataset; its proposals are kept for this version of the data."""
     columns = [str(c) for c in data.columns]
@@ -643,7 +638,7 @@ def _fill(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...], scope) -
 
 
 def _ai_search(data: pd.DataFrame, definitions: tuple[DerivedVariable, ...]) -> None:
-    engine = _engine()
+    engine = running_engine()
     with st.container(border=True):
         st.markdown("**Find them with the AI engine**")
         st.caption(

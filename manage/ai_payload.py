@@ -30,6 +30,7 @@ from urllib.parse import urlparse
 import pandas as pd
 
 from core.workspace import file_name_of
+from enrich.recode import free_text
 from manage.rag.providers import AI_PROVIDERS, declared
 
 logger = logging.getLogger(__name__)
@@ -203,17 +204,29 @@ def document_name(metadata: Mapping[str, Any] | None) -> str:
     return file_name_of((metadata or {}).get("source")) or "Unknown"  # a folder is never named
 
 
+def cloud_model(model: str | None) -> bool:
+    """An Ollama model that runs on ollama.com through the local server (Ollama 0.12 and later): its tag says cloud
+    ("gpt-oss:120b-cloud", "glm-4.6:cloud")."""
+    name = str(model or "").strip().lower()
+    tag = name.rpartition(":")[2]
+    return tag == "cloud" or tag.endswith("-cloud") or name.endswith("-cloud")
+
+
 def category_values(
-    counts: Mapping[str, int], provider: str | None, base_url: str | None
+    counts: Mapping[str, int], provider: str | None, base_url: str | None, model: str | None = None
 ) -> tuple[list[str], int]:
     """
     The values of a categorical variable that may be sent to the AI engine for it to propose which are one category
-    (Data > Clean): every value to an Ollama on this machine; to any other recipient, an Ollama of the private network
-    included, only those held by MIN_COUNT rows or more, since a rarer one can single out a participant. The most
-    frequent first; with how many were held back. No count is ever sent.
+    (Data > Clean): every value to an Ollama that runs its model on this machine; to any other recipient, an Ollama of
+    the private network and an Ollama cloud model included, only those held by MIN_COUNT rows or more, since a rarer
+    one can single out a participant (rows, not people: a value repeated on one person's visits counts each visit).
+    A to Z, so that their order says nothing of their counts; with how many were held back. No count is ever sent.
+    Never free text, mostly rare values or an identifier (``enrich.recode.free_text``): nothing.
     """
-    local = provider in local_providers() and on_this_machine(base_url)
-    sent = [str(v) for v, n in counts.items() if local or n >= MIN_COUNT]
+    if free_text(counts):
+        return [], len(counts)
+    local = provider in local_providers() and on_this_machine(base_url) and not cloud_model(model)
+    sent = sorted((str(v) for v, n in counts.items() if local or n >= MIN_COUNT), key=lambda v: (v.casefold(), v))
     return sent, len(counts) - len(sent)
 
 
@@ -253,15 +266,18 @@ def outside_private_network(url: str | None) -> bool:
     return not (address.is_private or address.is_loopback or address.is_link_local)
 
 
-def recipient(provider: str | None, base_url: str | None = None) -> str | None:
+def recipient(provider: str | None, base_url: str | None = None, model: str | None = None) -> str | None:
     """
-    The recipient that needs the user's confirmation: a cloud provider (any provider not known as local), or an
-    Ollama outside the private network ("ollama@<host>"); None for an Ollama on this machine or the private network.
+    The recipient that needs the user's confirmation: a cloud provider (any provider not known as local), an Ollama
+    cloud model, which runs on ollama.com through the local server ("ollama@ollama.com"), or an Ollama outside the
+    private network ("ollama@<host>"); None for an Ollama that runs its model on this machine or the private network.
     """
     if not provider:
         return None
     if provider not in local_providers():
         return provider
+    if cloud_model(model):
+        return f"{provider}@ollama.com"
     return f"{provider}@{host_of(base_url)}" if outside_private_network(base_url) else None
 
 

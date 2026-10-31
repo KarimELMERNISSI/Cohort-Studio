@@ -388,7 +388,6 @@ KEYS: tuple[Key, ...] = (
             "app_pages.data_insight",
             "app_pages.data_monitoring",
             "app_pages.document_insight",
-            "app_pages.enrichment_derived",
             "app_pages.home",
             "app_pages.rag_monitoring",
             "app_pages.rag_sidebar",

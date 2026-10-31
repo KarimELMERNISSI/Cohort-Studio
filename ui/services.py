@@ -88,6 +88,21 @@ def ai_engine() -> Any:
     return engine
 
 
+def running_engine() -> Any:
+    """The session's AI engine when it runs (Settings > AI engine), else None; nothing is built."""
+    engine = st.session_state.get(ENGINE_KEY)
+    return engine if engine is not None and getattr(engine, "initialized", False) else None
+
+
+def engine_model(engine: Any) -> str:
+    """The chat model an engine runs: each connector keeps it in its configuration (``llm.config.model_name``)."""
+    llm = getattr(engine, "llm", None)
+    model = getattr(getattr(llm, "config", None), "model_name", None) or getattr(
+        llm, "model_name", None
+    )
+    return str(model or "")[:80]
+
+
 def end_session(reason: str) -> None:
     """
     End the session, as a sign-out does: the AI engine is stopped first, so that it sends nothing more, then every key
