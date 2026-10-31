@@ -22,6 +22,7 @@ from explore.quality_score import (
     interpretation,
     lost_text,
     ordered,
+    points_text,
     score_text,
     weighted_score,
 )
@@ -75,7 +76,7 @@ def _score_breakdown(quality, details, checks, weights) -> None:
             chosen = _selected_dimension(event)
             name = chosen if chosen in names else names[0]
             dim = next(d for d in quality.dimensions if d.name == name)
-            st.markdown(f"**{name}** · score {score_text(dim.score)}% · loses {dim.lost:.2f} points")
+            st.markdown(f"**{name}** · score {score_text(dim.score)}% · loses {points_text(dim.lost)} points")
             st.caption(
                 DIMENSION_HELP.get(name, "")
                 + ("" if chosen else " Click a bar to see another dimension.")
@@ -1103,13 +1104,22 @@ def render_dashboard(df, config):
         domain = getattr(auditor, "domain_checks", None)
         if "Domain Validity" in metrics and domain is not None:
             fails, made, flagged = domain
+            imputed = int(getattr(auditor, "domain_imputed_rows", 0) or 0)
             st.metric("Domain Validity Score", f"{metrics['Domain Validity']}%")
             st.caption(
                 f"{fails:,} of {made:,} checks fail; {flagged:,} row{'s' if flagged != 1 else ''} "
-                f"break{'s' if flagged == 1 else ''} at least one rule. A check is one rule on one row holding the "
-                "values it reads."
+                f"break{'s' if flagged == 1 else ''} at least one rule on its recorded values. A check is one rule on "
+                "one row holding the values it reads."
+                + (
+                    f" {imputed:,} more row{'s' if imputed != 1 else ''} break{'s' if imputed == 1 else ''} a rule "
+                    "only through an imputed value."
+                    if imputed
+                    else ""
+                )
             )
-            if fails or flagged:  # never the rounded score: one failing check in 20,000 rounds to 100
+            # never the rounded score: one failing check in 20,000 rounds to 100; nor only the recorded values: an
+            # imputed value that breaks a rule flags its row in the population
+            if fails or flagged or imputed:
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
                     # --- Summary Report: the lines the score counts; in an "all" or "at least k" family, the
                     # family's, its rules' apart ---
@@ -1121,8 +1131,10 @@ def render_dashboard(df, config):
                     failing = lines[family] if combined and family is not None else lines
                     members = lines[~family] if combined and family is not None else pd.DataFrame()
                     if not failing.empty:
-                        failing["Checked"] = [f"{int(round(c / s)):,}" for c, s in zip(failing["Count"], failing["Share"])]
+                        failing["Checked"] = [int(round(c / s)) for c, s in zip(failing["Count"], failing["Share"])]
                         failing["Share"] = failing["Share"] * 100
+                        named = str(getattr(auditor, "domain_family", "") or "the family")
+                        failing["Where"] = failing["Where"].replace({"the family": named})
                         col1, col2 = st.columns([3, 2], vertical_alignment="center")
                         with col1:
                             # one colour, the dimension's: the bar's length is the count
@@ -1149,6 +1161,8 @@ def render_dashboard(df, config):
                                 width="stretch",
                                 hide_index=True,
                                 column_config={
+                                    "Failing": st.column_config.NumberColumn(format="localized"),
+                                    "Checked": st.column_config.NumberColumn(format="localized"),
                                     "Failing share": st.column_config.NumberColumn(format="%.2f%%"),
                                 },
                             )
@@ -1184,11 +1198,21 @@ def render_dashboard(df, config):
                                     styles[i] = 'background-color: #ff4b4b; color: white'
                         return styles
 
-                    # Display with style
-                    st.dataframe(auditor.clinical_anomalies_df.style.apply(highlight_anomalies, axis=1), width='stretch')
-                    
+                    # the rows, without the columns the app keeps for itself (the row id is the index); numbers as
+                    # recorded, never padded to six decimals
+                    shown = auditor.clinical_anomalies_df.drop(
+                        columns=[c for c in auditor.clinical_anomalies_df.columns if str(c).startswith("__")]
+                    ).rename_axis(index="row")
+                    decimals = [c for c in shown.columns if pd.api.types.is_float_dtype(shown[c])]
+                    st.dataframe(
+                        shown.style.apply(highlight_anomalies, axis=1).format(
+                            lambda v: f"{v:g}", subset=decimals, na_rep=""
+                        ),
+                        width="stretch",
+                    )
+
                     # Download button
-                    csv = auditor.clinical_anomalies_df.to_csv(index=True).encode('utf-8')
+                    csv = shown.to_csv(index=True).encode('utf-8')
                     st.download_button(
                         label="Download the Rows with Implausible Values",
                         data=csv,
@@ -1209,7 +1233,7 @@ def render_dashboard(df, config):
                 else:
                     st.info("Open the **Handle Implausible Values** tab to inspect the rows and the rules.")
             else:
-                st.success("No check fails: no row breaks the declared plausibility rules.")
+                st.success("No check fails: no row breaks the declared plausibility rules, imputed values included.")
         elif getattr(auditor, "domain_na", None) in (None, NO_RULE):
             st.info("No plausibility rule is declared yet. Declare them on the **Handle Implausible Values** tab.")
         else:

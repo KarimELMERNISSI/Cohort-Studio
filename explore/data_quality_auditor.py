@@ -7,8 +7,9 @@ import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
 
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
+from core.criteria import criterion_columns
 from core.derived import from_config
-from core.population import family_checks, family_masks, observed_values
+from core.population import family_checks, family_masks, family_operator, observed_values
 from core.registry import as_code
 from enrich.derived import CANNOT, DISAGREES, MIN_ROWS, MOSTLY, TOO_FEW, check_derived
 
@@ -23,16 +24,13 @@ DERIVED_CATEGORY = "Derived variables"
 NO_RULE = "no plausibility rule is declared"  # why Domain Validity is N/A when no rule is declared
 
 
-def _share(line: tuple[int, int]) -> float:
-    return line[0] / line[1] if line[1] else 0.0
-
-
 def severe(fails: int, checks: int) -> bool:
-    """A rule that fails often enough to make the advice high: 5 failing checks or more and SEVERE_SHARE of its
-    checks, or a Wilson lower bound of SEVERE_SHARE (one failure among 4 checks is no evidence)."""
+    """A line (a rule's, a family's, or the pooled one) that fails often enough to make the advice high: 5 failing
+    checks or more and SEVERE_SHARE of its checks, or an exact (Clopper-Pearson) lower bound of SEVERE_SHARE: one
+    failure among 4 checks, or 2 among 5, is no evidence."""
     if not checks or not fails:
         return False
-    low, _ = proportion_confint(fails, checks, alpha=0.05, method="wilson")
+    low, _ = proportion_confint(fails, checks, alpha=0.05, method="beta")
     return (fails >= 5 and fails / checks >= SEVERE_SHARE) or float(low) >= SEVERE_SHARE
 # a rule failing this share of its checks makes the Domain Validity advice "high", whatever the pooled score
 SEVERE_SHARE = 0.10
@@ -76,9 +74,11 @@ class DataQualityAuditor:
         # Domain Validity's (checks that fail, checks made, rows flagged); None while it is N/A, and why
         self.domain_checks: tuple[int, int, int] | None = None
         self.domain_na: str | None = None
-        # (failing, checks) of the line that fails most (the family's, for "all" or "at least k"): the severity
-        self.domain_worst: tuple[int, int] = (0, 0)
+        # (failing, checks) of each line the score counts (each rule's, or the family's for "all" or "at least k"):
+        # the advice is high when one fails often, whatever the pooled score
+        self.domain_lines: list[tuple[int, int]] = []
         self.domain_combined = False  # "all" or "at least k": the family's line counts, not its rules'
+        self.domain_family = ""  # that line's name on the page ("every rule together")
         self.domain_imputed_rows = 0  # rows that break a rule only through an imputed value
         self.uniformity_details: list[dict[str, str]] = []
         # Per dimension: the columns, rows or rules behind the points it loses (see DETAIL_COLUMNS).
@@ -225,8 +225,8 @@ class DataQualityAuditor:
         """
         self.clinical_anomalies_df = None
         self.clinical_anomalies_booleans = None
-        self.domain_checks, self.domain_na, self.domain_worst = None, NO_RULE, (0, 0)
-        self.domain_combined, self.domain_imputed_rows = False, 0
+        self.domain_checks, self.domain_na, self.domain_lines = None, NO_RULE, []
+        self.domain_combined, self.domain_family, self.domain_imputed_rows = False, "", 0
 
         # If no config or no mask_families, return None (N/A - rules not configured)
         if not self.config or "mask_families" not in self.config:
@@ -287,7 +287,7 @@ class DataQualityAuditor:
             for check in found.units:
                 checked, fired = int(check.checked.sum()), int(check.fired.sum())
                 if not checked:
-                    rows.append((check.unit, "not checked: no row holds its values", None, None))
+                    rows.append((check.unit, f"not checked: {self._unchecked(anomaly_config, check.unit)}", None, None))
                 elif fired:
                     issue = (
                         f"fires, of {checked:,} rows checked; the family's line counts"
@@ -295,10 +295,12 @@ class DataQualityAuditor:
                         else f"flagged, of {checked:,} rows checked"
                     )
                     rows.append((check.unit, issue, fired, fired / checked))
-                    if not combined and fired / checked > _share(self.domain_worst):
-                        self.domain_worst = (fired, checked)
+                    if not combined:
+                        self.domain_lines.append((fired, checked))
             if combined and found.checks:
+                _, k = family_operator(anomaly_config)
                 words = "every rule fires" if found.operator == "all" else "enough rules fire"
+                self.domain_family = "every rule together" if found.operator == "all" else f"{k} rules or more together"
                 rows.append(
                     (
                         "the family",
@@ -307,15 +309,25 @@ class DataQualityAuditor:
                         found.fails / found.checks,
                     )
                 )
-                self.domain_worst = (found.fails, found.checks)
+                self.domain_lines.append((found.fails, found.checks))
             self.details["Domain Validity"] = _details(rows + broken)
             if not found.checks:
                 self.domain_na = "no row holds the values the rules read"
                 return None
-            # the rows breaking a rule on the recorded values; those that break one only through an imputed value apart
-            observed = family_masks(observed_values(self.df, self.imputed), anomaly_config).flag
-            flagged = int(observed.sum()) if observed is not None else int(any_anomaly_mask.sum())
-            self.domain_imputed_rows = max(int(any_anomaly_mask.sum()) - flagged, 0)
+            # the rows breaking a rule on the recorded values, by the rules that can be read there (as the checks
+            # count them); the others break one only through an imputed value, said apart
+            recorded = observed_values(self.df, self.imputed)
+            readable = {k: v for k, v in anomaly_config.items() if k == "operator" or k not in found.errors}
+            observed = family_masks(recorded, readable)
+            if observed.errors and "operator" not in observed.errors:
+                observed = family_masks(
+                    recorded, {k: v for k, v in readable.items() if k == "operator" or k not in observed.errors}
+                )
+            if observed.flag is None:
+                flagged = int(any_anomaly_mask.sum())
+            else:
+                flagged = int((any_anomaly_mask & observed.flag).sum())
+                self.domain_imputed_rows = int((any_anomaly_mask & ~observed.flag).sum())
             self.domain_checks, self.domain_na = (found.fails, found.checks, flagged), None
             return failing_score(found.fails, found.checks)
 
@@ -323,6 +335,18 @@ class DataQualityAuditor:
             logger.error("Error computing domain validity (%s)", type(e).__name__)
             self.domain_na = "the rules could not be checked"
             return None
+
+    def _unchecked(self, rules: Mapping[str, Any], unit: str) -> str:
+        """Why a rule made no check: its values are held by no row, or the table no longer holds a column it reads (a
+        listed rule's rows were flagged on a column since renamed: which rows it assessed is unknown)."""
+        definition = rules.get(unit)
+        try:
+            gone = [c for c in criterion_columns(unit, definition) if c not in self.df.columns]
+        except Exception:  # a definition of another shape names no column
+            gone = []
+        if isinstance(definition, Mapping) and gone:  # a table cell: drawn as text
+            return f"the table no longer holds {', '.join(str(c) for c in gone[:3])}, which it reads"
+        return "no row holds its values"
 
     def compute_uniformity(self) -> float:
         """
@@ -614,9 +638,9 @@ class DataQualityAuditor:
             self.advice.append({
                 "category": "Domain Validity",
                 "message": msg,
-                # a pooled score hides one rule failing often: the worst rule decides too
+                # a pooled score hides one rule failing often: each line decides too, on enough evidence
                 "severity": "high"
-                if self.metrics["Domain Validity"] < 90 or severe(*self.domain_worst)
+                if severe(fails, checks) or any(severe(*line) for line in self.domain_lines)
                 else "medium",
             })
         elif self.domain_imputed_rows:  # no recorded value fails, but an imputation wrote implausible ones

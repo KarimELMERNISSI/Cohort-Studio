@@ -137,6 +137,12 @@ def lost_text(points: float) -> str:
     return f"{points:.1f}" if points >= 0.05 or points <= 0 else f"{max(points, 0.01):.2f}"
 
 
+def points_text(points: float) -> str:
+    """Points of the global score, to two decimals, as the chart of points lost labels them: a loss that rounds to
+    nothing still shows (0.01), never 0.00."""
+    return f"{points:.2f}" if points >= 0.005 or points <= 0 else "0.01"
+
+
 __all__ = [
     "DEFAULT_WEIGHTS",
     "DIMENSIONS",
@@ -146,6 +152,7 @@ __all__ = [
     "band",
     "interpretation",
     "lost_text",
+    "points_text",
     "score_text",
     "ordered",
     "weighted_score",

@@ -262,6 +262,7 @@ def test_in_an_all_family_the_family_s_line_counts() -> None:
     auditor.compute_domain_validity()
     details = auditor.details["Domain Validity"].set_index("Where")
     assert details.loc["A", "Issue"] == "fires, of 3 rows checked; the family's line counts"
+    assert auditor.domain_family == "every rule together"  # the line's name on the page
     assert (
         details.loc["the family", "Issue"]
         == "rows where every rule fires, of 3 rows where the rules settle it"
@@ -311,8 +312,41 @@ def test_a_rule_is_severe_on_enough_evidence() -> None:
     from explore.data_quality_auditor import severe
 
     assert not severe(1, 4) and not severe(0, 50)
-    assert severe(5, 20) and severe(30, 100)
+    assert severe(5, 20) and severe(30, 100) and severe(9, 60)
     assert not severe(4, 1000)
+    # the exact (Clopper-Pearson) bound: 0.03, 0.09 and 0.05 (Wilson's, 0.21, 0.21 and 0.12, made them high)
+    assert not severe(1, 1) and not severe(2, 3) and not severe(2, 5)
+
+
+def test_any_line_failing_often_makes_the_advice_high() -> None:
+    """A rule failing 1 of its 2 checks hid one failing 30 of 100: only the largest share was tested."""
+    n = 1_000
+    df = pd.DataFrame(
+        {
+            "a": [9.0, 1.0] + [np.nan] * (n - 2),
+            "b": [9.0] * 30 + [1.0] * 70 + [np.nan] * (n - 100),
+            **{f"v{i}": [1.0] * n for i in range(9)},
+        }
+    )
+    family = {"A": {"expression": "df['a'] > 5"}, "B": {"expression": "df['b'] > 5"}} | {
+        f"V{i}": {"expression": f"df['v{i}'] > 5"} for i in range(9)
+    }
+    auditor = DataQualityAuditor(df, {"mask_families": {"clinical_anomalies": family}})
+    auditor.run_audit()
+    assert sorted(auditor.domain_lines) == [(1, 2), (30, 100)]
+    (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
+    assert advice["severity"] == "high"
+
+
+def test_the_pooled_line_is_high_only_on_enough_evidence() -> None:
+    """1 failing check of 8 read below 90, and high."""
+    df = pd.DataFrame({"a": [1.0] * 7 + [9.0]})
+    auditor = DataQualityAuditor(
+        df, {"mask_families": {"clinical_anomalies": {"A": {"expression": "df['a'] > 5"}}}}
+    )
+    assert auditor.run_audit()["Domain Validity"] == 87.5
+    (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
+    assert advice["severity"] == "medium"
 
 
 def test_rows_break_a_rule_on_recorded_values_and_an_imputed_one_is_said_apart() -> None:
@@ -350,3 +384,41 @@ def test_a_rule_whose_checks_fail_on_the_recorded_values_is_listed() -> None:
     assert auditor.compute_domain_validity() == failing_score(1, 3)
     details = auditor.details["Domain Validity"].set_index("Where")
     assert details.loc["Age", "Issue"].startswith("cannot be checked")
+
+
+def test_rows_on_the_recorded_values_are_counted_with_the_rules_readable_there() -> None:
+    """A rule that raises once the imputed values are set aside counted every row the table flags as broken on its
+    recorded values: 0 checks failing beside rows that break a rule, and no word of the imputed value."""
+    df = pd.DataFrame(
+        {"age": [30.0, 140.0, 40.0, 50.0], "x": [1.0, 1.0, 1.0, 1.0]},
+        index=pd.Index([0, 1, 2, 3], name="__row_id"),
+    )
+    family = {
+        "Age": {"expression": "df['age'].astype(int) > 110"},
+        "X": {"expression": "df['x'] > 2"},
+    }
+    auditor = DataQualityAuditor(
+        df, {"mask_families": {"clinical_anomalies": family}}, imputed={"age": np.array([1])}
+    )
+    auditor.run_audit()
+    assert auditor.domain_checks == (0, 4, 0)
+    assert auditor.domain_imputed_rows == 1
+    (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
+    assert advice["message"].startswith(
+        "1 row breaks a plausibility rule only through an imputed value"
+    )
+
+
+def test_a_listed_rule_whose_column_is_gone_says_so() -> None:
+    df = pd.DataFrame({"x": [1.0, 2.0, 30.0, 4.0]})
+    family = {
+        "Renamed": {"row_ids": [[2, 2]], "method": "iqr", "columns": ["gone"]},
+        "X": {"expression": "df['x'] > 100"},
+    }
+    auditor = DataQualityAuditor(df, {"mask_families": {"clinical_anomalies": family}})
+    auditor.compute_domain_validity()
+    details = auditor.details["Domain Validity"].set_index("Where")
+    assert (
+        details.loc["Renamed", "Issue"]
+        == "not checked: the table no longer holds gone, which it reads"
+    )

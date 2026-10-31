@@ -18,7 +18,15 @@ from collections.abc import Mapping, Sequence
 
 import plotly.graph_objects as go
 
-from explore.quality_score import QualityScore, band, lost_text, ordered, score_text, weighted_score
+from explore.quality_score import (
+    QualityScore,
+    band,
+    lost_text,
+    ordered,
+    points_text,
+    score_text,
+    weighted_score,
+)
 from ui.theme import BRAND, OKABE_ITO, TOKENS
 
 DIMENSION_COLORS: dict[str, str] = {
@@ -67,7 +75,7 @@ def ring_figure(
         colors.append(dimension_color(d.name))
         hovers.append(
             f"<b>{d.name}</b><br>score {score_text(d.score)}%<br>weight {d.weight:g}: {d.share:.0%} of the global score"
-            f"<br>adds {d.earned:.2f} points, loses {d.lost:.2f}"
+            f"<br>adds {d.earned:.2f} points, loses {points_text(d.lost)}"
             + (f"<br>{html.escape(notes[d.name])}" if notes and d.name in notes else "")
         )
         if d.lost > 0:
@@ -75,7 +83,7 @@ def ring_figure(
             values.append(d.lost)
             colors.append(LOST_COLOR)
             hovers.append(
-                f"<b>{d.name}: points lost</b><br>{d.lost:.2f} of 100<br>{lost_text(100 - d.score)}% of its checks fail"
+                f"<b>{d.name}: points lost</b><br>{points_text(d.lost)} of 100<br>{lost_text(100 - d.score)}% of its checks fail"
             )
     if not values:  # every weight at zero
         labels, values, colors, hovers = (
@@ -135,12 +143,12 @@ def loss_figure(quality: QualityScore) -> go.Figure | None:
             y=[d.name for d in dims],
             orientation="h",
             marker={"color": [dimension_color(d.name) for d in dims]},
-            text=[f"−{d.lost:.2f}" if d.lost >= 0.005 else "−0.01" for d in dims],
+            text=[f"−{points_text(d.lost)}" for d in dims],
             textposition="outside",
             cliponaxis=False,
-            customdata=[[d.name, score_text(d.score), d.share] for d in dims],
+            customdata=[[d.name, score_text(d.score), d.share, points_text(d.lost)] for d in dims],
             hovertemplate=(
-                "<b>%{customdata[0]}</b><br>loses %{x:.2f} points of 100"
+                "<b>%{customdata[0]}</b><br>loses %{customdata[3]} points of 100"
                 "<br>score %{customdata[1]}% · %{customdata[2]:.0%} of the global score"
                 "<br>Click to see where<extra></extra>"
             ),
