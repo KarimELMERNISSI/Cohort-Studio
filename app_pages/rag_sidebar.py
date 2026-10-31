@@ -19,6 +19,7 @@ import streamlit as st
 from core.registry import Selection
 from core.workspace import remove_pdf, safe_filename
 from manage.ai_payload import (
+    cloud_model,
     host_of,
     on_this_machine,
     outside_private_network,
@@ -172,6 +173,7 @@ def _provider_card() -> dict:
         provider = chosen.chosen or default_provider()  # none can run here: named all the same
         cfg["provider"] = provider
         info = declared(provider)  # its key, its models (manage.rag.providers)
+        where = None  # an Ollama's: where the data goes, drawn once the model is known
         if provider == "ollama":
             cfg["base_url"] = st.text_input(
                 "Ollama endpoint",
@@ -181,7 +183,7 @@ def _provider_card() -> dict:
                 icon=":material/dns:",
                 persist_state=PERSIST,
             )
-            _address_badge(cfg["base_url"])
+            where = st.container()  # where the data goes, once the model is known: a cloud model runs elsewhere
             chat_options = _discover_ollama_models(cfg["base_url"]) or list(info.chat_models)
             embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
@@ -231,6 +233,17 @@ def _provider_card() -> dict:
         )
         for notice in stale:
             st.caption(notice)
+        if where is not None:
+            with where:
+                if cloud_model(cfg["model"]) or cloud_model(cfg["embedding"]):
+                    # pulled from ollama.com, it runs there: the address is only the way to it
+                    st.badge("Cloud model: data goes to ollama.com", icon=":material/cloud:", color="orange")
+                    st.caption(
+                        "A model tagged cloud runs on ollama.com through your Ollama server: what it is sent leaves "
+                        "this machine, and needs your confirmation below."
+                    )
+                else:
+                    _address_badge(cfg["base_url"])
     return cfg
 
 
@@ -317,9 +330,11 @@ def _roles(cfg: dict, vector: dict | None = None) -> tuple[str | None, str | Non
     the private network; the embedding provider of Claude when it is another such recipient (it receives the
     documents and every search text); the Qdrant server outside the private network that keeps the index.
     """
-    chat = recipient(cfg["provider"], cfg.get("base_url"))
+    chat = recipient(cfg["provider"], cfg.get("base_url"), cfg.get("model"))
     embedding = recipient(
-        cfg.get("embedding_provider") or cfg["provider"], cfg.get("embedding_base_url") or cfg.get("base_url")
+        cfg.get("embedding_provider") or cfg["provider"],
+        cfg.get("embedding_base_url") or cfg.get("base_url"),
+        cfg.get("embedding"),
     )
     on_qdrant = bool(vector) and vector.get("vector_engine") == VectorEngine.QDRANT
     store = store_recipient(vector.get("qdrant_url")) if on_qdrant else None
@@ -422,8 +437,10 @@ def _engine_recipients(manager) -> tuple[list[str], str | None]:
     cfg = {
         "provider": manager.provider,
         "base_url": manager.base_url,
+        "model": getattr(manager, "model_name", None),
         "embedding_provider": manager.embedding_provider,
         "embedding_base_url": manager.embedding_base_url,
+        "embedding": getattr(manager, "embedding_model", None),
     }
     chat, embedding, store = _roles(cfg, {"vector_engine": VectorEngine.QDRANT, "qdrant_url": manager.qdrant_url})
     return [r for r in (chat, embedding, store) if r], embedding

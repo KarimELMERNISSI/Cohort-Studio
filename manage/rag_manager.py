@@ -185,6 +185,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         
         self.embedding_provider: str | None = None
         self.embedding_base_url: str | None = None
+        # the models the engine runs: an Ollama model tagged "cloud" runs on ollama.com, a recipient of its own
+        self.model_name: str | None = None
+        self.embedding_model: str | None = None
         # The recipients the user confirmed may receive data, in this session (browser tab), as the exact set of one
         # box of Settings > AI engine > Data sharing: a provider confirmed as Claude's embedding provider is not
         # confirmed to answer on its own, which receives more (column summaries, descriptions, criteria)
@@ -198,15 +201,19 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         embedding_provider: str | None = None,
         embedding_base_url: str | None = None,
         qdrant_url: str | None = None,
+        *,
+        model_name: str | None = None,
+        embedding_model: str | None = None,
     ) -> frozenset[str]:
         """
         The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, an
-        Ollama outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
+        Ollama cloud model, which runs on ollama.com through the Ollama server ("ollama@ollama.com"), an Ollama
+        outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
         ("qdrant@<host>").
         """
         found = {
-            recipient(provider, base_url),
-            recipient(embedding_provider, embedding_base_url or base_url),
+            recipient(provider, base_url, model_name),
+            recipient(embedding_provider, embedding_base_url or base_url, embedding_model),
             store_recipient(qdrant_url),
         }
         return frozenset(r for r in found if r)
@@ -214,7 +221,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
     def recipients(self) -> frozenset[str]:
         """The recipients the engine sends data to: for answers, for embeddings, and the index's Qdrant server."""
         return self.recipients_of(
-            self.provider, self.base_url, self.embedding_provider, self.embedding_base_url, self.qdrant_url
+            self.provider,
+            self.base_url,
+            self.embedding_provider,
+            self.embedding_base_url,
+            self.qdrant_url,
+            model_name=getattr(self, "model_name", None),
+            embedding_model=getattr(self, "embedding_model", None),
         )
 
     def uses_cloud(self) -> bool:
@@ -443,7 +456,15 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # scheme is the one the client reads (https with a key)
         store_key = qdrant_api_key or store_settings.key_for(server)
         store_url = explicit_address(server, store_key) if engine == VectorEngine.QDRANT else None
-        needed = self.recipients_of(provider_clean, base_url, embed_provider, own_embedding_url, store_url)
+        needed = self.recipients_of(
+            provider_clean,
+            base_url,
+            embed_provider,
+            own_embedding_url,
+            store_url,
+            model_name=model_name,
+            embedding_model=embedding_model,
+        )
         if not self.is_confirmed(needed):
             names = " and ".join(provider_label(r) for r in sorted(needed))
             return False, (
@@ -461,6 +482,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self._drop_connections()
         self.provider, self.base_url, self.embedding_provider = provider_clean, base_url, embed_provider
         self.embedding_base_url = own_embedding_url
+        self.model_name, self.embedding_model = model_name, embedding_model
         self.qdrant_url = store_url
         succeeded = False
         try:

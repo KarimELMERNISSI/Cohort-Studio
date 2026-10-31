@@ -143,6 +143,43 @@ def test_an_ollama_outside_the_private_network_needs_the_confirmation(monkeypatc
         assert rm.RAGManager.recipients_of("ollama", private) == frozenset(), private
 
 
+def test_an_ollama_cloud_model_needs_the_confirmation(monkeypatch, tmp_path) -> None:
+    """A model tagged cloud, pulled into the local Ollama, runs on ollama.com: the loopback address let every prompt
+    and document go there unconfirmed."""
+    _fake_connectors(monkeypatch, tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    local, model = "http://localhost:11434", "gpt-oss:120b-cloud"
+    ok, message = manager.initialize_system(
+        provider="ollama", base_url=local, model_name=model, vector_engine="lancedb"
+    )
+    assert not ok and "Ollama at ollama.com" in message
+    manager.confirm("ollama@ollama.com")
+    ok, message = manager.initialize_system(
+        provider="ollama", base_url=local, model_name=model, vector_engine="lancedb"
+    )
+    assert ok, message
+    assert manager.recipients() == {"ollama@ollama.com"} and manager.uses_cloud()
+    assert manager.withdraw_consent("ollama@ollama.com") is True and not manager.initialized
+    assert rm.RAGManager.recipients_of("ollama", local, model_name="llama3.2") == frozenset()
+    assert rm.RAGManager.recipients_of("ollama", local, model_name="glm-4.6:cloud") == {"ollama@ollama.com"}
+
+
+def test_settings_names_an_ollama_cloud_model_as_a_recipient() -> None:
+    from app_pages.rag_sidebar import _notice, _recipients
+
+    cfg = {
+        "provider": "ollama",
+        "base_url": "http://localhost:11434",
+        "model": "glm-4.6:cloud",
+        "embedding": "nomic-embed-text",
+    }
+    assert _recipients(cfg) == ["ollama@ollama.com"]  # the embeddings stay on this machine
+    assert "summary of each column" in _notice(["ollama@ollama.com"], cfg)
+    assert _recipients({**cfg, "model": "llama3.2"}) == []
+
+
 def test_a_refused_start_leaves_the_running_engine_as_it_was(monkeypatch, tmp_path) -> None:
     # the provider fields were written before the checks: a refused switch relabelled the running
     # engine, and a later withdrawal of its real provider missed it
