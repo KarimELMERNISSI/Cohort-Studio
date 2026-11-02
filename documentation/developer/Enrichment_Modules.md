@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.experimental.enable_iterative_imputer`, `sklearn.impute.IterativeImputer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `ingest.analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
+`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `ingest.analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
 
 ### class `MissForestTransformer` (data_imputation.py)
 
@@ -1084,6 +1084,32 @@ the values an exact formula computed from imputed ones, single-imputed as they a
 
 ---
 
+## patterns.py
+
+_The values a regular expression picks (Data > Clean > Categories), Python's own syntax, searched anywhere in each value
+as written (``^`` and ``$`` anchor it), case ignored unless asked. The pattern is tried in a separate Python process
+with a time limit: a pattern that backtracks without end (``(a+)+$`` on a long value) stops there, and never holds the
+server, which every user shares (Python's matcher keeps the interpreter while it runs). The values travel to that
+process and back on its own pipes; nothing is written._
+
+**Imports**:
+`__future__.annotations`, `json`, `re`, `subprocess`, `sys`, `collections.abc.Sequence`
+
+### class `PatternError` (patterns.py)
+
+A pattern that picks nothing it could: why, in plain words.
+
+### def `matching` (patterns.py)
+
+- **Arguments**: `pattern: str, values: Sequence[str]`
+
+- **Returns**: `list[str]`
+
+The values ``pattern`` finds, in their order. Raises :class:`PatternError` for an empty, overlong or invalid
+pattern, or one that takes longer than ``timeout`` seconds on these values.
+
+---
+
 ## recode.py
 
 _The values of a categorical variable as written, recoded (Data > Clean > Categories): each value given a clean value
@@ -1634,9 +1660,11 @@ fingerprints are left out: one of a single column can be tested against a guesse
 - **Returns**: `bool`
 
 Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
-held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier (many values,
-the typical one rare: names, numbers; read on the median and without the codes for missing, so that one frequent
-placeholder hides none).
+held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier: among the values
+held by ``min_count`` rows or more, those a cloud recipient would be sent, many, the typical one a small share of
+their rows (names on visits, numbers). Read on their median, without the codes for missing, so that one frequent
+placeholder hides none; the rare values are not among them, so that the typos of a messy categorical column beside
+a few frequent categories (half its values held by 1 to 4 rows) no longer make it read as an identifier.
 
 ### def `_ai_refused` (recode.py)
 

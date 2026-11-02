@@ -785,7 +785,7 @@ For each connector setting that names nothing this version offers, the variable 
 _No module description._
 
 **Imports**:
-`glob`, `logging`, `os`, `re`, `functools.cached_property`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `manage.iam.providers.local_duckdb.LocalDuckDBIAMProvider`, `manage.iam.schemas.UserCredentials`, `manage.iam.schemas.UserRole`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`
+`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`
 
 ### class `DBManager` (db_manager.py)
 
@@ -796,40 +796,6 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 - **__init__**(`self, db_path: str, scope: ComplexType`) -> `None`
   > No description available.
 
-- **iam_provider**(`self`) -> `LocalDuckDBIAMProvider`
-  > The local accounts, opened on first use: a session's store never opens the users database for nothing
-  > (the application signs users in through manage.iam).
-
-- **_get_user_connection**(`self`) -> `None`
-  > Get a new DuckDB connection for users DB.
-
-- **init_user_db**(`self`) -> `None`
-  > Initialize the users table with activation support.
-
-- **create_user**(`self, username: str, password: str, auto_activate: bool, role: UserRole`) -> `tuple[ComplexType]`
-  > Create a new user (pending approval unless auto_activate is set).
-
-- **verify_user**(`self, username: str, password: str`) -> `tuple[ComplexType]`
-  > Verify user credentials and check if account is active.
-
-- **get_all_users**(`self`) -> `list[str]`
-  > Get list of all registered usernames.
-
-- **get_all_users_with_status**(`self`) -> `list[dict[ComplexType]]`
-  > Get list of all users with their activation status.
-
-- **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
-  > Activate a user account (admin only).
-
-- **deactivate_user**(`self, username: str`) -> `tuple[ComplexType]`
-  > Deactivate a user account (admin only). Cannot deactivate admin.
-
-- **update_user_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
-  > Update a user's password.
-
-- **delete_user**(`self, username: str`) -> `tuple[ComplexType]`
-  > Delete a user account. Protects admin from deletion.
-
 - **_get_connection**(`self`) -> `None`
   > Get a new DuckDB connection.
 
@@ -839,8 +805,8 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 - **save_dataframe**(`self, df: pd.DataFrame, name: str, folder: ComplexType`) -> `tuple[ComplexType]`
   > Persists a pandas DataFrame to a Parquet file via DuckDB (Low level).
 
-- **save_dataset**(`self, df: pd.DataFrame, base_name: str, username: ComplexType`) -> `tuple[ComplexType]`
-  > Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept).
+- **save_dataset**(`self, df: pd.DataFrame, base_name: str`) -> `tuple[ComplexType]`
+  > Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept), in the workspace.
 
 - **load_dataframe**(`self, name: str, folder: ComplexType`) -> `tuple[ComplexType]`
   > Loads a Parquet file into a pandas DataFrame via DuckDB (Low level).
@@ -869,12 +835,8 @@ Helper class to manage DuckDB connections and data persistence using Parquet wit
 - **load_lineage**(`self, file_name: str`) -> `ComplexType`
   > No description available.
 
-- **get_available_tables**(`self`) -> `list[str]`
-  > List available parquet files in the current directory.
-
-- **get_available_datasets**(`self, username: ComplexType`) -> `list[str]`
-  > List available parquet files in the current directory, sorted by modification time.
-  > Filters by username if provided (unless admin).
+- **get_available_datasets**(`self`) -> `list[str]`
+  > The saved versions of the workspace's datasets, the newest first.
 
 - **save_stats**(`self, df: pd.DataFrame, dataset_name: str, stats_type: str`) -> `tuple[ComplexType]`
   > Save statistical results to parquet cache.
@@ -1602,10 +1564,6 @@ Central facade managing IAM operations and provider lifecycle.
 - **authenticate**(`self, credentials: UserCredentials`) -> `AuthResult`
   > Authenticate user credentials.
 
-- **verify_user**(`self, username: str, password: str`) -> `tuple[ComplexType]`
-  > Convenience verification method returning (success, message).
-  > Maintains complete drop-in compatibility with legacy DBManager calls.
-
 - **create_user**(`self, username: str, password: str, role: UserRole, auto_activate: bool`) -> `tuple[ComplexType]`
   > Provision a new user account. A name whose workspace folder exists is refused, with the message of a name taken
   > (core.workspace.workspace_exists): the folder may hold another account's files, such as the folder an earlier
@@ -1625,8 +1583,7 @@ Central facade managing IAM operations and provider lifecycle.
   > Return list of all registered usernames.
 
 - **get_all_users_with_status**(`self`) -> `list[dict[ComplexType]]`
-  > Return structured dictionary list of all users with status.
-  > Maintains complete drop-in compatibility with legacy DBManager calls.
+  > Every account with its status, as the Users page lists them.
 
 - **activate_user**(`self, username: str`) -> `tuple[ComplexType]`
   > Activate user account.
@@ -4045,7 +4002,7 @@ No description available.
   >      The user's workspace, passed by the session's services (manage.services); None outside a
   >      session.
 
-- **initialize_session**(`self, dataset_name: str, username: ComplexType`) -> `None`
+- **initialize_session**(`self, dataset_name: str`) -> `None`
   > Initializes a new session trace (``parent`` links it to the trace of a saved version it starts from).
 
 - **get_trace_path**(`self`) -> `ComplexType`
@@ -4099,9 +4056,8 @@ No description available.
 - **load_trace**(`self, filepath`) -> `None`
   > Loads a trace from a JSON file.
 
-- **get_available_datasets_from_traces**(`self, username`) -> `None`
-  > Scans all trace files in the trace directory and returns a list of available datasets.
+- **get_available_datasets_from_traces**(`self`) -> `None`
+  > Scans all trace files in the trace directory (the workspace's) and returns a list of available datasets.
   > Each entry contains: session_id, timestamp, step_description, file_path.
-  > Filters by username if provided (unless admin).
 
 ---

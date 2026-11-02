@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.criteria.describe_definition`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -318,6 +318,10 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > evaluated, or that no row can check, is listed in the details and not counted. The rows the family flags, as
   > the analysis population reads it (core.population.family_masks), are listed apart. None (N/A) when no rule is
   > declared or no check can be made.
+
+- **_where**(`self, rules: Mapping[ComplexType], check: Any`) -> `str`
+  > A check's name on the screens: a rule named by its column alone (a range: potassium_mmol_l) reads as what
+  > makes it fire (potassium_mmol_l < 2.5 or potassium_mmol_l > 7.0); the others by their name.
 
 - **_unchecked**(`self, rules: Mapping[ComplexType], unit: str`) -> `str`
   > Why a rule made no check: its values are held by no row, or the table no longer holds a column it reads (a
