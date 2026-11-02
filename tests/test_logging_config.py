@@ -2,6 +2,7 @@
 
 import io
 import logging
+import threading
 
 import pytest
 
@@ -61,7 +62,7 @@ def test_the_log_shows_neither_the_key_nor_its_traceback() -> None:
 def test_configure_logging_filters_every_root_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     root = logging.getLogger()
     handler = logging.StreamHandler(io.StringIO())
-    monkeypatch.setattr("utils.logging_config._CONFIGURED", False)
+    monkeypatch.setattr("utils.logging_config._configured", threading.Event())
     monkeypatch.setattr(root, "handlers", [handler])
     monkeypatch.setattr(root, "level", root.level)
     configure_logging()

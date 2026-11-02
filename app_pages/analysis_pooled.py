@@ -165,11 +165,12 @@ def compare_pooled(
         return Pooled(two_groups, analyze_mi(t_test, mi, columns=columns), reference, comparison)
     if numeric:
 
-        def linear_model(data: pd.DataFrame, i: int):
+        def linear_model(data: pd.DataFrame):
+            observed = data.attrs["imputation"] == 0  # the complete-case data
             data = _in_groups(data, group, levels)
             if more_groups == "anova":
                 return ancova(data, target, group, levels={group: levels})
-            _two_per_group(data.dropna(subset=columns), group, levels, observed=i == 0)
+            _two_per_group(data.dropna(subset=columns), group, levels, observed=observed)
             return welch_means(data, target, group, levels={group: levels})
 
         return Pooled(more_groups, analyze_mi(linear_model, mi, columns=columns), reference=levels[0])

@@ -237,9 +237,9 @@ def test_terms_with_different_complete_data_df_are_refused() -> None:
     mi, _ = _mi()
     levels = {"site": ["Ettelbruck", "Luxembourg", "Metz"]}
 
-    def uneven(data, i):
+    def uneven(data):
         fit = welch_means(data, "sbp", "site", levels=levels)
-        return replace(fit, term_df={"const": 9.0}) if i == 2 else fit
+        return replace(fit, term_df={"const": 9.0}) if data.attrs["imputation"] == 2 else fit
 
     with pytest.raises(ValueError, match="different complete-data df"):
         analyze_mi(uneven, mi)
@@ -267,7 +267,7 @@ def test_cox_regression_reports_hazard_ratios() -> None:
     mi, _ = _mi()
     levels = mi.levels(["arm", "site"])
     result = analyze_mi(
-        lambda d, i: cox_regression(d, "time", "event", ["age", "arm", "site"], levels=levels),
+        lambda d: cox_regression(d, "time", "event", ["age", "arm", "site"], levels=levels),
         mi,
         columns=["time", "event", "age", "arm", "site"],
     )
@@ -436,8 +436,8 @@ def test_survival_curves_are_pooled_with_medians_and_log_rank() -> None:
 def test_a_failure_names_the_imputation_and_unsupported_results_are_refused() -> None:
     mi, _ = _mi()
 
-    def fails_on_three(d: pd.DataFrame, i: int):
-        if i == 3:
+    def fails_on_three(d: pd.DataFrame):
+        if d.attrs["imputation"] == 3:
             raise RuntimeError("did not converge")
         return linear_regression(d, "sbp", ["age"])
 
@@ -448,12 +448,12 @@ def test_a_failure_names_the_imputation_and_unsupported_results_are_refused() ->
         analyze_mi(lambda d: {"mean": 1.0}, mi)
 
 
-def test_time_budget_gives_a_labelled_preview_and_fn_can_receive_the_index() -> None:
+def test_time_budget_gives_a_labelled_preview_and_each_dataset_carries_its_number() -> None:
     mi, _ = _mi(m=6)
     seen: list[int] = []
 
-    def fit(d: pd.DataFrame, i: int):
-        seen.append(i)
+    def fit(d: pd.DataFrame):
+        seen.append(d.attrs["imputation"])
         return linear_regression(d, "sbp", ["age"])
 
     result = analyze_mi(fit, mi, time_budget=0.0, min_imputations=2)
@@ -465,8 +465,9 @@ def test_time_budget_gives_a_labelled_preview_and_fn_can_receive_the_index() -> 
 def test_differing_complete_data_df_use_the_smallest() -> None:
     mi, _ = _mi(m=3)
 
-    def test_with_varying_df(d: pd.DataFrame, i: int) -> TestResult:
-        return TestResult(name="t", estimate=float(d["sbp"].mean()), se=1.0, df=[50.0 + i])
+    def test_with_varying_df(d: pd.DataFrame) -> TestResult:
+        df = [50.0 + d.attrs["imputation"]]
+        return TestResult(name="t", estimate=float(d["sbp"].mean()), se=1.0, df=df)
 
     result = analyze_mi(test_with_varying_df, mi, complete_case=False)
     assert result.term("estimate").dfcom == 51.0

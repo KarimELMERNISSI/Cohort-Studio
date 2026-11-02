@@ -1,8 +1,9 @@
 """
 Run one analysis on every imputed dataset and pool it.
 
-``analyze_mi(fn, mi)`` calls ``fn(data)`` (or ``fn(data, i)``, to skip costly extras beyond the first
-imputations) on each completed dataset, picks the adapter for the type of result, pools the estimates
+``analyze_mi(fn, mi)`` calls ``fn(data)`` on each completed dataset, whose number is in
+``data.attrs["imputation"]`` (an analysis can skip costly extras beyond the first imputations; 0 is the complete-case
+data), picks the adapter for the type of result, pools the estimates
 (:mod:`biostats.mi.pooling`) and returns an :class:`MIResult`: the pooled table, D1/D2 tests, what the
 adapter adds (ratios, curves, adjusted means, a pooled t-test), the complete-case analysis for comparison
 and the warnings counted across imputations. An analysis that fails on one imputation stops the pooling
@@ -11,7 +12,6 @@ and the warnings counted across imputations. An analysis that fails on one imput
 
 from __future__ import annotations
 
-import inspect
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -57,18 +57,6 @@ class MIResult:
         return self.table.to_frame() if self.table is not None else pd.DataFrame()
 
 
-def _takes_index(fn: Callable[..., Any]) -> bool:
-    try:
-        params = [
-            p
-            for p in inspect.signature(fn).parameters.values()
-            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD) and p.default is p.empty
-        ]
-    except TypeError, ValueError:
-        return False
-    return len(params) >= 2
-
-
 def analyze_mi(
     fn: Callable[..., Any],
     mi: MIData,
@@ -87,14 +75,14 @@ def analyze_mi(
     (seconds) the loop stops once at least ``min_imputations`` datasets are analysed and the budget is spent;
     the result is then flagged ``partial`` with a note.
     """
-    takes_index = _takes_index(fn)
     started = time.perf_counter()
     results: list[Any] = []
     partial = False
     floor = max(2, min(min_imputations, mi.m))
     for i, data in mi.completed(columns):
         try:
-            results.append(fn(data, i) if takes_index else fn(data))
+            data.attrs["imputation"] = i  # the imputation's number, for an analysis that reads it
+            results.append(fn(data))
         except NotPoolableError:
             raise
         except Exception as exc:
@@ -149,7 +137,8 @@ def analyze_mi(
     if complete_case:
         try:
             observed = mi.complete(0, columns)
-            cc = fn(observed, 0) if takes_index else fn(observed)
+            observed.attrs["imputation"] = 0
+            cc = fn(observed)
         except Exception as exc:  # the comparison is informative only
             notes.append(f"complete-case analysis unavailable: {exc}")
     return MIResult(

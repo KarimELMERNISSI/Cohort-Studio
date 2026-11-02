@@ -273,13 +273,13 @@ def _fit_cox(df, mi, key, config, time_col, event_col, covariates) -> None:
 
             levels = mi.levels(covariates)
             fitted = analyze_mi(
-                lambda d, i: cox_regression(
+                lambda d: cox_regression(
                     d,
                     time_col,
                     event_col,
                     covariates,
                     levels=levels,
-                    diagnostics=i <= PH_TEST_IMPUTATIONS,
+                    diagnostics=d.attrs["imputation"] <= PH_TEST_IMPUTATIONS,
                 ),
                 mi,
                 columns=[time_col, event_col, *covariates],

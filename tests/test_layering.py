@@ -104,8 +104,8 @@ MODULE_NAME = re.compile(r"[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+")  # a dotted n
 # --- today's exceptions (they can only shrink) ------------------------------------------------------------------
 # R1, (importer, imported): upward imports
 KNOWN_UPWARD: set[tuple[str, str]] = set()
-# R2: the cycles allowed, by design
-CYCLES_BY_DESIGN = [{"biostats.mi.engine", "biostats.mi.parallel"}]
+# R2: the cycles allowed, by design: none (the parallel imputation's worker has a module of its own)
+CYCLES_BY_DESIGN: list[set[str]] = []
 # R3, (module below ui, the import through which it reaches Streamlit)
 KNOWN_STREAMLIT: set[tuple[str, str]] = set()
 # R4, modules outside manage/rag/providers that import a provider SDK: none (Gemini's file upload of the document

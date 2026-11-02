@@ -3,8 +3,8 @@ Parallel imputation in a separate Python process.
 
 Worker processes started with ``spawn`` re-import the parent's ``__main__`` module. Inside Streamlit (and its
 AppTest) that module is the page script, which must not run again in the workers. ``impute(workers > 1)``
-therefore runs ``python -m biostats.mi.parallel`` with the data and the specification in a temporary folder:
-there, ``__main__`` is this module and the process pool is safe. Progress is written to a small file that
+therefore runs ``python -m biostats.mi.worker`` with the data and the specification in a temporary folder:
+there, ``__main__`` is that module and the process pool is safe.Progress is written to a small file that
 the caller polls; the result comes back the same way. Each chain has its own random stream, so the result is
 the same as a sequential run.
 
@@ -99,7 +99,7 @@ def _run(
     errors = tmp / "stderr.txt"
     with errors.open("wb") as err:  # a file, not a pipe: many warnings cannot block the child
         process = subprocess.Popen(
-            [executable, "-m", "biostats.mi.parallel", str(job), str(result), str(ticks)],
+            [executable, "-m", "biostats.mi.worker", str(job), str(result), str(ticks)],
             cwd=root,
             env=env,
             stdout=subprocess.DEVNULL,
@@ -132,24 +132,3 @@ def _run(
     if progress is not None:
         progress(1.0)
     return run
-
-
-def _main(job: str, result: str, ticks: str) -> None:
-    from biostats.mi.engine import impute
-
-    with open(job, "rb") as handle:
-        df, spec, workers = pickle.load(handle)
-
-    def report(fraction: float) -> None:
-        tmp = f"{ticks}.tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            handle.write(f"{fraction:.4f}")
-        os.replace(tmp, ticks)
-
-    run = impute(df, spec, workers=workers, progress=report)
-    with open(result, "wb") as handle:
-        pickle.dump(run, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-if __name__ == "__main__":
-    _main(*sys.argv[1:4])

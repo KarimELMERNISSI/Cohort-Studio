@@ -14,6 +14,7 @@ variables has changed, so that a test that sets one sees it at once. Secrets are
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import re
@@ -208,26 +209,22 @@ def _validate() -> Settings:
     return Settings(**sections)  # type: ignore[arg-type]
 
 
-_cache: tuple[tuple[str | None, ...], Settings] | None = None
-
-
 def get_settings() -> Settings:
     """The settings of the current environment, validated again only when one of their variables has changed."""
-    global _cache
-    raw = tuple(os.environ.get(name) for name in NAMES)
-    cached = _cache  # one immutable pair: two sessions racing only validate twice
-    if cached is not None and cached[0] == raw:
-        return cached[1]
-    settings = _validate()
-    _cache = (raw, settings)
-    return settings
+    return _settings_of(tuple(os.environ.get(name) for name in NAMES))
+
+
+@functools.lru_cache(maxsize=1)
+def _settings_of(raw: tuple[str | None, ...]) -> Settings:
+    """The settings validated for one state of their variables (``raw``): two sessions racing only validate twice."""
+    return _validate()
 
 
 _loaded: set[str] = set()
 _load_lock = (
     threading.Lock()
 )  # the first runs of several sessions: .env is loaded before any of them validates
-_warned = False
+_warned = threading.Event()  # the warning about a Streamlit secrets file, given once
 
 
 def _unread_streamlit_files(app_folder: Path | None) -> list[str]:
@@ -253,7 +250,6 @@ def load_settings(env_file: str | Path | None = None) -> Settings:
     warn, once, about a ``.streamlit/secrets.toml``, which is not read (the settings have one source); then validate
     every setting. Raises SettingsError naming each wrong variable, never its value.
     """
-    global _warned
     app_folder = None
     with _load_lock:
         if env_file is not None:
@@ -264,8 +260,8 @@ def load_settings(env_file: str | Path | None = None) -> Settings:
 
                 dotenv.load_dotenv(path, override=False)
                 _loaded.add(str(path))
-        if not _warned:
-            _warned = True
+        if not _warned.is_set():
+            _warned.set()
             for place in _unread_streamlit_files(app_folder):
                 logger.warning(
                     "A .streamlit/secrets.toml exists in %s and is not read ([secrets] files = [] in "
@@ -293,9 +289,8 @@ def secret_values(min_length: int = 8) -> list[str]:
 
 def reset_settings() -> None:
     """Forget the settings and the .env files already loaded (tests)."""
-    global _cache, _warned
-    _cache = None
-    _warned = False
+    _settings_of.cache_clear()
+    _warned.clear()
     _loaded.clear()
 
 

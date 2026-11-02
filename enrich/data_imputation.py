@@ -2,9 +2,7 @@
 import pandas as pd
 from sklearn.base import TransformerMixin
 from sklearn.compose import ColumnTransformer  # split some of our processing to specific columns
-from sklearn.experimental import enable_iterative_imputer  # noqa: F401
 from sklearn.impute import (  # to use basic (median, mean, most_frequent, constant, etc.) and knn imputers
-    IterativeImputer,  # importable only after the side-effect import of enable_iterative_imputer above
     KNNImputer,
     SimpleImputer,
 )
@@ -449,6 +447,9 @@ def get_imputer(numerical_imputation_method='mean',
         num_imputer = KNNImputer()
     elif numerical_imputation_method == 'mice':
         # Single imputation by chained equations (one deterministic pass); not multiple imputation.
+        from sklearn.experimental import enable_iterative_imputer  # noqa: F401 (scikit-learn's side-effect import)
+        from sklearn.impute import IterativeImputer
+
         num_imputer = IterativeImputer(random_state=RANDOM_STATE)
     elif numerical_imputation_method == 'missforest':
         num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)

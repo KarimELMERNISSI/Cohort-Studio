@@ -173,7 +173,6 @@ def test_an_ollama_model_run_elsewhere_is_a_recipient_whatever_its_name() -> Non
 
 def test_the_ollama_server_says_which_models_it_runs_elsewhere() -> None:
     pytest.importorskip("httpx", reason="the ai extra")
-    import json
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 

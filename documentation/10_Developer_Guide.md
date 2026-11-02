@@ -31,8 +31,8 @@ the test) until a milestone moves them. The groups of `manage` are not ordered a
 
 **Rules:**
 - **R1:** imports go strictly down, and two groups on the same layer do not import each other.
-- **R2:** no import cycles. The one exception is the multiple-imputation engine and its worker module
-  (`biostats.mi.engine`, `biostats.mi.parallel`), by design.
+- **R2:** no import cycles. The multiple-imputation engine starts its worker process by the module's name
+  (`biostats.mi.worker`, which imports the engine), never by an import.
 - **R3:** nothing below `ui` reaches Streamlit, through any chain of imports. A graph renderer imports it inside its
   `render` method only (and yFiles' component package inside `translate`).
 - **R4:** the AI providers' SDKs are imported only in `manage/rag/providers`.

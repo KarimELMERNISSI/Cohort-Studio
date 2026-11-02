@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 
 from utils.settings import get_settings, secret_values
 
-_CONFIGURED = False
+_configured = threading.Event()  # set once the root logger is configured
 _NOISY_LIBRARIES = ("httpx", "httpcore", "urllib3", "lancedb", "qdrant_client", "portalocker", "watchdog", "PIL", "matplotlib", "numba")
 
 REDACTED = "[redacted]"
@@ -61,8 +62,7 @@ class RedactSecrets(logging.Filter):
 
 def configure_logging(level: str | None = None) -> None:
     """Configure the root logger from ``CMP_LOG_LEVEL`` (default INFO). Safe to call repeatedly."""
-    global _CONFIGURED
-    if _CONFIGURED:
+    if _configured.is_set():
         return
     level_name = (level or get_settings().logging.level).upper()
     root = logging.getLogger()
@@ -76,4 +76,4 @@ def configure_logging(level: str | None = None) -> None:
             handler.addFilter(RedactSecrets())
     for name in _NOISY_LIBRARIES:
         logging.getLogger(name).setLevel(logging.WARNING)
-    _CONFIGURED = True
+    _configured.set()
