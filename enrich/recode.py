@@ -89,7 +89,9 @@ OFFER_KINDS = frozenset({CAPITALS, CASE, FIRST_LETTER, VARIANT, SPELLING, CLOSE,
 # what a value set to missing means (stored with the step: never renamed)
 UNKNOWN, NOT_APPLICABLE, DECLINED = "unknown or not done", "not applicable", "declined"
 MEANINGS = (UNKNOWN, NOT_APPLICABLE, DECLINED)
-RESULT = "a result: keep as a value"  # the other answer to a code that may mean missing ("ND": not detected)
+# the other answer to a code that may mean missing ("ND": not detected): a result, kept as a value; the answer is
+# recorded (``results``), so that the page shows it and "Tick all" leaves the code out
+RESULT = "a result"
 # codes read as unknown (folded: spaces, capitals and accents)
 _UNKNOWN_CODES = frozenset(
     {
@@ -308,8 +310,11 @@ class Candidate:
 
     column: str
     values: int  # distinct values as written
-    to_check: int  # the values the fold gives a spelling, and those an offer names
+    to_check: int  # the values an offer names
     cleaned_into: str = ""  # the copy a recode of it wrote, still a column
+    spaced: int = (
+        0  # the values written with extra spaces, which the fold collapses (nothing to check)
+    )
 
 
 def _spaced(value: str) -> str:
@@ -866,8 +871,24 @@ def values_fp(counts: Mapping[str, int], fold_rule: str | None = FOLD) -> str:
 
 
 def new_choices() -> dict[str, Any]:
-    # "ai_by": who proposed each AI choice ({provider, model, where, values_sent, values_held}), recorded with the step
-    return {"mapping": {}, "kinds": {}, "kept": [], "meanings": {}, "reasons": {}, "ai_by": {}}
+    # "ai_by": who proposed each AI choice ({provider, model, where, values_sent, values_held}), recorded with the step;
+    # "results": the codes answered a result (ND: not detected), kept as values
+    return {
+        "mapping": {},
+        "kinds": {},
+        "kept": [],
+        "meanings": {},
+        "reasons": {},
+        "ai_by": {},
+        "results": [],
+    }
+
+
+def _unanswered(choices: MutableMapping[str, Any], value: str) -> None:
+    """Another choice for a value replaces its answer "a result"."""
+    results = choices.get("results")
+    if results and value in results:
+        results.remove(value)
 
 
 def _drop(choices: MutableMapping[str, Any], key: str) -> None:
@@ -891,6 +912,7 @@ def give(
     spellings = fold(counts)
     mapping, kept = choices["mapping"], choices["kept"]
     spelling = spellings.get(value, value)
+    _unanswered(choices, value)
     if value in kept:
         kept.remove(value)
     if (
@@ -917,12 +939,20 @@ def give(
 
 
 def unset_missing(choices: MutableMapping[str, Any], counts: Mapping[str, int], value: str) -> None:
-    """A value no longer missing: its own choice goes; when its group's choice still sets it to missing, it is kept as
-    written."""
+    """A value no longer missing: its own choice goes, its answer "a result" too; when its group's choice still sets it
+    to missing, it is kept as written."""
     _drop(choices, value)
+    _unanswered(choices, value)
     spellings = fold(counts)
     if resolve(value, spellings, choices["mapping"], choices["kept"])[0] is None:
         choices["kept"].append(value)
+
+
+def keep_result(choices: MutableMapping[str, Any], counts: Mapping[str, int], value: str) -> None:
+    """A code that may mean missing answered a result (ND: not detected): kept as a value, as written, and the answer
+    kept with the choices (``results``), recorded with the step."""
+    give(choices, counts, value, value)
+    choices.setdefault("results", []).append(value)
 
 
 def tick(
@@ -939,6 +969,7 @@ def tick(
         same = value != offer.value and spellings.get(value, value) == offer.value
         if same and choices["mapping"].get(value, _NONE) == offer.clean:
             _drop(choices, value)
+    _unanswered(choices, offer.value)
     if offer.value in choices["kept"]:
         choices["kept"].remove(offer.value)
     choices["mapping"][offer.value] = offer.clean
@@ -1112,10 +1143,13 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
         "kept",
         "missing_meaning",
         "groupings",
+        "results",
         "target_fp",
         "values_fp",
     )
     out = {k: v for k, v in params.items() if k not in named}
+    if params.get("results"):  # the codes answered a result: counted, never named
+        out["codes kept as results"] = len(params["results"])
     chosen = (
         params.get("kinds") or params.get("reasons") or {}
     )  # "reasons": every change, before the fold rule
@@ -1288,19 +1322,51 @@ def ai_offers(
     into the value holding the most rows, so that ticking them all never swaps two names. The model's text is kept to a
     short reason, drawn as text. In the order of the values' rows.
     """
+    return _ai_read(proposals, counts, sent=sent, taken=taken)[0]
+
+
+def ai_tally(
+    proposals: Iterable[Mapping[str, Any]],
+    counts: Mapping[str, int],
+    *,
+    sent: Collection[str],
+    taken: Collection[str] = (),
+) -> dict[str, int]:
+    """
+    Where the AI engine's proposals went, by value proposed (``ai_offers``): ``shown`` as offers; ``offered`` on a
+    value an offer of the rules already names; ``apart``, refused, as the rules keep the two values apart (or the
+    proposed name is too long); ``reversed``, the same values the other way round of a proposal shown (one direction
+    is kept). A proposal naming a value it was not sent, or none, is no proposal.
+    """
+    return _ai_read(proposals, counts, sent=sent, taken=taken)[1]
+
+
+def _ai_read(
+    proposals: Iterable[Mapping[str, Any]],
+    counts: Mapping[str, int],
+    *,
+    sent: Collection[str],
+    taken: Collection[str],
+) -> tuple[tuple[Offer, ...], dict[str, int]]:
     spellings = fold(counts)
     allowed = {spellings.get(v, v) for v in sent if v in counts}
     held: dict[str, int] = defaultdict(int)
     for value, n in counts.items():
         held[spellings.get(value, value)] += n
     found: dict[str, Offer] = {}
+    offered: set[str] = set()
+    apart: set[str] = set()
     for proposal in proposals:
         value = str(proposal.get("value", ""))
         spelling = spellings.get(value, value)
         clean = " ".join(str(proposal.get("clean", "")).split())
-        if spelling not in allowed or spelling in taken or spelling in found:
+        if spelling not in allowed or spelling in found or not clean or clean == spelling:
+            continue  # a value it was not sent, a second proposal for one value, no proposal
+        if spelling in taken:
+            offered.add(spelling)
             continue
-        if not clean or len(clean) > 60 or clean == spelling or _ai_refused(spelling, clean):
+        if len(clean) > 60 or _ai_refused(spelling, clean):
+            apart.add(spelling)
             continue
         reason = _shortened(" ".join(str(proposal.get("reason", "")).split()), 80)
         found[spelling] = Offer(spelling, clean, AI, reason=reason)
@@ -1312,7 +1378,15 @@ def ai_offers(
         if offer.value not in into and offer.clean not in kept:
             kept[offer.value] = offer
             into.add(offer.clean or "")
-    return tuple(sorted(kept.values(), key=lambda o: (-held[o.value], o.value)))
+    tally = {
+        "shown": len(kept),
+        "offered": len(offered),
+        "apart": len(
+            apart - set(found)
+        ),  # a value refused once, then proposed again as the rules allow, is shown
+        "reversed": len(found) - len(kept),
+    }
+    return tuple(sorted(kept.values(), key=lambda o: (-held[o.value], o.value))), tally
 
 
 def _shortened(text: str, limit: int) -> str:
@@ -1355,8 +1429,9 @@ def last_record(
 def documented(record: Mapping[str, Any]) -> dict[str, Any]:
     """
     What a recode records of the choices beside the values it writes: the mapping, the kinds, the folds put back,
-    what missing means, why each grouping was made and who proposed each AI choice. Two records that document the same
-    choices compare equal; a corrected meaning or reason does not, though the copy it writes is the same.
+    what missing means, the codes answered a result, why each grouping was made and who proposed each AI choice. Two
+    records that document the same choices compare equal; a corrected meaning or reason does not, though the copy it
+    writes is the same.
     """
     grouped = record.get("groupings") or {}
     return {
@@ -1364,6 +1439,7 @@ def documented(record: Mapping[str, Any]) -> dict[str, Any]:
         "kinds": dict(record.get("kinds") or {}),
         "kept": sorted(record.get("kept") or ()),
         "missing_meaning": dict(record.get("missing_meaning") or {}),
+        "results": sorted(record.get("results") or ()),
         "reasons": {
             str(c): (g.get("reason", "") if isinstance(g, Mapping) else str(g))
             for c, g in grouped.items()
@@ -1395,6 +1471,7 @@ def choices_of(record: Mapping[str, Any] | None) -> dict[str, Any]:
             for c, g in grouped.items()
         },
         "ai_by": {k: dict(v) for k, v in (record.get("ai_by") or {}).items() if k in mapping},
+        "results": list(record.get("results") or []),
     }
 
 
@@ -1442,9 +1519,10 @@ def numeric_codes(df: pd.DataFrame) -> list[str]:
 def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> list[Candidate]:
     """
     The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
-    (source -> copy) left out: those with values to check first, then the cleaned ones, then the others, each in the
-    dataset's order. The count of values to check holds every offer the page makes, variants and close spellings
-    apart included (rapidfuzz keeps the two-by-two comparison to milliseconds).
+    (source -> copy) left out: those with values to check first, then those with extra spaces only, then the cleaned
+    ones, then the others, each in the dataset's order. The count of values to check holds every offer the page makes,
+    variants and close spellings included (rapidfuzz keeps the two-by-two comparison to milliseconds); the values
+    written with extra spaces, which the fold collapses with nothing to check, are counted apart.
     """
     recoded = {s: t for s, t in (recoded or {}).items() if s in df.columns and t in df.columns}
     copies = set(recoded.values())
@@ -1466,12 +1544,16 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
         found.append(
             (
                 position,
-                Candidate(str(column), len(counts), len(hints.spellings) + len(hints.offers), into),
+                Candidate(
+                    str(column), len(counts), len(hints.offers), into, spaced=len(hints.spellings)
+                ),
             )
         )
 
-    def rank(c: Candidate) -> int:  # to check, then cleaned, then the others
-        return 1 if c.cleaned_into else 0 if c.to_check else 2
+    def rank(
+        c: Candidate,
+    ) -> int:  # to check, then extra spaces only, then cleaned, then the others
+        return 2 if c.cleaned_into else 0 if c.to_check else 1 if c.spaced else 3
 
     return [c for _, c in sorted(found, key=lambda pc: (rank(pc[1]), pc[0]))]
 
@@ -1503,6 +1585,7 @@ __all__ = [
     "Offer",
     "Suggestions",
     "ai_offers",
+    "ai_tally",
     "candidates",
     "changes",
     "choices_of",
@@ -1512,6 +1595,7 @@ __all__ = [
     "free_text",
     "give",
     "groupings",
+    "keep_result",
     "last_record",
     "letters_apart",
     "level_counts",

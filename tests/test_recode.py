@@ -629,10 +629,11 @@ def test_the_variables_listed_leave_out_the_copies_and_say_which_were_cleaned() 
         }
     )
     found = candidates(df, {"sex": "sex_clean"})
-    assert [(c.column, c.values, c.to_check, c.cleaned_into) for c in found] == [
-        ("site", 3, 1, ""),
-        ("sex", 3, 1, "sex_clean"),
-        ("arm", 2, 0, ""),
+    # extra spaces are counted apart: the fold collapses them, with nothing to check
+    assert [(c.column, c.values, c.to_check, c.spaced, c.cleaned_into) for c in found] == [
+        ("site", 3, 0, 1, ""),
+        ("sex", 3, 1, 0, "sex_clean"),
+        ("arm", 2, 0, 0, ""),
     ]
 
 

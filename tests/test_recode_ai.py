@@ -15,12 +15,14 @@ from enrich.recode import (
     AI,
     Offer,
     ai_offers,
+    ai_tally,
     choices_of,
     free_text,
     groupings,
     new_choices,
     recorded,
     report_params,
+    suggest,
     tick,
 )
 from manage.ai_payload import category_values
@@ -294,3 +296,24 @@ def test_a_translation_or_an_abbreviation_is_read_and_a_number_never_crossed() -
     ]
     got = {o.value: o.clean for o in ai_offers(proposals, counts, sent=list(counts))}
     assert got == {"MI": "myocardial infarction", "Oui": "Yes"}
+
+
+def test_the_tally_says_where_each_proposal_went() -> None:
+    """Shown, on a value the rules already offer, refused by the rules, or the same values the other way round."""
+    counts = {"Female": 40, "Male": 40, "Femme": 6, "Homme": 6, "FEMALE": 6}
+    proposals = [
+        {"value": "Femme", "clean": "Female"},
+        {"value": "Homme", "clean": "Male"},
+        {"value": "FEMALE", "clean": "Female"},  # a case variant the rules offer
+        {"value": "Female", "clean": "Femme"},  # Femme → Female the other way round
+        {"value": "Male", "clean": "Female"},  # a word inside the other: two categories
+        {"value": "Elsewhere", "clean": "Female"},  # never sent: no proposal
+    ]
+    taken = {o.value for o in suggest(counts).offers}
+    assert "FEMALE" in taken
+    tally = ai_tally(proposals, counts, sent=list(counts), taken=taken)
+    assert tally == {"shown": 2, "offered": 1, "apart": 1, "reversed": 1}
+    assert [o.value for o in ai_offers(proposals, counts, sent=list(counts), taken=taken)] == [
+        "Femme",
+        "Homme",
+    ]

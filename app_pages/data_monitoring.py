@@ -1808,13 +1808,17 @@ def app():
         recoded = recoded_columns(state.transformation_manager.history)
         found = state.session.memo("clean_candidates", None, lambda: candidates(base, recoded))
         written = sum(1 for c in found if c.to_check and not c.cleaned_into)
+        # extra spaces split a level in two in an analysis, with nothing to check: said apart
+        spaced = sum(1 for c in found if c.spaced and not c.to_check and not c.cleaned_into)
         said = [dates_found(n)] if n else []
         if written:
             said.append(f"{written} variable{'s' if written != 1 else ''} with values to check")
+        if spaced:
+            said.append(f"{spaced} variable{'s' if spaced != 1 else ''} with extra spaces")
         if said:
             with hint, st.container(horizontal=True, vertical_alignment="center"):
                 st.caption(f":material/cleaning_services: {' · '.join(said)}.")
                 if n:
                     page_link("clean", "Clean dates", tab="date_checks")
-                if written:
+                if written or spaced:
                     page_link("clean", "Clean categories", tab="categories")

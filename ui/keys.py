@@ -140,6 +140,14 @@ KEYS: tuple[Key, ...] = (
         "record names those two when a proposal is ticked); asked again once the column's values change",
     ),
     Key(
+        "clean_ai_pending",
+        "app_pages.clean_categories",
+        "page",
+        note="Clean > Categories: a Send just clicked (the values and the recipient previewed), made by the next run "
+        "beside the heading, under a spinner, then removed",
+        reset_on_dataset=True,
+    ),
+    Key(
         "clean_manual",
         "app_pages.clean_categories",
         "dataset",

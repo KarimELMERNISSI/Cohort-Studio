@@ -24,6 +24,7 @@ from enrich.recode import (
     GROUPING,
     MISSING_CODE,
     NOT_APPLICABLE,
+    RESULT,
     SPELLING,
     UNKNOWN,
     report_params,
@@ -214,15 +215,16 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
     at = _open({"sex": SEX, "age": list(range(len(SEX)))})
     assert _one(at.selectbox, "clean_variable::").value == "sex"
     written, missing = _group(at, "written"), _group(at, "missing")
-    assert written.options == ["`Female` → `F` · first-letter code · 1 row"]  # the drawn labels
+    # the drawn labels: the values in bold body text, never markup
+    assert written.options == ["**Female** → **F** · first-letter code · 1 row"]
     # a one-letter value: case may name a category (Kell K and k), so it is checked on its own
-    assert _group(at, "case").options == ["`f` → `F` · 1 row"]
+    assert _group(at, "case").options == ["**f** → **F** · 1 row"]
     assert _tick_all(at, "case") is None
     assert (
         missing.options
         == [  # n.a. names no meaning; unknown reads as unknown; the group's title says why
-            "`n.a.` → missing · 2 rows",
-            "`unknown` → missing · 1 row",
+            "**n\\.a\\.** → missing · 2 rows",
+            "**unknown** → missing · 1 row",
         ]
     )
     assert not written.value and not missing.value  # offered, never applied
@@ -304,7 +306,7 @@ def test_a_value_set_to_missing_says_what_missing_means() -> None:
         "Say what missing means for `n.a.` in the table's Missing column." in c.value
         for c in at.caption
     )
-    assert _rows(at)[_row(at, "n.a.")][3] == "missing: say what it means"
+    assert _rows(at)[_row(at, "n.a.")][3] == "choose a meaning"
     assert _one(at.button, "clean_missing::").disabled  # nothing picked, no meaning yet
     _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
     assert not at.button(key="clean_apply::sex").disabled
@@ -319,6 +321,9 @@ def test_merging_two_categories_is_a_grouping_that_says_why() -> None:
     _ok(at)
     assert at.button(key="clean_apply::nyha").disabled
     reason = _one(at.text_input, "clean_reason::")
+    assert (
+        reason.label == "Why group `IV` with `III`?"
+    )  # the value keeping its name is not among those grouped
     reason.input("advanced heart failure, as pre-specified").run()
     _ok(at)
     assert not at.button(key="clean_apply::nyha").disabled
@@ -403,7 +408,7 @@ def test_values_nobody_chose_reach_no_record_and_markup_is_drawn_as_text() -> No
     spec = at.get("plotly_chart")[0].proto.spec
     assert "<a href" not in spec and "&lt;a href" in spec
     offers = _group(at, "letter")
-    assert offers.options == ["`Luxembourgg` → `Luxembourg` · 1 edit apart · 1 → 120 rows"]
+    assert offers.options == ["**Luxembourgg** → **Luxembourg** · 1 edit apart · 1 → 120 rows"]
     offers.select("Luxembourgg").run()
     _set_to_missing(at, ["CANARY-MISS-5B9"], UNKNOWN)
     at.button(key="clean_apply::commune").click().run()
@@ -495,9 +500,20 @@ def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_propose
     assert at.session_state["rag_manager"].sent == [
         ("sex", ["Female", "Femme", "Male"])
     ]  # A to Z, no Homme
-    assert any("The AI engine proposed 1 correspondence" in c.value for c in at.caption)
+    # made by the run that followed Send, beside the heading: every proposal accounted for (Homme was not sent)
+    assert "clean_ai_pending" not in at.session_state
+    assert any(
+        c.value == "The AI engine made 1 proposal, below, under Proposed by the AI engine."
+        for c in at.caption
+    )
+    offers = [w for w in at.pills if str(w.key).startswith("clean_offers::")]
+    assert "::ai::" in str(
+        offers[0].key
+    )  # the AI engine's group first: what Send changed shows at the top
     group = _group(at, "ai")
-    assert group.options == ["`Femme` → `Female` · French for female · 6 → 40 rows"]  # both counts
+    assert group.options == [
+        "**Femme** → **Female** · French for female · 6 → 40 rows"
+    ]  # both counts
     assert not group.value  # offered, never applied
     assert _tick_all(at, "ai") is None
     group.select("Femme").run()
@@ -550,13 +566,15 @@ def test_each_edit_of_the_table_is_read_once_and_a_later_one_wins() -> None:
 
 
 def test_the_table_starts_again_when_the_store_and_what_it_shows_differ() -> None:
-    """ND said to be a result: kept as written, so its cell reads "—", not the answer the browser painted."""
+    """A clean value typed with spaces around it is stored without them: the cell reads what the store holds, not
+    what the browser painted."""
     at = _open({"virus": ["detected"] * 40 + ["negative"] * 40 + ["ND"] * 6})
-    r = _row(at, "ND")
-    first = _edit(at, {str(r): {"Missing": "a result: keep as a value"}})
+    r = _row(at, "negative")
+    first = _edit(at, {str(r): {"Clean value": "  Negative  "}})
     assert _editor(at).proto.id != first  # drawn again from the store
-    assert _rows(at)[r][3] == "—" and at.session_state["clean_manual"]["virus"]["mapping"] == {}
-    second = _edit(at, {str(r): {"Missing": "declined"}})
+    assert _rows(at)[r][2] == "Negative"
+    assert at.session_state["clean_manual"]["virus"]["mapping"] == {"negative": "Negative"}
+    second = _edit(at, {str(_row(at, "ND")): {"Missing": "declined"}})
     assert (
         _editor(at).proto.id == second
     )  # the store shows what the browser shows: the table is kept
@@ -648,3 +666,162 @@ def test_a_grouping_given_a_reason_stays_one() -> None:
     assert _grouped(counts, record, choices) == {
         "Diabetes mellitus": ["Diabetes melitus", "Diabetes mellitus"]
     }
+
+
+def _popover(at: AppTest, prefix: str):
+    found = []
+
+    def walk(node) -> None:
+        proto = getattr(node, "proto", None)
+        if getattr(node, "type", None) == "popover" and prefix in str(getattr(proto, "id", "")):
+            found.append(proto.popover)
+        for child in getattr(node, "children", {}).values():
+            walk(child)
+
+    walk(at._tree)
+    (popover,) = found
+    return popover
+
+
+def test_a_code_answered_a_result_is_kept_and_shown_as_answered() -> None:
+    """ND said to be a result: the answer was kept nowhere, so the table started again at its first row, the cell read
+    "—", and "Tick the other 1" set ND back to missing."""
+    at = _open(
+        {
+            "virus": ["detected"] * 40
+            + ["negative"] * 40
+            + ["ND"] * 6
+            + ["n.a."] * 3
+            + ["unknown"] * 2
+        }
+    )
+    assert _tick_all(at, "missing").label == "Tick all 3"
+    r = _row(at, "ND")
+    first = _edit(at, {str(r): {"Missing": RESULT}})
+    assert (
+        _editor(at).proto.id == first
+    )  # the store holds the answer the browser shows: the table is kept
+    assert _rows(at)[r][3] == RESULT and _rows(at)[r][4] == "kept: a result"
+    store = at.session_state["clean_manual"]["virus"]
+    assert store["results"] == ["ND"] and "ND" not in store["mapping"]
+    assert _tick_all(at, "missing").label == "Tick the other 2"  # an answered code is left as it is
+    _tick_all(at, "missing").click().run()
+    _ok(at)
+    assert at.session_state["clean_manual"]["virus"]["results"] == ["ND"]
+    assert _tick_all(at, "missing").label == "All answered"
+    _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
+    at.button(key="clean_apply::virus").click().run()
+    _ok(at)
+    params = _step(at)["params"]
+    assert params["results"] == ["ND"] and params["mapping"] == {"n.a.": None, "unknown": None}
+    shown = report_params(params)
+    assert shown["codes kept as results"] == 1 and "ND" not in repr(shown)
+    assert (
+        _rows(at)[_row(at, "ND")][3] == RESULT
+    )  # cleaning again starts from the record, the answer with it
+    assert any("Nothing changed since `virus_clean` was written." in c.value for c in at.caption)
+    _edit(
+        at, {str(_row(at, "ND")): {"Missing": "—"}}
+    )  # the answer withdrawn: the record would say another thing
+    assert not at.button(key="clean_apply::virus").disabled
+    assert not at.session_state["clean_manual"]["virus"]["results"]
+
+
+def test_a_pill_ticked_keeps_its_key_and_a_pill_the_table_changed_is_drawn_again() -> None:
+    """The keyboard's focus stays on a pill that was ticked; a pill whose offer the table changed is new."""
+    at = _open({"sex": ["F"] * 30 + ["M"] * 30 + ["Female", "male", "MALE", "unknown"]})
+    editor = _editor(at).proto.id
+    before = _group(at, "written").key
+    _group(at, "written").select("Female").run()
+    _ok(at)
+    assert _group(at, "written").key == before and "Female" in _group(at, "written").value
+    assert _editor(at).proto.id == editor  # the table too keeps its key, its scroll and its focus
+    _edit(at, {str(_row(at, "Female")): {"Clean value": "Female"}})  # kept as written in the table
+    assert _group(at, "written").key != before and "Female" not in (
+        _group(at, "written").value or []
+    )
+
+
+def test_values_sent_show_their_hidden_spaces() -> None:
+    """For an Ollama on this machine every value is sent as written: "Luxembourg" and "Luxembourg " read the same."""
+    frame = {"site": ["Luxembourg"] * 40 + ["Luxembourg "] * 2 + ["Metz"] * 30 + ["Lux"] * 6}
+    ai = {
+        "provider": "ollama",
+        "base_url": "http://localhost:11434",
+        "recipients": [],
+        "proposals": [],
+    }
+    at = _open(frame, ai=ai)
+    popover = "clean_ai_open::" + str(_one(at.button, "clean_map::").key).split("::", 1)[1]
+    at.session_state[popover] = True
+    at.run()
+    _ok(at)
+    table = [d for d in at.dataframe if list(d.value.columns) == ["Values sent"]]
+    assert table and table[0].value["Values sent"].tolist() == [
+        "Lux",
+        "Luxembourg",
+        "Luxembourg␣",
+        "Metz",
+    ]
+    _one(at.button, "clean_ai_send::").click().run()
+    _ok(at)
+    assert any(c.value == "The AI engine made no proposal for these values." for c in at.caption)
+
+
+def test_free_text_keeps_the_ai_button_disabled_and_says_why() -> None:
+    """Mostly rare values are never sent: the button vanished without a word."""
+    frame = {"note": [f"note {i}" for i in range(60)] + ["usual"] * 40}
+    ai = {"provider": "anthropic", "base_url": None, "recipients": ["anthropic"], "proposals": []}
+    at = _open(frame, ai=ai)
+    popover = _popover(at, "clean_ai_open::")
+    assert popover.disabled and "never sent" in popover.help
+
+
+def test_the_variable_list_counts_extra_spaces_apart() -> None:
+    at = _open(
+        {"site": ["Metz"] * 20 + ["Metz "] * 2 + ["Luxembourg"] * 20, "age": list(range(42))}
+    )
+    label = _one(at.selectbox, "clean_variable::").format_func("site")
+    assert label == "site · 3 values, 1 with extra spaces"
+
+
+def test_the_ai_caption_accounts_for_every_proposal() -> None:
+    """The caption counted proposals that the rules already offer, or set aside: the AI group held fewer."""
+    from app_pages.clean_categories import _ai_said
+
+    assert _ai_said({"shown": 5, "offered": 2, "apart": 1, "reversed": 0}) == (
+        "The AI engine made 8 proposals: 5 below, under Proposed by the AI engine; 2 on values already offered "
+        "above; 1 set aside: the rules keep its values apart."
+    )
+    assert _ai_said({"shown": 0, "offered": 2, "apart": 0, "reversed": 0}) == (
+        "The AI engine made 2 proposals, all on values already offered above."
+    )
+    assert _ai_said({"shown": 0, "offered": 0, "apart": 0, "reversed": 0}) == (
+        "The AI engine made no proposal for these values."
+    )
+
+
+def test_a_dense_variable_s_chart_names_every_bar() -> None:
+    """34 bars drew 17 names: the 15 largest are drawn, then the others in one bar, then the missing ones."""
+    from app_pages.clean_categories import _figure
+
+    counts = {f"value {i:02d}": 100 - i for i in range(30)}
+    figure = _figure(counts, {"value 29": None}, after=True)
+    labels = list(figure.data[0].y)
+    assert len(labels) == 17
+    assert labels[15] == f"14 others ({sum(100 - i for i in range(15, 29)):,})"
+    assert labels[16] == "missing (71)"
+    assert (
+        len(list(_figure(dict(list(counts.items())[:16]), {}, after=True).data[0].y)) == 16
+    )  # no "1 others"
+
+
+def test_the_grouping_question_names_what_joins_which_value() -> None:
+    from app_pages.clean_categories import _grouping_question
+
+    assert _grouping_question("Metz", ["Esch", "Luxembourg", "Metz"]) == (
+        "Why group `Esch` and `Luxembourg` with `Metz`?"
+    )
+    assert _grouping_question("Cardiovascular", ["Hypertension", "Stroke"]) == (
+        "Why group `Hypertension` and `Stroke` as `Cardiovascular`?"
+    )

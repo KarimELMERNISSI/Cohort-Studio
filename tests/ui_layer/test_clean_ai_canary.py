@@ -180,7 +180,7 @@ def test_what_the_ai_engine_is_sent_or_answers_never_reaches_a_shared_output(
     # 3. only a value sent is offered; the model's words are a hint, never the user's reason
     (ai,) = [w for w in at.pills if "::ai::" in str(w.key)]
     assert ai.options == [
-        f"`MI` → `Myocardial infarction` · {REASON.replace('-', chr(92) + '-')} · 6 → 40 rows"
+        f"**MI** → **Myocardial infarction** · {REASON.replace('-', chr(92) + '-')} · 6 → 40 rows"
     ]
     ai.select("MI").run()
     _ok(at)

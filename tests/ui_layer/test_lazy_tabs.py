@@ -51,6 +51,7 @@ MIRRORS = (
     "family_box",  # the sidebar's population boxes, set from the ticked criteria on every run
     "criterion_box",
     "clean_offers::",  # Clean > Categories: the offers and a grouping's reason, drawn from the page's store
+    "_pills_key(",  # (the offers' key, kept while the pills show what the store holds ticked)
     "clean_reason::",
     "clean_variable::",  # and the variable, from clean_column
 )
