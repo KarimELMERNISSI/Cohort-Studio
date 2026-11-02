@@ -261,7 +261,10 @@ def test_in_an_all_family_the_family_s_line_counts() -> None:
     auditor = DataQualityAuditor(df, {"mask_families": {"clinical_anomalies": family}})
     auditor.compute_domain_validity()
     details = auditor.details["Domain Validity"].set_index("Where")
-    assert details.loc["A", "Issue"] == "fires, of 3 rows checked; the family's line counts"
+    assert (
+        details.loc["A", "Issue"]
+        == "fires, of 3 rows checked; counted only in the line \u201cevery rule together\u201d"
+    )
     assert auditor.domain_family == "every rule together"  # the line's name on the page
     assert (
         details.loc["every rule together", "Issue"]
@@ -479,3 +482,22 @@ def test_the_rows_line_makes_the_advice_high_when_many_rules_each_fail_a_little(
     assert read == n and rows > 150
     (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
     assert advice["severity"] == "high" and "% of the 1,000 rows checked" in advice["message"]
+
+
+def test_a_rule_named_by_its_column_reads_as_what_makes_it_fire() -> None:
+    """A range rule on potassium_mmol_l read "potassium_mmol_l" in the lines: which bounds it held was not said."""
+    df = pd.DataFrame({"potassium_mmol_l": [4.0, 8.5, 2.0, 5.0], "age": [30, 40, 50, 60]})
+    family = {
+        "potassium_mmol_l": {
+            "numeric": True,
+            "lower_bound": 2.5,
+            "upper_bound": 7.0,
+            "strategy": "exclude",
+        },
+        "Old": {"expression": "df['age'] > 55"},
+    }
+    auditor = DataQualityAuditor(df, {"mask_families": {"clinical_anomalies": family}})
+    auditor.compute_domain_validity()
+    where = set(auditor.details["Domain Validity"]["Where"])
+    assert "potassium_mmol_l < 2.5 or potassium_mmol_l > 7.0" in where
+    assert "Old" in where  # a rule named by the user keeps its name

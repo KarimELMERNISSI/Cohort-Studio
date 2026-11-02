@@ -20,7 +20,6 @@ from explore.quality_score import (
     DIMENSION_HELP,
     DIMENSIONS,
     interpretation,
-    lost_text,
     ordered,
     points_text,
     score_text,
@@ -249,9 +248,9 @@ def render_dashboard(df, config):
                     else:
                         color = "#ff4b4b" # Red
 
-                    delta_val = value - 100
-                    delta_str = f"-{lost_text(-delta_val)}%" if value < 100 else "Perfect"
-                    arrow = "↓" if value < 100 else ""
+                    # how far the score is below 100, to the score's own decimals (99.83 %: 0.17), in the band's
+                    # colour: "↓ -0.2%" read as a change, down twice, and rounded the score's gap
+                    gap = f"{round(100 - value, 2):g} points below 100" if value < 100 else "Perfect"
                     # under the change, what the score pools: the rows that break a rule, on a muted line of its
                     # own (beside the change it read as its cause); every card has that line, so they keep one height
                     note = _domain_notes(auditor).get(name)
@@ -261,7 +260,7 @@ def render_dashboard(df, config):
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.875rem; opacity: 0.8;">{name}</span>
                             <span style="font-size: 2rem; font-weight: 600; line-height: 1.2;">{value}%</span>
-                            <span style="font-size: 0.875rem; color: {color};">{arrow} {delta_str}</span>
+                            <span style="font-size: 0.875rem; color: {color};">{gap}</span>
                             <span style="font-size: 0.8rem; opacity: 0.7;">{note_html}</span>
                         </div>
                     """, unsafe_allow_html=True)
@@ -1138,7 +1137,8 @@ def render_dashboard(df, config):
                         st.markdown("### Failing Checks by Rule")
                         failing["Checked"] = [int(round(c / s)) for c, s in zip(failing["Count"], failing["Share"])]
                         failing["Share"] = failing["Share"] * 100
-                        col1, col2 = st.columns([3, 2], vertical_alignment="center")
+                        # the table the wider: a rule named by what makes it fire is long, and Checked stays in view
+                        col1, col2 = st.columns([2, 3], vertical_alignment="center")
                         with col1:
                             # one colour, the dimension's: the bar's length is the count
                             fig = px.bar(
@@ -1149,10 +1149,13 @@ def render_dashboard(df, config):
                                 text="Count",
                                 labels={"Where": "", "Count": "Failing checks"},
                             )
-                            fig.update_traces(marker_color=dimension_color("Domain Validity"), textposition="outside")
+                            # the count beside its bar, drawn past the plot's edge for the longest bar
+                            fig.update_traces(
+                                marker_color=dimension_color("Domain Validity"), textposition="outside", cliponaxis=False
+                            )
                             fig.update_layout(  # the table's order, the most failing checks on top
                                 yaxis={"categoryorder": "array", "categoryarray": list(failing["Where"])[::-1]},
-                                margin={"t": 10},
+                                margin={"t": 10, "r": 30},
                                 showlegend=False,
                             )
                             st.plotly_chart(fig, width="stretch")
@@ -1163,17 +1166,18 @@ def render_dashboard(df, config):
                                 ),
                                 width="stretch",
                                 hide_index=True,
-                                column_config={
-                                    "Failing": st.column_config.NumberColumn(format="localized"),
-                                    "Checked": st.column_config.NumberColumn(format="localized"),
-                                    "Failing share": st.column_config.NumberColumn(format="%.2f%%"),
+                                column_config={  # whole numbers, never in the browser's locale (1.206)
+                                    "Rule": st.column_config.TextColumn(width=300),
+                                    "Failing": st.column_config.NumberColumn(format="%d", width=65),
+                                    "Checked": st.column_config.NumberColumn(format="%d", width=70),
+                                    "Failing share": st.column_config.NumberColumn(format="%.2f%%", width=100),
                                 },
                             )
                             st.caption(
                                 "Each rule's share is of the rows it checks: those holding the values it reads."
                             )
                     if not members.empty:  # in an "all" family, a rule's hits are no failing checks of their own
-                        st.caption("The family's rules, which count only together:")
+                        st.caption(f"The rules counted only in the line \u201c{named}\u201d:")
                         st.dataframe(
                             members[["Where", "Issue", "Count"]].rename(columns={"Where": "Rule", "Count": "Fires"}),
                             width="stretch",

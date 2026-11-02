@@ -7,7 +7,7 @@ import pandas as pd
 from statsmodels.stats.proportion import proportion_confint
 
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
-from core.criteria import criterion_columns
+from core.criteria import criterion_columns, describe_definition
 from core.derived import from_config
 from core.population import family_checks, family_masks, family_operator
 from core.registry import as_code
@@ -286,24 +286,26 @@ class DataQualityAuditor:
             ]
             combined = found.operator != "any"  # the family's line counts, not its rules'
             self.domain_combined = combined
+            if combined:  # the line's name on the page, which its rules point to
+                _, k = family_operator(anomaly_config)
+                self.domain_family = "every rule together" if found.operator == "all" else f"{k} rules or more together"
             rows = []
             for check in found.units:
                 checked, fired = int(check.checked.sum()), int(check.fired.sum())
+                where = self._where(anomaly_config, check)
                 if not checked:
-                    rows.append((check.unit, f"not checked: {self._unchecked(anomaly_config, check.unit)}", None, None))
+                    rows.append((where, f"not checked: {self._unchecked(anomaly_config, check.unit)}", None, None))
                 elif fired:
                     issue = (
-                        f"fires, of {checked:,} rows checked; the family's line counts"
+                        f"fires, of {checked:,} rows checked; counted only in the line \u201c{self.domain_family}\u201d"
                         if combined
                         else f"flagged, of {checked:,} rows checked"
                     )
-                    rows.append((check.unit, issue, fired, fired / checked))
+                    rows.append((where, issue, fired, fired / checked))
                     if not combined:
                         self.domain_lines.append((fired, checked))
             if combined and found.checks:
-                _, k = family_operator(anomaly_config)
                 words = "every rule fires" if found.operator == "all" else "enough rules fire"
-                self.domain_family = "every rule together" if found.operator == "all" else f"{k} rules or more together"
                 rows.append(
                     (
                         self.domain_family,
@@ -332,6 +334,15 @@ class DataQualityAuditor:
             logger.error("Error computing domain validity (%s)", type(e).__name__)
             self.domain_na = "the rules could not be checked"
             return None
+
+    def _where(self, rules: Mapping[str, Any], check: Any) -> str:
+        """A check's name on the screens: a rule named by its column alone (a range: potassium_mmol_l) reads as what
+        makes it fire (potassium_mmol_l < 2.5 or potassium_mmol_l > 7.0); the others by their name."""
+        if not check.column and check.rule in self.df.columns and isinstance(rules.get(check.rule), Mapping):
+            said = describe_definition(check.rule, rules[check.rule])
+            if not said.startswith("cannot be evaluated"):
+                return said
+        return check.unit
 
     def _unchecked(self, rules: Mapping[str, Any], unit: str) -> str:
         """Why a rule made no check: its values are held by no row, or the table no longer holds a column it reads (a
