@@ -216,6 +216,9 @@ class FamilyChecks:
     fails: int  # F: those where the rule, or the family, fires
     units: tuple[RuleCheck, ...]  # each check of each rule (one per column for bounds)
     errors: Mapping[str, str]  # rule name -> why it cannot be evaluated: listed, not counted
+    # the rows the family flags on their recorded values, as the checks read them (None: no rule can be read)
+    flagged: pd.Series | None = None
+    rows_checked: int = 0  # the rows at least one check reads
 
 
 def family_checks(
@@ -231,31 +234,85 @@ def family_checks(
     operator, k = family_operator(members)
     observed = observed_values(df, imputed)
     units: list[RuleCheck] = []
-    evaluable: dict[str, Any] = {}
+    verdicts: dict[
+        str, tuple[pd.Series, pd.Series]
+    ] = {}  # rule -> where it fires, where its result is known
     errors: dict[str, str] = {}
     for name, spec in _rules(members).items():
         try:
-            units += rule_checks(observed, name, spec)
+            found = _recorded_checks(df, observed, imputed, name, spec)
         except CriterionError as exc:
             errors[name] = str(exc)
             continue
-        evaluable[name] = spec
+        units += found
+        fires = pd.Series(False, index=df.index)
+        known = pd.Series(True, index=df.index)
+        for check in found:
+            fires |= check.fired
+            known &= check.checked
+        verdicts[name] = (fires, fires | known)
+    read = pd.Series(False, index=df.index)
+    for check in units:
+        read |= check.checked
     if operator == "threshold" and (isinstance(k, bool) or not isinstance(k, int | float)):
         errors["operator"] = 'a threshold family needs a number of rules, as {"threshold": 2}'
         return FamilyChecks(operator, 0, 0, tuple(units), errors)
-    if operator == "any" or not evaluable:
+    if operator == "any" or not verdicts:
         checks = sum(int(c.checked.sum()) for c in units)
         fails = sum(int(c.fired.sum()) for c in units)
-        return FamilyChecks(operator, checks, fails, tuple(units), errors)
-    need = len(evaluable) if operator == "all" else int(k)
-    family = {
-        "threshold": need,
-        "members": evaluable,
-    }  # Kleene logic, as a rule "at least k of" reads it
-    (whole,) = rule_checks(observed, "the family", family)
+        flagged = pd.Series(False, index=df.index)
+        for fires, _ in verdicts.values():
+            flagged |= fires
+        return FamilyChecks(operator, checks, fails, tuple(units), errors, flagged, int(read.sum()))
+    # "all" or "at least k", read as Kleene logic reads "at least k of" its rules: fired where k fire, settled where
+    # too few can still fire
+    need = len(verdicts) if operator == "all" else int(k)
+    fired = pd.Series(0, index=df.index)
+    unknown = pd.Series(0, index=df.index)
+    for fires, known in verdicts.values():
+        fired += fires.astype(int)
+        unknown += (~known).astype(int)
+    family_fires = fired >= need
+    settled = family_fires | (fired + unknown < need)
     return FamilyChecks(
-        operator, int(whole.checked.sum()), int(whole.fired.sum()), tuple(units), errors
+        operator,
+        int(settled.sum()),
+        int(family_fires.sum()),
+        tuple(units),
+        errors,
+        family_fires,
+        int(settled.sum()),
     )
+
+
+def _recorded_checks(
+    df: pd.DataFrame,
+    observed: pd.DataFrame,
+    imputed: Mapping[str, Any] | None,
+    name: str,
+    spec: Any,
+) -> list[RuleCheck]:
+    """
+    A rule's checks on the recorded values. A rule that cannot be read once the imputed values are set aside (an
+    expression that needs every value, as ``astype(int)``) is read on every value, its verdict kept on the rows with no
+    imputed cell in the columns it reads, unknown on the others: before, it was left out, and its recorded breaks were
+    credited to the imputation. An expression that reads a column's statistic (a mean) still reads the imputed values.
+    """
+    try:
+        return rule_checks(observed, name, spec)
+    except CriterionError:
+        if observed is df:
+            raise
+    found = rule_checks(df, name, spec)  # raises when it cannot be read on any value
+    columns = [c for c in criterion_columns(name, spec) if c in df.columns] or [
+        str(c) for c in df.columns
+    ]
+    touched = pd.Series(False, index=df.index)
+    for column in columns:
+        ids = (imputed or {}).get(column)
+        if ids is not None:
+            touched |= pd.Series(df.index.isin(np.asarray(ids)), index=df.index)
+    return [RuleCheck(c.rule, c.column, c.checked & ~touched, c.fired & ~touched) for c in found]
 
 
 def observed_values(df: pd.DataFrame, imputed: Mapping[str, Any] | None) -> pd.DataFrame:

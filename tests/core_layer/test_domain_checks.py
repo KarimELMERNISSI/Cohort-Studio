@@ -15,7 +15,7 @@ import pytest
 
 from core.criteria import CRITERION_KINDS, CriterionError, CriterionKind, rule_checks
 from core.population import family_checks
-from explore.data_quality_auditor import NO_RULE, DataQualityAuditor, failing_score
+from explore.data_quality_auditor import NO_RULE, DataQualityAuditor, failing_score, severe
 from ui.state import TUTORIAL_COHORT_PATH
 
 
@@ -264,7 +264,7 @@ def test_in_an_all_family_the_family_s_line_counts() -> None:
     assert details.loc["A", "Issue"] == "fires, of 3 rows checked; the family's line counts"
     assert auditor.domain_family == "every rule together"  # the line's name on the page
     assert (
-        details.loc["the family", "Issue"]
+        details.loc["every rule together", "Issue"]
         == "rows where every rule fires, of 3 rows where the rules settle it"
     )
 
@@ -370,9 +370,11 @@ def test_rows_break_a_rule_on_recorded_values_and_an_imputed_one_is_said_apart()
     )
 
 
-def test_a_rule_whose_checks_fail_on_the_recorded_values_is_listed() -> None:
-    """Before age was imputed, the rule could not be evaluated and was listed; after, its checks (on the recorded
-    values) raised, and it was neither counted nor listed."""
+def test_a_rule_unreadable_on_the_recorded_values_alone_is_read_where_its_values_are_recorded() -> (
+    None
+):
+    """Set aside, the imputed age made astype(int) raise: the rule was left out, then listed. It is read on every
+    value, its verdict kept on the rows whose age is recorded, unknown on the imputed one."""
     df = pd.DataFrame({"age": [30.0, 40.0, 120.0], "x": [1.0, 2.0, 3.0]})
     family = {
         "Age": {"expression": "df['age'].astype(int) > 110"},
@@ -381,9 +383,9 @@ def test_a_rule_whose_checks_fail_on_the_recorded_values_is_listed() -> None:
     auditor = DataQualityAuditor(
         df, {"mask_families": {"clinical_anomalies": family}}, imputed={"age": np.array([0])}
     )
-    assert auditor.compute_domain_validity() == failing_score(1, 3)
+    assert auditor.compute_domain_validity() == failing_score(2, 5)
     details = auditor.details["Domain Validity"].set_index("Where")
-    assert details.loc["Age", "Issue"].startswith("cannot be checked")
+    assert details.loc["Age", "Issue"] == "flagged, of 2 rows checked"
 
 
 def test_rows_on_the_recorded_values_are_counted_with_the_rules_readable_there() -> None:
@@ -401,7 +403,7 @@ def test_rows_on_the_recorded_values_are_counted_with_the_rules_readable_there()
         df, {"mask_families": {"clinical_anomalies": family}}, imputed={"age": np.array([1])}
     )
     auditor.run_audit()
-    assert auditor.domain_checks == (0, 4, 0)
+    assert auditor.domain_checks == (0, 7, 0)  # Age read on the 3 rows whose age is recorded
     assert auditor.domain_imputed_rows == 1
     (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
     assert advice["message"].startswith(
@@ -422,3 +424,58 @@ def test_a_listed_rule_whose_column_is_gone_says_so() -> None:
         details.loc["Renamed", "Issue"]
         == "not checked: the table no longer holds gone, which it reads"
     )
+
+
+def _ages(family_extra: dict | None = None, operator: str | None = None) -> DataQualityAuditor:
+    """10 recorded ages of 130, 40 imputed ages, every other age recorded and plausible."""
+    n = 200
+    age = [130.0] * 10 + [50.0] * (n - 10)
+    sbp = [200.0] * 10 + [120.0] * (n - 10)
+    df = pd.DataFrame({"age": age, "sbp": sbp}, index=pd.Index(range(n), name="__row_id"))
+    family: dict = {
+        "Age": {"expression": "df['age'].astype(int) > 110"},
+        "SBP": {"expression": "df['sbp'] > 180"},
+    }
+    family |= family_extra or {}
+    if operator:
+        family["operator"] = operator
+    imputed = {"age": np.arange(150, 190)}
+    auditor = DataQualityAuditor(
+        df, {"mask_families": {"clinical_anomalies": family}}, imputed=imputed
+    )
+    auditor.run_audit()
+    return auditor
+
+
+def test_recorded_breaks_are_never_credited_to_the_imputation() -> None:
+    """The rule raised on the recorded values alone: Domain Validity read 100 and the advice sent the user to the
+    imputation model, though the 10 implausible ages were recorded."""
+    auditor = _ages()
+    fails, checks, rows = auditor.domain_checks
+    assert (fails, rows) == (20, 10) and auditor.domain_imputed_rows == 0
+    assert auditor.metrics["Domain Validity"] < 100
+
+
+def test_an_all_family_keeps_every_rule_when_one_is_unreadable_on_recorded_values() -> None:
+    """With Age dropped, the family read "SBP alone": 20 failing checks on 10 rows, one check per row."""
+    auditor = _ages(operator="all")
+    fails, checks, rows = auditor.domain_checks
+    assert (fails, rows) == (10, 10) and checks <= 200
+    assert auditor.domain_imputed_rows == 0
+
+
+def test_the_rows_line_makes_the_advice_high_when_many_rules_each_fail_a_little() -> None:
+    """10 rules each failing 2 % of their checks broke 19 % of the rows, read "medium" and "ready for analysis"."""
+    n = 1_000
+    rng = np.random.default_rng(7)
+    columns = {f"v{i}": np.where(rng.random(n) < 0.02, 9.0, 1.0) for i in range(10)}
+    family = {f"V{i}": {"expression": f"df['v{i}'] > 5"} for i in range(10)}
+    auditor = DataQualityAuditor(
+        pd.DataFrame(columns), {"mask_families": {"clinical_anomalies": family}}
+    )
+    auditor.run_audit()
+    assert not any(severe(*line) for line in auditor.domain_lines)  # no rule fails often
+    rows, read = auditor.domain_rows
+    assert read == n and rows > 150
+    (advice,) = [a for a in auditor.advice if a["category"] == "Domain Validity"]
+    assert advice["severity"] == "high" and "% of the 1,000 rows checked" in advice["message"]

@@ -1106,35 +1106,38 @@ def render_dashboard(df, config):
             fails, made, flagged = domain
             imputed = int(getattr(auditor, "domain_imputed_rows", 0) or 0)
             st.metric("Domain Validity Score", f"{metrics['Domain Validity']}%")
-            st.caption(
-                f"{fails:,} of {made:,} checks fail; {flagged:,} row{'s' if flagged != 1 else ''} "
-                f"break{'s' if flagged == 1 else ''} at least one rule on its recorded values. A check is one rule on "
-                "one row holding the values it reads."
-                + (
-                    f" {imputed:,} more row{'s' if imputed != 1 else ''} break{'s' if imputed == 1 else ''} a rule "
-                    "only through an imputed value."
-                    if imputed
-                    else ""
-                )
+            through = (
+                f" {imputed:,} {'more ' if flagged else ''}row{'s' if imputed != 1 else ''} "
+                f"break{'s' if imputed == 1 else ''} a rule only through an imputed value."
+                if imputed
+                else ""
             )
+            if fails or flagged:
+                said = (
+                    f"{fails:,} of {made:,} checks fail; {flagged:,} row{'s' if flagged != 1 else ''} "
+                    f"break{'s' if flagged == 1 else ''} at least one rule on {'its' if flagged == 1 else 'their'} "
+                    "recorded values."
+                )
+            else:
+                said = f"No check fails on the recorded values ({made:,} checks)."
+            st.caption(f"{said}{through} A check is one rule on one row holding the values it reads.")
             # never the rounded score: one failing check in 20,000 rounds to 100; nor only the recorded values: an
             # imputed value that breaks a rule flags its row in the population
             if fails or flagged or imputed:
                 if hasattr(auditor, 'clinical_anomalies_booleans') and auditor.clinical_anomalies_booleans is not None:
                     # --- Summary Report: the lines the score counts; in an "all" or "at least k" family, the
                     # family's, its rules' apart ---
-                    st.markdown("### Failing Checks by Rule")
                     details = auditor.details.get("Domain Validity")
                     lines = details[details["Count"].notna()].copy() if details is not None else pd.DataFrame()
                     combined = bool(getattr(auditor, "domain_combined", False))
-                    family = lines["Where"] == "the family" if not lines.empty else None
+                    named = str(getattr(auditor, "domain_family", "") or "")
+                    family = lines["Where"] == named if not lines.empty and named else None
                     failing = lines[family] if combined and family is not None else lines
                     members = lines[~family] if combined and family is not None else pd.DataFrame()
-                    if not failing.empty:
+                    if not failing.empty:  # the heading only where a line fails
+                        st.markdown("### Failing Checks by Rule")
                         failing["Checked"] = [int(round(c / s)) for c, s in zip(failing["Count"], failing["Share"])]
                         failing["Share"] = failing["Share"] * 100
-                        named = str(getattr(auditor, "domain_family", "") or "the family")
-                        failing["Where"] = failing["Where"].replace({"the family": named})
                         col1, col2 = st.columns([3, 2], vertical_alignment="center")
                         with col1:
                             # one colour, the dimension's: the bar's length is the count
@@ -1198,15 +1201,27 @@ def render_dashboard(df, config):
                                     styles[i] = 'background-color: #ff4b4b; color: white'
                         return styles
 
-                    # the rows, without the columns the app keeps for itself (the row id is the index); numbers as
-                    # recorded, never padded to six decimals
+                    # the rows, without the columns the app keeps for itself (the row id is the index), each saying
+                    # whether it breaks a rule on its recorded values or only through an imputed value (whose remedy is
+                    # the imputation model); numbers as recorded, never padded to six decimals nor turned into
+                    # exponents (a patient number 1000101 read 1.0001e+06)
                     shown = auditor.clinical_anomalies_df.drop(
                         columns=[c for c in auditor.clinical_anomalies_df.columns if str(c).startswith("__")]
-                    ).rename_axis(index="row")
+                    ).rename_axis(index="row id")
+                    recorded = getattr(auditor, "domain_recorded", None)
+                    if recorded is not None:
+                        shown.insert(
+                            1,
+                            "Through",
+                            [
+                                "recorded values" if recorded.get(i, True) else "an imputed value"
+                                for i in shown.index
+                            ],
+                        )
                     decimals = [c for c in shown.columns if pd.api.types.is_float_dtype(shown[c])]
                     st.dataframe(
                         shown.style.apply(highlight_anomalies, axis=1).format(
-                            lambda v: f"{v:g}", subset=decimals, na_rep=""
+                            lambda v: f"{v:.15g}", subset=decimals, na_rep=""
                         ),
                         width="stretch",
                     )
