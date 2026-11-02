@@ -131,7 +131,8 @@ brackets.
   excluded when df['age'] > 110", or for an inclusion criterion, which is a requirement, "Adult: excluded unless
   18 <= age <= 85". The note under them says how a missing value counts: a participant whose value is missing meets
   no condition on it, so an exclusion criterion keeps them and an inclusion criterion excludes them (in an
-  expression, a missing value meets `.isna()`, and may also meet a condition written with `!=` or `~`). Below, the
+  expression, a missing value meets `.isna()` only: a comparison or a test on it is unknown, as SQL's `WHERE` reads
+  it, so a condition written with `!=` or `~` does not meet it either). Below, the
   tables give the rows in, excluded and out for each family, what each criterion excludes (on the whole table, at
   its step, and as the first reason), and the excluded rows with their reasons.
 - **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is
@@ -247,7 +248,7 @@ The Data Quality Score aggregates results from all validation checks into a sing
 | --- | --- |
 | **Completeness** | Percentage of non-missing values across the dataset. |
 | **Statistical Validity** | Proportion of non-outlier values (based on selected method). |
-| **Domain Validity** | Share of the plausibility checks that pass: each rule you declare is checked on the rows holding the values it reads, never on a missing or imputed value (Completeness counts those); a bounds rule makes one check per column. Each check counts once, so a rule that never fails raises the score: the scorecard and the Domain Validity tab say how many rows break a rule, and the tab lists them. A failing check never reads 100 % (the score stops at 99.99). A rule written with `!=` or `~` also fires on a missing value. |
+| **Domain Validity** | Share of the plausibility checks that pass: each rule you declare is checked on the rows holding the values it reads, never on a missing or imputed value (Completeness counts those); a bounds rule makes one check per column. Each check counts once, so a rule that never fails raises the score: the scorecard and the Domain Validity tab say how many rows break a rule, and the tab lists them. A failing check never reads 100 % (the score stops at 99.99). |
 | **Consistency** | Percentage of columns with correct data type definitions. |
 | **Uniformity** | Percentage of text values with consistent formatting (case, whitespace). |
 | **Uniqueness** | Percentage of unique (non-duplicate) rows. |

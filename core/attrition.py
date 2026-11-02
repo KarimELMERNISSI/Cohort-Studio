@@ -120,8 +120,8 @@ class ParticipantFlow:
 # Under the flow's details and the dossier's criteria: how a missing value counts (core.criteria).
 MISSING_VALUES_NOTE = (
     "A participant whose value is missing meets no condition on it: an exclusion criterion keeps them, an inclusion "
-    "criterion excludes them. In an expression, a missing value meets .isna(), and may also meet a condition written "
-    "with != or ~ (not)."
+    "criterion excludes them. In an expression, a missing value meets .isna() only: a comparison or a test on it is "
+    "unknown, and met by no condition, written with != or ~ (not) too."
 )
 
 

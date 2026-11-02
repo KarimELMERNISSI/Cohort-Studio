@@ -540,8 +540,12 @@ A numeric range reads the column named like the rule, or the one its `"column"` 
 An expression uses `df['column']` (bare names are rejected), `& | ~` with parenthesised comparisons, and the
 allow-listed `pd.*` / `np.*` functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`,
 `.str.*`, `.dt.*`, `pd.to_datetime(..., dayfirst=True)`, ...). A missing value meets no condition of the other kinds.
-In an expression it meets `.isna()`, and may also meet a condition written with `!=` or `~`: the flow and the dossier
-say so, and how such expressions should read a missing value is an open decision.
+In an expression it meets `.isna()` only. An expression is read in three-valued logic (Kleene's, as SQL's `WHERE`;
+`core.expressions.kleene`): a comparison or a membership test (`isin`, `between`, the tests of `.str`) at the level
+of the expression's logic (the expression itself, the operands of `& | ^`, the operand of `~`) is unknown where an
+operand is missing, `~unknown` is unknown, and a rule fires where its expression is True only. A test inside a call
+(`np.where`, `.astype`, a sum) is read as Python reads it. This reading is `RULES_VERSION` 2: a change to it is a new
+number, which changes the fingerprint of every study with criteria.
 
 `core.criteria.rule_kind` is the only place that decides a rule's kind:
 

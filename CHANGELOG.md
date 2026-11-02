@@ -738,6 +738,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   The page names what was left out, and the rules shared without keys this version does not read; everything else
   is kept as written (the names, the descriptions, the expressions and the derived formulas).
 
+### Criteria: a missing value never fires a rule, written with "!=" or "~" too (results)
+
+- **Before:** an expression fired on a missing value when written with `!=` or `~` (not): `~(df['height_cm'] >= 100)`
+  fired on every missing height (58 rows of the tutorial cohort, against 3 for `df['height_cm'] < 100`), and
+  `df['status'] != 'withdrawn'` on every missing status, against the rule that a missing value fires no criterion.
+- **Now:** an expression is read in three-valued logic, as SQL's `WHERE` reads it: a comparison or a test of a value
+  (`isin`, `between`, the tests of `.str`) on a missing value is unknown, "not unknown" is unknown, and a rule fires
+  where its expression is true only. `.isna()` still finds the missing values, and `df['x'].isna() | (...)` fires on
+  them; a test inside a call (`np.where`, `.astype`, `fillna`) is read as before.
+- **What changes:** a study whose criteria use `!=` or `~` on a column with missing values may select other rows. The
+  rules' version is now 2, so every study with criteria gets a new fingerprint; its files, saved before, still load.
+  The participant flow, the dossier and the quality dashboard's help say how a missing value counts.
+
 ### Internal structure: one catalogue of criterion kinds (M5b)
 
 - **Each kind of criterion is one entry of a catalogue** (`core.criteria.CRITERION_KINDS`): how a rule of that kind

@@ -4,7 +4,8 @@ Strict evaluation of one study criterion (plausibility rule, inclusion criterion
 A criterion *fires* on a row when its condition holds: for a plausibility or outlier rule the row
 is flagged, for an inclusion criterion the row meets it. A missing value never fires (a value is not
 flagged implausible when missing, an inclusion criterion is not met by one), unless an expression asks for
-missing values explicitly (``df['x'].isna()``).
+missing values explicitly (``df['x'].isna()``): an expression is read in three-valued logic, as SQL's WHERE reads
+it (core.expressions.kleene), so a test written with != or ~ does not fire on a missing value either.
 
 Every problem raises :class:`CriterionError`, so a population built on a broken criterion fails visibly instead
 of silently keeping or dropping rows. The Validate checks and the quality dashboard evaluate the rules here too
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import dataclasses
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -31,13 +33,23 @@ import numpy as np
 import pandas as pd
 
 from biostats.outliers import MULTIVARIATE_METHODS
-from core.expressions import UnsafeExpressionError, column_references, evaluate, evaluate_tree
+from core.expressions import (
+    DEFAULT_POLICY,
+    UnsafeExpressionError,
+    column_references,
+    evaluate_tree,
+    validate,
+)
+from core.expressions.kleene import HELPERS, three_valued
 from core.registry import Catalogue
 
 # What a rule selects, as this module reads and evaluates the definitions. A study definition's fingerprint holds it
-# (core.protocol): a change to what the same definition selects (how a missing value meets "!=" or "~", say) is a new
-# number, which changes the fingerprint of every study with criteria, as their rows may change.
-RULES_VERSION = 1
+# (core.protocol): a change to what the same definition selects is a new number, which changes the fingerprint of
+# every study with criteria, as their rows may change. 2: an expression is read in three-valued logic (a missing value
+# no longer meets a test written with "!=" or "~").
+RULES_VERSION = 2
+# the rewritten expression holds a call per test: its own limit on nodes, the user's expression keeping the policy's
+_THREE_VALUED = dataclasses.replace(DEFAULT_POLICY, max_nodes=DEFAULT_POLICY.max_nodes * 3)
 
 
 class CriterionError(ValueError):
@@ -704,9 +716,12 @@ CRITERION_KINDS.register(
 
 
 def _expression_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
+    """Where the expression is True, read in three-valued logic: a comparison or a test on a missing value is
+    unknown, and an unknown row never fires (core.expressions.kleene)."""
     expression = str(definition.get("expression")).strip()
     try:
-        result = evaluate(expression, df)
+        tree = three_valued(validate(expression))  # the user's expression is checked as written
+        result = evaluate_tree(tree, df, policy=_THREE_VALUED, extra_locals=HELPERS)
     except UnsafeExpressionError as exc:
         raise CriterionError(f"criterion '{name}': expression rejected ({exc})") from exc
     except Exception as exc:

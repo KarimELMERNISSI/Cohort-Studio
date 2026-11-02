@@ -33,7 +33,7 @@ CONFIG = json.loads(
 )
 # pinned: a change to the view, or to how a configuration is read, changes every study's fingerprint, which results
 # record; it must be deliberate (a new RULES_VERSION when what the rules select changes)
-TUTORIAL_HASH = "8cb610cbdde7b8c6cd25febb37db9c8e5b10c791838f0b7fa59efdec19f3a2d6"
+TUTORIAL_HASH = "5acae0c731ca29b9000fe7b6d293ffd50fbbe8519fff077272f9469e43294091"
 TICKED = ["study_inclusion::Written consent", "clinical_anomalies::Implausible age"]
 UNTICKED = "study_inclusion::age"  # a criterion of the configuration, not ticked
 DERIVED = {
@@ -104,9 +104,9 @@ GOLDEN_VIEW = (
     '"numeric":true,"strategy":"exclude","upper_bound":7}]]],["signs",["threshold",2],[["fever",'
     '{"expression":"df[\'temp\'] > 38"}],["tachycardia",{"column":"hr","lower_bound":100,"numeric":true}]]]],'
     '"population":{"ticked":["clinical_anomalies::potassium_mmol_l","signs::At least 2 rules of signs"]},'
-    '"rules_version":1}'
+    '"rules_version":2}'
 )
-GOLDEN_HASH = "03d288298e227e0687ee0389da0ed0476379ce0d499c0ef55c24af2e4c6eb092"
+GOLDEN_HASH = "17751a2839c906e10ec9af69900ba0486b9225e7fd5717b126d79234d1a32a91"
 # how every saved file is checked: this must never change
 GOLDEN_CHECKSUM = "fea1c5d89a8197bddeaefd66eaeda6edcb78bc5bb820b50619c05d0e6a0e0842"
 
@@ -253,7 +253,9 @@ def test_a_new_reading_of_the_rules_changes_the_fingerprint_and_reads_the_old_fi
     saved = json.loads(json.dumps(StudyProtocol(_body(), ProtocolMeta("cohort")).to_file()))
     derived_only = {"derived_variables": copy.deepcopy(DERIVED)}
     before = protocol_hash(derived_only)
-    monkeypatch.setattr("core.protocol.RULES_VERSION", 2)
+    from core.criteria import RULES_VERSION
+
+    monkeypatch.setattr("core.protocol.RULES_VERSION", RULES_VERSION + 1)
     read, problems = StudyProtocol.from_file(saved)
     assert read is not None and problems == []
     assert read.hash != BASE and protocol_hash(derived_only) == before
