@@ -22,7 +22,7 @@ the cloud providers, and an Ollama or a Qdrant server outside this machine and t
 user's confirmation._
 
 **Imports**:
-`__future__.annotations`, `ipaddress`, `logging`, `os`, `socket`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `core.workspace.file_name_of`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
+`__future__.annotations`, `ipaddress`, `logging`, `os`, `socket`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `core.workspace.file_name_of`, `enrich.recode.free_text`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
 
 ### def `_frequent_values` (ai_payload.py)
 
@@ -107,16 +107,29 @@ user's map itself is unchanged.
 The document a passage comes from, as a prompt names it: the file's name, never its path on the server, which
 names the user's account and the server's folders. Both separators are read: an index can move between systems.
 
+### def `cloud_model` (ai_payload.py)
+
+- **Arguments**: `model: ComplexType`
+
+- **Returns**: `bool`
+
+An Ollama model that runs on ollama.com through the local server (Ollama 0.12 and later), as its tag says
+("gpt-oss:120b-cloud", "glm-4.6:cloud"), on the whole name. A copy under another name, or a model built on one,
+says so only through the server (manage.rag.providers.ollama_server.remote_host).
+
 ### def `category_values` (ai_payload.py)
 
-- **Arguments**: `counts: Mapping[ComplexType], provider: ComplexType, base_url: ComplexType`
+- **Arguments**: `counts: Mapping[ComplexType], provider: ComplexType, base_url: ComplexType, model: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
 The values of a categorical variable that may be sent to the AI engine for it to propose which are one category
-(Data > Clean): every value to an Ollama on this machine; to any other recipient, an Ollama of the private network
-included, only those held by MIN_COUNT rows or more, since a rarer one can single out a participant. The most
-frequent first; with how many were held back. No count is ever sent.
+(Data > Clean): every value to an Ollama that runs its model on this machine; to any other recipient, an Ollama of
+the private network and an Ollama cloud model included (its tag, or the server's ``remote_host``), only those held
+by MIN_COUNT rows or more, since a rarer one can single out a participant. Rows, not people: a value repeated on
+one person's visits counts each visit, which the preview says. A to Z, so that their order says nothing of their
+counts; with how many were held back. No count is ever sent. Never free text, mostly rare values or an
+identifier (``enrich.recode.free_text``): nothing.
 
 ### def `host_of` (ai_payload.py)
 
@@ -156,12 +169,24 @@ there may leave the user's organisation.
 
 ### def `recipient` (ai_payload.py)
 
+- **Arguments**: `provider: ComplexType, base_url: ComplexType, model: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The recipient that needs the user's confirmation: a cloud provider (any provider not known as local); an Ollama
+model that runs elsewhere through the Ollama server, a cloud model by its tag ("ollama@ollama.com") or by the
+server's answer ("ollama@<the host that runs it>"); or an Ollama outside the private network ("ollama@<host>");
+None for an Ollama that runs its model on this machine or the private network. The model is always given, so
+that no caller forgets it (``server_recipient`` names the Ollama server itself).
+
+### def `server_recipient` (ai_payload.py)
+
 - **Arguments**: `provider: ComplexType, base_url: ComplexType`
 
 - **Returns**: `ComplexType`
 
-The recipient that needs the user's confirmation: a cloud provider (any provider not known as local), or an
-Ollama outside the private network ("ollama@<host>"); None for an Ollama on this machine or the private network.
+A local provider's server outside the private network ("ollama@<host>"): it receives every prompt, also when
+the model runs elsewhere (a cloud model behind an Ollama outside the network has two recipients).
 
 ### def `store_recipient` (ai_payload.py)
 
@@ -1780,7 +1805,7 @@ Embedding connector for Mistral AI embeddings (mistral-embed).
 
 _Ollama Local & Open-Source Provider Connectors.
 
-Enables 100% offline, privacy-preserving, sovereign execution using locally hosted
+Runs the models an Ollama server hosts, on this machine or your network, using locally hosted
 open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
 (Nomic Embed Text, BGE-M3, etc.) via Ollama REST API._
 
@@ -1790,7 +1815,8 @@ open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
 ### class `OllamaChatConnector` (ollama.py)
 
 Chat connector for local Ollama instances via native REST API.
-Zero cloud dependencies, completely offline and private.
+Its models run on the Ollama server, except a cloud model (tagged cloud, or a copy of one), which Ollama runs
+on ollama.com: a recipient that needs the data-sharing confirmation (manage.ai_payload.recipient).
 
 **Methods:**
 
@@ -1828,6 +1854,53 @@ Supports high-performance embeddings like nomic-embed-text, bge-m3, all-minilm.
 
 - **embed_query**(`self, text: str`) -> `list[float]`
   > No description available.
+
+---
+
+## ollama_server.py
+
+_What an Ollama server says of its models, asked without the chat connector: which of them it runs elsewhere. Ollama
+0.12 and later run a cloud model on ollama.com through the local server, and so any copy of one (``ollama cp``) or
+model built on one (``FROM``), whatever its name; the server's ``/api/show`` and ``/api/tags`` answer ``remote_host``
+for them. A name's tag (":cloud", "-cloud") says so only for the models pulled under it (manage.ai_payload.cloud_model).
+An older Ollama, or a server that cannot be reached, answers nothing: no model is then known to run elsewhere by this
+route._
+
+**Imports**:
+`__future__.annotations`, `logging`, `typing.Any`
+
+### def `_ask` (ollama_server.py)
+
+- **Arguments**: `base_url: ComplexType, method: str, path: str, body: ComplexType`
+
+- **Returns**: `Any`
+
+No description available.
+
+### def `_remote` (ollama_server.py)
+
+- **Arguments**: `entry: Any`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `remote_host` (ollama_server.py)
+
+- **Arguments**: `base_url: ComplexType, model: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The address that runs ``model`` for this Ollama server when the server does not run it itself (a cloud model,
+or a copy of one), as ``/api/show`` answers; None when the server runs it, or cannot say.
+
+### def `remote_models` (ollama_server.py)
+
+- **Arguments**: `base_url: ComplexType`
+
+- **Returns**: `dict[ComplexType]`
+
+The models the server lists that it runs elsewhere, by name, with the address that runs each (``/api/tags``).
 
 ---
 
@@ -2724,7 +2797,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.OLLAMA`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -2782,8 +2855,10 @@ Computed Variable Methods (from ComputedVarsMixin):
   > No description available.
 
 - **recipients_of**(`provider: ComplexType, base_url: ComplexType, embedding_provider: ComplexType, embedding_base_url: ComplexType, qdrant_url: ComplexType`) -> `frozenset[str]`
-  > The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, an
-  > Ollama outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
+  > The recipients of a configuration that need the confirmation: its cloud chat and embedding providers; an
+  > Ollama model that runs elsewhere through the Ollama server, a cloud model by its tag ("ollama@ollama.com") or by
+  > the server's answer (``model_remote_host``); an Ollama outside the private network ("ollama@<host>"), which
+  > receives every prompt also when its model runs elsewhere; and the Qdrant server there that keeps the index
   > ("qdrant@<host>").
 
 - **recipients**(`self`) -> `frozenset[str]`
@@ -3202,7 +3277,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`
 
 ### class `StepRecord` (reproduction_manager.py)
 
@@ -3362,8 +3437,9 @@ No description available.
 
 - **Returns**: `None`
 
-The recode redone: the recorded fold rule recomputed on the values read (a trace without one recorded every
-change in its mapping), the recorded choices over it. Differences are said by their number, never by a value.
+The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
+under another rule (an earlier version of Data > Clean) is refused: the column is cleaned again. Differences are
+said by their number, never by a value.
 
 ### def `_apply_filter` (reproduction_manager.py)
 

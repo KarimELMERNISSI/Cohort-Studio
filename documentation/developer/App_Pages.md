@@ -790,21 +790,22 @@ _Clean page: how values are written, fixed (a variable's values recoded into a n
 ## clean_categories.py
 
 _Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
-written into a new column beside the original, which is kept (enrich.recode). Values that differ by spaces, and words
-that differ by capitals in a typo's number of rows, take their group's spelling (the fold rule, recorded as a rule);
-a one-letter code, a variant (accents, British and American spellings), a spelling one letter apart, a case variant
-and a code that may mean missing are offered, never applied. A value set to missing says what missing means there; a
-grouping of categories says why. The page shows each value's own rows, on all rows, never an outcome beside them:
-merging values after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``,
-which the replay redoes; what it records always gives the preview (enrich.recode.recorded).
+written into a new column beside the original, which is kept (enrich.recode). A value written with extra spaces takes
+its spelling with the spaces collapsed (the fold rule, recorded as a rule); a case variant, a one-letter code, a variant
+(accents, British and American spellings), a close spelling, a code that may mean missing and what the AI
+engine proposes are offered, never applied. A value set to missing says what missing means there; a grouping of
+categories says why. The page shows each value's own rows, on all rows, never an outcome beside them: merging values
+after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``, which the replay
+redoes; what it records always gives the preview (enrich.recode.recorded).
 
 The choices live in one session key, ``clean_manual`` (ui.keys: cleared when another dataset is loaded), per column,
 changed only through enrich.recode (give, tick, untick, unset_missing); the widgets that edit them carry a short id of
 the dataset's trace and fold what they change into it as they change, so that no choice is lost on a page change and
-none follows the user to another dataset._
+none follows the user to another dataset. The table is drawn from the store: it reads each edit once, and starts
+again from the store whenever the store and what the browser shows of its edits differ._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `html`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.AI`, `enrich.recode.CAPITALS`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPACES_AND_CAPITALS`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.ai_offers`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.free_text`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.last_record`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `manage.ai_payload.category_values`, `manage.ai_payload.provider_label`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `hashlib`, `html`, `json`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.recode.AI`, `enrich.recode.CAPITALS`, `enrich.recode.CASE`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.ai_offers`, `enrich.recode.ai_tally`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.documented`, `enrich.recode.free_text`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.keep_result`, `enrich.recode.last_record`, `enrich.recode.letters_apart`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.swaps`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `manage.ai_payload.category_values`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.services.engine_model`, `ui.services.running_engine`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
 
 ### def `_rows` (clean_categories.py)
 
@@ -846,22 +847,57 @@ No description available.
 
 No description available.
 
+### def `_counts_fp` (clean_categories.py)
+
+- **Arguments**: `counts: dict[ComplexType]`
+
+- **Returns**: `str`
+
+The values as written and their rows: the choices made on them start again once they change.
+
+### def `_unapplied` (clean_categories.py)
+
+- **Arguments**: `held: dict[ComplexType], fresh: dict[ComplexType]`
+
+- **Returns**: `bool`
+
+Whether the choices held say another thing than those the column starts again from.
+
+### def `_cell` (clean_categories.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `Any`
+
+A cell as the browser sends it: a cleared one comes back None or NaN.
+
+### def `_edits` (clean_categories.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
 ### def `_table_changed` (clean_categories.py)
 
 - **Arguments**: `column: str, key: str, values: list[str], counts: dict[ComplexType]`
 
 - **Returns**: `None`
 
-The table's edits into the store, as they are made (each edit is read against what the table showed).
+The table's last edit into the store. The browser sends every edit made since the table was drawn, by row: only
+the cells that changed since the last call are read, so that an earlier edit is never read again over a later one
+(which, read in row order against a store the later one already changed, could undo it).
 
 ### def `_ticked` (clean_categories.py)
 
-- **Arguments**: `column: str, key: str, offers: dict[ComplexType], counts: dict[ComplexType]`
+- **Arguments**: `column: str, name: str, offers: dict[ComplexType], counts: dict[ComplexType]`
 
 - **Returns**: `None`
 
-A group's pills: a ticked offer fills the table (its group's choice); unticked, its values take their spelling
-again.
+A group's pills (``name``): a ticked offer fills the table (its group's choice); unticked, its values take their
+spelling again. The table and the pills keep their keys, so the keyboard's focus stays where it was: a table whose
+edits no longer match the store starts again by itself, and so do pills that show another thing than the store.
 
 ### def `_tick_all` (clean_categories.py)
 
@@ -869,7 +905,18 @@ again.
 
 - **Returns**: `None`
 
-No description available.
+The offers of a group not yet ticked, nor answered a result, ticked.
+
+### def `_pills_key` (clean_categories.py)
+
+- **Arguments**: `choices: dict[ComplexType], scope: str, column: str, name: str, on: list[str]`
+
+- **Returns**: `str`
+
+A group's pills are drawn from the store (``default``), never kept: their key stays while they show what the store
+holds ticked, so that a click on a pill keeps the keyboard's focus there; when the store holds another thing (a
+table edit, a button, Apply), a new key draws them again, never a stale pill that the next click on another would
+undo. Each new key is new (a counter), never one that the session still holds with another state.
 
 ### def `_buttons` (clean_categories.py)
 
@@ -882,7 +929,7 @@ cleared after use.
 
 ### def `_shown` (clean_categories.py)
 
-- **Arguments**: `counts: dict[ComplexType], spellings: dict[ComplexType], reasons: dict[ComplexType], choices: dict[ComplexType]`
+- **Arguments**: `counts: dict[ComplexType], spellings: dict[ComplexType], choices: dict[ComplexType]`
 
 - **Returns**: `None`
 
@@ -894,8 +941,9 @@ Each value as written: its clean value (None: missing), what missing means there
 
 - **Returns**: `go.Figure`
 
-One bar per clean value (after) or per value as written (before); the values set to missing apart, in grey.
-The values are drawn as text: a level holding markup is shown, never rendered.
+One bar per clean value (after) or per value as written (before), the 15 largest, then the others in one bar;
+the values set to missing apart, in grey: every bar keeps its name. The values are drawn as text: a level holding
+markup is shown, never rendered.
 
 ### def `_offer_groups` (clean_categories.py)
 
@@ -914,6 +962,15 @@ The offers in their groups, each with "Tick all"; ticking fills the table, never
 The editor of one variable's values: the offers, what each value becomes, a preview, and Apply. ``header``:
 the container beside the variable's choice that holds the new column's name.
 
+### def `_grouping_question` (clean_categories.py)
+
+- **Arguments**: `clean: str, parts: list[str]`
+
+- **Returns**: `str`
+
+Why values are grouped: those joining a value that keeps its name are grouped with it (Why group Esch and
+Luxembourg with Metz?); otherwise, as the new name (Why group Stroke and Hypertension as Cardiovascular?).
+
 ### def `_blocked` (clean_categories.py)
 
 - **Arguments**: `df, steps, column, target, cleaned_into, counts, choices, shown, full, grouped, record`
@@ -922,6 +979,17 @@ the container beside the variable's choice that holds the new column's name.
 
 Why Apply waits ("" when it does not).
 
+### def `_record_of` (clean_categories.py)
+
+- **Arguments**: `record: tuple, grouped: dict[ComplexType], choices: dict[ComplexType], counts: dict[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The choices as the step records them: the mapping, the kinds (a merge typed by hand that groups categories is
+a grouping; an offer or the AI engine's proposal keeps its kind), the folds put back, what missing means, the codes
+answered a result (those still values), why each grouping was made, and who proposed each AI choice (never the
+prompt or the answer).
+
 ### def `_apply` (clean_categories.py)
 
 - **Arguments**: `state, df: pd.DataFrame, column: str, target: str, counts: dict[ComplexType], choices: dict[ComplexType], record: tuple, grouped: dict[ComplexType]`
@@ -929,14 +997,6 @@ Why Apply waits ("" when it does not).
 - **Returns**: `None`
 
 No description available.
-
-### def `_engine` (clean_categories.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-The AI engine when it runs (Settings > AI engine), else None.
 
 ### def `_ai_proposals` (clean_categories.py)
 
@@ -948,13 +1008,84 @@ What the AI engine proposed for this column's values as they are now (a change o
 
 ### def `_ask_ai` (clean_categories.py)
 
-- **Arguments**: `column: str, scope: str, counts: dict[ComplexType]`
+- **Arguments**: `column: str, scope: str, counts: dict[ComplexType], offers: tuple[ComplexType]`
 
 - **Returns**: `None`
 
 "Ask the AI engine": a preview of exactly what is sent (the variable's name and its values, no count, no row;
-to any recipient but an Ollama on this machine, only the values held by 5 rows or more), then a second click.
-Never for free text.
+to any recipient but an Ollama that runs its model on this machine, only the values held by 5 rows or more), then
+Send, which closes it; the request is then made here, beside the heading, under a spinner, and what came back is
+said here, every proposal accounted for. Never for free text: the button stays, disabled, and says why.
+
+### def `_ai_said` (clean_categories.py)
+
+- **Arguments**: `tally: dict[ComplexType]`
+
+- **Returns**: `str`
+
+What came back, every proposal accounted for: shown below, on a value already offered above, or set aside.
+
+### def `_preview` (clean_categories.py)
+
+- **Arguments**: `engine, column: str, scope: str, counts: dict[ComplexType], popover: str`
+
+- **Returns**: `None`
+
+Exactly what Send gives the engine, then Send.
+
+### def `_payload` (clean_categories.py)
+
+- **Arguments**: `engine, counts: dict[ComplexType], model: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+No description available.
+
+### def `_send` (clean_categories.py)
+
+- **Arguments**: `column: str, counts: dict[ComplexType], sent: list[str], held: int, popover: str, to: str`
+
+- **Returns**: `None`
+
+Send, as the click's callback: the popover closed, and the request left to the run that follows, which makes
+it beside the heading under a spinner (a callback's spinner is drawn above the page's title).
+
+### def `_request` (clean_categories.py)
+
+- **Arguments**: `column: str, counts: dict[ComplexType], pending: dict[ComplexType]`
+
+- **Returns**: `None`
+
+The request Send asked for: the previewed values, to the recipient previewed, once the rule run again on the
+engine that runs now gives the same values and the same recipient (an engine changed since the preview sends
+nothing), and only to a recipient a box of Settings > AI engine confirmed; its answer into the store.
+
+### def `_recipients` (clean_categories.py)
+
+- **Arguments**: `engine, model: str`
+
+- **Returns**: `list[str]`
+
+The recipients of a request that need a confirmation: the chat model's, and its Ollama server outside the
+private network, which receives the prompt also when the model runs elsewhere.
+
+### def `_receiver` (clean_categories.py)
+
+- **Arguments**: `engine, model: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+Who receives a request, and where it runs (as recorded and reported): the chat recipients only, the embedding
+provider receiving none.
+
+### def `_proposed_by` (clean_categories.py)
+
+- **Arguments**: `column: str`
+
+- **Returns**: `dict[ComplexType]`
+
+Who proposed (provider, model, where it runs) and how many values it was sent and not sent: kept with each AI
+choice, recorded with the step.
 
 ### def `_choice_label` (clean_categories.py)
 
@@ -962,7 +1093,8 @@ Never for free text.
 
 - **Returns**: `str`
 
-No description available.
+A variable in the list: what it holds to check, and apart the values with extra spaces, which the fold
+collapses with nothing to check.
 
 ### def `render_categories` (clean_categories.py)
 
@@ -1873,7 +2005,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`html`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.data_quality_auditor.NO_RULE`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.lost_text`, `explore.quality_score.ordered`, `explore.quality_score.score_text`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.text.plain`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.dimension_color`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
+`html`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.data_quality_auditor.NO_RULE`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.lost_text`, `explore.quality_score.ordered`, `explore.quality_score.points_text`, `explore.quality_score.score_text`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.text.plain`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.dimension_color`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -2032,7 +2164,7 @@ enrich.derived). Optional: with no definition nothing changes, and a definition 
 it or ticks it in an imputation tab._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.replace`, `pandas`, `streamlit`, `core.derived.KINDS`, `core.derived.NOTE_LENGTH`, `core.derived.DerivedVariable`, `core.derived.cycles`, `core.derived.note_text`, `core.registry.as_code`, `enrich.derived.AGREES`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.DerivedCheck`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `ingest.analyzer.DataAnalyzer`, `manage.ai_payload.column_kinds`, `manage.ai_payload.typical_ranges`, `ui.components.help_popover`, `ui.components.text.plain`, `ui.state.get_state`
+`__future__.annotations`, `dataclasses.replace`, `pandas`, `streamlit`, `core.derived.KINDS`, `core.derived.NOTE_LENGTH`, `core.derived.DerivedVariable`, `core.derived.cycles`, `core.derived.note_text`, `core.registry.as_code`, `enrich.derived.AGREES`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.DerivedCheck`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `ingest.analyzer.DataAnalyzer`, `manage.ai_payload.column_kinds`, `manage.ai_payload.typical_ranges`, `ui.components.help_popover`, `ui.components.text.plain`, `ui.services.running_engine`, `ui.state.get_state`
 
 ### def `_badge` (enrichment_derived.py)
 
@@ -2193,14 +2325,6 @@ No description available.
 - **Returns**: `None`
 
 The one form that adds a definition, or edits one (its inverses kept), checked before it is saved.
-
-### def `_engine` (enrichment_derived.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-The AI engine when it runs (Settings > AI engine), else None.
 
 ### def `_find` (enrichment_derived.py)
 
@@ -2863,7 +2987,7 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
+`os`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.cloud_model`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -2880,6 +3004,23 @@ The signed-in user's document library (audit E4); the legacy shared folder outsi
 - **Returns**: `list[str]`
 
 Ollama model list, probed at most once a minute per endpoint (audit E11).
+
+### def `_remote_host` (rag_sidebar.py)
+
+- **Arguments**: `base_url: str, model: str`
+
+- **Returns**: `ComplexType`
+
+Where the Ollama server runs a model when not itself (a cloud model, a copy of one), asked at most once a
+minute per endpoint and model, as the engine asks it when it starts.
+
+### def `_remote_models` (rag_sidebar.py)
+
+- **Arguments**: `base_url: str`
+
+- **Returns**: `dict[ComplexType]`
+
+The models the Ollama server lists that it runs elsewhere, to mark them in the list.
 
 ### def `_discover_cloud_models` (rag_sidebar.py)
 
@@ -2956,9 +3097,11 @@ Claude has no embedding model: choose the provider that embeds the documents (lo
 
 - **Returns**: `tuple[ComplexType]`
 
-The recipients that need the confirmation, by role: the chat provider when it is a cloud one or an Ollama outside
-the private network; the embedding provider of Claude when it is another such recipient (it receives the
-documents and every search text); the Qdrant server outside the private network that keeps the index.
+The recipients that need the confirmation, by role: the chat provider when it is a cloud one, an Ollama model run
+elsewhere (its tag, or the server's ``remote_host``) or an Ollama outside the private network; the embedding
+provider of Claude when it is another such recipient (it receives the documents and every search text); the
+Qdrant server outside the private network that keeps the index; the Ollama server outside the private network
+when its model runs elsewhere (it receives the prompts too).
 
 ### def `_recipients` (rag_sidebar.py)
 

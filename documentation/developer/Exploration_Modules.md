@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.observed_values`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -319,6 +319,10 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > the analysis population reads it (core.population.family_masks), are listed apart. None (N/A) when no rule is
   > declared or no check can be made.
 
+- **_unchecked**(`self, rules: Mapping[ComplexType], unit: str`) -> `str`
+  > Why a rule made no check: its values are held by no row, or the table no longer holds a column it reads (a
+  > listed rule's rows were flagged on a column since renamed: which rows it assessed is unknown).
+
 - **compute_uniformity**(`self`) -> `float`
   > Checks for string uniformity issues:
   > - Leading/trailing whitespace.
@@ -359,22 +363,15 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > or there is nothing to say. Shown on screen only: an export would need the study package's disclosure rule
   > (k = 5 for each count and difference).
 
-### def `_share` (data_quality_auditor.py)
-
-- **Arguments**: `line: tuple[ComplexType]`
-
-- **Returns**: `float`
-
-No description available.
-
 ### def `severe` (data_quality_auditor.py)
 
 - **Arguments**: `fails: int, checks: int`
 
 - **Returns**: `bool`
 
-A rule that fails often enough to make the advice high: 5 failing checks or more and SEVERE_SHARE of its
-checks, or a Wilson lower bound of SEVERE_SHARE (one failure among 4 checks is no evidence).
+A line (a rule's, a family's, or the pooled one) that fails often enough to make the advice high: 5 failing
+checks or more and SEVERE_SHARE of its checks, or an exact (Clopper-Pearson) lower bound of SEVERE_SHARE: one
+failure among 4 checks, or 2 among 5, is no evidence.
 
 ### def `failing_score` (data_quality_auditor.py)
 
@@ -479,5 +476,14 @@ A score to one decimal, as the dashboard prints it; a score under 100 never read
 - **Returns**: `str`
 
 Points or a share lost, to one decimal; a loss that rounds to nothing still shows (0.01).
+
+### def `points_text` (quality_score.py)
+
+- **Arguments**: `points: float`
+
+- **Returns**: `str`
+
+Points of the global score, to two decimals, as the chart of points lost labels them: a loss that rounds to
+nothing still shows (0.01), never 0.00.
 
 ---

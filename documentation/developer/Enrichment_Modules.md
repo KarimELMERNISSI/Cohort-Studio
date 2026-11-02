@@ -1092,12 +1092,10 @@ or set to missing, and written into a new text column beside the original, which
 
 What the step records, and what the replay recomputes:
 
-- the fold rule (:data:`FOLD`), never the values it folds. Values that differ by spaces take their group's spelling,
-  the one most rows hold. A word (4 letters or more) that differs from it by capitals takes it too when it is the
-  size of a typo (:data:`RARE_ROWS` rows or fewer, under :data:`CASE_SHARE` of its group), unless the column writes
-  capitals inside a word (CcDee, HFmrEF, mg/dL), where case carries meaning. In a code of three characters or fewer,
-  case can carry meaning too (Kell K and k; g/l and G/L): its case variants, like the other ones, are offered. The replay folds
-  the values it reads with this rule; a changed rule takes a new id;
+- the fold rule (:data:`FOLD`), never the values it folds: a value written with spaces before, after or repeated
+  inside takes its spelling with the spaces collapsed. Capitals are never folded: case can name a category (Kell K
+  and k, anti-k and anti-K, g/L and G/L, Rh Ccdee and ccdee), so a case variant is offered. The replay folds the
+  values it reads with this rule, and refuses a step recorded under another (an earlier version's: clean again);
 
 - the user's choices (``mapping``): a choice for a spelling applies to its whole group, a folded value's own choice
   to itself, a clean value that is itself given another is followed (MALE → male → M), and ``kept`` lists the folds
@@ -1115,19 +1113,26 @@ The offers, never applied:
 
 - a variant: the same spelling once accents are stripped and ae or oe read as e (Pétange, Petange; Anaemia, Anemia);
 
-- a rare spelling one letter from a frequent value (Damerau-Levenshtein distance 1: "Luxembourgg", "Daibetes"), and,
-  to check first, a close spelling one letter apart that holds more rows;
+- a close spelling: a value within a typo's edits of a more frequent one, which is the reference (Damerau-
+  Levenshtein distance on the keys: one edit under 10 letters, two from 10; "Luxembourgg", "Luxenbourgg",
+  "Diferdange", "Daibetes"), offered when it holds a typo's rows beside it, and, to check first, one edit away under
+  :data:`CLOSE_SHARE` of its rows;
 
-- a case variant the fold leaves apart;
+- a case variant: the same word written another way when its differing words hold 4 letters or more, the column
+  writes no case codes and the variant holds a typo's rows; otherwise, to check, since case may name a category
+  (Kell K and k, anti-k and anti-K, Rh CcDee and ccdee);
 
-- the codes that may mean missing. Some are read as unknown; for others the user says what they mean ("n/a" can mean
-  not applicable, "none" an absence, "NR" non-reactive, "ND" a result).
+- the codes and phrasings that may mean missing. Some are read as unknown; for others the user says what they mean
+  ("n/a" can mean not applicable, "none" an absence, "NR" non-reactive, "ND" a result, "Pending" a result to come).
 
-One letter can separate two categories, so a spelling is never offered across a token holding a digit, a short token
-or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b), a sign or a Roman numeral, nor when the words
-differ in their first four letters (Unstable and Stable, Hypotension and Hypertension), nor two letters apart
-(Hypokalaemia and Hypocalcaemia, Craniectomy and Craniotomy). One letter apart can still separate two terms (Dysphasia
-and Dysphagia): such an offer says to check it.
+A merge is a grouping, which says why, whoever proposed it, unless an offer relation joins its values (``groupings``);
+the AI engine's proposals are refused where the rules see two categories, and the user checks the rest.
+
+One or two letters can separate two categories, so a spelling is never offered across a token holding a digit, a
+short token or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b), a sign or a Roman numeral, a prefix that
+negates or opposes (Unstable and Stable, Hypotension and Hypertension, Abduction and Adduction), another ending on one
+root (Craniectomy and Craniotomy) or one ending on two roots (Hypokalaemia and Hypocalcaemia). A few edits can still
+separate two terms (Dysphasia and Dysphagia, Prednisone and Prednisolone): each offer is checked on its own.
 
 Nothing here reads an outcome: the values and their rows only._
 
@@ -1170,6 +1175,15 @@ No description available.
 
 No description available.
 
+### def `_unaccented` (recode.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `str`
+
+Accents set aside (Pétange, Petange; Mère, Mere), every other character kept: a Greek letter, µ, ≤ and ≥ name
+categories (α- and β-blocker, IgG κ and λ, µg/L and g/L), so the ASCII form, which drops them, is never used.
+
 ### def `sort_key` (recode.py)
 
 - **Arguments**: `value: str`
@@ -1186,21 +1200,14 @@ together (Pétange, Petange, Petange␣), then the value as written.
 - **Returns**: `str`
 
 Two spellings of one word compare equal: spaces, capitals, accents and hyphens set aside, ae and oe read as e
-(Anaemia, Anemia; Oedema, Edema).
+before two letters or a vowel (Anaemia, Anemia; Oedema, Œdème, Edema; Diarrhoea, Diarrhea), never before a
+word's last letter (Michael and Michel, Noel and Nel stay apart).
 
 ### def `_words` (recode.py)
 
 - **Arguments**: `text: str`
 
 - **Returns**: `list[str]`
-
-No description available.
-
-### def `_why` (recode.py)
-
-- **Arguments**: `value: str, spelling: str`
-
-- **Returns**: `str`
 
 No description available.
 
@@ -1252,7 +1259,56 @@ The spellings (spaces collapsed) that differ by capitals only, and their rows: o
 - **Returns**: `dict[ComplexType]`
 
 The rule :data:`FOLD` on the values as written (``level_counts``): each value -> the spelling it takes, where
-they differ.
+they differ. Spaces only: a value that differs from another by capitals is offered, never folded (case names
+categories in codes, antibodies and units: Kell K and k, anti-k and anti-K, g/L and G/L, Rh Ccdee and ccdee).
+
+### def `_case_free` (recode.py)
+
+- **Arguments**: `variant: str, spelling: str`
+
+- **Returns**: `bool`
+
+Whether two spellings differ only in words whose capitals carry no meaning: 4 letters or more, each in lower
+case, capitals or capitalised.
+
+### def `_not_recorded` (recode.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `bool`
+
+A comparison key that says a value was not recorded, is awaited or not known (``_NOT_RECORDED``).
+
+### def `_case_coded` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType]`
+
+- **Returns**: `bool`
+
+Whether a column writes case as part of its codes: a capital right after a lower-case letter (CcDee, HFmrEF,
+mg/dL), or a letter beside its other case (Cc, Kk).
+
+### def `_case_safe` (recode.py)
+
+- **Arguments**: `variant: str, target: str, held: Mapping[ComplexType], coded: bool`
+
+- **Returns**: `bool`
+
+Whether a case variant is its target's word written another way: each word whose case differs holds 4 letters
+or more, in lower case, capitals or capitalised in both (``_case_free``); the column writes no case codes
+(``_case_coded``); and the variant holds a typo's rows beside its target (RARE_ROWS or fewer, or under
+CLOSE_SHARE of its rows). Otherwise case may name a category (Kell K and k, anti-k and anti-K, Rh CcDee and
+ccdee; two sites writing Luxembourg and LUXEMBOURG in many rows): offered to check, and a grouping when merged.
+
+### def `_one_category` (recode.py)
+
+- **Arguments**: `a: str, b: str, held: Mapping[ComplexType], coded: bool`
+
+- **Returns**: `bool`
+
+Whether an offer relation joins two spellings, so that merging them names one category written two ways: a case
+variant taken as one word (``_case_safe``), a variant (accents, hyphens, British and American spellings), a
+one-letter code and its word, or a close spelling in a typo's rows (``_spelling_kind``).
 
 ### def `_marked` (recode.py)
 
@@ -1284,7 +1340,46 @@ Whether two spellings differ by what names a category: digits, Roman numerals, s
 
 - **Returns**: `str`
 
-Accents set aside, case kept (Mère, Mere; but HFrEF, HFREF stay two tokens).
+Accents set aside, case and every other character kept (Mère, Mere; HFrEF and HFREF, κ and λ stay apart).
+
+### def `_relation` (recode.py)
+
+- **Arguments**: `rare: str, common: str, keys: ComplexType`
+
+- **Returns**: `ComplexType`
+
+How two spellings may be one category: VARIANT (equal keys), SPELLING (within a typo's edits: ``_edits``), or
+None. Never across what names a category: a digit, a sign, a Roman numeral, a code (``_apart``); words that name
+two categories, a negating prefix among them (``_named_apart``); another ending on one root, or one ending on two
+roots (``_other_ending``).
+
+### def `letters_apart` (recode.py)
+
+- **Arguments**: `value: str, clean: str`
+
+- **Returns**: `ComplexType`
+
+How many edits separate two spellings, once spaces, case, accents and hyphens are set aside, when they are a
+typo's (``_edits``); None otherwise.
+
+### def `_edits_allowed` (recode.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `int`
+
+How many edits a typo makes: one in a value under 10 letters, two from 10 (Luxenbourgg).
+
+### def `_edits` (recode.py)
+
+- **Arguments**: `a: str, b: str`
+
+- **Returns**: `ComplexType`
+
+The Damerau-Levenshtein distance of two keys when it is a typo's, else None: one edit (two from 10 letters,
+``_edits_allowed`` of the shorter), never on a word's first letter (Gambian and Zambian, Heisdorf and Reisdorf),
+and two only past a word's first four letters (Regression and Progression, Nephropathy and Neuropathy,
+Saxagliptin and Sitagliptin are two categories).
 
 ### def `_into_word` (recode.py)
 
@@ -1294,15 +1389,24 @@ Accents set aside, case kept (Mère, Mere; but HFrEF, HFREF stay two tokens).
 
 How far into its word the first difference of two keys falls.
 
-### def `_relation` (recode.py)
+### def `_other_ending` (recode.py)
 
-- **Arguments**: `rare: str, common: str, keys: ComplexType`
+- **Arguments**: `a: str, b: str`
+
+- **Returns**: `bool`
+
+Two words that end in two endings of ``_ENDINGS`` on one root (Craniectomy, Craniotomy), or in one ending on
+roots two edits apart or more (Hypokalaemia, Hypocalcaemia): two procedures or two conditions.
+
+### def `_spelling_kind` (recode.py)
+
+- **Arguments**: `rare: str, common: str, held: Mapping[ComplexType], keys: ComplexType`
 
 - **Returns**: `ComplexType`
 
-How two spellings may be one category: VARIANT (equal keys), SPELLING (one letter apart: Damerau-Levenshtein
-distance 1 on the keys, the first difference past a word's first four letters), or None. Never across what names
-a category (``_apart``).
+The offer a rarer spelling gets towards a more frequent one within a typo's edits (``_relation``): SPELLING when
+it holds a typo's rows (RARE_ROWS or fewer, and RARE_SHARE of the other's at most; or a single row beside 10 or
+more), CLOSE when one edit away and under CLOSE_SHARE of its rows (to check first), else None: a value of its own.
 
 ### def `_first_letter` (recode.py)
 
@@ -1319,7 +1423,7 @@ A one-letter code and a word of 3 letters or more it begins, which holds no digi
 - **Returns**: `Suggestions`
 
 What each value as written could become (``level_counts``): the fold, pre-filled, and the offers (variants and
-spellings one letter apart only with ``near``: they compare the spellings two by two).
+close spellings only with ``near``: they compare the spellings two by two).
 
 ### def `_hop` (recode.py)
 
@@ -1337,8 +1441,8 @@ One step: what a value becomes, and the key of the choice that says so (None: as
 
 What one value as written becomes, the key of the first choice it follows (its kind's) and of the last (what
 missing means): as written when ``kept``; its own choice when the fold gave it a spelling and the mapping names
-it; else its spelling's choice (its group's), or that spelling. With ``chain``, a clean value that is itself
-given another is followed (MALE → male → M); a cycle (F → Female → F) takes the first choice only.
+it; else its spelling's choice (its group's), or that spelling. A clean value that is itself given another is
+followed (MALE → male → M); a cycle (F → Female → F) takes the first choice only.
 
 ### def `clean_value` (recode.py)
 
@@ -1348,22 +1452,13 @@ given another is followed (MALE → male → M); a cycle (F → Female → F) ta
 
 What one value as written becomes (``resolve``).
 
-### def `_spellings` (recode.py)
-
-- **Arguments**: `counts: Mapping[ComplexType], fold_rule: ComplexType`
-
-- **Returns**: `dict[ComplexType]`
-
-No description available.
-
 ### def `plan` (recode.py)
 
 - **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType]`
 
 - **Returns**: `dict[ComplexType]`
 
-Each value as written that a recode changes -> its clean value (None: missing). ``fold_rule`` None: no fold and
-no chain (a step recorded before the fold rule listed every change).
+Each value as written that a recode changes -> its clean value (None: missing).
 
 ### def `outcome` (recode.py)
 
@@ -1397,8 +1492,8 @@ name is written anew). Returns the table and how many distinct values were kept 
 
 - **Returns**: `str`
 
-A fingerprint of the values as written and the spelling the fold gives each: the replay says when the values
-it reads differ from those the step saw (a value swapped for another, a spelling that lost its majority).
+A fingerprint of the values as written and the spelling the fold gives each: the replay says when the values it
+reads differ from those the step saw (a value swapped for another).
 
 ### def `new_choices` (recode.py)
 
@@ -1407,6 +1502,14 @@ it reads differ from those the step saw (a value swapped for another, a spelling
 - **Returns**: `dict[ComplexType]`
 
 No description available.
+
+### def `_unanswered` (recode.py)
+
+- **Arguments**: `choices: MutableMapping[ComplexType], value: str`
+
+- **Returns**: `None`
+
+Another choice for a value replaces its answer "a result".
 
 ### def `_drop` (recode.py)
 
@@ -1432,8 +1535,17 @@ that agrees with its group, or puts its fold back, is no choice of its own.
 
 - **Returns**: `None`
 
-A value no longer missing: its own choice goes; when its group's choice still sets it to missing, it is kept as
-written.
+A value no longer missing: its own choice goes, its answer "a result" too; when its group's choice still sets it
+to missing, it is kept as written.
+
+### def `keep_result` (recode.py)
+
+- **Arguments**: `choices: MutableMapping[ComplexType], counts: Mapping[ComplexType], value: str`
+
+- **Returns**: `None`
+
+A code that may mean missing answered a result (ND: not detected): kept as a value, as written, and the answer
+kept with the choices (``results``), recorded with the step.
 
 ### def `tick` (recode.py)
 
@@ -1442,14 +1554,25 @@ written.
 - **Returns**: `None`
 
 An offer ticked: its spelling's choice, for the whole group; the members' own choices that agree with it go.
+``by``: who proposed an AI offer ({provider, model, where, values_sent, values_held}), kept with the choice.
 
 ### def `untick` (recode.py)
 
-- **Arguments**: `choices: MutableMapping[ComplexType], offer: Offer`
+- **Arguments**: `choices: MutableMapping[ComplexType], counts: Mapping[ComplexType], offer: Offer`
 
 - **Returns**: `None`
 
-No description available.
+An offer unticked, as ``tick`` ticks it: its spelling's choice goes, and the members' own choices that give what
+it proposes (a row given that clean value in the table), so that it reads unticked.
+
+### def `swaps` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], choices: Mapping[ComplexType]`
+
+- **Returns**: `list[str]`
+
+The values whose choices lead back to themselves (Oui → Yes → Oui): the copy would swap their names, not merge
+them; the page asks for one name first.
 
 ### def `ticked` (recode.py)
 
@@ -1472,24 +1595,17 @@ agrees with its group's). Choices are left out one at a time against the running
 becomes and what missing means, so that the record always gives the preview. Raises ValueError if it does not
 (never: the page then refuses Apply).
 
-### def `_related` (recode.py)
-
-- **Arguments**: `a: str, b: str`
-
-- **Returns**: `bool`
-
-Two spellings an offer would join: a one-letter code and its word, a variant, one letter apart.
-
 ### def `groupings` (recode.py)
 
-- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType], kinds: Mapping[ComplexType]`
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType]`
 
 - **Returns**: `dict[ComplexType]`
 
-The clean values that group categories: a spelling merged by hand (a choice, not an offer) with another that
-something naming a category sets apart (``_apart``: NYHA IV into III, Stage IVA into IV), unless an offer would
-join them (a first letter, a variant); or two spellings that each hold :data:`GROUPING_SHARE` of the rows. Clean
-value -> the spellings it merges.
+The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): two
+spellings merged that no offer relation joins (``_one_category``: a case variant taken as one word, a variant, a
+one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III, Unstable angina into Stable
+angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why. Clean value -> the
+spellings it merges.
 
 ### def `changes` (recode.py)
 
@@ -1498,8 +1614,8 @@ value -> the spellings it merges.
 - **Returns**: `dict[ComplexType]`
 
 The values a recode changes, counted by kind and meaning: ``{"by_kind": {kind: [values, rows]},
-"set_to_missing": {meaning: [values, rows]}}``. A value takes the kind of the first choice it follows, or the
-fold's reason; a kind or meaning holding one value gives that value's rows.
+"set_to_missing": {meaning: [values, rows]}}``. A value takes the kind of the first choice it follows, or
+:data:`SPACES` when the fold alone changes it; a kind or meaning holding one value gives that value's rows.
 
 ### def `report_params` (recode.py)
 
@@ -1517,7 +1633,46 @@ fingerprints are left out: one of a single column can be tested against a guesse
 
 - **Returns**: `bool`
 
-Values that read as free text (long, or several words each): the AI engine is not asked about them.
+Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
+held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier (many values,
+the typical one rare: names, numbers; read on the median and without the codes for missing, so that one frequent
+placeholder hides none).
+
+### def `_ai_refused` (recode.py)
+
+- **Arguments**: `value: str, clean: str`
+
+- **Returns**: `bool`
+
+Whether a proposal of the AI engine joins what the rules keep apart: a value that is no value of its own on either
+side (Not tested and Negative, Refused and Unknown, Homme and unknown; by pattern, Not recorded, Pending, Don't
+know); an answer stating an absence or a presence, but from its own forms (Non to No, Négatif to Negative, Oui to
+Yes; never Not assessed to Normal); a number, a sign or two Roman numerals (Type 1 and 2, NYHA II and III); words
+that name two categories (``_named_apart``). The rules see words, not meanings: a class or a sibling they cannot
+read (Stroke and Hypertension) passes, and its merge is a grouping, which asks why (``groupings``).
+
+### def `_named_apart` (recode.py)
+
+- **Arguments**: `value: str, clean: str`
+
+- **Returns**: `bool`
+
+Whether the words of two values name two categories: a word in common and others apart (Stage IIIA and IIIB,
+Hepatitis B and C, Ex-smoker and Current smoker), unless those differ by a typo (``_edits``, in words of 5
+letters or more: Diabetes melitus); two codes a letter or two apart (HFmrEF and HFrEF, pT1a and pT1b, IgG and IgM); two
+units (mg/dL and mmol/L); opposites (Positive and Negative); a prefix that negates or opposes (Unstable and
+Stable, Hypotension and Hypertension); a broader class, or a word inside the other (STEMI and MI, Type 2 diabetes
+and Diabetes, Female and Male). A translation, a synonym or an abbreviation crosses none (Femme and Female, Oui
+and Yes, MI and Myocardial infarction).
+
+### def `_code` (recode.py)
+
+- **Arguments**: `token: str`
+
+- **Returns**: `bool`
+
+A code rather than a word: a digit, or a capital after its first character (HFmrEF, pT1a, IgG, MI, NYHA); Oui,
+Yes and Female are words.
 
 ### def `_numbered_apart` (recode.py)
 
@@ -1525,9 +1680,18 @@ Values that read as free text (long, or several words each): the AI engine is no
 
 - **Returns**: `bool`
 
-Whether a number, a sign or two different Roman numerals set two values apart (Type 1 and 2, HER2- and HER2+,
-NYHA II and III): a translation or an abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where
-"MI" reads as a numeral only when the other value holds one too).
+Whether a number or a sign sets two values apart (Type 1 and 2, NYHA II and III, HER2- and HER2+), a Roman
+numeral read as the number it names (NYHA 3 and NYHA III, Grade 2 and II are one class): a translation or an
+abbreviation crosses none (Oui and Yes; MI and myocardial infarction, where "MI" reads as a numeral only when the
+other value holds a number too).
+
+### def `_roman_value` (recode.py)
+
+- **Arguments**: `numeral: str`
+
+- **Returns**: `int`
+
+No description available.
 
 ### def `ai_offers` (recode.py)
 
@@ -1536,9 +1700,38 @@ NYHA II and III): a translation or an abbreviation crosses none (Oui and Yes; MI
 - **Returns**: `tuple[ComplexType]`
 
 The AI engine's proposals, read: only a value it was sent (as written, or its spelling), given another value or a
-short standard name, never to missing, never across a number, a sign or a Roman numeral (NYHA II and III, Type
-1 and 2: the prompt forbids the rest, and the user ticks each); one per value, in the order of the values' rows, those an offer of the rules already names (``taken``)
-left out. The model's text is kept to a short reason, drawn as text.
+short standard name, never to missing, never across what the rules keep apart (``_ai_refused``: the prompt
+forbids the rest, and the user ticks each); one per value, those an offer of the rules already names (``taken``)
+left out. A value proposed both ways (Oui → Yes, Yes → Oui) or along a chain (MALE → Male → M) keeps one direction,
+into the value holding the most rows, so that ticking them all never swaps two names. The model's text is kept to a
+short reason, drawn as text. In the order of the values' rows.
+
+### def `ai_tally` (recode.py)
+
+- **Arguments**: `proposals: Iterable[Mapping[ComplexType]], counts: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Where the AI engine's proposals went, by value proposed (``ai_offers``): ``shown`` as offers; ``offered`` on a
+value an offer of the rules already names; ``apart``, refused, as the rules keep the two values apart (or the
+proposed name is too long); ``reversed``, the same values the other way round of a proposal shown (one direction
+is kept). A proposal naming a value it was not sent, or none, is no proposal.
+
+### def `_ai_read` (recode.py)
+
+- **Arguments**: `proposals: Iterable[Mapping[ComplexType]], counts: Mapping[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+No description available.
+
+### def `_shortened` (recode.py)
+
+- **Arguments**: `text: str, limit: int`
+
+- **Returns**: `str`
+
+At most ``limit`` characters, cut after a whole word.
 
 ### def `recoded_columns` (recode.py)
 
@@ -1557,6 +1750,17 @@ Each column recoded in a trace's steps -> the copy its last recode wrote.
 The parameters of the last recode of ``source`` into ``target`` in a trace's steps: cleaning again starts from
 its choices.
 
+### def `documented` (recode.py)
+
+- **Arguments**: `record: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+What a recode records of the choices beside the values it writes: the mapping, the kinds, the folds put back,
+what missing means, the codes answered a result, why each grouping was made and who proposed each AI choice. Two
+records that document the same choices compare equal; a corrected meaning or reason does not, though the copy it
+writes is the same.
+
 ### def `choices_of` (recode.py)
 
 - **Arguments**: `record: ComplexType`
@@ -1573,8 +1777,7 @@ The choices a recorded step made, to clean again from them (its kinds kept).
 
 Whether ``target`` can be written again: it is the copy of ``source`` that the last recode wrote, and no later step
 changed it (its fingerprint still matches, or the recorded recode of the source as it is now still gives it, as
-after a freeze that removed rows from both). A record without a fingerprint (before 747ccc3) is checked by the
-recode alone.
+after a freeze that removed rows from both).
 
 ### def `numeric_codes` (recode.py)
 
@@ -1591,9 +1794,10 @@ The number columns holding 2 to 10 distinct values (1/2 codes): not listed, and 
 - **Returns**: `list[Candidate]`
 
 The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
-(source -> copy) left out: those with values to check first, then the cleaned ones, then the others, each in the
-dataset's order. Variants and spellings one letter apart are not looked for here (they compare the spellings two
-by two): only in the open variable.
+(source -> copy) left out: those with values to check first, then those with extra spaces only, then the cleaned
+ones, then the others, each in the dataset's order. The count of values to check holds every offer the page makes,
+variants and close spellings included (rapidfuzz keeps the two-by-two comparison to milliseconds); the values
+written with extra spaces, which the fold collapses with nothing to check, are counted apart.
 
 ---
 
