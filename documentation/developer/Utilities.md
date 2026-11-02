@@ -989,7 +989,7 @@ Every record is written without API keys (:func:`redact_secrets`): a provider's 
 as Google does for a suspended key ("Consumer 'api_key:...' has been suspended")._
 
 **Imports**:
-`__future__.annotations`, `logging`, `re`, `utils.settings.get_settings`, `utils.settings.secret_values`
+`__future__.annotations`, `logging`, `re`, `threading`, `utils.settings.get_settings`, `utils.settings.secret_values`
 
 ### class `RedactSecrets` (logging_config.py)
 
@@ -1453,7 +1453,7 @@ variables has changed, so that a test that sets one sees it at once. Secrets are
 ``**********``. ``core`` and ``biostats`` never read settings: they receive values as parameters._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `re`, `threading`, `dataclasses.dataclass`, `pathlib.Path`, `typing.Literal`, `urllib.parse.urlparse`, `pydantic.Field`, `pydantic.SecretStr`, `pydantic.ValidationError`, `pydantic.field_validator`, `pydantic_settings.BaseSettings`, `pydantic_settings.SettingsConfigDict`
+`__future__.annotations`, `functools`, `logging`, `os`, `re`, `threading`, `dataclasses.dataclass`, `pathlib.Path`, `typing.Literal`, `urllib.parse.urlparse`, `pydantic.Field`, `pydantic.SecretStr`, `pydantic.ValidationError`, `pydantic.field_validator`, `pydantic_settings.BaseSettings`, `pydantic_settings.SettingsConfigDict`
 
 ### class `SettingsError` (settings.py)
 
@@ -1555,6 +1555,14 @@ No description available.
 - **Returns**: `Settings`
 
 The settings of the current environment, validated again only when one of their variables has changed.
+
+### def `_settings_of` (settings.py)
+
+- **Arguments**: `raw: tuple[ComplexType]`
+
+- **Returns**: `Settings`
+
+The settings validated for one state of their variables (``raw``): two sessions racing only validate twice.
 
 ### def `_unread_streamlit_files` (settings.py)
 
