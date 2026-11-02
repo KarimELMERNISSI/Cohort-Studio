@@ -1319,6 +1319,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
 
+### Data > Clean: the AI engine reads a messy column too
+
+- **Before:** a column of more than 30 values, half of them typos held by 1 to 4 rows beside a few frequent
+  categories, read as an identifier, and "Ask the AI engine" was disabled where it helps most.
+- **Now:** a column reads as an identifier from the values a cloud recipient would be sent, those held by 5 rows or
+  more (codes for missing set aside): many of them, the typical one a small share of their rows (names on visits).
+  The rare typos are never sent to a cloud recipient and no longer count; names on visits beside a frequent
+  placeholder still read as an identifier.
+
 ### Validate: Date checks, a tab of its own (M6)
 
 - **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed

@@ -1079,9 +1079,11 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
 def free_text(counts: Mapping[str, int], *, min_count: int = RARE_ROWS) -> bool:
     """
     Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
-    held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier (many values,
-    the typical one rare: names, numbers; read on the median and without the codes for missing, so that one frequent
-    placeholder hides none).
+    held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier: among the values
+    held by ``min_count`` rows or more, those a cloud recipient would be sent, many, the typical one a small share of
+    their rows (names on visits, numbers). Read on their median, without the codes for missing, so that one frequent
+    placeholder hides none; the rare values are not among them, so that the typos of a messy categorical column beside
+    a few frequent categories (half its values held by 1 to 4 rows) no longer make it read as an identifier.
     """
     if not counts:
         return False
@@ -1089,14 +1091,15 @@ def free_text(counts: Mapping[str, int], *, min_count: int = RARE_ROWS) -> bool:
     wordy = sum(1 for v in counts if len(v.split()) >= 5)
     rows = sum(counts.values())
     rare = sum(n for n in counts.values() if n < min_count)
-    real = sorted(
+    sent = sorted(
         n
         for v, n in counts.items()
-        if _plain(v) not in _UNKNOWN_CODES
+        if n >= min_count
+        and _plain(v) not in _UNKNOWN_CODES
         and _plain(v) not in _ASKED_CODES
         and not _not_recorded(_key(v))
     )
-    identifier = len(real) > 30 and real[len(real) // 2] < 0.05 * sum(real)
+    identifier = len(sent) > 30 and sent[len(sent) // 2] < 0.05 * sum(sent)
     return (
         sum(lengths) / len(lengths) > 40
         or wordy > len(counts) / 2

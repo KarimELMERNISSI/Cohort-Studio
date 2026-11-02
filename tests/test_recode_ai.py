@@ -317,3 +317,30 @@ def test_the_tally_says_where_each_proposal_went() -> None:
         "Femme",
         "Homme",
     ]
+
+
+def test_a_messy_categorical_column_is_no_identifier() -> None:
+    """33 values, half of them typos of 1 to 4 rows beside a few frequent categories, read as an identifier: the AI
+    engine was never offered where it helps most. Names on visits stay one, a frequent placeholder beside them too."""
+    frequent = {
+        "Hypertension": 300,
+        "Diabetes mellitus": 250,
+        "Heart failure": 200,
+        "Atrial fibrillation": 180,
+        "Myocardial infarction": 150,
+        "Chronic kidney disease": 120,
+        "Obesity": 110,
+        "COPD": 90,
+        "Stroke": 80,
+        "Anaemia": 70,
+        "Oedema": 60,
+        "Asthma": 50,
+        "CKD": 40,
+        "Hypokalaemia": 40,
+        "MI": 30,
+        "AF": 25,
+    }
+    typos = {f"typo {i}": 1 + i % 4 for i in range(17)}
+    assert not free_text(frequent | typos)
+    assert free_text({f"Name {i}": 6 for i in range(40)} | {"anonymous": 360})
+    assert free_text({f"Name {i}": 6 for i in range(40)} | {"unknown": 60})
