@@ -166,6 +166,37 @@ def test_an_ollama_cloud_model_needs_the_confirmation(monkeypatch, tmp_path) -> 
     assert rm.RAGManager.recipients_of("ollama", local, model_name="glm-4.6:cloud") == {"ollama@ollama.com"}
 
 
+def test_a_model_the_ollama_server_runs_elsewhere_needs_the_confirmation(monkeypatch, tmp_path) -> None:
+    """A copy of a cloud model (ollama cp gpt-oss:120b-cloud gpt-oss:120b) reads local by its name: the engine asks
+    the server, which answers that ollama.com runs it."""
+    import manage.rag.providers.ollama_server as server
+
+    _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        server, "remote_host", lambda base_url, model: "https://ollama.com:443" if model == "gpt-oss:120b" else None
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    start = {"provider": "ollama", "base_url": "http://localhost:11434", "model_name": "gpt-oss:120b"}
+    ok, message = manager.initialize_system(**start, vector_engine="lancedb")
+    assert not ok and "Ollama at ollama.com" in message
+    manager.confirm("ollama@ollama.com")
+    ok, message = manager.initialize_system(**start, vector_engine="lancedb")
+    assert ok, message
+    assert manager.recipients() == {"ollama@ollama.com"} and manager.model_remote_host == "https://ollama.com:443"
+
+
+def test_a_cloud_model_behind_an_ollama_outside_the_network_names_both() -> None:
+    """The server at the address receives the prompts too: it was shown as the embedding provider only."""
+    from app_pages.rag_sidebar import _recipients
+
+    outside = "https://ollama.example.com"
+    cfg = {"provider": "ollama", "base_url": outside, "model": "glm-4.6:cloud", "embedding": "nomic-embed-text"}
+    assert _recipients(cfg) == ["ollama@ollama.com", "ollama@ollama.example.com"]
+    both = {"ollama@ollama.com", "ollama@ollama.example.com"}
+    assert rm.RAGManager.recipients_of("ollama", outside, model_name="glm-4.6:cloud") == both
+
 def test_settings_names_an_ollama_cloud_model_as_a_recipient() -> None:
     from app_pages.rag_sidebar import _notice, _recipients
 

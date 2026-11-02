@@ -482,7 +482,10 @@ def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_propose
     at.session_state[popover] = True
     at.run()
     _ok(at)
-    assert any("1 value held by fewer than 5 rows is not sent." in c.value for c in at.caption)
+    assert any(
+        "1 value held by fewer than 5 rows is not sent; rows are counted, not people" in c.value
+        for c in at.caption
+    )
     assert any(c.value.startswith("Send to Anthropic") for c in at.caption)
     sent_table = [d for d in at.dataframe if list(d.value.columns) == ["Values sent"]]
     assert sent_table and sent_table[0].value["Values sent"].tolist() == ["Female", "Femme", "Male"]
@@ -513,7 +516,7 @@ def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_propose
         "Femme": {
             "provider": "anthropic",
             "model": "fake-model",
-            "where": "cloud",
+            "where": "Anthropic Claude",
             "values_sent": 3,
             "values_held": 1,
         }

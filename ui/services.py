@@ -95,12 +95,13 @@ def running_engine() -> Any:
 
 
 def engine_model(engine: Any) -> str:
-    """The chat model an engine runs: each connector keeps it in its configuration (``llm.config.model_name``)."""
+    """The chat model an engine runs, whole: each connector keeps it in its configuration (``llm.config.model_name``);
+    a decision reads the whole name, a record may cut it."""
     llm = getattr(engine, "llm", None)
     model = getattr(getattr(llm, "config", None), "model_name", None) or getattr(
         llm, "model_name", None
     )
-    return str(model or "")[:80]
+    return str(model or "")
 
 
 def end_session(reason: str) -> None:

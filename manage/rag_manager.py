@@ -20,6 +20,7 @@ from rapidfuzz import process
 
 from core.workspace import UserScope
 from manage.ai_payload import (
+    OLLAMA,
     column_profile,
     document_name,
     frequent_values,
@@ -27,6 +28,7 @@ from manage.ai_payload import (
     provider_label,
     recipient,
     safe_stats,
+    server_recipient,
     store_recipient,
     taxonomy_for_prompt,
 )
@@ -188,6 +190,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # the models the engine runs: an Ollama model tagged "cloud" runs on ollama.com, a recipient of its own
         self.model_name: str | None = None
         self.embedding_model: str | None = None
+        self.model_remote_host: str | None = None  # where the Ollama server runs the chat model, when elsewhere
         # The recipients the user confirmed may receive data, in this session (browser tab), as the exact set of one
         # box of Settings > AI engine > Data sharing: a provider confirmed as Claude's embedding provider is not
         # confirmed to answer on its own, which receives more (column summaries, descriptions, criteria)
@@ -204,15 +207,18 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         *,
         model_name: str | None = None,
         embedding_model: str | None = None,
+        model_remote_host: str | None = None,
     ) -> frozenset[str]:
         """
-        The recipients of a configuration that need the confirmation: its cloud chat and embedding providers, an
-        Ollama cloud model, which runs on ollama.com through the Ollama server ("ollama@ollama.com"), an Ollama
-        outside the private network ("ollama@<host>"), and the Qdrant server there that keeps the index
+        The recipients of a configuration that need the confirmation: its cloud chat and embedding providers; an
+        Ollama model that runs elsewhere through the Ollama server, a cloud model by its tag ("ollama@ollama.com") or by
+        the server's answer (``model_remote_host``); an Ollama outside the private network ("ollama@<host>"), which
+        receives every prompt also when its model runs elsewhere; and the Qdrant server there that keeps the index
         ("qdrant@<host>").
         """
         found = {
-            recipient(provider, base_url, model_name),
+            recipient(provider, base_url, model_name, remote_host=model_remote_host),
+            server_recipient(provider, base_url),
             recipient(embedding_provider, embedding_base_url or base_url, embedding_model),
             store_recipient(qdrant_url),
         }
@@ -228,6 +234,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             self.qdrant_url,
             model_name=getattr(self, "model_name", None),
             embedding_model=getattr(self, "embedding_model", None),
+            model_remote_host=getattr(self, "model_remote_host", None),
         )
 
     def uses_cloud(self) -> bool:
@@ -456,6 +463,12 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # scheme is the one the client reads (https with a key)
         store_key = qdrant_api_key or store_settings.key_for(server)
         store_url = explicit_address(server, store_key) if engine == VectorEngine.QDRANT else None
+        # an Ollama server says which of its models it runs elsewhere (a copy of a cloud model reads local by name)
+        remote = None
+        if provider_clean == OLLAMA:
+            from manage.rag.providers.ollama_server import remote_host
+
+            remote = remote_host(base_url, model_name)
         needed = self.recipients_of(
             provider_clean,
             base_url,
@@ -464,6 +477,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             store_url,
             model_name=model_name,
             embedding_model=embedding_model,
+            model_remote_host=remote,
         )
         if not self.is_confirmed(needed):
             names = " and ".join(provider_label(r) for r in sorted(needed))
@@ -483,6 +497,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self.provider, self.base_url, self.embedding_provider = provider_clean, base_url, embed_provider
         self.embedding_base_url = own_embedding_url
         self.model_name, self.embedding_model = model_name, embedding_model
+        self.model_remote_host = remote
         self.qdrant_url = store_url
         succeeded = False
         try:

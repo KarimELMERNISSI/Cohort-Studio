@@ -204,7 +204,7 @@ the replay handles it.
 
 ### 5. AI Assistant (optional `ai` group)
 
-- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your server), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit consent in Settings > AI engine. The server's default is set by `CMP_AI_PROVIDER` (local Ollama unless set), and Settings offers only the providers that can run here.
+- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your server, except with an Ollama cloud model, which runs on ollama.com and asks for the same consent as a cloud provider), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit consent in Settings > AI engine. The server's default is set by `CMP_AI_PROVIDER` (local Ollama unless set), and Settings offers only the providers that can run here.
 - **Column-Name Suggestions**: The language model suggests clearer, standardised names for raw columns. The suggestions are not checked against a terminology: UMLS, LOINC and SNOMED CT are not loaded.
 - **Variable Suggestions**: From the columns of your dataset, the variable map and your indexed documents, the engine proposes new variables (BMI, eGFR, clinical scores), for a concept you name or by scanning the dataset. Each formula is checked against your columns and shown with its source (a document and its pages, or the model's knowledge); for a missing input, it can look for a proxy or an alternative formula. A suggestion goes to the formula editor, where you preview it before anything is added.
 - **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant, in your workspace or on a Qdrant server (a server outside your network needs the same consent as a cloud provider). What is sent anywhere names each passage by its PDF, never by its folder on the server.
@@ -354,7 +354,8 @@ CMP_ADMIN_PASSWORD=choose-a-long-passphrase
 # Identity provider: local (default) | better_auth | disabled (no sign-in, one local user)
 CMP_IAM_PROVIDER=local
 
-# AI providers: Ollama is the default and keeps data on the server. Cloud providers are opt-in
+# AI providers: Ollama is the default and keeps data on the server (its cloud models run on ollama.com and ask
+# for consent). Cloud providers are opt-in
 # and require an explicit confirmation in the app before any data is sent.
 CMP_AI_PROVIDER=auto
 OLLAMA_BASE_URL=http://localhost:11434

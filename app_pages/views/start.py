@@ -181,5 +181,5 @@ with right:
         else:
             st.badge("Off", icon=":material/radio_button_unchecked:", color="gray")
             st.caption("Optional. Nothing is sent before an engine starts in Settings; with Ollama on this machine, no "
-                       "data leaves the server.")
+                       "data leaves the server, unless its model is a cloud model, which runs on ollama.com.")
         page_link("settings", "Configure in Settings", icon=":material/settings:")

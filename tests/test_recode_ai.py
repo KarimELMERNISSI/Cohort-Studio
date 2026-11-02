@@ -95,9 +95,17 @@ def test_a_value_held_by_fewer_than_5_rows_reaches_only_a_model_run_on_this_mach
 
 def test_free_text_mostly_rare_values_or_an_identifier_is_never_sent() -> None:
     long_text = {"the patient reported chest pain at rest": 9, "dyspnoea on exertion for weeks": 9}
-    assert category_values(long_text, "ollama", "http://localhost:11434") == ([], 2)
+    assert category_values(long_text, "ollama", "http://localhost:11434", None) == ([], 2)
     names = {f"Name {i}": 1 for i in range(40)} | {"Doe": 5}
-    assert category_values(names, "anthropic", None) == ([], 41)
+    assert category_values(names, "anthropic", None, None) == ([], 41)
+    # a frequent placeholder no longer hides an identifier: 40 names on 6 visits each, and 60 rows "unknown"
+    visits = {f"Name {i}": 6 for i in range(40)} | {"unknown": 60}
+    assert category_values(visits, "anthropic", None, "claude") == ([], 41)
+    # a model the Ollama server runs elsewhere gets only the values held by 5 rows or more
+    sent, held = category_values(
+        COUNTS, "ollama", "http://localhost:11434", "gpt-oss:120b", remote_host="https://ollama.com"
+    )
+    assert held == 1 and "W" not in sent
 
 
 def test_the_engine_is_sent_the_name_and_the_values_never_a_count_and_its_answer_is_read() -> None:
@@ -170,7 +178,9 @@ def test_a_proposal_is_an_offer_its_reason_never_pre_filled_and_who_proposed_is_
     again = choices_of({"mapping": mapping, "kinds": kinds, "ai_by": {"Oui": by, "Gone": by}})
     assert again["ai_by"] == {"Oui": by}
     shown = report_params({"mapping": mapping, "kinds": kinds, "ai_by": again["ai_by"]})
-    assert shown["proposed by the AI engine"] == ["ollama gpt-oss:120b-cloud: 1 value"]
+    assert shown["proposed by the AI engine"] == [
+        "ollama gpt-oss:120b-cloud (cloud): 1 value"
+    ]  # where it ran
     assert "ai_by" not in shown and "Oui" not in repr(shown)
 
 

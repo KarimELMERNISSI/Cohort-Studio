@@ -28,7 +28,9 @@ Claude. A server can preselect another provider for the users who chose none (`C
 preselected this way receives none of your data until you confirm it, as when you choose it. Typing a key for Gemini
 or Claude asks the provider which models the key may use: the key is sent, none of your data.
 
-Nothing leaves the server with an Ollama on this machine. An Ollama on another machine receives the prompts, the
+Nothing leaves the server with an Ollama on this machine running its own model; an Ollama cloud model (tagged
+cloud, or a copy of one) runs on ollama.com, which receives what it is sent, after the same confirmation as a cloud
+provider.An Ollama on another machine receives the prompts, the
 text of your documents and the column summaries, and the page shows its host:
 - **on your network** (a private address, a Docker service name, a .local, .lan or .internal name): no
   confirmation is asked;

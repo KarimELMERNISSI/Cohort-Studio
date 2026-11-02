@@ -1111,31 +1111,42 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
         "the trace)"
         for clean, g in grouped.items()
     ]
-    proposed: dict[tuple[str, str], int] = defaultdict(int)
+    proposed: dict[tuple[str, str, str], int] = defaultdict(int)
     for by in (params.get("ai_by") or {}).values():
         if isinstance(by, Mapping):
-            proposed[(str(by.get("provider", "")), str(by.get("model", "")))] += 1
-    if proposed:  # who proposed, how many choices: never which values
+            key = (str(by.get("provider", "")), str(by.get("model", "")), str(by.get("where", "")))
+            proposed[key] += 1
+    if proposed:  # who proposed, where it ran, how many choices: never which values
         out["proposed by the AI engine"] = [
-            f"{provider or 'unknown provider'} {model or 'unknown model'}: {n} value{'s' if n != 1 else ''}"
-            for (provider, model), n in sorted(proposed.items())
+            f"{provider or 'unknown provider'} {model or 'unknown model'}{f' ({where})' if where else ''}: "
+            f"{n} value{'s' if n != 1 else ''}"
+            for (provider, model, where), n in sorted(proposed.items())
         ]
     out.pop("ai_by", None)
     return out
 
 
-def free_text(counts: Mapping[str, int]) -> bool:
+def free_text(counts: Mapping[str, int], *, min_count: int = RARE_ROWS) -> bool:
     """
     Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
-    held by fewer than 5 rows cover half the rows), or an identifier (many values, none frequent: names, numbers).
+    held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier (many values,
+    the typical one rare: names, numbers; read on the median and without the codes for missing, so that one frequent
+    placeholder hides none).
     """
     if not counts:
         return False
     lengths = [len(_spaced(v)) for v in counts]
     wordy = sum(1 for v in counts if len(v.split()) >= 5)
     rows = sum(counts.values())
-    rare = sum(n for n in counts.values() if n < 5)
-    identifier = len(counts) > 30 and max(counts.values()) < 0.05 * rows
+    rare = sum(n for n in counts.values() if n < min_count)
+    real = sorted(
+        n
+        for v, n in counts.items()
+        if _plain(v) not in _UNKNOWN_CODES
+        and _plain(v) not in _ASKED_CODES
+        and not _not_recorded(_key(v))
+    )
+    identifier = len(real) > 30 and real[len(real) // 2] < 0.05 * sum(real)
     return (
         sum(lengths) / len(lengths) > 40
         or wordy > len(counts) / 2

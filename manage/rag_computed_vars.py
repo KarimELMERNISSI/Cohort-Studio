@@ -575,5 +575,12 @@ class ComputedVarsMixin:
                 found.append(
                     {"value": entry["value"], "clean": entry["clean"], "reason": str(entry.get("reason") or "")[:120]}
                 )
-        logger.info("The AI engine proposed %d category groups from %d values", len(found), len(values))
+        model = getattr(getattr(self.llm, "config", None), "model_name", None) or ""
+        logger.info(  # who answered, how many: never a value
+            "The AI engine (%s %s) proposed %d category groups from %d values",
+            getattr(self, "provider", ""),
+            str(model)[:80],
+            len(found),
+            len(values),
+        )
         return found[:max_proposals], None

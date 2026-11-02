@@ -91,7 +91,9 @@ def test_the_readers_go_through_the_registry(monkeypatch: pytest.MonkeyPatch) ->
     assert local_providers() == {"ollama"}
     assert embedding_providers() == ("ollama", "gemini", "openai", "mistral")
     assert provider_label("anthropic") == "Anthropic Claude" and provider_label("zz9") == "zz9"
-    assert recipient("custom") == "custom"  # a provider not declared local needs the confirmation
+    assert (
+        recipient("custom", None, None) == "custom"
+    )  # a provider not declared local needs the confirmation
     monkeypatch.setenv("MISTRAL_API_KEY", "planted-mistral-key")
     assert server_key("Mistral") == "planted-mistral-key" and server_key("ollama") is None
 

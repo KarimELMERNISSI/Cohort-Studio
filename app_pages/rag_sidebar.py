@@ -25,6 +25,7 @@ from manage.ai_payload import (
     outside_private_network,
     provider_label,
     recipient,
+    server_recipient,
     store_recipient,
 )
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
@@ -90,6 +91,23 @@ def _discover_ollama_models(base_url: str) -> list[str]:
         return list(ConnectorFactory.get_llm_connector(cfg).get_available_models() or [])
     except Exception:
         return []
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _remote_host(base_url: str, model: str) -> str | None:
+    """Where the Ollama server runs a model when not itself (a cloud model, a copy of one), asked at most once a
+    minute per endpoint and model, as the engine asks it when it starts."""
+    from manage.rag.providers.ollama_server import remote_host
+
+    return remote_host(base_url, model)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _remote_models(base_url: str) -> dict[str, str]:
+    """The models the Ollama server lists that it runs elsewhere, to mark them in the list."""
+    from manage.rag.providers.ollama_server import remote_models
+
+    return remote_models(base_url)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -187,7 +205,10 @@ def _provider_card() -> dict:
             chat_options = _discover_ollama_models(cfg["base_url"]) or list(info.chat_models)
             embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
-            chat_help = "Local model for question answering and taxonomy generation."
+            chat_help = (
+                "Model for question answering and taxonomy generation. One tagged cloud, or that your Ollama server "
+                "runs elsewhere, runs on ollama.com and needs your confirmation."
+            )
             embed_help = "Local embedding model (pull it first: 'ollama pull <model>')."
         else:
             st.badge("Cloud: requires your confirmation", icon=":material/cloud:", color="orange")
@@ -223,10 +244,18 @@ def _provider_card() -> dict:
             *_seed_model(embed_key, list(embed_options), None, prefs.ai_embedding_model.get(embed_owner), "embedding"),
         ]
         col_chat, col_embed = st.columns(2)
+        elsewhere = _remote_models(cfg["base_url"] or "") if provider == "ollama" else {}
+
+        def model_label(model: str) -> str:  # an Ollama model run elsewhere, said in the list
+            return f"{model} (ollama.com)" if provider == "ollama" and (cloud_model(model) or model in elsewhere) else model
+
         cfg["model"] = col_chat.selectbox(
             "Chat model", chat_options, index=0, key=chat_key, help=chat_help, persist_state=PERSIST,
+            format_func=model_label,
             on_change=preferences.save_from, args=(chat_key, "ai_chat_model"), kwargs={"provider": provider},
         )
+        if provider == "ollama":  # as the engine asks when it starts: a copy of a cloud model reads local by name
+            cfg["remote_host"] = _remote_host(cfg["base_url"] or "", str(cfg["model"] or ""))
         cfg["embedding"] = col_embed.selectbox(
             "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST,
             on_change=preferences.save_from, args=(embed_key, "ai_embedding_model"), kwargs={"provider": embed_owner},
@@ -235,12 +264,13 @@ def _provider_card() -> dict:
             st.caption(notice)
         if where is not None:
             with where:
-                if cloud_model(cfg["model"]) or cloud_model(cfg["embedding"]):
-                    # pulled from ollama.com, it runs there: the address is only the way to it
-                    st.badge("Cloud model: data goes to ollama.com", icon=":material/cloud:", color="orange")
+                if cloud_model(cfg["model"]) or cloud_model(cfg["embedding"]) or cfg.get("remote_host"):
+                    # pulled from ollama.com, or a copy of such a model, it runs there: the address is only the way
+                    host = host_of(cfg.get("remote_host")) or "ollama.com"
+                    st.badge(f"Cloud model: data goes to {host}", icon=":material/cloud:", color="orange")
                     st.caption(
-                        "A model tagged cloud runs on ollama.com through your Ollama server: what it is sent leaves "
-                        "this machine, and needs your confirmation below."
+                        f"This model runs on {host} through your Ollama server: what it is sent leaves this machine, "
+                        "and needs your confirmation below."
                     )
                 else:
                     _address_badge(cfg["base_url"])
@@ -324,13 +354,18 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     return list(info.embedding_models), f"{info.display_name} embedding model used to index your documents."
 
 
-def _roles(cfg: dict, vector: dict | None = None) -> tuple[str | None, str | None, str | None]:
+def _roles(
+    cfg: dict, vector: dict | None = None
+) -> tuple[str | None, str | None, str | None, str | None]:
     """
-    The recipients that need the confirmation, by role: the chat provider when it is a cloud one or an Ollama outside
-    the private network; the embedding provider of Claude when it is another such recipient (it receives the
-    documents and every search text); the Qdrant server outside the private network that keeps the index.
+    The recipients that need the confirmation, by role: the chat provider when it is a cloud one, an Ollama model run
+    elsewhere (its tag, or the server's ``remote_host``) or an Ollama outside the private network; the embedding
+    provider of Claude when it is another such recipient (it receives the documents and every search text); the
+    Qdrant server outside the private network that keeps the index; the Ollama server outside the private network
+    when its model runs elsewhere (it receives the prompts too).
     """
-    chat = recipient(cfg["provider"], cfg.get("base_url"), cfg.get("model"))
+    chat = recipient(cfg["provider"], cfg.get("base_url"), cfg.get("model"), remote_host=cfg.get("remote_host"))
+    server = server_recipient(cfg["provider"], cfg.get("base_url"))
     embedding = recipient(
         cfg.get("embedding_provider") or cfg["provider"],
         cfg.get("embedding_base_url") or cfg.get("base_url"),
@@ -338,7 +373,8 @@ def _roles(cfg: dict, vector: dict | None = None) -> tuple[str | None, str | Non
     )
     on_qdrant = bool(vector) and vector.get("vector_engine") == VectorEngine.QDRANT
     store = store_recipient(vector.get("qdrant_url")) if on_qdrant else None
-    return chat, (embedding if embedding != chat else None), store
+    server = server if server != chat else None
+    return chat, (embedding if embedding not in (chat, server) else None), store, server
 
 
 def _recipients(cfg: dict, vector: dict | None = None) -> list[str]:
@@ -379,7 +415,7 @@ def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
 
 def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str:
     """What the recipients of one box receive, each for its role (a Qdrant server receives no column summary)."""
-    _chat, embedding, store = _roles(cfg, vector)
+    _chat, embedding, store, _server = _roles(cfg, vector)
     lines = []
     if any(r not in (embedding, store) for r in recipients):  # the provider that answers
         lines += [
@@ -412,6 +448,11 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
                 "- **Document insight:** the text of the first 30 pages that have text of each PDF whose graph you "
                 "extract, 35,000 characters at most, whether the PDF is indexed or not."
             )
+    if cfg.get("provider") == "ollama" and (cloud_model(cfg.get("model")) or cfg.get("remote_host")):
+        lines.append(
+            "- **An Ollama cloud model** runs on ollama.com under the account signed in on this server's Ollama, the "
+            "same for every user of this server."
+        )
     if embedding in recipients:
         lines.append(
             f"- **{provider_label(embedding)}, for the embeddings:** the text of the PDFs you index and every "
@@ -441,9 +482,12 @@ def _engine_recipients(manager) -> tuple[list[str], str | None]:
         "embedding_provider": manager.embedding_provider,
         "embedding_base_url": manager.embedding_base_url,
         "embedding": getattr(manager, "embedding_model", None),
+        "remote_host": getattr(manager, "model_remote_host", None),
     }
-    chat, embedding, store = _roles(cfg, {"vector_engine": VectorEngine.QDRANT, "qdrant_url": manager.qdrant_url})
-    return [r for r in (chat, embedding, store) if r], embedding
+    chat, embedding, store, server = _roles(
+        cfg, {"vector_engine": VectorEngine.QDRANT, "qdrant_url": manager.qdrant_url}
+    )
+    return [r for r in (chat, server, embedding, store) if r], embedding
 
 
 def _running_engine(manager) -> None:

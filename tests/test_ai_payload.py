@@ -146,7 +146,7 @@ def test_an_address_is_read_as_the_client_connects_to_it(url: str) -> None:
     from manage.ai_payload import outside_private_network, recipient, store_recipient
 
     assert outside_private_network(url)
-    assert store_recipient(url) is not None and recipient("ollama", url) is not None
+    assert store_recipient(url) is not None and recipient("ollama", url, None) is not None
 
 
 def test_the_vector_database_named_here_is_the_registry_s() -> None:
@@ -154,3 +154,58 @@ def test_the_vector_database_named_here_is_the_registry_s() -> None:
     from manage.vectorstores.base import VectorEngine
 
     assert VectorEngine.QDRANT.value == QDRANT
+
+
+def test_an_ollama_model_run_elsewhere_is_a_recipient_whatever_its_name() -> None:
+    """A copy of a cloud model (ollama cp gpt-oss:120b-cloud gpt-oss:120b) reads local by its name: the server says
+    where it runs it. Behind an Ollama outside the network, both receive the prompts."""
+    from manage.ai_payload import recipient, server_recipient
+
+    here = "http://localhost:11434"
+    assert recipient("ollama", here, "gpt-oss:120b") is None
+    assert recipient("ollama", here, "gpt-oss:120b", remote_host="https://ollama.com:443") == "ollama@ollama.com"
+    assert recipient("ollama", here, "x" * 90 + "-cloud") == "ollama@ollama.com"  # the whole name decides
+    outside = "https://ollama.example.com"
+    assert recipient("ollama", outside, "glm-4.6:cloud") == "ollama@ollama.com"
+    assert server_recipient("ollama", outside) == "ollama@ollama.example.com"
+    assert server_recipient("ollama", here) is None and server_recipient("anthropic", None) is None
+
+
+def test_the_ollama_server_says_which_models_it_runs_elsewhere() -> None:
+    pytest.importorskip("httpx", reason="the ai extra")
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from manage.rag.providers.ollama_server import remote_host, remote_models
+
+    class Handler(BaseHTTPRequestHandler):
+        def _answer(self, body: object) -> None:
+            data = json.dumps(body).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self) -> None:
+            self._answer({"models": [{"name": "llama3.2"}, {"name": "gpt-oss:120b", "remote_host": "https://ollama.com:443"}]})
+
+        def do_POST(self) -> None:
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            remote = body.get("model") == "gpt-oss:120b"
+            self._answer({"remote_host": "https://ollama.com:443", "remote_model": "gpt-oss:120b"} if remote else {})
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        assert remote_host(url, "gpt-oss:120b") == "https://ollama.com:443"
+        assert remote_host(url, "llama3.2") is None and remote_host(url, None) is None
+        assert remote_models(url) == {"gpt-oss:120b": "https://ollama.com:443"}
+    finally:
+        server.shutdown()
+    assert remote_host("http://127.0.0.1:9", "gpt-oss:120b") is None  # no server: nothing known

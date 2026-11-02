@@ -78,7 +78,14 @@ from enrich.recode import (
     untick,
     values_fp,
 )
-from manage.ai_payload import category_values, host_of, on_this_machine, provider_label, recipient
+from manage.ai_payload import (
+    category_values,
+    host_of,
+    on_this_machine,
+    provider_label,
+    recipient,
+    server_recipient,
+)
 from ui.components.levels import show_level
 from ui.components.text import plain
 from ui.quality_charts import chart_config
@@ -639,7 +646,7 @@ def category_editor(
                 value=choices["reasons"].get(clean, ""),
                 key=f"clean_reason::{scope}::{column}::{clean}",
                 max_chars=200,
-                placeholder=f"The AI engine said: {plain(hinted[clean], limit=80)}"
+                placeholder=f"The AI engine said: {' '.join(hinted[clean].split())[:80]}"  # plain text, never markup
                 if clean in hinted
                 else None,
                 help="Merging categories is a grouping, not a correction: the methods say why.",
@@ -864,10 +871,11 @@ def _ask_ai(column: str, scope: str, counts: dict[str, int]) -> None:
 def _preview(engine, column: str, scope: str, counts: dict[str, int], popover: str) -> None:
     """Exactly what Send gives the engine, then Send."""
     model = engine_model(engine)
-    sent, held = category_values(counts, engine.provider, engine.base_url, model)
+    sent, held = _payload(engine, counts, model)
     to, _ = _receiver(engine, model)
     rare = (
-        f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} not sent."
+        f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} not sent; "
+        "rows are counted, not people: a value written on 5 visits of one person is sent."
         if held
         else ""
     )
@@ -888,14 +896,27 @@ def _preview(engine, column: str, scope: str, counts: dict[str, int], popover: s
         key=f"clean_ai_send::{scope}::{column}",
         type="primary",
         on_click=_send,
-        args=(column, counts, sent, held, popover),
+        args=(column, counts, sent, held, popover, to),
     )
 
 
-def _send(column: str, counts: dict[str, int], sent: list[str], held: int, popover: str) -> None:
+def _payload(engine, counts: dict[str, int], model: str) -> tuple[list[str], int]:
+    return category_values(
+        counts,
+        engine.provider,
+        engine.base_url,
+        model,
+        remote_host=getattr(engine, "model_remote_host", None),
+    )
+
+
+def _send(
+    column: str, counts: dict[str, int], sent: list[str], held: int, popover: str, to: str
+) -> None:
     """
-    Send, as the click's callback: the previewed values, to the engine that runs now, once the rule run again on it
-    gives the same values (an engine changed since the preview sends nothing); its answer into the store, said under
+    Send, as the click's callback: the previewed values, to the recipient previewed, once the rule run again on the
+    engine that runs now gives the same values and the same recipient (an engine changed since the preview sends
+    nothing), and only to a recipient a box of Settings > AI engine confirmed; its answer into the store, said under
     the heading, and the popover closed.
     """
     engine = running_engine()
@@ -903,9 +924,21 @@ def _send(column: str, counts: dict[str, int], sent: list[str], held: int, popov
     if engine is None:
         return
     model = engine_model(engine)
-    if category_values(counts, engine.provider, engine.base_url, model) != (sent, held):
+    receiver, where = _receiver(engine, model)
+    confirmed = getattr(engine, "confirmed", None)
+    unconfirmed = [
+        r
+        for r in _recipients(engine, model)
+        if confirmed is not None and not any(r in box for box in confirmed)
+    ]
+    if _payload(engine, counts, model) != (sent, held) or receiver != to:
         error, proposals = (
             "the AI engine changed since the preview: open it again to see what is sent",
+            [],
+        )
+    elif unconfirmed:
+        error, proposals = (
+            f"{provider_label(unconfirmed[0])} is not confirmed in Settings > AI engine: nothing was sent",
             [],
         )
     else:
@@ -919,21 +952,39 @@ def _send(column: str, counts: dict[str, int], sent: list[str], held: int, popov
         ],
         "error": error,
         "provider": str(engine.provider or ""),
-        "model": model,
-        "where": _receiver(engine, model)[1],
+        "model": model[:80],  # the record's: the decisions read the whole name
+        "where": where,
         "values_sent": len(sent),
         "values_held": held,
     }
 
 
+def _recipients(engine, model: str) -> list[str]:
+    """The recipients of a request that need a confirmation: the chat model's, and its Ollama server outside the
+    private network, which receives the prompt also when the model runs elsewhere."""
+    found = [
+        recipient(
+            engine.provider,
+            engine.base_url,
+            model,
+            remote_host=getattr(engine, "model_remote_host", None),
+        ),
+        server_recipient(engine.provider, engine.base_url),
+    ]
+    return list(dict.fromkeys(r for r in found if r))
+
+
 def _receiver(engine, model: str) -> tuple[str, str]:
-    """Who receives a request, and where it runs: the chat recipient only (the embedding provider receives none)."""
-    found = recipient(engine.provider, engine.base_url, model)
+    """Who receives a request, and where it runs (as recorded and reported): the chat recipients only, the embedding
+    provider receiving none."""
+    found = _recipients(engine, model)
     if found:
-        return provider_label(found), "cloud"
+        named = " and ".join(provider_label(r) for r in found)
+        return named, named
     if on_this_machine(engine.base_url):
         return "the AI engine on this machine", "this machine"
-    return f"the AI engine at {host_of(engine.base_url)}, on your network", "your network"
+    host = host_of(engine.base_url)
+    return f"the AI engine at {host}, on your network", f"your network ({host})"
 
 
 def _proposed_by(column: str) -> dict[str, Any]:

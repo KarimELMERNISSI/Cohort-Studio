@@ -1,7 +1,7 @@
 """
 Ollama Local & Open-Source Provider Connectors.
 
-Enables 100% offline, privacy-preserving, sovereign execution using locally hosted
+Runs the models an Ollama server hosts, on this machine or your network, using locally hosted
 open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
 (Nomic Embed Text, BGE-M3, etc.) via Ollama REST API.
 """
@@ -26,7 +26,8 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 class OllamaChatConnector(BaseLLMConnector):
     """
     Chat connector for local Ollama instances via native REST API.
-    Zero cloud dependencies, completely offline and private.
+    Its models run on the Ollama server, except a cloud model (tagged cloud, or a copy of one), which Ollama runs
+    on ollama.com: a recipient that needs the data-sharing confirmation (manage.ai_payload.recipient).
     """
 
     @property

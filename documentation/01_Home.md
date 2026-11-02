@@ -61,7 +61,7 @@ Rename columns for clarity and consistency. Two approaches are available:
 ### AI-Assisted Renaming (RAG)
 - The AI engine suggests clearer, standardised names. The suggestions come from the language model; they are not checked against a terminology (UMLS, SNOMED CT or LOINC are not loaded).
 - Suggestions can be reviewed, accepted, or modified before applying.
-- Requires the AI engine (Settings > AI engine). The default is a local Ollama model, which needs no API key; the cloud providers need an API key and your consent to send data.
+- Requires the AI engine (Settings > AI engine). The default is a local Ollama model, which needs no API key; the cloud providers need an API key and your consent to send data, and so does an Ollama cloud model, which runs on ollama.com.
 
 ---
 
