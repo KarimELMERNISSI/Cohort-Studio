@@ -1349,6 +1349,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The warning of a column that would lose dates counts them among its recorded values ("40 of the 80 recorded
   values"). It compared them with all the rows, so a sparse column could lose half its dates without a word.
 
+### Removed: what came before the per-user workspaces
+
+- The name prefixes of saved versions and traces (`<user>_name`, `<user>_session_...`), and the filters that listed a
+  user's files by them (the dataset and trace stores, Reproduce): they served only without a workspace, which every
+  signed-in user now has. A name that holds a prefix, kept from an earlier version, still loads as it is.
+- The user methods of `DBManager`, which only wrapped the local accounts: the application, the Users page and
+  `manage_users.py` go through `manage.iam`.
+
 ### Removed: what remained of ChromaDB
 
 - ChromaDB, which LanceDB and Qdrant replaced, was no longer installed. Settings no longer looks for a ChromaDB index

@@ -24,14 +24,14 @@ def test_datasets_are_invisible_across_scopes(root: Path) -> None:
     bob = DBManager(scope=UserScope.for_user("bob"))
     df = pd.DataFrame({"id": [1, 2], "value": [0.5, 0.7]})
 
-    ok, msg, name = alice.save_dataset(df, "cohort", username="alice")
+    ok, msg, name = alice.save_dataset(df, "cohort")
     assert ok, msg
-    assert name == "cohort_v1"  # no username prefix inside a workspace
+    assert name == "cohort_v1"  # the name as given: the folder is the user's
     assert Path(alice.dataset_dir) == root / "users" / "alice" / "datasets"
     assert (root / "users" / "alice" / "datasets" / "cohort_v1.parquet").exists()
 
-    assert alice.get_available_datasets(username="alice") == ["cohort_v1"]
-    assert bob.get_available_datasets(username="bob") == []
+    assert alice.get_available_datasets() == ["cohort_v1"]
+    assert bob.get_available_datasets() == []
     missing, _ = bob.load_dataset("cohort_v1")
     assert missing is None
     loaded, _ = alice.load_dataset("cohort_v1")
@@ -40,7 +40,7 @@ def test_datasets_are_invisible_across_scopes(root: Path) -> None:
 
 def test_dataset_names_with_quotes_are_quoted_for_duckdb(root: Path) -> None:
     alice = DBManager(scope=UserScope.for_user("alice"))
-    ok, msg, name = alice.save_dataset(pd.DataFrame({"a": [1]}), "o'neil study", username="alice")
+    ok, msg, name = alice.save_dataset(pd.DataFrame({"a": [1]}), "o'neil study")
     assert ok, msg
     loaded, _ = alice.load_dataset(name)
     assert loaded is not None
@@ -49,11 +49,11 @@ def test_dataset_names_with_quotes_are_quoted_for_duckdb(root: Path) -> None:
 def test_traces_live_in_the_user_workspace(root: Path) -> None:
     tm = TransformationManager(scope=UserScope.for_user("alice"))
     assert Path(tm.trace_dir) == root / "users" / "alice" / "traces"
-    tm.initialize_session("cohort.csv", username="alice")
+    tm.initialize_session("cohort.csv")
     assert tm.session_id.startswith("session_")
     assert (root / "users" / "alice" / "traces" / f"{tm.session_id}.json").exists()
     other = TransformationManager(scope=UserScope.for_user("bob"))
-    assert other.get_available_datasets_from_traces(username="bob") == []
+    assert other.get_available_datasets_from_traces() == []
 
 
 def test_services_given_no_scope_use_the_shared_folders(root: Path) -> None:

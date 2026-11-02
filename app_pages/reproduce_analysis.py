@@ -114,13 +114,8 @@ def app():
             return
 
         # List available traces
-        traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]
-        
-        # Traces live in the user's workspace; the legacy name-prefix filter only applies without a scope
-        username = st.session_state.get('username')
-        if get_current_scope() is None and username and username != 'admin':
-            traces = [f for f in traces if f.startswith(f"{username}_")]
-        
+        traces = [f for f in os.listdir(trace_dir) if f.endswith(".json")]  # the user's workspace
+
         if not traces:
             st.info("No analysis traces found in your workspace.")
             return

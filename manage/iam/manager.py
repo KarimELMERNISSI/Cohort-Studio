@@ -118,14 +118,6 @@ class IAMManager:
         """Authenticate user credentials."""
         return self._provider.authenticate(credentials)
 
-    def verify_user(self, username: str, password: str) -> tuple[bool, str]:
-        """
-        Convenience verification method returning (success, message).
-        Maintains complete drop-in compatibility with legacy DBManager calls.
-        """
-        res = self._provider.authenticate(UserCredentials(username=username, password=password))
-        return res.success, res.message
-
     def create_user(
         self,
         username: str,
@@ -167,10 +159,7 @@ class IAMManager:
         return [u.username for u in self._provider.list_users()]
 
     def get_all_users_with_status(self) -> list[dict[str, Any]]:
-        """
-        Return structured dictionary list of all users with status.
-        Maintains complete drop-in compatibility with legacy DBManager calls.
-        """
+        """Every account with its status, as the Users page lists them."""
         users = self._provider.list_users()
         result: list[dict[str, Any]] = []
         for u in users:

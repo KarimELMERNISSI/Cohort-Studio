@@ -242,7 +242,7 @@ class AppState:
         dropped = self._draft_snapshots()
         tm = self.transformation_manager
         ended = list(tm.history)
-        tm.initialize_session(source_name or ref.name, username=self.username, parent=parent)
+        tm.initialize_session(source_name or ref.name, parent=parent)
         session_id = tm.session_id
 
         source_path = ref.source_path
@@ -1264,7 +1264,7 @@ class AppState:
 
     def saved_versions(self) -> list[str]:
         try:
-            return list(self.db_manager.get_available_datasets(username=self.username))
+            return list(self.db_manager.get_available_datasets())
         except Exception:
             return []
 
@@ -1331,7 +1331,7 @@ class AppState:
             return False, "No dataset loaded.", None
         ref = self.dataset
         name = dataset_base_name(base_name or (ref.name if ref else "cohort"))
-        ok, msg, saved = self.db_manager.save_dataset(base, base_name=name, username=self.username)
+        ok, msg, saved = self.db_manager.save_dataset(base, base_name=name)
         if ok and saved:
             self.session.record_population_use(self.config)
             new_ref = DatasetRef.from_saved_name(

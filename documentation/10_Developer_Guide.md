@@ -334,7 +334,7 @@ Sign Up → Pending → Admin Activates → Active → (Admin can Deactivate/Del
 ### Implementation
 
 - Passwords are hashed with **bcrypt** before storage.
-- User records are stored in `users.duckdb` (shared data folder) by the local IAM provider (`manage/iam/providers/local_duckdb.py`), opened through `db_manager.py`.
+- User records are stored in `users.duckdb` (shared data folder) by the local IAM provider (`manage/iam/providers/local_duckdb.py`), which `manage.iam` opens.
 - The `is_active` field controls login eligibility.
 - The **Admin > Users** page goes through `get_iam_manager()`, so it manages the accounts of the configured provider
   (local or Better Auth), never the local database in its place.
@@ -433,7 +433,7 @@ row) returns a new analyzer each call, built from a column profile that is compu
 
 Manages the recording of analysis steps:
 
-- `initialize_session(dataset_name, username)` — Starts a new trace session.
+- `initialize_session(dataset_name, *, parent=None)` — Starts a new trace session, in the user's workspace (`parent`: the trace of the saved version it starts from).
 - `add_step(function_name, params, description, output_dataset_path=None, ..., *, data=None, population=None, replayable=None)` — Records a transformation step. Pages do not call it directly: changes of the data go through `AppState` and `DataSession`, which record the step.
 - `get_available_datasets_from_traces()` — Lists datasets referenced in past traces.
 

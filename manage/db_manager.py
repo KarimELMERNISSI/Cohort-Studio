@@ -2,15 +2,12 @@ import glob
 import logging
 import os
 import re
-from functools import cached_property
 from typing import Any
 
 import duckdb
 import pandas as pd
 
 from core.workspace import UserScope
-from manage.iam.providers.local_duckdb import LocalDuckDBIAMProvider
-from manage.iam.schemas import UserCredentials, UserRole
 from utils.data_paths import get_datasets_dir, get_stats_dir
 
 
@@ -55,74 +52,10 @@ class DBManager:
         else:
             self.dataset_dir = shared_dir
             self.stats_dir = get_stats_dir()
-        # The user directory and the DuckDB catalog are shared by design.
+        # The DuckDB catalog is shared by design (the accounts are manage.iam's).
         self.db_path: str = os.path.join(shared_dir, "cohort_data.duckdb")
-        self.user_db_path: str = os.path.join(shared_dir, "users.duckdb")
 
         # Don't keep a persistent connection - open/close as needed
-
-    @cached_property
-    def iam_provider(self) -> LocalDuckDBIAMProvider:
-        """The local accounts, opened on first use: a session's store never opens the users database for nothing
-        (the application signs users in through manage.iam)."""
-        return LocalDuckDBIAMProvider(db_path=self.user_db_path)
-
-    def _get_user_connection(self):
-        """Get a new DuckDB connection for users DB."""
-        return self.iam_provider._get_connection()
-
-    def init_user_db(self):
-        """Initialize the users table with activation support."""
-        self.iam_provider._init_database()
-
-    def create_user(
-        self,
-        username: str,
-        password: str,
-        auto_activate: bool = False,
-        role: UserRole = UserRole.RESEARCHER,
-    ) -> tuple[bool, str]:
-        """Create a new user (pending approval unless auto_activate is set)."""
-        return self.iam_provider.create_user(username, password, role=role, auto_activate=auto_activate)
-
-    def verify_user(self, username: str, password: str) -> tuple[bool, str]:
-        """Verify user credentials and check if account is active."""
-        res = self.iam_provider.authenticate(UserCredentials(username=username, password=password))
-        return res.success, res.message
-
-    def get_all_users(self) -> list[str]:
-        """Get list of all registered usernames."""
-        return [u.username for u in self.iam_provider.list_users()]
-
-    def get_all_users_with_status(self) -> list[dict[str, Any]]:
-        """Get list of all users with their activation status."""
-        users = self.iam_provider.list_users()
-        return [
-            {
-                "username": u.username,
-                "is_active": u.is_active,
-                "created_at": u.created_at,
-                "status": "Active" if u.is_active else "Pending Approval",
-                "role": str(u.role),
-            }
-            for u in users
-        ]
-
-    def activate_user(self, username: str) -> tuple[bool, str]:
-        """Activate a user account (admin only)."""
-        return self.iam_provider.activate_user(username)
-
-    def deactivate_user(self, username: str) -> tuple[bool, str]:
-        """Deactivate a user account (admin only). Cannot deactivate admin."""
-        return self.iam_provider.deactivate_user(username)
-
-    def update_user_password(self, username: str, new_password: str) -> tuple[bool, str]:
-        """Update a user's password."""
-        return self.iam_provider.update_password(username, new_password)
-
-    def delete_user(self, username: str) -> tuple[bool, str]:
-        """Delete a user account. Protects admin from deletion."""
-        return self.iam_provider.delete_user(username)
 
     def _get_connection(self):
         """Get a new DuckDB connection."""
@@ -163,13 +96,9 @@ class DBManager:
         finally:
             con.close()
 
-    def save_dataset(self, df: pd.DataFrame, base_name: str = "dataset", username: str | None = None) -> tuple[bool, str, str | None]:
-        """Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept)."""
+    def save_dataset(self, df: pd.DataFrame, base_name: str = "dataset") -> tuple[bool, str, str | None]:
+        """Persists a pandas DataFrame to a versioned Parquet file (row ids and dtypes are kept), in the workspace."""
         try:
-            # Legacy name-prefix isolation only when no workspace scope is active
-            if self.scope is None and username and username != 'admin':
-                base_name = f"{username}_{base_name}"
-
             version = self._get_next_version(base_name)
             file_name = f"{base_name}_v{version}"
             file_path = os.path.join(self.dataset_dir, f"{file_name}.parquet")
@@ -241,16 +170,8 @@ class DBManager:
             logger.warning("Unreadable lineage sidecar: %s", os.path.basename(path))
             return None
 
-    def get_available_tables(self) -> list[str]:
-        """List available parquet files in the current directory."""
-        files = glob.glob("*.parquet")
-        return [f.replace(".parquet", "") for f in files if not f.startswith("stats_") and not f.startswith("tmp_")]
-
-    def get_available_datasets(self, username: str | None = None) -> list[str]:
-        """
-        List available parquet files in the current directory, sorted by modification time.
-        Filters by username if provided (unless admin).
-        """
+    def get_available_datasets(self) -> list[str]:
+        """The saved versions of the workspace's datasets, the newest first."""
         files = glob.glob(os.path.join(self.dataset_dir, "*.parquet"))
         # Filter out stats files, temp files, and User DB
         dataset_files = [f for f in files if not os.path.basename(f).startswith("stats_") and not os.path.basename(f).startswith("tmp_") and not os.path.basename(f) == "users.parquet" and not os.path.basename(f) == "users.duckdb"]
@@ -258,12 +179,7 @@ class DBManager:
         # Sort by modification time (newest first)
         dataset_files.sort(key=os.path.getmtime, reverse=True)
         
-        all_files = [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
-        
-        if self.scope is None and username and username != 'admin':
-            return [f for f in all_files if f.startswith(f"{username}_")]
-        
-        return all_files
+        return [os.path.basename(f).replace(".parquet", "") for f in dataset_files]
 
     def save_stats(self, df: pd.DataFrame, dataset_name: str, stats_type: str) -> tuple[bool, str]:
         """Save statistical results to parquet cache."""

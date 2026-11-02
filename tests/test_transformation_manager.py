@@ -36,16 +36,6 @@ class TestTransformationManager:
         assert trace_path is not None
         assert Path(trace_path).exists()
 
-    def test_initialize_session_with_user_isolation(self, isolated_transformation_manager: TransformationManager) -> None:
-        """Non-admin user sessions are prefixed with their username."""
-        isolated_transformation_manager.initialize_session("trial_alpha.csv", username="dr_smith")
-        assert isolated_transformation_manager.session_id.startswith("dr_smith_session_")
-
-        # Admin user session does not get prefixed
-        isolated_transformation_manager.initialize_session("trial_alpha.csv", username="admin")
-        assert not isolated_transformation_manager.session_id.startswith("admin_")
-        assert isolated_transformation_manager.session_id.startswith("session_")
-
     def test_add_step_and_serialization(self, isolated_transformation_manager: TransformationManager) -> None:
         """Adding a transformation step converts complex parameters (numpy, pandas) safely."""
         isolated_transformation_manager.initialize_session("baseline.csv")
@@ -107,40 +97,19 @@ class TestTransformationManager:
         assert "not found" in msg.lower()
 
     def test_get_available_datasets_from_traces(self, isolated_transformation_manager: TransformationManager) -> None:
-        """Scans traces directory and lists datasets with user filtering."""
-        # Session 1: dr_who
-        mgr1 = TransformationManager(trace_dir=isolated_transformation_manager.trace_dir)
-        mgr1.initialize_session("cardio.csv", username="dr_who")
-        mgr1.add_step(
-            function_name="variable_transformation",
-            params={"method": "zscore"},
-            description="Normalized features",
-            output_dataset_path="/data/cardio_norm.parquet"
-        )
-
-        # Session 2: dr_watson
-        mgr2 = TransformationManager(trace_dir=isolated_transformation_manager.trace_dir)
-        mgr2.initialize_session("neuro.csv", username="dr_watson")
-        mgr2.add_step(
-            function_name="variable_transformation",
-            params={"bins": 5},
-            description="Binned age categories",
-            output_dataset_path="/data/neuro_binned.parquet"
-        )
-
-        # dr_who sees only dr_who's datasets
-        who_datasets = isolated_transformation_manager.get_available_datasets_from_traces(username="dr_who")
-        assert len(who_datasets) == 1
-        assert who_datasets[0]["file_path"] == "/data/cardio_norm.parquet"
-
-        # dr_watson sees only dr_watson's datasets
-        watson_datasets = isolated_transformation_manager.get_available_datasets_from_traces(username="dr_watson")
-        assert len(watson_datasets) == 1
-        assert watson_datasets[0]["file_path"] == "/data/neuro_binned.parquet"
-
-        # admin sees both datasets
-        admin_datasets = isolated_transformation_manager.get_available_datasets_from_traces(username="admin")
-        assert len(admin_datasets) == 2
+        """Every trace of the folder (a user's workspace) is listed, by the file its step wrote."""
+        for name, path in (("cardio.csv", "/data/cardio_norm.parquet"), ("neuro.csv", "/data/neuro_binned.parquet")):
+            manager = TransformationManager(trace_dir=isolated_transformation_manager.trace_dir)
+            manager.initialize_session(name)
+            assert manager.session_id.startswith("session_")
+            manager.add_step(
+                function_name="variable_transformation",
+                params={"method": "zscore"},
+                description="Normalized features",
+                output_dataset_path=path,
+            )
+        listed = isolated_transformation_manager.get_available_datasets_from_traces()
+        assert sorted(d["file_path"] for d in listed) == ["/data/cardio_norm.parquet", "/data/neuro_binned.parquet"]
 
 
 class TestTraceFileLocation:

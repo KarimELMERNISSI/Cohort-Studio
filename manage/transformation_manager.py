@@ -48,16 +48,11 @@ class TransformationManager:
 
         # Ensure trace directory exists (get_traces_dir already does this)
 
-    def initialize_session(self, dataset_name: str, username: str | None = None, *, parent: dict[str, Any] | None = None) -> None:
+    def initialize_session(self, dataset_name: str, *, parent: dict[str, Any] | None = None) -> None:
         """Initializes a new session trace (``parent`` links it to the trace of a saved version it starts from)."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = "".join([c for c in dataset_name if c.isalnum() or c in (' ', '.', '_', '-')]).strip()
-
-        # Legacy name-prefix isolation only when no workspace scope is active
-        if self.scope is None and username and username != 'admin':
-            self.session_id = f"{username}_session_{timestamp}_{safe_name}"
-        else:
-            self.session_id = f"session_{timestamp}_{safe_name}"
+        self.session_id = f"session_{timestamp}_{safe_name}"
 
         self.source_dataset = dataset_name
         self.history = []
@@ -226,22 +221,17 @@ class TransformationManager:
         except Exception as e:
             return False, str(e)
 
-    def get_available_datasets_from_traces(self, username=None):
+    def get_available_datasets_from_traces(self):
         """
-        Scans all trace files in the trace directory and returns a list of available datasets.
+        Scans all trace files in the trace directory (the workspace's) and returns a list of available datasets.
         Each entry contains: session_id, timestamp, step_description, file_path.
-        Filters by username if provided (unless admin).
         """
         datasets = []
         if not os.path.exists(self.trace_dir):
             return datasets
 
         trace_files = [f for f in os.listdir(self.trace_dir) if f.endswith('.json')]
-        
-        # Legacy name-prefix filtering only when no workspace scope is active
-        if self.scope is None and username and username != 'admin':
-            trace_files = [f for f in trace_files if f.startswith(f"{username}_")]
-        
+
         for trace_file in trace_files:
             try:
                 with open(os.path.join(self.trace_dir, trace_file), 'r', encoding='utf-8') as f:

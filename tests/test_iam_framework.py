@@ -330,8 +330,7 @@ class TestIAMManager:
         ok, _ = manager.create_user("admin", "AdminSecret!", auto_activate=True)
         assert ok is True
 
-        valid, _ = manager.verify_user("admin", "AdminSecret!")
-        assert valid is True
+        assert manager.authenticate(UserCredentials(username="admin", password="AdminSecret!")).success
 
         all_users = manager.get_all_users()
         assert "admin" in all_users
@@ -344,8 +343,7 @@ class TestIAMManager:
         assert manager.is_enabled is False
         assert manager.provider_name == "disabled"
 
-        valid, _ = manager.verify_user("anyone", "anypass")
-        assert valid is True
+        assert manager.authenticate(UserCredentials(username="anyone", password="anypass")).success
 
     def test_manager_environment_switching(self, monkeypatch: pytest.MonkeyPatch, temp_db_path: str) -> None:
         """Environment variable CMP_IAM_PROVIDER alters instantiated provider."""
