@@ -23,6 +23,7 @@ from ingest.loaders import (
 )
 from ui.components import error_card, page_link, section
 from ui.components.csv_options import delimiter_input
+from ui.preferences import import_dayfirst
 from ui.state import AppState
 
 ENCODINGS = ("utf-8", "utf-8-sig", "latin-1", "cp1252", "iso-8859-15", "utf-16")
@@ -40,7 +41,7 @@ def _new_draft(uploaded: Any) -> dict[str, Any]:
     data = uploaded.getvalue()
     kind = file_kind(uploaded.name)
     options = sniff(data, uploaded.name)
-    if st.session_state.get("import_default_dayfirst"):
+    if import_dayfirst():
         options = ParseOptions(**{**options.to_dict(), "dayfirst": True})
     sheet_names = excel_sheet_names(data) if kind == "excel" else []
     if sheet_names:

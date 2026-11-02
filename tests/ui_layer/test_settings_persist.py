@@ -46,11 +46,13 @@ def app(signed_in: AppTest) -> AppTest:
 
 
 def test_the_day_first_default_reaches_the_import_page(app: AppTest) -> None:
-    app.toggle(key="import_default_dayfirst").set_value(True).run()
-    _visit(app, "import")
-    assert app.session_state["import_default_dayfirst"] is True  # what a new import draft reads
-    _visit(app, "settings")
+    """Day first until the user chooses; month first, once chosen, reaches the import."""
     assert app.toggle(key="import_default_dayfirst").value is True
+    app.toggle(key="import_default_dayfirst").set_value(False).run()
+    _visit(app, "import")
+    assert app.session_state["import_default_dayfirst"] is False  # what a new import draft reads
+    _visit(app, "settings")
+    assert app.toggle(key="import_default_dayfirst").value is False
 
 
 def test_the_ai_provider_model_and_consent_survive_a_revisit(app: AppTest) -> None:
@@ -228,11 +230,11 @@ def test_the_choices_of_settings_are_kept_for_the_next_session(
     app: AppTest, tmp_path: Path
 ) -> None:
     """Settings kept its choices for the session only: the next sign-in started from the defaults (M5b)."""
-    app.toggle(key="import_default_dayfirst").set_value(True).run()
-    assert '"import_dayfirst": true' in _saved(tmp_path)
+    app.toggle(key="import_default_dayfirst").set_value(False).run()  # day first is the default
+    assert '"import_dayfirst": false' in _saved(tmp_path)
     later = _new_session()
-    assert later.session_state["import_default_dayfirst"] is True  # what the Import page reads
-    assert later.toggle(key="import_default_dayfirst").value is True
+    assert later.session_state["import_default_dayfirst"] is False  # what the Import page reads
+    assert later.toggle(key="import_default_dayfirst").value is False
 
 
 def test_a_saved_cloud_provider_starts_nothing_and_no_secret_is_saved(

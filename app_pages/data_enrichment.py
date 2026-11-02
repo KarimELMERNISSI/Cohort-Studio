@@ -55,6 +55,7 @@ from ui.components.csv_options import csv_options
 from ui.components.staging import render_draft_banner
 from ui.components.text import plain
 from ui.graph_view import current_theme, render_graph
+from ui.preferences import import_dayfirst
 from ui.session_scope import get_current_scope
 from ui.state import get_state
 from utils.data_paths import get_traces_dir
@@ -405,7 +406,7 @@ def _date_formats(main_df: pd.DataFrame, enrichment_df: pd.DataFrame) -> dict:
     dayfirst = (
         bool(ref.parse.dayfirst)
         if ref is not None and ref.parse is not None
-        else bool(st.session_state.get("import_default_dayfirst"))
+        else import_dayfirst()
     )
     recorded = recorded_formats(state.transformation_manager.history)
     return eed.date_key_formats(main_df, enrichment_df, recorded, dayfirst=dayfirst)

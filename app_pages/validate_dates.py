@@ -37,6 +37,7 @@ from ingest.dates import (
     set_to_missing,
 )
 from ui.components import no_dataset
+from ui.preferences import import_dayfirst
 from ui.state import get_state
 
 TEXT = "text"  # the choice to leave a column as text
@@ -73,7 +74,7 @@ def _dayfirst(state) -> bool:
     ref = state.dataset
     if ref is not None and ref.parse is not None:
         return bool(ref.parse.dayfirst)
-    return bool(st.session_state.get("import_default_dayfirst"))
+    return import_dayfirst()
 
 
 def detections(df: pd.DataFrame, *, dayfirst: bool) -> dict[str, Detection]:

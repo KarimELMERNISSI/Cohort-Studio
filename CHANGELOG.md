@@ -1206,6 +1206,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ### Dates: read by the day-first choice or a declared format (M6, results)
 
+- **Day first by default.** Until a user chooses otherwise (Settings > Import defaults), an import reads dates day
+  first (31/12/2024), the order of the region the application serves; month first stays one switch away there and in
+  each import. Before, the default was month first: a file whose dates show no order (all completed to the 1st of the
+  month, 01/MM/YYYY) was read with day and month swapped.
 - **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
   of day and month from the largest numbers and otherwise passed each value to a general date reader: in one column
   it read two-digit years month first twice and day first once, took 20210305 for the year 57233 and 2021 for 1905,

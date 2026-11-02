@@ -78,8 +78,9 @@ KEYS: tuple[Key, ...] = (
         "import_default_dayfirst",
         "ui.preferences",
         "session",
-        ("ui.import_flow",),
-        "the user's saved choice of day-first dates, seeded once per session",
+        (),
+        "the user's saved choice of day-first dates, seeded once per session; read through "
+        "ui.preferences.import_dayfirst, day first until the user chooses",
     ),
     Key(
         "rag_qdrant_url",

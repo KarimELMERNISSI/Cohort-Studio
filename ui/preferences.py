@@ -22,6 +22,12 @@ from manage.preferences import Preferences, load_preferences, update_preferences
 from ui.session_scope import get_current_scope
 
 PREFERENCES_KEY = "_preferences"  # the user's preferences, read once per session
+IMPORT_DAYFIRST = (
+    "import_default_dayfirst"  # Settings > Import: whether a new import reads dates day first
+)
+# until the user chooses: dates in the region the application serves are written 31/12/2024; read month first by
+# mistake, a date written on one of the first 12 days of a month swaps its day and month without a word
+DAYFIRST_DEFAULT = True
 SEEDED_KEY = "_preferences_seeded"  # the user whose preferences seeded this session
 
 
@@ -47,6 +53,11 @@ def seed_session() -> None:
     prefs = current()
     if prefs.import_dayfirst is not None and "import_default_dayfirst" not in ss:
         ss["import_default_dayfirst"] = prefs.import_dayfirst
+
+
+def import_dayfirst() -> bool:
+    """Whether a new import reads dates day first: the user's choice (Settings > Import), else the default."""
+    return bool(st.session_state.get(IMPORT_DAYFIRST, DAYFIRST_DEFAULT))
 
 
 def save(**changes: Any) -> None:
