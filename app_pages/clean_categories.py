@@ -2,7 +2,7 @@
 Clean > Categories: the values of a categorical variable as written, each given a clean value or set to missing, and
 written into a new column beside the original, which is kept (enrich.recode). A value written with extra spaces takes
 its spelling with the spaces collapsed (the fold rule, recorded as a rule); a case variant, a one-letter code, a variant
-(accents, British and American spellings), a spelling one letter apart, a code that may mean missing and what the AI
+(accents, British and American spellings), a close spelling, a code that may mean missing and what the AI
 engine proposes are offered, never applied. A value set to missing says what missing means there; a grouping of
 categories says why. The page shows each value's own rows, on all rows, never an outcome beside them: merging values
 after seeing results is a choice the intervals ignore. Apply is one traced step, ``recode_levels``, which the replay
@@ -120,7 +120,7 @@ WORDS = {
     AI: "AI proposal",
 }
 # the offers, in groups; "Tick all" only where each offer is the same value written another way, never where two
-# values may be two categories (a case that may name one, one letter apart, the AI engine's), each of which the user
+# values may be two categories (a case that may name one, a close spelling, the AI engine's), each of which the user
 # checks one by one
 GROUPS = (
     ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER), True),
@@ -379,9 +379,11 @@ def _offer_groups(
                 SPELLING,
                 CLOSE,
             ):  # the more frequent value is the reference: both counts
-                apart = letters_apart(value, offer.clean or "") or 1
+                apart = (
+                    letters_apart(value, offer.clean or "") or 1
+                )  # two letters swapped count one edit
                 rows = f"{held.get(value, 0):,} → {held.get(offer.clean or '', 0):,} rows"
-                return f"{as_code(show_level(value))} → {clean} · {apart} letter{'s' if apart != 1 else ''} apart · {rows}"
+                return f"{as_code(show_level(value))} → {clean} · {apart} edit{'s' if apart != 1 else ''} apart · {rows}"
             why = "" if offer.why in SAID else f" · {WORDS[offer.why]}"
             return f"{as_code(show_level(value))} → {clean}{why} · {_rows(held.get(value, 0))}"
 
@@ -592,7 +594,7 @@ def category_editor(
             record = recorded(counts, choices)
         except ValueError:  # never: the record would not give the preview
             record = None
-        grouped = groupings(counts, record[0], kept=record[2]) if record is not None else {}
+        grouped = _grouped(counts, record, choices)
         for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
             typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
             if typed is not None:
@@ -663,6 +665,25 @@ def category_editor(
         )
         if applied and not blocked and record is not None:
             _apply(state, df, column, target, counts, choices, record, grouped, replaces=replaces)
+
+
+def _grouped(
+    counts: dict[str, int], record: tuple | None, choices: dict[str, Any]
+) -> dict[str, list[str]]:
+    """The clean values that group categories (``groupings``), and those a reason was given for that still merge two
+    spellings or more: a grouping said and recorded stays one (a record of an earlier rule, cleaned again, kept its
+    grouping, and Apply came back for nothing)."""
+    if record is None:
+        return {}
+    grouped = groupings(counts, record[0], kept=record[2])
+    full = plan(counts, record[0], kept=record[2])
+    spellings = suggest(counts, near=False).spellings
+    for clean, reason in choices["reasons"].items():
+        if reason and clean not in grouped:
+            parts = sorted({spellings.get(v, v) for v in counts if full.get(v, v) == clean})
+            if len(parts) > 1:
+                grouped[clean] = parts
+    return grouped
 
 
 def _blocked(

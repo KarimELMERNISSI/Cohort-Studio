@@ -73,7 +73,7 @@ RARE_SHARE, RARE_ROWS = (
     0.01,
     5,
 )  # a rare spelling: at most 1 % of its target's rows, and at most 5 rows
-# a close spelling, to check first: one letter apart, under 5 % of its target's rows; a case variant taken as one
+# a close spelling, to check first: one edit away, under 5 % of its target's rows; a case variant taken as one
 # word holds as few (or a typo's RARE_ROWS)
 CLOSE_SHARE = 0.05
 MAX_VALUES = 200  # more distinct values: free text or an identifier, not listed
@@ -138,9 +138,11 @@ _ASKED_CODES = frozenset(
 # the codes above, and never joined to a value ("Not recorded" is not "No", "Pending" not "Negative")
 _NOT_RECORDED = re.compile(
     r"(?:not|non|no) (?:yet )?(?:recorded|assessed|measured|stated|reported|evaluated|examined|specified|collected"
-    r"|documented|available|known|done|tested|renseigne|precise|evalue|fait|mesure|disponible|connu)"
-    r"|pending|awaiting(?: .*)?|inconclusive|indeterminate|equivocal|unclear|uncertain|not sure"
-    r"|don'?t know|do not know|prefer not to (?:say|answer)|manquant|n/k|en attente|a venir"
+    r"|documented|available|known|done|tested|performed|obtained|given|answered|evaluable|renseigne|precise|evalue"
+    r"|fait|mesure|disponible|connu)"
+    r"|no (?:data|information)|missing data|data missing|(?:results? )?pending(?: results?)?|awaiting(?: .*)?"
+    r"|inconclusive|indeterminate|equivocal|unclear|uncertain|not sure|unable to .*|insufficient(?: .*)?"
+    r"|don'?t know|do not know|prefer not to (?:say|answer)|manquant|n/k|qns|n\.d\.|dk|tbc|en attente|a venir"
 )
 # what is no value of its own: the AI engine never joins it to one, or one to it ("Not tested" is not "Negative")
 _NOT_VALUES = (
@@ -222,8 +224,7 @@ _ENDINGS = (
     "graphy",
     "itis",
     "osis",
-    "aemia",
-    "emia",
+    "emia",  # anaemia too: a key reads ae as e
     "algia",
     "lysis",
     "plasia",
@@ -479,7 +480,7 @@ def _one_category(a: str, b: str, held: Mapping[str, int], coded: bool) -> bool:
     """
     Whether an offer relation joins two spellings, so that merging them names one category written two ways: a case
     variant taken as one word (``_case_safe``), a variant (accents, hyphens, British and American spellings), a
-    one-letter code and its word, or a spelling one letter apart under CLOSE_SHARE of the other's rows.
+    one-letter code and its word, or a close spelling in a typo's rows (``_spelling_kind``).
     """
     plain_a, plain_b = _unaccented(_spaced(a)), _unaccented(_spaced(b))
     if plain_a != plain_b and plain_a.casefold() == plain_b.casefold():  # case sets them apart
@@ -574,11 +575,26 @@ def _edits_allowed(key: str) -> int:
 
 
 def _edits(a: str, b: str) -> int | None:
-    """The Damerau-Levenshtein distance of two keys when it is a typo's (``_edits_allowed`` of the shorter), else
-    None."""
+    """
+    The Damerau-Levenshtein distance of two keys when it is a typo's, else None: one edit (two from 10 letters,
+    ``_edits_allowed`` of the shorter), never on a word's first letter (Gambian and Zambian, Heisdorf and Reisdorf),
+    and two only past a word's first four letters (Regression and Progression, Nephropathy and Neuropathy,
+    Saxagliptin and Sitagliptin are two categories).
+    """
     allowed = min(_edits_allowed(a), _edits_allowed(b))
     found = OSA.distance(a, b, score_cutoff=allowed)
-    return found if 0 < found <= allowed else None
+    if not 0 < found <= allowed:
+        return None
+    into = _into_word(a, b)
+    return found if into >= (4 if found == 2 else 1) else None
+
+
+def _into_word(a: str, b: str) -> int:
+    """How far into its word the first difference of two keys falls."""
+    first = next(
+        (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))
+    )
+    return first - (a.rfind(" ", 0, first) + 1)
 
 
 def _other_ending(a: str, b: str) -> bool:
@@ -604,13 +620,13 @@ def _spelling_kind(
 ) -> str | None:
     """
     The offer a rarer spelling gets towards a more frequent one within a typo's edits (``_relation``): SPELLING when
-    it holds a typo's rows (RARE_ROWS or fewer, and RARE_SHARE of the other's at most), CLOSE when one edit away and
-    under CLOSE_SHARE of its rows (to check first), else None: a value of its own.
+    it holds a typo's rows (RARE_ROWS or fewer, and RARE_SHARE of the other's at most; or a single row beside 10 or
+    more), CLOSE when one edit away and under CLOSE_SHARE of its rows (to check first), else None: a value of its own.
     """
     if _relation(rare, common, keys) != SPELLING:
         return None
     rows, other = held.get(rare, 0), held.get(common, 0)
-    if rows <= min(RARE_ROWS, RARE_SHARE * other):
+    if rows <= min(RARE_ROWS, RARE_SHARE * other) or (rows == 1 and other >= 10):
         return SPELLING
     a, b = (keys[rare], keys[common]) if keys else (_key(rare), _key(common))
     return CLOSE if _edits(a, b) == 1 and rows < CLOSE_SHARE * other else None
@@ -631,7 +647,7 @@ def _first_letter(short: str, word: str) -> bool:
 def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
     """
     What each value as written could become (``level_counts``): the fold, pre-filled, and the offers (variants and
-    spellings one letter apart only with ``near``: they compare the spellings two by two).
+    close spellings only with ``near``: they compare the spellings two by two).
     """
     spellings = fold(counts)
     held: dict[str, int] = defaultdict(int)
@@ -670,7 +686,10 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
         for rare in order:
             if rare in offers:
                 continue
-            for common in order:  # the most frequent first; only into a more frequent spelling
+            close: list[
+                tuple[int, int, str, str]
+            ] = []  # (edits, -rows, value, kind) of each candidate
+            for common in order:  # only into a more frequent spelling
                 if held[common] <= held[rare]:
                     break
                 if (
@@ -679,13 +698,15 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
                     or common.casefold() == rare.casefold()
                 ):
                     continue
-                # the most frequent close value is the reference: the rarer is probably its typo
                 if _relation(rare, common, keys) == VARIANT:
-                    offers[rare] = Offer(rare, common, VARIANT)
+                    close.append((0, -held[common], common, VARIANT))
                 elif kind := _spelling_kind(rare, common, held, keys):
-                    offers[rare] = Offer(rare, common, kind)
-                if rare in offers:
-                    break
+                    close.append(
+                        (_edits(keys[rare], keys[common]) or 1, -held[common], common, kind)
+                    )
+            if close:  # the reference: the value the fewest edits away, then the most frequent; the rarer is its typo
+                _, _, common, kind = min(close)
+                offers[rare] = Offer(rare, common, kind)
     ranked = tuple(sorted(offers.values(), key=lambda o: order.index(o.value)))
     return Suggestions(spellings, {v: _why(v, s) for v, s in spellings.items()}, ranked)
 
@@ -1012,7 +1033,7 @@ def groupings(
     """
     The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): two
     spellings merged that no offer relation joins (``_one_category``: a case variant taken as one word, a variant, a
-    one-letter code and its word, a rare spelling one letter apart). NYHA IV into III, Unstable angina into Stable
+    one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III, Unstable angina into Stable
     angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why. Clean value -> the
     spellings it merges.
     """
@@ -1177,8 +1198,8 @@ def _ai_refused(value: str, clean: str) -> bool:
 def _named_apart(value: str, clean: str) -> bool:
     """
     Whether the words of two values name two categories: a word in common and others apart (Stage IIIA and IIIB,
-    Hepatitis B and C, Ex-smoker and Current smoker), unless those differ by a typo (a letter, in words of 5 letters
-    or more: Diabetes melitus); two codes a letter or two apart (HFmrEF and HFrEF, pT1a and pT1b, IgG and IgM); two
+    Hepatitis B and C, Ex-smoker and Current smoker), unless those differ by a typo (``_edits``, in words of 5
+    letters or more: Diabetes melitus); two codes a letter or two apart (HFmrEF and HFrEF, pT1a and pT1b, IgG and IgM); two
     units (mg/dL and mmol/L); opposites (Positive and Negative); a prefix that negates or opposes (Unstable and
     Stable, Hypotension and Hypertension); a broader class, or a word inside the other (STEMI and MI, Type 2 diabetes
     and Diabetes, Female and Male). A translation, a synonym or an abbreviation crosses none (Femme and Female, Oui
@@ -1201,12 +1222,14 @@ def _named_apart(value: str, clean: str) -> bool:
     if words_a & words_b and only_a and only_b and not typo:
         return True
     codes = all(_code(t) for t in _words(value)) and all(_code(t) for t in _words(clean))
-    if (codes and OSA.distance(a, b) <= 2) or ("/" in a and "/" in b):
+    if (codes and OSA.distance(a, b) <= 2) or ("/" in a and "/" in b and _edits(a, b) is None):
         return True  # two codes a letter or two apart; two ratios (units: mg/dL and mmol/L)
     if frozenset((a, b)) in _OPPOSITES or words_a < words_b or words_b < words_a:
         return True
     if min(len(a), len(b)) >= 2 and (a.endswith(b) or b.endswith(a)):
         return True
+    if _other_ending(a, b):
+        return True  # another ending on one root, one ending on two roots
 
     def stems(word: str) -> set[str]:
         return {
@@ -1420,7 +1443,7 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
     """
     The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
     (source -> copy) left out: those with values to check first, then the cleaned ones, then the others, each in the
-    dataset's order. The count of values to check holds every offer the page makes, variants and spellings one letter
+    dataset's order. The count of values to check holds every offer the page makes, variants and close spellings
     apart included (rapidfuzz keeps the two-by-two comparison to milliseconds).
     """
     recoded = {s: t for s, t in (recoded or {}).items() if s in df.columns and t in df.columns}
@@ -1438,9 +1461,7 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
         counts = level_counts(values)
         if not 2 <= len(counts) <= MAX_VALUES:
             continue
-        hints = suggest(
-            counts
-        )  # variants and spellings one letter apart too: what the page will offer
+        hints = suggest(counts)  # variants and close spellings too: what the page will offer
         into = recoded.get(str(column), "")
         found.append(
             (

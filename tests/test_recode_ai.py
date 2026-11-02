@@ -226,6 +226,8 @@ def test_a_proposal_both_ways_or_along_a_chain_keeps_one_direction() -> None:
         ("NYHA II", "NYHA III"),
         ("Male", "Female"),
         ("IgM", "IgG"),
+        ("Hypokalaemia", "Hypocalcaemia"),  # one ending, two roots
+        ("Craniotomy", "Craniectomy"),  # another ending on one root
     ],
 )
 def test_a_proposal_that_joins_two_categories_is_refused(value: str, clean: str) -> None:

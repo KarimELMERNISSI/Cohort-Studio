@@ -319,7 +319,9 @@ def test_codes_for_unknown_are_offered_as_unknown_and_the_others_ask_what_they_m
     }
     for code in ("n.a.", "NR", "none", "ND", "NK", "-", "N/A", "NC", "SO", "Refus", "Not tested",
                  "Not recorded", "Not assessed", "Pending", "Awaiting result", "Inconclusive", "Don’t know",
-                 "Prefer not to say", "Non précisé", "Manquant", "N/K"):  # fmt: skip
+                 "Prefer not to say", "Non précisé", "Manquant", "N/K", "Not performed", "Not obtained",
+                 "No data", "Missing data", "Results pending", "Unable to assess", "Insufficient sample", "QNS",
+                 "N.D.", "DK", "TBC"):  # fmt: skip
         assert _offers({"pre": 300, "post": 200, code: 40})[code] == (None, MISSING_CODE, None), (
             code
         )
@@ -842,13 +844,14 @@ def test_a_corrected_meaning_or_reason_documents_another_record() -> None:
     assert documented({**first, "kept": ["b", "a"]}) == documented({**first, "kept": ["a", "b"]})
 
 
-def test_the_most_frequent_close_value_is_the_reference_of_a_rarer_one() -> None:
-    """A rarer value within a typo's edits of a more frequent one is probably its typo: offered towards the most
-    frequent close value, two edits apart in a value of 10 letters or more, only in a typo's rows."""
+def test_the_closest_then_most_frequent_value_is_the_reference_of_a_rarer_one() -> None:
+    """A rarer value within a typo's edits of a more frequent one is probably its typo: offered towards the value the
+    fewest edits away, then the most frequent; two edits apart in a value of 10 letters or more, only in a typo's rows
+    and past a word's first four letters; never on a word's first letter."""
     counts = {"Luxembourg": 400, "Luxemburg": 50, "Luxemburgg": 2, "Esch": 300}
     assert _offers(counts) == {
-        "Luxemburgg": ("Luxembourg", SPELLING, None)
-    }  # Luxemburg: 12 %, a value of its own
+        "Luxemburgg": ("Luxemburg", CLOSE, None)
+    }  # one edit from Luxemburg, two from Luxembourg
     assert _offers({"Luxembourg": 400, "Luxenbourgg": 2}) == {
         "Luxenbourgg": ("Luxembourg", SPELLING, None)
     }
@@ -856,5 +859,16 @@ def test_the_most_frequent_close_value_is_the_reference_of_a_rarer_one() -> None
     assert _offers({"Diabetes": 300, "Diabtes": 10}) == {
         "Diabtes": ("Diabetes", CLOSE, None)
     }  # to check first
+    assert _offers({"Ettelbruck": 12, "Ettelbruk": 1}) == {
+        "Ettelbruk": ("Ettelbruck", SPELLING, None)
+    }  # small column
     assert _offers({"Hypokalaemia": 400, "Hypocalcaemia": 3}) == {}  # one ending, two roots
     assert _offers({"Abduction": 400, "Adduction": 3}) == {}  # ab- and ad-
+    for common, rare in (("Progression", "Regression"), ("Neuropathy", "Nephropathy"), ("Sitagliptin", "Saxagliptin"),
+                         ("Zambian", "Gambian"), ("Heisdorf", "Reisdorf"), ("Sailor", "Tailor")):  # fmt: skip
+        assert _offers({common: 320, rare: 3}) == {}, (
+            rare
+        )  # two edits early in a word; a word's first letter
+    assert _offers({"Sacubitril/valsartan": 300, "Sacubitril/valsartn": 2}) == {
+        "Sacubitril/valsartn": ("Sacubitril/valsartan", SPELLING, None)
+    }

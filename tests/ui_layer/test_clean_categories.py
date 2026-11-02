@@ -139,7 +139,7 @@ def _one(widgets, prefix: str):
 
 
 def _group(at: AppTest, name: str):
-    """The pills of one group of offers: written another way, one letter apart, codes for missing."""
+    """The pills of one group of offers: written another way, close spellings, codes for missing."""
     found = [
         w
         for w in at.pills
@@ -403,7 +403,7 @@ def test_values_nobody_chose_reach_no_record_and_markup_is_drawn_as_text() -> No
     spec = at.get("plotly_chart")[0].proto.spec
     assert "<a href" not in spec and "&lt;a href" in spec
     offers = _group(at, "letter")
-    assert offers.options == ["`Luxembourgg` → `Luxembourg` · 1 letter apart · 1 → 120 rows"]
+    assert offers.options == ["`Luxembourgg` → `Luxembourg` · 1 edit apart · 1 → 120 rows"]
     offers.select("Luxembourgg").run()
     _set_to_missing(at, ["CANARY-MISS-5B9"], UNKNOWN)
     at.button(key="clean_apply::commune").click().run()
@@ -442,7 +442,7 @@ def test_tick_all_ticks_every_offer_of_a_group() -> None:
 
 
 def test_no_tick_all_where_two_values_may_be_two_categories() -> None:
-    """One letter apart (Dysphasia, Dysphagia) or the AI engine's: each is checked on its own."""
+    """A close spelling (Dysphasia, Dysphagia) or the AI engine's: each is checked on its own."""
     terms = ["Dysphagia"] * 400 + ["Dysphasia"] * 2 + ["Luxembourg"] * 300 + ["Luxembourgg"] * 2
     at = _open({"term": terms})
     assert len(_group(at, "letter").options) == 2
@@ -630,3 +630,21 @@ def test_a_corrected_meaning_of_missing_is_recorded_though_the_copy_is_the_same(
     assert at.button(key="clean_apply::status").disabled
     replayed = apply_steps(at.session_state["data"].drop(columns=["status_clean"]), history[-2:])
     assert replayed.error is None and not replayed.warnings
+
+
+def test_a_grouping_given_a_reason_stays_one() -> None:
+    """A merge recorded as a grouping with its reason, cleaned again under a rule that reads it as a typo's fix,
+    stays a grouping: dropping it changed the record, and Apply came back although nothing had changed."""
+    from app_pages.clean_categories import _grouped
+    from enrich.recode import new_choices, recorded
+
+    counts = {"Diabetes mellitus": 300, "Diabetes melitus": 2}
+    choices = new_choices()
+    choices["mapping"] = {"Diabetes melitus": "Diabetes mellitus"}
+    choices["kinds"] = {"Diabetes melitus": "grouping"}
+    record = recorded(counts, choices)
+    assert _grouped(counts, record, choices) == {}  # a typo's fix asks no reason
+    choices["reasons"] = {"Diabetes mellitus": "the earlier record's reason"}
+    assert _grouped(counts, record, choices) == {
+        "Diabetes mellitus": ["Diabetes melitus", "Diabetes mellitus"]
+    }
