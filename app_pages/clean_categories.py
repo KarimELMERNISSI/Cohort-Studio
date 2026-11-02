@@ -31,6 +31,7 @@ from core.registry import as_code
 from enrich.recode import (
     AI,
     CAPITALS,
+    CASE,
     CHOSEN,
     CLOSE,
     FIRST_LETTER,
@@ -51,6 +52,7 @@ from enrich.recode import (
     candidates,
     changes,
     choices_of,
+    documented,
     free_text,
     give,
     groupings,
@@ -97,6 +99,7 @@ A_TO_Z, MOST_ROWS = "A-Z", "Most rows"
 # what each kind of choice reads on the page (the stored ids never change)
 WORDS = {
     CAPITALS: "capitals",
+    CASE: "case",
     SPACES: "spaces",
     SPACES_AND_CAPITALS: "spaces and capitals",
     FIRST_LETTER: "first-letter code",
@@ -109,15 +112,17 @@ WORDS = {
     AI: "AI proposal",
 }
 # the offers, in groups; "Tick all" only where each offer is the same value written another way, never where two
-# values may be two categories (one letter apart, the AI engine's), each of which the user checks one by one
+# values may be two categories (a case that may name one, one letter apart, the AI engine's), each of which the user
+# checks one by one
 GROUPS = (
     ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER), True),
+    ("case", "Case may name a category: check that both mean the same", (CASE,), False),
     ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE), False),
     ("missing", "Codes that may mean missing", (MISSING_CODE,), True),
     ("ai", "Proposed by the AI engine: check that both name the same category", (AI,), False),
 )
 # a group's title already says why: its pills do not repeat it
-SAID = frozenset({SPELLING, CLOSE, MISSING_CODE})
+SAID = frozenset({CASE, SPELLING, CLOSE, MISSING_CODE})
 _UNSEEN = object()  # a cell of the table no earlier edit set
 
 
@@ -350,10 +355,14 @@ def _offer_groups(
         def label(value: str, group: dict[str, Offer] = group) -> str:
             offer = group[value]
             clean = as_code(show_level(offer.clean)) if offer.clean is not None else "missing"
-            if offer.why == AI:
+            if offer.why == AI:  # both counts: a merge of two frequent categories reads as one
+                into = held.get(offer.clean or "", 0)
                 why = f" · {plain(offer.reason, limit=80)}" if offer.reason else ""
-            else:
-                why = "" if offer.why in SAID else f" · {WORDS[offer.why]}"
+                rows = (
+                    f"{held.get(value, 0):,} → {into:,} rows" if into else _rows(held.get(value, 0))
+                )
+                return f"{as_code(show_level(value))} → {clean}{why} · {rows}"
+            why = "" if offer.why in SAID else f" · {WORDS[offer.why]}"
             return f"{as_code(show_level(value))} → {clean}{why} · {_rows(held.get(value, 0))}"
 
         on = [v for v, o in group.items() if ticked(choices, counts, o)]
@@ -563,9 +572,7 @@ def category_editor(
             record = recorded(counts, choices)
         except ValueError:  # never: the record would not give the preview
             record = None
-        grouped = (
-            groupings(counts, record[0], record[1], kept=record[2]) if record is not None else {}
-        )
+        grouped = groupings(counts, record[0], kept=record[2]) if record is not None else {}
         for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
             typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
             if typed is not None:
@@ -606,6 +613,12 @@ def category_editor(
                 f"multiple imputation fills {them} as missing at random given its variables. A value that means not "
                 "applicable or declined is often better kept as a value."
             )
+        # the AI engine's reason for a merge it proposed, shown as a hint only: the reason recorded is the user's
+        hinted = {
+            o.clean: o.reason
+            for o in proposed
+            if o.reason and record is not None and o.value in record[0]
+        }
         for clean, parts in grouped.items():
             listed = [as_code(show_level(p)) for p in parts]
             reason = st.text_input(
@@ -613,6 +626,9 @@ def category_editor(
                 value=choices["reasons"].get(clean, ""),
                 key=f"clean_reason::{scope}::{column}::{clean}",
                 max_chars=200,
+                placeholder=f"The AI engine said: {plain(hinted[clean], limit=80)}"
+                if clean in hinted
+                else None,
                 help="Merging categories is a grouping, not a correction: the methods say why.",
             ).strip()[:200]  # the browser's limit, enforced here too
             if reason:
@@ -662,14 +678,43 @@ def _blocked(
         return "Nothing to change: every value keeps how it is written."
     last = last_record(steps, column, target) if replaces else None
     if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
-        # the copy is what that recode wrote, with its rule: the same outcome would write it again
+        # the copy is what that recode wrote, with its rule: the same values and the same record (what missing means,
+        # why values are grouped, who proposed) would write nothing new
         then = choices_of(last)
         before = outcome(
             counts, then["mapping"], then["meanings"], kept=then["kept"], fold_rule=rule_of(last)
         )
-        if before == outcome(counts, record[0], record[3], kept=record[2]):
+        same = before == outcome(counts, record[0], record[3], kept=record[2])
+        if same and documented(last) == documented(_record_of(record, grouped, choices)):
             return f"Nothing changed since {as_code(target)} was written."
     return ""
+
+
+def _record_of(
+    record: tuple, grouped: dict[str, list[str]], choices: dict[str, Any]
+) -> dict[str, Any]:
+    """The choices as the step records them: the mapping, the kinds (a merge typed by hand that groups categories is
+    a grouping; an offer or the AI engine's proposal keeps its kind), the folds put back, what missing means, why each
+    grouping was made, and who proposed each AI choice (never the prompt or the answer)."""
+    mapping, kinds, kept, meanings = record
+    kinds = {
+        k: GROUPING if mapping[k] in grouped and kind not in OFFER_KINDS else kind
+        for k, kind in kinds.items()
+    }
+    out: dict[str, Any] = {
+        "mapping": mapping,
+        "kinds": kinds,
+        "kept": kept,
+        "missing_meaning": meanings,
+        "groupings": {
+            clean: {"reason": choices["reasons"].get(clean, "")[:200], "values": parts}
+            for clean, parts in grouped.items()
+        },
+    }
+    proposed = {k: choices.get("ai_by", {}).get(k, {}) for k, kind in kinds.items() if kind == AI}
+    if proposed:
+        out["ai_by"] = proposed
+    return out
 
 
 def _apply(
@@ -684,15 +729,13 @@ def _apply(
     *,
     replaces: bool,
 ) -> None:
-    mapping, kinds, kept, meanings = record
-    for (
-        key,
-        clean,
-    ) in (
-        mapping.items()
-    ):  # a hand-made merge into a grouping is one; an AI proposal keeps who proposed
-        if clean in grouped and kinds[key] not in OFFER_KINDS and kinds[key] != AI:
-            kinds[key] = GROUPING
+    chosen = _record_of(record, grouped, choices)
+    mapping, kinds, kept, meanings = (
+        chosen["mapping"],
+        chosen["kinds"],
+        chosen["kept"],
+        chosen["missing_meaning"],
+    )
     spellings = suggest(counts, near=False).spellings
     held: dict[str, int] = defaultdict(int)
     for value, n in counts.items():
@@ -709,15 +752,9 @@ def _apply(
         "kinds": kinds,
         "kept": kept,
         "missing_meaning": meanings,
-        "groupings": {
-            clean: {
-                "reason": choices["reasons"][clean][:200],
-                "values": parts,
-                "each_5_rows": all(
-                    held.get(p, 0) >= 5 for p in parts
-                ),  # the report names them only then
-            }
-            for clean, parts in grouped.items()
+        "groupings": {  # the report names the values only when each held 5 rows or more
+            clean: {**grouping, "each_5_rows": all(held.get(p, 0) >= 5 for p in grouping["values"])}
+            for clean, grouping in chosen["groupings"].items()
         },
         "replaces": replaces,
         "values_before": len(counts),
@@ -732,17 +769,20 @@ def _apply(
         "values_fp": values_fp(counts),
         "target_fp": frame_fingerprint(new[[target]]),
     }
-    # who proposed each AI choice (provider, model, where it runs), kept when the copy is written again: never the
-    # prompt, never the answer
-    proposed = {k: choices.get("ai_by", {}).get(k, {}) for k, kind in kinds.items() if kind == AI}
-    if proposed:
-        params["ai_by"] = proposed
+    if "ai_by" in chosen:  # who proposed each AI choice, kept when the copy is written again
+        params["ai_by"] = chosen["ai_by"]
     summary = f"{len(after)} values instead of {len(counts)}" + (
         f", {_rows(gone)} set to missing" if gone else ""
     )
     wrote = state.commit_change(
         new, "recode_levels", params, f"Recoded {column} into {target}: {summary}"
     )
+    if not wrote:  # the copy holds these values already: what changed is what they mean, or why they are grouped
+        state.record_step(
+            "recode_levels",
+            params,
+            f"Recoded {column} into {target} again, its values unchanged: {summary}",
+        )
     # the trace holds the choices now: the store starts again from them, its revision moving on (the table, drawn
     # again under a key it had before, would bring back the browser's edits)
     st.session_state.setdefault(STORE, {})[column] = {
@@ -754,7 +794,10 @@ def _apply(
         verb = "Wrote" if replaces else "Added"
         st.session_state[DONE] = f"{verb} {as_code(target)} beside {as_code(column)}: {summary}."
     else:
-        st.session_state[DONE] = f"Nothing written: {as_code(target)} already holds these values."
+        st.session_state[DONE] = (
+            f"Recorded the corrected choices for {as_code(target)}: what missing means or why values are grouped. "
+            "Its values are unchanged."
+        )
     st.rerun()
 
 

@@ -609,6 +609,12 @@ class DataSession:
             population_label=population.label,
         )
 
+    def record(self, function: str, params: Mapping[str, Any] | None, description: str) -> None:
+        """Trace a step that changes no data: a recode whose copy already holds its values, recorded for what it says
+        of them (what missing means, why values are grouped), which the replay redoes as written."""
+        self._require_base()
+        self._record(function, params, description)
+
     def record_population_use(self, config: Mapping[str, Any] | None) -> None:
         """Trace the population once per identity, when a result or a saved version first uses it."""
         population = self.population(config)

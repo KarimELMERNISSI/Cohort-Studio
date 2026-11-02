@@ -13,7 +13,6 @@ import pytest
 
 from enrich.recode import (
     AI,
-    CHOSEN,
     Offer,
     ai_offers,
     choices_of,
@@ -147,8 +146,8 @@ def test_the_answer_is_read_only_for_values_sent_and_never_joins_two_categories(
 
 
 def test_a_proposal_is_an_offer_its_reason_never_pre_filled_and_who_proposed_is_recorded() -> None:
-    """A synonym the user ticks is one category written two ways: no grouping, and the model's words never stand
-    for the user's reason (the report printed "AVC is French for stroke" beside a 3-row value)."""
+    """The model's words never stand for the user's reason (the report printed "AVC is French for stroke" beside a
+    3-row value); a merge it proposes is a grouping when no offer relation joins its values, as by hand."""
     counts = {"Oui": 300, "Yes": 400, "Non": 200}
     (offer,) = ai_offers(
         [{"value": "Oui", "clean": "Yes", "reason": "French for yes"}], counts, sent=list(counts)
@@ -164,10 +163,9 @@ def test_a_proposal_is_an_offer_its_reason_never_pre_filled_and_who_proposed_is_
     tick(choices, counts, offer, by=by)
     assert choices["reasons"] == {} and choices["ai_by"] == {"Oui": by}
     mapping, kinds, kept, _ = recorded(counts, choices)
-    assert kinds == {"Oui": AI} and groupings(counts, mapping, kinds, kept=kept) == {}
-    assert groupings(counts, mapping, {"Oui": CHOSEN}, kept=kept) == {
-        "Yes": ["Oui", "Yes"]
-    }  # typed by hand
+    assert kinds == {"Oui": AI}
+    # two categories of 300 and 400 rows, merged on the model's word: the user says why, as for a merge by hand
+    assert groupings(counts, mapping, kept=kept) == {"Yes": ["Oui", "Yes"]}
     # kept when the copy is cleaned again, and reported by counts, never by value
     again = choices_of({"mapping": mapping, "kinds": kinds, "ai_by": {"Oui": by, "Gone": by}})
     assert again["ai_by"] == {"Oui": by}

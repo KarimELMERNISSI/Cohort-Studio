@@ -35,8 +35,10 @@ from pathlib import Path
 # Validity's checks (M6, 2026-10-30, measured locally: CI stopped at two failing tests before its floors).
 # enrich to 87 at 89.2 with the tests of the two fold rules of 30 October and of the AI proposals' guard, explore to 80
 # at 82.9 with those of Domain Validity's severity and rows on recorded values (M6, 2026-10-31).
+# app_pages to 64 at 66.0 with the tests of the Categories page's table, AI popover and corrected records (M6,
+# 2026-11-02).
 FLOORS: dict[str, float] = {
-    "app_pages": 62.0,
+    "app_pages": 64.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 87.0,

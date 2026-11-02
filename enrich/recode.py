@@ -24,9 +24,14 @@ The offers, never applied:
 - a variant: the same spelling once accents are stripped and ae or oe read as e (Pétange, Petange; Anaemia, Anemia);
 - a rare spelling one letter from a frequent value (Damerau-Levenshtein distance 1: "Luxembourgg", "Daibetes"), and,
   to check first, a close spelling one letter apart that holds more rows;
-- a case variant the fold leaves apart;
-- the codes that may mean missing. Some are read as unknown; for others the user says what they mean ("n/a" can mean
-  not applicable, "none" an absence, "NR" non-reactive, "ND" a result).
+- a case variant: the same word written another way when its differing words hold 4 letters or more, the column
+  writes no case codes and the variant holds a typo's rows; otherwise, to check, since case may name a category
+  (Kell K and k, anti-k and anti-K, Rh CcDee and ccdee);
+- the codes and phrasings that may mean missing. Some are read as unknown; for others the user says what they mean
+  ("n/a" can mean not applicable, "none" an absence, "NR" non-reactive, "ND" a result, "Pending" a result to come).
+
+A merge is a grouping, which says why, whoever proposed it, unless an offer relation joins its values (``groupings``);
+the AI engine's proposals are refused where the rules see two categories, and the user checks the rest.
 
 One letter can separate two categories, so a spelling is never offered across a token holding a digit, a short token
 or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b), a sign or a Roman numeral, nor when the words
@@ -66,21 +71,19 @@ RARE_SHARE, RARE_ROWS = (
     0.01,
     5,
 )  # a rare spelling: at most 1 % of its target's rows, and at most 5 rows
-CLOSE_SHARE = (
-    0.05  # a close spelling, to check first: one letter apart, under 5 % of its target's rows
-)
-GROUPING_SHARE = (
-    0.05  # two values that each hold this share of the rows, merged by hand: a grouping
-)
+# a close spelling, to check first: one letter apart, under 5 % of its target's rows; a case variant taken as one
+# word holds as few (or a typo's RARE_ROWS)
+CLOSE_SHARE = 0.05
 MAX_VALUES = 200  # more distinct values: free text or an identifier, not listed
 # why a value is given its clean value (stored with the step: never renamed)
 SPACES, CAPITALS, SPACES_AND_CAPITALS = "spaces", "capitals", "spaces and capitals"
 FIRST_LETTER, VARIANT, SPELLING, CLOSE = "first letter", "variant", "spelling", "close spelling"
 MISSING_CODE, CHOSEN, GROUPING = "missing code", "chosen", "grouping"
 AI = "ai"  # proposed by the AI engine (a synonym, a translation): checked here, ticked by the user
-# the offers, never a grouping: a variant, a spelling, a synonym the AI engine proposes (one category written two
-# ways); a merge of two categories is made by hand, and says why
-OFFER_KINDS = frozenset({CAPITALS, FIRST_LETTER, VARIANT, SPELLING, CLOSE, MISSING_CODE, AI})
+CASE = "case"  # a case variant where case may name a category (Kell K and k, anti-k, Rh CcDee): offered to check
+# the offers; whoever proposed a merge, it is a grouping, which says why, unless an offer relation joins its values
+# (``groupings``)
+OFFER_KINDS = frozenset({CAPITALS, CASE, FIRST_LETTER, VARIANT, SPELLING, CLOSE, MISSING_CODE, AI})
 # what a value set to missing means (stored with the step: never renamed)
 UNKNOWN, NOT_APPLICABLE, DECLINED = "unknown or not done", "not applicable", "declined"
 MEANINGS = (UNKNOWN, NOT_APPLICABLE, DECLINED)
@@ -129,10 +132,34 @@ _ASKED_CODES = frozenset(
         "non communique",
     }
 )
+# phrasings that say a value was not recorded, is awaited or not known (comparison keys): asked what they mean, like
+# the codes above, and never joined to a value ("Not recorded" is not "No", "Pending" not "Negative")
+_NOT_RECORDED = re.compile(
+    r"(?:not|non|no) (?:yet )?(?:recorded|assessed|measured|stated|reported|evaluated|examined|specified|collected"
+    r"|documented|available|known|done|tested|renseigne|precise|evalue|fait|mesure|disponible|connu)"
+    r"|pending|awaiting(?: .*)?|inconclusive|indeterminate|equivocal|unclear|uncertain|not sure"
+    r"|don'?t know|do not know|prefer not to (?:say|answer)|manquant|n/k|en attente|a venir"
+)
 # what is no value of its own: the AI engine never joins it to one, or one to it ("Not tested" is not "Negative")
 _NOT_VALUES = (
     _UNKNOWN_CODES | _ASKED_CODES | {"declined", "not applicable", "unknown or not done", "other"}
 )
+# answers that state an absence or a presence: the AI engine joins a value to one only from that answer's own forms
+# (Non to No, Négatif to Negative, Oui to Yes), never a value that says nothing was recorded (comparison keys)
+_POLAR_FORMS: dict[str, frozenset[str]] = {
+    answer: frozenset(forms)
+    for answer, forms in (
+        ("no", ("non", "nein", "n", "nee", "nao", "nej")),
+        ("negative", ("negatif", "negativ", "neg", "neg.", "negativo", "negativa")),
+        ("normal", ("normale", "norm", "nl", "normaal")),
+        ("absent", ("absente", "abs", "ausente")),
+        ("none", ("nil", "aucun", "aucune", "keine", "kein", "ninguno", "nessuno")),
+        ("yes", ("oui", "ja", "si", "y", "sim", "da")),
+        ("positive", ("positif", "positiv", "pos", "pos.", "positivo", "positiva")),
+        ("present", ("presente", "pres")),
+        ("abnormal", ("anormal", "anormale", "abn")),
+    )
+}
 # prefixes that negate or oppose a word: a proposal never joins two words a prefix sets apart (Unstable, Stable;
 # Hypotension, Hypertension), a broader class neither (STEMI and MI)
 _OPPOSITE_PREFIXES = (
@@ -193,8 +220,19 @@ _OPPOSITES = frozenset(
     )
 )
 # letters NFKD does not decompose; the minus sign read as a hyphen (a sign, for _SIGNS)
-_TRANSLITERATE = str.maketrans(
-    {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ø": "o", "Ø": "O", "ł": "l", "Ł": "L", "ß": "ss"}
+_TRANSLITERATE = str.maketrans(  # and the typographic apostrophe read as ' (Don’t know)
+    {
+        "œ": "oe",
+        "Œ": "OE",
+        "æ": "ae",
+        "Æ": "AE",
+        "ø": "o",
+        "Ø": "O",
+        "ł": "l",
+        "Ł": "L",
+        "ß": "ss",
+        "’": "'",
+    }
 )
 _ROMAN = re.compile(  # a whole token; the lookbehind refuses the empty match before a word such as "male"
     r"\b(?=[mdclxvi])m{0,4}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})\b(?<=[mdclxvi])"
@@ -374,6 +412,54 @@ def _case_free(variant: str, spelling: str) -> bool:
     )
 
 
+def _not_recorded(key: str) -> bool:
+    """A comparison key that says a value was not recorded, is awaited or not known (``_NOT_RECORDED``)."""
+    return _NOT_RECORDED.fullmatch(key) is not None
+
+
+def _case_coded(counts: Mapping[str, int]) -> bool:
+    """Whether a column writes case as part of its codes: a capital right after a lower-case letter (CcDee, HFmrEF,
+    mg/dL), or a letter beside its other case (Cc, Kk)."""
+    return any(
+        _inner_capital(value)
+        or any(a != b and a.casefold() == b.casefold() for a, b in zip(value, value[1:]))
+        for value in counts
+    )
+
+
+def _case_safe(variant: str, target: str, held: Mapping[str, int], coded: bool) -> bool:
+    """
+    Whether a case variant is its target's word written another way: each word whose case differs holds 4 letters
+    or more, in lower case, capitals or capitalised in both (``_case_free``); the column writes no case codes
+    (``_case_coded``); and the variant holds a typo's rows beside its target (RARE_ROWS or fewer, or under
+    CLOSE_SHARE of its rows). Otherwise case may name a category (Kell K and k, anti-k and anti-K, Rh CcDee and
+    ccdee; two sites writing Luxembourg and LUXEMBOURG in many rows): offered to check, and a grouping when merged.
+    """
+    rows = held.get(variant, 0)
+    small = rows <= RARE_ROWS or rows < CLOSE_SHARE * held.get(target, 0)
+    return not coded and small and _case_free(variant, target)
+
+
+def _one_category(a: str, b: str, held: Mapping[str, int], coded: bool) -> bool:
+    """
+    Whether an offer relation joins two spellings, so that merging them names one category written two ways: a case
+    variant taken as one word (``_case_safe``), a variant (accents, hyphens, British and American spellings), a
+    one-letter code and its word, or a spelling one letter apart under CLOSE_SHARE of the other's rows.
+    """
+    plain_a, plain_b = _unaccented(_spaced(a)), _unaccented(_spaced(b))
+    if plain_a != plain_b and plain_a.casefold() == plain_b.casefold():  # case sets them apart
+        rare, common = sorted((a, b), key=lambda s: (held.get(s, 0), s))
+        return _case_safe(rare, common, held, coded)
+    if _first_letter(a, b) or _first_letter(b, a):
+        return True
+    relation = _relation(a, b)
+    if relation == SPELLING:
+        return min(held.get(a, 0), held.get(b, 0)) < CLOSE_SHARE * max(
+            held.get(a, 0), held.get(b, 0)
+        )
+    return relation == VARIANT
+
+
 def _legacy_fold(counts: Mapping[str, int]) -> dict[str, str]:
     """The second rule recorded under :data:`LEGACY_FOLD` (replays only): spaces, and a word's case variant in a
     typo's number of rows."""
@@ -474,15 +560,18 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
         plain = _plain(spelling)
         if plain in _UNKNOWN_CODES:
             offers[spelling] = Offer(spelling, None, MISSING_CODE, UNKNOWN)
-        elif plain in _ASKED_CODES:
+        elif plain in _ASKED_CODES or _not_recorded(_key(spelling)):
             offers[spelling] = Offer(spelling, None, MISSING_CODE)
     main: dict[str, str] = {}  # a spelling -> its group's (the fold left case variants apart)
+    coded = _case_coded(held)
     for rows in _groups(held):
         spelling = _spelling(rows)
         for variant in rows:
             main[variant] = spelling
             if variant != spelling and variant not in offers:
-                offers[variant] = Offer(variant, spelling, CAPITALS)
+                # one word written another way, or a case that may name a category: offered to check
+                safe = _case_safe(variant, spelling, held, coded)
+                offers[variant] = Offer(variant, spelling, CAPITALS if safe else CASE)
     for short in order:
         if len(short) != 1 or not short.isascii() or not short.isalpha() or short in offers:
             continue
@@ -835,51 +924,43 @@ def recorded(
     )
 
 
-def _related(a: str, b: str) -> bool:
-    """Two spellings an offer would join: a one-letter code and its word, a variant, one letter apart."""
-    return _first_letter(a, b) or _first_letter(b, a) or _relation(a, b) is not None
-
-
 def groupings(
     counts: Mapping[str, int],
     mapping: Mapping[str, str | None],
-    kinds: Mapping[str, str],
     *,
     kept: Collection[str] = (),
 ) -> dict[str, list[str]]:
     """
-    The clean values that group categories: a spelling merged by hand (a choice, not an offer) with another that
-    something naming a category sets apart (``_apart``: NYHA IV into III, Stage IVA into IV; ``_named_apart``:
-    Unstable angina into Stable angina, Type 2 diabetes into Diabetes), unless an offer would join them (a first
-    letter, a variant); or two spellings that each hold :data:`GROUPING_SHARE` of the rows. Clean value -> the
+    The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): two
+    spellings merged that no offer relation joins (``_one_category``: a case variant taken as one word, a variant, a
+    one-letter code and its word, a rare spelling one letter apart). NYHA IV into III, Unstable angina into Stable
+    angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why. Clean value -> the
     spellings it merges.
     """
     spellings, kept = fold(counts), set(kept)
     held: dict[str, int] = defaultdict(int)
     for value, n in counts.items():
         held[spellings.get(value, value)] += n
-    total = sum(counts.values())
+    coded = _case_coded(held)
     into: dict[str, set[str]] = defaultdict(set)
-    hand: dict[str, set[str]] = defaultdict(set)
+    chosen: dict[str, set[str]] = defaultdict(set)  # the spellings a choice sends there
     for value in counts:
         clean, first, _ = resolve(value, spellings, mapping, kept)
         if clean is None:
             continue
         spelling = spellings.get(value, value)
         into[clean].add(spelling)
-        if first is not None and kinds.get(first, CHOSEN) not in OFFER_KINDS:
-            hand[clean].add(spelling)
-
-    def grouping(a: str, b: str) -> bool:
-        if _key(a) == _key(b):
-            return False  # one word, written two ways
-        big = min(held.get(a, 0), held.get(b, 0)) >= GROUPING_SHARE * total
-        return big or ((_apart(a, b) or _named_apart(a, b)) and not _related(a, b))
-
+        if first is not None:
+            chosen[clean].add(spelling)
     return {
         clean: sorted(into[clean])
         for clean in into
-        if any(grouping(a, b) for a in hand.get(clean, ()) for b in into[clean] if a != b)
+        if any(
+            not _one_category(a, b, held, coded)
+            for a in chosen.get(clean, ())
+            for b in into[clean]
+            if a != b
+        )
     }
 
 
@@ -986,17 +1067,21 @@ def free_text(counts: Mapping[str, int]) -> bool:
 
 def _ai_refused(value: str, clean: str) -> bool:
     """
-    Whether a proposal of the AI engine joins what the rules keep apart: a number, a sign or two Roman numerals (Type
-    1 and 2, NYHA II and III); words that name two categories (``_named_apart``); a value that is no value of its own
-    on either side (Not tested and Negative, Refused and Unknown, Homme and unknown).
+    Whether a proposal of the AI engine joins what the rules keep apart: a value that is no value of its own on either
+    side (Not tested and Negative, Refused and Unknown, Homme and unknown; by pattern, Not recorded, Pending, Don't
+    know); an answer stating an absence or a presence, but from its own forms (Non to No, Négatif to Negative, Oui to
+    Yes; never Not assessed to Normal); a number, a sign or two Roman numerals (Type 1 and 2, NYHA II and III); words
+    that name two categories (``_named_apart``). The rules see words, not meanings: a class or a sibling they cannot
+    read (Stroke and Hypertension) passes, and its merge is a grouping, which asks why (``groupings``).
     """
     a, b = _key(value), _key(clean)
-    return (
-        _numbered_apart(value, clean)
-        or a in _NOT_VALUES
-        or b in _NOT_VALUES
-        or _named_apart(value, clean)
-    )
+    if any(key in _NOT_VALUES or _not_recorded(key) for key in (a, b)):
+        return True  # no value of its own
+    if (b in _POLAR_FORMS and a not in _POLAR_FORMS[b]) or (
+        a in _POLAR_FORMS and b not in _POLAR_FORMS
+    ):
+        return True  # an answer stating an absence or a presence takes only its own forms
+    return _numbered_apart(value, clean) or _named_apart(value, clean)
 
 
 def _named_apart(value: str, clean: str) -> bool:
@@ -1154,6 +1239,30 @@ def last_record(
     return found
 
 
+def documented(record: Mapping[str, Any]) -> dict[str, Any]:
+    """
+    What a recode records of the choices beside the values it writes: the mapping, the kinds, the folds put back,
+    what missing means, why each grouping was made and who proposed each AI choice. Two records that document the same
+    choices compare equal; a corrected meaning or reason does not, though the copy it writes is the same.
+    """
+    grouped = record.get("groupings") or {}
+    return {
+        "mapping": dict(record.get("mapping") or {}),
+        "kinds": dict(record.get("kinds") or {}),
+        "kept": sorted(record.get("kept") or ()),
+        "missing_meaning": dict(record.get("missing_meaning") or {}),
+        "reasons": {
+            str(c): (g.get("reason", "") if isinstance(g, Mapping) else str(g))
+            for c, g in grouped.items()
+        },
+        "ai_by": {
+            k: (str(v.get("provider", "")), str(v.get("model", "")))
+            for k, v in (record.get("ai_by") or {}).items()
+            if isinstance(v, Mapping)
+        },
+    }
+
+
 def choices_of(record: Mapping[str, Any] | None) -> dict[str, Any]:
     """The choices a recorded step made, to clean again from them (its kinds kept)."""
     if record is None:
@@ -1259,6 +1368,7 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
 __all__ = [
     "AI",
     "CAPITALS",
+    "CASE",
     "CASE_SHARE",
     "CHOSEN",
     "CLOSE",
@@ -1266,7 +1376,6 @@ __all__ = [
     "FIRST_LETTER",
     "FOLD",
     "GROUPING",
-    "GROUPING_SHARE",
     "LEGACY_FOLD",
     "MAX_VALUES",
     "MEANINGS",
@@ -1287,6 +1396,7 @@ __all__ = [
     "changes",
     "choices_of",
     "clean_value",
+    "documented",
     "fold",
     "free_text",
     "give",

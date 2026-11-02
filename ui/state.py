@@ -1098,6 +1098,10 @@ class AppState:
         self._after_data_change()
         return True
 
+    def record_step(self, step: str, params: dict[str, Any] | None, description: str) -> None:
+        """Trace a step that changes no data (core.session.DataSession.record)."""
+        self.session.record(step, params, description)
+
     def record_population_use(self) -> None:
         if self.session.loaded:
             with contextlib.suppress(PopulationError):

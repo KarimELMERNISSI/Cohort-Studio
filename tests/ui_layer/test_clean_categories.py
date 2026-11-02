@@ -17,7 +17,7 @@ from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
 from enrich.recode import (
-    CAPITALS,
+    CASE,
     CHOSEN,
     FIRST_LETTER,
     FOLD,
@@ -214,10 +214,10 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
     at = _open({"sex": SEX, "age": list(range(len(SEX)))})
     assert _one(at.selectbox, "clean_variable::").value == "sex"
     written, missing = _group(at, "written"), _group(at, "missing")
-    assert written.options == [  # the drawn labels
-        "`Female` → `F` · first-letter code · 1 row",
-        "`f` → `F` · capitals · 1 row",
-    ]
+    assert written.options == ["`Female` → `F` · first-letter code · 1 row"]  # the drawn labels
+    # a one-letter value: case may name a category (Kell K and k), so it is checked on its own
+    assert _group(at, "case").options == ["`f` → `F` · 1 row"]
+    assert _tick_all(at, "case") is None
     assert (
         missing.options
         == [  # n.a. names no meaning; unknown reads as unknown; the group's title says why
@@ -226,10 +226,16 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
         ]
     )
     assert not written.value and not missing.value  # offered, never applied
-    written.select("Female").select("f").run()
+    written.select("Female").run()
+    _group(at, "case").select("f").run()
     _group(at, "missing").select("unknown").run()
     _ok(at)
     _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
+    assert at.button(
+        key="clean_apply::sex"
+    ).disabled  # f and F may be two categories: say why they are one
+    _one(at.text_input, "clean_reason::").input("f is the code F written in lower case").run()
+    _ok(at)
     assert at.get("plotly_chart")
     before = at.session_state["data"].copy()
     at.button(key="clean_apply::sex").click().run()
@@ -242,10 +248,11 @@ def test_the_record_names_what_was_chosen_and_the_fold_as_a_rule() -> None:
     assert params["mapping"] == {"Female": "F", "f": "F", "unknown": None, "n.a.": None}
     assert params["kinds"] == {
         "Female": FIRST_LETTER,
-        "f": CAPITALS,
+        "f": CASE,
         "unknown": MISSING_CODE,
         "n.a.": CHOSEN,
     }
+    assert params["groupings"]["F"]["reason"] == "f is the code F written in lower case"
     assert params["missing_meaning"] == {"unknown": UNKNOWN, "n.a.": NOT_APPLICABLE}
     assert (params["values_before"], params["values_after"], params["rows_set_to_missing"]) == (
         7,
@@ -422,15 +429,15 @@ def _tick_all(at: AppTest, name: str):
 
 
 def test_tick_all_ticks_every_offer_of_a_group() -> None:
-    at = _open({"sex": SEX})
+    at = _open({"sex": ["F"] * 30 + ["M"] * 30 + ["Female", "male", "MALE", "unknown"]})
     button = _tick_all(at, "written")
-    assert button is not None and button.label == "Tick all 2"
-    _group(at, "written").select("f").run()
+    assert button is not None and button.label == "Tick all 3"
+    _group(at, "written").select("MALE").run()
     _ok(at)
-    assert _tick_all(at, "written").label == "Tick the other 1"
+    assert _tick_all(at, "written").label == "Tick the other 2"
     _tick_all(at, "written").click().run()
     _ok(at)
-    assert set(_group(at, "written").value or []) == {"Female", "f"}
+    assert set(_group(at, "written").value or []) == {"Female", "male", "MALE"}
     assert not _group(at, "missing").value  # the other groups untouched
 
 
@@ -487,12 +494,16 @@ def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_propose
     ]  # A to Z, no Homme
     assert any("The AI engine proposed 1 correspondence" in c.value for c in at.caption)
     group = _group(at, "ai")
-    assert group.options == [
-        "`Femme` → `Female` · French for female · 6 rows"
-    ]  # Homme was not sent
+    assert group.options == ["`Femme` → `Female` · French for female · 6 → 40 rows"]  # both counts
     assert not group.value  # offered, never applied
     assert _tick_all(at, "ai") is None
     group.select("Femme").run()
+    _ok(at)
+    # two categories of 6 and 40 rows merged on the model's word: the user says why; its words are a hint only
+    assert at.button(key="clean_apply::sex").disabled
+    reason = _one(at.text_input, "clean_reason::")
+    assert reason.value == "" and "French for female" in (reason.placeholder or "")
+    reason.input("Femme is French for Female").run()
     _ok(at)
     at.button(key="clean_apply::sex").click().run()
     _ok(at)
@@ -507,7 +518,7 @@ def test_the_ai_engine_proposes_after_a_preview_and_the_record_names_who_propose
             "values_held": 1,
         }
     }
-    assert params["groupings"] == {}  # a synonym, ticked: one category written two ways
+    assert params["groupings"]["Female"]["reason"] == "Femme is French for Female"
     # written again in another session: who proposed is kept
     at.session_state["clean_ai"] = {}
     at.session_state["clean_manual"] = {}
@@ -556,7 +567,7 @@ def test_a_pill_reads_what_the_table_did() -> None:
     _ok(at)
     _edit(at, {str(_row(at, "Female")): {"Clean value": "Female"}})
     assert "Female" not in (_group(at, "written").value or [])
-    _group(at, "written").select("f").run()
+    _group(at, "case").select("f").run()
     _ok(at)
     assert at.session_state["clean_manual"]["sex"]["mapping"] == {"f": "F"}
 
@@ -593,3 +604,26 @@ def test_the_model_is_read_from_a_real_connector_s_configuration() -> None:
     engine = type("Engine", (), {})()
     engine.llm = OllamaChatConnector(config=ProviderConfig(model_name="gpt-oss:120b-cloud"))
     assert engine_model(engine) == "gpt-oss:120b-cloud"
+
+
+def test_a_corrected_meaning_of_missing_is_recorded_though_the_copy_is_the_same() -> None:
+    """Apply wrote nothing when the copy's values were unchanged, yet the page then showed the correction as
+    recorded, and Apply stayed offered."""
+    at = _open({"status": ["yes"] * 40 + ["no"] * 40 + ["n.a."] * 3})
+    _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
+    at.button(key="clean_apply::status").click().run()
+    _ok(at)
+    assert at.button(key="clean_apply::status").disabled  # nothing changed since it was written
+    steps = len(at.session_state["transformation_manager"].history)
+    _set_to_missing(at, ["n.a."], "declined")
+    assert not at.button(key="clean_apply::status").disabled  # the record says another thing
+    at.button(key="clean_apply::status").click().run()
+    _ok(at)
+    history = at.session_state["transformation_manager"].history
+    assert len(history) == steps + 1 and history[-1]["params"]["missing_meaning"] == {
+        "n.a.": "declined"
+    }
+    assert any("Recorded the corrected choices" in s.value for s in at.success)
+    assert at.button(key="clean_apply::status").disabled
+    replayed = apply_steps(at.session_state["data"].drop(columns=["status_clean"]), history[-2:])
+    assert replayed.error is None and not replayed.warnings

@@ -14,6 +14,7 @@ import pytest
 
 from enrich.recode import (
     CAPITALS,
+    CASE,
     CHOSEN,
     CLOSE,
     DECLINED,
@@ -30,6 +31,7 @@ from enrich.recode import (
     Offer,
     candidates,
     changes,
+    documented,
     fold,
     give,
     groupings,
@@ -95,7 +97,9 @@ def test_spaces_fold_into_the_value_with_its_spaces_collapsed() -> None:
 
 def test_capitals_never_fold_they_are_offered() -> None:
     """Case can name a category (Kell K and k, anti-k and anti-K, Rh Ccdee and ccdee): a case variant is offered at
-    any row count, never folded (the rules of 30 October folded anti-k into anti-K, MALE into Male)."""
+    any row count, never folded (the rules of 30 October folded anti-k into anti-K, MALE into Male). A word's variant
+    of a typo's size is the same word written another way; two sites writing a word two ways in many rows, a case to
+    check."""
     assert fold({"Luxembourg": 300, "luxembourg": 2}) == {}
     assert _offers({"Luxembourg": 300, "luxembourg": 2})["luxembourg"] == (
         "Luxembourg",
@@ -104,7 +108,7 @@ def test_capitals_never_fold_they_are_offered() -> None:
     )
     assert _offers({"Luxembourg": 300, "luxembourg": 200})["luxembourg"] == (
         "Luxembourg",
-        CAPITALS,
+        CASE,
         None,
     )
     assert (
@@ -137,17 +141,38 @@ def test_capitals_never_fold_they_are_offered() -> None:
         },  # Rh: capitals inside a word, in the column
     ],
 )
-def test_in_a_code_or_where_capitals_sit_inside_words_case_never_folds(
+def test_in_a_code_or_where_capitals_sit_inside_words_case_is_offered_to_check(
     counts: dict[str, int],
 ) -> None:
+    """Never folded, and never in the group that "Tick all" ticks: one click turned 9 Rh phenotypes, 153 D-negative
+    rows among them, into CcDee."""
     assert fold(counts) == {}
     assert all(
-        o.why == CAPITALS for o in suggest(counts).offers if o.clean is not None and o.value != "Kk"
+        o.why == CASE for o in suggest(counts).offers if o.clean is not None and o.value != "Kk"
     )
 
 
+@pytest.mark.parametrize(
+    "counts",
+    [
+        {"anti-K": 40, "anti-k": 2},  # a one-letter word: the antibody
+        {"K+": 300, "k+": 3},  # Kell
+        {"Luxembourg": 300, "luxembourg": 2, "CcDee": 5},  # a column that writes case codes
+        {"Female": 300, "FEMALE": 40},  # many rows: two sites, or two categories
+    ],
+)
+def test_a_case_variant_is_one_word_only_in_plain_words_of_a_typo_s_size(
+    counts: dict[str, int],
+) -> None:
+    variant = min(
+        (v for v in counts if v.casefold() == max(counts, key=counts.get).casefold()),
+        key=counts.get,
+    )
+    assert _offers(counts)[variant][1] == CASE
+
+
 def test_a_code_s_tie_takes_capitals() -> None:
-    assert _offers({"ab": 3, "AB": 3, "x": 400})["ab"][:2] == ("AB", CAPITALS)
+    assert _offers({"ab": 3, "AB": 3, "x": 400})["ab"][:2] == ("AB", CASE)
 
 
 def test_a_one_letter_code_and_the_only_value_it_begins_are_offered_never_applied() -> None:
@@ -156,11 +181,11 @@ def test_a_one_letter_code_and_the_only_value_it_begins_are_offered_never_applie
     assert (
         Offer("Female", "F", FIRST_LETTER) in offers and Offer("male", "M", FIRST_LETTER) in offers
     )
-    assert {o.value: o.why for o in offers if o.why == CAPITALS} == {
+    assert {o.value: o.why for o in offers if o.why in (CAPITALS, CASE)} == {
         "MALE": CAPITALS,
         "female": CAPITALS,
-        "f": CAPITALS,
-        "m": CAPITALS,
+        "f": CASE,  # one letter: Kell k and K are two antigens
+        "m": CASE,
     }
     assert _offers({"Yes": 300, "Y": 4, "No": 200, "N": 3}) == {
         "Y": ("Yes", FIRST_LETTER, None)
@@ -287,7 +312,9 @@ def test_codes_for_unknown_are_offered_as_unknown_and_the_others_ask_what_they_m
         "Ne sait pas": (None, MISSING_CODE, UNKNOWN),
         "Non renseigné": (None, MISSING_CODE, UNKNOWN),
     }
-    for code in ("n.a.", "NR", "none", "ND", "NK", "-", "N/A", "NC", "SO", "Refus", "Not tested"):
+    for code in ("n.a.", "NR", "none", "ND", "NK", "-", "N/A", "NC", "SO", "Refus", "Not tested",
+                 "Not recorded", "Not assessed", "Pending", "Awaiting result", "Inconclusive", "Don’t know",
+                 "Prefer not to say", "Non précisé", "Manquant", "N/K"):  # fmt: skip
         assert _offers({"pre": 300, "post": 200, code: 40})[code] == (None, MISSING_CODE, None), (
             code
         )
@@ -488,34 +515,43 @@ def test_the_record_always_gives_the_preview() -> None:
         assert set(kinds) == set(mapping)
 
 
-def test_merging_categories_by_hand_is_a_grouping_and_an_offer_is_not() -> None:
+def test_a_merge_no_offer_relation_joins_is_a_grouping_whoever_proposed_it() -> None:
+    """One test, whoever proposed the merge: the user, an offer or the AI engine. A merge the AI proposed was never a
+    grouping, and the same merge typed by hand was one; a hand merge of unrelated words under 5 % of rows was none."""
     nyha = {"II": 526, "III": 396, "I": 186, "IV": 40}
-    assert groupings(nyha, {"IV": "III"}, {"IV": CHOSEN}) == {
-        "III": ["III", "IV"]
-    }  # 4 %, yet two categories
-    assert groupings(nyha, {"III": "III-IV", "IV": "III-IV"}, {"III": CHOSEN, "IV": CHOSEN}) == {
-        "III-IV": ["III", "IV"]
-    }
-    assert groupings({"M": 90, "m": 10}, {"m": "M"}, {"m": CAPITALS}) == {}  # an offer
+    assert groupings(nyha, {"IV": "III"}) == {"III": ["III", "IV"]}  # 4 %, yet two categories
+    assert groupings(nyha, {"III": "III-IV", "IV": "III-IV"}) == {"III-IV": ["III", "IV"]}
+    assert groupings({"F": 400, "Female": 1}, {"Female": "F"}) == {}  # a first letter
     assert (
-        groupings({"F": 400, "Female": 1}, {"Female": "F"}, {"Female": CHOSEN}) == {}
-    )  # a first letter
-    assert groupings({"F": 400, "Female": 300}, {"Female": "F"}, {"Female": CHOSEN}) == {
-        "F": ["F", "Female"]
-    }
+        groupings({"F": 400, "Female": 300}, {"Female": "F"}) == {}
+    )  # the code and its word, however many rows
+    assert groupings({"Male": 300, "MALE": 2}, {"MALE": "Male"}) == {}  # one word, a typo's rows
+    assert groupings({"Male": 300, "MALE": 200}, {"MALE": "Male"}) == {
+        "Male": ["MALE", "Male"]
+    }  # two sites?
+    assert groupings({"M": 90, "m": 10}, {"m": "M"}) == {
+        "M": ["M", "m"]
+    }  # Kell K and k are two antigens
+    rh = {"ccdee": 140, "CcDee": 400, "CCDee": 250}
+    assert groupings(rh, {"CCDee": "CcDee"}) == {
+        "CcDee": ["CCDee", "CcDee"]
+    }  # a column of case codes
     assert (
-        groupings({"Male": 300, "MALE": 200}, {"MALE": "Male"}, {"MALE": CHOSEN}) == {}
-    )  # one word
-    # words that name two categories, merged by hand, whatever their rows; a typo's fix is no grouping
+        groupings({"Luxembourg": 400, "Luxembourgg": 2}, {"Luxembourgg": "Luxembourg"}) == {}
+    )  # one letter
+    assert groupings({"Pétange": 300, "Petange": 200}, {"Petange": "Pétange"}) == {}  # accents
     stable = {"Stable angina": 300, "Unstable angina": 4}
-    assert groupings(stable, {"Unstable angina": "Stable angina"}, {"Unstable angina": CHOSEN}) == {
+    assert groupings(stable, {"Unstable angina": "Stable angina"}) == {
         "Stable angina": ["Stable angina", "Unstable angina"]
     }
+    for small in ({"Negative": 400, "Pending": 3}, {"Ibuprofen": 300, "Naproxen": 4}):
+        rare, common = sorted(small, key=small.get)
+        assert groupings(small, {rare: common}) == {common: sorted(small)}, small
+    # a typo early in a word is no offer: its fix says why too
     typo = {"Diabetes mellitus": 300, "Diabetes melitus": 2}
-    assert (
-        groupings(typo, {"Diabetes melitus": "Diabetes mellitus"}, {"Diabetes melitus": CHOSEN})
-        == {}
-    )
+    assert groupings(typo, {"Diabetes melitus": "Diabetes mellitus"}) == {
+        "Diabetes mellitus": ["Diabetes melitus", "Diabetes mellitus"]
+    }
 
 
 def test_the_changes_are_counted_by_kind_and_meaning() -> None:
@@ -781,3 +817,19 @@ def test_the_copy_keeps_the_marks_of_the_imputed_values_it_copies() -> None:
     new_single, new_exact = sort_filled("recode_levels", params, before, after, single, exact)
     assert new_single["sex"].tolist() == [1, 2] and new_single["sex_clean"].tolist() == [1]
     assert new_exact["sex_clean"].tolist() == [0]
+
+
+def test_a_corrected_meaning_or_reason_documents_another_record() -> None:
+    """The copy is the same, the record is not: "declined" in place of "not applicable", another reason."""
+    first = {
+        "mapping": {"n.a.": None, "IV": "III"},
+        "kinds": {"n.a.": CHOSEN, "IV": "grouping"},
+        "kept": [],
+        "missing_meaning": {"n.a.": NOT_APPLICABLE},
+        "groupings": {"III": {"reason": "advanced", "values": ["III", "IV"], "each_5_rows": True}},
+    }
+    assert documented(first) == documented(dict(first))
+    assert documented(first) != documented({**first, "missing_meaning": {"n.a.": DECLINED}})
+    other = {**first, "groupings": {"III": {"reason": "pre-specified", "values": ["III", "IV"]}}}
+    assert documented(first) != documented(other)
+    assert documented({**first, "kept": ["b", "a"]}) == documented({**first, "kept": ["a", "b"]})
