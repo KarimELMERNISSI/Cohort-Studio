@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import json
 from collections import defaultdict
 from typing import Any
 
@@ -43,7 +44,6 @@ from enrich.recode import (
     OFFER_KINDS,
     RESULT,
     SPACES,
-    SPACES_AND_CAPITALS,
     SPELLING,
     VARIANT,
     Candidate,
@@ -70,7 +70,6 @@ from enrich.recode import (
     recorded,
     replaceable,
     resolve,
-    rule_of,
     sort_key,
     suggest,
     swaps,
@@ -121,7 +120,6 @@ WORDS = {
     CAPITALS: "capitals",
     CASE: "case",
     SPACES: "spaces",
-    SPACES_AND_CAPITALS: "spaces and capitals",
     FIRST_LETTER: "first-letter code",
     VARIANT: "spelling variant",
     SPELLING: "close spelling",
@@ -187,6 +185,20 @@ def _again(column: str) -> None:
     _choices(column)["revision"] += 1
 
 
+def _counts_fp(counts: dict[str, int]) -> str:
+    """The values as written and their rows: the choices made on them start again once they change."""
+    text = json.dumps(sorted(counts.items()), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _unapplied(held: dict[str, Any], fresh: dict[str, Any]) -> bool:
+    """Whether the choices held say another thing than those the column starts again from."""
+    parts = ("mapping", "kept", "meanings", "reasons", "results")
+    return any(
+        held.get(p) not in (None, fresh.get(p)) and (held.get(p) or fresh.get(p)) for p in parts
+    )
+
+
 def _cell(value: Any) -> Any:
     """A cell as the browser sends it: a cleared one comes back None or NaN."""
     return None if value is None or (isinstance(value, float) and pd.isna(value)) else value
@@ -208,9 +220,11 @@ def _table_changed(column: str, key: str, values: list[str], counts: dict[str, i
     choices = _choices(column)
     shown = choices.get("shown") or {}
     edits = _edits(key)
+    # the cells read, for this table and these values in this order: rows are matched to values by position
     seen = choices.get("seen") or {}
-    before = seen.get("rows", {}) if seen.get("key") == key else {}
-    choices["seen"] = {"key": key, "rows": edits}
+    same = seen.get("key") == key and seen.get("values") == list(values)
+    before = seen.get("rows", {}) if same else {}
+    choices["seen"] = {"key": key, "values": list(values), "rows": edits}
     for row, cells in edits.items():
         changed = {
             name: v for name, v in cells.items() if before.get(row, {}).get(name, _UNSEEN) != v
@@ -292,12 +306,7 @@ def _buttons(column: str, keys: dict[str, str], counts: dict[str, int], how: str
     _again(column)
 
 
-def _shown(
-    counts: dict[str, int],
-    spellings: dict[str, str],
-    reasons: dict[str, str],
-    choices: dict[str, Any],
-):
+def _shown(counts: dict[str, int], spellings: dict[str, str], choices: dict[str, Any]):
     """Each value as written: its clean value (None: missing), what missing means there, and why."""
     mapping, kinds, kept, meanings = (
         choices["mapping"],
@@ -317,9 +326,8 @@ def _shown(
             why = "kept as written"
         elif first is not None and first == value:
             why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
-        elif value != spelling:  # folded: why, or the spelling whose choice it follows
-            folded = WORDS.get(reasons.get(value, SPACES), SPACES)
-            why = folded if clean == spelling else f"follows {show_level(spelling)}"
+        elif value != spelling:  # folded: its spaces, or the spelling whose choice it follows
+            why = WORDS[SPACES] if clean == spelling else f"follows {show_level(spelling)}"
         elif first is not None:
             why = WORDS.get(kinds.get(first, CHOSEN), kinds.get(first, CHOSEN))
         else:
@@ -477,16 +485,29 @@ def category_editor(
     scope = _scope(state)
     counts = level_counts(df[column])
     hints = suggest(counts)
-    spellings, reasons = hints.spellings, hints.reasons
+    spellings = hints.spellings
     cleaned_into = recoded_columns(steps).get(column, "")
     store = st.session_state.setdefault(STORE, {})
-    if column not in store:
-        target = cleaned_into if cleaned_into in df.columns else f"{column}_clean"
+    # the choices are those of these values: when a step changed the column (a merge, an imputation, a freeze), they
+    # start again from its last recode, and the page says so if that drops a choice not yet applied
+    fp = _counts_fp(counts)
+    held = store.get(column)
+    moved = held is not None and held.get("counts_fp", fp) != fp
+    if held is None or moved:
+        last = last_record(
+            steps, column, cleaned_into if cleaned_into in df.columns else f"{column}_clean"
+        )
         store[column] = {
-            **choices_of(last_record(steps, column, target)),
-            "revision": 0,
+            **choices_of(last),
+            "revision": (held or {}).get("revision", -1) + 1,
             "shown": {},
         }
+        if moved and held is not None and _unapplied(held, store[column]):
+            st.caption(
+                f":material/info: The values of {as_code(column)} changed since your last choices (a step changed "
+                f"the data): the choices start again from {'its last recode' if last else 'the values as written'}."
+            )
+    store[column]["counts_fp"] = fp
     choices = store[column]
     order = str(st.session_state.get(f"clean_order::{scope}::{column}") or A_TO_Z)
     keys = _keys(scope, column, choices["revision"], order)
@@ -514,7 +535,7 @@ def category_editor(
         into = f"write {as_code(name)} again" if replaces else f"add {as_code(name)}"
         _offer_groups(column, scope, choices, counts, (*hints.offers, *proposed), into)
 
-    shown = _shown(counts, spellings, reasons, choices)
+    shown = _shown(counts, spellings, choices)
     full = plan(
         counts, {k: v for k, v in choices["mapping"].items() if v != ""}, kept=choices["kept"]
     )
@@ -648,7 +669,7 @@ def category_editor(
             record = recorded(counts, choices)
         except ValueError:  # never: the record would not give the preview
             record = None
-        grouped = _grouped(counts, record, choices)
+        grouped = groupings(counts, record[0], kept=record[2]) if record is not None else {}
         for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
             typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
             if typed is not None:
@@ -730,25 +751,6 @@ def _grouping_question(clean: str, parts: list[str]) -> str:
     return f"Why group {named} {how} {as_code(show_level(clean))}?"
 
 
-def _grouped(
-    counts: dict[str, int], record: tuple | None, choices: dict[str, Any]
-) -> dict[str, list[str]]:
-    """The clean values that group categories (``groupings``), and those a reason was given for that still merge two
-    spellings or more: a grouping said and recorded stays one (a record of an earlier rule, cleaned again, kept its
-    grouping, and Apply came back for nothing)."""
-    if record is None:
-        return {}
-    grouped = groupings(counts, record[0], kept=record[2])
-    full = plan(counts, record[0], kept=record[2])
-    spellings = suggest(counts, near=False).spellings
-    for clean, reason in choices["reasons"].items():
-        if reason and clean not in grouped:
-            parts = sorted({spellings.get(v, v) for v in counts if full.get(v, v) == clean})
-            if len(parts) > 1:
-                grouped[clean] = parts
-    return grouped
-
-
 def _blocked(
     df, steps, column, target, cleaned_into, counts, choices, shown, full, grouped, record
 ) -> str:
@@ -782,12 +784,10 @@ def _blocked(
         return "Nothing to change: every value keeps how it is written."
     last = last_record(steps, column, target) if replaces else None
     if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
-        # the copy is what that recode wrote, with its rule: the same values and the same record (what missing means,
-        # why values are grouped, who proposed) would write nothing new
+        # the copy is what that recode wrote: the same values and the same record (what missing means, why values are
+        # grouped, who proposed) would write nothing new
         then = choices_of(last)
-        before = outcome(
-            counts, then["mapping"], then["meanings"], kept=then["kept"], fold_rule=rule_of(last)
-        )
+        before = outcome(counts, then["mapping"], then["meanings"], kept=then["kept"])
         same = before == outcome(counts, record[0], record[3], kept=record[2])
         if same and documented(last) == documented(_record_of(record, grouped, choices, counts)):
             return f"Nothing changed since {as_code(target)} was written."

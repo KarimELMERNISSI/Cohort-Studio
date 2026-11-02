@@ -106,6 +106,14 @@ def _app(frame: dict, other: dict | None = None, ai: dict | None = None) -> None
         )
         if switch:
             st.session_state["other_in"] = True
+    if st.session_state.pop(
+        "change_source", False
+    ):  # a later step that changes a value of the source
+        changed = state.base.copy()
+        changed.loc[changed.index[-1], "sex"] = "F"
+        state.commit_change(
+            changed, "targeted_imputation", {"target_variable": "sex"}, "Filled sex"
+        )
     if st.session_state.pop("change_copy", False):  # a later step that fills a value of the copy
         changed = state.base.copy()
         changed.loc[changed.index[-1], "sex_clean"] = "F"
@@ -650,24 +658,6 @@ def test_a_corrected_meaning_of_missing_is_recorded_though_the_copy_is_the_same(
     assert replayed.error is None and not replayed.warnings
 
 
-def test_a_grouping_given_a_reason_stays_one() -> None:
-    """A merge recorded as a grouping with its reason, cleaned again under a rule that reads it as a typo's fix,
-    stays a grouping: dropping it changed the record, and Apply came back although nothing had changed."""
-    from app_pages.clean_categories import _grouped
-    from enrich.recode import new_choices, recorded
-
-    counts = {"Diabetes mellitus": 300, "Diabetes melitus": 2}
-    choices = new_choices()
-    choices["mapping"] = {"Diabetes melitus": "Diabetes mellitus"}
-    choices["kinds"] = {"Diabetes melitus": "grouping"}
-    record = recorded(counts, choices)
-    assert _grouped(counts, record, choices) == {}  # a typo's fix asks no reason
-    choices["reasons"] = {"Diabetes mellitus": "the earlier record's reason"}
-    assert _grouped(counts, record, choices) == {
-        "Diabetes mellitus": ["Diabetes melitus", "Diabetes mellitus"]
-    }
-
-
 def _popover(at: AppTest, prefix: str):
     found = []
 
@@ -825,3 +815,20 @@ def test_the_grouping_question_names_what_joins_which_value() -> None:
     assert _grouping_question("Cardiovascular", ["Hypertension", "Stroke"]) == (
         "Why group `Hypertension` and `Stroke` as `Cardiovascular`?"
     )
+
+
+def test_choices_start_again_when_a_step_changes_the_values() -> None:
+    """A choice made before a merge covered the rows the merge added, and the cells already read were matched to other
+    values once the rows moved: the choices are those of the values they were made on."""
+    at = _open({"sex": SEX})
+    _set_to_missing(at, ["n.a."], NOT_APPLICABLE)
+    revision = at.session_state["clean_manual"]["sex"]["revision"]
+    at.session_state["change_source"] = True  # n.a. now holds one row, F one more
+    at.run()
+    _ok(at)
+    store = at.session_state["clean_manual"]["sex"]
+    assert store["mapping"] == {} and store["revision"] > revision
+    assert any("changed since your last choices" in c.value for c in at.caption)
+    at.run()
+    _ok(at)
+    assert not any("changed since your last choices" in c.value for c in at.caption)  # said once

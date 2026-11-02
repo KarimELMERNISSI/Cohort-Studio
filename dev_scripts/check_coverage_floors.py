@@ -33,7 +33,7 @@ from pathlib import Path
 # last row, and the Date checks tab's columns already dates and extraction date (M6, 2026-10-30).
 # enrich to 85 at 87.7 with the tests of the recoding (Data > Clean), explore to 77 at 79.1 with those of Domain
 # Validity's checks (M6, 2026-10-30, measured locally: CI stopped at two failing tests before its floors).
-# enrich to 87 at 89.2 with the tests of the two fold rules of 30 October and of the AI proposals' guard, explore to 80
+# enrich to 87 at 89.2 with the tests of the fold rule and of the AI proposals' guard, explore to 80
 # at 82.9 with those of Domain Validity's severity and rows on recorded values (M6, 2026-10-31).
 # app_pages to 64 at 66.0 with the tests of the Categories page's table, AI popover and corrected records (M6,
 # 2026-11-02).

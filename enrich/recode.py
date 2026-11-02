@@ -8,8 +8,7 @@ What the step records, and what the replay recomputes:
 - the fold rule (:data:`FOLD`), never the values it folds: a value written with spaces before, after or repeated
   inside takes its spelling with the spaces collapsed. Capitals are never folded: case can name a category (Kell K
   and k, anti-k and anti-K, g/L and G/L, Rh Ccdee and ccdee), so a case variant is offered. The replay folds the
-  values it reads with the rule the step recorded; a changed rule takes a new id, and the two earlier rules recorded
-  under :data:`LEGACY_FOLD` are told apart by the record (``rule_of``);
+  values it reads with this rule, and refuses a step recorded under another (an earlier version's: clean again);
 - the user's choices (``mapping``): a choice for a spelling applies to its whole group, a folded value's own choice
   to itself, a clean value that is itself given another is followed (MALE → male → M), and ``kept`` lists the folds
   put back as written;
@@ -61,14 +60,6 @@ from rapidfuzz.distance import OSA
 from core.fingerprint import frame_fingerprint
 
 FOLD = "spaces"  # the fold rule's id, recorded with the step: a changed rule takes a new id
-# the id of the two rules of 30 October 2026, which folded capitals too: kept for the replay of their steps
-LEGACY_FOLD = "spaces_and_capitals"
-_FIRST_FOLD = (
-    "spaces_and_capitals, first rule"  # never recorded: the first of the two (``rule_of``)
-)
-CASE_SHARE = (
-    0.05  # the earlier rules: a case variant under this share of its group's rows could be a typo
-)
 RARE_SHARE, RARE_ROWS = (
     0.01,
     5,
@@ -78,7 +69,7 @@ RARE_SHARE, RARE_ROWS = (
 CLOSE_SHARE = 0.05
 MAX_VALUES = 200  # more distinct values: free text or an identifier, not listed
 # why a value is given its clean value (stored with the step: never renamed)
-SPACES, CAPITALS, SPACES_AND_CAPITALS = "spaces", "capitals", "spaces and capitals"
+SPACES, CAPITALS = "spaces", "capitals"
 FIRST_LETTER, VARIANT, SPELLING, CLOSE = "first letter", "variant", "spelling", "close spelling"
 MISSING_CODE, CHOSEN, GROUPING = "missing code", "chosen", "grouping"
 AI = "ai"  # proposed by the AI engine (a synonym, a translation): checked here, ticked by the user
@@ -297,10 +288,8 @@ class Offer:
 
 @dataclass(frozen=True)
 class Suggestions:
-    spellings: dict[
-        str, str
-    ]  # a value as written -> the spelling the fold gives it, where they differ
-    reasons: dict[str, str]  # the same values -> SPACES, CAPITALS or SPACES_AND_CAPITALS
+    # a value as written -> the spelling the fold gives it (its spaces collapsed), where they differ
+    spellings: dict[str, str]
     offers: tuple[Offer, ...]  # the most frequent first
 
 
@@ -354,12 +343,6 @@ def _words(text: str) -> list[str]:
     return _JOINING_HYPHEN.sub(" ", text).split()
 
 
-def _why(value: str, spelling: str) -> str:
-    spaces = _spaced(value) != value
-    capitals = _spaced(value) != spelling
-    return SPACES_AND_CAPITALS if spaces and capitals else SPACES if spaces else CAPITALS
-
-
 def _case_rank(text: str, code: bool) -> int:
     """A word: capitalised first (Female), then lower case (male), then capitals (MALE); a code: capitals first."""
     letters = [c for c in text if c.isalpha()]
@@ -406,44 +389,10 @@ def fold(counts: Mapping[str, int]) -> dict[str, str]:
     return {value: _spaced(value) for value in counts if _spaced(value) != value}
 
 
-def rule_of(params: Mapping[str, Any]) -> str | None:
-    """
-    The fold rule a recorded step used (None: none, its mapping lists every change). Two rules were recorded under
-    :data:`LEGACY_FOLD` on 30 October 2026: the first (3ea6198, 747ccc3), then the second (191a550 on), whose records
-    alone hold ``values_fp``; each replays as it wrote.
-    """
-    rule = params.get("fold")
-    return _FIRST_FOLD if rule == LEGACY_FOLD and "values_fp" not in params else rule
-
-
-def _first_fold(counts: Mapping[str, int]) -> dict[str, str]:
-    """
-    The first rule recorded under :data:`LEGACY_FOLD` (replays only): spaces, and a case variant of a group's spelling
-    (the most rows; on a tie capitalised, then lower case) whose differing words hold 4 letters or more, each in lower
-    case, capitals or capitalised; in a group written in lower case or capitals only, any variant under
-    :data:`CASE_SHARE` of its rows. No chain.
-    """
-    takes: dict[str, str] = {}
-    for rows in _groups(counts):
-        spelling, total = (
-            min(rows, key=lambda s: (-rows[s], _first_case_rank(s), s)),
-            sum(rows.values()),
-        )
-        cased = all(s in (s.lower(), s.upper()) for s in rows)
-        for variant, n in rows.items():
-            free = _case_free(variant, spelling) or (cased and n < CASE_SHARE * total)
-            takes[variant] = spelling if free else variant
-    return {value: takes[_spaced(value)] for value in counts if takes[_spaced(value)] != value}
-
-
-def _first_case_rank(text: str) -> int:
-    letters = [c for c in text if c.isalpha()]
-    if letters and letters[0].isupper() and any(c.islower() for c in letters):
-        return 0
-    return 1 if text == text.lower() else 2
-
-
 def _case_free(variant: str, spelling: str) -> bool:
+    """Whether two spellings differ only in words whose capitals carry no meaning: 4 letters or more, each in lower
+    case, capitals or capitalised."""
+
     def plain_case(word: str) -> bool:
         return word in (word.lower(), word.upper(), word.capitalize())
 
@@ -495,26 +444,6 @@ def _one_category(a: str, b: str, held: Mapping[str, int], coded: bool) -> bool:
         return True
     rare, common = sorted((a, b), key=lambda s: (held.get(s, 0), s))
     return _relation(a, b) == VARIANT or _spelling_kind(rare, common, held) is not None
-
-
-def _legacy_fold(counts: Mapping[str, int]) -> dict[str, str]:
-    """The second rule recorded under :data:`LEGACY_FOLD` (replays only): spaces, and a word's case variant in a
-    typo's number of rows."""
-    meaningful = any(
-        _inner_capital(value) for value in counts
-    )  # the column's capitals carry meaning
-    takes: dict[str, str] = {}  # a spelling (spaces collapsed) -> the one it takes
-    for rows in _groups(counts):
-        spelling, total = _spelling(rows), sum(rows.values())
-        word = any(
-            len(w) >= 4 for w in _words(spelling)
-        )  # in a code (Kell K, k; g/l, G/L), case can mean
-        for variant, n in rows.items():
-            typo = n <= RARE_ROWS and n < CASE_SHARE * total
-            takes[variant] = (
-                spelling if variant == spelling or (typo and word and not meaningful) else variant
-            )
-    return {value: takes[_spaced(value)] for value in counts if takes[_spaced(value)] != value}
 
 
 def _marked(text: str) -> bool:
@@ -713,7 +642,7 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
                 _, _, common, kind = min(close)
                 offers[rare] = Offer(rare, common, kind)
     ranked = tuple(sorted(offers.values(), key=lambda o: order.index(o.value)))
-    return Suggestions(spellings, {v: _why(v, s) for v, s in spellings.items()}, ranked)
+    return Suggestions(spellings, ranked)
 
 
 def _hop(
@@ -738,17 +667,15 @@ def resolve(
     spellings: Mapping[str, str],
     mapping: Mapping[str, str | None],
     kept: Collection[str],
-    *,
-    chain: bool = True,
 ) -> tuple[str | None, str | None, str | None]:
     """
     What one value as written becomes, the key of the first choice it follows (its kind's) and of the last (what
     missing means): as written when ``kept``; its own choice when the fold gave it a spelling and the mapping names
-    it; else its spelling's choice (its group's), or that spelling. With ``chain``, a clean value that is itself
-    given another is followed (MALE → male → M); a cycle (F → Female → F) takes the first choice only.
+    it; else its spelling's choice (its group's), or that spelling. A clean value that is itself given another is
+    followed (MALE → male → M); a cycle (F → Female → F) takes the first choice only.
     """
     clean, first = _hop(value, spellings, mapping, kept)
-    if not chain or first is None or clean is None:
+    if first is None or clean is None:
         return clean, first, first
     path, last, current = [value], first, clean
     while True:
@@ -769,39 +696,20 @@ def clean_value(
     spellings: Mapping[str, str],
     mapping: Mapping[str, str | None],
     kept: Collection[str],
-    *,
-    chain: bool = True,
 ) -> str | None:
     """What one value as written becomes (``resolve``)."""
-    return resolve(value, spellings, mapping, kept, chain=chain)[0]
-
-
-def _spellings(counts: Mapping[str, int], fold_rule: str | None) -> dict[str, str]:
-    rules = {FOLD: fold, LEGACY_FOLD: _legacy_fold, _FIRST_FOLD: _first_fold}
-    if fold_rule is not None and fold_rule not in rules:
-        raise ValueError(
-            f"unknown fold rule {fold_rule!r}; the rules are {FOLD!r} and {LEGACY_FOLD!r}"
-        )
-    return rules[fold_rule](counts) if fold_rule is not None else {}
-
-
-def _chains(fold_rule: str | None) -> bool:
-    """Whether a clean value that is itself given another is followed: from the second rule of 30 October 2026 on."""
-    return fold_rule in (FOLD, LEGACY_FOLD)
+    return resolve(value, spellings, mapping, kept)[0]
 
 
 def plan(
     counts: Mapping[str, int],
     mapping: Mapping[str, str | None],
     *,
-    fold_rule: str | None = FOLD,
     kept: Collection[str] = (),
 ) -> dict[str, str | None]:
-    """Each value as written that a recode changes -> its clean value (None: missing). ``fold_rule`` None: no fold and
-    no chain (a step recorded before the fold rule listed every change)."""
-    spellings, kept = _spellings(counts, fold_rule), set(kept)
-    chain = _chains(fold_rule)
-    full = {value: clean_value(value, spellings, mapping, kept, chain=chain) for value in counts}
+    """Each value as written that a recode changes -> its clean value (None: missing)."""
+    spellings, kept = fold(counts), set(kept)
+    full = {value: clean_value(value, spellings, mapping, kept) for value in counts}
     return {value: clean for value, clean in full.items() if clean != value}
 
 
@@ -811,14 +719,12 @@ def outcome(
     meanings: Mapping[str, str],
     *,
     kept: Collection[str] = (),
-    fold_rule: str | None = FOLD,
 ) -> dict[str, tuple[str | None, str | None]]:
-    """Each value as written -> what it becomes, and what missing means when it becomes missing (the preview; of a
-    recorded step, with the rule it recorded)."""
-    spellings, kept = _spellings(counts, fold_rule), set(kept)
+    """Each value as written -> what it becomes, and what missing means when it becomes missing (the preview)."""
+    spellings, kept = fold(counts), set(kept)
     out: dict[str, tuple[str | None, str | None]] = {}
     for value in counts:
-        clean, _, last = resolve(value, spellings, mapping, kept, chain=_chains(fold_rule))
+        clean, _, last = resolve(value, spellings, mapping, kept)
         out[value] = (clean, meanings.get(last) if clean is None and last is not None else None)
     return out
 
@@ -836,7 +742,6 @@ def recode_column(
     target: str,
     mapping: Mapping[str, str | None],
     *,
-    fold_rule: str | None = FOLD,
     kept: Collection[str] = (),
     replaces: bool = False,
 ) -> tuple[pd.DataFrame, int]:
@@ -851,17 +756,16 @@ def recode_column(
     if target in df.columns and not replaces:
         raise ValueError(f"{target!r} is already a column of the data")
     counts = level_counts(df[source])
-    full = plan(counts, mapping, fold_rule=fold_rule, kept=kept)
+    full = plan(counts, mapping, kept=kept)
     out = df.drop(columns=[target], errors="ignore")
     out.insert(out.columns.get_loc(source) + 1, target, recode(df[source], full))
     return out, sum(1 for value in counts if value not in full)
 
 
-def values_fp(counts: Mapping[str, int], fold_rule: str | None = FOLD) -> str:
-    """A fingerprint of the values as written and the spelling the fold gives each (with the rule a step recorded):
-    the replay says when the values it reads differ from those the step saw (a value swapped for another; under the
-    rules of 30 October 2026, a spelling that lost its majority)."""
-    spellings = _spellings(counts, fold_rule)
+def values_fp(counts: Mapping[str, int]) -> str:
+    """A fingerprint of the values as written and the spelling the fold gives each: the replay says when the values it
+    reads differ from those the step saw (a value swapped for another)."""
+    spellings = fold(counts)
     text = json.dumps(sorted((v, spellings.get(v, v)) for v in counts), ensure_ascii=False)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -1100,27 +1004,22 @@ def changes(
     mapping: Mapping[str, str | None],
     kinds: Mapping[str, str],
     *,
-    fold_rule: str | None = FOLD,
     kept: Collection[str] = (),
     meanings: Mapping[str, str] | None = None,
 ) -> dict[str, dict[str, list[int]]]:
     """
     The values a recode changes, counted by kind and meaning: ``{"by_kind": {kind: [values, rows]},
-    "set_to_missing": {meaning: [values, rows]}}``. A value takes the kind of the first choice it follows, or the
-    fold's reason; a kind or meaning holding one value gives that value's rows.
+    "set_to_missing": {meaning: [values, rows]}}``. A value takes the kind of the first choice it follows, or
+    :data:`SPACES` when the fold alone changes it; a kind or meaning holding one value gives that value's rows.
     """
-    spellings, kept, meanings = _spellings(counts, fold_rule), set(kept), meanings or {}
+    spellings, kept, meanings = fold(counts), set(kept), meanings or {}
     by_kind: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     missing: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for value, n in counts.items():
-        clean, first, last = resolve(value, spellings, mapping, kept, chain=_chains(fold_rule))
+        clean, first, last = resolve(value, spellings, mapping, kept)
         if clean == value:
             continue
-        kind = (
-            kinds.get(first, CHOSEN)
-            if first is not None
-            else _why(value, spellings.get(value, value))
-        )
+        kind = kinds.get(first, CHOSEN) if first is not None else SPACES
         tallies = [(by_kind, kind)]
         if clean is None:
             tallies.append((missing, meanings.get(last, "") if last is not None else ""))
@@ -1139,7 +1038,6 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     named = (
         "mapping",
         "kinds",
-        "reasons",
         "kept",
         "missing_meaning",
         "groupings",
@@ -1150,9 +1048,7 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     out = {k: v for k, v in params.items() if k not in named}
     if params.get("results"):  # the codes answered a result: counted, never named
         out["codes kept as results"] = len(params["results"])
-    chosen = (
-        params.get("kinds") or params.get("reasons") or {}
-    )  # "reasons": every change, before the fold rule
+    chosen = params.get("kinds") or {}
     out["choices"] = {
         kind: sum(1 for k in chosen.values() if k == kind) for kind in sorted(set(chosen.values()))
     }
@@ -1161,9 +1057,8 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     # a reason is free text, which may name the values: printed only beside values each held by 5 rows or more
     out["groupings"] = [
         f"{', '.join(g['values'])} grouped as {clean}: {g['reason']}"
-        if isinstance(g, Mapping) and g.get("each_5_rows")
-        else f"{len(g.get('values', ())) if isinstance(g, Mapping) else 'some'} values grouped (the reason is in "
-        "the trace)"
+        if g.get("each_5_rows")
+        else f"{len(g.get('values', ()))} values grouped (the reason is in the trace)"
         for clean, g in grouped.items()
     ]
     proposed: dict[tuple[str, str, str], int] = defaultdict(int)
@@ -1433,7 +1328,6 @@ def documented(record: Mapping[str, Any]) -> dict[str, Any]:
     records that document the same choices compare equal; a corrected meaning or reason does not, though the copy it
     writes is the same.
     """
-    grouped = record.get("groupings") or {}
     return {
         "mapping": dict(record.get("mapping") or {}),
         "kinds": dict(record.get("kinds") or {}),
@@ -1441,13 +1335,11 @@ def documented(record: Mapping[str, Any]) -> dict[str, Any]:
         "missing_meaning": dict(record.get("missing_meaning") or {}),
         "results": sorted(record.get("results") or ()),
         "reasons": {
-            str(c): (g.get("reason", "") if isinstance(g, Mapping) else str(g))
-            for c, g in grouped.items()
+            str(c): g.get("reason", "") for c, g in (record.get("groupings") or {}).items()
         },
         "ai_by": {
             k: (str(v.get("provider", "")), str(v.get("model", "")))
             for k, v in (record.get("ai_by") or {}).items()
-            if isinstance(v, Mapping)
         },
     }
 
@@ -1457,19 +1349,13 @@ def choices_of(record: Mapping[str, Any] | None) -> dict[str, Any]:
     if record is None:
         return new_choices()
     mapping = dict(record.get("mapping") or {})
-    kinds = dict(
-        record.get("kinds") or record.get("reasons") or {}
-    )  # "reasons": before the fold rule
-    grouped = record.get("groupings") or {}
+    kinds = dict(record.get("kinds") or {})
     return {
         "mapping": mapping,
         "kinds": {k: str(kinds.get(k, CHOSEN)) for k in mapping},
         "kept": list(record.get("kept") or []),
         "meanings": dict(record.get("missing_meaning") or {}),
-        "reasons": {
-            c: (g.get("reason", "") if isinstance(g, Mapping) else str(g))
-            for c, g in grouped.items()
-        },
+        "reasons": {c: g.get("reason", "") for c, g in (record.get("groupings") or {}).items()},
         "ai_by": {k: dict(v) for k, v in (record.get("ai_by") or {}).items() if k in mapping},
         "results": list(record.get("results") or []),
     }
@@ -1481,8 +1367,7 @@ def replaceable(
     """
     Whether ``target`` can be written again: it is the copy of ``source`` that the last recode wrote, and no later step
     changed it (its fingerprint still matches, or the recorded recode of the source as it is now still gives it, as
-    after a freeze that removed rows from both). A record without a fingerprint (before 747ccc3) is checked by the
-    recode alone.
+    after a freeze that removed rows from both).
     """
     record = last_record(steps, source, target)
     if record is None or target not in df.columns:
@@ -1496,7 +1381,6 @@ def replaceable(
             source,
             target,
             record.get("mapping") or {},
-            fold_rule=rule_of(record),
             kept=record.get("kept") or (),
             replaces=True,
         )
@@ -1562,14 +1446,12 @@ __all__ = [
     "AI",
     "CAPITALS",
     "CASE",
-    "CASE_SHARE",
     "CHOSEN",
     "CLOSE",
     "DECLINED",
     "FIRST_LETTER",
     "FOLD",
     "GROUPING",
-    "LEGACY_FOLD",
     "MAX_VALUES",
     "MEANINGS",
     "MISSING_CODE",
@@ -1577,7 +1459,6 @@ __all__ = [
     "OFFER_KINDS",
     "RESULT",
     "SPACES",
-    "SPACES_AND_CAPITALS",
     "SPELLING",
     "UNKNOWN",
     "VARIANT",
@@ -1610,7 +1491,6 @@ __all__ = [
     "replaceable",
     "report_params",
     "resolve",
-    "rule_of",
     "sort_key",
     "suggest",
     "swaps",

@@ -20,7 +20,6 @@ from enrich.recode import (
     DECLINED,
     FIRST_LETTER,
     FOLD,
-    LEGACY_FOLD,
     MEANINGS,
     MISSING_CODE,
     NOT_APPLICABLE,
@@ -45,7 +44,6 @@ from enrich.recode import (
     recoded_columns,
     recorded,
     report_params,
-    rule_of,
     sort_key,
     suggest,
     swaps,
@@ -83,9 +81,7 @@ def _offers(counts: dict[str, int]) -> dict[str, tuple[str | None, str, str | No
 def test_spaces_fold_into_the_value_with_its_spaces_collapsed() -> None:
     found = suggest(SEX)
     assert found.spellings == {"F ": "F", "M ": "M"}
-    assert found.reasons == {"F ": SPACES, "M ": SPACES}
     assert fold({"Luxembourg": 300, " LUXEMBOURG ": 2}) == {" LUXEMBOURG ": "LUXEMBOURG"}
-    assert suggest({"Luxembourg": 300, " LUXEMBOURG ": 2}).reasons == {" LUXEMBOURG ": SPACES}
     # its capitals, offered
     assert _offers({"Luxembourg": 300, " LUXEMBOURG ": 2}) == {
         "LUXEMBOURG": ("Luxembourg", CAPITALS, None)
@@ -97,9 +93,8 @@ def test_spaces_fold_into_the_value_with_its_spaces_collapsed() -> None:
 
 def test_capitals_never_fold_they_are_offered() -> None:
     """Case can name a category (Kell K and k, anti-k and anti-K, Rh Ccdee and ccdee): a case variant is offered at
-    any row count, never folded (the rules of 30 October folded anti-k into anti-K, MALE into Male). A word's variant
-    of a typo's size is the same word written another way; two sites writing a word two ways in many rows, a case to
-    check."""
+    any row count, never folded. A word's variant of a typo's size is the same word written another way; two sites
+    writing a word two ways in many rows, a case to check."""
     assert fold({"Luxembourg": 300, "luxembourg": 2}) == {}
     assert _offers({"Luxembourg": 300, "luxembourg": 2})["luxembourg"] == (
         "Luxembourg",
@@ -346,22 +341,14 @@ def test_a_choice_for_a_spelling_applies_to_its_group_and_a_value_s_own_choice_w
         "F ": "Female",
     }  # F␣ → F → Female
     assert plan({"F": 400, "F ": 1}, {}, kept=["F "]) == {}  # a fold put back as written
-    assert plan(counts, {}, fold_rule=None) == {}  # no fold: the mapping lists every change
-    with pytest.raises(ValueError, match="unknown fold rule"):
-        plan(counts, {}, fold_rule="other")
 
 
 def test_a_clean_value_given_another_is_followed() -> None:
-    """MALE → male and male → M: MALE becomes M. A cycle takes the first choice only; a step recorded before the fold
-    rule chains nothing."""
+    """MALE → male and male → M: MALE becomes M. A cycle takes the first choice only."""
     assert plan(SEX, {"MALE": "male", "male": "M"})["MALE"] == "M"
     assert plan({"F": 3, "Female": 3}, {"F": "Female", "Female": "F"}) == {
         "F": "Female",
         "Female": "F",
-    }
-    assert plan({"MALE": 1, "male": 1, "M": 5}, {"MALE": "male", "male": "M"}, fold_rule=None) == {
-        "MALE": "male",
-        "male": "M",
     }
 
 
@@ -613,9 +600,6 @@ def test_the_trace_report_counts_the_choices_names_no_value_and_says_each_groupi
         "2 values grouped (the reason is in the trace)",
     ]
     assert "rare ones" not in repr(shown)  # free text, perhaps naming the rare values
-    # a step recorded before the fold rule listed every change, and why
-    older = report_params({"mapping": {"CANARY-1 ": "F"}, "reasons": {"CANARY-1 ": SPACES}})
-    assert "CANARY" not in repr(older) and older["choices"] == {SPACES: 1}
 
 
 def test_the_variables_listed_leave_out_the_copies_and_say_which_were_cleaned() -> None:
@@ -685,83 +669,20 @@ def test_the_step_replays_the_fold_and_says_when_the_column_holds_values_it_did_
     assert len(swapped.warnings) == 1 and "F  " not in swapped.warnings[0]
 
 
-def test_a_step_without_a_fold_rule_replays_its_mapping_alone() -> None:
+@pytest.mark.parametrize("fold_id", ["spaces_and_capitals", None])
+def test_a_recode_of_an_earlier_version_is_refused_by_the_replay(fold_id: str | None) -> None:
+    """Only the fold rule of today is kept: a recode recorded under another (30 October 2026), or before the fold rule,
+    is refused with a word, never replayed under a rule it did not use."""
     from manage.reproduction_manager import apply_steps
 
+    params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": [], "fold": fold_id}
     step = {
         "function": "recode_levels",
-        "params": {"source": "sex", "target": "sex_clean", "mapping": {"f": "F"}},
+        "params": {k: v for k, v in params.items() if v is not None},
     }
-    replayed = apply_steps(pd.DataFrame({"sex": ["F", "f", "M "]}), [step])
-    assert replayed.df is not None and replayed.df["sex_clean"].tolist() == ["F", "F", "M "]
-
-
-# the two rules recorded under LEGACY_FOLD on 30 October 2026: what 747ccc3 and 751ad38 wrote
-FIRST, SECOND = {"fold": LEGACY_FOLD}, {"fold": LEGACY_FOLD, "values_fp": "86c22e35b51a72cb"}
-
-
-@pytest.mark.parametrize(
-    ("counts", "first", "second"),
-    [
-        ({"Male": 300, "MALE": 200, "male": 3}, {"MALE": "Male", "male": "Male"}, {"male": "Male"}),
-        ({"K": 300, "k": 5}, {"k": "K"}, {}),
-        ({"anti-K": 40, "anti-k": 2}, {}, {"anti-k": "anti-K"}),
-        (
-            {"ccdee": 400, "Ccdee": 3, "CCDEE": 2, "CcDee": 100},
-            {"Ccdee": "ccdee", "CCDEE": "ccdee"},
-            {},
-        ),
-        (
-            {"F": 489, "F ": 1, "f": 1, "Female": 1, "female": 1},
-            {"F ": "F", "f": "F", "female": "Female"},
-            {"F ": "F"},
-        ),
-    ],
-)
-def test_the_two_rules_of_30_october_replay_as_they_wrote(
-    counts: dict[str, int], first: dict[str, str], second: dict[str, str]
-) -> None:
-    """One id, two rules: the record that holds values_fp (191a550 on) used the second."""
-    assert plan(counts, {}, fold_rule=rule_of(FIRST)) == first
-    assert plan(counts, {}, fold_rule=rule_of(SECOND)) == second
-    assert outcome(counts, {}, {}, fold_rule=rule_of(FIRST)) == {
-        v: (first.get(v, v), None) for v in counts
-    }
-
-
-def test_only_the_second_rule_of_30_october_and_the_rule_now_follow_a_chain() -> None:
-    counts, mapping = {"MALE": 1, "male": 1, "M": 5}, {"MALE": "male", "male": "M"}
-    assert plan(counts, mapping, fold_rule=rule_of(FIRST)) == {"MALE": "male", "male": "M"}
-    assert plan(counts, mapping, fold_rule=rule_of(SECOND)) == {"MALE": "M", "male": "M"}
-    assert plan(counts, mapping) == {"MALE": "M", "male": "M"}
-    assert rule_of({}) is None and rule_of({"fold": FOLD}) == FOLD
-
-
-def test_a_step_of_30_october_replays_with_its_rule_and_its_fingerprint() -> None:
-    from manage.reproduction_manager import apply_steps
-
-    params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": []}
-    sex = ["Male"] * 300 + ["MALE"] * 200 + ["Female"] * 280
-    replayed = apply_steps(
-        pd.DataFrame({"sex": sex}), [{"function": "recode_levels", "params": {**params, **FIRST}}]
-    )
-    assert replayed.df is not None and set(replayed.df["sex_clean"]) == {
-        "Male",
-        "Female",
-    }  # MALE folded
-    sex = ["Male"] * 300 + ["MALE"] * 2 + ["Female"] * 280
-    step = {"function": "recode_levels", "params": {**params, **SECOND}}
-    replayed = apply_steps(pd.DataFrame({"sex": sex}), [step])
-    assert (
-        replayed.error is None and not replayed.warnings
-    )  # the fingerprint it recorded, under its rule
-    assert replayed.df is not None and set(replayed.df["sex_clean"]) == {
-        "Male",
-        "Female",
-    }  # a typo's 2 rows
-    assert (
-        values_fp(level_counts(pd.Series(sex))) != SECOND["values_fp"]
-    )  # the rule now folds no capitals
+    replayed = apply_steps(pd.DataFrame({"sex": ["Male", "MALE", "Female"]}), [step])
+    assert replayed.df is None and "earlier version of Data > Clean" in (replayed.error or "")
+    assert "clean it again" in (replayed.error or "")
 
 
 @pytest.mark.parametrize(

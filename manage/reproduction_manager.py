@@ -42,7 +42,7 @@ from enrich.imputation_service import (
     impute_rows,
     left_missing,
 )
-from enrich.recode import level_counts, recode_column, rule_of, values_fp
+from enrich.recode import FOLD, level_counts, recode_column, values_fp
 from enrich.transformation_logic import apply_variable_transformation
 from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
@@ -390,36 +390,38 @@ def _rename_columns(df, step, index, paths, warnings):
 
 
 def _recode_levels(df, step, index, paths, warnings):
-    """The recode redone: the recorded fold rule recomputed on the values read (a trace without one recorded every
-    change in its mapping; two rules share an id, told apart by the record), the recorded choices over it. Differences
-    are said by their number, never by a value."""
+    """The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
+    under another rule (an earlier version of Data > Clean) is refused: the column is cleaned again. Differences are
+    said by their number, never by a value."""
     params = step.get("params", {}) or {}
-    source, target, rule = params.get("source"), params.get("target"), rule_of(params)
+    source, target = params.get("source"), params.get("target")
+    if params.get("fold") != FOLD:
+        raise ValueError(
+            f"{source} was recoded by an earlier version of Data > Clean, whose rules are not kept: clean it again"
+        )
     new_df, kept = recode_column(
         df,
         source,
         target,
         params.get("mapping") or {},
-        fold_rule=rule,
         kept=params.get("kept") or (),
         replaces=bool(params.get("replaces")),
     )
     said = len(warnings)
-    recorded = params.get("kept_as_written")
-    if recorded is not None and kept > recorded:
+    if kept > params["kept_as_written"]:
         warnings.append(
-            f"step {index + 1}: {kept - recorded} more value(s) of {source} kept as written in {target} than when the "
-            "step was recorded: values it did not see"
+            f"step {index + 1}: {kept - params['kept_as_written']} more value(s) of {source} kept as written in "
+            f"{target} than when the step was recorded: values it did not see"
         )
-    after, recorded = int(new_df[target].dropna().nunique()), params.get("values_after")
-    if recorded is not None and after != recorded:
-        warnings.append(f"step {index + 1}: {target} holds {after} distinct values, {recorded} when it was recorded")
-    # the same counts can hide a value swapped for another, or a spelling that lost its majority: their fingerprint
-    seen = params.get("values_fp")
-    if seen is not None and len(warnings) == said and values_fp(level_counts(df[source]), rule) != seen:
+    after = int(new_df[target].dropna().nunique())
+    if after != params["values_after"]:
         warnings.append(
-            f"step {index + 1}: the values of {source} differ from those the step saw (another value, or another "
-            f"spelling holding the most rows): check {target}"
+            f"step {index + 1}: {target} holds {after} distinct values, {params['values_after']} when it was recorded"
+        )
+    # the same counts can hide a value swapped for another: their fingerprint
+    if len(warnings) == said and values_fp(level_counts(df[source])) != params["values_fp"]:
+        warnings.append(
+            f"step {index + 1}: the values of {source} differ from those the step saw (another value): check {target}"
         )
     return new_df, None
 
