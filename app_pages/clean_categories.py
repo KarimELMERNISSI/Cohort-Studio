@@ -29,6 +29,7 @@ import streamlit as st
 
 from core.fingerprint import frame_fingerprint
 from core.registry import as_code
+from enrich.patterns import MAX_LENGTH, PatternError, matching
 from enrich.recode import (
     AI,
     CAPITALS,
@@ -173,6 +174,9 @@ def _keys(scope: str, column: str, revision: int, order: str) -> dict[str, str]:
         "into": f"clean_into::{base}",
         "means": f"clean_means::{base}",
         "view": f"clean_view::{base}",
+        "pattern": f"clean_pattern::{base}",
+        "case": f"clean_case::{base}",
+        "pattern_open": f"clean_pattern_open::{base}",
         "order": f"clean_order::{base}",
         # starts again from the store when a pill, a button or the order changes it (not on the table's own edits,
         # which would lose its scroll position and focus); the rows are matched to values by position: the order
@@ -304,6 +308,44 @@ def _buttons(column: str, keys: dict[str, str], counts: dict[str, int], how: str
     st.session_state[keys["pick"]] = []
     st.session_state[keys["means"]] = None
     _again(column)
+
+
+def _pick_by_pattern(column: str, keys: dict[str, str], counts: dict[str, int]) -> None:
+    """The values a regular expression finds, picked in Values (for Map, Set to missing or Keep as written), and the
+    pattern's popover closed; what was picked, or why nothing, is said under the row."""
+    choices = _choices(column)
+    st.session_state[keys["pattern_open"]] = False
+    try:
+        found = matching(
+            str(st.session_state.get(keys["pattern"]) or ""),
+            sorted(counts, key=sort_key),
+            ignore_case=bool(st.session_state.get(keys["case"], True)),
+        )
+    except PatternError as exc:
+        choices["picked"] = {"why": str(exc)}
+        return
+    st.session_state[keys["pick"]] = found
+    choices["picked"] = {"found": found}
+
+
+_NAMED = 6  # the values a pattern picked, named under the row
+
+
+def _picked_words(said: dict[str, Any]) -> str:
+    """What a pattern picked, for a caption: how many, and the first of them in bold, as the offers show values (Values
+    scrolls sideways once it holds a few, so the row names them, to be checked before Map); or why nothing."""
+    found = said.get("found")
+    if found is None:
+        return plain(said.get("why", ""))
+    if not found:
+        return "No value matches the pattern."
+    n, them = len(found), "them" if len(found) != 1 else "it"
+    named = ", ".join(f"**{plain(show_level(v), limit=40)}**" for v in found[:_NAMED])
+    more = f" and {n - _NAMED:,} more" if n > _NAMED else ""
+    return (
+        f"{n:,} value{'s' if n != 1 else ''} picked: {named}{more}. Give {them} a clean value and Map, or set "
+        f"{them} to missing."
+    )
 
 
 def _shown(counts: dict[str, int], spellings: dict[str, str], choices: dict[str, Any]):
@@ -556,6 +598,30 @@ def category_editor(
         values = sorted(counts, key=sort_key) if order == A_TO_Z else list(counts)
         clean_values = sorted({c for c, _, _ in shown.values() if c}, key=sort_key)
         with st.container(horizontal=True, vertical_alignment="bottom"):
+            # a messy column: the values a regular expression finds, picked at once (the pattern runs apart, timed)
+            with st.popover(
+                "Pattern",
+                icon=":material/regular_expression:",
+                key=keys["pattern_open"],
+                on_change="rerun",  # its state kept, so that "Pick them" can close it
+                help="Pick the values a regular expression finds, to map them or set them to missing at once.",
+            ):
+                st.text_input(
+                    "Values matching",
+                    key=keys["pattern"],
+                    persist_state="page",
+                    max_chars=MAX_LENGTH,
+                    placeholder="^hyp.*tension",
+                    help="A regular expression (Python's), found anywhere in a value as written: ^ and $ anchor it.",
+                )
+                st.checkbox("Ignore case", value=True, key=keys["case"], persist_state="page")
+                st.button(
+                    "Pick them",
+                    key=f"clean_pattern_pick::{scope}::{column}",
+                    type="primary",
+                    on_click=_pick_by_pattern,
+                    args=(column, keys, counts),
+                )
             picked = st.multiselect(
                 "Values",
                 sorted(counts, key=sort_key),
@@ -583,6 +649,8 @@ def category_editor(
                 args=(column, keys, counts, "map"),
                 disabled=not (n and into),
             )
+        if said := choices.pop("picked", None):  # what the pattern picked, said once
+            st.caption(_picked_words(said))
         with st.container(horizontal=True, vertical_alignment="bottom"):
             means = st.selectbox(
                 "Missing means",

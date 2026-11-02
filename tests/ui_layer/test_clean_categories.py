@@ -832,3 +832,45 @@ def test_choices_start_again_when_a_step_changes_the_values() -> None:
     at.run()
     _ok(at)
     assert not any("changed since your last choices" in c.value for c in at.caption)  # said once
+
+
+def test_values_are_picked_by_a_regular_expression_and_mapped_at_once() -> None:
+    """A messy column: the values a pattern finds are picked in Values, for the buttons that already map them."""
+    at = _open(
+        {
+            "diagnosis": ["Hypertension"] * 40
+            + ["hypertension"] * 3
+            + ["HYPERTENSION"] * 2
+            + ["Hypertenson"]
+            + ["Diabetes"] * 30
+        }
+    )
+    _one(at.text_input, "clean_pattern::").set_value("^hyp.*ten").run()
+    _one(at.button, "clean_pattern_pick::").click().run()
+    _ok(at)
+    found = ["HYPERTENSION", "Hypertenson", "Hypertension", "hypertension"]
+    assert sorted(_one(at.multiselect, "clean_pick::").value) == sorted(found)
+    said = next(c.value for c in at.caption if c.value.startswith("4 values picked: "))
+    assert all(f"**{v}**" in said for v in found)  # named, to be checked before Map
+    _one(at.selectbox, "clean_into::").set_value("Hypertension").run()
+    _one(at.button, "clean_map::").click().run()
+    _ok(at)
+    full = at.session_state["clean_manual"]["diagnosis"]["mapping"]
+    assert {full.get(v, v) for v in found} == {"Hypertension"}
+    _one(at.text_input, "clean_pattern::").set_value("(").run()
+    _one(at.button, "clean_pattern_pick::").click().run()
+    _ok(at)
+    assert any("Not a regular expression" in c.value for c in at.caption)
+
+
+def test_what_a_pattern_picked_is_named_under_the_row() -> None:
+    """The first six values a pattern picked are named, then how many more; a pattern that picks none says so."""
+    from app_pages.clean_categories import _picked_words
+
+    said = _picked_words({"found": [f"v{i}" for i in range(9)]})
+    assert said.startswith("9 values picked: **v0**, **v1**, ") and said.count("**") == 12
+    assert "**v5** and 3 more. Give them a clean value" in said
+    assert _picked_words({"found": ["x"]}).endswith(
+        "**x**. Give it a clean value and Map, or set it to missing."
+    )
+    assert _picked_words({"found": []}) == "No value matches the pattern."

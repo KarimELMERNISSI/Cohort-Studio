@@ -1328,6 +1328,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   The rare typos are never sent to a cloud recipient and no longer count; names on visits beside a frequent
   placeholder still read as an identifier.
 
+### Data > Clean: values picked by a regular expression
+
+- **A pattern picks values at once.** "Pattern", beside Values on Data > Clean > Categories, picks the values a
+  regular expression finds (Python's, found anywhere in a value as written, case ignored unless asked), for Map, Set
+  to missing or Keep as written: a messy column is cleaned in a few strokes, without the AI engine. The row names what
+  the pattern picked, to be checked before Map.
+- **Safe for a shared server.** The pattern is tried in a separate process with a time limit of 2 seconds: one that
+  backtracks without end (`(a+)+$` on a long value) stops there, with a word, and never holds the server; an invalid
+  or empty pattern says why.
+
 ### Validate: Date checks, a tab of its own (M6)
 
 - **Converting text columns to dates is a tab of Validate, Date checks.** It sat above the tabs, in a box that parsed
