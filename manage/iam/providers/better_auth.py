@@ -141,8 +141,18 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                         message="Account pending approval by administrator",
                     )
 
+                # the account's name as Better Auth holds it, of the kind typed (an e-mail or a username), never
+                # the text typed: Better Auth matches e-mails without regard to case, and the workspace folder comes
+                # from this name, so one account typed in two cases had two workspaces
+                kind = "email" if "@" in credentials.username else "username"
+                canonical = str(user_data.get(kind) or "").strip()
+                if not canonical:
+                    return AuthResult(
+                        success=False,
+                        message=f"Better Auth returned no {kind} for this account: sign-in refused",
+                    )
                 profile = UserProfile(
-                    username=user_data.get("username", credentials.username),
+                    username=canonical,
                     email=user_data.get("email"),
                     role=role_enum,
                     is_active=is_active,

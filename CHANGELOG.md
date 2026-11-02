@@ -323,6 +323,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     browser session in turn: another user with a table that hashed alike could be served them. Each cached result
     is now keyed by the signed-in user's workspace too.
 
+- **Better Auth: one workspace per account, however its name is typed.** The signed-in name, and so the workspace
+  folder, is the identity provider's spelling of the account (its e-mail, or its username), never the text typed:
+  Better Auth matches e-mails without regard to case, so one account typed in two cases had two workspaces. A
+  provider that names no account refuses the sign-in. A user who signed in with another case before finds their
+  earlier files in the folder of that spelling, which an administrator can move.
+
 ### Usability
 
 - **Show Explained Variance (Data > Enrich, PCA or FAMD) names the incomplete columns** and their missing values,

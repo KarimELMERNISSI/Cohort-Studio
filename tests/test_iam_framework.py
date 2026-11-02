@@ -390,3 +390,32 @@ def test_a_name_whose_workspace_folder_exists_is_refused_unless_the_operator_reu
     (tmp_path / "users" / "drlee" / "datasets").mkdir(parents=True)  # "drlee."'s earlier folder
     assert iam.create_user("drlee", "a-long-password-1") == (False, "Username already exists")
     assert iam.create_user("drlee", "a-long-password-1", reuse_folder=True)[0]
+
+
+def _better_auth_answer(user: dict) -> MagicMock:
+    answer = MagicMock()
+    answer.status_code = 200
+    answer.json.return_value = {"token": "t", "user": user}
+    return answer
+
+
+@patch("requests.Session.post")
+def test_the_account_s_name_is_the_identity_provider_s_spelling(mock_post: MagicMock) -> None:
+    """Better Auth matches e-mails without regard to case, and the workspace folder came from the name as typed: one
+    account typed in two cases had two workspaces."""
+    mock_post.return_value = _better_auth_answer(
+        {"email": "j.smith@chl.lu", "username": "jsmith", "role": "researcher", "isActive": True}
+    )
+    provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+    by_mail = provider.authenticate(UserCredentials(username="J.Smith@CHL.lu", password="pw"))
+    assert by_mail.success and by_mail.user is not None and by_mail.user.username == "j.smith@chl.lu"
+    by_name = provider.authenticate(UserCredentials(username="JSmith", password="pw"))
+    assert by_name.success and by_name.user is not None and by_name.user.username == "jsmith"
+
+
+@patch("requests.Session.post")
+def test_an_account_the_provider_does_not_name_is_refused(mock_post: MagicMock) -> None:
+    mock_post.return_value = _better_auth_answer({"role": "researcher", "isActive": True})
+    provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+    refused = provider.authenticate(UserCredentials(username="dr_who", password="pw"))
+    assert not refused.success and "returned no username" in refused.message

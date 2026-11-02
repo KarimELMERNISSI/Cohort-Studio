@@ -131,16 +131,20 @@ def _login_card(iam) -> None:
                 result = iam.authenticate(
                     UserCredentials(username=username.strip(), password=password)
                 )
-                if result.success:
-                    _move_earlier_workspace(iam, username.strip())
+                if result.success and result.user is not None:
+                    # the identity provider's name for the account, never the text typed: the workspace folder
+                    # comes from it (Better Auth matches e-mails without regard to case)
+                    name = result.user.username
+                    _move_earlier_workspace(iam, name)
                     st.session_state.user_authenticated = True
-                    st.session_state.username = username.strip()
-                    st.session_state.user_role = (
-                        str(result.user.role)
-                        if result.user is not None
-                        else UserRole.RESEARCHER.value
-                    )
+                    st.session_state.username = name
+                    st.session_state.user_role = str(result.user.role)
                     st.rerun()
+                elif result.success:  # signed in, but no account named: no workspace can be chosen
+                    st.error(
+                        "The identity provider named no account: sign-in refused.",
+                        icon=":material/error:",
+                    )
                 else:
                     st.error(result.message, icon=":material/error:")
 
