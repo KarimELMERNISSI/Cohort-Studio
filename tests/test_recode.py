@@ -210,10 +210,11 @@ DISTINCT = [
     ("Hysterectomy", "Hysterotomy"),
     ("Laminectomy", "Laminotomy"),
     ("Nephrectomy", "Nephrotomy"),
-    ("Prednisolone", "Prednisone"),
     ("Abduction", "Adduction"),
     ("Macrocytic", "Microcytic"),
-    ("Peroneal", "Perineal"),
+    ("Colostomy", "Colotomy"),  # another ending on one root
+    ("Tracheostomy", "Tracheotomy"),
+    ("Unilateral", "Bilateral"),
     ("Typical", "Atypical"),
     ("Febrile", "Afebrile"),
     ("Smoker", "Non-smoker"),
@@ -240,8 +241,9 @@ def test_no_spelling_is_offered_between_two_categories(common: str, rare: str) -
     [
         ("Dysphagia", "Dysphasia"),
         ("Aphagia", "Aphasia"),
-        ("Colostomy", "Colotomy"),
-        ("Tracheostomy", "Tracheotomy"),
+        ("Prednisolone", "Prednisone"),  # two edits in a word of 10 letters: a typo's size
+        ("Peroneal", "Perineal"),
+        ("Ilium", "Ileum"),
     ],
 )
 def test_two_terms_one_letter_apart_are_offered_only_as_a_spelling_to_check(
@@ -287,7 +289,10 @@ def test_a_spelling_one_letter_apart_is_offered_rare_or_to_check_first() -> None
     # 5 % or more: not offered
     assert _offers({"Luxembourg": 300, "Luxembourgg": 20}) == {}
     # a first difference within a word's first four letters: another word
-    assert _offers({"Differdange": 300, "Diferdange": 2}) == {}
+    # a typo early in a word: the prefixes that negate or oppose are guarded, not the first four letters
+    assert _offers({"Differdange": 300, "Diferdange": 2}) == {
+        "Diferdange": ("Differdange", SPELLING, None)
+    }
     # looked for only in the open variable (the list of variables compares no two spellings)
     assert suggest({"Luxembourg": 397, "Luxembourgg": 1}, near=False).offers == ()
 
@@ -547,9 +552,11 @@ def test_a_merge_no_offer_relation_joins_is_a_grouping_whoever_proposed_it() -> 
     for small in ({"Negative": 400, "Pending": 3}, {"Ibuprofen": 300, "Naproxen": 4}):
         rare, common = sorted(small, key=small.get)
         assert groupings(small, {rare: common}) == {common: sorted(small)}, small
-    # a typo early in a word is no offer: its fix says why too
+    # a typo's fix is an offer relation: no reason asked; the same edit in many rows is a value of its own
     typo = {"Diabetes mellitus": 300, "Diabetes melitus": 2}
-    assert groupings(typo, {"Diabetes melitus": "Diabetes mellitus"}) == {
+    assert groupings(typo, {"Diabetes melitus": "Diabetes mellitus"}) == {}
+    many = {"Diabetes mellitus": 300, "Diabetes melitus": 40}
+    assert groupings(many, {"Diabetes melitus": "Diabetes mellitus"}) == {
         "Diabetes mellitus": ["Diabetes melitus", "Diabetes mellitus"]
     }
 
@@ -833,3 +840,21 @@ def test_a_corrected_meaning_or_reason_documents_another_record() -> None:
     other = {**first, "groupings": {"III": {"reason": "pre-specified", "values": ["III", "IV"]}}}
     assert documented(first) != documented(other)
     assert documented({**first, "kept": ["b", "a"]}) == documented({**first, "kept": ["a", "b"]})
+
+
+def test_the_most_frequent_close_value_is_the_reference_of_a_rarer_one() -> None:
+    """A rarer value within a typo's edits of a more frequent one is probably its typo: offered towards the most
+    frequent close value, two edits apart in a value of 10 letters or more, only in a typo's rows."""
+    counts = {"Luxembourg": 400, "Luxemburg": 50, "Luxemburgg": 2, "Esch": 300}
+    assert _offers(counts) == {
+        "Luxemburgg": ("Luxembourg", SPELLING, None)
+    }  # Luxemburg: 12 %, a value of its own
+    assert _offers({"Luxembourg": 400, "Luxenbourgg": 2}) == {
+        "Luxenbourgg": ("Luxembourg", SPELLING, None)
+    }
+    assert _offers({"Luxembourg": 400, "Luxenbourgg": 15}) == {}  # two edits: a typo's rows only
+    assert _offers({"Diabetes": 300, "Diabtes": 10}) == {
+        "Diabtes": ("Diabetes", CLOSE, None)
+    }  # to check first
+    assert _offers({"Hypokalaemia": 400, "Hypocalcaemia": 3}) == {}  # one ending, two roots
+    assert _offers({"Abduction": 400, "Adduction": 3}) == {}  # ab- and ad-

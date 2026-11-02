@@ -57,6 +57,7 @@ from enrich.recode import (
     give,
     groupings,
     last_record,
+    letters_apart,
     level_counts,
     new_choices,
     numeric_codes,
@@ -104,8 +105,8 @@ WORDS = {
     SPACES_AND_CAPITALS: "spaces and capitals",
     FIRST_LETTER: "first-letter code",
     VARIANT: "spelling variant",
-    SPELLING: "one letter apart",
-    CLOSE: "one letter apart",
+    SPELLING: "close spelling",
+    CLOSE: "close spelling",
     MISSING_CODE: "code for missing",
     CHOSEN: "chosen",
     GROUPING: "grouping",
@@ -117,7 +118,12 @@ WORDS = {
 GROUPS = (
     ("written", "Written another way", (CAPITALS, VARIANT, FIRST_LETTER), True),
     ("case", "Case may name a category: check that both mean the same", (CASE,), False),
-    ("letter", "One letter apart: check that both mean the same", (SPELLING, CLOSE), False),
+    (
+        "letter",
+        "Close to a more frequent value: check that both mean the same",
+        (SPELLING, CLOSE),
+        False,
+    ),
     ("missing", "Codes that may mean missing", (MISSING_CODE,), True),
     ("ai", "Proposed by the AI engine: check that both name the same category", (AI,), False),
 )
@@ -362,6 +368,13 @@ def _offer_groups(
                     f"{held.get(value, 0):,} → {into:,} rows" if into else _rows(held.get(value, 0))
                 )
                 return f"{as_code(show_level(value))} → {clean}{why} · {rows}"
+            if offer.why in (
+                SPELLING,
+                CLOSE,
+            ):  # the more frequent value is the reference: both counts
+                apart = letters_apart(value, offer.clean or "") or 1
+                rows = f"{held.get(value, 0):,} → {held.get(offer.clean or '', 0):,} rows"
+                return f"{as_code(show_level(value))} → {clean} · {apart} letter{'s' if apart != 1 else ''} apart · {rows}"
             why = "" if offer.why in SAID else f" · {WORDS[offer.why]}"
             return f"{as_code(show_level(value))} → {clean}{why} · {_rows(held.get(value, 0))}"
 
@@ -398,8 +411,8 @@ def _offer_groups(
                     disabled=not left,
                 )
     st.caption(
-        f"Ticking fills the table; the data change when you {into}. A one-letter code, a variant, a spelling one "
-        "letter apart or a code for unknown can name a category of its own: check what it means in the source first."
+        f"Ticking fills the table; the data change when you {into}. A one-letter code, a variant, a close "
+        "spelling or a code for unknown can name a category of its own: check what it means in the source first."
     )
 
 

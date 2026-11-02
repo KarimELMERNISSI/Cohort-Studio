@@ -22,8 +22,10 @@ The offers, never applied:
 
 - a one-letter code and the only longer value it begins (the rarer joins the more frequent);
 - a variant: the same spelling once accents are stripped and ae or oe read as e (Pétange, Petange; Anaemia, Anemia);
-- a rare spelling one letter from a frequent value (Damerau-Levenshtein distance 1: "Luxembourgg", "Daibetes"), and,
-  to check first, a close spelling one letter apart that holds more rows;
+- a close spelling: a value within a typo's edits of a more frequent one, which is the reference (Damerau-
+  Levenshtein distance on the keys: one edit under 10 letters, two from 10; "Luxembourgg", "Luxenbourgg",
+  "Diferdange", "Daibetes"), offered when it holds a typo's rows beside it, and, to check first, one edit away under
+  :data:`CLOSE_SHARE` of its rows;
 - a case variant: the same word written another way when its differing words hold 4 letters or more, the column
   writes no case codes and the variant holds a typo's rows; otherwise, to check, since case may name a category
   (Kell K and k, anti-k and anti-K, Rh CcDee and ccdee);
@@ -33,11 +35,11 @@ The offers, never applied:
 A merge is a grouping, which says why, whoever proposed it, unless an offer relation joins its values (``groupings``);
 the AI engine's proposals are refused where the rules see two categories, and the user checks the rest.
 
-One letter can separate two categories, so a spelling is never offered across a token holding a digit, a short token
-or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b), a sign or a Roman numeral, nor when the words
-differ in their first four letters (Unstable and Stable, Hypotension and Hypertension), nor two letters apart
-(Hypokalaemia and Hypocalcaemia, Craniectomy and Craniotomy). One letter apart can still separate two terms (Dysphasia
-and Dysphagia): such an offer says to check it.
+One or two letters can separate two categories, so a spelling is never offered across a token holding a digit, a
+short token or an acronym (HFmrEF and HFrEF, Stage IIIB and IIIA, 3a and 3b), a sign or a Roman numeral, a prefix that
+negates or opposes (Unstable and Stable, Hypotension and Hypertension, Abduction and Adduction), another ending on one
+root (Craniectomy and Craniotomy) or one ending on two roots (Hypokalaemia and Hypocalcaemia). A few edits can still
+separate two terms (Dysphasia and Dysphagia, Prednisone and Prednisolone): each offer is checked on its own.
 
 Nothing here reads an outcome: the values and their rows only.
 """
@@ -195,6 +197,39 @@ _OPPOSITE_PREFIXES = (
     "pan",
     "de",
     "n",
+    "ad",
+    "endo",
+    "exo",
+    "infra",
+    "ante",
+    "inter",
+    "hetero",
+    "homo",
+    "uni",
+    "bi",
+    "tri",
+    "multi",
+)
+# endings that name another procedure or condition on one root (Craniectomy and Craniotomy), or the same one on two
+# roots (Hypokalaemia and Hypocalcaemia): a spelling is never offered across them
+_ENDINGS = (
+    "ectomy",
+    "otomy",
+    "ostomy",
+    "plasty",
+    "pexy",
+    "scopy",
+    "graphy",
+    "itis",
+    "osis",
+    "aemia",
+    "emia",
+    "algia",
+    "lysis",
+    "plasia",
+    "trophy",
+    "penia",
+    "uria",
 )
 # words that name opposite categories: the AI engine never joins them
 _OPPOSITES = frozenset(
@@ -452,12 +487,8 @@ def _one_category(a: str, b: str, held: Mapping[str, int], coded: bool) -> bool:
         return _case_safe(rare, common, held, coded)
     if _first_letter(a, b) or _first_letter(b, a):
         return True
-    relation = _relation(a, b)
-    if relation == SPELLING:
-        return min(held.get(a, 0), held.get(b, 0)) < CLOSE_SHARE * max(
-            held.get(a, 0), held.get(b, 0)
-        )
-    return relation == VARIANT
+    rare, common = sorted((a, b), key=lambda s: (held.get(s, 0), s))
+    return _relation(a, b) == VARIANT or _spelling_kind(rare, common, held) is not None
 
 
 def _legacy_fold(counts: Mapping[str, int]) -> dict[str, str]:
@@ -508,19 +539,12 @@ def _ascii(text: str) -> str:
     return _unaccented(text)
 
 
-def _into_word(a: str, b: str) -> int:
-    """How far into its word the first difference of two keys falls."""
-    first = next(
-        (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))
-    )
-    return first - (a.rfind(" ", 0, first) + 1)
-
-
 def _relation(rare: str, common: str, keys: Mapping[str, str] | None = None) -> str | None:
     """
-    How two spellings may be one category: VARIANT (equal keys), SPELLING (one letter apart: Damerau-Levenshtein
-    distance 1 on the keys, the first difference past a word's first four letters), or None. Never across what names
-    a category (``_apart``).
+    How two spellings may be one category: VARIANT (equal keys), SPELLING (within a typo's edits: ``_edits``), or
+    None. Never across what names a category: a digit, a sign, a Roman numeral, a code (``_apart``); words that name
+    two categories, a negating prefix among them (``_named_apart``); another ending on one root, or one ending on two
+    roots (``_other_ending``).
     """
     a = keys[rare] if keys else _key(rare)
     b = keys[common] if keys else _key(common)
@@ -528,9 +552,68 @@ def _relation(rare: str, common: str, keys: Mapping[str, str] | None = None) -> 
         return None
     if a == b:
         return None if _apart(rare, common) else VARIANT
-    if abs(len(a) - len(b)) > 1 or _into_word(a, b) < 4 or OSA.distance(a, b) != 1:
+    if (
+        _edits(a, b) is None
+        or _apart(rare, common)
+        or _named_apart(rare, common)
+        or _other_ending(a, b)
+    ):
         return None
-    return None if _apart(rare, common) else SPELLING
+    return SPELLING
+
+
+def letters_apart(value: str, clean: str) -> int | None:
+    """How many edits separate two spellings, once spaces, case, accents and hyphens are set aside, when they are a
+    typo's (``_edits``); None otherwise."""
+    return _edits(_key(value), _key(clean))
+
+
+def _edits_allowed(key: str) -> int:
+    """How many edits a typo makes: one in a value under 10 letters, two from 10 (Luxenbourgg)."""
+    return 1 if sum(c.isalnum() for c in key) < 10 else 2
+
+
+def _edits(a: str, b: str) -> int | None:
+    """The Damerau-Levenshtein distance of two keys when it is a typo's (``_edits_allowed`` of the shorter), else
+    None."""
+    allowed = min(_edits_allowed(a), _edits_allowed(b))
+    found = OSA.distance(a, b, score_cutoff=allowed)
+    return found if 0 < found <= allowed else None
+
+
+def _other_ending(a: str, b: str) -> bool:
+    """Two words that end in two endings of ``_ENDINGS`` on one root (Craniectomy, Craniotomy), or in one ending on
+    roots two edits apart or more (Hypokalaemia, Hypocalcaemia): two procedures or two conditions."""
+    for x, y in zip(a.split(), b.split(), strict=False):
+        for ending in _ENDINGS:
+            if not x.endswith(ending):
+                continue
+            root = x[: -len(ending)]
+            for other in _ENDINGS:
+                if not y.endswith(other):
+                    continue
+                if (other != ending and y[: -len(other)] == root) or (
+                    other == ending and OSA.distance(root, y[: -len(other)]) >= 2
+                ):
+                    return True
+    return False
+
+
+def _spelling_kind(
+    rare: str, common: str, held: Mapping[str, int], keys: Mapping[str, str] | None = None
+) -> str | None:
+    """
+    The offer a rarer spelling gets towards a more frequent one within a typo's edits (``_relation``): SPELLING when
+    it holds a typo's rows (RARE_ROWS or fewer, and RARE_SHARE of the other's at most), CLOSE when one edit away and
+    under CLOSE_SHARE of its rows (to check first), else None: a value of its own.
+    """
+    if _relation(rare, common, keys) != SPELLING:
+        return None
+    rows, other = held.get(rare, 0), held.get(common, 0)
+    if rows <= min(RARE_ROWS, RARE_SHARE * other):
+        return SPELLING
+    a, b = (keys[rare], keys[common]) if keys else (_key(rare), _key(common))
+    return CLOSE if _edits(a, b) == 1 and rows < CLOSE_SHARE * other else None
 
 
 def _first_letter(short: str, word: str) -> bool:
@@ -596,15 +679,11 @@ def suggest(counts: Mapping[str, int], *, near: bool = True) -> Suggestions:
                     or common.casefold() == rare.casefold()
                 ):
                     continue
-                relation = _relation(rare, common, keys)
-                if relation == VARIANT:
+                # the most frequent close value is the reference: the rarer is probably its typo
+                if _relation(rare, common, keys) == VARIANT:
                     offers[rare] = Offer(rare, common, VARIANT)
-                elif relation == SPELLING and held[rare] <= min(
-                    RARE_ROWS, RARE_SHARE * held[common]
-                ):
-                    offers[rare] = Offer(rare, common, SPELLING)
-                elif relation == SPELLING and held[rare] < CLOSE_SHARE * held[common]:
-                    offers[rare] = Offer(rare, common, CLOSE)
+                elif kind := _spelling_kind(rare, common, held, keys):
+                    offers[rare] = Offer(rare, common, kind)
                 if rare in offers:
                     break
     ranked = tuple(sorted(offers.values(), key=lambda o: order.index(o.value)))
@@ -1106,7 +1185,7 @@ def _named_apart(value: str, clean: str) -> bool:
     typo = (
         len(only_a) == len(only_b) == 1
         and min(len(w) for w in (*only_a, *only_b)) >= 5
-        and OSA.distance(next(iter(only_a)), next(iter(only_b))) == 1
+        and _edits(next(iter(only_a)), next(iter(only_b))) is not None
     )
     if words_a & words_b and only_a and only_b and not typo:
         return True
@@ -1402,6 +1481,7 @@ __all__ = [
     "give",
     "groupings",
     "last_record",
+    "letters_apart",
     "level_counts",
     "new_choices",
     "numeric_codes",

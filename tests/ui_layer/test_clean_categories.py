@@ -403,7 +403,7 @@ def test_values_nobody_chose_reach_no_record_and_markup_is_drawn_as_text() -> No
     spec = at.get("plotly_chart")[0].proto.spec
     assert "<a href" not in spec and "&lt;a href" in spec
     offers = _group(at, "letter")
-    assert offers.options == ["`Luxembourgg` → `Luxembourg` · 1 row"]
+    assert offers.options == ["`Luxembourgg` → `Luxembourg` · 1 letter apart · 1 → 120 rows"]
     offers.select("Luxembourgg").run()
     _set_to_missing(at, ["CANARY-MISS-5B9"], UNKNOWN)
     at.button(key="clean_apply::commune").click().run()
