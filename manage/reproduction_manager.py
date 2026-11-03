@@ -163,30 +163,41 @@ def _population_rows(
     index: int,
     warnings: list[str],
     frames: Mapping[str, pd.DataFrame] | None = None,
+    *,
+    checks_only: bool = False,
 ) -> pd.Index:
     """
     Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
     evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
     to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
-    a plausibility rule's bound must not take its row out of the next fill.
+    a plausibility rule's bound must not take its row out of the next fill. A population recorded under other rules
+    is taken from the rows the step holds; when it holds none, a step that changes the data on it is refused, and
+    one that only checks it (``checks_only``) reads its criteria now, with a warning.
     """
     criteria = criteria_from_trace(block)
     if not criteria:
         return df.index
     recorded = _rules_version(block)
+    frame = (frames or {}).get(str(block.get("data_fp") or ""), df)
     if recorded != RULES_VERSION:  # read otherwise when recorded: the rows it kept then, when the step holds them
         then = f"recorded under rules version {recorded} ({_RULES_BEFORE.get(recorded, 'read otherwise')})"
-        if block.get("included") is not None:
+        kept = _recorded_rows(block, frame)
+        if kept is not None:
             warnings.append(
                 f"step {index + 1}: the analysis population was {then}: the rows it kept then are used, not its "
                 f"criteria read under version {RULES_VERSION}"
             )
-            return df.index.intersection(pd.Index(ranges_to_ids(block["included"])))
+            return df.index.intersection(kept)
+        if not checks_only:
+            raise ValueError(
+                f"the analysis population was {then}, and the step holds neither the rows it kept nor those it "
+                f"excluded (too many to hold): read under version {RULES_VERSION}, its criteria may keep other rows. "
+                "Replay this trace with the version of CohortStudio that recorded it"
+            )
         warnings.append(
             f"step {index + 1}: the analysis population was {then}, without its rows (too many to hold): its "
             f"criteria are read under version {RULES_VERSION}, which may keep other rows"
         )
-    frame = (frames or {}).get(str(block.get("data_fp") or ""), df)
     result = evaluate_population(frame, criteria)
     if not result.ok:
         raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
@@ -200,6 +211,21 @@ def _population_rows(
 
 # how the rules were read before each version (core.criteria.RULES_VERSION), for a population recorded then
 _RULES_BEFORE = {1: "a test written with != or ~ (not) was true on a missing value then"}
+
+
+def _recorded_rows(block: Mapping[str, Any], frame: pd.DataFrame) -> pd.Index | None:
+    """The rows a recorded population kept, from its step: the rows it kept, or (a large population holds only these)
+    the table's rows less those its criteria excluded, since a row leaves the population when any ticked criterion
+    excludes it; None when the step holds neither."""
+    if block.get("included") is not None:
+        return pd.Index(ranges_to_ids(block["included"]))
+    excluded = block.get("excluded_by")
+    if not isinstance(excluded, Mapping):
+        return None
+    gone: set[int] = set()
+    for ranges in excluded.values():
+        gone.update(ranges_to_ids(ranges))
+    return frame.index[~frame.index.isin(list(gone))]
 
 
 def _rules_version(block: Mapping[str, Any]) -> int:
@@ -468,7 +494,7 @@ def _apply_filter(df, step, index, paths, warnings):
 
 
 def _population_definition(df, step, index, paths, warnings):
-    _population_rows(df, step.get("population") or {}, index, warnings)  # verification only
+    _population_rows(df, step.get("population") or {}, index, warnings, checks_only=True)  # verification only
     return df, None
 
 
@@ -482,7 +508,8 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     params = step.get("params", {}) or {}
     block = step.get("population") or {}
     frames = result.population_frames if result is not None else None
-    rows = _population_rows(df, block, index, warnings, frames) if block else df.index
+    # the imputed datasets are checked against their hash and the table is left as it is: other rows are said there
+    rows = _population_rows(df, block, index, warnings, frames, checks_only=True) if block else df.index
     spec = ImputationSpec(**params["spec"])
     derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
     if derived is not None:

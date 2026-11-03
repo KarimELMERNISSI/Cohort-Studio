@@ -169,6 +169,32 @@ def test_a_population_recorded_under_the_earlier_rules_replays_with_the_rows_it_
     assert rows == [0, 1, 2]
     assert len(warnings) == 1 and "recorded under rules version 1" in warnings[0]
     assert "the rows it kept then are used" in warnings[0]
+    # more than 20,000 rows kept: the step holds those its criteria excluded, and the table's other rows are used
+    large = {k: v for k, v in block.items() if k not in ("rules_version", "included")} | {
+        "excluded_by": {criteria[0].id: ids_to_ranges([3])}
+    }
+    warnings, rows = replayed(large)
+    assert rows == [0, 1, 2] and "the rows it kept then are used" in warnings[0]
+    # neither: a step that changes the data on it is refused; a step that only checks it says what it reads
+    neither = {k: v for k, v in large.items() if k != "excluded_by"}
+    freeze = {
+        "function": "freeze_population",
+        "params": {},
+        "description": "",
+        "population": neither,
+    }
+    refused = apply_steps(frame, [freeze])
+    assert refused.df is None and "holds neither the rows it kept nor those it excluded" in (
+        refused.error or ""
+    )
+    check = {
+        "function": "population_definition",
+        "params": {},
+        "description": "",
+        "population": neither,
+    }
+    checked = apply_steps(frame, [check])
+    assert checked.error is None and "which may keep other rows" in checked.warnings[0]
 
 
 def test_an_expression_that_says_what_a_missing_value_gives_is_read_as_written() -> None:
@@ -200,3 +226,51 @@ def test_a_study_written_under_the_earlier_rules_says_what_reads_otherwise() -> 
     }
     found = {c.criterion.name: (c.more, c.fewer) for c in rules_changes(DF, config)}
     assert found == {"Not withdrawn": (1, 0), "Short": (0, 1)}
+
+
+def test_a_family_counting_its_rules_is_read_as_then_too() -> None:
+    """A family read "at least 2 of" its rules is one threshold rule, whose members are criteria: an expression member
+    was read as Python reads it then. Two measurements missing together fired "~(... >= ...)" twice under version 1,
+    and fire neither now: the notice said nothing."""
+    from core.population import rules_changes
+
+    frame = pd.DataFrame(
+        {
+            "height_cm": [170.0, np.nan, 80.0, np.nan, 175.0],
+            "weight_kg": [70.0, np.nan, 10.0, 60.0, np.nan],
+            "age": [40, 50, 60, 130, 70],
+        }
+    )
+    rules = {
+        "Short": {"expression": "~(df['height_cm'] >= 100)"},
+        "Light": {"expression": "~(df['weight_kg'] >= 20)"},
+        "Old": {"expression": "df['age'] > 120"},
+    }
+    family = {"mask_families": {"clinical_anomalies": {"operator": {"threshold": 2}, **rules}}}
+    (change,) = rules_changes(frame, family)
+    # then, a missing value made "~(... >= ...)" fire: row 1 (both missing) and row 3 (a missing height and an age
+    # over 120) reached 2 of 3; row 2 (both low) fires now as then; row 4 (one missing, nothing else) never did
+    assert (change.more, change.fewer) == (0, 2) and change.criterion.family == "clinical_anomalies"
+    by_hand = {
+        "mask_families": {
+            "clinical_anomalies": {
+                "operator": "any",
+                "Two of three": {"threshold": 2, "members": rules},
+            }
+        }
+    }
+    assert [(c.criterion.name, c.more, c.fewer) for c in rules_changes(frame, by_hand)] == [
+        ("Two of three", 0, 2)
+    ]
+    # no expression at any depth: read alike, never listed
+    from core.criteria import criterion_mask, earlier_mask
+
+    ranges = {
+        "Tall": {"numeric": True, "column": "height_cm", "lower_bound": 172, "strategy": "include"},
+        "Heavy": {"numeric": True, "column": "weight_kg", "lower_bound": 65, "strategy": "include"},
+    }
+    two = {"threshold": 1, "members": ranges}
+    assert criterion_mask(frame, "Two", two).tolist() == [True, False, False, False, True]
+    assert earlier_mask(frame, "Two", two) is None
+    numeric = {"mask_families": {"clinical_anomalies": {"operator": "any", "Two": two}}}
+    assert rules_changes(frame, numeric) == []

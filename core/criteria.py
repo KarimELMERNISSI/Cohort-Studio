@@ -877,17 +877,37 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
 
 def earlier_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series | None:
     """
-    Where an expression fired under the rules of version 1, read as Python reads it (a test written with != or ~ true
-    on a missing value), to say what a study written then selects differently now; None for another kind, which
-    version 2 reads alike, or an expression that cannot be read.
+    Where a criterion fired under the rules of version 1, where an expression was read as Python reads it (a test
+    written with != or ~ true on a missing value), to say what a study written then selects differently now. A rule
+    that combines others (a threshold rule's members, at any depth) counts its expression members as then and its
+    other members as now. None when no expression is read at any depth (version 2 reads the rule alike), or when the
+    rule cannot be read.
     """
     try:
-        if rule_kind(name, definition).mask is not _expression_mask:
-            return None
-        tree = validate(str(definition.get("expression")).strip())
-        return _as_mask(evaluate_tree(tree, df, policy=DEFAULT_POLICY), df.index)
+        return _earlier(df, name, definition)
     except Exception:
         return None
+
+
+def _earlier(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series | None:
+    kind = rule_kind(name, definition)
+    if kind.mask is _expression_mask:
+        tree = validate(str(definition.get("expression")).strip())
+        return _as_mask(evaluate_tree(tree, df, policy=DEFAULT_POLICY), df.index)
+    if kind.mask is not _threshold_mask:
+        return None
+    members = _members(kind, definition)
+    then = {member: _earlier(df, str(member), spec) for member, spec in members.items()}
+    if all(mask is None for mask in then.values()):
+        return None
+    fired = pd.DataFrame(
+        {
+            member: mask if mask is not None else criterion_mask(df, str(member), members[member])
+            for member, mask in then.items()
+        },
+        index=df.index,
+    )
+    return fired.sum(axis=1) >= int(definition["threshold"])  # as _threshold_mask counts
 
 
 def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:

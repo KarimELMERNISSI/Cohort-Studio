@@ -778,10 +778,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   reason for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added,
   with the expression that keeps them; the AI engine that writes criteria is told the rule.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
-  (version 1), not the data; a population now records the version of the rules it was read under.
+  (version 1), not the data; a population now records the version of the rules it was read under. A population that
+  kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one
+  that holds neither stops the replay at a step that changes the data on it (a freeze, an imputation), rather than
+  read its criteria under the new rules.
 - **A study configuration written before** says so when it is loaded: the configuration downloaded records the
   version of its rules (`rules_version`), and one uploaded without it, or of an earlier version, names the criteria
-  that select other rows of the loaded data now, with how many more or fewer rows each excludes.
+  that select other rows of the loaded data now, with how many more or fewer rows each excludes, a family counted
+  "at least k of" its rules included.
 - **What changes:** a study whose criteria use `!=` or `~` on a column with missing values may select other rows. The
   rules' version is now 2, so every study with criteria gets a new fingerprint; its files, saved before, still load.
   The participant flow, the dossier and the quality dashboard's help say how a missing value counts.
