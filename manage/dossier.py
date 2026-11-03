@@ -110,19 +110,31 @@ def _pairs(doc: Any, rows: list[tuple[str, str]]) -> None:
     _table(doc, pd.DataFrame(rows, columns=["Item", "Value"]))
 
 
+_LACKING = "Of them, lacking a value it reads"  # an inclusion criterion's exclusions for want of a value
+
+
 def _exclusions(flow: ParticipantFlow) -> pd.DataFrame:
     rows = []
     for exit_ in flow.exits:
+        missing = dict(exit_.missing)
         if exit_.reasons:
             rows.extend(
-                {"Step": exit_.label, "Criterion": name, "Rows excluded first": f"{n:,}"}
+                {
+                    "Step": exit_.label,
+                    "Criterion": name,
+                    "Rows excluded first": f"{n:,}",
+                    _LACKING: f"{missing[name]:,}" if missing.get(name) else "",
+                }
                 for name, n in exit_.reasons
             )
         else:
             rows.append(
-                {"Step": exit_.label, "Criterion": "", "Rows excluded first": f"{exit_.n:,}"}
+                {"Step": exit_.label, "Criterion": "", "Rows excluded first": f"{exit_.n:,}", _LACKING: ""}
             )
-    return pd.DataFrame(rows, columns=["Step", "Criterion", "Rows excluded first"])
+    columns = ["Step", "Criterion", "Rows excluded first"]
+    if any(exit_.missing for exit_ in flow.exits):  # the column only when a value was lacking
+        columns.append(_LACKING)
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _frozen_criteria(flow: ParticipantFlow) -> list[str]:

@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 import enrich.external_data as eed
+from core.criteria import RULES_VERSION
 from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
 from core.population import criteria_from_trace, evaluate_population
 from core.registry import UnknownIdError
@@ -172,16 +173,42 @@ def _population_rows(
     criteria = criteria_from_trace(block)
     if not criteria:
         return df.index
+    recorded = _rules_version(block)
+    if recorded != RULES_VERSION:  # read otherwise when recorded: the rows it kept then, when the step holds them
+        then = f"recorded under rules version {recorded} ({_RULES_BEFORE.get(recorded, 'read otherwise')})"
+        if block.get("included") is not None:
+            warnings.append(
+                f"step {index + 1}: the analysis population was {then}: the rows it kept then are used, not its "
+                f"criteria read under version {RULES_VERSION}"
+            )
+            return df.index.intersection(pd.Index(ranges_to_ids(block["included"])))
+        warnings.append(
+            f"step {index + 1}: the analysis population was {then}, without its rows (too many to hold): its "
+            f"criteria are read under version {RULES_VERSION}, which may keep other rows"
+        )
     frame = (frames or {}).get(str(block.get("data_fp") or ""), df)
     result = evaluate_population(frame, criteria)
     if not result.ok:
         raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
-    if block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
+    if recorded == RULES_VERSION and block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
         warnings.append(
             f"step {index + 1}: the analysis population re-evaluated on the replayed data keeps other rows "
             "than when the step was recorded"
         )
     return result.included if frame is df else df.index.intersection(result.included)
+
+
+# how the rules were read before each version (core.criteria.RULES_VERSION), for a population recorded then
+_RULES_BEFORE = {1: "a test written with != or ~ (not) was true on a missing value then"}
+
+
+def _rules_version(block: Mapping[str, Any]) -> int:
+    """The version of how a recorded population's rules were read: 1 when the block names none (written before the
+    version was recorded), 0 when it names one that is no number."""
+    try:
+        return int(block.get("rules_version") or 1)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _snapshot(step: dict[str, Any], paths: PathResolver | None) -> pd.DataFrame | None:

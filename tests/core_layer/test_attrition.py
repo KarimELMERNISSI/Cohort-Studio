@@ -131,6 +131,44 @@ def test_malformed_lines_and_rows_removed_by_a_step_have_their_own_boxes() -> No
     assert flow.inconsistencies() == []
 
 
+def test_the_flow_counts_the_rows_an_inclusion_criterion_excludes_for_want_of_a_value() -> None:
+    """Pregnancy recorded for the women only: "Not pregnant" written as an inclusion criterion excludes the men too,
+    whose value is missing; the flow says how many of its exclusions lack a value it reads, beside its definition."""
+    from core.population import active_criteria, evaluate_population
+
+    frame = pd.DataFrame(
+        {
+            "sex": ["M", "M", "M", "F", "F", "F"],
+            "pregnant": [None, None, None, "Yes", "No", "No"],
+            "age": [30, 40, None, 30, 25, 35],
+        }
+    )
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Not pregnant": {"expression": "df['pregnant'] != 'Yes'"},
+                "Adult": {"expression": "df['age'] >= 18"},
+            }
+        }
+    }
+    population = evaluate_population(
+        frame, active_criteria(config, [c.id for c in catalogue(config)])
+    )
+    assert list(population.included) == [4, 5]
+    counts = {c.criterion.name: (c.sequential, c.missing) for c in population.counts}
+    assert counts == {
+        "Not pregnant": (4, 3),
+        "Adult": (0, 0),
+    }  # row 2 lacks both: excluded first by the first
+    (stage,) = participant_flow(population).exits
+    assert (
+        stage.details[-1]
+        == "Not pregnant: 3 of the 4 rows it excludes first lack a value it reads (pregnant)"
+    )
+    assert population.to_trace()["counts"][0]["missing"] == 3
+
+
 def test_boxes_that_do_not_add_up_are_reported() -> None:
     flow = ParticipantFlow(
         main=(FlowBox("a", "A", 100, "loaded"), FlowBox("b", "B", 90, "stage")),

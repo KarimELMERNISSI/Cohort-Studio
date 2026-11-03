@@ -5,7 +5,8 @@ A criterion *fires* on a row when its condition holds: for a plausibility or out
 is flagged, for an inclusion criterion the row meets it. A missing value never fires (a value is not
 flagged implausible when missing, an inclusion criterion is not met by one), unless an expression asks for
 missing values explicitly (``df['x'].isna()``): an expression is read in three-valued logic, as SQL's WHERE reads
-it (core.expressions.kleene), so a test written with != or ~ does not fire on a missing value either.
+it (core.expressions.kleene), so a test written with !=, ~, .ne() or == False does not fire on a missing value
+either, unless the expression gives missing values a value itself (fillna, np.where, a text test's na=).
 
 Every problem raises :class:`CriterionError`, so a population built on a broken criterion fails visibly instead
 of silently keeping or dropping rows. The Validate checks and the quality dashboard evaluate the rules here too
@@ -715,18 +716,22 @@ CRITERION_KINDS.register(
 # expression: {"expression": "df['age'] > 110"} a whitelisted boolean expression (core.expressions)
 
 
-def _expression_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
-    """Where the expression is True, read in three-valued logic: a comparison or a test on a missing value is
-    unknown, and an unknown row never fires (core.expressions.kleene)."""
+def _expression_value(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> Any:
+    """The expression's value, read in three-valued logic: unknown (NA) where a comparison or a test meets a missing
+    value (core.expressions.kleene)."""
     expression = str(definition.get("expression")).strip()
     try:
         tree = three_valued(validate(expression))  # the user's expression is checked as written
-        result = evaluate_tree(tree, df, policy=_THREE_VALUED, extra_locals=HELPERS)
+        return evaluate_tree(tree, df, policy=_THREE_VALUED, extra_locals=HELPERS)
     except UnsafeExpressionError as exc:
         raise CriterionError(f"criterion '{name}': expression rejected ({exc})") from exc
     except Exception as exc:
         raise CriterionError(f"criterion '{name}': {exc}") from exc
-    return _as_mask(result, df.index)
+
+
+def _expression_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
+    """Where the expression is True: an unknown row never fires."""
+    return _as_mask(_expression_value(df, name, definition), df.index)
 
 
 def _expression_columns(name: str, definition: Mapping[str, Any]) -> tuple[str, ...]:
@@ -868,6 +873,30 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
         raise
     except Exception as exc:
         raise CriterionError(f"criterion '{name}': {exc}") from exc
+
+
+def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
+    """
+    The rows where a criterion does not fire for want of a value: an expression where its value is unknown in
+    three-valued logic (a comparison or a test met a missing value), any other kind where it does not fire and a column
+    it reads is missing (listed rows read none). An inclusion criterion excludes these rows, which the participant
+    flow counts apart. Never raises: no row when the criterion cannot be read (:func:`criterion_mask` says why).
+    """
+    none = pd.Series(False, index=df.index)
+    try:
+        kind = rule_kind(name, definition)
+        if kind.mask is _expression_mask:
+            value = _expression_value(df, name, definition)
+            if not isinstance(value, pd.Series) or len(value) != len(df.index):
+                return none
+            return pd.Series(value.isna().to_numpy(dtype=bool), index=df.index)
+        missing = none.copy()
+        for column in criterion_columns(name, definition):
+            if column in df.columns:
+                missing |= df[column].isna().to_numpy(dtype=bool)
+        return missing & ~criterion_mask(df, name, definition)
+    except Exception:
+        return none
 
 
 def rule_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
@@ -1079,6 +1108,7 @@ __all__ = [
     "combined_rules",
     "criterion_columns",
     "criterion_mask",
+    "criterion_unknown",
     "criterion_problems",
     "describe_definition",
     "expression_rule",

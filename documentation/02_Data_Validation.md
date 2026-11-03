@@ -131,8 +131,13 @@ brackets.
   excluded when df['age'] > 110", or for an inclusion criterion, which is a requirement, "Adult: excluded unless
   18 <= age <= 85". The note under them says how a missing value counts: a participant whose value is missing meets
   no condition on it, so an exclusion criterion keeps them and an inclusion criterion excludes them (in an
-  expression, a missing value meets `.isna()` only: a comparison or a test on it is unknown, as SQL's `WHERE` reads
-  it, so a condition written with `!=` or `~` does not meet it either). Below, the
+  expression, a comparison or a test on a missing value is unknown, as SQL's `WHERE` reads it, however it is
+  written: `!=`, `~`, `.ne()`, `== False`; `.isna()` finds missing values, and an expression that gives a missing
+  value a value itself, with `fillna`, `np.where`, a text test's `na=` or a missing value in an `isin` list, decides
+  what it gives). So an inclusion criterion "not pregnant", `df['pregnant'] != 'Yes'`, excludes every participant
+  whose pregnancy is not recorded, men included: to keep them, write
+  `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`, or the rule as an exclusion criterion,
+  `df['pregnant'] == 'Yes'`. Below, the
   tables give the rows in, excluded and out for each family, what each criterion excludes (on the whole table, at
   its step, and as the first reason), and the excluded rows with their reasons.
 - **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is

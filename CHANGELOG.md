@@ -751,8 +751,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   `df['status'] != 'withdrawn'` on every missing status, against the rule that a missing value fires no criterion.
 - **Now:** an expression is read in three-valued logic, as SQL's `WHERE` reads it: a comparison or a test of a value
   (`isin`, `between`, the tests of `.str`) on a missing value is unknown, "not unknown" is unknown, and a rule fires
-  where its expression is true only. `.isna()` still finds the missing values, and `df['x'].isna() | (...)` fires on
-  them; a test inside a call (`np.where`, `.astype`, `fillna`) is read as before.
+  where its expression is true only. One reading however the test is spelt: `.ne()`, `.ge()` and the other comparison
+  methods, `np.logical_not` and its siblings, `(test) == False`, and `between` with a missing bound (unknown unless
+  the other comparison is false). `.isna()` still finds the missing values, and `df['x'].isna() | (...)` fires on
+  them; an expression that gives a missing value a value itself is read as before: inside a call (`np.where`,
+  `.astype`, `fillna`), a text test's `na=`, a missing value in an `isin` list.
+- **An inclusion criterion written as a negation** ("not pregnant", `df['pregnant'] != 'Yes'`) now excludes every
+  participant whose value is missing, men included where pregnancy is recorded for women only: write
+  `df['pregnant'].isna() | (df['pregnant'] != 'Yes')` to keep them, or the rule as an exclusion criterion.
+- **Said where it counts.** The participant flow and the dossier count apart the rows an inclusion criterion excludes
+  for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a
+  reason for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added,
+  with the expression that keeps them; the AI engine that writes criteria is told the rule.
+- **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
+  (version 1), not the data; a population now records the version of the rules it was read under.
 - **What changes:** a study whose criteria use `!=` or `~` on a column with missing values may select other rows. The
   rules' version is now 2, so every study with criteria gets a new fingerprint; its files, saved before, still load.
   The participant flow, the dossier and the quality dashboard's help say how a missing value counts.

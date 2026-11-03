@@ -12,7 +12,13 @@ import monitor.changes as mc
 import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from app_pages.validate_dates import date_candidates, dates_found
-from core.criteria import expression_rule, listed_rows_rule, numeric_rule
+from core.criteria import (
+    criterion_columns,
+    criterion_unknown,
+    expression_rule,
+    listed_rows_rule,
+    numeric_rule,
+)
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
 from core.fingerprint import ids_to_ranges
@@ -1412,6 +1418,44 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
 
 ##### INCLUSION PART
 
+def unknown_advice(
+    df: pd.DataFrame, name: str, definition: dict[str, Any]
+) -> tuple[str, str | None] | None:
+    """
+    What an inclusion criterion does where it is unknown for want of a value: it excludes those rows (a missing value
+    meets no condition, written with != or ~ too: "not pregnant" excludes the men whose pregnancy is not recorded).
+    The words, and the expression that keeps them (None for a kind other than an expression); None when the criterion
+    is known on every row.
+    """
+    unknown = int(criterion_unknown(df, name or "criterion", definition).sum())
+    if not unknown or not len(df):
+        return None
+    columns = criterion_columns(name or "criterion", definition)
+    them = "them" if unknown != 1 else "it"
+    kept = (
+        " | ".join(f"df[{c!r}].isna()" for c in columns) + f" | ({definition['expression']})"
+        if definition.get("expression") and columns
+        else None
+    )
+    words = (
+        f"Unknown on {unknown:,} row{'s' if unknown != 1 else ''} ({unknown / len(df):.0%}), where a value it reads "
+        f"is missing ({', '.join(columns) or 'its columns'}): as an inclusion criterion, it excludes {them}."
+        + (f" To keep {them}, write it this way:" if kept else "")
+    )
+    return words, kept
+
+
+def _say_unknown(df: pd.DataFrame, name: str, definition: dict[str, Any], st_container) -> None:
+    """The advice of :func:`unknown_advice`, said before the criterion is added."""
+    advice = unknown_advice(df, name, definition)
+    if advice is None:
+        return
+    words, kept = advice
+    st_container.warning(plain(words), icon=":material/help:")
+    if kept:
+        st_container.code(kept, language="python")
+
+
 def add_study_inclusion_mask(config: dict[str, Any], st_container):
     st_container.subheader("Define New Study Inclusion Criterion")
 
@@ -1447,6 +1491,8 @@ def add_study_inclusion_mask(config: dict[str, Any], st_container):
         mask_details = handle_numeric_mask_input(st_container, base_key=family_name)
     else:
         mask_details = handle_expression_mask_input(st_container, base_key=family_name)
+    if mask_details and get_state().base is not None:
+        _say_unknown(get_state().base, mask_name, mask_details, st_container)
 
     if mask_details and st_container.button("Add Inclusion Criterion"):
         config["mask_families"][family_name][mask_name] = mask_details

@@ -272,3 +272,45 @@ def test_values_imputed_by_an_exact_formula_are_documented_apart() -> None:
     text = "\n".join(p.text for p in Document(build_dossier(inp)).paragraphs)
     assert "3 values were imputed by an exact formula" in text and "(weight_kg: 3)" in text
     assert "2 values were filled by single imputation (ldl_mmol_l: 2)" in text
+
+
+def test_the_exclusions_table_counts_the_rows_lacking_a_value_an_inclusion_criterion_reads() -> (
+    None
+):
+    """Pregnancy recorded for the women only: "Not pregnant", an inclusion criterion, excludes the men for want of a
+    value; the dossier's table says how many of its exclusions lack one (a reason of its own, STROBE item 13)."""
+    import pandas as pd
+
+    from core.attrition import participant_flow
+    from core.population import active_criteria, catalogue, evaluate_population
+    from manage.dossier import _exclusions
+
+    frame = pd.DataFrame({"pregnant": [None, None, None, "Yes", "No", "No"]})
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Not pregnant": {"expression": "df['pregnant'] != 'Yes'"},
+            }
+        }
+    }
+    population = evaluate_population(
+        frame, active_criteria(config, [c.id for c in catalogue(config)])
+    )
+    table = _exclusions(participant_flow(population))
+    assert table.to_dict("records") == [
+        {
+            "Step": table.at[0, "Step"],
+            "Criterion": "Not pregnant",
+            "Rows excluded first": "4",
+            "Of them, lacking a value it reads": "3",
+        }
+    ]
+    # without a value lacking, the table keeps its three columns
+    frame = pd.DataFrame({"pregnant": ["Yes", "No", "No"]})
+    table = _exclusions(
+        participant_flow(
+            evaluate_population(frame, active_criteria(config, [c.id for c in catalogue(config)]))
+        )
+    )
+    assert list(table.columns) == ["Step", "Criterion", "Rows excluded first"]

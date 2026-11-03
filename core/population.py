@@ -27,11 +27,13 @@ import numpy as np
 import pandas as pd
 
 from core.criteria import (
+    RULES_VERSION,
     CriterionError,
     RuleCheck,
     criterion_columns,
     criterion_mask,
     criterion_problems,
+    criterion_unknown,
     holds_row_list,
     rule_checks,
     shared_definition,
@@ -575,6 +577,8 @@ class CriterionCount:
     marginal_base: int  # rows of the whole table the criterion excludes
     marginal_in_stage: int  # rows entering its family's stage that it excludes
     sequential: int  # rows it excludes that no earlier criterion of the stage excluded
+    # of those, the rows an inclusion criterion excludes for want of a value it reads (core.criteria.criterion_unknown)
+    missing: int = 0
 
 
 @dataclass(frozen=True)
@@ -625,12 +629,14 @@ class PopulationResult:
         )
 
     def to_trace(self, *, inline_limit: int = _INLINE_IDS) -> dict[str, Any]:
-        """JSON-able record of the population for the transformation trace."""
+        """JSON-able record of the population for the transformation trace, with the version of how its rules were
+        read (a replay under other rules uses the rows recorded: ``manage.reproduction_manager``)."""
         block: dict[str, Any] = {
             "fingerprint": self.fingerprint,
             "data_fp": self.data_fp,
             "rows_fp": self.rows_fingerprint,
             "spec_fp": self.spec_fingerprint,
+            "rules_version": RULES_VERSION,
             "n_base": self.n_base,
             "n_included": self.n_included,
             "criteria": [c.snapshot() for c in self.criteria],
@@ -641,6 +647,7 @@ class PopulationResult:
                     "marginal_base": c.marginal_base,
                     "marginal_in_stage": c.marginal_in_stage,
                     "sequential": c.sequential,
+                    **({"missing": c.missing} if c.missing else {}),
                 }
                 for c in self.counts
             ],
@@ -663,6 +670,9 @@ def evaluate_population(
     criterion: its error is recorded and the result is not ``ok`` (callers must refuse to analyse it)."""
     n = len(df)
     excluded: dict[str, np.ndarray] = {}
+    unknown: dict[
+        str, np.ndarray
+    ] = {}  # an inclusion criterion's rows excluded for want of a value
     errors: dict[str, str] = {}
     for c in criteria:
         try:
@@ -671,6 +681,8 @@ def evaluate_population(
             errors[c.id] = str(exc)
             continue
         excluded[c.id] = fires if c.kind == EXCLUSION else ~fires
+        if c.kind != EXCLUSION:
+            unknown[c.id] = criterion_unknown(df, c.name, c.definition).to_numpy(dtype=bool)
 
     families: list[str] = []
     for c in criteria:
@@ -688,12 +700,14 @@ def evaluate_population(
             if mask is None:
                 continue
             in_stage = mask & remaining
+            first = in_stage & ~stage_excluded
             counts.append(
                 CriterionCount(
                     c,
                     marginal_base=int(mask.sum()),
                     marginal_in_stage=int(in_stage.sum()),
-                    sequential=int((in_stage & ~stage_excluded).sum()),
+                    sequential=int(first.sum()),
+                    missing=int((first & unknown[c.id]).sum()) if c.id in unknown else 0,
                 )
             )
             stage_excluded |= in_stage

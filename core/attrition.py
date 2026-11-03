@@ -21,7 +21,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from core.criteria import describe_definition
+from core.criteria import criterion_columns, describe_definition
 from core.population import EXCLUSION, INCLUSION, PopulationResult, family_words
 from core.steps import flow_name
 
@@ -57,6 +57,8 @@ class FlowExit:
     n: int
     reasons: tuple[tuple[str, int], ...] = ()  # (criterion, rows it was the first reason for)
     details: tuple[str, ...] = ()  # the definitions of the criteria
+    # (an inclusion criterion, how many of the rows it was the first reason for lack a value it reads)
+    missing: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,8 +122,10 @@ class ParticipantFlow:
 # Under the flow's details and the dossier's criteria: how a missing value counts (core.criteria).
 MISSING_VALUES_NOTE = (
     "A participant whose value is missing meets no condition on it: an exclusion criterion keeps them, an inclusion "
-    "criterion excludes them. In an expression, a missing value meets .isna() only: a comparison or a test on it is "
-    "unknown, and met by no condition, written with != or ~ (not) too."
+    "criterion excludes them. In an expression, a comparison or a test on a missing value is unknown and meets no "
+    "condition, however it is written (!=, ~, .ne(), == False); .isna() finds it, and an expression that gives a "
+    "missing value a value itself (fillna, np.where, a text test's na=, a missing value in an isin list) decides "
+    "what it gives."
 )
 
 
@@ -137,6 +141,19 @@ def criterion_line(name: str, kind: str, definition: Mapping[str, Any]) -> str:
     if kind not in (EXCLUSION, INCLUSION) or words.startswith(("cannot be evaluated", "never met")):
         return f"{name}: {words}"
     return f"{name}: excluded {'when' if kind == EXCLUSION else 'unless'} {words}"
+
+
+def missing_line(name: str, definition: Mapping[str, Any], missing: int, first: int) -> str:
+    """
+    How many of the rows an inclusion criterion excludes first lack a value it reads: a reason of its own (STROBE asks
+    for the reasons for non-participation), which a rule written as a negation ("not pregnant") makes common where a
+    variable is recorded for a subgroup only. Counts and the columns' names, never a value.
+    """
+    columns = ", ".join(criterion_columns(name, definition)) or "its columns"
+    return (
+        f"{name}: {missing:,} of the {first:,} row{'s' if first != 1 else ''} it excludes first "
+        f"lack{'s' if first == 1 else ''} a value it reads ({columns})"
+    )
 
 
 def _added_lines(step: Mapping[str, Any], added: int) -> tuple[str, ...]:
@@ -224,14 +241,28 @@ def participant_flow(
         block = step.get("population") or {}
         if function == "freeze_population" and block.get("counts"):
             names = {c["id"]: c["name"] for c in block.get("criteria") or []}
+            definitions = {c["id"]: c.get("definition") or {} for c in block.get("criteria") or []}
             reasons = tuple(
                 (names.get(c["id"], c["id"]), int(c["sequential"]))
                 for c in block["counts"]
                 if int(c.get("sequential") or 0)
             )
-            details = details + tuple(
-                criterion_line(c["name"], c.get("kind"), c.get("definition") or {})
-                for c in block.get("criteria") or []
+            details = (
+                details
+                + tuple(
+                    criterion_line(c["name"], c.get("kind"), c.get("definition") or {})
+                    for c in block.get("criteria") or []
+                )
+                + tuple(
+                    missing_line(
+                        names.get(c["id"], c["id"]),
+                        definitions.get(c["id"], {}),
+                        int(c["missing"]),
+                        int(c.get("sequential") or 0),
+                    )
+                    for c in block["counts"]
+                    if int(c.get("missing") or 0)
+                )
             )
         if removed:
             exits.append(
@@ -278,7 +309,19 @@ def participant_flow(
                 _family_label(stage.family, stage.kind),
                 stage.n_excluded,
                 reasons=reasons,
-                details=tuple(criterion_line(c.name, c.kind, c.definition) for c in members),
+                details=tuple(criterion_line(c.name, c.kind, c.definition) for c in members)
+                + tuple(
+                    missing_line(
+                        c.name, c.definition, counts[c.id].missing, counts[c.id].sequential
+                    )
+                    for c in members
+                    if c.id in counts and counts[c.id].missing
+                ),
+                missing=tuple(
+                    (c.name, counts[c.id].missing)
+                    for c in members
+                    if c.id in counts and counts[c.id].missing
+                ),
             )
         )
         last = k == len(stages) - 1
@@ -381,6 +424,7 @@ __all__ = [
     "ParticipantFlow",
     "SourceRows",
     "criterion_line",
+    "missing_line",
     "flow_layout",
     "participant_flow",
     "source_from_trace",

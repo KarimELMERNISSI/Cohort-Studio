@@ -186,11 +186,15 @@ def render_flow(flow: ParticipantFlow | None, *, key: str) -> None:
     for line in item.details:  # names and expressions as written: the user's text, never Markdown
         st.caption(plain(line))
     if isinstance(item, FlowExit) and item.reasons:
-        st.dataframe(
-            pd.DataFrame(item.reasons, columns=["Criterion", "Rows it excluded first"]),
-            hide_index=True,
-            alt="Criteria behind this exclusion",
-        )
+        table = pd.DataFrame(item.reasons, columns=["Criterion", "Rows it excluded first"])
+        if (
+            item.missing
+        ):  # an inclusion criterion's exclusions for want of a value, a reason of their own
+            lacking = dict(item.missing)
+            table["Of them, lacking a value it reads"] = [
+                lacking.get(name, 0) for name, _ in item.reasons
+            ]
+        st.dataframe(table, hide_index=True, alt="Criteria behind this exclusion")
     st.caption(
         "Participant flow (STROBE item 13): each exclusion counts the rows that criterion excluded first, in the "
         "order of the study configuration, so the counts add up to the next box."

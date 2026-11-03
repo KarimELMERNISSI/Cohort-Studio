@@ -540,12 +540,16 @@ A numeric range reads the column named like the rule, or the one its `"column"` 
 An expression uses `df['column']` (bare names are rejected), `& | ~` with parenthesised comparisons, and the
 allow-listed `pd.*` / `np.*` functions and Series methods of `core.expressions.safe_eval` (`isin`, `between`,
 `.str.*`, `.dt.*`, `pd.to_datetime(..., dayfirst=True)`, ...). A missing value meets no condition of the other kinds.
-In an expression it meets `.isna()` only. An expression is read in three-valued logic (Kleene's, as SQL's `WHERE`;
-`core.expressions.kleene`): a comparison or a membership test (`isin`, `between`, the tests of `.str`) at the level
-of the expression's logic (the expression itself, the operands of `& | ^`, the operand of `~`) is unknown where an
-operand is missing, `~unknown` is unknown, and a rule fires where its expression is True only. A test inside a call
-(`np.where`, `.astype`, a sum) is read as Python reads it. This reading is `RULES_VERSION` 2: a change to it is a new
-number, which changes the fingerprint of every study with criteria.
+In an expression, `.isna()` finds it. An expression is read in three-valued logic (Kleene's, as SQL's `WHERE`;
+`core.expressions.kleene`): a comparison or a test of a value at the level of the expression's logic (the expression
+itself, the operands of `& | ^` and of `np.logical_and/or/xor`, the operand of `~` and of `np.logical_not`) is unknown
+where an operand is missing, `~unknown` is unknown, and a rule fires where its expression is True only. One reading
+however the test is spelt: the methods `eq ne lt le gt ge` are the comparisons, a test compared with True or False is
+the test or its negation, `between` is its two comparisons (unknown where the value or a bound is missing, unless the
+other is False), and `isin` and the tests of `.str` are unknown where the value is missing. An expression that gives a
+missing value a value itself is read as Python reads it: inside a call (`np.where`, `.astype`, `fillna`, a sum), a
+comparison method with `fill_value=`, a text test with `na=`, an `isin` list holding a missing value. This reading is
+`RULES_VERSION` 2: a change to it is a new number, which changes the fingerprint of every study with criteria.
 
 `core.criteria.rule_kind` is the only place that decides a rule's kind:
 

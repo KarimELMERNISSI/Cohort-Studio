@@ -77,6 +77,7 @@ Instructions:
 3. Write a VALID Python boolean expression for each condition (e.g., `(df['age'] > 18) & (df['status'] == 'Active')`).
     - **Date Logic:** Check the Date Parsing Hints of the Data Summary. If dates are 'DD/MM/YYYY', use `format='%d/%m/%Y'`. If ambiguous, use `dayfirst=True` and `errors='coerce'`.
     - **Example:** `(pd.to_datetime(df['visit'], dayfirst=True) - pd.to_datetime(df['dob'], dayfirst=True)) > pd.Timedelta(days=365*18)`
+    - **Missing values:** a missing value meets no condition, written with `!=` or `~` (not) too, so a row whose value is missing is never flagged by a plausibility rule and is excluded by an inclusion criterion. To keep such rows in an inclusion criterion (a variable recorded for some patients only, such as pregnancy), write `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`.
 4. Choose a short, descriptive name for the criteria (snake_case).
 5. Provide a brief explanation.
 
