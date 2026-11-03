@@ -299,6 +299,9 @@ def render_dashboard(df, config):
                         if item['category'] == DERIVED_CATEGORY:
                             page_link("enrich", "Open the derived variables", icon=":material/calculate:",
                                       tab="derived_variables")
+                        elif item['category'] == "Uniformity":
+                            page_link("clean", "Clean categories", icon=":material/cleaning_services:",
+                                      tab="categories")
             
             with col_best_practices:
                 st.markdown("### Data Quality Best Practices")
@@ -1309,8 +1312,10 @@ def render_dashboard(df, config):
             if "Uniformity" in metrics:
                 st.metric("Uniformity Score", f"{metrics['Uniformity']}%")
                 if metrics['Uniformity'] < 100:
-                    st.warning("Inconsistent text formatting detected.")
-                    
+                    st.warning("Inconsistent text formatting detected: clean these columns on Data > Clean > "
+                               "Categories, each into a copy beside it.")
+                    page_link("clean", "Clean categories", icon=":material/cleaning_services:", tab="categories")
+
                     if hasattr(auditor, 'uniformity_details') and auditor.uniformity_details:
                         st.markdown("### Uniformity Issues")
                         uniformity_df = pd.DataFrame(auditor.uniformity_details)

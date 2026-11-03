@@ -410,8 +410,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Groups to include: groups that differ only by a space are told apart.** "Luxembourg" and "Luxembourg " are two
   groups, which the list showed identically, so the tutorial cohort's sites seemed to be listed twice.
   - A space at either end, or a run of spaces, now shows as ␣ (*Luxembourg␣*).
-  - A warning names the groups that differ only by spaces or capitals, and gives the formula of a cleaned copy to
-    group by, to add in Enrich > Create New Variables: for example `site_clean` = `site.str.strip()`.
+  - A warning names the groups that differ only by spaces or capitals, and where to clean them: Data > Clean >
+    Categories, into a copy beside the variable (`site_clean`) to group by.
   - Nothing is merged for you: the analysis uses the values as they are.
   - The same applies to the pooled comparison over the imputed datasets and to the power analysis.
   - Another grouping variable now starts with all its groups. The list kept the previous variable's choice, none of
@@ -1147,7 +1147,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   what runs is what you chose.
 - **What would make a model's terms unstable, before it runs:** a variable left with one value in the rows used
   (the model left it out without a word), one value written several ways ("F", "F␣", "female", each a group of its
-  own, with the formula of a cleaned copy), levels held by fewer than 10 rows or without an event, variables that are
+  own, to clean on Data > Clean), levels held by fewer than 10 rows or without an event, variables that are
   exact combinations of others, and strong collinearity (variance inflation above 10, the generalised VIF of Fox and
   Monette for a categorical variable), each with the variable it is most correlated with.
 - **A level without events is named whatever its size, and an extreme estimate is flagged.** The plan looked for
@@ -1364,6 +1364,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   that changes no data: the Start page no longer counts it as a new revision of the data or marks the analyses and the
   report out of date, the quality history adds no revision for it, and the replay checks that redoing it leaves the
   table as it was.
+- **The analysis warnings and the quality dashboard point to Clean.** The warning under a list of groups (two-group
+  tests, the pooled comparison over imputed datasets, the power analysis) and Survival & regression's plan said to
+  add a cleaned copy in Enrich with a formula (`sex.str.strip().str.lower()`, which keeps *f* and *female* apart);
+  they now say to clean the variable on Data > Clean > Categories, into a copy beside it, and use the copy. The
+  dashboard's Uniformity advice names its columns as code, says the same, and links to Clean's Categories tab, as
+  does its Uniformity panel.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

@@ -298,3 +298,28 @@ def test_a_name_is_quoted_as_code_and_cannot_become_a_link() -> None:
     message = _advice(_bmi_frame(), DerivedVariable("[x](https://example.org)", "weight_kg * 2"))
     assert "`[x](https://example.org)`: its formula cannot be used on these data." in message
     assert message.count("](https://example.org)") == 1  # only inside the code span
+
+
+def test_the_uniformity_advice_points_to_the_clean_page_and_quotes_names_as_code() -> None:
+    """It advised normalising the text by hand (trim, standardise case), which keeps "f" and "female" apart, and set
+    the names in bold: a column named in a file could format the sentence or become a link."""
+    frame = pd.DataFrame(
+        {
+            "site": ["Metz", "Metz ", "metz"] * 10,
+            "[x](https://example.org)": ["a", "A", "a"] * 10,
+            "unit": ["kg"] * 30,
+        }
+    )
+    auditor = DataQualityAuditor(frame)
+    auditor.run_audit()
+    (advice,) = [a for a in auditor.advice if a["category"] == "Uniformity"]
+    message = advice["message"]
+    assert message.startswith(
+        "Some text columns hold values with stray spaces, or one value written with different capitals. Check "
+    )
+    assert "`site`" in message and "`[x](https://example.org)`" in message and "`unit`" not in message
+    assert message.count("](https://example.org)") == 1  # only inside the code span
+    assert message.endswith(
+        "Clean them on Data > Clean > Categories, each into a copy beside it; the original is kept."
+    )
+    assert "normaliz" not in message and "**" not in message

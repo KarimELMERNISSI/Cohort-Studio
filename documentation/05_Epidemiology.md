@@ -182,7 +182,8 @@ on how many rows and events, and what to check first. It names:
 - the rows a model leaves out for a missing value;
 - fewer than 10 events per estimated term;
 - a variable left with one value in the rows used (the model leaves it out);
-- one value written several ways ("F", "F␣", "female"), each a group of its own, with the formula of a cleaned copy;
+- one value written several ways ("F", "F␣", "female"), each a group of its own: clean the variable first on
+  Data > Clean > Categories, into a copy beside it (`sex_clean`), and use the copy;
 - a level without an event (logistic: where every row or none has it), whatever its size: its ratio goes to 0 or
   to infinity and cannot be estimated (monotone likelihood, separation). Clean spelling variants first; merge a level
   only with one it belongs with on subject-matter grounds, chosen without looking at the outcome; a real level without

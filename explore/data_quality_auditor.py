@@ -684,12 +684,14 @@ class DataQualityAuditor:
 
         # 6. Uniformity Advice
         if self.metrics.get("Uniformity", 100) < 100:
-            msg = "String columns have inconsistent formatting."
-            if hasattr(self, 'uniformity_details') and self.uniformity_details:
-                top_cols = [d['Column'] for d in self.uniformity_details[:3]]
-                msg += f" Check columns: **{', '.join(top_cols)}**."
-            msg += " Consider normalizing text data (trim whitespace, standardize case)."
-            
+            msg = "Some text columns hold values with stray spaces, or one value written with different capitals."
+            if getattr(self, "uniformity_details", None):
+                names = [as_code(d["Column"]) for d in self.uniformity_details[:3]]
+                more = len(self.uniformity_details) - len(names)
+                msg += f" Check {', '.join(names)}" + (f" and {more} more" if more else "") + "."
+            # cleaned on the Clean page, into a copy beside each (an Enrich formula kept "f" and "female" apart)
+            msg += " Clean them on Data > Clean > Categories, each into a copy beside it; the original is kept."
+
             self.advice.append({
                 "category": "Uniformity",
                 "message": msg,

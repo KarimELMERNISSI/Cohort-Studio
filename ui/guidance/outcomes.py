@@ -220,8 +220,9 @@ def _some(levels: Sequence[Any], limit: int = 4) -> str:
 
 
 def _spellings(col: str, values: pd.Series) -> Advice | None:
-    """One value written several ways (spaces, capitals): each is a level of its own, as the lists show them."""
-    from ui.components.levels import alike_levels, cleaning_formula
+    """One value written several ways (spaces, capitals): each is a level of its own, as the lists show them, until the
+    variable is cleaned on Data > Clean, into a copy the analysis then uses."""
+    from ui.components.levels import CLEAN_WHERE, alike_levels
 
     alike = alike_levels(sorted(values.dropna().astype(str).unique()))
     if not alike:
@@ -230,7 +231,8 @@ def _spellings(col: str, values: pd.Series) -> Advice | None:
     return Advice(
         "caution",
         f"{as_code(col)} holds one value written several ways ({shown}): each is a group of its own. Clean it "
-        f"first, as a new variable {as_code(cleaning_formula(col, alike))} (Enrich > Create new variables).",
+        f"first on {CLEAN_WHERE}, into a copy beside it ({as_code(f'{col}_clean')} unless you name it otherwise), "
+        "and use the copy here.",
     )
 
 
