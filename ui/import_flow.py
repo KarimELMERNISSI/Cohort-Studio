@@ -164,10 +164,10 @@ def _render_options(draft: dict[str, Any]) -> ParseOptions:
         )
     )
     fields["dayfirst"] = c7.checkbox(
-        "Dates are day-first (31/12/2024)",
+        "Read 03/04/2024 as 3 April (day first)",
         value=current.dayfirst,
         key=f"imp_dayfirst_{draft['file_id']}",
-        help="European date order. Used when dates are parsed later.",
+        help="Off: 4 March (month first). Used when dates are read later.",
     )
     na_text = c8.text_input(
         "Missing-value tokens",

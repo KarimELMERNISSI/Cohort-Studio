@@ -145,6 +145,25 @@ class TestDataQualityAuditor:
         assert auditor_with_rules.clinical_anomalies_df is not None
         assert len(auditor_with_rules.clinical_anomalies_df) == 1
 
+    def test_a_range_rule_is_named_by_what_makes_it_fire_in_the_rows_it_breaks(self) -> None:
+        """A rule named by its column alone reads as its range in "Rules broken", as in the lines above the table."""
+        df = pd.DataFrame({"potassium": [4.0, 9.0, 1.0, 4.5], "sbp": [120, 250, 130, 125]})
+        config = {
+            "mask_families": {
+                "clinical_anomalies": {
+                    "potassium": {"numeric": True, "lower_bound": 2.5, "upper_bound": 7.0, "strategy": "exclude"},
+                    "Hypertensive crisis": {"expression": "df['sbp'] > 200"},
+                }
+            }
+        }
+        auditor = DataQualityAuditor(df, config=config)
+        auditor.compute_domain_validity()
+        broken = auditor.clinical_anomalies_df["Rules broken"].tolist()
+        assert broken == [
+            ["potassium < 2.5 or potassium > 7.0", "Hypertensive crisis"],
+            ["potassium < 2.5 or potassium > 7.0"],
+        ]
+
     def test_run_audit_and_generate_advice(self, dirty_cohort_df: pd.DataFrame) -> None:
         """Full audit run compiles all dimension scores and generates actionable advice."""
         auditor = DataQualityAuditor(dirty_cohort_df)

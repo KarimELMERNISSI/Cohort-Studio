@@ -267,9 +267,20 @@ class DataQualityAuditor:
                 # 2. Store the original values for display
                 self.clinical_anomalies_df = self.df[any_anomaly_mask].copy()
                 
-                # 3. Add a "Rules broken" column listing the rules that fire
+                # 3. Add a "Rules broken" column listing the rules that fire, a rule named by its column alone (a range)
+                # read as what makes it fire, as the lines above name it (_where)
+                def shown(rule: str) -> str:
+                    definition = anomaly_config.get(rule)
+                    if rule in self.df.columns and isinstance(definition, Mapping):
+                        said = describe_definition(rule, definition)
+                        if not said.startswith("cannot be evaluated"):
+                            return said
+                    return rule
+
+                names = {col: shown(str(col)) for col in self.clinical_anomalies_booleans.columns}
+
                 def get_active_anomalies(row):
-                    return [col for col in row.index if row[col]]
+                    return [names[col] for col in row.index if row[col]]
                 
                 anomalies_list = self.clinical_anomalies_booleans.apply(get_active_anomalies, axis=1)
                 self.clinical_anomalies_df.insert(0, "Rules broken", anomalies_list)

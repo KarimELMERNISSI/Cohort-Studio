@@ -4,7 +4,7 @@ Parallel imputation in a separate Python process.
 Worker processes started with ``spawn`` re-import the parent's ``__main__`` module. Inside Streamlit (and its
 AppTest) that module is the page script, which must not run again in the workers. ``impute(workers > 1)``
 therefore runs ``python -m biostats.mi.worker`` with the data and the specification in a temporary folder:
-there, ``__main__`` is that module and the process pool is safe.Progress is written to a small file that
+there, ``__main__`` is that module and the process pool is safe. Progress is written to a small file that
 the caller polls; the result comes back the same way. Each chain has its own random stream, so the result is
 the same as a sequential run.
 

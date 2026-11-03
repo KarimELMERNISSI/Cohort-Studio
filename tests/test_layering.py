@@ -19,7 +19,7 @@ package they serve (``UTILS_GROUPS``) until a milestone dissolves them. ``manage
 storage) are not ordered yet.
 
 - **R1** Imports go strictly down; two groups on the same layer do not import each other.
-- **R2** No import cycles. The one exception is the MI engine and its worker module, by design.
+- **R2** No import cycles: none is allowed (the parallel imputation's worker has a module of its own).
 - **R3** Nothing below ui reaches Streamlit, through any chain of imports. Graph renderers import it inside their
   ``render`` method only, and a Streamlit component package (yFiles) inside ``translate`` too.
 - **R4** The AI providers' SDKs are imported only in ``manage/rag/providers``.

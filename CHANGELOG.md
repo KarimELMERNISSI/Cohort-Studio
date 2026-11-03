@@ -1238,9 +1238,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ### Dates: read by the day-first choice or a declared format (M6, results)
 
-- **Day first by default.** Until a user chooses otherwise (Settings > Import defaults), an import reads dates day
-  first (31/12/2024), the order of the region the application serves; month first stays one switch away there and in
-  each import. Before, the default was month first: a file whose dates show no order (all completed to the 1st of the
+- **Day first by default.** Until a user chooses otherwise (Settings > Import defaults: "Read 03/04/2024 as 3 April
+  (day first)"), an import reads dates day first, the order of the region the application serves; month first stays
+  one switch away there and in each import. Before, the default was month first: a file whose dates show no order (all completed to the 1st of the
   month, 01/MM/YYYY) was read with day and month swapped.
 - **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
   of day and month from the largest numbers and otherwise passed each value to a general date reader: in one column
@@ -1435,6 +1435,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   even when no recorded value fails). The advice is *high* when one rule fails 5 checks or more and 10 % of its
   checks, or on a Wilson lower bound of 10 %, and the global score's sentence never says "ready for analysis" beside
   a high-priority advice. A failing score never prints 100.0 (the ring, its hover, the breakdown, the card's change).
+- A rule named by its column alone reads as what makes it fire ("potassium_mmol_l < 2.5 or potassium_mmol_l >
+  7.0"), in Domain Validity's lines, in "Where the score loses points" and in the *Rules broken* column of the rows
+  it breaks; Failing and Checked are whole numbers in every locale, and each card says how far its score is below
+  100 ("0.17 points below 100").
 
 ### Validate: clinical anomalies are now implausible values
 

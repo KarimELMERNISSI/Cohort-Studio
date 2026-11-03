@@ -38,8 +38,8 @@ with tab_import, st.container(border=True, width=760):
     st.subheader("Defaults applied when a file is imported", icon=":material/upload_file:", anchor=False)
     # kept for the session: Import, the page that reads it, does not show this toggle
     st.session_state.setdefault(IMPORT_DAYFIRST, DAYFIRST_DEFAULT)  # on until the user chooses
-    st.toggle("Treat dates as day-first (31/12/2024) by default", key=IMPORT_DAYFIRST,
-              help="The European date order, on by default. You can still change it per file in the import flow.",
+    st.toggle("Read 03/04/2024 as 3 April (day first) by default", key=IMPORT_DAYFIRST,
+              help="Off: 4 March (month first). Each import can change it, for its own file.",
               persist_state="session",
               on_change=save_from, args=(IMPORT_DAYFIRST, "import_dayfirst"))  # kept for the next session
     st.caption("Encoding, delimiter and decimal separator are always detected per file and shown for review.")
