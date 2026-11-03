@@ -1241,7 +1241,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Day first by default.** Until a user chooses otherwise (Settings > Import defaults: "Read 03/04/2024 as 3 April
   (day first)"), an import reads dates day first, the order of the region the application serves; month first stays
   one switch away there and in each import. Before, the default was month first: a file whose dates show no order (all completed to the 1st of the
-  month, 01/MM/YYYY) was read with day and month swapped.
+  month, 01/MM/YYYY) was read with day and month swapped. A file read outside Import (an enrichment file, Compare,
+  a configuration's data) takes the same choice, which its step records: it was read month first.
+- **Dates completed to the 1st decide their order.** Where no value shows the order but one reading puts every date
+  in one month (03/01/2024 read day first: 3 January, and so on), Date checks pre-fills the other, whatever the
+  setting, and asks: accepted as pre-filled, a month-first file of such dates was read wrong in 365 of 400 values.
 - **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
   of day and month from the largest numbers and otherwise passed each value to a general date reader: in one column
   it read two-digit years month first twice and day first once, took 20210305 for the year 57233 and 2021 for 1905,

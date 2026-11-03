@@ -54,6 +54,7 @@ _CHOICES = {
 _ORDER_FROM = {
     "data": "the data",
     "few_values": "a few values",
+    "one_month": "the spread of the months",
     "import_setting": "the import setting",
     "user": "your choice",
     "shape": "",
@@ -143,6 +144,18 @@ def _why(detection: Detection, values: pd.Series | None = None) -> str:
                     f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
                     f"{_spread(read_dates(values, 'month_first'))}."
                 )
+    if detection.order_source == "one_month":
+        first = "day" if detection.format == "day_first" else "month"
+        other = "month" if first == "day" else "day"
+        reasons.append(
+            f"No value shows whether the day or the month comes first; read {other} first, every date falls in one "
+            f"month, as for dates completed to the 1st: {first} first is pre-filled. Check it."
+        )
+        if values is not None:
+            reasons.append(
+                f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
+                f"{_spread(read_dates(values, 'month_first'))}."
+            )
     if detection.order_source == "few_values":
         shown = detection.day_first_only or detection.month_first_only
         way = "day" if detection.day_first_only else "month"
@@ -289,7 +302,8 @@ def _study_dates(state, options: list[str]) -> tuple[date | None, list[str]]:
 def _heaping(reports: dict[str, DateReport]) -> None:
     for column, report in reports.items():
         if report.january_first or report.month_first_day:
-            where = "1 January" if report.january_first else "the 1st of a month"
+            # dates on the 1st of every month heap on 1 January too: the 1st of a month says what the source did
+            where = "the 1st of a month" if report.month_first_day else "1 January"
             st.caption(
                 f":material/info: {as_code(column)}: many dates fall on {where}. Did the source complete dates it "
                 "knew only by their month or year?"

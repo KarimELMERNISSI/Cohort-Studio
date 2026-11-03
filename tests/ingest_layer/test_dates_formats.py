@@ -387,3 +387,22 @@ def test_a_column_already_dates_is_checked_as_it_is() -> None:
     assert recorded_formats(steps) == {
         "visit": {"format": "day_first"}
     }  # how a merge reads a file's visit
+
+
+def test_dates_completed_to_the_first_are_pre_filled_from_the_spread_of_their_months() -> None:
+    """No value shows the order, but read day first a month-first column of dates completed to the 1st falls in one
+    month (January): month first is pre-filled, whatever the setting, and asked; and the other way round."""
+    month_first = pd.Series([f"{m:02d}/01/2023" for m in range(1, 13)] * 30)
+    found = detect(month_first, dayfirst=True, name="visit")
+    assert (found.format, found.order_source, found.decided) == ("month_first", "one_month", False)
+    day_first = pd.Series([f"01/{m:02d}/2023" for m in range(1, 13)] * 30)
+    found = detect(day_first, dayfirst=False, name="visit")
+    assert (found.format, found.order_source, found.decided) == ("day_first", "one_month", False)
+    # a value that shows the order still decides, and two months are no spread
+    assert (
+        detect(pd.Series(["13/01/2023", *month_first]), dayfirst=True).order_source == "few_values"
+    )
+    assert (
+        detect(pd.Series(["01/01/2023", "02/01/2023"] * 50), dayfirst=True).order_source
+        == "import_setting"
+    )

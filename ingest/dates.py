@@ -405,7 +405,11 @@ class Detection:
         0  # values only the day-first order reads (first number 13-31, second 1-12)
     )
     month_first_only: int = 0
-    order_source: str = ""  # "data" when the values show the order; "few_values" when fewer than ORDER_EVIDENCE show it, one way  # only (asked, pre-filled from them); "import_setting" when none or both ways do (asked, pre-filled from it)
+    # "data" when the values show the order; "few_values" when fewer than ORDER_EVIDENCE show it, one way only
+    # (asked, pre-filled from them); "one_month" when none does but one order puts every date in one month (dates
+    # completed to the 1st: asked, pre-filled with the other); "import_setting" when none or both ways do (asked,
+    # pre-filled from it)
+    order_source: str = ""
     two_digit_years: int = 0  # read only with a pivot, which is always asked
 
 
@@ -415,13 +419,23 @@ def _order(first: int, second: int, values: int) -> bool:
 
 
 def _ordered(
-    n: int, shape: int, day_only: int, month_only: int, dayfirst: bool, formats: tuple[str, str]
+    n: int,
+    shape: int,
+    day_only: int,
+    month_only: int,
+    dayfirst: bool,
+    formats: tuple[str, str],
+    spread: int | None = None,
 ) -> Detection:
-    """A format of a family read in two orders, ``formats`` (day first, month first)."""
+    """A format of a family read in two orders, ``formats`` (day first, month first). ``spread``: the order (0 day
+    first, 1 month first) that spreads dates the other puts in one month (dates completed to the 1st): pre-filled
+    from that, whatever the setting, when no value shows the order."""
     if _order(day_only, month_only, n):
         chosen, source = formats[0], "data"
     elif _order(month_only, day_only, n):
         chosen, source = formats[1], "data"
+    elif spread is not None and not (day_only or month_only):
+        chosen, source = formats[spread], "one_month"
     elif day_only and not month_only:  # under 5 % but one way only: pre-filled from them, asked
         chosen, source = formats[0], "few_values"
     elif month_only and not day_only:
@@ -506,7 +520,13 @@ def detect(series: pd.Series, *, dayfirst: bool, name: str = "") -> Detection:
         a, b = _number(slash["a"]), _number(slash["b"])
         day_only = int((a.between(13, 31) & b.between(1, 12)).sum())
         month_only = int((a.between(1, 12) & b.between(13, 31)).sum())
-        found = _ordered(n, n_slash, day_only, month_only, dayfirst, ("day_first", "month_first"))
+        # read day first, the month is the second number; month first, the first: one order may put every date
+        # in one month (dates completed to the 1st, written 03/01/2024 month first), the other spread them
+        firsts, seconds = a.dropna().nunique(), b.dropna().nunique()
+        spread = 1 if seconds == 1 and firsts >= 3 else 0 if firsts == 1 and seconds >= 3 else None
+        found = _ordered(
+            n, n_slash, day_only, month_only, dayfirst, ("day_first", "month_first"), spread
+        )
         short = int((slash["y"].str.len() == 2).sum())
         return Detection(
             found.format,

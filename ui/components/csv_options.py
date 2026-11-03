@@ -21,6 +21,7 @@ from ingest.loaders import (
     separator_problem,
     sniff,
 )
+from ui.preferences import import_dayfirst
 
 OTHER = "other"
 CHOICES = (*DELIMITER_CANDIDATES, " ", OTHER)
@@ -63,16 +64,18 @@ def delimiter_input(current: str, *, key: str, container: Any = None) -> str:
 def csv_options(data: bytes, filename: str, *, key: str) -> ParseOptions | None:
     """
     For a delimited text file read outside Data > Import: the detected delimiter and decimal separator, which the
-    user can change; None for an Excel or Parquet file, which carries its own structure. The section opens by itself
-    when the detected delimiter finds one column only. While the chosen delimiter cannot separate columns, the
-    problem is shown and the file is read with the detected options.
+    user can change, and the order of day and month of the user's import default (day first until the user chooses:
+    ui.preferences.import_dayfirst; recorded with the step that reads the file, so that its replay reads it so too);
+    None for an Excel or Parquet file, which carries its own structure. The section opens by itself when the detected
+    delimiter finds one column only. While the chosen delimiter cannot separate columns, the problem is shown and the
+    file is read with the detected options.
     """
     try:
         if file_kind(filename) != "csv":
             return None
     except ValueError:
         return None
-    detected = sniff(data, filename)
+    detected = replace(sniff(data, filename), dayfirst=import_dayfirst())
     try:
         one_column = read_table(data, filename, detected, nrows=20).df.shape[1] <= 1
     except Exception:
