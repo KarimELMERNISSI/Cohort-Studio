@@ -49,3 +49,30 @@ def test_a_numeric_range_is_said_without_an_expression_and_a_known_criterion_say
         )
         is None
     )
+
+
+def test_a_criterion_of_two_columns_is_kept_as_an_exclusion_of_its_negation() -> None:
+    """The advice wrote "isna() | (...)" over each column, which kept the rows a known value excludes: a minor whose
+    consent is missing, and a refusal whose age is missing. Added as an exclusion criterion, the negation fires only
+    where the criterion is known to fail, so it keeps exactly the rows that meet it and those where it is unknown."""
+    from core.criteria import criterion_mask, criterion_unknown
+
+    frame = pd.DataFrame(
+        {
+            "age": [30, 12, None, 40, None, 15],
+            "consent": ["Yes", "Yes", "Yes", None, "No", None],
+        }
+    )
+    definition = {"expression": "(df['age'] >= 18) & (df['consent'] == 'Yes')"}
+    words, kept = unknown_advice(frame, "Adult who consented", definition)
+    said = "it excludes them. To keep them, add it as an exclusion criterion instead, written this way:"
+    assert said in words
+    assert kept == "~((df['age'] >= 18) & (df['consent'] == 'Yes'))"
+    meets = criterion_mask(frame, "c", definition)
+    unknown = criterion_unknown(frame, "c", definition)
+    assert meets.tolist() == [True, False, False, False, False, False]
+    # a minor, or a refusal, is known to fail whatever the missing value
+    assert unknown.tolist() == [False, False, True, True, False, False]
+    # an exclusion criterion keeps the rows where it does not fire
+    kept_rows = ~criterion_mask(frame, "x", {"expression": kept})
+    assert kept_rows.tolist() == (meets | unknown).tolist()

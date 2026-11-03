@@ -1,6 +1,7 @@
 # pages/data_monitoring.py
 import json
 import os
+from collections.abc import Mapping
 from io import BytesIO
 from typing import Any
 
@@ -24,6 +25,7 @@ from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.derived import merge_definitions
 from core.fingerprint import ids_to_ranges
 from core.population import (
+    EXCLUSION,
     SharedConfiguration,
     catalogue,
     configuration_for_sharing,
@@ -1219,9 +1221,10 @@ def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[
 
 def _rules_notice(written: Any, families: Any) -> list[str]:
     """
-    A file written under the rules of version 1 (a test written with != or ~ true on a missing value), or before they
-    were recorded: the criteria that select other rows of the loaded data now, with how many more or fewer they
-    exclude, and how to keep the rows whose value is missing. Nothing for a file of today's rules, or without data.
+    A file written under the first rules (a test written with != or ~ true on a missing value), or before they were
+    recorded: the criteria that select other rows of the loaded data now, each with how many more or fewer rows it
+    excludes, and what to write for each (:func:`_rules_change_said`). Nothing for a file of today's rules, or without
+    data.
     """
     base = get_state().base
     try:
@@ -1233,23 +1236,39 @@ def _rules_notice(written: Any, families: Any) -> list[str]:
     changes = rules_changes(base, {"mask_families": families})
     if not changes:
         return []
-    said = "; ".join(
-        f"{as_code(c.criterion.name)} ({c.criterion.kind}) excludes "
-        + " and ".join(
-            part
-            for part in (
-                f"{c.more:,} more row{'s' if c.more != 1 else ''}" if c.more else "",
-                f"{c.fewer:,} fewer" if c.fewer else "",
-            )
-            if part
-        )
-        for c in changes
-    )
+    said = "; ".join(_rules_change_said(base, c) for c in changes)
     return [
-        f"This file was written under the rules of version {version}, where a test written with != or ~ was true on "
-        f"a missing value; read now, these criteria select other rows of this data: {said}. To keep the rows whose "
-        "value is missing, write df['x'].isna() | (...)."
+        "This file was written before a missing value changed how it counts: a test written with != or ~ was then "
+        "true on a missing value, and is now unknown, so the criterion neither meets nor fires there. Read now, these "
+        f"criteria select other rows of this data: {said}."
     ]
+
+
+def _rules_change_said(df: pd.DataFrame, change: Any) -> str:
+    """
+    One criterion of :func:`_rules_notice`: how many more or fewer rows it excludes and, for an expression of one
+    column changed one way only, the expression that brings back the rows whose value is missing as before: kept by
+    an inclusion criterion, excluded by an exclusion criterion (``isna() | (...)`` does either, by the criterion's
+    kind). Any other criterion is said to check.
+    """
+    c = change.criterion
+    counted = [f"{change.more:,} more" if change.more else "", f"{change.fewer:,} fewer" if change.fewer else ""]
+    last = change.fewer or change.more
+    text = f"{as_code(c.name)} ({c.kind}) excludes {' and '.join(p for p in counted if p)} row" + (
+        "s" if last != 1 else ""
+    )
+    expression = c.definition.get("expression") if isinstance(c.definition, Mapping) else None
+    try:
+        columns = criterion_columns(c.name, c.definition) if expression else []
+    except Exception:
+        columns = []
+    if expression and len(columns) == 1:
+        guarded = as_code(f"df[{columns[0]!r}].isna() | ({expression})", limit=400)
+        if c.kind == EXCLUSION and change.fewer and not change.more:
+            return f"{text}: to exclude the rows whose value is missing, as before, write it {guarded}"
+        if c.kind != EXCLUSION and change.more and not change.fewer:
+            return f"{text}: to keep the rows whose value is missing, as before, write it {guarded}"
+    return f"{text}: check it in its tab"
 
 
 def _on_config_upload() -> None:
@@ -1472,15 +1491,19 @@ def unknown_advice(
         return None
     columns = criterion_columns(name or "criterion", definition)
     them = "them" if unknown != 1 else "it"
-    kept = (
-        " | ".join(f"df[{c!r}].isna()" for c in columns) + f" | ({definition['expression']})"
-        if definition.get("expression") and columns
-        else None
-    )
+    expression = definition.get("expression")
+    if expression and len(columns) == 1:
+        kept, how = f"df[{columns[0]!r}].isna() | ({expression})", f" To keep {them}, write it this way:"
+    elif expression and columns:
+        # two columns or more: "isna() | (...)" would also keep the rows a known value excludes (a minor whose consent
+        # is missing); as an exclusion criterion, its negation fires only where the criterion is known to fail
+        kept = f"~({expression})"
+        how = f" To keep {them}, add it as an exclusion criterion instead, written this way:"
+    else:
+        kept, how = None, ""
     words = (
         f"Unknown on {unknown:,} row{'s' if unknown != 1 else ''} ({unknown / len(df):.0%}), where a value it reads "
-        f"is missing ({', '.join(columns) or 'its columns'}): as an inclusion criterion, it excludes {them}."
-        + (f" To keep {them}, write it this way:" if kept else "")
+        f"is missing ({', '.join(columns) or 'its columns'}): as an inclusion criterion, it excludes {them}." + how
     )
     return words, kept
 

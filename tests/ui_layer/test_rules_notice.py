@@ -54,17 +54,42 @@ def _read(content: dict) -> tuple[bool, list[str], dict]:
     return loaded, messages, at.session_state["merged"]
 
 
+EARLIER = "This file was written before a missing value changed how it counts"
+
+
 def test_a_file_of_the_earlier_rules_says_which_criteria_read_otherwise() -> None:
     loaded, messages, merged = _read(RULES)
     assert loaded
-    (notice,) = [m for m in messages if "rules of version" in m]
-    assert notice.startswith("This file was written under the rules of version 1")
-    assert "`Not pregnant` (inclusion) excludes 3 more rows" in notice
+    (notice,) = [m for m in messages if m.startswith(EARLIER)]
+    assert (
+        "`Not pregnant` (inclusion) excludes 3 more rows: to keep the rows whose value is missing, as before, write "
+        "it `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`" in notice
+    )
     assert (
         "rules_version" not in merged
     )  # a file's version, never merged into the session's configuration
 
 
+def test_an_exclusion_criterion_is_told_how_to_exclude_them_again() -> None:
+    """The notice told every criterion how to keep the rows whose value is missing: for an exclusion criterion, which
+    excludes fewer rows now, the same expression excludes them, as before."""
+    rules = {
+        "mask_families": {
+            "clinical_anomalies": {
+                "operator": "any",
+                "Not negative": {"expression": "~(df['pregnant'] == 'No')"},
+            }
+        }
+    }
+    _, messages, _ = _read(rules)
+    (notice,) = [m for m in messages if m.startswith(EARLIER)]
+    assert (
+        "`Not negative` (exclusion) excludes 3 fewer rows: to exclude the rows whose value is missing, as before, "
+        "write it `df['pregnant'].isna() | (~(df['pregnant'] == 'No'))`" in notice
+    )
+    assert "to keep the rows" not in notice
+
+
 def test_a_file_of_today_s_rules_says_nothing_of_them() -> None:
     loaded, messages, _ = _read({**RULES, "rules_version": 2})
-    assert loaded and not any("rules of version" in m for m in messages)
+    assert loaded and not any(m.startswith(EARLIER) for m in messages)

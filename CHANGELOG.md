@@ -776,7 +776,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Said where it counts.** The participant flow and the dossier count apart the rows an inclusion criterion excludes
   for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a
   reason for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added,
-  with the expression that keeps them; the AI engine that writes criteria is told the rule.
+  with the expression that keeps them (for a criterion of two columns or more, its negation added as an exclusion
+  criterion: `isna() | (...)` over each column would also keep a minor whose consent is missing); the AI engine that
+  writes criteria is told the rule.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
   (version 1), not the data; a population now records the version of the rules it was read under. A population that
   kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one
@@ -789,6 +791,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **What changes:** a study whose criteria use `!=` or `~` on a column with missing values may select other rows. The
   rules' version is now 2, so every study with criteria gets a new fingerprint; its files, saved before, still load.
   The participant flow, the dossier and the quality dashboard's help say how a missing value counts.
+- **What to write, criterion by criterion.** The notice of a configuration written before tells each criterion of
+  one column the expression that brings back, as before, the rows whose value is missing: kept by an inclusion
+  criterion, excluded by an exclusion criterion (it said to keep them for every criterion, the opposite of what an
+  exclusion criterion needs); any other is said to check. It counts in rows, and no longer speaks of "rules of
+  version 1".
 
 ### Internal structure: one catalogue of criterion kinds (M5b)
 
