@@ -494,6 +494,19 @@ def test_the_consent_notice_says_what_document_insight_sends_each_provider() -> 
         )
 
 
+def test_the_notice_says_that_rows_are_counted_not_people() -> None:
+    """The 5 is a count of rows: a value on 5 visits of one person is sent, which the notice said nowhere."""
+    from app_pages.rag_sidebar import _notice
+
+    for provider in ("gemini", "openai", "anthropic", "ollama"):
+        notice = _notice([provider], {"provider": provider})
+        assert (
+            "only values shared by at least 5 rows; the first and last year of date columns. Rows are counted, not "
+            "people: a value written on 5 visits of one person is sent." in notice
+        )
+        assert "only values held by at least 5 rows (rows, not people, as above), without their counts" in notice
+
+
 def test_the_passages_sent_name_their_document_never_its_path() -> None:
     """The chat, the questions about chosen documents and the search for formulas sent each passage with its path on
     the server, which named the user's account and the server's folders."""

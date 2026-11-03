@@ -425,12 +425,13 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
                 "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and "
                 "95th percentiles of numeric columns (never the minimum or the maximum); the most frequent values of "
                 "the other columns with their counts, only values shared by at least 5 rows; the first and last year "
-                "of date columns."
+                "of date columns. Rows are counted, not people: a value written on 5 visits of one person is sent."
             ),
             "- **No row of your dataset.**",
             (
                 "- **Data > Clean, when you ask the AI engine:** the name of the variable and its values as written, "
-                "only values held by at least 5 rows, without their counts; never free text."
+                "only values held by at least 5 rows (rows, not people, as above), without their counts; never free "
+                "text."
             ),
             (
                 "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index "

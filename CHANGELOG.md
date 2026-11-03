@@ -1376,6 +1376,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   or a typo's edits away) counts as that value, so a messy column's typos count as the categories they misspell.
   Every other value counts as its own, however rare: a column of names, participant codes or dates on visits still
   reads as an identifier, and is never sent.
+- **Settings > AI engine says that rows are counted, not people:** the column summaries and Clean's values are sent
+  when 5 rows hold them, so a value written on 5 visits of one person is sent; the notice beside the consent box now
+  says so, as Clean's preview did.
 
 ### Data > Clean: values found by a text or a regular expression
 
