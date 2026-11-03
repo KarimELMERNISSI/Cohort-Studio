@@ -304,6 +304,9 @@ class Candidate:
     spaced: int = (
         0  # the values written with extra spaces, which the fold collapses (nothing to check)
     )
+    follows: bool = (
+        True  # its copy was written from the values it holds now (a later step changed none)
+    )
 
 
 def _spaced(value: str) -> str:
@@ -966,12 +969,36 @@ def groupings(
     kept: Collection[str] = (),
 ) -> dict[str, list[str]]:
     """
-    The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): two
-    spellings merged that no offer relation joins (``_one_category``: a case variant taken as one word, a variant, a
-    one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III, Unstable angina into Stable
-    angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why. Clean value -> the
-    spellings it merges.
+    The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): a spelling
+    a choice sends there that no offer relation joins to the clean value (``_one_category``: a case variant taken as
+    one word, a variant, a one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III,
+    Unstable angina into Stable angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why.
+    Clean value -> the spellings it merges.
+
+    Each spelling is tested against the clean value it ends at (through a chain too), never against another one: the
+    clean value's own spelling when the column holds it, else, for a new name, the group's most held spelling. Two of
+    the page's offers for one word (hypertension, capitals; Hypertenson, a close spelling) are then one category,
+    merged in one step or two; a new name given to one category's spellings is a relabel, and two categories under one
+    new name a grouping.
     """
+    return {clean: members for clean, (members, _) in _grouped(counts, mapping, kept).items()}
+
+
+def grouped_apart(
+    counts: Mapping[str, int],
+    mapping: Mapping[str, str | None],
+    *,
+    kept: Collection[str] = (),
+) -> dict[str, list[str]]:
+    """Of each grouping (:func:`groupings`), the spellings no offer relation joins to its clean value: what its
+    question names (Why group Hypotension with Hypertension?), the spellings of the clean value apart."""
+    return {clean: apart for clean, (_, apart) in _grouped(counts, mapping, kept).items()}
+
+
+def _grouped(
+    counts: Mapping[str, int], mapping: Mapping[str, str | None], kept: Collection[str]
+) -> dict[str, tuple[list[str], list[str]]]:
+    """Each clean value that groups categories -> (the spellings it merges, those no offer relation joins to it)."""
     spellings, kept = fold(counts), set(kept)
     held: dict[str, int] = defaultdict(int)
     for value, n in counts.items():
@@ -987,16 +1014,18 @@ def groupings(
         into[clean].add(spelling)
         if first is not None:
             chosen[clean].add(spelling)
-    return {
-        clean: sorted(into[clean])
-        for clean in into
-        if any(
-            not _one_category(a, b, held, coded)
+    found: dict[str, tuple[list[str], list[str]]] = {}
+    for clean, members in into.items():
+        own = _spaced(clean)
+        anchor = own if own in held else max(members, key=lambda s: (held.get(s, 0), s))
+        apart = sorted(
+            a
             for a in chosen.get(clean, ())
-            for b in into[clean]
-            if a != b
+            if a != anchor and not _one_category(a, anchor, held, coded)
         )
-    }
+        if apart:
+            found[clean] = (sorted(members), apart)
+    return found
 
 
 def changes(
@@ -1350,6 +1379,26 @@ def recoded_columns(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     return out
 
 
+def recoded_fps(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """Each column recoded in a trace's steps -> the fingerprint of the column when its last recode was written ("" for
+    a record that keeps none)."""
+    out: dict[str, str] = {}
+    for step in steps:
+        if step.get("function") == "recode_levels":
+            params = step.get("params") or {}
+            out[str(params.get("source"))] = str(params.get("source_fp") or "")
+    return out
+
+
+def follows(record: Mapping[str, Any] | None, df: pd.DataFrame, column: str) -> bool:
+    """Whether a recode's copy was written from the column as it is: False when a later step changed it since (an
+    imputation, a merge's rows), so that the copy no longer follows it; True when the record keeps no fingerprint of
+    it (written before it was recorded). The values' fingerprint would not do: a row moved from one value to another
+    keeps the same values."""
+    recorded = (record or {}).get("source_fp")
+    return not recorded or column not in df.columns or recorded == frame_fingerprint(df[[column]])
+
+
 def last_record(
     steps: Iterable[Mapping[str, Any]], source: str, target: str
 ) -> dict[str, Any] | None:
@@ -1448,7 +1497,11 @@ def numeric_codes(df: pd.DataFrame) -> list[str]:
     ]
 
 
-def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> list[Candidate]:
+def candidates(
+    df: pd.DataFrame,
+    recoded: Mapping[str, str] | None = None,
+    recorded_fps: Mapping[str, str] | None = None,
+) -> list[Candidate]:
     """
     The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
     (source -> copy) left out: those with values to check first, then those with extra spaces only, then the cleaned
@@ -1473,11 +1526,17 @@ def candidates(df: pd.DataFrame, recoded: Mapping[str, str] | None = None) -> li
             continue
         hints = suggest(counts)  # variants and close spellings too: what the page will offer
         into = recoded.get(str(column), "")
+        recorded = (recorded_fps or {}).get(str(column))
         found.append(
             (
                 position,
                 Candidate(
-                    str(column), len(counts), len(hints.offers), into, spaced=len(hints.spellings)
+                    str(column),
+                    len(counts),
+                    len(hints.offers),
+                    into,
+                    spaced=len(hints.spellings),
+                    follows=not (into and recorded) or recorded == frame_fingerprint(df[[column]]),
                 ),
             )
         )
@@ -1521,8 +1580,10 @@ __all__ = [
     "clean_value",
     "documented",
     "fold",
+    "follows",
     "free_text",
     "give",
+    "grouped_apart",
     "groupings",
     "keep_result",
     "last_record",
@@ -1535,6 +1596,7 @@ __all__ = [
     "recode",
     "recode_column",
     "recoded_columns",
+    "recoded_fps",
     "recorded",
     "replaceable",
     "report_params",

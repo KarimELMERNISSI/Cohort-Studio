@@ -56,8 +56,10 @@ from enrich.recode import (
     changes,
     choices_of,
     documented,
+    follows,
     free_text,
     give,
+    grouped_apart,
     groupings,
     keep_result,
     last_record,
@@ -69,6 +71,7 @@ from enrich.recode import (
     plan,
     recode_column,
     recoded_columns,
+    recoded_fps,
     recorded,
     replaceable,
     resolve,
@@ -195,6 +198,26 @@ def _counts_fp(counts: dict[str, int]) -> str:
     """The values as written and their rows: the choices made on them start again once they change."""
     text = json.dumps(sorted(counts.items()), ensure_ascii=False)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _choice_state(choices: dict[str, Any]) -> str:
+    """The choices a user makes in the editor, as one text: a choice made changes it."""
+    parts = ("mapping", "kept", "meanings", "reasons", "results")
+    return json.dumps(
+        {p: choices.get(p) for p in parts}, sort_keys=True, default=str, ensure_ascii=False
+    )
+
+
+def _dropped(held: dict[str, Any], fresh: dict[str, Any]) -> int:
+    """How many values held a choice that starting again drops: a clean value, a fold put back, what missing means,
+    an answer "a result"."""
+    mapping, again = held.get("mapping") or {}, fresh.get("mapping") or {}
+    meanings, meant = held.get("meanings") or {}, fresh.get("meanings") or {}
+    values = {v for v, c in mapping.items() if v not in again or again[v] != c}
+    values |= set(held.get("kept") or ()) - set(fresh.get("kept") or ())
+    values |= {v for v, m in meanings.items() if meant.get(v) != m}
+    values |= set(held.get("results") or ()) - set(fresh.get("results") or ())
+    return len(values)
 
 
 def _unapplied(held: dict[str, Any], fresh: dict[str, Any]) -> bool:
@@ -553,12 +576,25 @@ def category_editor(
             "shown": {},
         }
         if moved and held is not None and _unapplied(held, store[column]):
-            st.caption(
-                f":material/info: The values of {as_code(column)} changed since your last choices (a step changed "
-                f"the data): the choices start again from {'its last recode' if last else 'the values as written'}."
-            )
+            # said until the next choice: what went, and the step that changed the values
+            store[column]["dropped"] = {
+                "n": _dropped(held, store[column]),
+                "step": str((steps[-1] if steps else {}).get("description") or "a step"),
+                "from": "its last recode" if last else "the values as written",
+                "at": _choice_state(store[column]),
+            }
     store[column]["counts_fp"] = fp
     choices = store[column]
+    if (dropped := choices.get("dropped")) and _choice_state(choices) != dropped["at"]:
+        choices.pop("dropped")  # a choice was made since
+    elif dropped:
+        n = dropped["n"]
+        st.info(
+            f"{n} choice{'s' if n != 1 else ''} not yet applied {'were' if n != 1 else 'was'} dropped: "
+            f"{plain(dropped['step'], limit=80)} (a later step) changed the values of {as_code(column)}; the choices "
+            f"start again from {dropped['from']}.",
+            icon=":material/history:",
+        )
     order = str(st.session_state.get(f"clean_order::{scope}::{column}") or A_TO_Z)
     keys = _keys(scope, column, choices["revision"], order)
 
@@ -759,6 +795,7 @@ def category_editor(
         except ValueError:  # never: the record would not give the preview
             record = None
         grouped = groupings(counts, record[0], kept=record[2]) if record is not None else {}
+        apart = grouped_apart(counts, record[0], kept=record[2]) if record is not None else {}
         for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
             typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
             if typed is not None:
@@ -787,6 +824,12 @@ def category_editor(
             st.success(done, icon=":material/check:")
         if blocked:
             st.caption(blocked)
+        elif replaces and not follows(last_record(steps, column, target), df, column):
+            st.info(
+                f"{as_code(column)} changed since {as_code(target)} was written (a later step): write it again to "
+                "bring those rows in.",
+                icon=":material/sync_problem:",
+            )
         if state.pending_steps():
             st.caption(
                 "An Enrich draft is open: this changes the data under it, and the draft will ask to be redone."
@@ -807,7 +850,7 @@ def category_editor(
         }
         for clean, parts in grouped.items():
             reason = st.text_input(
-                _grouping_question(clean, parts),
+                _grouping_question(clean, parts, apart.get(clean, [])),
                 value=choices["reasons"].get(clean, ""),
                 key=f"clean_reason::{scope}::{column}::{clean}",
                 max_chars=200,
@@ -830,14 +873,25 @@ def category_editor(
             _apply(state, df, column, target, counts, choices, record, grouped, replaces=replaces)
 
 
-def _grouping_question(clean: str, parts: list[str]) -> str:
-    """Why values are grouped: those joining a value that keeps its name are grouped with it (Why group Esch and
-    Luxembourg with Metz?); otherwise, as the new name (Why group Stroke and Hypertension as Cardiovascular?)."""
+def _named(values: list[str]) -> str:
+    """Values in a sentence: the first six, then how many more."""
+    listed = [as_code(show_level(v)) for v in values[:_NAMED]]
+    if len(values) > _NAMED:
+        return f"{', '.join(listed)} and {len(values) - _NAMED:,} more"
+    return listed[0] if len(listed) == 1 else f"{', '.join(listed[:-1])} and {listed[-1]}"
+
+
+def _grouping_question(clean: str, parts: list[str], apart: list[str]) -> str:
+    """Why values are grouped, naming first those that are no spelling of the clean value (Why group Hypotension with
+    Hypertension?), the spellings merged with them said apart, so that one answer is never read as the reason for
+    both. Those joining a value that keeps its name are grouped with it (Why group Esch and Luxembourg with Metz?);
+    otherwise, as the new name (Why group Stroke and Hypertension as Cardiovascular?)."""
     joining = [p for p in parts if p != clean]
-    listed = [as_code(show_level(p)) for p in joining]
-    named = listed[0] if len(listed) == 1 else f"{', '.join(listed[:-1])} and {listed[-1]}"
+    first = [p for p in joining if p in apart] or joining
+    spelt = [p for p in joining if p not in first]
     how = "with" if clean in parts else "as"
-    return f"Why group {named} {how} {as_code(show_level(clean))}?"
+    also = f" Also merged, as its spellings: {_named(spelt)}." if spelt else ""
+    return f"Why group {_named(first)} {how} {as_code(show_level(clean))}?{also}"
 
 
 def _blocked(
@@ -872,6 +926,10 @@ def _blocked(
     if not full:
         return "Nothing to change: every value keeps how it is written."
     last = last_record(steps, column, target) if replaces else None
+    if last is not None and not follows(
+        last, df, column
+    ):  # a later step changed the source: written again, not "nothing"
+        return ""
     if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
         # the copy is what that recode wrote: the same values and the same record (what missing means, why values are
         # grouped, who proposed) would write nothing new
@@ -891,8 +949,14 @@ def _record_of(
     answered a result (those still values), why each grouping was made, and who proposed each AI choice (never the
     prompt or the answer)."""
     mapping, kinds, kept, meanings = record
+    # a grouping of a record cleaned again whose clean value no longer groups categories (a typo's rows now) is a
+    # choice: never a grouping without one, and without its reason
     kinds = {
-        k: GROUPING if mapping[k] in grouped and kind not in OFFER_KINDS else kind
+        k: GROUPING
+        if mapping[k] in grouped and kind not in OFFER_KINDS
+        else CHOSEN
+        if kind == GROUPING
+        else kind
         for k, kind in kinds.items()
     }
     out: dict[str, Any] = {
@@ -968,6 +1032,9 @@ def _apply(
         "changes": changes(counts, mapping, kinds, kept=kept, meanings=meanings),
         "values_fp": values_fp(counts),
         "target_fp": frame_fingerprint(new[[target]]),
+        "source_fp": frame_fingerprint(
+            df[[column]]
+        ),  # a later step that changes it leaves the copy behind
     }
     if "ai_by" in chosen:  # who proposed each AI choice, kept when the copy is written again
         params["ai_by"] = chosen["ai_by"]
@@ -1068,7 +1135,8 @@ def _ask_ai(column: str, scope: str, counts: dict[str, int], offers: tuple[Offer
 
 
 def _ai_said(tally: dict[str, int]) -> str:
-    """What came back, every proposal accounted for: shown below, on a value already offered above, or set aside."""
+    """What came back, every proposal accounted for: shown below, on a value the rules already offer (their groups
+    come after the AI engine's), or set aside."""
     shown, offered, apart, back = (
         tally["shown"],
         tally["offered"],
@@ -1081,9 +1149,9 @@ def _ai_said(tally: dict[str, int]) -> str:
             (shown, "below, under Proposed by the AI engine"),
             (
                 offered,
-                "on a value already offered above"
+                "on a value the rules already offer, below"
                 if offered == 1
-                else "on values already offered above",
+                else "on values the rules already offer, below",
             ),
             (apart, f"set aside: the rules keep {'its' if apart == 1 else 'their'} values apart"),
             (back, "set aside: the same values the other way round"),
@@ -1261,7 +1329,9 @@ def _choice_label(c: Candidate) -> str:
     """A variable in the list: what it holds to check, and apart the values with extra spaces, which the fold
     collapses with nothing to check."""
     if c.cleaned_into:
-        return f"{c.column} · cleaned into {c.cleaned_into}"
+        return f"{c.column} · cleaned into {c.cleaned_into}" + (
+            "" if c.follows else ", which no longer follows it"
+        )
     said = [f"{c.values} values"]
     if c.to_check:
         said.append(f"{c.to_check} to check")
@@ -1279,7 +1349,7 @@ def render_categories() -> None:
     done = st.session_state.pop(DONE, None)
     steps = state.transformation_manager.history
     found = state.session.memo(
-        "clean_candidates", None, lambda: candidates(df, recoded_columns(steps))
+        "clean_candidates", None, lambda: candidates(df, recoded_columns(steps), recoded_fps(steps))
     )
     codes = numeric_codes(df)
     if not found:

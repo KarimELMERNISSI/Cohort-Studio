@@ -33,6 +33,7 @@ from enrich.recode import (
     documented,
     fold,
     give,
+    grouped_apart,
     groupings,
     last_record,
     level_counts,
@@ -742,8 +743,25 @@ def test_a_recode_of_an_earlier_version_is_refused_by_the_replay(fold_id: str | 
         "params": {k: v for k, v in params.items() if v is not None},
     }
     replayed = apply_steps(pd.DataFrame({"sex": ["Male", "MALE", "Female"]}), [step])
-    assert replayed.df is None and "earlier version of Data > Clean" in (replayed.error or "")
+    assert replayed.df is None and "another version of Data > Clean (fold rule: " in (
+        replayed.error or ""
+    )
     assert "clean it again" in (replayed.error or "")
+
+
+def test_a_recode_recorded_without_what_the_replay_checks_is_refused_with_a_word() -> None:
+    """A record of today's fold rule that lacks its counts (written by hand, or cut) is refused by name, never with a
+    bare key name for an error."""
+    from manage.reproduction_manager import apply_steps
+
+    params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": [], "fold": FOLD}
+    replayed = apply_steps(
+        pd.DataFrame({"sex": ["Male", "MALE"]}), [{"function": "recode_levels", "params": params}]
+    )
+    assert replayed.df is None
+    assert "recorded without kept_as_written, values_after, values_fp, which the replay checks" in (
+        replayed.error or ""
+    )
 
 
 @pytest.mark.parametrize(
@@ -855,3 +873,30 @@ def test_the_closest_then_most_frequent_value_is_the_reference_of_a_rarer_one() 
     assert _offers({"Sacubitril/valsartan": 300, "Sacubitril/valsartn": 2}) == {
         "Sacubitril/valsartn": ("Sacubitril/valsartan", SPELLING, None)
     }
+
+
+def test_each_spelling_is_tested_against_the_clean_value_it_ends_at() -> None:
+    """Two of the page's offers for one word (capitals, a close spelling) are one category, merged in one step or two:
+    each spelling is tested against the clean value, never against the other. A neighbouring category merged with
+    them is a grouping, and its question names it apart; a new name for one category is a relabel."""
+    counts = {
+        "Hypertension": 300,
+        "hypertension": 4,
+        "Hypertenson": 1,
+        "Hypotension": 25,
+        "Diabetes": 200,
+    }
+    spellings = {"hypertension": "Hypertension", "Hypertenson": "Hypertension"}
+    assert groupings(counts, spellings) == {}
+    assert (
+        groupings(counts, {"Hypertenson": "hypertension", "hypertension": "Hypertension"}) == {}
+    )  # a chain
+    with_hypotension = {**spellings, "Hypotension": "Hypertension"}
+    assert groupings(counts, with_hypotension) == {
+        "Hypertension": ["Hypertension", "Hypertenson", "Hypotension", "hypertension"]
+    }
+    assert grouped_apart(counts, with_hypotension) == {"Hypertension": ["Hypotension"]}
+    relabel = {v: "Arterial hypertension" for v in ("Hypertension", "hypertension", "Hypertenson")}
+    assert groupings(counts, relabel) == {}
+    two = {**relabel, "Hypotension": "Arterial hypertension"}
+    assert grouped_apart(counts, two) == {"Arterial hypertension": ["Hypotension"]}

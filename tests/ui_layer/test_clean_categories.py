@@ -52,6 +52,7 @@ PARAMS = {
     "changes",
     "values_fp",
     "target_fp",
+    "source_fp",
 }
 
 
@@ -780,11 +781,11 @@ def test_the_ai_caption_accounts_for_every_proposal() -> None:
     from app_pages.clean_categories import _ai_said
 
     assert _ai_said({"shown": 5, "offered": 2, "apart": 1, "reversed": 0}) == (
-        "The AI engine made 8 proposals: 5 below, under Proposed by the AI engine; 2 on values already offered "
-        "above; 1 set aside: the rules keep its values apart."
+        "The AI engine made 8 proposals: 5 below, under Proposed by the AI engine; 2 on values the rules already "
+        "offer, below; 1 set aside: the rules keep its values apart."
     )
     assert _ai_said({"shown": 0, "offered": 2, "apart": 0, "reversed": 0}) == (
-        "The AI engine made 2 proposals, all on values already offered above."
+        "The AI engine made 2 proposals, all on values the rules already offer, below."
     )
     assert _ai_said({"shown": 0, "offered": 0, "apart": 0, "reversed": 0}) == (
         "The AI engine made no proposal for these values."
@@ -809,11 +810,21 @@ def test_a_dense_variable_s_chart_names_every_bar() -> None:
 def test_the_grouping_question_names_what_joins_which_value() -> None:
     from app_pages.clean_categories import _grouping_question
 
-    assert _grouping_question("Metz", ["Esch", "Luxembourg", "Metz"]) == (
+    assert _grouping_question("Metz", ["Esch", "Luxembourg", "Metz"], ["Esch", "Luxembourg"]) == (
         "Why group `Esch` and `Luxembourg` with `Metz`?"
     )
-    assert _grouping_question("Cardiovascular", ["Hypertension", "Stroke"]) == (
-        "Why group `Hypertension` and `Stroke` as `Cardiovascular`?"
+    assert _grouping_question("Cardiovascular", ["Hypertension", "Stroke"], ["Stroke"]) == (
+        "Why group `Stroke` as `Cardiovascular`? Also merged, as its spellings: `Hypertension`."
+    )
+    # the neighbouring category first, the spellings apart: one answer is never read as the reason for both
+    parts = ["HYPERTENSION", "Hypertension", "Hypertenson", "Hypotension", "hypertension"]
+    assert _grouping_question("Hypertension", parts, ["Hypotension"]) == (
+        "Why group `Hypotension` with `Hypertension`? Also merged, as its spellings: `HYPERTENSION`, `Hypertenson` "
+        "and `hypertension`."
+    )
+    many = [f"v{i:02d}" for i in range(20)]
+    assert _grouping_question("Other", many, many).startswith(
+        "Why group `v00`, `v01`, `v02`, `v03`, `v04`, `v05` and 14 more as `Other`?"
     )
 
 
@@ -828,10 +839,13 @@ def test_choices_start_again_when_a_step_changes_the_values() -> None:
     _ok(at)
     store = at.session_state["clean_manual"]["sex"]
     assert store["mapping"] == {} and store["revision"] > revision
-    assert any("changed since your last choices" in c.value for c in at.caption)
+    said = "1 choice not yet applied was dropped: Filled sex (a later step) changed the values of `sex`"
+    assert any(i.value.startswith(said) for i in at.info)
     at.run()
     _ok(at)
-    assert not any("changed since your last choices" in c.value for c in at.caption)  # said once
+    assert any(i.value.startswith(said) for i in at.info)  # said until the next choice
+    _set_to_missing(at, ["unknown"], UNKNOWN)
+    assert not any(i.value.startswith(said) for i in at.info)
 
 
 def test_values_are_picked_by_a_regular_expression_and_mapped_at_once() -> None:
@@ -908,3 +922,49 @@ def test_what_a_search_picked_is_named_under_the_row() -> None:
         "1 row: **x** (1). Give it a clean value and Map, or set it to missing."
     )
     assert _picked_words([], counts) == "Nothing found: Values is as it was."
+
+
+def test_a_copy_a_later_step_left_behind_its_source_is_said_and_written_again() -> None:
+    """sex cleaned into sex_clean, then a later step fills a value of sex: the page never says "Nothing changed" of a
+    copy that no longer follows its source, says why, and writes it again; the list says so too."""
+    at = _open({"sex": SEX})
+    _set_to_missing(at, ["n.a.", "unknown"], UNKNOWN)
+    at.button(key="clean_apply::sex").click().run()
+    _ok(at)
+    assert at.button(key="clean_apply::sex").disabled  # written: nothing changed
+    assert any("Nothing changed since" in c.value for c in at.caption)
+    at.session_state["change_source"] = True  # a later step fills the last n.a. of sex
+    at.run()
+    _ok(at)
+    assert not any("Nothing changed since" in c.value for c in at.caption)
+    assert any("changed since `sex_clean` was written (a later step)" in i.value for i in at.info)
+    assert "which no longer follows it" in _one(at.selectbox, "clean_variable::").format_func("sex")
+    at.button(key="clean_apply::sex").click().run()
+    _ok(at)
+    data = at.session_state["data"]
+    assert data["sex_clean"].tolist()[-1] == "F"  # the filled row brought in
+    assert "which no longer follows it" not in _one(at.selectbox, "clean_variable::").format_func(
+        "sex"
+    )
+
+
+def test_a_grouping_that_no_longer_groups_is_recorded_as_a_choice() -> None:
+    """A record cleaned again keeps its kinds; a grouping whose clean value now groups nothing (Diferdange into
+    Differdange: a typo's rows) is recorded as a choice, never as a grouping without one or its reason."""
+    from app_pages.clean_categories import _record_of
+    from enrich.recode import CHOSEN, GROUPING
+
+    record = ({"Diferdange": "Differdange"}, {"Diferdange": GROUPING}, [], {})
+    out = _record_of(record, {}, {"reasons": {}}, {"Differdange": 300, "Diferdange": 2})
+    assert out["kinds"] == {"Diferdange": CHOSEN} and out["groupings"] == {}
+    grouped = {"Differdange": ["Diferdange", "Differdange"]}
+    out = _record_of(
+        record,
+        grouped,
+        {"reasons": {"Differdange": "one town"}},
+        {"Differdange": 300, "Diferdange": 200},
+    )
+    assert (
+        out["kinds"] == {"Diferdange": GROUPING}
+        and out["groupings"]["Differdange"]["reason"] == "one town"
+    )

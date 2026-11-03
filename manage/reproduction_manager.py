@@ -418,13 +418,19 @@ def _rename_columns(df, step, index, paths, warnings):
 
 def _recode_levels(df, step, index, paths, warnings):
     """The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
-    under another rule (an earlier version of Data > Clean) is refused: the column is cleaned again. Differences are
-    said by their number, never by a value."""
+    under another rule (another version of Data > Clean, earlier or later) is refused: the column is cleaned again; so
+    is a record without what the replay checks. Differences are said by their number, never by a value."""
     params = step.get("params", {}) or {}
     source, target = params.get("source"), params.get("target")
     if params.get("fold") != FOLD:
         raise ValueError(
-            f"{source} was recoded by an earlier version of Data > Clean, whose rules are not kept: clean it again"
+            f"{source} was recoded by another version of Data > Clean (fold rule: {params.get('fold') or 'none'}), "
+            "whose rules this version does not have: clean it again"
+        )
+    missing = [k for k in ("kept_as_written", "values_after", "values_fp") if k not in params]
+    if missing:
+        raise ValueError(
+            f"the recode of {source} was recorded without {', '.join(missing)}, which the replay checks: clean it again"
         )
     new_df, kept = recode_column(
         df,

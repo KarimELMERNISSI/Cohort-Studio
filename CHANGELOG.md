@@ -1341,6 +1341,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   copies (an imputed value recoded is still imputed), 2 and "2" are one value in it, and it is written again only
   while no later step changed it. The replay says when the values it reads differ from those the step saw. The choices
   are kept per variable until they are applied, and never follow the user to another dataset.
+- **Asked why only of a grouping.** Each value merged is tested against the clean value it ends at (the clean value's
+  own spelling, or for a new name the group's most held one), never against another value merged: two of the page's
+  own offers for one word (a capitals variant and a close spelling) no longer ask why, in one step or two. A
+  neighbouring category merged with them still does, and its question names it first (Why group Hypotension with
+  Hypertension? Also merged, as its spellings: ...), six values at most, then how many more.
+- **A copy a later step left behind.** When an imputation or a merge changes the source after its copy was written,
+  the page says so ("sex changed since sex_clean was written (a later step): write it again to bring those rows in"),
+  the list reads "cleaned into sex_clean, which no longer follows it", and Write again is on: it said "Nothing
+  changed". The recode records a fingerprint of its source for this.
+- **Choices dropped when a step changes the values** are said, with how many and the step, until the next choice;
+  a grouping recorded before that no longer groups anything is recorded as a choice; the AI engine's caption says
+  that the rules' own offers come below its group.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
