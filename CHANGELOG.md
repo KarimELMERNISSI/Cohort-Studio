@@ -1457,7 +1457,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - A rule named by its column alone reads as what makes it fire ("potassium_mmol_l < 2.5 or potassium_mmol_l >
   7.0"), in Domain Validity's lines, in "Where the score loses points" and in the *Rules broken* column of the rows
   it breaks; Failing and Checked are whole numbers in every locale, and each card says how far its score is below
-  100 ("0.17 points below 100").
+  100 ("0.17 points below 100"), in the body's muted colour, its band a dot beside the score (the band's green on
+  white read at 2.33:1).
 
 ### Validate: clinical anomalies are now implausible values
 

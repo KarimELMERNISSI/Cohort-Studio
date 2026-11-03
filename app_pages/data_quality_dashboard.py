@@ -248,8 +248,9 @@ def render_dashboard(df, config):
                     else:
                         color = "#ff4b4b" # Red
 
-                    # how far the score is below 100, to the score's own decimals (99.83 %: 0.17), in the band's
-                    # colour: "↓ -0.2%" read as a change, down twice, and rounded the score's gap
+                    # how far the score is below 100, to the score's own decimals (99.83 %: 0.17): "↓ -0.2%" read as a
+                    # change, down twice, and rounded the score's gap. In the muted body colour (the band's green on
+                    # white read at 2.33:1); the band is a dot beside the score, which says it too
                     gap = f"{round(100 - value, 2):g} points below 100" if value < 100 else "Perfect"
                     # under the change, what the score pools: the rows that break a rule, on a muted line of its
                     # own (beside the change it read as its cause); every card has that line, so they keep one height
@@ -259,8 +260,10 @@ def render_dashboard(df, config):
                     st.markdown(f"""
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.875rem; opacity: 0.8;">{name}</span>
-                            <span style="font-size: 2rem; font-weight: 600; line-height: 1.2;">{value}%</span>
-                            <span style="font-size: 0.875rem; color: {color};">{gap}</span>
+                            <span style="font-size: 2rem; font-weight: 600; line-height: 1.2;"><span aria-hidden="true"
+                                style="display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%;
+                                background: {color}; margin-right: 0.45rem; vertical-align: middle;"></span>{value}%</span>
+                            <span style="font-size: 0.875rem; opacity: 0.8;">{gap}</span>
                             <span style="font-size: 0.8rem; opacity: 0.7;">{note_html}</span>
                         </div>
                     """, unsafe_allow_html=True)
