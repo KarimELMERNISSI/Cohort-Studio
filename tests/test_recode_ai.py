@@ -319,9 +319,10 @@ def test_the_tally_says_where_each_proposal_went() -> None:
     ]
 
 
-def test_a_messy_categorical_column_is_no_identifier() -> None:
-    """33 values, half of them typos of 1 to 4 rows beside a few frequent categories, read as an identifier: the AI
-    engine was never offered where it helps most. Names on visits stay one, a frequent placeholder beside them too."""
+def test_a_messy_categorical_column_is_no_identifier_and_people_on_visits_stay_one() -> None:
+    """33 values, half of them typos of 1 to 4 rows beside 16 frequent categories: each typo counts as the category
+    it misspells, and the AI engine can be asked. A rare value that misspells nothing counts as its own: codes, dates
+    and names on visits stay identifiers, however few people hold 5 rows or more."""
     frequent = {
         "Hypertension": 300,
         "Diabetes mellitus": 250,
@@ -340,7 +341,38 @@ def test_a_messy_categorical_column_is_no_identifier() -> None:
         "MI": 30,
         "AF": 25,
     }
-    typos = {f"typo {i}": 1 + i % 4 for i in range(17)}
+    misspelt = [
+        "Hypertenion",
+        "hypertension",
+        "Diabetes melitus",
+        "Heart faillure",
+        "Atrial fibrilation",
+        "Myocardial infarctio",
+        "Chronic kidney diseas",
+        "Obesitty",
+        "copd",
+        "Strok",
+        "Anemia",
+        "Edema",
+        "Asthmaa",
+        "ckd",
+        "Hypokalemia",
+        "mi",
+        "af",
+    ]
+    typos = {value: 1 + i % 4 for i, value in enumerate(misspelt)}
     assert not free_text(frequent | typos)
+    # 17 rare values that misspell nothing (other terms, abbreviations): 33 values of their own, most of them rare,
+    # which is what a column of names looks like
+    assert free_text(frequent | {f"Other condition {chr(65 + i)}": 1 + i % 4 for i in range(17)})
+    # people on visits: 25 codes on 6 visits beside 50 on 2, the same as dates of birth, 40 participants on 1 to 8
+    # visits; every one of them refused before, and offered when only the frequent values were read
+    codes = {f"P-{i:04d}": 6 for i in range(25)} | {f"P-{i:04d}": 2 for i in range(25, 75)}
+    assert free_text(codes)
+    births = {
+        f"19{40 + i % 50}-{1 + i % 12:02d}-{10 + i % 19}": 6 if i < 25 else 2 for i in range(75)
+    }
+    assert len(births) == 75 and free_text(births)
+    assert free_text({f"P-{i:04d}": 1 + (3 * i) % 8 for i in range(40)})
     assert free_text({f"Name {i}": 6 for i in range(40)} | {"anonymous": 360})
     assert free_text({f"Name {i}": 6 for i in range(40)} | {"unknown": 60})

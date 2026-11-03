@@ -1079,11 +1079,8 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
 def free_text(counts: Mapping[str, int], *, min_count: int = RARE_ROWS) -> bool:
     """
     Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
-    held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier: among the values
-    held by ``min_count`` rows or more, those a cloud recipient would be sent, many, the typical one a small share of
-    their rows (names on visits, numbers). Read on their median, without the codes for missing, so that one frequent
-    placeholder hides none; the rare values are not among them, so that the typos of a messy categorical column beside
-    a few frequent categories (half its values held by 1 to 4 rows) no longer make it read as an identifier.
+    held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), more than :data:`MAX_VALUES`
+    values, or an identifier (``_identifier``: names, codes or dates on visits).
     """
     if not counts:
         return False
@@ -1091,21 +1088,51 @@ def free_text(counts: Mapping[str, int], *, min_count: int = RARE_ROWS) -> bool:
     wordy = sum(1 for v in counts if len(v.split()) >= 5)
     rows = sum(counts.values())
     rare = sum(n for n in counts.values() if n < min_count)
-    sent = sorted(
-        n
-        for v, n in counts.items()
-        if n >= min_count
-        and _plain(v) not in _UNKNOWN_CODES
-        and _plain(v) not in _ASKED_CODES
-        and not _not_recorded(_key(v))
-    )
-    identifier = len(sent) > 30 and sent[len(sent) // 2] < 0.05 * sum(sent)
     return (
         sum(lengths) / len(lengths) > 40
         or wordy > len(counts) / 2
         or rare * 2 >= rows
-        or identifier
+        or len(counts) > MAX_VALUES
+        or _identifier(counts, min_count)
     )
+
+
+def _identifier(counts: Mapping[str, int], min_count: int) -> bool:
+    """
+    Whether a column reads as an identifier: more than 30 values, the typical one (the median) under 5 % of their
+    rows, the codes for missing set aside, so that one frequent placeholder hides none. A value of fewer than
+    ``min_count`` rows that is a spelling of a value held by ``min_count`` rows or more (the same key, or a typo's edits:
+    ``_relation``) counts as that value: the typos of a messy categorical column are its categories misspelt. Every
+    other value counts as its own, however rare: a name, a code or a date that misspells nothing is what a column of
+    people on visits holds, and the reason the column is never sent (its frequent values would be: rows, not people).
+    """
+    real = {
+        v: n
+        for v, n in counts.items()
+        if _plain(v) not in _UNKNOWN_CODES
+        and _plain(v) not in _ASKED_CODES
+        and not _not_recorded(_key(v))
+    }
+    if len(real) <= 30:
+        return False
+    keys = {v: _key(v) for v in real}
+    held = {
+        v: n for v, n in real.items() if n >= min_count
+    }  # the frequent values, with their spellings' rows
+    own: list[int] = []  # a rare value that misspells none of them
+    for value, n in real.items():
+        if n >= min_count:
+            continue
+        into = next(
+            (f for f in held if keys[value] == keys[f] or _relation(value, f, keys) == SPELLING),
+            None,
+        )
+        if into is None:
+            own.append(n)
+        else:
+            held[into] += n
+    counted = sorted([*held.values(), *own])
+    return len(counted) > 30 and counted[len(counted) // 2] < 0.05 * sum(counted)
 
 
 def _ai_refused(value: str, clean: str) -> bool:

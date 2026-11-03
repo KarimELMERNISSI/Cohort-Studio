@@ -1323,10 +1323,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 - **Before:** a column of more than 30 values, half of them typos held by 1 to 4 rows beside a few frequent
   categories, read as an identifier, and "Ask the AI engine" was disabled where it helps most.
-- **Now:** a column reads as an identifier from the values a cloud recipient would be sent, those held by 5 rows or
-  more (codes for missing set aside): many of them, the typical one a small share of their rows (names on visits).
-  The rare typos are never sent to a cloud recipient and no longer count; names on visits beside a frequent
-  placeholder still read as an identifier.
+- **Now:** a value of 1 to 4 rows that misspells a value held by 5 rows or more (the same word written another way,
+  or a typo's edits away) counts as that value, so a messy column's typos count as the categories they misspell.
+  Every other value counts as its own, however rare: a column of names, participant codes or dates on visits still
+  reads as an identifier, and is never sent.
 
 ### Data > Clean: values picked by a regular expression
 
