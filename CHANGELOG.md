@@ -1360,6 +1360,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Choices dropped when a step changes the values** are said, with how many and the step, until the next choice;
   a grouping recorded before that no longer groups anything is recorded as a choice; the AI engine's caption says
   that the rules' own offers come below its group.
+- **A correction that leaves the copy's values as they are** (what missing means, why values are grouped) is a step
+  that changes no data: the Start page no longer counts it as a new revision of the data or marks the analyses and the
+  report out of date, the quality history adds no revision for it, and the replay checks that redoing it leaves the
+  table as it was.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

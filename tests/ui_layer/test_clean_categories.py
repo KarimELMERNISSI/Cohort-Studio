@@ -655,8 +655,14 @@ def test_a_corrected_meaning_of_missing_is_recorded_though_the_copy_is_the_same(
     }
     assert any("Recorded the corrected choices" in s.value for s in at.success)
     assert at.button(key="clean_apply::status").disabled
+    # no change of the data: the workflow counts no new revision, and the replay checks the step's table
+    from core.progress import data_revision
+
+    assert history[-1]["data"]["fp_in"] == history[-1]["data"]["fp_out"]
+    assert data_revision(history) == data_revision(history[:-1])
     replayed = apply_steps(at.session_state["data"].drop(columns=["status_clean"]), history[-2:])
     assert replayed.error is None and not replayed.warnings
+    assert replayed.verified_steps == 2 and replayed.divergence is None
 
 
 def _popover(at: AppTest, prefix: str):

@@ -611,9 +611,12 @@ class DataSession:
 
     def record(self, function: str, params: Mapping[str, Any] | None, description: str) -> None:
         """Trace a step that changes no data: a recode whose copy already holds its values, recorded for what it says
-        of them (what missing means, why values are grouped), which the replay redoes as written."""
-        self._require_base()
-        self._record(function, params, description)
+        of them (what missing means, why values are grouped), which the replay redoes as written. The step carries the
+        data's fingerprint as both its input and its output: it counts as no change of the data (no new revision, no
+        result out of date), and the replay checks that redoing it leaves the table as it was."""
+        base = self._require_base()
+        same = describe_change(base, base, fp_in=self.data_fp, fp_out=self.data_fp)
+        self._record(function, params, description, change=same)
 
     def record_population_use(self, config: Mapping[str, Any] | None) -> None:
         """Trace the population once per identity, when a result or a saved version first uses it."""

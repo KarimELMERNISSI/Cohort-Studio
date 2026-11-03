@@ -731,6 +731,53 @@ def test_the_step_replays_the_fold_and_says_when_the_column_holds_values_it_did_
     assert len(swapped.warnings) == 1 and "F  " not in swapped.warnings[0]
 
 
+def test_a_corrected_record_is_no_change_of_the_data_and_the_replay_checks_it() -> None:
+    """The choices corrected while the copy keeps its values (what missing means): the step is recorded with the data's
+    fingerprint in and out, so the workflow counts no new revision and marks no result out of date, and the replay
+    redoes it and finds the table it recorded."""
+    from core.progress import changes_data, data_revision
+    from core.session import DataSession
+    from manage.reproduction_manager import apply_steps
+
+    class Trace:
+        def __init__(self) -> None:
+            self.steps: list[dict] = []
+
+        def add_step(self, function_name, params, description, output_dataset_path=None, **extra):
+            self.steps.append(
+                {"function": function_name, "params": params, "description": description, **extra}
+            )
+
+    raw = pd.DataFrame({"sex": ["F"] * 30 + ["Female", None] + ["M"] * 30})
+    session = DataSession(trace=Trace())
+    session.install(raw, params={"source": "test"})
+    assert session.base is not None
+    new, kept = recode_column(session.base, "sex", "sex_clean", {"Female": "F"})
+    params = {
+        "source": "sex",
+        "target": "sex_clean",
+        "fold": FOLD,
+        "mapping": {"Female": "F"},
+        "kept": [],
+        "values_after": 2,
+        "kept_as_written": kept,
+        "values_fp": values_fp(level_counts(raw["sex"])),
+    }
+    assert session.commit(new, "recode_levels", params, "Recoded sex into sex_clean") is not None
+    again = {**params, "replaces": True, "missing_meaning": {"": "not asked"}}
+    same, _ = recode_column(session.base, "sex", "sex_clean", {"Female": "F"}, replaces=True)
+    assert session.commit(same, "recode_levels", again, "Recoded sex into sex_clean") is None
+    session.record("recode_levels", again, "Recoded sex into sex_clean again, its values unchanged")
+
+    steps = session.trace.steps  # type: ignore[union-attr]
+    assert [changes_data(step) for step in steps] == [False, True, False]
+    assert data_revision(steps) == 1 and session.revision == 1
+    assert steps[-1]["data"]["fp_in"] == steps[-1]["data"]["fp_out"] == session.data_fp
+    replayed = apply_steps(raw, steps[1:])
+    assert replayed.error is None and not replayed.warnings
+    assert replayed.verified_steps == 2 and replayed.divergence is None
+
+
 @pytest.mark.parametrize("fold_id", ["spaces_and_capitals", None])
 def test_a_recode_of_an_earlier_version_is_refused_by_the_replay(fold_id: str | None) -> None:
     """Only the fold rule of today is kept: a recode recorded under another (30 October 2026), or before the fold rule,
