@@ -290,6 +290,31 @@ def test_a_file_writing_its_dates_in_another_shape_still_matches(written, how) -
     assert merged["hb"].tolist() == [12.1, 13.4, 11.8]
 
 
+def test_the_spread_of_the_months_never_overrides_the_recorded_order() -> None:
+    """Dates of 1-12 March written day first, as the dataset's visit_date was read: the spread rule read them month
+    first (12 months on the 3rd), and 7 of 60 keys matched, with "Enrichment completed". A constant month is no day
+    completed to the 1st; and where the rule does apply, the main column's recorded order wins."""
+    day_first = {"visit_date": {"format": "day_first"}}
+    march = [f"{d:02d}/03/2024" for d in range(1, 13)] * 5
+    main = ensure_row_ids(convert(pd.DataFrame({"pid": range(60), "visit_date": march}), day_first))
+    file = pd.DataFrame({"pid": range(60), "visit_date": march, "hb": [12.0] * 60})
+    formats = date_key_formats(main, file, day_first, dayfirst=False)
+    assert formats == day_first
+    keys = ["pid", "visit_date"]
+    merged = add_data(
+        main, align_date_keys(main, file, formats), keys, keys, ["hb"], missing_keys="never"
+    )
+    assert merged.attrs["join_counts"]["main_rows_unmatched"] == 0
+    # dates completed to the 1st over two years read month first by their spread: the recorded order still wins
+    firsts = pd.DataFrame(
+        {
+            "pid": range(24),
+            "visit_date": [f"{m:02d}/01/{y}" for y in (2022, 2023) for m in range(1, 13)],
+        }
+    )
+    assert date_key_formats(main, firsts, day_first, dayfirst=False) == day_first
+
+
 def test_an_identifier_named_as_the_count_s_own_column_is_counted() -> None:
     main = ensure_row_ids(pd.DataFrame({"_found": [1, 2, 3]}))
     merged = add_data(

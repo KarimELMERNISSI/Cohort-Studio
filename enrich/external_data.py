@@ -101,6 +101,9 @@ def date_key_formats(main_df, additional_df, recorded, *, dayfirst=False):
         if how.format in (None, "excel_serial") or how.shape < CHOSEN * how.values:
             continue
         read = {"format": how.format}
+        if how.order_source == "one_month" and mine.get("format") in _DAY_FIRST:
+            # the spread of the months only guesses: the main column's order was read from its own values
+            read["format"] = "day_first" if _DAY_FIRST[mine["format"]] else "month_first"
         if how.two_digit_years:
             if mine.get("pivot") is None:
                 continue

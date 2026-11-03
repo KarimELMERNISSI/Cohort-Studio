@@ -390,14 +390,23 @@ def test_a_column_already_dates_is_checked_as_it_is() -> None:
 
 
 def test_dates_completed_to_the_first_are_pre_filled_from_the_spread_of_their_months() -> None:
-    """No value shows the order, but read day first a month-first column of dates completed to the 1st falls in one
-    month (January): month first is pre-filled, whatever the setting, and asked; and the other way round."""
-    month_first = pd.Series([f"{m:02d}/01/2023" for m in range(1, 13)] * 30)
+    """No value shows the order, but read day first a month-first column of dates completed to the 1st, over more
+    than one year, falls in one month (January): month first is pre-filled, whatever the setting, and asked; and the
+    other way round."""
+    month_first = pd.Series([f"{m:02d}/01/{y}" for y in (2022, 2023) for m in range(1, 13)] * 15)
     found = detect(month_first, dayfirst=True, name="visit")
     assert (found.format, found.order_source, found.decided) == ("month_first", "one_month", False)
-    day_first = pd.Series([f"01/{m:02d}/2023" for m in range(1, 13)] * 30)
+    day_first = pd.Series([f"01/{m:02d}/{y}" for y in (2022, 2023) for m in range(1, 13)] * 15)
     found = detect(day_first, dayfirst=False, name="visit")
     assert (found.format, found.order_source, found.decided) == ("day_first", "one_month", False)
+    # a constant month is no day completed to the 1st (a March window, a campaign every March, written day first),
+    # nor is a constant 1 within one year (a January window): the setting decides, as before
+    march = pd.Series([f"{d:02d}/03/{y}" for y in (2022, 2023) for d in range(1, 13)] * 15)
+    found = detect(march, dayfirst=True, name="visit")
+    assert (found.format, found.order_source) == ("day_first", "import_setting")
+    january = pd.Series([f"{d:02d}/01/2023" for d in range(1, 13)] * 30)
+    found = detect(january, dayfirst=True, name="visit")
+    assert (found.format, found.order_source) == ("day_first", "import_setting")
     # a value that shows the order still decides, and two months are no spread
     assert (
         detect(pd.Series(["13/01/2023", *month_first]), dayfirst=True).order_source == "few_values"

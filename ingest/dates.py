@@ -413,6 +413,12 @@ class Detection:
     two_digit_years: int = 0  # read only with a pivot, which is always asked
 
 
+def _only_one(numbers: pd.Series) -> bool:
+    """Whether every number is 1: the day of dates completed to the 1st, in the order that reads it as the day."""
+    known = numbers.dropna()
+    return len(known) > 0 and bool((known == 1).all())
+
+
 def _order(first: int, second: int, values: int) -> bool:
     """Whether the values show their order: one reading has no value of its own, the other enough of them."""
     return second == 0 and first >= max(1, math.ceil(ORDER_EVIDENCE * values))
@@ -521,9 +527,17 @@ def detect(series: pd.Series, *, dayfirst: bool, name: str = "") -> Detection:
         day_only = int((a.between(13, 31) & b.between(1, 12)).sum())
         month_only = int((a.between(1, 12) & b.between(13, 31)).sum())
         # read day first, the month is the second number; month first, the first: one order may put every date
-        # in one month (dates completed to the 1st, written 03/01/2024 month first), the other spread them
-        firsts, seconds = a.dropna().nunique(), b.dropna().nunique()
-        spread = 1 if seconds == 1 and firsts >= 3 else 0 if firsts == 1 and seconds >= 3 else None
+        # in one month (dates completed to the 1st, written 03/01/2024 month first), the other spread them. Only a
+        # constant 1 over more than one year reads so: dates of one month's first 12 days hold a constant month (a
+        # March window, a campaign every March), and a January window a constant 1 within one year
+        years = bool(slash["y"].dropna().nunique() >= 2)
+        spread = (
+            1
+            if years and _only_one(b) and a.dropna().nunique() >= 3
+            else 0
+            if years and _only_one(a) and b.dropna().nunique() >= 3
+            else None
+        )
         found = _ordered(
             n, n_slash, day_only, month_only, dayfirst, ("day_first", "month_first"), spread
         )
