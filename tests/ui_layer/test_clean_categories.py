@@ -845,32 +845,66 @@ def test_values_are_picked_by_a_regular_expression_and_mapped_at_once() -> None:
             + ["Diabetes"] * 30
         }
     )
-    _one(at.text_input, "clean_pattern::").set_value("^hyp.*ten").run()
+    _one(at.checkbox, "clean_regex::").check()
+    _one(at.text_input, "clean_pattern::").set_value("^hyp.*ten")
     _one(at.button, "clean_pattern_pick::").click().run()
     _ok(at)
     found = ["HYPERTENSION", "Hypertenson", "Hypertension", "hypertension"]
     assert sorted(_one(at.multiselect, "clean_pick::").value) == sorted(found)
-    said = next(c.value for c in at.caption if c.value.startswith("4 values picked: "))
-    assert all(f"**{v}**" in said for v in found)  # named, to be checked before Map
+    said = next(c.value for c in at.caption if c.value.startswith("4 values picked, 46 rows: "))
+    assert said.startswith("4 values picked, 46 rows: **Hypertension** (40), **hypertension** (3)")
     _one(at.selectbox, "clean_into::").set_value("Hypertension").run()
+    # the line stays while Values holds the pick, through the choice of a clean value
+    assert any(c.value.startswith("4 values picked") for c in at.caption)
     _one(at.button, "clean_map::").click().run()
     _ok(at)
+    assert not any(
+        c.value.startswith("4 values picked") for c in at.caption
+    )  # Values emptied: the line goes
     full = at.session_state["clean_manual"]["diagnosis"]["mapping"]
     assert {full.get(v, v) for v in found} == {"Hypertension"}
-    _one(at.text_input, "clean_pattern::").set_value("(").run()
+    _one(at.text_input, "clean_pattern::").set_value("(")
     _one(at.button, "clean_pattern_pick::").click().run()
     _ok(at)
     assert any("Not a regular expression" in c.value for c in at.caption)
 
 
-def test_what_a_pattern_picked_is_named_under_the_row() -> None:
-    """The first six values a pattern picked are named, then how many more; a pattern that picks none says so."""
+def test_text_typed_as_it_reads_finds_it_and_nothing_found_leaves_values_as_they_were() -> None:
+    """n.a., typed as it reads, picks n.a. only (a dot is a dot until Regular expression is ticked): Set to missing
+    says how many rows; a search that finds nothing leaves Values as it was."""
+    at = _open(
+        {
+            "diagnosis": ["Myocardial infarction"] * 30
+            + ["n.a."] * 6
+            + ["Diabetes"] * 30
+            + ["Asthma"] * 5
+        }
+    )
+    _one(at.text_input, "clean_pattern::").set_value("n.a.")
+    _one(at.button, "clean_pattern_pick::").click().run()
+    _ok(at)
+    assert _one(at.multiselect, "clean_pick::").value == ["n.a."]
+    missing = _one(at.button, "clean_missing::")
+    assert missing.label == "Set 1 value to missing (6 rows)"
+    _one(at.text_input, "clean_pattern::").set_value("zzz")
+    _one(at.button, "clean_pattern_pick::").click().run()
+    _ok(at)
+    assert _one(at.multiselect, "clean_pick::").value == ["n.a."]
+    assert any(c.value == "Nothing found: Values is as it was." for c in at.caption)
+
+
+def test_what_a_search_picked_is_named_under_the_row() -> None:
+    """The six values holding the most rows are named with their rows, then how many more; nothing found is said."""
     from app_pages.clean_categories import _picked_words
 
-    said = _picked_words({"found": [f"v{i}" for i in range(9)]})
-    assert said.startswith("9 values picked: **v0**, **v1**, ") and said.count("**") == 12
-    assert "**v5** and 3 more. Give them a clean value" in said
-    assert _picked_words({"found": ["x"]}).endswith(
-        "**x**. Give it a clean value and Map, or set it to missing."
+    counts = {f"v{i}": i + 1 for i in range(9)}
+    said = _picked_words(list(counts), counts)
+    assert (
+        said.startswith("9 values picked, 45 rows: **v8** (9), **v7** (8), ")
+        and said.count("**") == 12
     )
-    assert _picked_words({"found": []}) == "No value matches the pattern."
+    assert "**v3** (4) and 3 more. Give them a clean value" in said
+    assert _picked_words(["x"], {"x": 1}).endswith(
+        "1 row: **x** (1). Give it a clean value and Map, or set it to missing."
+    )
+    assert _picked_words([], counts) == "Nothing found: Values is as it was."

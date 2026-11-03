@@ -162,6 +162,7 @@ def test_what_the_ai_engine_is_sent_or_answers_never_reaches_a_shared_output(
         "fp",
         "sent",
         "proposals",
+        "refused",  # the page's own refusal, apart from the engine's error
         "error",
         "provider",
         "model",
@@ -276,4 +277,31 @@ def test_send_asks_nothing_of_a_recipient_no_box_confirmed() -> None:
     _one(at.button, "clean_ai_send::").click().run()
     _ok(at)
     assert at.session_state["rag_manager"].sent == []
-    assert "not confirmed" in at.session_state["clean_ai"]["diagnosis"]["error"]
+    assert "not confirmed" in at.session_state["clean_ai"]["diagnosis"]["refused"]
+
+
+def test_send_asks_nothing_when_the_ollama_server_does_not_say_where_it_runs_the_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Asked again at Send, a server that does not answer (late, unreachable) never reads as running the model here:
+    nothing is sent, and the page says that it sent nothing, not that the engine could not answer."""
+    import manage.rag.providers.ollama_server as server
+
+    def silent(base_url, model):
+        raise server.NoAnswer(model)
+
+    monkeypatch.setattr(server, "runs_at", silent)
+    at = AppTest.from_function(_app, kwargs={"frame": FRAME, "ai": AI}, default_timeout=180)
+    at.run()
+    popover = "clean_ai_open::" + str(_one(at.button, "clean_map::").key).split("::", 1)[1]
+    at.session_state[popover] = True
+    at.run()
+    _one(at.button, "clean_ai_send::").click().run()
+    _ok(at)
+    assert at.session_state["rag_manager"].sent == []
+    assert any(
+        c.value.startswith(
+            "Nothing was sent: the Ollama server did not say where it runs the model"
+        )
+        for c in at.caption
+    )

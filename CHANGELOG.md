@@ -1347,15 +1347,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Every other value counts as its own, however rare: a column of names, participant codes or dates on visits still
   reads as an identifier, and is never sent.
 
-### Data > Clean: values picked by a regular expression
+### Data > Clean: values found by a text or a regular expression
 
-- **A pattern picks values at once.** "Pattern", beside Values on Data > Clean > Categories, picks the values a
-  regular expression finds (Python's, found anywhere in a value as written, case ignored unless asked), for Map, Set
-  to missing or Keep as written: a messy column is cleaned in a few strokes, without the AI engine. The row names what
-  the pattern picked, to be checked before Map.
-- **Safe for a shared server.** The pattern is tried in a separate process with a time limit of 2 seconds: one that
-  backtracks without end (`(a+)+$` on a long value) stops there, with a word, and never holds the server; an invalid
-  or empty pattern says why.
+- **Values picked at once.** "Find values", beside Values on Data > Clean > Categories, picks the values that hold a
+  text (found anywhere in a value as written, `*` standing for any text; `n.a.` finds n.a. only), or match a regular
+  expression when "Regular expression" is ticked, case ignored unless asked, for Map, Set to missing or Keep as
+  written: a messy column is cleaned in a few strokes, without the AI engine. While Values holds the pick, the row
+  names the values with their rows, the largest first, and Set to missing says how many rows it sets; a search that
+  finds nothing leaves Values as it was.
+- **Safe for a shared server.** The search runs in a separate process, with no environment, and has 2 seconds once
+  that process is ready: a pattern that backtracks without end (`(a+)+$` on a long value) stops there, with a word,
+  and never holds the server; a busy server's slow start is said apart; an invalid or empty search says why, in the
+  open popover.
 
 ### Validate: Date checks, a tab of its own (M6)
 

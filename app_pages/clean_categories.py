@@ -21,6 +21,7 @@ import hashlib
 import html
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -176,6 +177,7 @@ def _keys(scope: str, column: str, revision: int, order: str) -> dict[str, str]:
         "view": f"clean_view::{base}",
         "pattern": f"clean_pattern::{base}",
         "case": f"clean_case::{base}",
+        "regex": f"clean_regex::{base}",
         "pattern_open": f"clean_pattern_open::{base}",
         "order": f"clean_order::{base}",
         # starts again from the store when a pill, a button or the order changes it (not on the table's own edits,
@@ -311,40 +313,46 @@ def _buttons(column: str, keys: dict[str, str], counts: dict[str, int], how: str
 
 
 def _pick_by_pattern(column: str, keys: dict[str, str], counts: dict[str, int]) -> None:
-    """The values a regular expression finds, picked in Values (for Map, Set to missing or Keep as written), and the
-    pattern's popover closed; what was picked, or why nothing, is said under the row."""
+    """The values a search finds, picked in Values (for Map, Set to missing or Keep as written), and its popover
+    closed; when nothing is found, Values stays as it was. A search that cannot be made keeps the popover open and says
+    why inside it. What was picked is named under the row while Values holds it."""
     choices = _choices(column)
-    st.session_state[keys["pattern_open"]] = False
+    choices.pop("pattern_error", None)
     try:
         found = matching(
             str(st.session_state.get(keys["pattern"]) or ""),
             sorted(counts, key=sort_key),
             ignore_case=bool(st.session_state.get(keys["case"], True)),
+            regex=bool(st.session_state.get(keys["regex"], False)),
         )
     except PatternError as exc:
-        choices["picked"] = {"why": str(exc)}
+        choices["pattern_error"] = str(exc)
         return
-    st.session_state[keys["pick"]] = found
-    choices["picked"] = {"found": found}
+    st.session_state[keys["pattern_open"]] = False
+    if found:
+        st.session_state[keys["pick"]] = found
+    choices["picked"] = found
 
 
-_NAMED = 6  # the values a pattern picked, named under the row
+_NAMED = 6  # the values a search picked, named under the row
 
 
-def _picked_words(said: dict[str, Any]) -> str:
-    """What a pattern picked, for a caption: how many, and the first of them in bold, as the offers show values (Values
-    scrolls sideways once it holds a few, so the row names them, to be checked before Map); or why nothing."""
-    found = said.get("found")
-    if found is None:
-        return plain(said.get("why", ""))
+def _picked_words(found: list[str], counts: Mapping[str, int]) -> str:
+    """What a search picked, for the line under the row while Values holds it: how many values and rows, the first six
+    in bold with their rows, the largest first (Values scrolls sideways once it holds a few: the line names them, to be
+    checked before Map or Set to missing); or that nothing was found."""
     if not found:
-        return "No value matches the pattern."
-    n, them = len(found), "them" if len(found) != 1 else "it"
-    named = ", ".join(f"**{plain(show_level(v), limit=40)}**" for v in found[:_NAMED])
+        return "Nothing found: Values is as it was."
+    n, rows = len(found), sum(counts.get(v, 0) for v in found)
+    them = "them" if n != 1 else "it"
+    largest = sorted(found, key=lambda v: (-counts.get(v, 0), sort_key(v)))
+    named = ", ".join(
+        f"**{plain(show_level(v), limit=40)}** ({counts.get(v, 0):,})" for v in largest[:_NAMED]
+    )
     more = f" and {n - _NAMED:,} more" if n > _NAMED else ""
     return (
-        f"{n:,} value{'s' if n != 1 else ''} picked: {named}{more}. Give {them} a clean value and Map, or set "
-        f"{them} to missing."
+        f"{n:,} value{'s' if n != 1 else ''} picked, {rows:,} row{'s' if rows != 1 else ''}: {named}{more}. "
+        f"Give {them} a clean value and Map, or set {them} to missing."
     )
 
 
@@ -598,30 +606,37 @@ def category_editor(
         values = sorted(counts, key=sort_key) if order == A_TO_Z else list(counts)
         clean_values = sorted({c for c, _, _ in shown.values() if c}, key=sort_key)
         with st.container(horizontal=True, vertical_alignment="bottom"):
-            # a messy column: the values a regular expression finds, picked at once (the pattern runs apart, timed)
+            # a messy column: the values holding a text (or a pattern), picked at once (the search runs apart, timed)
             with st.popover(
-                "Pattern",
-                icon=":material/regular_expression:",
+                "Find values",
+                icon=":material/search:",
                 key=keys["pattern_open"],
                 on_change="rerun",  # its state kept, so that "Pick them" can close it
-                help="Pick the values a regular expression finds, to map them or set them to missing at once.",
+                help="Pick the values that hold a text, to map them or set them to missing at once.",
             ):
-                st.text_input(
-                    "Values matching",
-                    key=keys["pattern"],
-                    persist_state="page",
-                    max_chars=MAX_LENGTH,
-                    placeholder="^hyp.*tension",
-                    help="A regular expression (Python's), found anywhere in a value as written: ^ and $ anchor it.",
-                )
-                st.checkbox("Ignore case", value=True, key=keys["case"], persist_state="page")
-                st.button(
-                    "Pick them",
-                    key=f"clean_pattern_pick::{scope}::{column}",
-                    type="primary",
-                    on_click=_pick_by_pattern,
-                    args=(column, keys, counts),
-                )
+                with st.form(f"clean_find::{scope}::{column}", border=False, enter_to_submit=True):
+                    st.text_input(
+                        "Values containing",
+                        key=keys["pattern"],
+                        persist_state="page",
+                        max_chars=MAX_LENGTH,
+                        placeholder="kidney",
+                        help="Text found anywhere in a value as written; * stands for any text. Tick Regular "
+                        "expression to write a pattern: ^ starts a value, $ ends it, | separates two (CKD|kidney).",
+                    )
+                    st.checkbox(
+                        "Regular expression", value=False, key=keys["regex"], persist_state="page"
+                    )
+                    st.checkbox("Ignore case", value=True, key=keys["case"], persist_state="page")
+                    st.form_submit_button(
+                        "Pick them",
+                        key=f"clean_pattern_pick::{scope}::{column}",
+                        type="primary",
+                        on_click=_pick_by_pattern,
+                        args=(column, keys, counts),
+                    )
+                if why := choices.get("pattern_error"):  # said here, where it is corrected
+                    st.caption(plain(why))
             picked = st.multiselect(
                 "Values",
                 sorted(counts, key=sort_key),
@@ -649,8 +664,12 @@ def category_editor(
                 args=(column, keys, counts, "map"),
                 disabled=not (n and into),
             )
-        if said := choices.pop("picked", None):  # what the pattern picked, said once
-            st.caption(_picked_words(said))
+        found = choices.get("picked")
+        if found is not None and (not found or set(picked) != set(found)):
+            choices.pop("picked")  # nothing found is said once; the line goes once Values changes
+        if found is not None and (not found or set(picked) == set(found)):
+            st.caption(_picked_words(found, counts))
+        picked_rows = sum(counts.get(v, 0) for v in picked)
         with st.container(horizontal=True, vertical_alignment="bottom"):
             means = st.selectbox(
                 "Missing means",
@@ -661,7 +680,9 @@ def category_editor(
                 placeholder="What missing means",
             )
             st.button(
-                "Set to missing",
+                f"Set {n} value{'s' if n != 1 else ''} to missing ({picked_rows:,} row{'s' if picked_rows != 1 else ''})"
+                if n
+                else "Set to missing",
                 key=f"clean_missing::{scope}::{column}",
                 on_click=_buttons,
                 args=(column, keys, counts, "missing"),
@@ -1032,7 +1053,9 @@ def _ask_ai(column: str, scope: str, counts: dict[str, int], offers: tuple[Offer
             _request(column, counts, pending)
     asked = (st.session_state.get(AI_STORE) or {}).get(column) or {}
     if asked.get("fp") == values_fp(counts):  # what came back, once
-        if asked.get("error"):
+        if asked.get("refused"):
+            st.caption(f"Nothing was sent: {plain(asked['refused'], limit=200)}.")
+        elif asked.get("error"):
             st.caption(f"The AI engine could not answer: {plain(asked['error'], limit=200)}")
         else:
             tally = ai_tally(
@@ -1155,24 +1178,21 @@ def _request(column: str, counts: dict[str, int], pending: dict[str, Any]) -> No
         for r in _recipients(engine, model)
         if confirmed is not None and not any(r in box for box in confirmed)
     ]
+    # the page's own refusals, said apart from the engine's errors: nothing was sent
     if _payload(engine, counts, model) != (sent, held) or receiver != to:
-        error, proposals = (
-            "the AI engine changed since the preview: open it again to see what is sent",
-            [],
-        )
+        refused = "the AI engine changed since the preview: open it again to see what is sent"
     elif unconfirmed:
-        error, proposals = (
-            f"{provider_label(unconfirmed[0])} is not confirmed in Settings > AI engine: nothing was sent",
-            [],
-        )
+        refused = f"{provider_label(unconfirmed[0])} is not confirmed in Settings > AI engine"
     else:
-        proposals, error = engine.suggest_category_groups(column, sent)
+        refused = _runs_elsewhere_now(engine, model)
+    proposals, error = ([], "") if refused else engine.suggest_category_groups(column, sent)
     st.session_state.setdefault(AI_STORE, {})[column] = {
         "fp": values_fp(counts),
-        "sent": sent,
+        "sent": [] if refused else sent,
         "proposals": [
             {k: str(p.get(k, ""))[:120] for k in ("value", "clean", "reason")} for p in proposals
         ],
+        "refused": refused,
         "error": error,
         "provider": str(engine.provider or ""),
         "model": model[:80],  # the record's: the decisions read the whole name
@@ -1180,6 +1200,23 @@ def _request(column: str, counts: dict[str, int], pending: dict[str, Any]) -> No
         "values_sent": len(sent),
         "values_held": held,
     }
+
+
+def _runs_elsewhere_now(engine, model: str) -> str:
+    """An Ollama engine's server asked again, at Send, where it runs the model (3 seconds at most): why nothing is
+    sent when it does not say, or names another place than when the engine started (a model replaced under its
+    name since); "" when it says the same, or the engine is no Ollama."""
+    if str(getattr(engine, "provider", "") or "") != "ollama":
+        return ""
+    from manage.rag.providers.ollama_server import NoAnswer, runs_at
+
+    try:
+        now = runs_at(engine.base_url, model)
+    except NoAnswer:
+        return "the Ollama server did not say where it runs the model"
+    if now != getattr(engine, "model_remote_host", None):
+        return "the Ollama server runs the model elsewhere than when the AI engine started: start it again in Settings"
+    return ""
 
 
 def _recipients(engine, model: str) -> list[str]:
