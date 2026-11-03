@@ -1448,16 +1448,18 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The details list each check as "flagged, of N rows checked", and a rule no row can check as "not checked". Domain
   Validity reads N/A when no check can be made, and says why; an empty table scored 100. A rule that cannot be checked
   is listed and the others still count (before, some malformed rules blanked the whole dimension). The advice says
-  how many checks fail, and on how many rows; it is *high* when one rule fails 10 % of its checks, whatever the pooled
+  how many checks fail, and on how many rows; it is *high* when one rule fails often (below), whatever the pooled
   score. The scorecard and the ring's hover say how many rows break a rule. The Domain Validity tab charts the
   failing checks of each rule, as shares of the rows each rule checks, instead of shares of all rows; in an *all*
   or *at least k* family it charts the family's line, which is what counts, and lists its rules apart.
 - A rule whose checks cannot be made on the recorded values is listed, never silently left out; a listed-rows rule
   whose columns were renamed is not checked. The rows said to break a rule are those of the recorded values, and the
   advice says how many break one only through an imputed value (an imputation that wrote implausible values says so
-  even when no recorded value fails). The advice is *high* when one rule fails 5 checks or more and 10 % of its
-  checks, or on a Wilson lower bound of 10 %, and the global score's sentence never says "ready for analysis" beside
-  a high-priority advice. A failing score never prints 100.0 (the ring, its hover, the breakdown, the card's change).
+  even when no recorded value fails). The advice is *high* when a rule, a family, the rows or the pooled line fails 3
+  checks or more with an exact (Clopper-Pearson) lower bound of 5 % for the share that fails: one rule that rises
+  with the evidence (3 failures among 10 checks are high, 10 among 100 are not, 2 among 2 are no evidence; the
+  tutorial cohort's advice stays medium), and the global score's sentence never says "ready for analysis" beside a
+  high-priority advice. A failing score never prints 100.0 (the ring, its hover, the breakdown, the card's change).
 - A rule named by its column alone reads as what makes it fire ("potassium_mmol_l < 2.5 or potassium_mmol_l >
   7.0"), in Domain Validity's lines, in "Where the score loses points" and in the *Rules broken* column of the rows
   it breaks; Failing and Checked are whole numbers in every locale, and each card says how far its score is below

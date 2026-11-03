@@ -311,14 +311,19 @@ def test_the_tutorial_reads_99_83_and_99_70_with_the_diabetes_rule() -> None:
 
 
 def test_a_rule_is_severe_on_enough_evidence() -> None:
-    """One implausible value among 4 checks is no evidence of a rule failing often."""
+    """One implausible value among 4 checks is no evidence of a rule failing often; one rule rises with the evidence:
+    3 failing checks or more, and an exact (Clopper-Pearson) lower bound of 5 % for the share."""
     from explore.data_quality_auditor import severe
 
     assert not severe(1, 4) and not severe(0, 50)
-    assert severe(5, 20) and severe(30, 100) and severe(9, 60)
+    assert severe(5, 20) and severe(30, 100) and severe(9, 60) and severe(3, 3)
     assert not severe(4, 1000)
-    # the exact (Clopper-Pearson) bound: 0.03, 0.09 and 0.05 (Wilson's, 0.21, 0.21 and 0.12, made them high)
-    assert not severe(1, 1) and not severe(2, 3) and not severe(2, 5)
+    # too few failing checks, whatever the share (Wilson's bounds, 0.21, 0.21 and 0.12, made the first three high)
+    assert not severe(1, 1) and not severe(2, 3) and not severe(2, 5) and not severe(2, 2)
+    # the bound, not the point estimate: 10 % of 50, 60 or 100 checks is high no more (bounds 3.3, 3.8 and 4.9 %),
+    # 3 of 10 and 4 of 12 are now (6.7 and 9.9 %)
+    assert not severe(5, 50) and not severe(6, 60) and not severe(10, 100)
+    assert severe(3, 10) and severe(4, 12)
 
 
 def test_any_line_failing_often_makes_the_advice_high() -> None:

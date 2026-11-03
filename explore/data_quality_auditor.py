@@ -24,16 +24,21 @@ DERIVED_CATEGORY = "Derived variables"
 NO_RULE = "no plausibility rule is declared"  # why Domain Validity is N/A when no rule is declared
 
 
+# a line failing SEVERE_FAILS checks or more, with an exact lower bound of SEVERE_BOUND for the share of its checks that
+# fail, makes the Domain Validity advice "high", whatever the pooled score
+SEVERE_FAILS = 3
+SEVERE_BOUND = 0.05
+
+
 def severe(fails: int, checks: int) -> bool:
-    """A line (a rule's, a family's, or the pooled one) that fails often enough to make the advice high: 5 failing
-    checks or more and SEVERE_SHARE of its checks, or an exact (Clopper-Pearson) lower bound of SEVERE_SHARE: one
-    failure among 4 checks, or 2 among 5, is no evidence."""
-    if not checks or not fails:
+    """A line (a rule's, a family's, the rows', or the pooled one) that fails often enough to make the advice high, by
+    one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and an exact (Clopper-Pearson) 95 %
+    lower bound of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
+    10 among 100 are not (4.9 %); 2 among 2, or 1 among 4, are no evidence of a rule failing often."""
+    if not checks or fails < SEVERE_FAILS:
         return False
     low, _ = proportion_confint(fails, checks, alpha=0.05, method="beta")
-    return (fails >= 5 and fails / checks >= SEVERE_SHARE) or float(low) >= SEVERE_SHARE
-# a rule failing this share of its checks makes the Domain Validity advice "high", whatever the pooled score
-SEVERE_SHARE = 0.10
+    return float(low) >= SEVERE_BOUND
 
 
 def failing_score(fails: int, checks: int) -> float:

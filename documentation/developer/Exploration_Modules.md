@@ -373,9 +373,10 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 - **Returns**: `bool`
 
-A line (a rule's, a family's, or the pooled one) that fails often enough to make the advice high: 5 failing
-checks or more and SEVERE_SHARE of its checks, or an exact (Clopper-Pearson) lower bound of SEVERE_SHARE: one
-failure among 4 checks, or 2 among 5, is no evidence.
+A line (a rule's, a family's, the rows', or the pooled one) that fails often enough to make the advice high, by
+one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and an exact (Clopper-Pearson) 95 %
+lower bound of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
+10 among 100 are not (4.9 %); 2 among 2, or 1 among 4, are no evidence of a rule failing often.
 
 ### def `failing_score` (data_quality_auditor.py)
 
