@@ -417,3 +417,20 @@ def test_an_account_the_provider_does_not_name_is_refused(mock_post: MagicMock) 
     provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
     refused = provider.authenticate(UserCredentials(username="dr_who", password="pw"))
     assert not refused.success and "returned no username" in refused.message
+
+
+@patch("requests.Session.post")
+def test_a_name_typed_to_a_better_auth_without_usernames_signs_in(mock_post: MagicMock) -> None:
+    """Without the username plugin, Better Auth signs a typed name in as <name>@local.cohort and returns no username:
+    the account is that name, as the provider spells it; another e-mail is never taken for it."""
+    mock_post.return_value = _better_auth_answer(
+        {"email": "drlee@local.cohort", "role": "researcher", "isActive": True}
+    )
+    provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+    signed = provider.authenticate(UserCredentials(username="DrLee", password="pw"))
+    assert signed.success and signed.user is not None and signed.user.username == "drlee"
+    mock_post.return_value = _better_auth_answer(
+        {"email": "drlee@example.org", "role": "researcher", "isActive": True}
+    )
+    provider = BetterAuthIAMProvider(base_url="http://mock-auth:3000/api/auth")
+    assert not provider.authenticate(UserCredentials(username="drlee", password="pw2")).success

@@ -6,7 +6,7 @@ import logging
 
 import streamlit as st
 
-from core.workspace import earlier_workspaces, move_earlier_workspace
+from core.workspace import case_folders, earlier_workspaces, move_earlier_workspace
 from manage.iam import UserCredentials, UserRole, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, validate_new_credentials
 from manage.iam.schemas import IAMProviderType
@@ -84,6 +84,15 @@ def _move_earlier_workspace(iam, username: str) -> None:
                 if left
                 else ""
             )
+        cased = [folder.name for folder in case_folders(username)]
+        if (
+            cased
+        ):  # another case of the name, on a file system that tells case apart: never moved here
+            note = (
+                f"the folder {', '.join(cased)} of this account's name in another case is left for an administrator "
+                "to merge into its folder (dev_scripts/move_workspaces.py)"
+            )
+            moved, outcome = False, f"{outcome}; {note}" if outcome else note
     except Exception as exc:  # never in the way of a sign-in
         logger.warning(
             "An earlier workspace folder was not moved (%s: %s)",
@@ -173,7 +182,8 @@ def _login_card(iam) -> None:
             st.caption("New accounts are activated by an administrator.")
 
     st.caption(
-        ":material/lock: Data stays on this server  ·  :material/badge: Role-based access  ·  :material/history: Full audit trail",
+        ":material/lock: Data stays on this server unless you choose an AI engine that sends it elsewhere  ·  "
+        ":material/badge: Role-based access  ·  :material/history: Full audit trail",
         text_alignment="center",
     )
 

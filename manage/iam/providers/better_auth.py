@@ -146,6 +146,12 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 # from this name, so one account typed in two cases had two workspaces
                 kind = "email" if "@" in credentials.username else "username"
                 canonical = str(user_data.get(kind) or "").strip()
+                if not canonical and kind == "username":
+                    # a Better Auth without usernames signs a typed name in as <name>@local.cohort and returns no
+                    # username: the part before "@" of that e-mail, when it is the name typed
+                    local, _, domain = str(user_data.get("email") or "").strip().partition("@")
+                    if domain.lower() == "local.cohort" and local.casefold() == credentials.username.strip().casefold():
+                        canonical = local
                 if not canonical:
                     return AuthResult(
                         success=False,

@@ -120,6 +120,72 @@ def _code(name: str) -> str:
     return "".join(out)
 
 
+def _decoded(folder: str) -> str | None:
+    """The name a folder of :func:`safe_dirname` stands for: a folder name is its own name, "_" and a code the name
+    coded (``_code`` read back: two names never share one); None for a folder ``safe_dirname`` gives no name (a
+    hash of a long name, a folder made by hand)."""
+    name = _read_code(folder) if folder.startswith("_") else folder
+    try:
+        return name if name is not None and safe_dirname(name) == folder else None
+    except ValueError:
+        return None
+
+
+def _read_code(folder: str) -> str | None:
+    """A code of ``_code`` read back, None where it is no such code."""
+    out, i = [], 1
+    while i < len(folder):
+        if folder.startswith("__", i):
+            out.append("_")
+            i += 2
+        elif folder.startswith("_at_", i):
+            out.append("@")
+            i += 4
+        elif folder.startswith("_x", i):
+            end = folder.find("_", i + 2)
+            if end < 0:
+                return None
+            try:
+                out.append(chr(int(folder[i + 2 : end], 16)))
+            except ValueError, OverflowError:  # no hexadecimal number, or none a character has
+                return None
+            i = end + 1
+        elif folder[i] == "_":
+            return None
+        else:
+            out.append(folder[i])
+            i += 1
+    return "".join(out)
+
+
+def case_folders(username: str | None) -> list[Path]:
+    """
+    The folders under ``users/`` of a name that differs from ``username`` by case only, the account's own folder set
+    apart: an identity provider's account signed in before with its name typed in another case (Better Auth, before
+    the sign-in kept the provider's spelling), on a file system that tells case apart (Linux, the Docker image); where
+    it does not, both spellings were always one folder. They hold that account's files, and are left for an
+    administrator to merge into its folder (dev_scripts/move_workspaces.py).
+    """
+    name = (username or "").strip()
+    users = data_root() / "users"
+    if not name or not users.is_dir():
+        return []
+    own = users / safe_dirname(name)
+    found = []
+    for folder in users.iterdir():
+        if folder.name == own.name or not folder.is_dir() or folder.is_symlink():
+            continue
+        decoded = _decoded(folder.name)
+        if decoded is None or decoded == name or decoded.casefold() != name.casefold():
+            continue
+        if own.exists() and os.path.samefile(
+            folder, own
+        ):  # one folder where case is not told apart
+            continue
+        found.append(folder)
+    return sorted(found)
+
+
 def earlier_folders(username: str | None) -> list[str]:
     """
     The folders earlier versions gave ``username`` that are not its folder now: the name with each run of characters
@@ -442,6 +508,7 @@ __all__ = [
     "UserScope",
     "all_user_scopes",
     "data_root",
+    "case_folders",
     "earlier_folders",
     "earlier_workspaces",
     "is_device_name",

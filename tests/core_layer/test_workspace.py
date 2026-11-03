@@ -381,3 +381,43 @@ def test_the_script_counts_the_name_before_an_at_sign_as_an_owner(root: Path) ->
     rows = {account: verdict for account, _, verdict in script.plan(names)}
     assert "administrator" in rows["j.smith@chl.lu"]
     assert script.apply(names) == [] and current.exists()
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "admin",
+        "j.smith@chl.lu",
+        "o'neil@x.org",
+        "a_b@c.d",
+        "name.",
+        "Ünïcødé@x.lu",
+        "Alice@Example.org",
+    ],
+)
+def test_a_folder_code_reads_back_as_its_name(name: str) -> None:
+    from core.workspace import _decoded
+
+    assert _decoded(safe_dirname(name)) == name
+
+
+def test_what_no_code_writes_reads_as_no_name() -> None:
+    from core.workspace import _decoded
+
+    for folder in ("_x41", "_xzz_", "_a_b", "_x110000_"):
+        assert _decoded(folder) is None
+
+
+def test_a_folder_of_the_name_in_another_case_is_found_where_case_is_told_apart(root: Path) -> None:
+    """Better Auth's account signed in before as Alice@Example.org, now alice@example.org: on a file system that tells
+    case apart, its earlier folder is found (and left for an administrator); where it does not, it is the same folder."""
+    from core.workspace import case_folders
+
+    users = root / "users"
+    earlier = users / safe_dirname("Alice@Example.org")
+    earlier.mkdir(parents=True)
+    (earlier / "datasets").mkdir()
+    cases_apart = not (users / safe_dirname("alice@example.org")).exists()
+    assert case_folders("alice@example.org") == ([earlier] if cases_apart else [])
+    assert case_folders("Alice@Example.org") == []  # its own folder
+    assert case_folders("bob@example.org") == []

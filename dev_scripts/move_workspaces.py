@@ -22,7 +22,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from core.workspace import earlier_workspaces, move_workspace, planned_move
+from core.workspace import (
+    case_folders,
+    earlier_workspaces,
+    move_workspace,
+    planned_move,
+    safe_dirname,
+)
 
 
 def possible_owners(names: list[str]) -> list[str]:
@@ -32,21 +38,31 @@ def possible_owners(names: list[str]) -> list[str]:
 
 
 def plan(names: list[str]) -> list[tuple[str, str, str]]:
-    """(account, its earlier folders, "move" or why the folder stays) for each account with an earlier folder."""
+    """(account, its earlier folders, "move" or why the folder stays) for each account with an earlier folder, and
+    for each with a folder of its name in another case (core.workspace.case_folders), never moved: merged by hand."""
     owners = possible_owners(names)
     rows = []
     for name in names:
         found = earlier_workspaces(name)
-        if not found:
-            continue
-        earlier, reason = planned_move(name, owners)
-        rows.append(
-            (
-                name,
-                ", ".join(folder.name for folder in found),
-                "move" if earlier is not None else reason,
+        if found:
+            earlier, reason = planned_move(name, owners)
+            rows.append(
+                (
+                    name,
+                    ", ".join(folder.name for folder in found),
+                    "move" if earlier is not None else reason,
+                )
             )
-        )
+        cased = case_folders(name)
+        if cased:
+            rows.append(
+                (
+                    name,
+                    ", ".join(folder.name for folder in cased),
+                    f"its name in another case: merge it into {safe_dirname(name)} by hand, after review (both may "
+                    "hold files of one name: keep both), or delete it under the study's retention rule",
+                )
+            )
     return rows
 
 

@@ -333,8 +333,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Better Auth: one workspace per account, however its name is typed.** The signed-in name, and so the workspace
   folder, is the identity provider's spelling of the account (its e-mail, or its username), never the text typed:
   Better Auth matches e-mails without regard to case, so one account typed in two cases had two workspaces. A
-  provider that names no account refuses the sign-in. A user who signed in with another case before finds their
-  earlier files in the folder of that spelling, which an administrator can move.
+  provider that names no account refuses the sign-in; a name typed to a Better Auth without usernames signs in as
+  the name of its `<name>@local.cohort` e-mail.
+- **For the operator of a Better Auth deployment on Linux or in the Docker image** (a file system that tells case
+  apart; on Windows and macOS the spellings were always one folder): an account may have, under `data/users/`, a
+  folder of a spelling it signed in with before (`_Alice_at_Example.org` beside `_alice_at_example.org`), holding
+  participant data of its sessions, which its user no longer reaches. The sign-in logs it, and
+  `dev_scripts/move_workspaces.py` lists it: merge it into the account's folder after review (both may hold files
+  of one name: keep both), or delete it under the study's retention rule; until then, a request to erase that user's
+  data must cover it.
 
 ### Usability
 
