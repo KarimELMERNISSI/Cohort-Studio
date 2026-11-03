@@ -875,6 +875,21 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
         raise CriterionError(f"criterion '{name}': {exc}") from exc
 
 
+def earlier_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series | None:
+    """
+    Where an expression fired under the rules of version 1, read as Python reads it (a test written with != or ~ true
+    on a missing value), to say what a study written then selects differently now; None for another kind, which
+    version 2 reads alike, or an expression that cannot be read.
+    """
+    try:
+        if rule_kind(name, definition).mask is not _expression_mask:
+            return None
+        tree = validate(str(definition.get("expression")).strip())
+        return _as_mask(evaluate_tree(tree, df, policy=DEFAULT_POLICY), df.index)
+    except Exception:
+        return None
+
+
 def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
     """
     The rows where a criterion does not fire for want of a value: an expression where its value is unknown in
@@ -1109,6 +1124,7 @@ __all__ = [
     "criterion_columns",
     "criterion_mask",
     "criterion_unknown",
+    "earlier_mask",
     "criterion_problems",
     "describe_definition",
     "expression_rule",

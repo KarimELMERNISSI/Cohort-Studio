@@ -34,6 +34,7 @@ from core.criteria import (
     criterion_mask,
     criterion_problems,
     criterion_unknown,
+    earlier_mask,
     holds_row_list,
     rule_checks,
     shared_definition,
@@ -516,6 +517,40 @@ def merge_families(
     return merged, differing
 
 
+@dataclass(frozen=True)
+class RulesChange:
+    """A criterion that selects other rows of a table under the rules of today than under those of version 1: the
+    rows it excludes now and did not, and those it excluded and does not (core.criteria.earlier_mask)."""
+
+    criterion: Criterion
+    more: int
+    fewer: int
+
+
+def rules_changes(df: pd.DataFrame, config: Mapping[str, Any] | None) -> list[RulesChange]:
+    """The criteria of ``config`` that exclude other rows of ``df`` now than under the rules of version 1, where a test
+    written with != or ~ was true on a missing value: for a study written then, what the new reading changes. Only an
+    expression is read otherwise; a criterion that cannot be evaluated is left out (its error is said elsewhere)."""
+    changes = []
+    for c in catalogue(config):
+        before = earlier_mask(df, c.name, c.definition)
+        if before is None:
+            continue
+        try:
+            now = criterion_mask(df, c.name, c.definition)
+        except CriterionError:
+            continue
+        excluded_now = now if c.kind == EXCLUSION else ~now
+        excluded_then = before if c.kind == EXCLUSION else ~before
+        more, fewer = (
+            int((excluded_now & ~excluded_then).sum()),
+            int((excluded_then & ~excluded_now).sum()),
+        )
+        if more or fewer:
+            changes.append(RulesChange(c, more, fewer))
+    return changes
+
+
 def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
     """
     What makes a study configuration ambiguous or unusable, in words (empty when it is sound): an unknown family
@@ -764,6 +799,8 @@ __all__ = [
     "catalogue",
     "configuration_for_sharing",
     "configuration_problems",
+    "rules_changes",
+    "RulesChange",
     "criteria_from_trace",
     "criterion_id",
     "evaluate_population",

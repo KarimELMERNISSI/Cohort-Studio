@@ -13,6 +13,7 @@ import utils.clustering_utils as cu
 from app_pages.data_quality_dashboard import render_dashboard
 from app_pages.validate_dates import date_candidates, dates_found
 from core.criteria import (
+    RULES_VERSION,
     criterion_columns,
     criterion_unknown,
     expression_rule,
@@ -31,6 +32,7 @@ from core.population import (
     family_masks,
     family_words,
     merge_families,
+    rules_changes,
 )
 from core.registry import as_code
 from enrich.recode import candidates, recoded_columns
@@ -1078,7 +1080,8 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         config = st.session_state.config
         st.download_button(
             label="Download Configuration File",
-            data=json.dumps(config, indent=4, default=str),
+            # the version of how its rules are read: a file loaded later under other rules says what reads otherwise
+            data=json.dumps({**config, "rules_version": RULES_VERSION}, indent=4, default=str),
             file_name="config.json",
             mime="application/json",
             key=f"{key_base}_config",
@@ -1089,7 +1092,7 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         shared = configuration_for_sharing(config)
         st.download_button(
             label="Download for Sharing",
-            data=json.dumps(shared.config, indent=4, default=str),
+            data=json.dumps({**shared.config, "rules_version": RULES_VERSION}, indent=4, default=str),
             file_name="config_for_sharing.json",
             mime="application/json",
             key=f"{key_base}_config_shared",
@@ -1204,12 +1207,49 @@ def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[
         )
         if problems:
             return False, [refusal_text(problems)]
-        notices = _merge_uploaded(config, new_config)
+        written = new_config.pop("rules_version", 1)  # a file of the study, not a setting to merge
+        changed = _rules_notice(written, new_config.get("mask_families"))
+        notices = _merge_uploaded(config, new_config) + changed
     except json.JSONDecodeError:
         return False, ["Invalid JSON file. Please upload a valid configuration file."]
     except Exception as exc:  # a file this version cannot read is refused, never an error page
         return False, [f"This configuration was not loaded ({type(exc).__name__})."]
     return True, ["Configuration loaded and merged successfully!", *notices]
+
+
+def _rules_notice(written: Any, families: Any) -> list[str]:
+    """
+    A file written under the rules of version 1 (a test written with != or ~ true on a missing value), or before they
+    were recorded: the criteria that select other rows of the loaded data now, with how many more or fewer they
+    exclude, and how to keep the rows whose value is missing. Nothing for a file of today's rules, or without data.
+    """
+    base = get_state().base
+    try:
+        version = int(written)
+    except (TypeError, ValueError):
+        version = 1
+    if version >= RULES_VERSION or base is None or not isinstance(families, dict):
+        return []
+    changes = rules_changes(base, {"mask_families": families})
+    if not changes:
+        return []
+    said = "; ".join(
+        f"{as_code(c.criterion.name)} ({c.criterion.kind}) excludes "
+        + " and ".join(
+            part
+            for part in (
+                f"{c.more:,} more row{'s' if c.more != 1 else ''}" if c.more else "",
+                f"{c.fewer:,} fewer" if c.fewer else "",
+            )
+            if part
+        )
+        for c in changes
+    )
+    return [
+        f"This file was written under the rules of version {version}, where a test written with != or ~ was true on "
+        f"a missing value; read now, these criteria select other rows of this data: {said}. To keep the rows whose "
+        "value is missing, write df['x'].isna() | (...)."
+    ]
 
 
 def _on_config_upload() -> None:

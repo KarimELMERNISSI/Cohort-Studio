@@ -178,3 +178,25 @@ def test_an_expression_that_says_what_a_missing_value_gives_is_read_as_written()
     assert _fires("df['s'].isin(['x', None])") == [0, 1]
     assert _fires("df['s'].isin(['x', np.nan])") == [0, 1]
     assert _fires("~df['s'].isin(['x', None])") == [2, 3]
+
+
+def test_a_study_written_under_the_earlier_rules_says_what_reads_otherwise() -> None:
+    """Under version 1, "!=" kept the missing status (an inclusion criterion met) and "~" flagged the missing height (an
+    exclusion criterion fired): read now, the first excludes one row more, the second one fewer."""
+    from core.population import rules_changes
+
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Not withdrawn": {"expression": "df['s'] != 'withdrawn'"},
+            },
+            "clinical_anomalies": {
+                "operator": "any",
+                "Short": {"expression": "~(df['h'] >= 100)"},
+                "Isna": {"expression": "df['h'].isna()"},  # read alike: never listed
+            },
+        }
+    }
+    found = {c.criterion.name: (c.more, c.fewer) for c in rules_changes(DF, config)}
+    assert found == {"Not withdrawn": (1, 0), "Short": (0, 1)}
