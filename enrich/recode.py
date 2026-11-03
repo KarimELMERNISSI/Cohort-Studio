@@ -1029,23 +1029,41 @@ def changes(
     return {"by_kind": dict(by_kind), "set_to_missing": dict(missing)}
 
 
+# what the trace report prints of a recode as recorded, as it is: its columns, its fold rule and its counts
+_REPORTED = (
+    "source",
+    "target",
+    "fold",
+    "replaces",
+    "values_before",
+    "values_after",
+    "kept_as_written",
+    "rows_changed",
+    "rows_missing_before",
+    "rows_set_to_missing",
+    "changes",
+)
+
+
 def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
     """
-    The step's parameters as the trace report prints them: the choices counted, never named (the trace keeps them for
-    the replay), and each grouping with its reason, naming its values only when each held 5 rows or more. The
-    fingerprints are left out: one of a single column can be tested against a guessed cell.
+    The step's parameters as the trace report prints them: its columns and its counts, the choices counted, never named
+    (the trace keeps them for the replay), and each grouping with its reason, naming its values only when each held 5
+    rows or more. Only the keys of ``_REPORTED`` are printed as they are, so that a key another version writes is never
+    printed raw; never the fingerprints (one of a single column can be tested against a guessed cell). A recode of
+    another fold rule, which the replay refuses, holds the choices of another version in other shapes: its columns and
+    how many values it recoded are printed, nothing per value.
     """
-    named = (
-        "mapping",
-        "kinds",
-        "kept",
-        "missing_meaning",
-        "groupings",
-        "results",
-        "target_fp",
-        "values_fp",
-    )
-    out = {k: v for k, v in params.items() if k not in named}
+    if params.get("fold") != FOLD:
+        mapping = params.get("mapping")
+        return {
+            "source": params.get("source"),
+            "target": params.get("target"),
+            "recorded by": f"another version of Data > Clean (fold rule: {params.get('fold') or 'none'}), "
+            "which this version does not replay; its choices are in the trace",
+            "values recoded": len(mapping) if isinstance(mapping, Mapping) else 0,
+        }
+    out = {k: params[k] for k in _REPORTED if k in params}
     if params.get("results"):  # the codes answered a result: counted, never named
         out["codes kept as results"] = len(params["results"])
     chosen = params.get("kinds") or {}
@@ -1060,6 +1078,7 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
         if g.get("each_5_rows")
         else f"{len(g.get('values', ()))} values grouped (the reason is in the trace)"
         for clean, g in grouped.items()
+        if isinstance(g, Mapping)
     ]
     proposed: dict[tuple[str, str, str], int] = defaultdict(int)
     for by in (params.get("ai_by") or {}).values():
@@ -1072,7 +1091,6 @@ def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
             f"{n} value{'s' if n != 1 else ''}"
             for (provider, model, where), n in sorted(proposed.items())
         ]
-    out.pop("ai_by", None)
     return out
 
 

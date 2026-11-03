@@ -13,6 +13,7 @@ import pytest
 
 from enrich.recode import (
     AI,
+    FOLD,
     Offer,
     ai_offers,
     ai_tally,
@@ -179,7 +180,9 @@ def test_a_proposal_is_an_offer_its_reason_never_pre_filled_and_who_proposed_is_
     # kept when the copy is cleaned again, and reported by counts, never by value
     again = choices_of({"mapping": mapping, "kinds": kinds, "ai_by": {"Oui": by, "Gone": by}})
     assert again["ai_by"] == {"Oui": by}
-    shown = report_params({"mapping": mapping, "kinds": kinds, "ai_by": again["ai_by"]})
+    shown = report_params(
+        {"fold": FOLD, "mapping": mapping, "kinds": kinds, "ai_by": again["ai_by"]}
+    )
     assert shown["proposed by the AI engine"] == [
         "ollama gpt-oss:120b-cloud (cloud): 1 value"
     ]  # where it ran

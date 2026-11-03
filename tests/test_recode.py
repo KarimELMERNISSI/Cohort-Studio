@@ -600,6 +600,67 @@ def test_the_trace_report_counts_the_choices_names_no_value_and_says_each_groupi
         "2 values grouped (the reason is in the trace)",
     ]
     assert "rare ones" not in repr(shown)  # free text, perhaps naming the rare values
+    # a key another version writes is never printed raw
+    assert "CANARY" not in repr(report_params({**params, "reasons": {"CANARY-6": "chosen"}}))
+
+
+# the records of 30 October, in the shapes their pages wrote: no fold and "reasons" (baba1b7, 3ea6198), groupings as
+# text (747ccc3), groupings as mappings (191a550), the proposer under "ai" (751ad38)
+_COMMON = {"source": "sex", "target": "sex_clean", "replaces": False, "values_before": 6}
+_EARLIER = {
+    "baba1b7": {
+        **_COMMON,
+        "mapping": {"MALE": "Male", "male ": "Male", "Feemale": "Female", "ND": None},
+        "reasons": {
+            "MALE": "spaces and capitals",
+            "male ": "spaces and capitals",
+            "Feemale": "chosen",
+        },
+        "values_after": 2,
+    },
+    "747ccc3": {
+        **_COMMON,
+        "fold": "spaces_and_capitals",
+        "mapping": {"Feemale": "Female", "ND": None},
+        "kinds": {"Feemale": "spelling", "ND": "missing code"},
+        "groupings": {"Female": "Feemale is a typo"},
+    },
+    "191a550": {
+        **_COMMON,
+        "fold": "spaces_and_capitals",
+        "mapping": {"Feemale": "Female", "ND": None},
+        "groupings": {"Female": {"reason": "typo", "values": ["Female", "Feemale"]}},
+        "values_fp": "0" * 16,
+    },
+}
+_EARLIER["751ad38"] = {**_EARLIER["191a550"], "ai": {"provider": "Anthropic", "model": "claude"}}
+
+
+@pytest.mark.parametrize("shape", sorted(_EARLIER))
+def test_a_recode_of_an_earlier_version_is_reported_by_its_columns_and_counts(shape: str) -> None:
+    """The replay refuses it; the trace report still builds, and names no value of it."""
+    import io
+
+    from docx import Document
+
+    from manage.trace_documenter import TraceDocumenter
+
+    params = _EARLIER[shape]
+    shown = report_params(params)
+    assert shown["source"] == "sex" and shown["values recoded"] == len(params["mapping"])
+    assert not any(v in repr(shown) for v in ("Feemale", "MALE", "male ", "typo"))
+    step = {
+        "function": "recode_levels",
+        "params": params,
+        "description": "Recoded sex into sex_clean",
+    }
+    trace = {"session_id": f"s_{shape}", "source_dataset": "cohort.csv", "steps": [step]}
+    document = Document(io.BytesIO(TraceDocumenter(trace).generate_report().getvalue()))
+    text = "\n".join(p.text for p in document.paragraphs) + "\n".join(
+        c.text for table in document.tables for row in table.rows for c in row.cells
+    )
+    assert "another version of Data > Clean" in text
+    assert not any(v in text for v in ("Feemale", "MALE", "male "))
 
 
 def test_the_variables_listed_leave_out_the_copies_and_say_which_were_cleaned() -> None:
