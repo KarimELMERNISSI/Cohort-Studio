@@ -171,12 +171,13 @@ def test_an_ollama_model_run_elsewhere_is_a_recipient_whatever_its_name() -> Non
     assert server_recipient("ollama", here) is None and server_recipient("anthropic", None) is None
 
 
-def test_the_ollama_server_says_which_models_it_runs_elsewhere() -> None:
+def test_the_ollama_server_says_which_models_it_runs_elsewhere(monkeypatch: pytest.MonkeyPatch) -> None:
     pytest.importorskip("httpx", reason="the ai extra")
     import threading
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    from manage.rag.providers.ollama_server import remote_host, remote_models
+    monkeypatch.undo()  # the suite's stand-in answer (tests/conftest.py): the server's own here
+    from manage.rag.providers.ollama_server import NoAnswer, remote_host, remote_models, runs_at
 
     class Handler(BaseHTTPRequestHandler):
         def _answer(self, body: object) -> None:
@@ -205,6 +206,9 @@ def test_the_ollama_server_says_which_models_it_runs_elsewhere() -> None:
         assert remote_host(url, "gpt-oss:120b") == "https://ollama.com:443"
         assert remote_host(url, "llama3.2") is None and remote_host(url, None) is None
         assert remote_models(url) == {"gpt-oss:120b": "https://ollama.com:443"}
+        assert runs_at(url, "gpt-oss:120b") == "https://ollama.com:443" and runs_at(url, "llama3.2") is None
     finally:
         server.shutdown()
-    assert remote_host("http://127.0.0.1:9", "gpt-oss:120b") is None  # no server: nothing known
+    assert remote_host("http://127.0.0.1:9", "gpt-oss:120b") is None  # no server: nothing known for Settings
+    with pytest.raises(NoAnswer):  # and a decision on what is sent never reads a silence as "it runs here"
+        runs_at("http://127.0.0.1:9", "gpt-oss:120b")

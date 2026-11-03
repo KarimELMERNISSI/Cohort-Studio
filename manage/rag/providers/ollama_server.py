@@ -42,12 +42,30 @@ def _remote(entry: Any) -> str | None:
     return str(host) if host else None
 
 
+class NoAnswer(Exception):
+    """The Ollama server did not say where it runs a model: unreachable, an error, or no answer in time."""
+
+
 def remote_host(base_url: str | None, model: str | None) -> str | None:
     """The address that runs ``model`` for this Ollama server when the server does not run it itself (a cloud model,
-    or a copy of one), as ``/api/show`` answers; None when the server runs it, or cannot say."""
+    or a copy of one), as ``/api/show`` answers; None when the server runs it, or cannot say (for what Settings
+    shows: a decision on what is sent reads :func:`runs_at`)."""
     if not model:
         return None
     return _remote(_ask(base_url, "POST", "/api/show", {"model": model}))
+
+
+def runs_at(base_url: str | None, model: str | None) -> str | None:
+    """Where the server runs ``model``: the address that runs it when the server does not run it itself, None when it
+    does (an Ollama older than the cloud models answers without saying: it runs every model itself). Raises
+    :class:`NoAnswer` when the server does not answer in time, so that "it runs here" is never read in a silence: a
+    copy of a cloud model would then be sent every value, as to a model on this machine."""
+    if not model:
+        return None
+    answer = _ask(base_url, "POST", "/api/show", {"model": model})
+    if answer is None:
+        raise NoAnswer(model)
+    return _remote(answer)
 
 
 def remote_models(base_url: str | None) -> dict[str, str]:
@@ -61,4 +79,4 @@ def remote_models(base_url: str | None) -> dict[str, str]:
     }
 
 
-__all__ = ["remote_host", "remote_models"]
+__all__ = ["NoAnswer", "remote_host", "remote_models", "runs_at"]

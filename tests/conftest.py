@@ -21,6 +21,15 @@ os.environ.setdefault("CMP_ADMIN_PASSWORD", "test-bootstrap-password-1")
 
 
 @pytest.fixture(autouse=True)
+def _ollama_server_runs_it_here(monkeypatch: pytest.MonkeyPatch):
+    """No test reaches an Ollama server: asked where it runs a model (an engine's start, a Send of Data > Clean), the
+    server answers that it runs it itself. A test of a silent or a remote server sets its own answer."""
+    import manage.rag.providers.ollama_server as server
+
+    monkeypatch.setattr(server, "runs_at", lambda base_url, model: None)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_graph_manager():
     """Each test starts without the process-wide graph engine manager: one configured by an earlier test (an engine,
     offline mode) would decide for the next."""

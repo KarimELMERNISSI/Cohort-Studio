@@ -235,7 +235,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   - LangChain's tracing service (LangSmith) is switched off at start-up, its four environment switches and its own
     global switch: a tracing switch left in `.env` would have sent every prompt there.
   - An Ollama address on another machine is shown as such, not as "Local: no data leaves this server", with a
-    warning when it uses http. The sidebar and the Start page say so too.
+    warning when it uses http. The sidebar and the Start page say so too; a cloud model behind it shows both
+    recipients, the model's host and the server's address with its http warning.
+  - **A silent Ollama server is never read as running the model here.** A server that does not say in time where it
+    runs a model (late, unreachable) refuses the engine's start, and Data > Clean asks it again at Send, sending
+    nothing when it does not answer or names another place than at the start: a copy of a cloud model would
+    otherwise read as a model of this machine, and be sent every value. The page says "Nothing was sent" for its own
+    refusals, apart from the engine's errors. The sign-in page says that data stay on the server unless an AI engine
+    that sends them elsewhere is chosen.
   - The notice says that the confirmation is the user's, for one browser tab, and does not replace the approvals of
     a data-protection framework, and that what was sent stays with the provider. "Mistral AI (cloud, EU)" claimed
     a location the app cannot check: it reads "Mistral AI (cloud)".

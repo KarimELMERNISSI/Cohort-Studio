@@ -173,7 +173,7 @@ def test_a_model_the_ollama_server_runs_elsewhere_needs_the_confirmation(monkeyp
 
     _fake_connectors(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        server, "remote_host", lambda base_url, model: "https://ollama.com:443" if model == "gpt-oss:120b" else None
+        server, "runs_at", lambda base_url, model: "https://ollama.com:443" if model == "gpt-oss:120b" else None
     )
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -185,6 +185,27 @@ def test_a_model_the_ollama_server_runs_elsewhere_needs_the_confirmation(monkeyp
     ok, message = manager.initialize_system(**start, vector_engine="lancedb")
     assert ok, message
     assert manager.recipients() == {"ollama@ollama.com"} and manager.model_remote_host == "https://ollama.com:443"
+
+
+def test_a_silent_ollama_server_never_reads_as_running_the_model_here(monkeypatch, tmp_path) -> None:
+    """A server that does not say where it runs the model (late, unreachable) refuses the start: a copy of a cloud
+    model would otherwise read as a model of this machine, and Data > Clean would send it every value."""
+    import manage.rag.providers.ollama_server as server
+
+    _fake_connectors(monkeypatch, tmp_path)
+
+    def silent(base_url, model):
+        raise server.NoAnswer(model)
+
+    monkeypatch.setattr(server, "runs_at", silent)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
+    ok, message = manager.initialize_system(
+        provider="ollama", base_url="http://localhost:11434", model_name="gpt-oss:120b", vector_engine="lancedb"
+    )
+    assert not ok and "did not say where it runs gpt-oss:120b" in message
+    assert not manager.recipients()
 
 
 def test_a_cloud_model_behind_an_ollama_outside_the_network_names_both() -> None:

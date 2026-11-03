@@ -206,8 +206,8 @@ def _provider_card() -> dict:
             embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
             chat_help = (
-                "Model for question answering and taxonomy generation. One tagged cloud, or that your Ollama server "
-                "runs elsewhere, runs on ollama.com and needs your confirmation."
+                "Model for question answering and taxonomy generation. A model marked (ollama.com) in the list "
+                "runs on that host through your Ollama server: what it is sent needs your confirmation."
             )
             embed_help = "Local embedding model (pull it first: 'ollama pull <model>')."
         else:
@@ -272,6 +272,8 @@ def _provider_card() -> dict:
                         f"This model runs on {host} through your Ollama server: what it is sent leaves this machine, "
                         "and needs your confirmation below."
                     )
+                    if not on_this_machine(cfg["base_url"]):  # the server at the address receives it too
+                        _address_badge(cfg["base_url"])
                 else:
                     _address_badge(cfg["base_url"])
     return cfg

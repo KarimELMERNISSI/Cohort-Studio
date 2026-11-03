@@ -466,9 +466,15 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # an Ollama server says which of its models it runs elsewhere (a copy of a cloud model reads local by name)
         remote = None
         if provider_clean == OLLAMA:
-            from manage.rag.providers.ollama_server import remote_host
+            from manage.rag.providers.ollama_server import NoAnswer, runs_at
 
-            remote = remote_host(base_url, model_name)
+            try:  # a silence is never read as "it runs here"
+                remote = runs_at(base_url, model_name)
+            except NoAnswer:
+                return False, (
+                    f"The Ollama server did not say where it runs {model_name}: check that it runs and holds this "
+                    "model, then start the engine again."
+                )
         needed = self.recipients_of(
             provider_clean,
             base_url,
