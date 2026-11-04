@@ -521,12 +521,13 @@ def test_the_notice_says_which_columns_send_no_value() -> None:
         "(never the minimum or the maximum, and none for a number named as a date, such as `dob`)" in notice
     )
     assert (
-        "only values shared by at least 5 rows, and none for free text or a column of more than 30 values, most of "
-        "them rare (names, codes or dates on the visits of more than 30 people)" in notice
+        "only values shared by at least 5 rows, and none for free text or an identifier (more than 30 values, most "
+        "of them rare: a name, a participant code or a date of birth written on each visit of more than 30 people)"
+        in notice
     )
     assert (
-        "never free text or a column of more than 30 values, most of them rare (names, codes or dates on the visits "
-        "of more than 30 people)." in notice
+        "never free text or an identifier (a name, a participant code or a date of birth written on each visit of "
+        "more than 30 people)." in notice
     )
 
 

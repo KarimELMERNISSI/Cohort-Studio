@@ -245,7 +245,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     that sends them elsewhere is chosen. Settings no longer draws such a server as "Local: no data leaves this
     server" beside the model, for a minute: it says that where the model runs is not known (or marks the model run
     elsewhere when the server's list says so), and asks again on the next run; its Data sharing card no longer says
-    that the local provider keeps the data on this server.
+    that the local provider keeps the data on this server. At an address off this machine, what the address says is
+    still shown (the network's badge, the http warning), and the Data sharing card names the server, and a Qdrant
+    server that keeps the index.
   - The notice says that the confirmation is the user's, for one browser tab, and does not replace the approvals of
     a data-protection framework, and that what was sent stays with the provider. "Mistral AI (cloud, EU)" claimed
     a location the app cannot check: it reads "Mistral AI (cloud)".

@@ -47,9 +47,10 @@ criteria, the derived variables it finds) is a summary of each column, never a r
   On visits, one person's rows sit side by side once sorted, so an exact percentile can be that person's value: hence
   the rounding, and a number named as a date (`dob`, `date_of_death`) keeps its name and type only;
 - **other columns, and numbers of 10 values or fewer:** their most frequent values with their counts, only values
-  shared by at least 5 rows; none for free text, nor for a column of more than 30 values most of them rare, such as
-  names, participant codes or dates on the visits of more than 30 people. Rows are counted, not people: a value written
-  on 5 visits of one person is sent, and so is a name in a study of 30 people or fewer;
+  shared by at least 5 rows; none for free text, nor for an identifier, a column of more than 30 values most of them
+  rare, such as a name, a participant code or a date of birth written on each visit of more than 30 people. Rows are
+  counted, not people: a value written on 5 visits of one person is sent, and so is a name in a study of 30 people or
+  fewer;
 - **date columns, and numbers written as dates (19620115):** the first and the last year.
 
 Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them; a

@@ -476,4 +476,14 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     assert any(
         "Where the Ollama server runs this model is not known" in c.value for c in signed_in.caption
     )
+    # at an address on the network, what the address says is known all the same: the badge, http, the recipient
+    signed_in.text_input(key="rag_ollama_base_url").input("http://127.0.0.2:11434").run()
+    assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
+    shown = [m.value for m in signed_in.markdown]
+    assert any("Your network: data goes to 127.0.0.2" in v for v in shown), shown[-6:]
+    captions = [c.value for c in signed_in.caption]
+    assert any("This address uses http" in c for c in captions)
+    assert any(
+        "Ollama at 127.0.0.2, on your network, then receives the prompts" in c for c in captions
+    )
     sidebar._runs_at.clear()

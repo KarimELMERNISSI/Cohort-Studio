@@ -186,8 +186,8 @@ def _provider_card() -> dict:
             seed=running.get("provider"),
             offer_auto=False,
             persist=PERSIST,
-            help_text="Ollama runs on this server or your network; the cloud providers need an API key and your "
-            "confirmation that data may be sent to them.",
+            help_text="Ollama runs on this server or your network, or sends a cloud model's prompts to ollama.com; the "
+            "cloud providers need an API key and your confirmation that data may be sent to them.",
         )
         provider = chosen.chosen or default_provider()  # none can run here: named all the same
         cfg["provider"] = provider
@@ -286,9 +286,11 @@ def _provider_card() -> dict:
                 elif silent:  # said as not known, never as "Local": the start asks again, and starts on an answer
                     st.badge("Where this model runs is not known", icon=":material/help:", color="gray")
                     st.caption(
-                        "The Ollama server did not say where it runs this model. The engine asks again when it starts, "
+                        "The Ollama server did not say where it runs this model. An engine started with it asks again, "
                         "and starts only once the server answers."
                     )
+                    if not on_this_machine(cfg["base_url"]):  # what the address says is known all the same
+                        _address_badge(cfg["base_url"])
                 else:
                     _address_badge(cfg["base_url"])
     return cfg
@@ -441,8 +443,9 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
                 "95th percentiles of numeric columns of more than 10 values, rounded to two significant digits of the "
                 "largest (never the minimum or the maximum, and none for a number named as a date, such as `dob`); the "
                 "most frequent values of the other columns with their counts, only values shared by at least 5 rows, "
-                "and none for free text or a column of more than 30 values, most of them rare (names, codes or dates "
-                "on the visits of more than 30 people); the first and last year of date columns, and of numbers "
+                "and none for free text or an identifier (more than 30 values, most of them rare: a name, a "
+                "participant code or a date of birth written on each visit of more than 30 people); the first and "
+                "last year of date columns, and of numbers "
                 "written as dates (19620115). Rows are counted, not people: a value written on 5 visits of one person "
                 "is sent, and so is a name in a study of 30 people or fewer."
             ),
@@ -450,8 +453,8 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
             (
                 "- **Data > Clean, when you ask the AI engine:** the name of the variable and its values as written, "
                 "only values held by at least 5 rows (rows, not people, as above), without their counts; never free "
-                "text or a column of more than 30 values, most of them rare (names, codes or dates on the visits of "
-                "more than 30 people)."
+                "text or an identifier (a name, a participant code or a date of birth written on each visit of more "
+                "than 30 people)."
             ),
             (
                 "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index "
@@ -543,18 +546,26 @@ def _consent_card(cfg: dict, vector: dict | None = None) -> bool:
             st.toast(notice, icon=":material/block:")
         _running_engine(manager)
         recipients = _recipients(cfg, vector)
+        # choosing a local provider changes nothing for a cloud engine that runs until another starts
+        url = cfg.get("embedding_base_url") or cfg.get("base_url") or ""
+        on_qdrant = (vector or {}).get("vector_engine") == VectorEngine.QDRANT
+        store = (vector or {}).get("qdrant_url") if on_qdrant else None
+        elsewhere = bool(store) and not on_this_machine(store)  # a Qdrant server on the private network
         if not recipients and cfg.get("where_unknown"):  # the server did not say where it runs the model
-            st.caption(
-                "Where the Ollama server runs this model is not known: the engine asks it again when it starts, and "
-                "sends nothing until it answers."
+            said = (
+                "Where the Ollama server runs this model is not known: an engine started with it asks the server "
+                "again, and sends nothing until it answers."
             )
+            if not on_this_machine(url):
+                said += (
+                    f" Ollama at {host_of(url)}, on your network, then receives the prompts, the text of your "
+                    "documents and the column summaries."
+                )
+            st.caption(said)
+            if elsewhere:
+                st.caption(f"The index of your documents is kept on the Qdrant server at {host_of(store)}, on your network.")
             return True
         if not recipients:
-            # choosing a local provider changes nothing for a cloud engine that runs until another starts
-            url = cfg.get("embedding_base_url") or cfg.get("base_url") or ""
-            on_qdrant = (vector or {}).get("vector_engine") == VectorEngine.QDRANT
-            store = (vector or {}).get("qdrant_url") if on_qdrant else None
-            elsewhere = bool(store) and not on_this_machine(store)  # a Qdrant server on the private network
             if on_this_machine(url):
                 kept = "every prompt and dataset excerpt" if elsewhere else "every prompt, document and dataset excerpt"
                 st.caption(f"The local provider keeps {kept} on this server.")
