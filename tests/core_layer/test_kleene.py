@@ -48,6 +48,13 @@ def test_a_missing_value_never_fires_a_rule_written_with_not_equal_or_not(
     assert _fires(expression) == rows
 
 
+def test_a_comparison_of_two_tests_is_unknown_where_either_is() -> None:
+    """Read as pandas reads them, the missing height and the missing status both gave False, so the two tests were
+    "equal" on that row and the rule fired there."""
+    assert _fires("(df['h'] > 100) == (df['s'] == 'x')") == []
+    assert _fires("(df['h'] > 100) != (df['s'] == 'x')") == [0, 2, 3]
+
+
 def test_unknown_or_true_is_true_and_a_rule_may_ask_for_missing_values() -> None:
     assert _fires("df['h'].isna() | (df['h'] > 130)") == [1, 2]
     assert _fires("df['h'].isna()") == [1]
@@ -87,6 +94,10 @@ def test_an_expression_is_still_checked_as_written() -> None:
         ("(df['h'] > 100) & (df['s'] != 'y')", "np.logical_and(df['h'] > 100, df['s'].ne('y'))"),
         ("(df['h'] > 100) | (df['s'] == 'x')", "np.logical_or(df['h'].gt(100), df['s'].eq('x'))"),
         ("(df['h'] > 100) ^ (df['s'] == 'x')", "np.logical_xor(df['h'] > 100, df['s'] == 'x')"),
+        # a test compared with True or False by its method: they fired on the missing height
+        ("~(df['h'] >= 100)", "(df['h'] >= 100).eq(False)"),
+        ("~(df['h'] >= 100)", "(df['h'] >= 100).ne(True)"),
+        ("df['h'] >= 100", "(df['h'] >= 100).eq(True)"),
         # by keyword too: they fired on the missing height
         ("~(df['h'] >= 100)", "~df['h'].ge(other=100)"),
         ("~(df['h'] >= 100)", "~df['h'].ge(100, axis=0)"),

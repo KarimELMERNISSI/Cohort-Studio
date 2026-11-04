@@ -768,22 +768,23 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Now:** an expression is read in three-valued logic, as SQL's `WHERE` reads it: a comparison or a test of a value
   (`isin`, `between`, the tests of `.str`) on a missing value is unknown, "not unknown" is unknown, and a rule fires
   where its expression is true only. One reading however the test is spelt: `.ne()`, `.ge()` and the other comparison
-  methods (`.ge(other=100)` too), `np.logical_not` and its siblings, `(test) == False`, and `between` (its bounds
-  given by keyword too) with a missing bound (unknown unless the other comparison is false). `.isna()` still finds
-  the missing values, and `df['x'].isna() | (...)` fires on them; an expression that gives a missing value a value itself decides it, whatever the column's dtype: a test's
-  `.fillna(True)` or `.fillna(False)` fills its unknowns (`(df['status'] != 'withdrawn').fillna(False)` fired on the
-  missing statuses of a text column, and `(df['egfr'] >= 30).fillna(True)` kept the missing values of an Int64 column
-  only), and an `isin` list holding a missing value finds the missing values (`np.nan` found a float's, not an
+  methods (`.ge(other=100)` too), `np.logical_not` and its siblings, `(test) == False` and `(test).eq(False)`, a
+  comparison of two tests (unknown where either is), and `between` (its bounds given by keyword too) with a missing
+  bound (unknown unless the other comparison is false). `.isna()` still finds the missing values, and `df['x'].isna() |
+  (...)` fires on them; an expression that gives a missing value a value itself decides it, whatever the column's dtype:
+  a test's `.fillna(True)` or `.fillna(False)` fills its unknowns (`(df['status'] != 'withdrawn').fillna(False)` fired
+  on the missing statuses of a text column, and `(df['egfr'] >= 30).fillna(True)` kept the missing values of an Int64
+  column only), and an `isin` list holding a missing value finds the missing values (`np.nan` found a float's, not an
   Int64's). Inside any other call (`np.where`, `.astype`) and in a text test's `na=` it is read as before.
 - **An inclusion criterion written as a negation** ("not pregnant", `df['pregnant'] != 'Yes'`) now excludes every
   participant whose value is missing, men included where pregnancy is recorded for women only: write
   `df['pregnant'].isna() | (df['pregnant'] != 'Yes')` to keep them, or the rule as an exclusion criterion.
 - **Said where it counts.** The participant flow and the dossier count apart the rows an inclusion criterion excludes
-  for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a
-  reason for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added,
-  with its share of the rows ("under 1%" for a few, never "0%") and the expression that keeps them (for a criterion of two columns or more, its negation added as an exclusion
-  criterion: `isna() | (...)` over each column would also keep a minor whose consent is missing); the AI engine that
-  writes criteria is told the rule.
+  for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a reason
+  for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added, with its
+  share of the rows ("under 1%" for a few, never "0%") and the expression that keeps them (for a criterion of two
+  columns or more, its negation added as an exclusion criterion: `isna() | (...)` over each column would also keep a
+  minor whose consent is missing); the AI engine that writes criteria is told the rule.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
   (version 1), not the data; a population now records the version of the rules it was read under. A population that
   kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one

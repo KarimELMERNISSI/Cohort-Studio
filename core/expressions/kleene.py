@@ -238,7 +238,7 @@ def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
         given = {k.arg: k.value for k in node.keywords if k.arg != "axis"}
         other = _argument(node.args, given, ("other",))
         if other is not None and len(node.args) + len(given) == 1:
-            return _call(COMPARE, owner, ast.Constant(_METHODS[name]), other[0])
+            return _compared(owner, _METHODS[name], other[0])
         return None
     if name == "between":
         given = {k.arg: k.value for k in node.keywords}
@@ -287,20 +287,25 @@ def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
     return None
 
 
+def _compared(left: ast.expr, symbol: str, right: ast.expr) -> ast.expr:
+    """A comparison made three-valued: unknown where a side is missing. A test compared with True or False is the test
+    or its negation, by the operator or by its method ((test).eq(False), (test).ne(True)); a test on either side is
+    made three-valued before it is compared, so (a > 1) == (b > 2) is unknown where either test is."""
+    if symbol in ("==", "!="):
+        for tested, flag in ((left, _flag(right)), (right, _flag(left))):
+            if flag is not None and _is_logic(tested):
+                return _logic(tested) if flag == (symbol == "==") else _negated(tested)
+    sides = [_logic(side) if _is_logic(side) else side for side in (left, right)]
+    return _call(COMPARE, sides[0], ast.Constant(symbol), sides[1])
+
+
 def _logic(node: ast.expr) -> ast.expr:
     """The tests at the level of the expression's logic made three-valued: the expression itself, the operands of
     &, | and ^ (and of numpy's logical functions), the operand of ~. Anything else is left as it is."""
     if isinstance(node, ast.Compare) and len(node.ops) == 1:
         op, left, right = node.ops[0], node.left, node.comparators[0]
-        if isinstance(
-            op, ast.Eq | ast.NotEq
-        ):  # a test compared with True or False: the test, or its negation
-            for tested, flag in ((left, _flag(right)), (right, _flag(left))):
-                if flag is not None and _is_logic(tested):
-                    keeps = flag == isinstance(op, ast.Eq)
-                    return _logic(tested) if keeps else _negated(tested)
         if type(op) in _COMPARISONS:
-            return _call(COMPARE, left, ast.Constant(_COMPARISONS[type(op)][0]), right)
+            return _compared(left, _COMPARISONS[type(op)][0], right)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
         name, owner = node.func.attr, node.func.value
         if _numpy(owner):
