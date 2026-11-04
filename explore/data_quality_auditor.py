@@ -32,8 +32,8 @@ SEVERE_BOUND = 0.05
 
 def severe(fails: int, checks: int) -> bool:
     """A line (a rule's, a family's, the rows', or the pooled one) that fails often enough to make the advice high, by
-    one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and an exact (Clopper-Pearson) 95 %
-    lower bound of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
+    one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and the lower end of the exact
+    (Clopper-Pearson) 95 % interval of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
     10 among 100 are not (4.9 %); 2 among 2, or 1 among 4, are no evidence of a rule failing often."""
     if not checks or fails < SEVERE_FAILS:
         return False

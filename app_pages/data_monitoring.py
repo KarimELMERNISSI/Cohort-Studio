@@ -1482,6 +1482,12 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
 
 ##### INCLUSION PART
 
+def _share(part: int, whole: int) -> str:
+    """A share of rows as a percentage; "under 1%" rather than "0%" for rows that are there (2 of 1,206)."""
+    share = part / whole if whole else 0.0
+    return "under 1%" if part and share < 0.005 else f"{share:.0%}"
+
+
 def unknown_advice(
     df: pd.DataFrame, name: str, definition: dict[str, Any]
 ) -> tuple[str, str | None] | None:
@@ -1507,7 +1513,7 @@ def unknown_advice(
     else:
         kept, how = None, ""
     words = (
-        f"Unknown on {unknown:,} row{'s' if unknown != 1 else ''} ({unknown / len(df):.0%}), where a value it reads "
+        f"Unknown on {unknown:,} row{'s' if unknown != 1 else ''} ({_share(unknown, len(df))}), where a value it reads "
         f"is missing ({', '.join(columns) or 'its columns'}): as an inclusion criterion, it excludes {them}." + how
     )
     return words, kept

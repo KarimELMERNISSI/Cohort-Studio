@@ -779,7 +779,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Said where it counts.** The participant flow and the dossier count apart the rows an inclusion criterion excludes
   for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a
   reason for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added,
-  with the expression that keeps them (for a criterion of two columns or more, its negation added as an exclusion
+  with its share of the rows ("under 1%" for a few, never "0%") and the expression that keeps them (for a criterion of two columns or more, its negation added as an exclusion
   criterion: `isna() | (...)` over each column would also keep a minor whose consent is missing); the AI engine that
   writes criteria is told the rule.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
@@ -1502,7 +1502,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   whose columns were renamed is not checked. The rows said to break a rule are those of the recorded values, and the
   advice says how many break one only through an imputed value (an imputation that wrote implausible values says so
   even when no recorded value fails). The advice is *high* when a rule, a family, the rows or the pooled line fails 3
-  checks or more with an exact (Clopper-Pearson) lower bound of 5 % for the share that fails: one rule that rises
+  checks or more and the lower end of the exact (Clopper-Pearson) 95 % interval of the share that fails is 5 % or
+  more: one rule that rises
   with the evidence (3 failures among 10 checks are high, 10 among 100 are not, 2 among 2 are no evidence; the
   tutorial cohort's advice stays medium), and the global score's sentence never says "ready for analysis" beside a
   high-priority advice. A failing score never prints 100.0 (the ring, its hover, the breakdown, the card's change).

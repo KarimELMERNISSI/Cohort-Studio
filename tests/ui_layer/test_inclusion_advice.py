@@ -76,3 +76,10 @@ def test_a_criterion_of_two_columns_is_kept_as_an_exclusion_of_its_negation() ->
     # an exclusion criterion keeps the rows where it does not fire
     kept_rows = ~criterion_mask(frame, "x", {"expression": kept})
     assert kept_rows.tolist() == (meets | unknown).tolist()
+
+
+def test_a_few_rows_read_under_1_percent_never_0() -> None:
+    """2 rows of 1,206 read "(0%)" beside "Unknown on 2 rows"."""
+    frame = pd.DataFrame({"pregnant": [None, None] + ["No"] * 1204})
+    words, _ = unknown_advice(frame, "Not pregnant", {"expression": "df['pregnant'] != 'Yes'"})
+    assert words.startswith("Unknown on 2 rows (under 1%), where a value it reads is missing")
