@@ -237,6 +237,9 @@ def participant_flow(
         function = str(step.get("function") or "step")
         description = str(step.get("description") or function)
         reasons: tuple[tuple[str, int], ...] = ()
+        missing: tuple[
+            tuple[str, int], ...
+        ] = ()  # as a stage's: the rows of each reason that lack a value it reads
         details: tuple[str, ...] = (description,)
         block = step.get("population") or {}
         if function == "freeze_population" and block.get("counts"):
@@ -246,6 +249,11 @@ def participant_flow(
                 (names.get(c["id"], c["id"]), int(c["sequential"]))
                 for c in block["counts"]
                 if int(c.get("sequential") or 0)
+            )
+            missing = tuple(
+                (names.get(c["id"], c["id"]), int(c["missing"]))
+                for c in block["counts"]
+                if int(c.get("missing") or 0)
             )
             details = (
                 details
@@ -273,6 +281,7 @@ def participant_flow(
                     removed,
                     reasons=reasons if sum(n for _, n in reasons) == removed else (),
                     details=details,
+                    missing=missing if sum(n for _, n in reasons) == removed else (),
                 )
             )
         main.append(

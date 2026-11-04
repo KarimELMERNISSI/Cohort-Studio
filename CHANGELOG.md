@@ -784,7 +784,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added, with its
   share of the rows ("under 1%" for a few, never "0%") and the expression that keeps them (for a criterion of two
   columns or more, its negation added as an exclusion criterion: `isna() | (...)` over each column would also keep a
-  minor whose consent is missing); the AI engine that writes criteria is told the rule.
+  minor whose consent is missing); the AI engine that writes criteria is told the rule. A rule counting "at least
+  k of" its rules lacks a value only where its missing rules could still decide it: a row whose known rules already
+  keep it under k is excluded for a known reason. A population kept as the dataset gives the dossier's table its
+  "lacking a value" column too.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
   (version 1), not the data; a population now records the version of the rules it was read under. A population that
   kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one

@@ -55,6 +55,24 @@ def test_a_comparison_of_two_tests_is_unknown_where_either_is() -> None:
     assert _fires("(df['h'] > 100) != (df['s'] == 'x')") == [0, 2, 3]
 
 
+def test_a_rule_of_at_least_k_lacks_a_value_only_where_the_missing_rules_could_decide() -> None:
+    """A row with one rule missing and the two others false cannot reach 2 of 3: it was counted as lacking a value,
+    and the flow said so of a row that the known rules exclude."""
+    frame = pd.DataFrame({"a": [np.nan, np.nan, 5.0, 5.0], "b": [0, 9, 9, 0], "c": [0, 0, 9, 0]})
+    two = {
+        "threshold": 2,
+        "members": {
+            "A": {"expression": "df['a'] > 3"},
+            "B": {"expression": "df['b'] > 3"},
+            "C": {"expression": "df['c'] > 3"},
+        },
+    }
+    assert criterion_mask(frame, "two", two).tolist() == [False, False, True, False]
+    assert criterion_unknown(frame, "two", two).tolist() == [False, True, False, False]
+    numeric = {"numeric": True, "column": "a", "lower_bound": 3, "strategy": "include"}
+    assert criterion_unknown(frame, "a", numeric).tolist() == [True, True, False, False]
+
+
 def test_unknown_or_true_is_true_and_a_rule_may_ask_for_missing_values() -> None:
     assert _fires("df['h'].isna() | (df['h'] > 130)") == [1, 2]
     assert _fires("df['h'].isna()") == [1]

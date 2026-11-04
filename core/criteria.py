@@ -913,9 +913,11 @@ def _earlier(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.S
 def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
     """
     The rows where a criterion does not fire for want of a value: an expression where its value is unknown in
-    three-valued logic (a comparison or a test met a missing value), any other kind where it does not fire and a column
-    it reads is missing (listed rows read none). An inclusion criterion excludes these rows, which the participant
-    flow counts apart. Never raises: no row when the criterion cannot be read (:func:`criterion_mask` says why).
+    three-valued logic (a comparison or a test met a missing value), any other kind where it does not fire and one of
+    its checks is not made (:func:`settled`, Kleene's reading of the kind: a numeric range where its value is missing;
+    "at least 2 of 3" only where the missing rules could still reach 2, never where the known ones settle it). An
+    inclusion criterion excludes these rows, which the participant flow counts apart. Never raises: no row when the
+    criterion cannot be read (:func:`criterion_mask` says why).
     """
     none = pd.Series(False, index=df.index)
     try:
@@ -925,11 +927,8 @@ def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]
             if not isinstance(value, pd.Series) or len(value) != len(df.index):
                 return none
             return pd.Series(value.isna().to_numpy(dtype=bool), index=df.index)
-        missing = none.copy()
-        for column in criterion_columns(name, definition):
-            if column in df.columns:
-                missing |= df[column].isna().to_numpy(dtype=bool)
-        return missing & ~criterion_mask(df, name, definition)
+        _, known = settled(df, name, definition)
+        return pd.Series(~known.to_numpy(dtype=bool), index=df.index)
     except Exception:
         return none
 

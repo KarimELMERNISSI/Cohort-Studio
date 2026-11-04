@@ -169,6 +169,36 @@ def test_the_flow_counts_the_rows_an_inclusion_criterion_excludes_for_want_of_a_
     assert population.to_trace()["counts"][0]["missing"] == 3
 
 
+def test_a_frozen_population_s_exit_counts_its_rows_lacking_a_value_too() -> None:
+    """Kept as the dataset, the population's exit read "Not pregnant 4" with no "lacking a value" column, though the
+    line below said "3 of the 4 rows it excludes first lack a value it reads"."""
+    session = DataSession(trace=Sink())
+    frame = pd.DataFrame(
+        {
+            "sex": ["M", "M", "M", "F", "F", "F"],
+            "pregnant": [None, None, None, "Yes", "No", "No"],
+        }
+    )
+    session.install(frame, params={"filename": "p.csv"})
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Not pregnant": {"expression": "df['pregnant'] != 'Yes'"},
+            }
+        }
+    }
+    session.set_ticked([criterion_id("study_inclusion", "Not pregnant")])
+    session.freeze_population(config)
+    source, n_loaded, steps = source_from_trace({"steps": session.trace.steps})
+    flow = participant_flow(
+        session.population(config), source=source, n_loaded=n_loaded, steps=steps
+    )
+    (removed,) = flow.exits
+    assert dict(removed.reasons) == {"Not pregnant": 4}
+    assert dict(removed.missing) == {"Not pregnant": 3}
+
+
 def test_boxes_that_do_not_add_up_are_reported() -> None:
     flow = ParticipantFlow(
         main=(FlowBox("a", "A", 100, "loaded"), FlowBox("b", "B", 90, "stage")),
