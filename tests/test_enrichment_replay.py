@@ -292,3 +292,34 @@ def test_the_earliest_row_by_a_column_of_dates_replays(tmp_path: Path) -> None:
     assert session.base["potassium"].tolist() == [4.6, 5.2]  # the earliest, not the first in the file
     assert tm.history[-1]["params"]["order_by"] == order_by
     _replays(tm, session)
+
+
+def test_a_merge_names_a_file_replaced_since_under_its_name(tmp_path: Path) -> None:
+    """The merge recorded the file's path only: a corrected export uploaded later under the same name was read by the
+    replay without a word. It records the file's checksum, and the replay names a file that is not the one merged."""
+    from core.state import file_checksum
+    from manage.paths import PathResolver
+    from manage.reproduction_manager import run_trace
+
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,potassium\n1,4.1\n2,4.6\n3,5.2\n", encoding="utf-8")
+    main = pd.DataFrame({"id": [1, 2, 3], "age": [50, 61, 72]})
+    tm, session = _record(tmp_path, main, load_dataframe(str(labs)), labs, ["id"], file_rows="unique")
+    trace = json.loads(json.dumps(tm.get_trace(), default=str))
+    (step,) = [s for s in trace["steps"] if s.get("function") == "enrichment"]
+    step["params"]["file_hash"] = file_checksum(labs.read_bytes())  # as the Enrich page records it now
+    same = run_trace(trace, paths=PathResolver.unconfined())
+    assert not any("not the one merged" in w for w in same.warnings), same.warnings
+    labs.write_text("id,potassium\n1,4.1\n2,9.9\n3,5.2\n", encoding="utf-8")  # corrected since, same name
+    other = run_trace(trace, paths=PathResolver.unconfined())
+    assert any("the file found is not the one merged (its checksum differs): labs.csv" in w for w in other.warnings)
+
+
+def test_the_enrich_page_records_the_checksum_of_the_file_it_merged(tmp_path: Path) -> None:
+    from app_pages.data_enrichment import _file_hash
+    from core.state import file_checksum
+
+    labs = tmp_path / "labs.csv"
+    labs.write_text("id,potassium\n1,4.1\n", encoding="utf-8")
+    assert _file_hash(str(labs)) == file_checksum(labs.read_bytes())
+    assert _file_hash(str(tmp_path / "gone.csv")) is None and _file_hash(None) is None

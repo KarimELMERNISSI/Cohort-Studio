@@ -99,8 +99,9 @@ def ranges_to_ids(ranges: Sequence[Sequence[int]]) -> np.ndarray:
 
 
 def ids_fingerprint(ids: Iterable[int], length: int = 16) -> str:
-    """Fingerprint of a set of row ids (order does not matter)."""
-    values = np.unique(np.asarray(list(ids), dtype="int64"))
+    """Fingerprint of a set of row ids (order does not matter), over little-endian 64-bit integers whatever the
+    machine (the same bytes on every platform: the fingerprints recorded so far on this one are unchanged)."""
+    values = np.unique(np.asarray(list(ids), dtype="<i8"))
     return hashlib.sha256(values.tobytes()).hexdigest()[:length]
 
 

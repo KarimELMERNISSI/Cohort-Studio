@@ -20,6 +20,7 @@ import logging
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -31,7 +32,7 @@ from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
 from core.population import criteria_from_trace, evaluate_population
 from core.registry import UnknownIdError
 from core.session import restrict_cells, sort_filled
-from core.state import ParseOptions
+from core.state import ParseOptions, file_checksum
 from core.steps import DOCUMENT, SNAPSHOT
 from core.steps import ids as step_ids
 from enrich.derived import APPROACHES, impute_and_derive
@@ -263,6 +264,17 @@ def _enrichment(df, step, index, paths, warnings):
     resolved = _resolve(enrichment_file_path, paths)
     if not resolved:
         return df, str(enrichment_file_path)
+    recorded_hash = params.get("file_hash")  # none in a step recorded before it was kept
+    if recorded_hash:
+        try:
+            found = file_checksum(Path(str(resolved)).read_bytes())
+        except OSError:
+            found = None
+        if found != recorded_hash:
+            warnings.append(
+                f"step {index + 1} (enrichment): the file found is not the one merged (its checksum differs): "
+                f"{Path(str(resolved)).name}"
+            )
     # read as the page read it (the sheet, merge key, separator and decimal recorded with the step), then the date
     # keys parsed as the page parsed them (with the formats it recorded; a step recorded before holds none)
     recorded = params.get("parse_options")

@@ -412,6 +412,17 @@ def _date_formats(main_df: pd.DataFrame, enrichment_df: pd.DataFrame) -> dict:
     return eed.date_key_formats(main_df, enrichment_df, recorded, dayfirst=dayfirst)
 
 
+def _file_hash(path) -> str | None:
+    """The checksum of the file a merge read (``sha256:<hex>``), recorded with the step: a file of the same name read
+    again later (a corrected export uploaded since) is then named by the replay, never merged silently."""
+    from core.state import file_checksum
+
+    try:
+        return file_checksum(Path(path).read_bytes()) if path else None
+    except OSError:
+        return None
+
+
 def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
     """Configure and perform the data enrichment."""
     st.subheader("Enrichment Configuration")
@@ -518,6 +529,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
+                        "file_hash": _file_hash(enrichment_file_path),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
@@ -588,6 +600,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
+                        "file_hash": _file_hash(enrichment_file_path),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
