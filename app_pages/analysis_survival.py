@@ -173,11 +173,12 @@ def _render_plan(
         acted: set[str] = set()  # one set of buttons per variable: their keys name it
         for item in plan.advice:
             st.markdown(f"{_ICON.get(item.level, '')} {item.text}")
-            if item.column and keys is not None and item.column not in acted:
-                acted.add(item.column)
-                compared = item.column == st.session_state.get(keys[0])
+            column = getattr(item, "column", None)  # a plan kept from before an update may lack it
+            if column and keys is not None and column not in acted:
+                acted.add(column)
+                compared = column == st.session_state.get(keys[0])
                 clean_actions(
-                    item.column,
+                    column,
                     group_key=keys[0] if compared else None,
                     list_key=None if compared else keys[1],
                     groupable=candidates,

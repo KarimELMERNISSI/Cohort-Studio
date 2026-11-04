@@ -105,7 +105,7 @@ STORE = "clean_manual"  # {column: choices}, declared in ui.keys (lifetime "data
 AI_STORE = "clean_ai"  # {column: what the AI engine was sent and proposed}, declared in ui.keys (lifetime "dataset")
 # a Send just clicked, made by the next run beside the heading (ui.keys)
 AI_PENDING = "clean_ai_pending"
-DONE = "clean_done"  # what the last Apply did, said once after the rerun
+DONE = "clean_done"  # what the last Apply did, by variable, said once after the rerun (take_done)
 COLUMN = "clean_column"  # the variable open in the editor, declared in ui.keys
 _BAR = OKABE_ITO[0]
 _MISSING_BAR = "rgba(128, 140, 145, 0.55)"
@@ -1081,12 +1081,14 @@ def _apply(
     }
     if wrote:
         verb = "Wrote" if replaces else "Added"
-        st.session_state[DONE] = f"{verb} {as_code(target)} beside {as_code(column)}: {summary}."
+        st.session_state[DONE] = {
+            column: f"{verb} {as_code(target)} beside {as_code(column)}: {summary}."
+        }
     else:
-        st.session_state[DONE] = (
-            f"Recorded the corrected choices for {as_code(target)}: what missing means, which codes are results, "
-            "or why values are grouped. Its values are unchanged."
-        )
+        st.session_state[DONE] = {
+            column: f"Recorded the corrected choices for {as_code(target)}: what missing means, which codes are "
+            "results, or why values are grouped. Its values are unchanged."
+        }
     st.rerun()
 
 
@@ -1364,6 +1366,22 @@ def _choice_label(c: Candidate) -> str:
     return f"{c.column} · {', '.join(said)}"
 
 
+def take_done(column: str | None = None) -> list[str]:
+    """What the last Apply did, said once after the rerun: its message for ``column`` (under that variable on an
+    analysis page, where another variable's warning may be drawn first), or every message (the Clean page)."""
+    done = st.session_state.get(DONE)
+    if not isinstance(done, dict):
+        st.session_state.pop(DONE, None)
+        return []
+    if column is None:
+        st.session_state.pop(DONE, None)
+        return [str(m) for m in done.values()]
+    message = done.pop(column, None)
+    if not done:
+        st.session_state.pop(DONE, None)
+    return [str(message)] if message else []
+
+
 def clean_candidates(state) -> list[Candidate]:
     """The variables Clean lists for the data as they are, with their copies and whether each copy follows its source:
     one computation, kept until the data or the copies change, which Validate's line above its tabs reads too (the two
@@ -1385,7 +1403,7 @@ def render_categories() -> None:
     df = state.base
     if df is None:
         return
-    done = st.session_state.pop(DONE, None)
+    done = " ".join(take_done())
     found = clean_candidates(state)
     codes = numeric_codes(df)
     if not found:

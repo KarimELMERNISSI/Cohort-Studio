@@ -252,3 +252,45 @@ def test_the_survival_plan_says_a_copy_is_behind_its_variable_and_offers_to_clea
     assert "clean_use::surv_adjust::sex" not in keys
     (opener,) = [b for b in at.button if b.key == "clean_open::surv_adjust::sex"]
     assert opener.label == "Clean `sex` again here"
+
+
+def _two_warnings_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.clean_dialog import group_warning
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    st.session_state.setdefault("username", "dialog_user")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        frame = pd.DataFrame(
+            {"site": ["Metz", "Metz ", "metz", "Esch"] * 10, "sex": ["F", "F ", "f", "M"] * 10}
+        )
+        state.set_dataset(
+            frame,
+            DatasetRef(name="two", origin="upload", file_hash="two"),
+            source_bytes=frame.to_csv(index=False).encode("utf-8"),
+            source_name="two.csv",
+        )
+    for column in ("site", "sex"):
+        group_warning(column, sorted(state.base[column].unique()), group_key=f"t_{column}")
+        st.markdown(f"end of {column}")
+
+
+def test_what_apply_did_is_said_under_its_own_variable() -> None:
+    """With two variables written several ways on one page, "Added `sex_clean` ..." was said under the first warning
+    drawn, `site`'s."""
+    at = AppTest.from_function(_two_warnings_script, default_timeout=60)
+    at.session_state["clean_done"] = {"sex": "Added `sex_clean` beside `sex`: 1 value changed."}
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    order = [
+        "success" if el.type == "success" else el.value
+        for el in at.main
+        if el.type == "success" or (el.type == "markdown" and el.value.startswith("end of"))
+    ]
+    assert order == ["end of site", "success", "end of sex"]
+    assert "clean_done" not in at.session_state  # said once

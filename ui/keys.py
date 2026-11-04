@@ -132,7 +132,9 @@ KEYS: tuple[Key, ...] = (
         "clean_done",
         "app_pages.clean_categories",
         "page",
-        note="what the last recode added, said once after the rerun",
+        note="what the last recode added, by variable, said once after the rerun (take_done: the Clean page, and "
+        "app_pages.clean_dialog under the variable on an analysis page). The dialog also sets the analysis pages' "
+        "grouping and covariate widgets, whose keys each page passes it (t_group_col, surv_adjust ...)",
     ),
     Key(
         "clean_column",

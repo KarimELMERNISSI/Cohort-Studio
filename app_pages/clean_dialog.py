@@ -12,7 +12,7 @@ from typing import Any
 
 import streamlit as st
 
-from app_pages.clean_categories import DONE, category_editor, clean_candidates
+from app_pages.clean_categories import category_editor, clean_candidates, take_done
 from core.registry import as_code
 from enrich.recode import MAX_VALUES, recoded_columns
 from ui.components.levels import CLEAN_WHERE, level_warning
@@ -98,7 +98,7 @@ def clean_actions(
         return
     name = str(column)
     source, copy, follows = _copy_of(state, name)
-    if done := st.session_state.pop(DONE, None):  # what Apply did in the dialog, said once
+    for done in take_done(source):  # what Apply did in the dialog, said once, under this variable
         st.success(done, icon=":material/check:")
     if copy and copy != name and follows:
         if groupable is not None and copy not in groupable:
