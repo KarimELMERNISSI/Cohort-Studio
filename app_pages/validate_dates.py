@@ -13,6 +13,7 @@ whichever tab was wanted.
 
 from __future__ import annotations
 
+import calendar
 from collections.abc import Collection
 from datetime import date
 from typing import Any
@@ -114,9 +115,13 @@ def _label(format_id: str) -> str:
     return "Leave as text" if format_id == TEXT else DATE_FORMATS.get(format_id).label
 
 
-def _spread(dates: pd.Series) -> str:
-    months = int(dates.dropna().dt.month.nunique())
-    return "every date in one month" if months == 1 else f"the dates over {months} months"
+def _spread(dates: pd.Series, *, they: bool = False) -> str:
+    """Where a reading puts the dates: every one in a month it names, or over how many months."""
+    found = dates.dropna().dt.month
+    months = int(found.nunique())
+    if months == 1:
+        return f"every date falls in {calendar.month_name[int(found.iloc[0])]}"
+    return f"{'they' if they else 'the dates'} spread over {months} months"
 
 
 def _why(detection: Detection, values: pd.Series | None = None) -> str:
@@ -148,15 +153,18 @@ def _why(detection: Detection, values: pd.Series | None = None) -> str:
         detection.order_source == "one_month"
     ):  # said once: the two readings, then what is pre-filled
         first = "day" if detection.format == "day_first" else "month"
+        other = "month" if first == "day" else "day"
+        # the other reading first, then the one pre-filled, which spreads the dates as dates completed to the 1st do
         readings = (
-            f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
-            f"{_spread(read_dates(values, 'month_first'))}."
+            f"Read {other} first, {_spread(read_dates(values, f'{other}_first'))}; {first} first, "
+            f"{_spread(read_dates(values, f'{first}_first'), they=True)}, as dates completed to the 1st do"
             if values is not None
-            else "One order puts every date in one month."
+            else f"One order puts every date in one month; {first} first spreads them, as dates completed to the 1st "
+            "do"
         )
         reasons.append(
-            f"No value shows whether the day or the month comes first. {readings} Dates completed to the 1st read "
-            f"so: {first} first, which spreads them over the months, is pre-filled. Check it."
+            f"No value shows whether the day or the month comes first. {readings}: {first} first is pre-filled. "
+            "Check it."
         )
     if detection.order_source == "few_values":
         shown = detection.day_first_only or detection.month_first_only

@@ -241,7 +241,10 @@ def test_dates_on_the_first_say_what_each_order_gives() -> None:
     """01/MM/YYYY reads both ways: month first, every date fell in January, silently (367 of 400 read wrong)."""
     at = _open({"visit": [f"01/{m:02d}/2021" for m in range(1, 13)] * 3}, dayfirst=False)
     said = " ".join(m.value for m in at.markdown)
-    assert "Read day first, the dates over 12 months; month first, every date in one month." in said
+    assert (
+        "Read day first, the dates spread over 12 months; month first, every date falls in January."
+        in said
+    )
 
 
 def test_columns_already_dates_are_checked_and_their_placeholders_set_to_missing() -> None:
