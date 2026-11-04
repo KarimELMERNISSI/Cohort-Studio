@@ -547,9 +547,12 @@ where an operand is missing, `~unknown` is unknown, and a rule fires where its e
 however the test is spelt: the methods `eq ne lt le gt ge` are the comparisons, a test compared with True or False is
 the test or its negation, `between` is its two comparisons (unknown where the value or a bound is missing, unless the
 other is False), and `isin` and the tests of `.str` are unknown where the value is missing. An expression that gives a
-missing value a value itself is read as Python reads it: inside a call (`np.where`, `.astype`, `fillna`, a sum), a
-comparison method with `fill_value=`, a text test with `na=`, an `isin` list holding a missing value. This reading is
-`RULES_VERSION` 2: a change to it is a new number, which changes the fingerprint of every study with criteria.
+missing value a value itself decides it, whatever the column's dtype: a test's `fillna(True)` or `fillna(False)` fills
+the test's unknowns, and an `isin` list holding a missing value (None, `np.nan`, `pd.NA`, `pd.NaT`) finds the missing
+values, read as `isin(the others) | isna()` (pandas matches these markers by dtype). Inside any other call
+(`np.where`, `.astype`, a sum), a comparison method with `fill_value=` and a text test with `na=` are read as Python
+reads them. This reading is `RULES_VERSION` 2: a change to it is a new number, which changes the fingerprint of every
+study with criteria.
 
 `core.criteria.rule_kind` is the only place that decides a rule's kind:
 

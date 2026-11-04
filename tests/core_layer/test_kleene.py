@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from core.criteria import CriterionError, criterion_mask
+from core.criteria import CriterionError, criterion_mask, criterion_unknown
 
 DF = pd.DataFrame(
     {
@@ -204,6 +204,45 @@ def test_an_expression_that_says_what_a_missing_value_gives_is_read_as_written()
     assert _fires("df['s'].isin(['x', None])") == [0, 1]
     assert _fires("df['s'].isin(['x', np.nan])") == [0, 1]
     assert _fires("~df['s'].isin(['x', None])") == [2, 3]
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [np.nan, pd.NA],
+    ids=["float64", "Int64"],
+)
+def test_a_test_s_fillna_and_a_missing_value_in_an_isin_list_decide_on_every_dtype(missing) -> None:
+    """pandas' comparison of a missing float gives False, so (x >= 30).fillna(True) filled nothing on float64 and kept
+    the missing values on Int64; np.nan in an isin list found a float's missing values, not an Int64's. Read in
+    three-valued logic, each says the same on every dtype."""
+    values = [50, missing, 20, 2]
+    df = pd.DataFrame({"x": pd.array(values, dtype="Int64") if missing is pd.NA else values})
+
+    def fires(expression: str) -> list[int]:
+        return [int(i) for i in df.index[criterion_mask(df, "rule", {"expression": expression})]]
+
+    assert fires("(df['x'] >= 30).fillna(True)") == [0, 1]
+    assert fires("(df['x'] >= 30).fillna(value=False)") == [0]
+    assert fires("~(df['x'] >= 30).fillna(True)") == [2, 3]
+    for marker in ("None", "np.nan", "pd.NA", "float('nan')"):
+        assert fires(f"df['x'].isin([2, {marker}])") == [1, 3], marker
+        assert fires(f"~df['x'].isin([2, {marker}])") == [0, 2], marker
+    # what the expression decides is known: no row lacks a value it reads
+    assert not criterion_unknown(df, "rule", {"expression": "(df['x'] >= 30).fillna(True)"}).any()
+
+
+@pytest.mark.parametrize("dtype", ["str", "object", "category"])
+def test_a_text_test_s_fillna_decides_on_every_text_dtype(dtype: str) -> None:
+    """(status != 'withdrawn').fillna(False) fired on the missing statuses of a str or object column: pandas' "!=" is
+    True there, so the fill saw nothing."""
+    df = pd.DataFrame({"s": pd.Series(["a", None, "withdrawn"], dtype=dtype)})
+
+    def fires(expression: str) -> list[int]:
+        return [int(i) for i in df.index[criterion_mask(df, "rule", {"expression": expression})]]
+
+    assert fires("(df['s'] != 'withdrawn').fillna(False)") == [0]
+    assert fires("(df['s'] != 'withdrawn').fillna(True)") == [0, 1]
+    assert fires("df['s'].isin(['a', None])") == [0, 1]
 
 
 def test_a_study_written_under_the_earlier_rules_says_what_reads_otherwise() -> None:

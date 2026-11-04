@@ -134,7 +134,7 @@ brackets.
   expression, a comparison or a test on a missing value is unknown, as SQL's `WHERE` reads it, however it is
   written: `!=`, `~`, `.ne()`, `== False`; `.isna()` finds missing values, and an expression that gives a missing
   value a value itself, with `fillna`, `np.where`, a text test's `na=` or a missing value in an `isin` list, decides
-  what it gives). So an inclusion criterion "not pregnant", `df['pregnant'] != 'Yes'`, excludes every participant
+  what it gives, whatever the column's type). So an inclusion criterion "not pregnant", `df['pregnant'] != 'Yes'`, excludes every participant
   whose pregnancy is not recorded, men included: to keep them, write
   `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`, or the rule as an exclusion criterion,
   `df['pregnant'] == 'Yes'`. Below, the

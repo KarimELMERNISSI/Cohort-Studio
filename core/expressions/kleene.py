@@ -8,9 +8,10 @@ fires a criterion, written with "!=" or "~" too: "~(df['height_cm'] >= 100)" fir
 One reading, however the test is spelt: the methods ``eq ne lt le gt ge`` are the comparisons, ``np.logical_not``,
 ``logical_and``, ``logical_or`` and ``logical_xor`` are ``~ & | ^``, a test compared with True or False is the test or
 its negation, and ``between`` is its two comparisons (unknown where the value or a bound is missing, unless the other
-comparison is False). An expression that says itself what a missing
-value gives is read as Python reads it: inside a call (np.where, fillna, astype, a sum), a text test's ``na=``, a
-missing value in an ``isin`` list.
+comparison is False). An expression that says itself what a missing value gives decides it, whatever the
+column's dtype: a test's ``fillna(True)`` or ``fillna(False)`` fills the test's unknowns, and an ``isin`` list holding
+a missing value (None, np.nan, pd.NA, pd.NaT) finds the missing values (``isin(the others) | isna()``); inside any
+other call (np.where, astype, a sum) and in a text test's ``na=`` it is read as Python reads it.
 """
 
 from __future__ import annotations
@@ -147,29 +148,42 @@ def _flag(node: ast.expr) -> bool | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, bool) else None
 
 
+def _is_missing(item: ast.expr) -> bool:
+    """A missing value written out: None, np.nan, pd.NA, pd.NaT, float('nan')."""
+    if isinstance(item, ast.Constant) and item.value is None:
+        return True
+    if (
+        isinstance(item, ast.Attribute)
+        and isinstance(item.value, ast.Name)
+        and (item.value.id, item.attr) in _MISSING_NAMES
+    ):
+        return True
+    return (
+        isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Name)
+        and item.func.id == "float"
+        and len(item.args) == 1
+        and isinstance(item.args[0], ast.Constant)
+        and str(item.args[0].value).strip().lower() == "nan"
+    )
+
+
 def _holds_missing(node: ast.expr) -> bool:
-    """A list written out (or a tuple, a set) that holds a missing value: None, np.nan, pd.NA, pd.NaT, float('nan')."""
-    if not isinstance(node, ast.List | ast.Tuple | ast.Set):
-        return False
-    for item in node.elts:
-        if isinstance(item, ast.Constant) and item.value is None:
-            return True
-        if (
-            isinstance(item, ast.Attribute)
-            and isinstance(item.value, ast.Name)
-            and (item.value.id, item.attr) in _MISSING_NAMES
-        ):
-            return True
-        if (
-            isinstance(item, ast.Call)
-            and isinstance(item.func, ast.Name)
-            and item.func.id == "float"
-            and len(item.args) == 1
-            and isinstance(item.args[0], ast.Constant)
-            and str(item.args[0].value).strip().lower() == "nan"
-        ):
-            return True
-    return False
+    """A list written out (or a tuple, a set) that holds a missing value."""
+    return isinstance(node, ast.List | ast.Tuple | ast.Set) and any(
+        _is_missing(item) for item in node.elts
+    )
+
+
+def _fill_flag(node: ast.Call) -> ast.expr | None:
+    """The True or False a ``fillna`` call gives, written as its one argument (``value=`` too); None otherwise."""
+    if len(node.args) == 1 and not node.keywords:
+        value = node.args[0]
+    elif not node.args and len(node.keywords) == 1 and node.keywords[0].arg == "value":
+        value = node.keywords[0].value
+    else:
+        return None
+    return value if _flag(value) is not None else None
 
 
 def _is_logic(node: ast.expr) -> bool:
@@ -186,6 +200,8 @@ def _is_logic(node: ast.expr) -> bool:
             return name in {"logical_not", *_NUMPY_LOGIC}
         if name in _METHODS or name in _TESTS:
             return True
+        if name == "fillna":  # a test whose unknowns are filled
+            return _fill_flag(node) is not None and _is_logic(owner)
         return name in _TEXT_TESTS and isinstance(owner, ast.Attribute) and owner.attr == "str"
     return False
 
@@ -216,8 +232,37 @@ def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
         return _call(TESTED, owner, node)
     if name == "isin":
         if node.args and _holds_missing(node.args[0]):
-            return None  # the list says that a missing value is among the values looked for
+            if len(node.args) != 1 or node.keywords:
+                return None
+            # the list looks for a missing value too: found by isna(), whatever the column's dtype (pandas matches
+            # None, NaN and NA by dtype: np.nan finds a float's missing values, not an Int64's)
+            listed = node.args[0]
+            if not isinstance(listed, ast.List | ast.Tuple | ast.Set):
+                return None
+            others = ast.List(elts=[i for i in listed.elts if not _is_missing(i)], ctx=ast.Load())
+            found = ast.Call(
+                func=ast.Attribute(value=owner, attr="isin", ctx=ast.Load()),
+                args=[others],
+                keywords=[],
+            )
+            missing = ast.Call(
+                func=ast.Attribute(value=copy.deepcopy(owner), attr="isna", ctx=ast.Load()),
+                args=[],
+                keywords=[],
+            )
+            return ast.BinOp(left=found, op=ast.BitOr(), right=missing)
         return _call(TESTED, owner, node)
+    if name == "fillna" and _is_logic(owner):
+        value = _fill_flag(node)
+        if value is None:
+            return None
+        # a test's own fill: its unknowns become the True or False given, on every dtype (pandas' comparison of a
+        # missing float or text gives False, which a fillna never sees)
+        return ast.Call(
+            func=ast.Attribute(value=_logic(owner), attr="fillna", ctx=ast.Load()),
+            args=[value],
+            keywords=[],
+        )
     if name in _TEXT_TESTS and isinstance(owner, ast.Attribute) and owner.attr == "str":
         if any(k.arg == "na" for k in node.keywords):
             return None  # na= says what a missing value gives
