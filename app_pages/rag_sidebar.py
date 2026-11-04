@@ -264,6 +264,7 @@ def _provider_card() -> dict:
             except NoAnswer:  # the list's own mark when it has one (the box is then offered), else not known
                 cfg["remote_host"] = elsewhere.get(str(cfg["model"] or ""))
                 silent = cfg["remote_host"] is None
+        cfg["where_unknown"] = silent  # read by the Data sharing card: never said to keep the data here
         cfg["embedding"] = col_embed.selectbox(
             "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST,
             on_change=preferences.save_from, args=(embed_key, "ai_embedding_model"), kwargs={"provider": embed_owner},
@@ -538,6 +539,12 @@ def _consent_card(cfg: dict, vector: dict | None = None) -> bool:
             st.toast(notice, icon=":material/block:")
         _running_engine(manager)
         recipients = _recipients(cfg, vector)
+        if not recipients and cfg.get("where_unknown"):  # the server did not say where it runs the model
+            st.caption(
+                "Where the Ollama server runs this model is not known: the engine asks it again when it starts, and "
+                "sends nothing until it answers."
+            )
+            return True
         if not recipients:
             # choosing a local provider changes nothing for a cloud engine that runs until another starts
             url = cfg.get("embedding_base_url") or cfg.get("base_url") or ""

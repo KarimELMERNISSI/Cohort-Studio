@@ -471,4 +471,9 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
         "The Ollama server did not say where it runs this model" in c.value
         for c in signed_in.caption
     )
+    # nor does the Data sharing card say that the data stay here
+    assert not any("The local provider keeps" in c.value for c in signed_in.caption)
+    assert any(
+        "Where the Ollama server runs this model is not known" in c.value for c in signed_in.caption
+    )
     sidebar._runs_at.clear()
