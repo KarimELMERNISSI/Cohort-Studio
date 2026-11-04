@@ -65,6 +65,9 @@ def test_a_file_of_the_earlier_rules_says_which_criteria_read_otherwise() -> Non
         "`Not pregnant` (inclusion) excludes 3 more rows: to keep the rows whose value is missing, as before, write "
         "it `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`" in notice
     )
+    assert notice.endswith(
+        "With all of its criteria, the analysis population keeps 2 of the 6 rows now, 5 as the file was written."
+    )
     assert (
         "rules_version" not in merged
     )  # a file's version, never merged into the session's configuration

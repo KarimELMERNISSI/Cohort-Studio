@@ -267,6 +267,32 @@ def test_a_study_written_under_the_earlier_rules_says_what_reads_otherwise() -> 
     assert found == {"Not withdrawn": (1, 0), "Short": (0, 1)}
 
 
+def test_the_study_s_population_is_counted_now_and_as_written() -> None:
+    """A criterion's own count is not the study's: "not pregnant" excludes 3 more rows than before, the two men whose
+    pregnancy is not recorded among them, but "women" excluded the men already: the population loses one row."""
+    from core.population import rules_changes, rules_population
+
+    frame = pd.DataFrame(
+        {
+            "sex": ["F", "F", "M", "M", "F"],
+            "pregnant": ["No", "Yes", None, None, None],
+        }
+    )
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Women": {"expression": "df['sex'] == 'F'"},
+                "Not pregnant": {"expression": "df['pregnant'] != 'Yes'"},
+            }
+        }
+    }
+    found = {c.criterion.name: (c.more, c.fewer) for c in rules_changes(frame, config)}
+    assert found == {"Not pregnant": (3, 0)}
+    # the woman whose pregnancy is missing (row 4) is the one row the study keeps no more
+    assert rules_population(frame, config) == (1, 2)
+
+
 def test_a_family_counting_its_rules_is_read_as_then_too() -> None:
     """A family read "at least 2 of" its rules is one threshold rule, whose members are criteria: an expression member
     was read as Python reads it then. Two measurements missing together fired "~(... >= ...)" twice under version 1,

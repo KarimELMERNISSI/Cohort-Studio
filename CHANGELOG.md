@@ -799,6 +799,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   criterion, excluded by an exclusion criterion (it said to keep them for every criterion, the opposite of what an
   exclusion criterion needs); any other is said to check. It counts in rows, and no longer speaks of "rules of
   version 1".
+- **The study's own count.** A criterion's count is not the study's: "not pregnant" excludes every man whose pregnancy
+  is not recorded, whom "women" excluded already. The notice now ends with the rows all the file's criteria keep
+  together, now and as the file was written.
 
 ### Internal structure: one catalogue of criterion kinds (M5b)
 

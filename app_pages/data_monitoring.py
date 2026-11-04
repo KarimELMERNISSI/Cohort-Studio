@@ -35,6 +35,7 @@ from core.population import (
     family_words,
     merge_families,
     rules_changes,
+    rules_population,
 )
 from core.registry import as_code
 from enrich.recode import candidates, recoded_columns
@@ -1223,8 +1224,9 @@ def _rules_notice(written: Any, families: Any) -> list[str]:
     """
     A file written under the first rules (a test written with != or ~ true on a missing value), or before they were
     recorded: the criteria that select other rows of the loaded data now, each with how many more or fewer rows it
-    excludes, and what to write for each (:func:`_rules_change_said`). Nothing for a file of today's rules, or without
-    data.
+    excludes, and what to write for each (:func:`_rules_change_said`); then the rows all its criteria keep together,
+    now and as the file was written, since a criterion's own count is not the study's. Nothing for a file of today's
+    rules, or without data.
     """
     base = get_state().base
     try:
@@ -1233,14 +1235,17 @@ def _rules_notice(written: Any, families: Any) -> list[str]:
         version = 1
     if version >= RULES_VERSION or base is None or not isinstance(families, dict):
         return []
-    changes = rules_changes(base, {"mask_families": families})
+    config = {"mask_families": families}
+    changes = rules_changes(base, config)
     if not changes:
         return []
     said = "; ".join(_rules_change_said(base, c) for c in changes)
+    now, then = rules_population(base, config)
     return [
         "This file was written before a missing value changed how it counts: a test written with != or ~ was then "
         "true on a missing value, and is now unknown, so the criterion neither meets nor fires there. Read now, these "
-        f"criteria select other rows of this data: {said}."
+        f"criteria select other rows of this data: {said}. With all of its criteria, the analysis population keeps "
+        f"{now:,} of the {len(base):,} rows now, {then:,} as the file was written."
     ]
 
 

@@ -551,6 +551,24 @@ def rules_changes(df: pd.DataFrame, config: Mapping[str, Any] | None) -> list[Ru
     return changes
 
 
+def rules_population(df: pd.DataFrame, config: Mapping[str, Any] | None) -> tuple[int, int]:
+    """The rows every criterion of ``config`` keeps in ``df``, read now and under the rules of version 1: a row stays
+    when no criterion excludes it, as in the analysis population. A criterion that cannot be evaluated is left out of
+    both counts (its error is said elsewhere)."""
+    gone_now = pd.Series(False, index=df.index)
+    gone_then = pd.Series(False, index=df.index)
+    for c in catalogue(config):
+        try:
+            now = criterion_mask(df, c.name, c.definition)
+        except CriterionError:
+            continue
+        before = earlier_mask(df, c.name, c.definition)
+        then = now if before is None else before
+        gone_now |= now if c.kind == EXCLUSION else ~now
+        gone_then |= then if c.kind == EXCLUSION else ~then
+    return int((~gone_now).sum()), int((~gone_then).sum())
+
+
 def configuration_problems(config: Mapping[str, Any] | None) -> list[str]:
     """
     What makes a study configuration ambiguous or unusable, in words (empty when it is sound): an unknown family
@@ -800,6 +818,7 @@ __all__ = [
     "configuration_for_sharing",
     "configuration_problems",
     "rules_changes",
+    "rules_population",
     "RulesChange",
     "criteria_from_trace",
     "criterion_id",
