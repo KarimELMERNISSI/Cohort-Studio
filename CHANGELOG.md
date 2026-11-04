@@ -12,6 +12,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   on the raw values was still shown under "Log1p applied", and a Log1p run of the group comparison was shown while the
   dossier kept the raw run, labelled current. The transformation, and the columns it changed, are now part of each
   result's settings, and the group comparison is stored whenever a run computes new results.
+- **The proportional-hazards test** (Survival & regression): with tied event times its p moved with the order of the
+  rows (0.371, 0.376 or 0.373 for the same rows of the tutorial cohort). It is computed on the rows in the order of
+  their ids.
+- **The paired t-test's d_z interval** was missing when SciPy's noncentral t gave no value far in a tail (t = -14.74
+  on 777 degrees of freedom), and present for the same rows in another order. The search moves inwards first, and a
+  large-sample interval (Hedges & Olkin) stands in when none is found, as for the two-group effect size.
 
 ### Statistics: results corrected (follow-up programme M5)
 

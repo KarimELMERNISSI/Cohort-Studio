@@ -59,11 +59,19 @@ def paired_t(after: Sequence, before: Sequence, *, alpha: float = 0.05) -> TestR
     hi = _invert_noncentral(
         lambda nc: stats.nct.cdf(t, n - 1, nc), alpha / 2, t - 5 - abs(t), t + 5 + abs(t)
     )
-    dz_ci = (
-        CI(lower=lo / np.sqrt(n), upper=hi / np.sqrt(n), level=1 - alpha, method="noncentral t")
-        if lo is not None and hi is not None
-        else None
-    )
+    if lo is not None and hi is not None:
+        dz_ci = CI(
+            lower=lo / np.sqrt(n), upper=hi / np.sqrt(n), level=1 - alpha, method="noncentral t"
+        )
+    else:  # large-sample (Hedges & Olkin 1985), as cohens_d falls back
+        se = float(np.sqrt(1 / n + dz * dz / (2 * n)))
+        z = float(stats.norm.ppf(1 - alpha / 2))
+        dz_ci = CI(
+            lower=dz - z * se,
+            upper=dz + z * se,
+            level=1 - alpha,
+            method="Hedges-Olkin large-sample",
+        )
     return TestResult(
         name="Paired t-test",
         family="parametric",

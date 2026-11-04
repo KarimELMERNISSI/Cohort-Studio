@@ -39,11 +39,23 @@ def hedges_j(df: float) -> float:
 def _invert_noncentral(
     cdf: Callable[[float], float], target: float, lo: float, hi: float
 ) -> float | None:
-    """Solve cdf(ncp) = target for a cdf that decreases monotonically in the noncentrality parameter."""
+    """Solve cdf(ncp) = target for a cdf that decreases monotonically in the noncentrality parameter. SciPy's
+    noncentral t gives NaN far in a tail (t = -14.74 on 777 df at ncp = 5): an end of the bracket that does is moved
+    halfway towards the other before giving up, so that the interval never depends on the last digit of t."""
     f = lambda nc: cdf(nc) - target
     for _ in range(12):
         try:
             flo, fhi = f(lo), f(hi)
+            for _ in range(40):
+                if not (np.isnan(flo) or np.isnan(fhi)):
+                    break
+                middle = (lo + hi) / 2
+                if np.isnan(flo):
+                    lo = (lo + middle) / 2
+                    flo = f(lo)
+                if np.isnan(fhi):
+                    hi = (hi + middle) / 2
+                    fhi = f(hi)
         except Exception:
             return None
         if np.isnan(flo) or np.isnan(fhi):

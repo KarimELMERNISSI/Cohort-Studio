@@ -399,6 +399,9 @@ def cox_regression(
 
         data = x.copy()
         data["_time"], data["_event"] = t, e
+        # by row id: with tied event times, the rank test's p moved with the rows' order (0.371, 0.376, 0.373 for the
+        # same rows of the tutorial cohort), which a replay or a sort would change
+        data = data.sort_index(kind="stable")
         with (
             catch_warnings()
         ):  # lifelines' own warnings print the design's column names (levels) to stderr

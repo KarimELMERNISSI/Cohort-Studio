@@ -297,3 +297,49 @@ def test_lifelines_warnings_naming_a_column_stay_in(monkeypatch: pytest.MonkeyPa
         warnings.simplefilter("always")
         cox_regression(_gehan(), "time", "event", ["arm"])
     assert not any("red[x]" in str(w.message) for w in caught)
+
+
+def test_the_proportional_hazards_test_does_not_depend_on_the_order_of_the_rows() -> None:
+    """With tied event times, the rank test's p moved with the rows' order (0.371, 0.376 or 0.373 for the same rows of
+    the tutorial cohort): a replay, or a sort of the data, changed a published assumption check."""
+    pytest.importorskip(
+        "lifelines", reason="the proportional-hazards test needs the optional lifelines"
+    )
+    rng = np.random.default_rng(3)
+    n = 240
+    df = pd.DataFrame(
+        {
+            "t": rng.integers(1, 40, n),  # many ties
+            "e": rng.integers(0, 2, n),
+            "arm": rng.choice(["A", "B"], n),
+            "age": rng.normal(60, 10, n).round(),
+        }
+    )
+    first = cox_regression(df, "t", "e", ["arm", "age"]).ph_test
+    for seed in (1, 2):
+        again = cox_regression(
+            df.sample(frac=1, random_state=seed), "t", "e", ["arm", "age"]
+        ).ph_test
+        pd.testing.assert_frame_equal(first, again)
+
+
+def test_the_paired_effect_size_interval_never_depends_on_the_last_digit_of_t() -> None:
+    """SciPy's noncentral t gives NaN at t = -14.742770318130594 on 777 df far in the tail: the d_z interval was missing,
+    and present for -14.742770318130598, the same rows in another order."""
+    from scipy import stats
+
+    from biostats.effect_sizes import _invert_noncentral
+
+    n = 778
+    found = []
+    for t in (-14.742770318130594, -14.742770318130598):
+        ends = [
+            _invert_noncentral(
+                lambda nc, t=t: stats.nct.cdf(t, n - 1, nc), q, t - 5 - abs(t), t + 5 + abs(t)
+            )
+            for q in (0.975, 0.025)
+        ]
+        assert None not in ends
+        found.append([e / np.sqrt(n) for e in ends])
+    assert np.allclose(found[0], found[1], atol=1e-6)
+    assert np.allclose(found[0], [-0.603, -0.453], atol=1e-3)
