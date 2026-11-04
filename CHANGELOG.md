@@ -349,7 +349,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   data must cover it. A folder of another listed account is never such a folder: local accounts sign in by their
   exact name and are not looked at, and the script marks a listed account's folder whose name differs by case alone
   "another account's folder: never merge it" (two local accounts, `alice` and `Alice`, could exist before
-  2026-10-20).
+  2026-10-20). Under local accounts, the script never plans such a merge either: a folder of a name in another case is
+  a deleted or an earlier account's, kept for its owner or deleted under the study's retention rule; under another
+  provider, it says to check whose the folder is first (a former local account's, after a change of provider).
 
 ### Usability
 

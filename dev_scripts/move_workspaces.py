@@ -37,9 +37,11 @@ def possible_owners(names: list[str]) -> list[str]:
     return list(dict.fromkeys([*names, *(name.split("@", 1)[0] for name in names if "@" in name)]))
 
 
-def plan(names: list[str]) -> list[tuple[str, str, str]]:
+def plan(names: list[str], *, local: bool = False) -> list[tuple[str, str, str]]:
     """(account, its earlier folders, "move" or why the folder stays) for each account with an earlier folder, and
-    for each with a folder of its name in another case (core.workspace.case_folders), never moved: merged by hand."""
+    for each with a folder of its name in another case (core.workspace.case_folders), never moved. ``local``: the
+    accounts are local ones, which tell names apart by case, so such a folder is never the account's (a deleted or an
+    earlier account's, as the sign-in reads it); with another provider, it may be, after review."""
     owners = possible_owners(names)
     rows = []
     for name in names:
@@ -59,8 +61,12 @@ def plan(names: list[str]) -> list[tuple[str, str, str]]:
                 (
                     name,
                     ", ".join(folder.name for folder in cased),
-                    f"its name in another case: merge it into {safe_dirname(name)} by hand, after review (both may "
-                    "hold files of one name: keep both), or delete it under the study's retention rule",
+                    "not this account's: local accounts tell names apart by case, so it is a deleted or an earlier "
+                    "account's; never merge it: keep it for its owner, or delete it under the study's retention rule"
+                    if local
+                    else "its name in another case: check whose it is first (after a change of identity provider, it "
+                    f"may be a former local account's), then merge it into {safe_dirname(name)} by hand (both may hold "
+                    "files of one name: keep both), or delete it under the study's retention rule",
                 )
             )
         others = [folder for folder in case_folders(name) if folder not in cased]
@@ -103,10 +109,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}")
         return 2
     from manage.iam import get_iam_manager
+    from manage.iam.schemas import IAMProviderType
 
-    names = [user.username for user in get_iam_manager().list_users()]
+    iam = get_iam_manager()
+    names = [user.username for user in iam.list_users()]
     print(f"{len(names)} accounts listed: check that the identity provider listed every account.")
-    rows = plan(names)
+    rows = plan(names, local=iam.provider_type == IAMProviderType.LOCAL)
     if not rows:
         print("No earlier workspace folder to move.")
         return 0

@@ -450,3 +450,32 @@ def test_another_account_s_folder_is_never_offered_to_merge(root: Path) -> None:
             verdicts
             == ["another account's folder (its name differs by case alone): never merge it"] * 2
         )
+
+
+def test_under_local_accounts_a_folder_of_another_case_is_never_planned_to_merge(
+    root: Path,
+) -> None:
+    """Local accounts tell names apart by case: `Alice` deleted (its folder kept) and `alice` listed, the script planned
+    to merge `Alice`'s folder into `alice`'s, which the sign-in never does."""
+    import importlib.util
+
+    users = root / "users"
+    for name in ("alice", "Alice"):
+        (users / safe_dirname(name) / "datasets").mkdir(parents=True, exist_ok=True)
+    cases_apart = len(list(users.iterdir())) == 2
+    spec = importlib.util.spec_from_file_location(
+        "move_workspaces",
+        Path(__file__).resolve().parents[2] / "dev_scripts" / "move_workspaces.py",
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    local = [verdict for _, _, verdict in script.plan(["alice"], local=True)]
+    assert not any("merge it into" in v for v in local)
+    elsewhere = [verdict for _, _, verdict in script.plan(["alice"])]
+    if cases_apart:  # a file system that tells case apart (Linux, a case-sensitive folder)
+        assert local == [
+            "not this account's: local accounts tell names apart by case, so it is a deleted or an earlier account's; "
+            "never merge it: keep it for its owner, or delete it under the study's retention rule"
+        ]
+        assert elsewhere[0].startswith("its name in another case: check whose it is first")
