@@ -1434,7 +1434,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Safe for a shared server.** The search runs in a separate process, with no environment, and has 2 seconds once
   that process is ready: a pattern that backtracks without end (`(a+)+$` on a long value) stops there, with a word,
   and never holds the server; a busy server's slow start is said apart; an invalid or empty search says why, in the
-  open popover.
+  open popover. A process that ends before it is ready is said to be the server's ("could not start"), never the
+  values'. The first search of a fresh server no longer loads the multiple-imputation engine to find its interpreter
+  (`biostats.processes`, light to import): it took several seconds before the search began.
 
 ### Validate: Date checks, a tab of its own (M6)
 

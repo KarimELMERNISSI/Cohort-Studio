@@ -115,6 +115,33 @@ def test_a_slow_start_is_the_server_s_not_the_pattern_s(monkeypatch: pytest.Monk
         matching("hyper", VALUES)
 
 
+def test_a_process_that_ends_before_it_is_ready_is_the_server_s_fault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A process that ended before its ready byte (an interpreter that cannot start) was answered "could not be made on
+    these values": the values were never read."""
+    monkeypatch.setattr(patterns, "_MATCHER", "import sys; sys.exit(3)")
+    with pytest.raises(PatternError, match="could not start on this server"):
+        matching("hyper", VALUES)
+
+
+def test_the_search_needs_no_imputation_engine() -> None:
+    """The first search of a fresh server imported the multiple-imputation engine (biostats.mi) to find its
+    interpreter: several hundred modules and seconds before the search started."""
+    import sys
+
+    code = (
+        "import sys\n"
+        "from enrich.patterns import matching\n"
+        "assert matching('hyper', ['Hypertension', 'Diabetes']) == ['Hypertension']\n"
+        "print('biostats.mi' in sys.modules)\n"
+    )
+    found = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, check=True
+    )
+    assert found.stdout.strip() == "False", found.stderr[-500:]
+
+
 def test_the_search_process_gets_no_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """The server's settings (its keys among them) stay out of the process: only what it needs to start."""
     seen: dict = {}

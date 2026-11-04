@@ -21,12 +21,13 @@ import os
 import pickle
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from biostats.processes import interpreter
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +37,6 @@ IN_SUBPROCESS = "CMP_MI_SUBPROCESS"
 def in_subprocess() -> bool:
     """Whether this process is the worker of a parallel imputation (a process variable, not a setting)."""
     return bool(os.environ.get(IN_SUBPROCESS))
-
-
-def interpreter() -> tuple[str, dict[str, str]]:
-    """
-    The interpreter to start, and what its environment needs. On Windows, the python.exe of a virtual environment
-    is a launcher that starts the real interpreter as its own process: stopping the launcher would leave the
-    interpreter running. The base interpreter is started instead, told which environment it serves, as
-    multiprocessing does (bpo-35797).
-    """
-    base = getattr(sys, "_base_executable", None) or sys.executable
-    if sys.platform == "win32" and os.path.normcase(base) != os.path.normcase(sys.executable):
-        return base, {"__PYVENV_LAUNCHER__": sys.executable}
-    return sys.executable, {}
 
 
 def _remove(folder: str) -> None:

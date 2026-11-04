@@ -70,8 +70,9 @@ def matching(
     with ``regex`` a regular expression. Raises :class:`PatternError` for an empty, overlong or invalid pattern, one
     that takes longer than ``timeout`` seconds once its process is ready, or a process that cannot start.
     """
-    # the base interpreter: a venv's launcher starts slowly when the server is busy
-    from biostats.mi.parallel import interpreter
+    # the base interpreter: a venv's launcher starts slowly when the server is busy; biostats.processes, light to
+    # import, never the imputation engine (biostats.mi: hundreds of modules on the first search)
+    from biostats.processes import interpreter
 
     text = str(
         pattern or ""
@@ -97,9 +98,11 @@ def matching(
         raise PatternError("The search could not start on this server: try again.") from exc
     with child:
         ready, out = threading.Event(), bytearray()
+        started: list[bytes] = []  # the ready byte, or nothing when the process ended first
 
         def read() -> None:
             first = child.stdout.read(1) if child.stdout else b""
+            started.append(first)
             ready.set()
             if first:
                 out.extend(child.stdout.read() if child.stdout else b"")
@@ -129,6 +132,8 @@ def matching(
                 )
             )
         child.wait()
+    if not any(started):  # it ended before it was ready: the server's fault, never the values'
+        raise PatternError("The search could not start on this server: try again.")
     if child.returncode != 0 or not out:
         raise PatternError("The search could not be made on these values.")
     return [values[i] for i in json.loads(out.decode("ascii"))]
