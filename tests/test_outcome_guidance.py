@@ -374,3 +374,23 @@ def test_an_exact_combination_names_every_variable_it_combines() -> None:
     assert text.startswith(
         "`smoking_status` and `smoker_baseline` are exact combinations of one another"
     )
+
+
+def test_a_variable_both_steps_read_is_advised_on_once() -> None:
+    """Compared by `site` and adjusted for `hba1c_pct`, the curves and the Cox model read `site` on rows of their own,
+    so their advice differed and both were kept: the page then offered to clean `site` twice under one key, and
+    stopped with an error before its Run button."""
+    df = pd.read_csv(
+        Path(__file__).resolve().parents[1] / "assets" / "tutorial" / "tutorial_cohort.csv"
+    )
+
+    def said(plan) -> list[str]:
+        return [a.text for a in plan.advice if a.column == "site"]
+
+    curves = plan_time_to_event(df, "fu_days", "death", "site", [], group=True, model=False)
+    model = plan_time_to_event(
+        df, "fu_days", "death", "site", ["hba1c_pct"], group=True, curves=False
+    )
+    assert len(said(curves)) == len(said(model)) == 1 and said(curves) != said(model)
+    both = plan_time_to_event(df, "fu_days", "death", "site", ["hba1c_pct"], group=True)
+    assert said(both) == said(curves)  # the curves', read on the most rows

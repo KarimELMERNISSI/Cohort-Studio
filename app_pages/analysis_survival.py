@@ -170,9 +170,11 @@ def _render_plan(
             if step.terms:
                 counts += f", {step.terms} term{'s' if step.terms > 1 else ''}"
             st.markdown(f"- {step.text} ({counts})")
+        acted: set[str] = set()  # one set of buttons per variable: their keys name it
         for item in plan.advice:
             st.markdown(f"{_ICON.get(item.level, '')} {item.text}")
-            if item.column and keys is not None:
+            if item.column and keys is not None and item.column not in acted:
+                acted.add(item.column)
                 compared = item.column == st.session_state.get(keys[0])
                 clean_actions(
                     item.column,

@@ -228,3 +228,42 @@ def test_with_imputed_data_only_its_variables_are_offered() -> None:
 def test_the_event_level_is_the_one_that_reads_as_an_event(levels, event) -> None:
     """The last sorted level took "Survived" for Died/Survived and "No event" for Event/No event."""
     assert levels[page._event_index(levels)] == event
+
+
+def _plan_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.analysis_survival import _render_plan
+    from core.state import DatasetRef
+    from ui.guidance.outcomes import plan_time_to_event
+    from ui.state import TUTORIAL_COHORT_PATH, get_state
+
+    st.session_state.setdefault("username", "plan_user")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        frame = pd.read_csv(TUTORIAL_COHORT_PATH)
+        state.set_dataset(
+            frame,
+            DatasetRef(name="tutorial", origin="upload", file_hash="tutorial"),
+            source_bytes=TUTORIAL_COHORT_PATH.read_bytes(),
+            source_name="tutorial_cohort.csv",
+        )
+    st.session_state.setdefault("surv_group", "site")
+    st.session_state.setdefault("surv_adjust", ["hba1c_pct"])
+    df = state.base
+    plan = plan_time_to_event(df, "fu_days", "death", "site", ["hba1c_pct"], group=True)
+    _render_plan(plan, keys=("surv_group", "surv_adjust"), candidates=list(df.columns))
+
+
+def test_the_plan_offers_to_clean_a_variable_once_whichever_steps_read_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tutorial cohort compared by `site` and adjusted for `hba1c_pct`: the page stopped with a duplicate key."""
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+    at = AppTest.from_function(_plan_script, default_timeout=120)
+    at.run()
+    _ok(at)
+    opened = [b for b in at.button if str(b.key).startswith("clean_open::")]
+    assert [b.key for b in opened] == ["clean_open::surv_group::site"]

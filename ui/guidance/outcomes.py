@@ -13,7 +13,7 @@ combinations of others, strong collinearity. It advises, and never decides: what
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -217,6 +217,21 @@ def _some(levels: Sequence[Any], limit: int = 4) -> str:
 
     shown = ", ".join(as_code(show_level(level)) for level in levels[:limit])
     return shown + (f" and {len(levels) - limit} more" if len(levels) > limit else "")
+
+
+def _distinct(advice: Iterable[Advice]) -> tuple[Advice, ...]:
+    """Each piece of advice once, and one per variable written several ways: the curves and the Cox model read it on
+    rows of their own, whose examples can differ, and the page offers to clean each variable once (its buttons' keys
+    name the variable). The first is kept: the curves', read on the most rows."""
+    seen: set[str] = set()
+    kept: list[Advice] = []
+    for item in dict.fromkeys(advice):
+        if item.column:
+            if item.column in seen:
+                continue
+            seen.add(item.column)
+        kept.append(item)
+    return tuple(kept)
 
 
 def _spellings(col: str, values: pd.Series) -> Advice | None:
@@ -548,9 +563,7 @@ def plan_time_to_event(
             )
             if a is not None
         )
-    return ModelPlan(
-        rows, tuple(steps), tuple(dict.fromkeys(advice))
-    )  # a variable both steps read: said once
+    return ModelPlan(rows, tuple(steps), _distinct(advice))  # a variable both steps read: said once
 
 
 def plan_binary(
