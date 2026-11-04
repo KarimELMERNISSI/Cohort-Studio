@@ -322,6 +322,8 @@ def _univariate_blocks(value: dict) -> ResultBlocks:
             "Test": frame["Test Used"],
             "Estimate": [_num(v) for v in estimates],
             "Estimate CI": frame["Estimate CI"] if "Estimate CI" in frame.columns else "",
+            # its direction (Intervention - Control); results stored before it was kept say nothing
+            "Estimate of": frame["Estimate of"] if "Estimate of" in frame.columns else "",
             "p": [_p(v) for v in frame["P-Value"]],
         }
     )

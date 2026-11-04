@@ -18,6 +18,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The paired t-test's d_z interval** was missing when SciPy's noncentral t gave no value far in a tail (t = -14.74
   on 777 degrees of freedom), and present for the same rows in another order. The search moves inwards first, and a
   large-sample interval (Hedges & Olkin) stands in when none is found, as for the two-group effect size.
+- **A two-group difference** took the groups in the order their rows came: +6.64 in the file's order, -6.64 sorted by
+  the group, and the dossier did not say which was subtracted. The first group in sorted order is the reference, and
+  the results and the dossier say "mean difference (Intervention - Control)".
 
 ### Statistics: results corrected (follow-up programme M5)
 

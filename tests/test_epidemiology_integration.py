@@ -169,3 +169,22 @@ class TestEpidemiologyAnalysisPipeline:
         assert "p_value" in res
         assert "statistic" in res
         assert "result" in res
+
+
+def test_a_two_group_difference_has_one_direction_whatever_the_order_of_the_rows(clinical_cohort_df) -> None:
+    """The groups were taken in order of first appearance: +6.64 in the file's order, -6.64 sorted by the group, and the
+    dossier said neither "Intervention - Control" nor the reverse. The first group in sorted order is the reference."""
+    df = clinical_cohort_df
+    kwargs = dict(
+        group_col="group",
+        target="biomarker",
+        numeric_cols=["biomarker", "sbp"],
+        categorical_cols=["stage"],
+        binary_cols=["adverse_event"],
+        manual_test="Welch's t-test",
+    )
+    first = analyze_variable(df=df, **kwargs)
+    reordered = analyze_variable(df=df.sort_values("group", ascending=False), **kwargs)
+    assert first["Estimate"] == pytest.approx(reordered["Estimate"], abs=1e-12)
+    low, high = sorted(map(str, df["group"].dropna().unique()))
+    assert first["Estimate of"] == f"mean difference ({high} - {low})" == reordered["Estimate of"]

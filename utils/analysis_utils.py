@@ -44,7 +44,10 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     effect_ci_text = ""
     if is_numeric:
         # Welch-first policy; assumptions are diagnostics, not gates (audit S7/S8). Engine: biostats.inference
-        groups = groups_from_frame(df, group_col, target)
+        # the groups in a fixed order, the first the reference: in order of appearance, the difference's sign followed
+        # the rows' order (+6.64 in the file's order, -6.64 sorted by arm) and the dossier did not say which was which
+        present = df[[group_col, target]].dropna()[group_col]
+        groups = groups_from_frame(df, group_col, target, levels=sorted(pd.unique(present), key=str))
         kind = LEGACY_NAMES.get(manual_test, "auto")
         reference = str(exposure_ref) if exposure_ref is not None and str(exposure_ref) in groups else None
         test_result = compare_groups(groups, kind=kind, reference=reference, n_boot=200)
@@ -136,6 +139,8 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
         "Effect CI": effect_ci_text,
         "Estimate": estimate,
         "Estimate CI": estimate_ci_text,
+        # what the estimate is, and its direction: "mean difference (Intervention - Control)"
+        "Estimate of": test_result.estimate_label if test_result is not None else "",
         "Assumptions": "; ".join(assumption_notes),
         "Sample Info": sample_info
     }
