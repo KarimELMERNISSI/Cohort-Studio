@@ -144,18 +144,20 @@ def _why(detection: Detection, values: pd.Series | None = None) -> str:
                     f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
                     f"{_spread(read_dates(values, 'month_first'))}."
                 )
-    if detection.order_source == "one_month":
+    if (
+        detection.order_source == "one_month"
+    ):  # said once: the two readings, then what is pre-filled
         first = "day" if detection.format == "day_first" else "month"
-        other = "month" if first == "day" else "day"
-        reasons.append(
-            f"No value shows whether the day or the month comes first; read {other} first, every date falls in one "
-            f"month, as for dates completed to the 1st: {first} first is pre-filled. Check it."
+        readings = (
+            f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
+            f"{_spread(read_dates(values, 'month_first'))}."
+            if values is not None
+            else "One order puts every date in one month."
         )
-        if values is not None:
-            reasons.append(
-                f"Read day first, {_spread(read_dates(values, 'day_first'))}; month first, "
-                f"{_spread(read_dates(values, 'month_first'))}."
-            )
+        reasons.append(
+            f"No value shows whether the day or the month comes first. {readings} Dates completed to the 1st read "
+            f"so: {first} first, which spreads them over the months, is pre-filled. Check it."
+        )
     if detection.order_source == "few_values":
         shown = detection.day_first_only or detection.month_first_only
         way = "day" if detection.day_first_only else "month"
@@ -237,7 +239,12 @@ def _reports(
 
 
 def _day(value) -> str:
-    return "" if pd.isna(value) else pd.Timestamp(value).strftime("%d/%m/%Y")
+    """A date as no reader takes for the other order, 1 Jan 2024: the Earliest and Latest columns sit beside the order
+    being chosen, and 01/12/2024 reads as 1 December one way and 12 January the other."""
+    if pd.isna(value):
+        return ""
+    day = pd.Timestamp(value)
+    return f"{day.day} {day:%b %Y}"
 
 
 def _placeholders(chosen: Collection[str], readings: dict[str, pd.Series]) -> dict[str, list[str]]:

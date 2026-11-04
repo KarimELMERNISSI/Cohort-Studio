@@ -153,7 +153,8 @@ def test_the_screen_shows_what_the_record_never_holds() -> None:
     )
     assert any("P-0042" in c.value for c in at.caption)  # an example, drawn as code
     (table,) = at.dataframe
-    assert table.value["Earliest"].tolist() == ["17/08/2019"]
+    # written as no reader takes for the other order (17/08/2019 and 01/12/2024 depend on it)
+    assert table.value["Earliest"].tolist() == ["17 Aug 2019"]
     at.checkbox(key="dates_convert_anyway::visit").check().run()
     recorded = json.dumps(_convert(at)["params"])
     for value in ("P-0042", "17/08/2019", "2019-08-17", "20/05/2021", "2021-05-20"):

@@ -1272,7 +1272,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   setting, and asks: accepted as pre-filled, a month-first file of such dates was read wrong in 365 of 400 values.
   Only a constant 1 over more than one year reads so: dates of one month's first 12 days (a March window, a campaign
   every March, a January window) keep the setting's order, and a merge keeps the order recorded for the dataset's
-  column.
+  column. Date checks writes the earliest and latest dates as 1 Jan 2024, which neither order misreads (01/12/2024
+  beside "Month first" read as the wrong order), and says the two readings once.
 - **Date checks reads each column with one format, from the shape of its values.** The parser before took the order
   of day and month from the largest numbers and otherwise passed each value to a general date reader: in one column
   it read two-digit years month first twice and day first once, took 20210305 for the year 57233 and 2021 for 1905,
