@@ -779,7 +779,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   a test's `.fillna(True)` or `.fillna(False)` fills its unknowns (`(df['status'] != 'withdrawn').fillna(False)` fired
   on the missing statuses of a text column, and `(df['egfr'] >= 30).fillna(True)` kept the missing values of an Int64
   column only), and an `isin` list holding a missing value finds the missing values (`np.nan` found a float's, not an
-  Int64's). Inside any other call (`np.where`, `.astype`) and in a text test's `na=` it is read as before.
+  Int64's), their keyword spellings too (`fillna(value=True, axis=0)`, `fillna(True, inplace=False)`,
+  `isin(values=[..., None])`). Inside any other call (`np.where`, `.astype`) and in a text test's `na=` it is read as
+  before.
 - **An inclusion criterion written as a negation** ("not pregnant", `df['pregnant'] != 'Yes'`) now excludes every
   participant whose value is missing, men included where pregnancy is recorded for women only: write
   `df['pregnant'].isna() | (df['pregnant'] != 'Yes')` to keep them, or the rule as an exclusion criterion.

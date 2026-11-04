@@ -420,3 +420,27 @@ def test_a_family_counting_its_rules_is_read_as_then_too() -> None:
     assert earlier_mask(frame, "Two", two) is None
     numeric = {"mask_families": {"clinical_anomalies": {"operator": "any", "Two": two}}}
     assert rules_changes(frame, numeric) == []
+
+
+@pytest.mark.parametrize("dtype", ["Int64", "float64", "object"])
+def test_a_keyword_spelling_reads_as_its_positional_one(dtype: str) -> None:
+    """isin(values=[..., None]) left the missing row unknown where isin([..., None]) finds it, and a test's
+    fillna(True, inplace=False) or fillna(value=True, axis=0) filled nothing on a float column, where fillna(True)
+    fills: one reading for one meaning."""
+    values = ["150", None, "90", "200"] if dtype == "object" else [150, None, 90, 200]
+    df = pd.DataFrame({"h": pd.array(values, dtype=dtype)})
+    listed = "['150', None]" if dtype == "object" else "[150, None]"
+
+    def fires(expression: str) -> list[int]:
+        return [int(i) for i in df.index[criterion_mask(df, "rule", {"expression": expression})]]
+
+    assert fires(f"df['h'].isin(values={listed})") == fires(f"df['h'].isin({listed})") == [0, 1]
+    assert fires(f"~df['h'].isin(values={listed})") == [2, 3]
+    if dtype != "object":
+        test = "(df['h'] >= 100)"
+        assert fires(f"{test}.fillna(True)") == [0, 1, 3]
+        assert (
+            fires(f"{test}.fillna(True, inplace=False)")
+            == fires(f"{test}.fillna(value=True, axis=0)")
+            == [0, 1, 3]
+        )

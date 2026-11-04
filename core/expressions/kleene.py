@@ -195,15 +195,23 @@ def _argument(
     return filled
 
 
+def _constant(node: ast.expr | None, value: object) -> bool:
+    return isinstance(node, ast.Constant) and node.value is value
+
+
 def _fill_flag(node: ast.Call) -> ast.expr | None:
-    """The True or False a ``fillna`` call gives, written as its one argument (``value=`` too); None otherwise."""
-    if len(node.args) == 1 and not node.keywords:
-        value = node.args[0]
-    elif not node.args and len(node.keywords) == 1 and node.keywords[0].arg == "value":
-        value = node.keywords[0].value
-    else:
+    """The True or False a ``fillna`` call gives, by position or as ``value=``; ``axis=``, ``inplace=False`` and
+    ``limit=None`` change nothing for a Series. None otherwise (a method, a limit: read as written)."""
+    given = {k.arg: k.value for k in node.keywords}
+    if None in given or ("inplace" in given and not _constant(given["inplace"], False)):
         return None
-    return value if _flag(value) is not None else None
+    if "limit" in given and not _constant(given["limit"], None):
+        return None
+    rest = {k: v for k, v in given.items() if k not in ("axis", "inplace", "limit")}
+    found = _argument(node.args, rest, ("value",))
+    if found is None or len(found) != 1:
+        return None
+    return found[0] if _flag(found[0]) is not None else None
 
 
 def _is_logic(node: ast.expr) -> bool:
@@ -248,12 +256,15 @@ def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
             return _call(BETWEEN, owner, bounds[0], bounds[1], inclusive)
         return _call(TESTED, owner, node)
     if name == "isin":
-        if node.args and _holds_missing(node.args[0]):
-            if len(node.args) != 1 or node.keywords:
+        given = {k.arg: k.value for k in node.keywords}
+        values = node.args[0] if node.args else given.get("values")
+        if values is not None and _holds_missing(values):
+            found = _argument(node.args, given, ("values",))  # by position or as values=
+            if found is None or len(found) != 1:
                 return None
             # the list looks for a missing value too: found by isna(), whatever the column's dtype (pandas matches
             # None, NaN and NA by dtype: np.nan finds a float's missing values, not an Int64's)
-            listed = node.args[0]
+            listed = found[0]
             if not isinstance(listed, ast.List | ast.Tuple | ast.Set):
                 return None
             others = ast.List(elts=[i for i in listed.elts if not _is_missing(i)], ctx=ast.Load())
