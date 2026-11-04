@@ -102,8 +102,9 @@ def _app(frame: dict, ai: dict) -> None:
         )
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A loaded dataset writes its user's workspace: in a temporary folder, never in the data folder (every test)."""
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
     return tmp_path
 

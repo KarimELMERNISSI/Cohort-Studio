@@ -8,8 +8,19 @@ is said when they come) and until it is dismissed. The configuration downloaded 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
+
+import utils.data_paths as dp
+
+
+@pytest.fixture(autouse=True)
+def _data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A loaded dataset writes its user's workspace: in a temporary folder, never in the data folder."""
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+
 
 RULES = {
     "mask_families": {
