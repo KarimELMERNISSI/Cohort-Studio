@@ -1148,6 +1148,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   by their type. pandas 4 leaves them out of a selection of "object" columns, so these checks would have skipped every
   text column without a word. A use of pandas that pandas 4 removes now fails the tests.
 
+### Dependency updates: pypdf, pyasn1 and virtualenv for their known vulnerabilities, and nine others
+
+- For their known vulnerabilities:
+  - pypdf 6.21.4 (seven), which reads the PDF documents of the AI engine's library;
+  - pyasn1 0.6.5 (four), which the Google AI connector uses through google-auth;
+  - for development, virtualenv 21.15.5, the one pre-commit uses: its Bash activator could run the text given with
+    `--prompt`.
+- Updated in `uv.lock`, as Dependabot proposed: pydantic 2.14.2, pydantic-settings 2.16.2, openai 3.42.0, google-genai
+  2.34.0, langchain-core 1.7.3, lancedb 0.41.0 and prince 0.23.1; for development, pytest 9.2.0 and ruff 0.17.3, which
+  the pre-commit hook follows.
+
 ### Internal structure: the date work in one place (M6)
 
 - Date parsing and the column profile moved into `ingest`, where files are read: `utils/date_parser.py` is now

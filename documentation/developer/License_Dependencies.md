@@ -74,9 +74,9 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pyarrow | 26.0.0 | Apache-2.0 |
-| pydantic | 2.14.1 | MIT |
-| pydantic-core | 2.50.1 | MIT |
-| pydantic-settings | 2.16.0 | MIT |
+| pydantic | 2.14.2 | MIT |
+| pydantic-core | 2.50.2 | MIT |
+| pydantic-settings | 2.16.2 | MIT |
 | pydeck | 0.9.3 | Apache License 2.0 |
 | pyparsing | 3.3.3 | MIT |
 | python-dateutil | 2.9.0.post0 | Apache / BSD |
@@ -119,7 +119,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
 | google-auth | 2.62.0 | Apache |
-| google-genai | 2.33.0 | Apache-2.0 |
+| google-genai | 2.34.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -133,19 +133,19 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | jsonpointer | 3.2.1 | BSD |
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
-| lancedb | 0.40.0 | Apache |
-| langchain-core | 1.7.0 | MIT |
+| lancedb | 0.41.0 | Apache |
+| langchain-core | 1.7.3 | MIT |
 | langchain-protocol | 0.0.20 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.12 | MIT |
-| openai | 3.37.0 | Apache-2.0 |
+| openai | 3.42.0 | Apache-2.0 |
 | opentelemetry-api | 1.45.1 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
-| pyasn1 | 0.6.4 | BSD-2-Clause |
+| pyasn1 | 0.6.5 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.11 | BSD-3-Clause |
-| pypdf | 6.21.2 | BSD-3-Clause |
+| pypdf | 6.21.4 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.20.0 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
@@ -163,7 +163,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lightgbm | 4.7.0 | MIT |
 | llvmlite | 0.50.0 | BSD-2-Clause AND Apache-2.0 WITH LLVM-exception |
 | numba | 0.68.0 | BSD |
-| prince | 0.23.0 | MIT |
+| prince | 0.23.1 | MIT |
 | pynndescent | 0.6.0 | BSD-2-Clause |
 | umap-learn | 0.5.12 | BSD |
 
@@ -197,9 +197,9 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pre-commit | 4.7.0 | MIT |
 | pygments | 2.21.0 | BSD-2-Clause |
 | pyright | 1.1.414 | MIT |
-| pytest | 9.1.1 | MIT |
+| pytest | 9.2.0 | MIT |
 | pytest-cov | 7.1.0 | MIT |
 | pytest-mock | 3.17.0 | MIT |
 | python-discovery | 1.6.2 | MIT |
-| ruff | 0.17.2 | MIT |
-| virtualenv | 21.14.12 | MIT |
+| ruff | 0.17.3 | MIT |
+| virtualenv | 21.15.5 | MIT |

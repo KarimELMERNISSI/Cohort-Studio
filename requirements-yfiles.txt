@@ -34,6 +34,7 @@ certifi==2026.10.19
     # via
     #   httpcore
     #   httpx
+    #   langchain-core
     #   requests
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via cryptography
@@ -75,7 +76,7 @@ formulaic==1.2.2
     #   statsmodels
 google-auth==2.62.0
     # via google-genai
-google-genai==2.33.0
+google-genai==2.34.0
     # via cohortstudio
 grpcio==1.84.0
     # via qdrant-client
@@ -143,9 +144,9 @@ lance-namespace==0.13.0
     # via lancedb
 lance-namespace-urllib3-client==0.13.0
     # via lance-namespace
-lancedb==0.40.0
+lancedb==0.41.0
     # via cohortstudio
-langchain-core==1.7.0
+langchain-core==1.7.3
     # via
     #   cohortstudio
     #   langchain-text-splitters
@@ -207,7 +208,7 @@ numpy==2.5.4
     #   statsmodels
     #   streamlit
     #   umap-learn
-openai==3.37.0
+openai==3.42.0
     # via cohortstudio
 openpyxl==3.1.5
     # via cohortstudio
@@ -247,7 +248,7 @@ plotly==7.1.0
     # via cohortstudio
 portalocker==3.2.0
     # via qdrant-client
-prince==0.23.0
+prince==0.23.1
     # via cohortstudio
 protobuf==7.36.2
     # via
@@ -258,13 +259,13 @@ pyarrow==26.0.0
     #   cohortstudio
     #   lancedb
     #   streamlit
-pyasn1==0.6.4
+pyasn1==0.6.5
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
 pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.1
+pydantic==2.14.2
     # via
     #   anthropic
     #   cohortstudio
@@ -276,9 +277,9 @@ pydantic==2.14.1
     #   openai
     #   pydantic-settings
     #   qdrant-client
-pydantic-core==2.50.1
+pydantic-core==2.50.2
     # via pydantic
-pydantic-settings==2.16.0
+pydantic-settings==2.16.2
     # via cohortstudio
 pydeck==0.9.3
     # via streamlit
@@ -286,7 +287,7 @@ pynndescent==0.6.0
     # via umap-learn
 pyparsing==3.3.3
     # via matplotlib
-pypdf==6.21.2
+pypdf==6.21.4
     # via cohortstudio
 python-dateutil==2.9.0.post0
     # via
