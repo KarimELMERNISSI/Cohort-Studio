@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 import pandas as pd
 
 from core.workspace import file_name_of
-from enrich.recode import free_text
+from enrich.recode import free_text, level_counts
 from manage.rag.providers import AI_PROVIDERS, declared
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,11 @@ PRIVATE_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa", ".localdomain")
 
 
 def _frequent_values(series: pd.Series) -> dict[str, int]:
+    """The most frequent values, each held by MIN_COUNT rows or more; none for a column read as free text or as an
+    identifier (names, codes or dates on visits), as Data > Clean reads it (enrich.recode.free_text): the summary then
+    keeps the column's name and type only."""
+    if free_text(level_counts(series), min_count=MIN_COUNT):
+        return {}
     counts = series.value_counts().head(TOP_VALUES)
     return {str(value): int(n) for value, n in counts.items() if n >= MIN_COUNT}
 

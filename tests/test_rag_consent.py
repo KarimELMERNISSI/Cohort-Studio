@@ -501,10 +501,24 @@ def test_the_notice_says_that_rows_are_counted_not_people() -> None:
     for provider in ("gemini", "openai", "anthropic", "ollama"):
         notice = _notice([provider], {"provider": provider})
         assert (
-            "only values shared by at least 5 rows; the first and last year of date columns. Rows are counted, not "
-            "people: a value written on 5 visits of one person is sent." in notice
+            "the first and last year of date columns. Rows are counted, not people: a value written on 5 visits of "
+            "one person is sent." in notice
         )
         assert "only values held by at least 5 rows (rows, not people, as above), without their counts" in notice
+
+
+def test_the_notice_says_which_columns_send_no_value() -> None:
+    """The summary sends no value of free text or of a column of names, codes or dates on visits, as Clean sends none;
+    a numeric column of 10 values or fewer is described by its values, not its percentiles."""
+    from app_pages.rag_sidebar import _notice
+
+    notice = _notice(["gemini"], {"provider": "gemini"})
+    assert "percentiles of numeric columns of more than 10 values" in notice
+    assert (
+        "only values shared by at least 5 rows, and none for free text or a column of names, codes or dates on visits"
+        in notice
+    )
+    assert "never free text or a column of names, codes or dates on visits." in notice
 
 
 def test_the_passages_sent_name_their_document_never_its_path() -> None:

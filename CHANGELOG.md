@@ -1405,6 +1405,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Settings > AI engine says that rows are counted, not people:** the column summaries and Clean's values are sent
   when 5 rows hold them, so a value written on 5 visits of one person is sent; the notice beside the consent box now
   says so, as Clean's preview did.
+- **The column summaries send no value of a column of names, codes or dates on visits.** Data insight, the criteria
+  assistant, the column renaming and Enrich's unit hints sent the five most frequent values of each text column with
+  their counts, so five names, participant codes or birth dates of a table of visits, where Clean reads the same
+  columns as identifiers and sends nothing. A column that Clean's test reads as free text, mostly rare values or an
+  identifier is now summarised by its name and type only. The consent notice says so, and that the percentiles are
+  those of numeric columns of more than 10 values (fewer are described by their values).
 
 ### Data > Clean: values found by a text or a regular expression
 

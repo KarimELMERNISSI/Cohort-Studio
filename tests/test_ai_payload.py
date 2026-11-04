@@ -75,6 +75,32 @@ def test_each_kind_of_column_is_summarised() -> None:
     assert profile["smoker"]["type"] == "Categorical"  # 0/1: described by its values
 
 
+def test_a_column_of_names_codes_or_dates_on_visits_sends_no_value() -> None:
+    """The summary sent the five most frequent names, participant codes and birth dates of a table of visits, each held
+    by 5 rows or more, where Data > Clean reads the same columns as identifiers and sends nothing. The column keeps its
+    name and type; categories keep their values."""
+    rng = np.random.default_rng(7)
+    visits = rng.integers(1, 9, size=40)  # 40 participants, 1 to 8 visits each
+    people = np.repeat(np.arange(40), visits)
+    df = pd.DataFrame(
+        {
+            "name": [f"Participant {chr(65 + p % 26)}{p}" for p in people],
+            "code": [f"P-{p:04d}" for p in people],
+            "birth": [f"19{50 + p:02d}-01-01" for p in people],
+            "sex": np.where(people % 2 == 0, "F", "M"),
+            "site": np.where(people % 3 == 0, "Esch", "Luxembourg"),
+        }
+    )
+    profile = {p["name"]: p for p in column_profile(df)}
+    for column in ("name", "code", "birth"):
+        assert profile[column]["top_values"] == {}, column
+        assert profile[column]["type"] == "Categorical"
+    assert set(profile["sex"]["top_values"]) == {"F", "M"}
+    assert set(profile["site"]["top_values"]) == {"Esch", "Luxembourg"}
+    sent = json.dumps(column_profile(df))
+    assert "P-00" not in sent and "Participant" not in sent and "-01-01" not in sent
+
+
 def test_statistics_outside_the_notice_are_dropped() -> None:
     # an imported or edited variable map may hold anything: only the percentiles are kept (an allow-list)
     assert safe_stats({"min": 31.5, "max": 912.0, "mean": 88.4}) == {}
