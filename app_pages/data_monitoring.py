@@ -1600,9 +1600,12 @@ def display_results_with_anomaly(df: pd.DataFrame, anomaly_col: str, st):
 ##### INCLUSION PART
 
 def _share(part: int, whole: int) -> str:
-    """A share of rows as a percentage; "under 1%" rather than "0%" for rows that are there (2 of 1,206)."""
+    """A share of rows as a percentage; "under 1%" rather than "0%" for rows that are there (2 of 1,206), and "over 99%"
+    rather than "100%" for rows that are not all (1,205 of 1,206)."""
     share = part / whole if whole else 0.0
-    return "under 1%" if part and share < 0.005 else f"{share:.0%}"
+    if part and share < 0.005:
+        return "under 1%"
+    return "over 99%" if part < whole and share >= 0.995 else f"{share:.0%}"
 
 
 def unknown_advice(

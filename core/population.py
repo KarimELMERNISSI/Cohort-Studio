@@ -31,9 +31,9 @@ from core.criteria import (
     CriterionError,
     RuleCheck,
     criterion_columns,
+    criterion_lacking,
     criterion_mask,
     criterion_problems,
-    criterion_unknown,
     earlier_mask,
     holds_row_list,
     rule_checks,
@@ -647,7 +647,7 @@ class CriterionCount:
     marginal_base: int  # rows of the whole table the criterion excludes
     marginal_in_stage: int  # rows entering its family's stage that it excludes
     sequential: int  # rows it excludes that no earlier criterion of the stage excluded
-    # of those, the rows an inclusion criterion excludes for want of a value it reads (core.criteria.criterion_unknown)
+    # of those, the rows an inclusion criterion excludes for want of a value it reads (core.criteria.criterion_lacking)
     missing: int = 0
 
 
@@ -752,7 +752,7 @@ def evaluate_population(
             continue
         excluded[c.id] = fires if c.kind == EXCLUSION else ~fires
         if c.kind != EXCLUSION:
-            unknown[c.id] = criterion_unknown(df, c.name, c.definition).to_numpy(dtype=bool)
+            unknown[c.id] = criterion_lacking(df, c.name, c.definition).to_numpy(dtype=bool)
 
     families: list[str] = []
     for c in criteria:

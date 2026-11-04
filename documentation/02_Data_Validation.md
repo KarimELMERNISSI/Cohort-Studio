@@ -133,13 +133,17 @@ brackets.
   no condition on it, so an exclusion criterion keeps them and an inclusion criterion excludes them (in an
   expression, a comparison or a test on a missing value is unknown, as SQL's `WHERE` reads it, however it is
   written: `!=`, `~`, `.ne()`, `== False`; `.isna()` finds missing values, and an expression that gives a missing
-  value a value itself, with `fillna`, `np.where`, a text test's `na=` or a missing value in an `isin` list, decides
-  what it gives, whatever the column's type). So an inclusion criterion "not pregnant", `df['pregnant'] != 'Yes'`, excludes every participant
-  whose pregnancy is not recorded, men included: to keep them, write
-  `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`, or the rule as an exclusion criterion,
-  `df['pregnant'] == 'Yes'`. Below, the
-  tables give the rows in, excluded and out for each family, what each criterion excludes (on the whole table, at
-  its step, and as the first reason), and the excluded rows with their reasons.
+  value a value itself decides what it gives: a test's `fillna(True)` or `fillna(False)`, a text test's `na=` and a
+  missing value in an `isin` list do so whatever the column's type, while inside `np.where`, a sum or another fill a
+  test is read as pandas reads it, which depends on the column's type (a missing number compared gives False, a
+  missing Int64 stays missing): there, write the test with `.isna()`). So an inclusion criterion "not pregnant",
+  `df['pregnant'] != 'Yes'`, excludes every participant whose pregnancy is not recorded, men included: to keep them,
+  write `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`, or the rule as an exclusion criterion,
+  `df['pregnant'] == 'Yes'`. The flow counts apart the rows an inclusion criterion excludes for want of a value it
+  reads, however it is written, a reason for exclusion of its own (STROBE item 13b): "not pregnant" lacks the same
+  values written `!= 'Yes'`, `(... != 'Yes').fillna(False)` or `.notna() & ...`. Below, the tables give the rows
+  in, excluded and out for each family, what each criterion excludes (on the whole table, at its step, and as the
+  first reason), and the excluded rows with their reasons.
 - **Keep only these rows** deletes the excluded rows from the current data (for an export or a hand-over). It is
   the one action that removes rows: it asks for confirmation, it is one step of the trace, saved versions are not
   changed, and the criteria are then unticked.

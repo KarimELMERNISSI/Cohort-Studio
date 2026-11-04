@@ -716,12 +716,16 @@ CRITERION_KINDS.register(
 # expression: {"expression": "df['age'] > 110"} a whitelisted boolean expression (core.expressions)
 
 
-def _expression_value(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> Any:
+def _expression_value(
+    df: pd.DataFrame, name: str, definition: Mapping[str, Any], *, bare: bool = False
+) -> Any:
     """The expression's value, read in three-valued logic: unknown (NA) where a comparison or a test meets a missing
-    value (core.expressions.kleene)."""
+    value (core.expressions.kleene); ``bare``, what it says a missing value gives set aside (:func:`criterion_lacking`)."""
     expression = str(definition.get("expression")).strip()
     try:
-        tree = three_valued(validate(expression))  # the user's expression is checked as written
+        tree = three_valued(
+            validate(expression), bare=bare
+        )  # the user's expression is checked as written
         return evaluate_tree(tree, df, policy=_THREE_VALUED, extra_locals=HELPERS)
     except UnsafeExpressionError as exc:
         raise CriterionError(f"criterion '{name}': expression rejected ({exc})") from exc
@@ -933,6 +937,48 @@ def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]
         return none
 
 
+def criterion_lacking(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
+    """
+    The rows a criterion's known values do not settle, whatever its expression says a missing value gives (a test's
+    ``fillna``, a missing value in an ``isin`` list, a text test's ``na=``, ``isna()`` or ``notna()``, a column's
+    ``fillna``): of the rows an inclusion criterion excludes, those the participant flow and the dossier count as
+    lacking a value it reads, a reason for exclusion STROBE reports (item 13b) however the criterion is written. "Not
+    pregnant" lacks the same values written ``!= 'Yes'``, ``(... != 'Yes').fillna(False)`` or ``notna() & ...``; the
+    criterion editor's advice reads :func:`criterion_unknown`, which honours them. A rule of at least k rules reads its
+    members so; any other kind is :func:`criterion_unknown`'s. Never raises: no row when the criterion cannot be read.
+    """
+    try:
+        return _bare(df, name, definition)[1]
+    except Exception:
+        return pd.Series(False, index=df.index)
+
+
+def _bare(
+    df: pd.DataFrame, name: str, definition: Mapping[str, Any]
+) -> tuple[pd.Series, pd.Series]:
+    """Where a criterion is true, and where it is unknown, its expressions read bare (:func:`criterion_lacking`)."""
+    kind = rule_kind(name, definition)
+    if kind.mask is _expression_mask:
+        value = _expression_value(df, name, definition, bare=True)
+        if not isinstance(value, pd.Series) or len(value) != len(df.index):
+            raise CriterionError(f"criterion '{name}': the expression must give one value per row")
+        unknown = pd.Series(value.isna().to_numpy(dtype=bool), index=df.index)
+        return _as_mask(value, df.index), unknown
+    if (
+        kind.mask is _threshold_mask
+    ):  # at least k: unknown where the unknown rules could still reach k
+        k = int(definition["threshold"])
+        true = pd.Series(0, index=df.index)
+        open_ = pd.Series(0, index=df.index)
+        for member, spec in _members(kind, definition).items():
+            fires, unknown = _bare(df, str(member), spec)
+            true += fires.astype(int)
+            open_ += unknown.astype(int)
+        return true >= k, (true < k) & (true + open_ >= k)
+    fires, known = settled(df, name, definition)
+    return fires, pd.Series(~known.to_numpy(dtype=bool), index=df.index)
+
+
 def rule_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> list[RuleCheck]:
     """
     The Domain Validity checks of a criterion on ``df``: per check, the rows holding every value it reads and the rows
@@ -1142,6 +1188,7 @@ __all__ = [
     "combined_rules",
     "criterion_columns",
     "criterion_mask",
+    "criterion_lacking",
     "criterion_unknown",
     "earlier_mask",
     "criterion_problems",

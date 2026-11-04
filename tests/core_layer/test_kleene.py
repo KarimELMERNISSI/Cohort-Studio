@@ -444,3 +444,76 @@ def test_a_keyword_spelling_reads_as_its_positional_one(dtype: str) -> None:
             == fires(f"{test}.fillna(value=True, axis=0)")
             == [0, 1, 3]
         )
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "df['pregnant'] != 'Yes'",
+        "df['pregnant'] == 'No'",
+        "df['pregnant'].isin(['No'])",
+        "(df['pregnant'] != 'Yes').fillna(False)",
+        "(df['pregnant'] == 'No').fillna(False)",
+        "df['pregnant'].notna() & (df['pregnant'] != 'Yes')",
+        "~df['pregnant'].isin(['Yes', None])",
+        "df['pregnant'].fillna('unknown') == 'No'",
+        "~df['pregnant'].str.contains('Yes', na=True)",
+    ],
+)
+def test_the_flow_counts_the_rows_lacking_a_value_however_the_criterion_is_written(
+    spelling: str,
+) -> None:
+    """Pregnancy recorded for the 500 women only: every spelling of "Not pregnant" excludes the same 508 rows, and the
+    flow said 500 of them lack a value for three spellings, 0 for those that say what a missing value gives, though
+    the 500 lack it all the same (STROBE item 13b). The criterion editor's advice still honours what they say."""
+    from core.criteria import criterion_lacking
+    from core.population import active_criteria, catalogue, evaluate_population
+
+    n = 1000
+    pregnant = np.where(np.arange(n) < 8, "Yes", np.where(np.arange(n) < 500, "No", None))
+    frame = pd.DataFrame({"pregnant": pregnant})
+    config = {
+        "mask_families": {
+            "study_inclusion": {"operator": "all", "Not pregnant": {"expression": spelling}}
+        }
+    }
+    criteria = active_criteria(config, [c.id for c in catalogue(config)])
+    (count,) = evaluate_population(frame, criteria).counts
+    assert (count.sequential, count.missing) == (508, 500)
+    said = criterion_unknown(frame, "Not pregnant", {"expression": spelling})
+    assert int(said.sum()) == (
+        0
+        if "fillna" in spelling or "notna" in spelling or "None" in spelling or "na=" in spelling
+        else 500
+    )
+    known_false = {"expression": "(df['age'] >= 18) & (df['consent'] == 'Yes')"}
+    adults = pd.DataFrame({"age": [10, 30, np.nan, 30], "consent": [None, None, "Yes", "No"]})
+    assert criterion_lacking(adults, "c", known_false).tolist() == [
+        False,
+        True,
+        True,
+        False,
+    ]  # a minor is settled
+
+
+def test_a_rule_of_at_least_k_reads_each_rule_by_its_value() -> None:
+    """A rule counting "at least 1 of" its rules read an expression rule as unsettled wherever a column it reads is
+    missing, even where its value is known: (a > 1) | (b > 2) is true where b is 5, whatever a."""
+    from core.criteria import criterion_lacking
+
+    frame = pd.DataFrame(
+        {"a": [np.nan, np.nan, 0.0], "b": [5.0, 0.0, 0.0], "w": [10.0, 10.0, 10.0]}
+    )
+    either = {"expression": "(df['a'] > 1) | (df['b'] > 2)"}
+    one = {"threshold": 1, "members": {"A": either, "B": {"expression": "df['w'] >= 20"}}}
+    assert criterion_mask(frame, "one", one).tolist() == [True, False, False]
+    assert criterion_lacking(frame, "one", one).tolist() == [False, True, False]
+    filled = {
+        "threshold": 1,
+        "members": {"A": {"expression": "(df['a'] > 1).fillna(False)"}, "B": one["members"]["B"]},
+    }
+    assert criterion_lacking(frame, "filled", filled).tolist() == [
+        True,
+        True,
+        False,
+    ]  # as A alone reads it

@@ -234,54 +234,76 @@ def _is_logic(node: ast.expr) -> bool:
     return False
 
 
-def _negated(node: ast.expr) -> ast.expr:
-    return ast.UnaryOp(op=ast.Invert(), operand=_logic(node))
+# the tests of whether a value is missing, which the bare reading makes unknown on a missing value
+_MISSING_TESTS = frozenset({"isna", "isnull", "notna", "notnull"})
 
 
-def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
-    """A Series's comparison or test, rewritten; None when it says itself what a missing value gives, or is not one."""
+def _column(node: ast.expr, bare: bool) -> ast.expr:
+    """In the bare reading, a column's own ``fillna`` set aside (``df['x'].fillna(0)`` read as ``df['x']``)."""
+    while (
+        bare
+        and isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "fillna"
+        and not _is_logic(node.func.value)
+    ):
+        node = node.func.value
+    return node
+
+
+def _negated(node: ast.expr, bare: bool = False) -> ast.expr:
+    return ast.UnaryOp(op=ast.Invert(), operand=_logic(node, bare))
+
+
+def _method(node: ast.Call, name: str, owner: ast.expr, bare: bool = False) -> ast.expr | None:
+    """A Series's comparison or test, rewritten; None when it says itself what a missing value gives, or is not one.
+    Read bare, what it says is set aside: unknown on a missing value."""
     if name in _METHODS:
         # the value compared with, by position or as other=; axis= changes nothing for a Series. fill_value= and
         # level= say themselves what a missing value gives: read as written
         given = {k.arg: k.value for k in node.keywords if k.arg != "axis"}
         other = _argument(node.args, given, ("other",))
         if other is not None and len(node.args) + len(given) == 1:
-            return _compared(owner, _METHODS[name], other[0])
+            return _compared(owner, _METHODS[name], other[0], bare)
         return None
     if name == "between":
         given = {k.arg: k.value for k in node.keywords}
         bounds = _argument(node.args, given, ("left", "right", "inclusive"))
         if bounds is not None and len(bounds) >= 2:
             inclusive = bounds[2] if len(bounds) == 3 else ast.Constant("both")
-            return _call(BETWEEN, owner, bounds[0], bounds[1], inclusive)
-        return _call(TESTED, owner, node)
+            return _call(BETWEEN, _column(owner, bare), bounds[0], bounds[1], inclusive)
+        return _call(TESTED, _column(owner, bare), node)
     if name == "isin":
         given = {k.arg: k.value for k in node.keywords}
         values = node.args[0] if node.args else given.get("values")
         if values is not None and _holds_missing(values):
             found = _argument(node.args, given, ("values",))  # by position or as values=
             if found is None or len(found) != 1:
-                return None
+                return _call(TESTED, _column(owner, bare), node) if bare else None
             # the list looks for a missing value too: found by isna(), whatever the column's dtype (pandas matches
             # None, NaN and NA by dtype: np.nan finds a float's missing values, not an Int64's)
             listed = found[0]
             if not isinstance(listed, ast.List | ast.Tuple | ast.Set):
-                return None
+                return _call(TESTED, _column(owner, bare), node) if bare else None
             others = ast.List(elts=[i for i in listed.elts if not _is_missing(i)], ctx=ast.Load())
             found = ast.Call(
                 func=ast.Attribute(value=owner, attr="isin", ctx=ast.Load()),
                 args=[others],
                 keywords=[],
             )
+            if bare:  # the missing value looked for set aside: unknown there
+                return _call(TESTED, _column(copy.deepcopy(owner), bare), found)
             missing = ast.Call(
                 func=ast.Attribute(value=copy.deepcopy(owner), attr="isna", ctx=ast.Load()),
                 args=[],
                 keywords=[],
             )
             return ast.BinOp(left=found, op=ast.BitOr(), right=missing)
-        return _call(TESTED, owner, node)
+        return _call(TESTED, _column(owner, bare), node)
     if name == "fillna" and _is_logic(owner):
         value = _fill_flag(node)
+        if bare:  # the test itself, its unknowns left unknown
+            return _logic(owner, bare)
         if value is None:
             return None
         # a test's own fill: its unknowns become the True or False given, on every dtype (pandas' comparison of a
@@ -292,55 +314,68 @@ def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
             keywords=[],
         )
     if name in _TEXT_TESTS and isinstance(owner, ast.Attribute) and owner.attr == "str":
-        if any(k.arg == "na" for k in node.keywords):
+        if any(k.arg == "na" for k in node.keywords) and not bare:
             return None  # na= says what a missing value gives
-        return _call(TESTED, owner.value, node)
+        return _call(TESTED, _column(owner.value, bare), node)
+    if bare and name in _MISSING_TESTS and not node.args and not node.keywords:
+        return _call(
+            TESTED, _column(owner, bare), node
+        )  # unknown on a missing value, as any test of it
     return None
 
 
-def _compared(left: ast.expr, symbol: str, right: ast.expr) -> ast.expr:
+def _compared(left: ast.expr, symbol: str, right: ast.expr, bare: bool = False) -> ast.expr:
     """A comparison made three-valued: unknown where a side is missing. A test compared with True or False is the test
     or its negation, by the operator or by its method ((test).eq(False), (test).ne(True)); a test on either side is
     made three-valued before it is compared, so (a > 1) == (b > 2) is unknown where either test is."""
     if symbol in ("==", "!="):
         for tested, flag in ((left, _flag(right)), (right, _flag(left))):
             if flag is not None and _is_logic(tested):
-                return _logic(tested) if flag == (symbol == "==") else _negated(tested)
-    sides = [_logic(side) if _is_logic(side) else side for side in (left, right)]
+                return _logic(tested, bare) if flag == (symbol == "==") else _negated(tested, bare)
+    sides = [
+        _logic(side, bare) if _is_logic(side) else _column(side, bare) for side in (left, right)
+    ]
     return _call(COMPARE, sides[0], ast.Constant(symbol), sides[1])
 
 
-def _logic(node: ast.expr) -> ast.expr:
+def _logic(node: ast.expr, bare: bool = False) -> ast.expr:
     """The tests at the level of the expression's logic made three-valued: the expression itself, the operands of
     &, | and ^ (and of numpy's logical functions), the operand of ~. Anything else is left as it is."""
     if isinstance(node, ast.Compare) and len(node.ops) == 1:
         op, left, right = node.ops[0], node.left, node.comparators[0]
         if type(op) in _COMPARISONS:
-            return _compared(left, _COMPARISONS[type(op)][0], right)
+            return _compared(left, _COMPARISONS[type(op)][0], right, bare)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
         name, owner = node.func.attr, node.func.value
         if _numpy(owner):
             if name == "logical_not" and len(node.args) == 1 and not node.keywords:
-                return _negated(node.args[0])
+                return _negated(node.args[0], bare)
             if name in _NUMPY_LOGIC and len(node.args) == 2 and not node.keywords:
                 return ast.BinOp(
-                    left=_logic(node.args[0]), op=_NUMPY_LOGIC[name](), right=_logic(node.args[1])
+                    left=_logic(node.args[0], bare),
+                    op=_NUMPY_LOGIC[name](),
+                    right=_logic(node.args[1], bare),
                 )
             return node
-        rewritten = _method(node, name, owner)
+        rewritten = _method(node, name, owner, bare)
         if rewritten is not None:
             return rewritten
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitAnd | ast.BitOr | ast.BitXor):
-        return ast.BinOp(left=_logic(node.left), op=node.op, right=_logic(node.right))
+        return ast.BinOp(left=_logic(node.left, bare), op=node.op, right=_logic(node.right, bare))
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
-        return _negated(node.operand)
+        return _negated(node.operand, bare)
     return node
 
 
-def three_valued(tree: ast.Expression) -> ast.Expression:
-    """A copy of a validated expression whose tests at the level of its logic are three-valued: evaluate it with
-    :data:`HELPERS` among its names."""
-    body = _logic(copy.deepcopy(tree.body))
+def three_valued(tree: ast.Expression, *, bare: bool = False) -> ast.Expression:
+    """
+    A copy of a validated expression whose tests at the level of its logic are three-valued: evaluate it with
+    :data:`HELPERS` among its names. ``bare``: what the expression says a missing value gives is set aside (a test's
+    ``fillna``, a missing value in an ``isin`` list, a text test's ``na=``, ``isna()`` and ``notna()``, a column's
+    ``fillna``), so that a row is unknown wherever its known values do not settle the expression: the rows a criterion
+    excludes for want of a value, however it is written (core.criteria.criterion_lacking).
+    """
+    body = _logic(copy.deepcopy(tree.body), bare)
     return ast.fix_missing_locations(ast.Expression(body=body))
 
 

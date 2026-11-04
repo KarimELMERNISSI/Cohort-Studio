@@ -786,14 +786,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   participant whose value is missing, men included where pregnancy is recorded for women only: write
   `df['pregnant'].isna() | (df['pregnant'] != 'Yes')` to keep them, or the rule as an exclusion criterion.
 - **Said where it counts.** The participant flow and the dossier count apart the rows an inclusion criterion excludes
-  for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a reason
-  for non-participation of its own (STROBE item 13); the criterion editor says it before a criterion is added, with its
-  share of the rows ("under 1%" for a few, never "0%") and the expression that keeps them (for a criterion of two
-  columns or more, its negation added as an exclusion criterion: `isna() | (...)` over each column would also keep a
-  minor whose consent is missing); the AI engine that writes criteria is told the rule. A rule counting "at least
-  k of" its rules lacks a value only where its missing rules could still decide it: a row whose known rules already
-  keep it under k is excluded for a known reason. A population kept as the dataset gives the dossier's table its
-  "lacking a value" column too.
+  for want of a value ("Not pregnant: 500 of the 508 rows it excludes first lack a value it reads (pregnant)"), a
+  reason for non-participation of its own (STROBE item 13), however the criterion is written: with `.fillna(False)`,
+  `.notna() & ...` or a missing value in an `isin` list, the same 500 rows lack the value (they counted 0). The
+  criterion editor says it before a criterion is added, with its share of the rows ("under 1%" for a few, never "0%";
+  "over 99%" short of all, never "100%") and the expression that keeps them (for a criterion of two columns or more,
+  its negation added as an exclusion criterion: `isna() | (...)` over each column would also keep a minor whose
+  consent is missing), and leaves alone a criterion that says what a missing value gives; the AI engine that writes
+  criteria is told the rule. A rule counting "at least k of" its rules lacks a value only where its missing rules
+  could still decide it, each rule read by its value (`(a > 1) | (b > 2)` is known where `b` is 5): a row whose known
+  rules already keep it under k is excluded for a known reason. A population kept as the dataset gives the dossier's
+  table its "lacking a value" column too.
 - **A trace recorded before** replays its populations with the rows they kept then, and says that the rules changed
   (version 1), not the data; a population now records the version of the rules it was read under. A population that
   kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one

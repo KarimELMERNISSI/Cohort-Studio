@@ -83,3 +83,13 @@ def test_a_few_rows_read_under_1_percent_never_0() -> None:
     frame = pd.DataFrame({"pregnant": [None, None] + ["No"] * 1204})
     words, _ = unknown_advice(frame, "Not pregnant", {"expression": "df['pregnant'] != 'Yes'"})
     assert words.startswith("Unknown on 2 rows (under 1%), where a value it reads is missing")
+
+
+def test_rows_short_of_all_read_over_99_percent_never_100() -> None:
+    """1,205 rows of 1,206 read "(100%)" beside "Unknown on 1,205 rows"."""
+    frame = pd.DataFrame({"pregnant": [None] * 1205 + ["No"]})
+    words, _ = unknown_advice(frame, "Not pregnant", {"expression": "df['pregnant'] != 'Yes'"})
+    assert words.startswith("Unknown on 1,205 rows (over 99%), where a value it reads is missing")
+    every = pd.DataFrame({"pregnant": [None] * 4})
+    words, _ = unknown_advice(every, "Not pregnant", {"expression": "df['pregnant'] != 'Yes'"})
+    assert words.startswith("Unknown on 4 rows (100%)")
