@@ -56,7 +56,8 @@ def level_warning(column: Any, values: Iterable[Any]) -> None:
     alike = alike_levels(values)
     if not alike:
         return
-    examples = "; ".join(", ".join(f"`{show_level(v)}`" for v in found) for found in alike[:3])
+    # as code: a value is the data's text, and a backtick in it would end a code span written by hand
+    examples = "; ".join(", ".join(as_code(show_level(v)) for v in found) for found in alike[:3])
     more = f" and {len(alike) - 3} more" if len(alike) > 3 else ""
     name = as_code(column)
     st.warning(

@@ -1018,6 +1018,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Validate shows a rule that cannot be evaluated as text.** Its name and the reason, which can quote a cell, were
   drawn as Markdown: a cell such as `![x](http://…)` in a rule's column would have been fetched. The names of the
   rules and criteria added on Validate are shown as code.
+- **The values of the groups' warning and the names of the quality advice are shown as code.** The warning under a list
+  of groups wrote its values in backticks by hand, so a value holding one left the code span and its Markdown became a
+  live link; the dashboard's Completeness and Outliers advice and its Data types panel set column names in bold. Each
+  is quoted as code now, as the plan's caution and the Uniformity advice were.
 
 ### AI engine: suggested formulas are read and tried as the application computes them
 

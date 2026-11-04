@@ -14,6 +14,7 @@ import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.criteria import criterion_columns
+from core.registry import as_code
 from explore.data_quality_auditor import DERIVED_CATEGORY, NO_RULE
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
@@ -1289,14 +1290,14 @@ def render_dashboard(df, config):
                 # Check if numeric
                 try:
                     pd.to_numeric(df[col].dropna())
-                    potential_issues.append(f"Column **'{col}'** is type 'Object' but looks Numeric.")
+                    potential_issues.append(f"Column {as_code(col)} is type 'Object' but looks Numeric.")
                     continue
                 except Exception:
                     pass  # not numeric: try a date next
                 # Check if date
                 try:
                     pd.to_datetime(df[col].dropna())
-                    potential_issues.append(f"Column **'{col}'** is type 'Object' but looks like a Date.")
+                    potential_issues.append(f"Column {as_code(col)} is type 'Object' but looks like a Date.")
                     continue
                 except Exception:
                     pass  # not a date either: the column is genuinely text

@@ -586,7 +586,7 @@ class DataQualityAuditor:
             
             msg = "Your dataset has missing values."
             if top_missing:
-                msg += f" Top columns with missing data: **{', '.join(top_missing)}**."
+                msg += f" Top columns with missing data: {', '.join(as_code(c) for c in top_missing)}."
             msg += " Consider using **Imputation** (Mean, Median, or MICE) in the 'Handle Missing Values' section."
             
             self.advice.append({
@@ -622,7 +622,7 @@ class DataQualityAuditor:
             
             msg = "Detected potential outliers in numerical columns."
             if top_outliers:
-                msg += f" Top affected columns: **{', '.join(top_outliers)}**."
+                msg += f" Top affected columns: {', '.join(as_code(c) for c in top_outliers)}."
             msg += " Use the **Outlier Detection** module to inspect and handle them (Clip or Remove)."
 
             self.advice.append({

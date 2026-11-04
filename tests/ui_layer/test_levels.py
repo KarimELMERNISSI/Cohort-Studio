@@ -105,3 +105,22 @@ def test_another_grouping_variable_starts_with_all_its_groups() -> None:
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     assert len(at.multiselect(key="t_selected_groups::sex").value) == 10
     assert CLEAN.format("`sex`", "`sex_clean`") in at.warning[0].value
+
+
+def _crafted_script() -> None:
+    from ui.components.levels import level_warning
+
+    level_warning("sex", ["F` [x](https://example.org) `", "f` [x](https://example.org) `", "M"])
+
+
+def test_a_value_holding_a_backtick_stays_inside_its_code_span() -> None:
+    """The examples were written in backticks by hand: a value holding one left the code span, and its Markdown became
+    a live link (an image would be fetched as the page is drawn)."""
+    import re
+
+    at = AppTest.from_function(_crafted_script, default_timeout=60)
+    at.run()
+    assert not at.exception
+    (warning,) = at.warning
+    assert "[x](https://example.org)" in warning.value
+    assert "](https://" not in re.sub(r"`[^`]*`", "", warning.value)

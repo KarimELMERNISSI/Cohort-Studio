@@ -323,3 +323,15 @@ def test_the_uniformity_advice_points_to_the_clean_page_and_quotes_names_as_code
         "Clean them on Data > Clean > Categories, each into a copy beside it; the original is kept."
     )
     assert "normaliz" not in message and "**" not in message
+
+
+def test_the_completeness_advice_quotes_a_column_name_as_code() -> None:
+    """The names were set in bold: a header written as a link became one on the dashboard."""
+    import re
+
+    frame = pd.DataFrame({"[x](https://example.org)": [1.0, None, 3.0, None], "age": [30, 40, 50, 60]})
+    auditor = DataQualityAuditor(frame)
+    auditor.run_audit()
+    (advice,) = [a for a in auditor.advice if a["category"] == "Completeness"]
+    assert "Top columns with missing data: `[x](https://example.org)`." in advice["message"]
+    assert "](https://" not in re.sub(r"`[^`]*`", "", advice["message"])
