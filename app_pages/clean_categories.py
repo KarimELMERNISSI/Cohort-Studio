@@ -71,7 +71,7 @@ from enrich.recode import (
     plan,
     recode_column,
     recoded_columns,
-    recoded_fps,
+    recoded_records,
     recorded,
     replaceable,
     resolve,
@@ -930,9 +930,9 @@ def _blocked(
         last, df, column
     ):  # a later step changed the source: written again, not "nothing"
         return ""
-    if last is not None and last.get("target_fp") == frame_fingerprint(df[[target]]):
-        # the copy is what that recode wrote: the same values and the same record (what missing means, why values are
-        # grouped, who proposed) would write nothing new
+    if last is not None and replaceable(df, steps, column, target):
+        # the copy is what that recode wrote (a freeze since removed rows from both alike): the same values and the
+        # same record (what missing means, why values are grouped, who proposed) would write nothing new
         then = choices_of(last)
         before = outcome(counts, then["mapping"], then["meanings"], kept=then["kept"])
         same = before == outcome(counts, record[0], record[3], kept=record[2])
@@ -1340,6 +1340,21 @@ def _choice_label(c: Candidate) -> str:
     return f"{c.column} · {', '.join(said)}"
 
 
+def clean_candidates(state) -> list[Candidate]:
+    """The variables Clean lists for the data as they are, with their copies and whether each copy follows its source:
+    one computation, kept until the data or the copies change, which Validate's line above its tabs reads too (the two
+    pages share the memo, so neither may fill it with less)."""
+    df = state.base
+    if df is None:
+        return []
+    steps = state.transformation_manager.history
+    recoded, records = recoded_columns(steps), recoded_records(steps)
+    key = json.dumps(
+        [recoded, records], sort_keys=True, default=str
+    )  # the copies and their last records
+    return state.session.memo("clean_candidates", key, lambda: candidates(df, recoded, records))
+
+
 def render_categories() -> None:
     """The Categories tab: a variable and the new column's name on one row, then its editor."""
     state = get_state()
@@ -1347,10 +1362,7 @@ def render_categories() -> None:
     if df is None:
         return
     done = st.session_state.pop(DONE, None)
-    steps = state.transformation_manager.history
-    found = state.session.memo(
-        "clean_candidates", None, lambda: candidates(df, recoded_columns(steps), recoded_fps(steps))
-    )
+    found = clean_candidates(state)
     codes = numeric_codes(df)
     if not found:
         st.caption(f"No text column holds 2 to {MAX_VALUES} values: nothing to clean here.")

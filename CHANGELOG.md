@@ -1380,7 +1380,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **A copy a later step left behind.** When an imputation or a merge changes the source after its copy was written,
   the page says so ("sex changed since sex_clean was written (a later step): write it again to bring those rows in"),
   the list reads "cleaned into sex_clean, which no longer follows it", and Write again is on: it said "Nothing
-  changed". The recode records a fingerprint of its source for this.
+  changed". The recode records a fingerprint of its source for this. A freeze (Keep only these rows) or a change of
+  the source's type leaves the copy as it should be, and says nothing: the copy follows its source when the recorded
+  recode of the source as it is gives the copy as it is. The list says so whichever page was opened first: Validate's
+  line above its tabs filled the same list without it.
 - **Choices dropped when a step changes the values** are said, with how many and the step, until the next choice;
   a grouping recorded before that no longer groups anything is recorded as a choice; the AI engine's caption says
   that the rules' own offers come below its group.

@@ -1379,24 +1379,41 @@ def recoded_columns(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     return out
 
 
-def recoded_fps(steps: Iterable[Mapping[str, Any]]) -> dict[str, str]:
-    """Each column recoded in a trace's steps -> the fingerprint of the column when its last recode was written ("" for
-    a record that keeps none)."""
-    out: dict[str, str] = {}
+def recoded_records(steps: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each column recoded in a trace's steps -> the parameters of its last recode, which say whether its copy still
+    follows it (:func:`follows`)."""
+    out: dict[str, dict[str, Any]] = {}
     for step in steps:
         if step.get("function") == "recode_levels":
             params = step.get("params") or {}
-            out[str(params.get("source"))] = str(params.get("source_fp") or "")
+            out[str(params.get("source"))] = dict(params)
     return out
 
 
 def follows(record: Mapping[str, Any] | None, df: pd.DataFrame, column: str) -> bool:
-    """Whether a recode's copy was written from the column as it is: False when a later step changed it since (an
-    imputation, a merge's rows), so that the copy no longer follows it; True when the record keeps no fingerprint of
-    it (written before it was recorded). The values' fingerprint would not do: a row moved from one value to another
-    keeps the same values."""
+    """Whether a recode's copy follows the column as it is: False when a later step changed rows of it since (an
+    imputation, a merge's rows) that the copy does not have yet; True when the record keeps no fingerprint of it
+    (written before it was recorded), when the column is unchanged, or when the record's recode of the column as it is
+    gives the copy as it is (a freeze removed rows from both; a change of type kept the values). The values'
+    fingerprint would not do: a row moved from one value to another keeps the same values."""
     recorded = (record or {}).get("source_fp")
-    return not recorded or column not in df.columns or recorded == frame_fingerprint(df[[column]])
+    if not recorded or column not in df.columns or recorded == frame_fingerprint(df[[column]]):
+        return True
+    target = (record or {}).get("target")
+    if not target or target not in df.columns:
+        return False
+    try:
+        again, _ = recode_column(
+            df,
+            column,
+            str(target),
+            (record or {}).get("mapping") or {},
+            kept=(record or {}).get("kept") or (),
+            replaces=True,
+        )
+    except ValueError:
+        return False
+    return bool(again[target].equals(df[target]))
 
 
 def last_record(
@@ -1500,14 +1517,15 @@ def numeric_codes(df: pd.DataFrame) -> list[str]:
 def candidates(
     df: pd.DataFrame,
     recoded: Mapping[str, str] | None = None,
-    recorded_fps: Mapping[str, str] | None = None,
+    records: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[Candidate]:
     """
     The text and categorical columns with 2 to :data:`MAX_VALUES` values as written, the copies ``recoded`` names
     (source -> copy) left out: those with values to check first, then those with extra spaces only, then the cleaned
     ones, then the others, each in the dataset's order. The count of values to check holds every offer the page makes,
     variants and close spellings included (rapidfuzz keeps the two-by-two comparison to milliseconds); the values
-    written with extra spaces, which the fold collapses with nothing to check, are counted apart.
+    written with extra spaces, which the fold collapses with nothing to check, are counted apart. ``records`` (source
+    -> its last recode's parameters, :func:`recoded_records`) say whether each copy still follows its source.
     """
     recoded = {s: t for s, t in (recoded or {}).items() if s in df.columns and t in df.columns}
     copies = set(recoded.values())
@@ -1526,7 +1544,6 @@ def candidates(
             continue
         hints = suggest(counts)  # variants and close spellings too: what the page will offer
         into = recoded.get(str(column), "")
-        recorded = (recorded_fps or {}).get(str(column))
         found.append(
             (
                 position,
@@ -1536,7 +1553,7 @@ def candidates(
                     len(hints.offers),
                     into,
                     spaced=len(hints.spellings),
-                    follows=not (into and recorded) or recorded == frame_fingerprint(df[[column]]),
+                    follows=not into or follows((records or {}).get(str(column)), df, str(column)),
                 ),
             )
         )
@@ -1596,7 +1613,7 @@ __all__ = [
     "recode",
     "recode_column",
     "recoded_columns",
-    "recoded_fps",
+    "recoded_records",
     "recorded",
     "replaceable",
     "report_params",

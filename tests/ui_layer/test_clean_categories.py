@@ -115,6 +115,15 @@ def _app(frame: dict, other: dict | None = None, ai: dict | None = None) -> None
         state.commit_change(
             changed, "targeted_imputation", {"target_variable": "sex"}, "Filled sex"
         )
+    if st.session_state.pop(
+        "freeze", False
+    ):  # Keep only these rows: two rows leave the source and its copy alike
+        state.commit_change(
+            state.base.iloc[2:].copy(),
+            "freeze_population",
+            {"n_before": len(state.base), "n_after": len(state.base) - 2},
+            "Kept the analysis population as the dataset",
+        )
     if st.session_state.pop("change_copy", False):  # a later step that fills a value of the copy
         changed = state.base.copy()
         changed.loc[changed.index[-1], "sex_clean"] = "F"
@@ -952,6 +961,27 @@ def test_a_copy_a_later_step_left_behind_its_source_is_said_and_written_again() 
     assert "which no longer follows it" not in _one(at.selectbox, "clean_variable::").format_func(
         "sex"
     )
+
+
+def test_a_freeze_leaves_a_copy_following_its_source() -> None:
+    """Keep only these rows removes rows from the source and its copy alike: the page said that sex "changed since
+    sex_clean was written", the list that the copy no longer followed it, and writing again recorded "the corrected
+    choices" though none was corrected."""
+    at = _open({"sex": SEX})
+    _set_to_missing(at, ["n.a.", "unknown"], UNKNOWN)
+    at.button(key="clean_apply::sex").click().run()
+    _ok(at)
+    steps = len(at.session_state["transformation_manager"].history)
+    at.session_state["freeze"] = True
+    at.run()
+    _ok(at)
+    assert not any("changed since" in i.value for i in at.info)
+    assert "which no longer follows it" not in _one(at.selectbox, "clean_variable::").format_func(
+        "sex"
+    )
+    assert at.button(key="clean_apply::sex").disabled
+    assert any("Nothing changed since `sex_clean` was written" in c.value for c in at.caption)
+    assert len(at.session_state["transformation_manager"].history) == steps + 1  # the freeze only
 
 
 def test_a_grouping_that_no_longer_groups_is_recorded_as_a_choice() -> None:

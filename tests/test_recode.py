@@ -731,6 +731,37 @@ def test_the_step_replays_the_fold_and_says_when_the_column_holds_values_it_did_
     assert len(swapped.warnings) == 1 and "F  " not in swapped.warnings[0]
 
 
+def test_a_copy_follows_its_source_after_a_freeze_and_not_after_a_changed_row() -> None:
+    """A freeze removes rows from the source and its copy alike: the source's fingerprint changes, yet the copy holds
+    what the recode gives, and Clean said it no longer followed and offered to write it again for nothing. Only a row
+    the copy has not got yet (a value filled later) leaves it behind."""
+    from core.fingerprint import frame_fingerprint
+    from enrich.recode import follows
+
+    df = pd.DataFrame({"sex": ["F"] * 6 + ["Female", "n.a."] + ["M"] * 6})
+    mapping = {"Female": "F", "n.a.": None}
+    written, _ = recode_column(df, "sex", "sex_clean", mapping)
+    record = {
+        "source": "sex",
+        "target": "sex_clean",
+        "mapping": mapping,
+        "kept": [],
+        "source_fp": frame_fingerprint(df[["sex"]]),
+    }
+    assert follows(record, written, "sex")
+    assert follows(record, written.iloc[2:], "sex")  # a freeze keeps a population
+    assert follows(
+        record, written.astype({"sex": "category"}), "sex"
+    )  # another type, the same values
+    filled = written.copy()
+    filled.loc[7, "sex"] = "F"  # the n.a. filled later: the copy still has it missing
+    assert not follows(record, filled, "sex")
+    assert not follows(record, filled.drop(columns=["sex_clean"]), "sex")  # no copy to compare
+    assert follows(
+        {k: v for k, v in record.items() if k != "source_fp"}, filled, "sex"
+    )  # written before
+
+
 def test_a_corrected_record_is_no_change_of_the_data_and_the_replay_checks_it() -> None:
     """The choices corrected while the copy keeps its values (what missing means): the step is recorded with the data's
     fingerprint in and out, so the workflow counts no new revision and marks no result out of date, and the replay

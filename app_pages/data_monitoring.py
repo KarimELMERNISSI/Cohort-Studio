@@ -11,6 +11,7 @@ import streamlit as st
 import biostats.outliers as mo
 import monitor.changes as mc
 import utils.clustering_utils as cu
+from app_pages.clean_categories import clean_candidates
 from app_pages.data_quality_dashboard import render_dashboard
 from app_pages.validate_dates import date_candidates, dates_found
 from core.criteria import (
@@ -38,7 +39,6 @@ from core.population import (
     rules_population,
 )
 from core.registry import as_code
-from enrich.recode import candidates, recoded_columns
 from ingest.analyzer import DataAnalyzer
 from ingest.loaders import UPLOAD_TYPES
 from ui.components import no_dataset, page_link
@@ -1917,10 +1917,8 @@ def app():
     # the variables with values to check (written several ways, codes for unknown), both kept until the data change
     state = get_state()
     if state.base is not None:
-        base = state.base
         n = len(date_candidates(state))
-        recoded = recoded_columns(state.transformation_manager.history)
-        found = state.session.memo("clean_candidates", None, lambda: candidates(base, recoded))
+        found = clean_candidates(state)  # Clean's own list, as it lists it
         written = sum(1 for c in found if c.to_check and not c.cleaned_into)
         # extra spaces split a level in two in an analysis, with nothing to check: said apart
         spaced = sum(1 for c in found if c.spaced and not c.to_check and not c.cleaned_into)
