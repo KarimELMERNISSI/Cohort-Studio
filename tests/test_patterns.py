@@ -12,7 +12,6 @@ import time
 
 import pytest
 
-import enrich.patterns as patterns
 from enrich.patterns import MAX_LENGTH, PatternError, matching
 
 VALUES = [
@@ -110,7 +109,7 @@ def test_a_slow_start_is_the_server_s_not_the_pattern_s(monkeypatch: pytest.Monk
     def refused(*args, **kwargs):
         raise OSError("no interpreter")
 
-    monkeypatch.setattr(patterns.subprocess, "Popen", refused)
+    monkeypatch.setattr("enrich.patterns.subprocess.Popen", refused)
     with pytest.raises(PatternError, match="could not start"):
         matching("hyper", VALUES)
 
@@ -120,7 +119,7 @@ def test_a_process_that_ends_before_it_is_ready_is_the_server_s_fault(
 ) -> None:
     """A process that ended before its ready byte (an interpreter that cannot start) was answered "could not be made on
     these values": the values were never read."""
-    monkeypatch.setattr(patterns, "_MATCHER", "import sys; sys.exit(3)")
+    monkeypatch.setattr("enrich.patterns._MATCHER", "import sys; sys.exit(3)")
     with pytest.raises(PatternError, match="could not start on this server"):
         matching("hyper", VALUES)
 
@@ -152,6 +151,6 @@ def test_the_search_process_gets_no_environment(monkeypatch: pytest.MonkeyPatch)
         return real(*args, **kwargs)
 
     monkeypatch.setenv("CMP_TEST_SECRET", "never-there")
-    monkeypatch.setattr(patterns.subprocess, "Popen", watched)
+    monkeypatch.setattr("enrich.patterns.subprocess.Popen", watched)
     assert matching("hyper", VALUES)
     assert "CMP_TEST_SECRET" not in seen and set(seen) <= {"__PYVENV_LAUNCHER__"}

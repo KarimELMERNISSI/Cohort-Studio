@@ -445,7 +445,7 @@ def _links_script(kinds: dict) -> None:
 
 
 def test_free_text_is_linked_to_the_formulas_and_the_rest_to_clean() -> None:
-    from explore.data_quality_auditor import COPY_KEEPS, FORMULA, TO_CLEAN
+    import explore.data_quality_auditor as dqa
 
     def links(kinds: dict) -> list[str]:
         at = AppTest.from_function(_links_script, kwargs={"kinds": kinds}, default_timeout=60)
@@ -453,9 +453,9 @@ def test_free_text_is_linked_to_the_formulas_and_the_rest_to_clean() -> None:
         assert not at.exception, [str(e.value) for e in at.exception]
         return [c.value for c in at.caption]  # a link outside the navigation (bare mode)
 
-    assert links({FORMULA: ["comment"]}) == ["-> Create New Variables"]
-    assert links({TO_CLEAN: ["site"], FORMULA: ["comment"]}) == [
+    assert links({dqa.FORMULA: ["comment"]}) == ["-> Create New Variables"]
+    assert links({dqa.TO_CLEAN: ["site"], dqa.FORMULA: ["comment"]}) == [
         "-> Clean categories",
         "-> Create New Variables",
     ]
-    assert links({COPY_KEEPS: ["site_clean"]}) == ["-> Clean categories"]
+    assert links({dqa.COPY_KEEPS: ["site_clean"]}) == ["-> Clean categories"]
