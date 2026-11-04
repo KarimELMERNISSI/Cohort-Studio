@@ -552,12 +552,20 @@ def _offer_groups(
 
 
 def category_editor(
-    state, df: pd.DataFrame, column: str, *, header: Any = None, done: str | None = None
+    state,
+    df: pd.DataFrame,
+    column: str,
+    *,
+    header: Any = None,
+    done: str | None = None,
+    host: str = "page",
 ) -> None:
     """The editor of one variable's values: the offers, what each value becomes, a preview, and Apply. ``header``:
-    the container beside the variable's choice that holds the new column's name."""
+    the container beside the variable's choice that holds the new column's name. ``host``: where it is drawn, the Clean
+    page or an analysis page's dialog (app_pages.clean_dialog); the choices are the variable's, wherever they were
+    made, but each host's widgets have keys of their own, so that the table's memory of its edits never crosses."""
     steps = state.transformation_manager.history
-    scope = _scope(state)
+    scope = _scope(state) if host == "page" else f"{_scope(state)}::{host}"
     counts = level_counts(df[column])
     hints = suggest(counts)
     spellings = hints.spellings
@@ -821,7 +829,12 @@ def category_editor(
                 else f"Add {plain(target)} ({plain(column)} kept)"
             )
             applied = st.button(
-                label, key=f"clean_apply::{column}", type="primary", disabled=bool(blocked)
+                label,
+                key=f"clean_apply::{column}"
+                if host == "page"
+                else f"clean_apply::{host}::{column}",
+                type="primary",
+                disabled=bool(blocked),
             )
         if done:  # what Apply did, then why it waits now ("Nothing changed since")
             st.success(done, icon=":material/check:")

@@ -23,6 +23,7 @@ from app_pages.analysis_guidance_ui import (
     render_plan,
     render_test_note,
 )
+from app_pages.clean_dialog import group_warning
 from biostats.multiplicity import adjust as adjust_pvalues
 from biostats.power import (
     ARE_NORMAL,
@@ -37,7 +38,7 @@ from biostats.power import (
 from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
 from ui.components import error_card, no_dataset, result_card
-from ui.components.levels import level_warning, show_level
+from ui.components.levels import show_level
 from ui.components.text import plain
 from ui.guidance.analysis import (
     HELP,
@@ -2251,7 +2252,9 @@ def run_power_analysis(df, analyzer):
                 # one choice per grouping variable: with one key, the next variable's list started empty
                 persist_state="page", key=f"power_selected_groups::{group_col_power}"
             )
-            level_warning(group_col_power, unique_groups)
+            group_warning(
+                group_col_power, unique_groups, group_key="power_group_col", groupable=potential_groupers
+            )
 
         # Track changes to trigger updates
         if 'last_power_selected_groups' not in st.session_state:

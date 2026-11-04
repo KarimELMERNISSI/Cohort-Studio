@@ -23,6 +23,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from app_pages.clean_dialog import group_warning
 from biostats.contingency import (
     TwoByTwo,
     analyze_twobytwo,
@@ -36,7 +37,7 @@ from biostats.mi import analyze_mi, not_poolable
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
 from biostats.multiplicity import adjust as adjust_pvalues
 from ui.components import error_card, result_card
-from ui.components.levels import level_warning, show_level
+from ui.components.levels import show_level
 from ui.components.mi_mode import mi_token, show_mi_notes, show_pooled_terms, show_tests
 from ui.progress import mark_step
 from ui.results import provenance, recall, remember
@@ -440,7 +441,7 @@ def run_pooled_comparison(mi, analyzer) -> None:
                 format_func=show_level,  # "Luxembourg " and "Luxembourg" are two groups: show the space
                 persist_state="page", key=f"mi_cmp_levels::{group}",
             )
-            level_warning(group, all_levels)
+            group_warning(group, all_levels, group_key="mi_cmp_group", groupable=groupers, imputed=True)
         candidates = [c for c in [*numeric, *categorical] if c != group]
         targets = c2.multiselect(
             "Variables to compare",

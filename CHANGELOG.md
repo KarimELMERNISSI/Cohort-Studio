@@ -1416,6 +1416,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   they now say to clean the variable on Data > Clean > Categories, into a copy beside it, and use the copy. The
   dashboard's Uniformity advice names its columns as code, says the same, and links to Clean's Categories tab, as
   does its Uniformity panel.
+- **Cleaned where it is analysed.** The warning under a list of groups (two-group tests, the pooled comparison over
+  imputed datasets, the power analysis) offers "Clean `site` here": Data > Clean's editor opens in a dialog, so the
+  analysis page keeps its choices; Apply writes the copy and closes it, and the warning then offers "Group by
+  `site_clean`", which sets the page's grouping. The pooled comparison says instead that a copy written after the
+  imputation needs it run again, and a variable that Clean does not list (more than 200 values) is said so. Grouped
+  by a copy whose values still differ, the dialog opens its source.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

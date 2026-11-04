@@ -58,12 +58,13 @@ def _where(key: str, tab: str) -> str:
 CLEAN_WHERE = _where("clean", "categories")
 
 
-def level_warning(column: Any, values: Iterable[Any]) -> None:
+def level_warning(column: Any, values: Iterable[Any]) -> bool:
     """Warns when levels of ``column`` differ only by spaces or capitals: each is analysed as a separate group, until
-    the variable is cleaned on Data > Clean (a copy beside it, which the analysis can then group by)."""
+    the variable is cleaned on Data > Clean (a copy beside it, which the analysis can then group by). Whether it
+    warned: the analysis pages then offer to clean it there (app_pages.clean_dialog.group_warning)."""
     alike = alike_levels(values)
     if not alike:
-        return
+        return False
     # as code: a value is the data's text, and a backtick in it would end a code span written by hand
     examples = "; ".join(", ".join(as_code(show_level(v)) for v in found) for found in alike[:3])
     more = f" and {len(alike) - 3} more" if len(alike) > 3 else ""
@@ -74,6 +75,7 @@ def level_warning(column: Any, values: Iterable[Any]) -> None:
         f"{as_code(f'{column}_clean')} unless you name it otherwise, and you then group by the copy.",
         icon=":material/spellcheck:",
     )
+    return True
 
 
 __all__ = ["CLEAN_WHERE", "alike_levels", "level_warning", "show_level"]

@@ -2,8 +2,9 @@
 
 import streamlit as st
 
+from app_pages.clean_dialog import group_warning
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
-from ui.components.levels import level_warning, show_level
+from ui.components.levels import show_level
 from ui.guidance.analysis import HELP
 
 
@@ -76,7 +77,10 @@ def render_analysis_configuration(df, numeric_cols, categorical_cols, binary_col
                 persist_state="page", key=f"{key_prefix}target_cols"
             )
 
-        level_warning(group_col, unique_groups)  # full width, under the choice of groups
+        # full width, under the choice of groups; cleaned here in a dialog, or grouped by its clean copy
+        group_warning(
+            group_col, unique_groups, group_key=f"{key_prefix}group_col", groupable=group_col_options
+        )
 
         # Global Test Preference
         col3, col4 = st.columns(2)
