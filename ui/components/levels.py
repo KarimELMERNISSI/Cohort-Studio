@@ -17,6 +17,7 @@ from typing import Any
 import streamlit as st
 
 from core.registry import as_code
+from enrich.recode import case_coded
 from ui import nav
 
 # what a browser hides: spaces at either end, runs of spaces, and whitespace other than a plain space
@@ -37,6 +38,13 @@ def show_level(value: Any) -> str:
 
 def _key(value: Any) -> str:
     return " ".join(str(value).split()).casefold()
+
+
+def cased_levels(alike: Iterable[Iterable[Any]]) -> list[Any]:
+    """The levels of the sets of :func:`alike_levels` that differ by capitals, not by spaces alone."""
+    return [
+        v for found in alike if len({" ".join(str(v).split()) for v in found}) > 1 for v in found
+    ]
 
 
 def alike_levels(values: Iterable[Any]) -> list[list[Any]]:
@@ -62,11 +70,14 @@ def level_warning(
     ``follows``: it was written from the values ``source`` holds now. Whether it warned: the analysis pages then offer
     to clean it there, or to group by the copy (app_pages.clean_dialog.group_warning).
     """
-    alike = alike_levels(values)
+    levels = list(values)
+    alike = alike_levels(levels)
     if not alike:
         return False
     # as code: a value is the data's text, and a backtick in it would end a code span written by hand
     examples = "; ".join(", ".join(as_code(show_level(v)) for v in found) for found in alike[:3])
+    # Kell's K and k, Rh's CcDee and ccdee: capitals that may name categories, which Clean asks about before merging
+    coded = case_coded(levels, cased_levels(alike))
     more = f" and {len(alike) - 3} more" if len(alike) > 3 else ""
     name, cleaned, original = as_code(column), as_code(copy), as_code(source or column)
     # each says what the button below it does (app_pages.clean_dialog.clean_actions): following a sentence that named
@@ -88,12 +99,17 @@ def level_warning(
             f"To merge them, clean {name} into a copy beside it ({as_code(f'{column}_clean')} unless you name it "
             "otherwise), then group by the copy."
         )
+    caution = (
+        " In codes, capitals can name categories (Kell's K and k, Rh's CcDee and ccdee): check them before merging."
+        if coded
+        else ""
+    )
     st.warning(
         f"Some groups of {name} differ only by spaces (␣) or capitals: {examples}{more}. Each is analysed as a "
-        f"separate group. {then}",
+        f"separate group.{caution} {then}",
         icon=":material/spellcheck:",
     )
     return True
 
 
-__all__ = ["CLEAN_WHERE", "alike_levels", "level_warning", "show_level"]
+__all__ = ["CLEAN_WHERE", "alike_levels", "cased_levels", "level_warning", "show_level"]

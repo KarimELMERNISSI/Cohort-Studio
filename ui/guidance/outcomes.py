@@ -238,17 +238,25 @@ def _spellings(col: str, values: pd.Series) -> Advice | None:
     """One value written several ways (spaces, capitals): each is a level of its own, as the lists show them, until the
     variable is cleaned into a copy beside it, which the analysis then uses. The page says below it what can be done,
     by the variable's state (app_pages.clean_dialog.clean_actions: clean it here, use its copy, clean it again)."""
-    from ui.components.levels import alike_levels
+    from enrich.recode import case_coded
+    from ui.components.levels import alike_levels, cased_levels
 
-    alike = alike_levels(sorted(values.dropna().astype(str).unique()))
+    levels = sorted(values.dropna().astype(str).unique())
+    alike = alike_levels(levels)
     if not alike:
         return None
     shown = "; ".join(_some(found, 3) for found in alike[:3])
+    # Kell's K and k are two antigens: values that differ by capitals in codes are not said to be one value
+    held = (
+        f"holds values written alike ({shown}), and in codes capitals can name categories (Kell's K and k, Rh's "
+        "CcDee and ccdee): check them before merging. Each is a group of its own"
+        if case_coded(levels, cased_levels(alike))
+        else f"holds one value written several ways ({shown}): each is a group of its own"
+    )
     return Advice(
         "caution",
-        f"{as_code(col)} holds one value written several ways ({shown}): each is a group of its own until the "
-        f"variable is cleaned into a copy beside it ({as_code(f'{col}_clean')} unless you name it otherwise), which "
-        "the analysis then uses.",
+        f"{as_code(col)} {held} until the variable is cleaned into a copy beside it ({as_code(f'{col}_clean')} unless "
+        "you name it otherwise), which the analysis then uses.",
         column=str(col),
     )
 

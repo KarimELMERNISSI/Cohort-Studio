@@ -228,7 +228,7 @@ def test_the_survival_plan_offers_to_clean_a_covariate_then_to_use_its_copy() ->
     at = AppTest.from_function(_plan_script, default_timeout=60)
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    assert any("`sex` holds one value written several ways" in m.value for m in at.markdown)
+    assert any("`sex` holds values written alike" in m.value for m in at.markdown)  # F and f: asked
     assert "clean_open::surv_adjust::sex" in {b.key for b in at.button}
     with_copy = AppTest.from_function(_plan_script, kwargs={"with_copy": True}, default_timeout=60)
     with_copy.run()

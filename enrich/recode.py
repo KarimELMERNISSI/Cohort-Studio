@@ -420,6 +420,17 @@ def _case_coded(counts: Mapping[str, int]) -> bool:
     )
 
 
+def case_coded(levels: Iterable[Any], cased: Iterable[Any] = ()) -> bool:
+    """Whether capitals may name categories among a variable's ``levels``: it writes case in its codes (a capital
+    right after a lower-case letter, a letter beside its other case: CcDee, HFmrEF, Kk), or levels that differ only by
+    capitals (``cased``) are single letters (Kell's K and k). Data > Clean then asks why before merging them, never
+    merges them by itself (``_case_safe``)."""
+    texts = [str(v) for v in levels]
+    return _case_coded(dict.fromkeys(texts, 0)) or any(
+        len(str(v).strip()) == 1 and str(v).strip().isalpha() for v in cased
+    )
+
+
 def _case_safe(variant: str, target: str, held: Mapping[str, int], coded: bool) -> bool:
     """
     Whether a case variant is its target's word written another way: each word whose case differs holds 4 letters
@@ -1626,6 +1637,7 @@ __all__ = [
     "ai_offers",
     "ai_tally",
     "candidates",
+    "case_coded",
     "changes",
     "choices_of",
     "clean_copies",

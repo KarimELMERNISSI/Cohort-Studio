@@ -31,6 +31,7 @@ from app_pages.clean_categories import take_done
 from app_pages.clean_dialog import clean_actions
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import EVENT_WORDS, compare_survival, cox_regression
+from enrich.recode import MAX_VALUES
 from ui.components import error_card, glossary_popover, page_link, status_chip
 from ui.components.mi_mode import mi_token
 from ui.components.text import plain
@@ -75,10 +76,16 @@ _STATUS = {
 
 
 def _group_candidates(df: pd.DataFrame, analyzer, max_levels: int = 8) -> list[str]:
+    """The variables a model can compare by or adjust for: 2 to ``max_levels`` values (a number, 3 at most). A text
+    variable's values are counted with spaces and capitals set aside, as Data > Clean merges its spellings: the
+    tutorial's `sex`, written 10 ways, holds 4 values so, and is offered, its plan then offering to clean it."""
     numeric = set(analyzer.numeric_cols)
     out = []
     for col in df.columns:
-        n = int(df[col].nunique(dropna=True))
+        values = df[col].dropna()
+        n = int(values.nunique())
+        if col not in numeric and max_levels < n <= MAX_VALUES:
+            n = len({" ".join(str(v).split()).casefold() for v in values.unique()})
         if 2 <= n <= max_levels and (col not in numeric or n <= 3):
             out.append(col)
     return out

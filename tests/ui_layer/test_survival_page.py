@@ -267,3 +267,19 @@ def test_the_plan_offers_to_clean_a_variable_once_whichever_steps_read_it(
     _ok(at)
     opened = [b for b in at.button if str(b.key).startswith("clean_open::")]
     assert [b.key for b in opened] == ["clean_open::surv_group::site"]
+
+
+def test_a_text_variable_written_several_ways_is_offered_by_its_values_set_aside_spaces_and_capitals() -> (
+    None
+):
+    """The tutorial's `sex` holds 10 spellings of 4 values, more than the 8 a model offers: it was in neither "Compare
+    by" nor "Adjust for", and its plan could never offer to clean it. A column of names is still left out."""
+    import pandas as pd
+
+    from ingest.analyzer import DataAnalyzer
+    from ui.state import TUTORIAL_COHORT_PATH
+
+    df = pd.read_csv(TUTORIAL_COHORT_PATH)
+    df["name"] = [f"Person {i}" for i in range(len(df))]
+    offered = page._group_candidates(df, DataAnalyzer(df))
+    assert {"sex", "site"} <= set(offered) and "name" not in offered

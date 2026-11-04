@@ -38,6 +38,7 @@ from pathlib import Path
 # app_pages to 64 at 66.0 with the tests of the Categories page's table, AI popover and corrected records (M6,
 # 2026-11-02).
 # explore to 82 at 84.2 with the tests of Uniformity's cleaned copies and of what each flagged column needs (2026-11-04).
+# ui to 87 at 89.0 with the tests of the warnings' words, Settings' silent server and the plans (2026-11-04).
 FLOORS: dict[str, float] = {
     "app_pages": 64.0,
     "biostats": 93.0,
@@ -49,7 +50,7 @@ FLOORS: dict[str, float] = {
     "manage": 77.0,
     "monitor": 6.0,
     "prompts": 85.0,
-    "ui": 85.0,
+    "ui": 87.0,
     "utils": 64.0,
 }
 MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised

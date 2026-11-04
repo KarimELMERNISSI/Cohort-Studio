@@ -234,13 +234,17 @@ def test_one_value_written_several_ways_is_named_before_the_cox_model_fails() ->
     )
     plan = plan_time_to_event(df, "fu_days", "death", "arm", ["hypertension", "sex"], group=True)
     caution = _advice(plan, "caution")
-    assert any(t.startswith("`sex` holds one value written several ways") for t in caution)
+    # single letters that differ by capitals (F and f): in codes they can be categories (Kell's K and k), so asked
+    assert any(
+        t.startswith("`sex` holds values written alike (") and "check them before merging" in t
+        for t in caution
+    )
     assert any("`F␣`" in t for t in caution)  # "F " reads as the lists show it, not as "F"
     # cleaned into a copy (an Enrich formula kept "f" and "female" apart), by the button the page draws below: the
     # advice names no page, which a user would leave the analysis for
     assert any(
-        "each is a group of its own until the variable is cleaned into a copy beside it (`sex_clean` unless you name "
-        "it otherwise), which the analysis then uses." in t
+        "is a group of its own until the variable is cleaned into a copy beside it (`sex_clean` unless you name it "
+        "otherwise), which the analysis then uses." in t
         for t in caution
     )
     assert not any("Data > Clean" in t for t in caution)
@@ -396,3 +400,21 @@ def test_a_variable_both_steps_read_is_advised_on_once() -> None:
     assert len(said(curves)) == len(said(model)) == 1 and said(curves) != said(model)
     both = plan_time_to_event(df, "fu_days", "death", "site", ["hba1c_pct"], group=True)
     assert said(both) == said(curves)  # the curves', read on the most rows
+
+
+def test_capitals_that_may_name_categories_are_never_said_to_be_one_value() -> None:
+    """Kell's K and k, Rh's CcDee and ccdee, were "one value written several ways"; words written in other cases
+    still are."""
+    from ui.guidance.outcomes import _spellings
+
+    kell = _spellings("kell", pd.Series(["K", "k", "K", "k"]))
+    rh = _spellings("rh", pd.Series(["CcDee", "ccdee", "CCDee", "ccDee"]))
+    site = _spellings("site", pd.Series(["Metz", "metz", "Metz "]))
+    assert kell is not None and rh is not None and site is not None
+    for advice in (kell, rh):
+        assert (
+            "holds values written alike" in advice.text
+            and "check them before merging" in advice.text
+        )
+        assert "one value" not in advice.text
+    assert site.text.startswith("`site` holds one value written several ways")

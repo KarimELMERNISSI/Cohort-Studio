@@ -159,3 +159,20 @@ def test_orientation_matches_the_page_tabs_and_help_texts_are_complete() -> None
     assert all(text.strip() for text in HELP.values()) and len(HELP) >= 45
     assert set(TEST_NOTES) >= {"Auto-Detect", "Student's t-test", "Welch's t-test", "Mann-Whitney U",
                                "ANOVA", "Kruskal-Wallis", "Chi-Square", "Fisher's Exact"}
+
+
+def test_a_test_not_computed_names_its_groups_of_one_value() -> None:
+    """F (490 rows) and M (710) beside six groups of one row read "fewer than two groups with two or more values":
+    the groups that hold one value are named, and how to leave them out."""
+    df = pd.DataFrame(
+        {
+            "sex": ["F"] * 40 + ["M"] * 40 + ["f", "m"],
+            "x": np.r_[rng.normal(10, 2, 80), [9.0, 11.0]],
+        }
+    )
+    plan = plan_group_comparison(
+        df, "sex", ["F", "M", "f", "m"], ["x"], numeric_cols=["x"], categorical_cols=[]
+    )
+    (test,) = [p for p in plan.tests if p.variable == "x"]
+    assert test.test == "not computed"
+    assert test.reason == "one value in f, m, where a test needs two or more per group: leave them out of the groups"

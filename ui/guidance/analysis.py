@@ -229,8 +229,22 @@ def _numeric_test(
         kind = "mannwhitney" if k == 2 else "kruskal"
         return DISPLAY_NAMES[kind], "rank-based family forced"
     groups = {g: v for g, v in groups_from_frame(df, group_col, target).items() if len(v) > 0}
-    if len(groups) < 2 or min(len(v) for v in groups.values()) < 2:
-        return "not computed", "fewer than two groups with two or more values"
+    if len(groups) < 2:
+        return "not computed", "fewer than two groups hold values"
+    single = [g for g, v in groups.items() if len(v) < 2]
+    if (
+        single
+    ):  # named: two groups of hundreds read "fewer than two groups" beside six groups of one value
+        from ui.components.levels import show_level
+
+        named = ", ".join(show_level(g) for g in single[:3]) + (
+            f" and {len(single) - 3} more" if len(single) > 3 else ""
+        )
+        them = "it" if len(single) == 1 else "them"
+        return (
+            "not computed",
+            f"one value in {named}, where a test needs two or more per group: leave {them} out of the groups",
+        )
     kind, reasons = recommend_kind(groups)
     if kind in ("welch", "student", "mannwhitney") and len(groups) > 2:
         kind = {"welch": "welch_anova", "student": "anova", "mannwhitney": "kruskal"}[kind]

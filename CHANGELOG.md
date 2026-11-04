@@ -1463,6 +1463,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   page's grouping; in the plan, the copy is offered with "Compare by", its field's name, and said to be the variable's
   once written. What Apply did is said under its own variable, and said too when it leaves no groups to warn of; a
   covariate whose clean copy is the comparison already is offered to leave the list, not to be read twice.
+- **Survival & regression offers a variable written several ways, and capitals that name categories are said so.** A
+  text variable's values are counted with spaces and capitals set aside for the 8 values a model offers: the
+  tutorial's `sex`, written 10 ways, was in neither "Compare by" nor "Adjust for", so its plan could never offer to
+  clean it. Where capitals may name categories (Kell's K and k, Rh's CcDee and ccdee, single letters), the groups'
+  warning and the plan's advice say so and ask to check them before merging, rather than calling them one value
+  written several ways. The Hypothesis tests plan names the groups that hold one value ("one value in f, m ...: leave
+  them out of the groups"), where it said "fewer than two groups with two or more values" beside two groups of
+  hundreds.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
