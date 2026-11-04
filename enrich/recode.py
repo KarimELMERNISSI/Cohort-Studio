@@ -981,7 +981,7 @@ def groupings(
     merged in one step or two; a new name given to one category's spellings is a relabel, and two categories under one
     new name a grouping.
     """
-    return {clean: members for clean, (members, _) in _grouped(counts, mapping, kept).items()}
+    return {clean: members for clean, (members, _, _) in _grouped(counts, mapping, kept).items()}
 
 
 def grouped_apart(
@@ -992,13 +992,26 @@ def grouped_apart(
 ) -> dict[str, list[str]]:
     """Of each grouping (:func:`groupings`), the spellings no offer relation joins to its clean value: what its
     question names (Why group Hypotension with Hypertension?), the spellings of the clean value apart."""
-    return {clean: apart for clean, (_, apart) in _grouped(counts, mapping, kept).items()}
+    return {clean: apart for clean, (_, apart, _) in _grouped(counts, mapping, kept).items()}
+
+
+def grouping_anchors(
+    counts: Mapping[str, int],
+    mapping: Mapping[str, str | None],
+    *,
+    kept: Collection[str] = (),
+) -> dict[str, str]:
+    """Of each grouping (:func:`groupings`), the spelling it is anchored on: its clean value when the column holds it,
+    else, for a new name, its most held spelling, a category of its own that its question names beside the new name
+    (Why group Hypotension with Hypertension, as BP disorder?), never among the spellings merged."""
+    return {clean: anchor for clean, (_, _, anchor) in _grouped(counts, mapping, kept).items()}
 
 
 def _grouped(
     counts: Mapping[str, int], mapping: Mapping[str, str | None], kept: Collection[str]
-) -> dict[str, tuple[list[str], list[str]]]:
-    """Each clean value that groups categories -> (the spellings it merges, those no offer relation joins to it)."""
+) -> dict[str, tuple[list[str], list[str], str]]:
+    """Each clean value that groups categories -> (the spellings it merges, those no offer relation joins to it, the
+    spelling they are tested against)."""
     spellings, kept = fold(counts), set(kept)
     held: dict[str, int] = defaultdict(int)
     for value, n in counts.items():
@@ -1014,7 +1027,7 @@ def _grouped(
         into[clean].add(spelling)
         if first is not None:
             chosen[clean].add(spelling)
-    found: dict[str, tuple[list[str], list[str]]] = {}
+    found: dict[str, tuple[list[str], list[str], str]] = {}
     for clean, members in into.items():
         own = _spaced(clean)
         anchor = own if own in held else max(members, key=lambda s: (held.get(s, 0), s))
@@ -1024,7 +1037,7 @@ def _grouped(
             if a != anchor and not _one_category(a, anchor, held, coded)
         )
         if apart:
-            found[clean] = (sorted(members), apart)
+            found[clean] = (sorted(members), apart, anchor)
     return found
 
 
@@ -1601,6 +1614,7 @@ __all__ = [
     "free_text",
     "give",
     "grouped_apart",
+    "grouping_anchors",
     "groupings",
     "keep_result",
     "last_record",

@@ -825,21 +825,35 @@ def test_a_dense_variable_s_chart_names_every_bar() -> None:
 def test_the_grouping_question_names_what_joins_which_value() -> None:
     from app_pages.clean_categories import _grouping_question
 
-    assert _grouping_question("Metz", ["Esch", "Luxembourg", "Metz"], ["Esch", "Luxembourg"]) == (
-        "Why group `Esch` and `Luxembourg` with `Metz`?"
+    question = _grouping_question(
+        "Metz", ["Esch", "Luxembourg", "Metz"], ["Esch", "Luxembourg"], "Metz"
     )
-    assert _grouping_question("Cardiovascular", ["Hypertension", "Stroke"], ["Stroke"]) == (
-        "Why group `Stroke` as `Cardiovascular`? Also merged, as its spellings: `Hypertension`."
+    assert question == "Why group `Esch` and `Luxembourg` with `Metz`?"
+    # a new name: the most held value is a category of its own, named with the new name, never as a spelling (it read
+    # "Why group Stroke as Cardiovascular? Also merged, as its spellings: Hypertension")
+    question = _grouping_question(
+        "Cardiovascular", ["Hypertension", "Stroke"], ["Stroke"], "Hypertension"
+    )
+    assert question == "Why group `Stroke` with `Hypertension`, as `Cardiovascular`?"
+    question = _grouping_question(
+        "Hypotension (low BP)",
+        ["Hypertension", "Hypertenson", "Hypotension"],
+        ["Hypotension"],
+        "Hypertension",
+    )
+    assert question == (
+        "Why group `Hypotension` with `Hypertension`, as `Hypotension (low BP)`? Also merged, as spellings of "
+        "`Hypertension`: `Hypertenson`."
     )
     # the neighbouring category first, the spellings apart: one answer is never read as the reason for both
     parts = ["HYPERTENSION", "Hypertension", "Hypertenson", "Hypotension", "hypertension"]
-    assert _grouping_question("Hypertension", parts, ["Hypotension"]) == (
+    assert _grouping_question("Hypertension", parts, ["Hypotension"], "Hypertension") == (
         "Why group `Hypotension` with `Hypertension`? Also merged, as its spellings: `HYPERTENSION`, `Hypertenson` "
         "and `hypertension`."
     )
     many = [f"v{i:02d}" for i in range(20)]
-    assert _grouping_question("Other", many, many).startswith(
-        "Why group `v00`, `v01`, `v02`, `v03`, `v04`, `v05` and 14 more as `Other`?"
+    assert _grouping_question("Other", many, many[1:], "v00").startswith(
+        "Why group `v01`, `v02`, `v03`, `v04`, `v05`, `v06` and 13 more with `v00`, as `Other`?"
     )
 
 

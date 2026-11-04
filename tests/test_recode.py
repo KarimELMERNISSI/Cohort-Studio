@@ -978,3 +978,8 @@ def test_each_spelling_is_tested_against_the_clean_value_it_ends_at() -> None:
     assert groupings(counts, relabel) == {}
     two = {**relabel, "Hypotension": "Arterial hypertension"}
     assert grouped_apart(counts, two) == {"Arterial hypertension": ["Hypotension"]}
+    # what each question is anchored on: the clean value the column holds, else, for a new name, the most held value
+    from enrich.recode import grouping_anchors
+
+    assert grouping_anchors(counts, with_hypotension) == {"Hypertension": "Hypertension"}
+    assert grouping_anchors(counts, two) == {"Arterial hypertension": "Hypertension"}

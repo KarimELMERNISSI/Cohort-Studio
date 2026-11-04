@@ -1377,7 +1377,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   own spelling, or for a new name the group's most held one), never against another value merged: two of the page's
   own offers for one word (a capitals variant and a close spelling) no longer ask why, in one step or two. A
   neighbouring category merged with them still does, and its question names it first (Why group Hypotension with
-  Hypertension? Also merged, as its spellings: ...), six values at most, then how many more.
+  Hypertension? Also merged, as its spellings: ...), six values at most, then how many more. For a new name, the most
+  held value is a category of its own, named with the new name and never as one of its spellings (Why group
+  Hypotension with Hypertension, as BP disorder?): 400 rows of hypertension renamed "Hypotension (low BP)" read as a
+  spelling.
 - **A copy a later step left behind.** When an imputation or a merge changes the source after its copy was written,
   the page says so ("sex changed since sex_clean was written (a later step): write it again to bring those rows in"),
   the list reads "cleaned into sex_clean, which no longer follows it", and Write again is on: it said "Nothing

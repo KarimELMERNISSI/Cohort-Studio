@@ -60,6 +60,7 @@ from enrich.recode import (
     free_text,
     give,
     grouped_apart,
+    grouping_anchors,
     groupings,
     keep_result,
     last_record,
@@ -796,6 +797,7 @@ def category_editor(
             record = None
         grouped = groupings(counts, record[0], kept=record[2]) if record is not None else {}
         apart = grouped_apart(counts, record[0], kept=record[2]) if record is not None else {}
+        anchors = grouping_anchors(counts, record[0], kept=record[2]) if record is not None else {}
         for clean in grouped:  # the reasons as typed in this run: the inputs come after Apply
             typed = st.session_state.get(f"clean_reason::{scope}::{column}::{clean}")
             if typed is not None:
@@ -850,7 +852,7 @@ def category_editor(
         }
         for clean, parts in grouped.items():
             reason = st.text_input(
-                _grouping_question(clean, parts, apart.get(clean, [])),
+                _grouping_question(clean, parts, apart.get(clean, []), anchors.get(clean, clean)),
                 value=choices["reasons"].get(clean, ""),
                 key=f"clean_reason::{scope}::{column}::{clean}",
                 max_chars=200,
@@ -881,17 +883,21 @@ def _named(values: list[str]) -> str:
     return listed[0] if len(listed) == 1 else f"{', '.join(listed[:-1])} and {listed[-1]}"
 
 
-def _grouping_question(clean: str, parts: list[str], apart: list[str]) -> str:
-    """Why values are grouped, naming first those that are no spelling of the clean value (Why group Hypotension with
-    Hypertension?), the spellings merged with them said apart, so that one answer is never read as the reason for
-    both. Those joining a value that keeps its name are grouped with it (Why group Esch and Luxembourg with Metz?);
-    otherwise, as the new name (Why group Stroke and Hypertension as Cardiovascular?)."""
-    joining = [p for p in parts if p != clean]
+def _grouping_question(clean: str, parts: list[str], apart: list[str], anchor: str) -> str:
+    """Why values are grouped, naming first those that are no spelling of the value the group is anchored on (Why group
+    Hypotension with Hypertension?), the anchor's spellings merged with them said apart, so that one answer is never
+    read as the reason for both. The anchor is the clean value when the column holds it (Why group Esch and Luxembourg
+    with Metz?); for a new name, the group's most held value, a category of its own, named with the new name and never
+    among the spellings (Why group Hypotension with Hypertension, as BP disorder?)."""
+    joining = [p for p in parts if p != anchor]
     first = [p for p in joining if p in apart] or joining
     spelt = [p for p in joining if p not in first]
-    how = "with" if clean in parts else "as"
-    also = f" Also merged, as its spellings: {_named(spelt)}." if spelt else ""
-    return f"Why group {_named(first)} {how} {as_code(show_level(clean))}?{also}"
+    shown = as_code(show_level(anchor))
+    if anchor == clean:
+        also = f" Also merged, as its spellings: {_named(spelt)}." if spelt else ""
+        return f"Why group {_named(first)} with {shown}?{also}"
+    also = f" Also merged, as spellings of {shown}: {_named(spelt)}." if spelt else ""
+    return f"Why group {_named(first)} with {shown}, as {as_code(show_level(clean))}?{also}"
 
 
 def _blocked(
