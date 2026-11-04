@@ -2,7 +2,8 @@
 A study configuration written under the rules of version 1 (a test written with != or ~ true on a missing value), or
 stating no version, says on upload, in one line of the sidebar, that some of its criteria select other rows; the notice
 above Validate's tabs says which, with what to write for each, once the data are loaded (a file uploaded before them
-is said when they come) and until it is dismissed. The configuration downloaded records the version.
+is said when they come), while the session holds them as loaded, and until it is dismissed. Its population counts are
+the ticked criteria's, as the sidebar counts them. The configuration downloaded records the version.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ def _data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
 
 
+PREGNANT = "study_inclusion::Not pregnant"
 RULES = {
     "mask_families": {
         "study_inclusion": {
@@ -54,10 +56,19 @@ def _app(content: str, with_data: bool = True) -> None:
             source_name="rules.csv",
         )
     if "uploaded" not in st.session_state:  # once, as the uploader's callback does
-        config: dict = {"mask_families": {}}
-        st.session_state["uploaded"] = read_uploaded_config(config, io.StringIO(content))
-        st.session_state["merged"] = config
+        st.session_state["uploaded"] = read_uploaded_config(state.config, io.StringIO(content))
+    if (second := st.session_state.pop("second", None)) is not None:  # another file, later
+        st.session_state["uploaded_second"] = read_uploaded_config(
+            state.config, io.StringIO(second)
+        )
+    if (ticks := st.session_state.pop("tick", None)) is not None:  # the sidebar's ticks
+        state.set_ticked(ticks)
+    if (edit := st.session_state.pop("edit", None)) is not None:  # a criterion edited in its tab
+        family, name, definition = edit
+        state.config["mask_families"][family][name] = definition
     _earlier_rules_notice()
+    if state.base is not None:
+        st.session_state["sidebar_keeps"] = state.population.n_included
 
 
 def _open(content: dict, with_data: bool = True) -> AppTest:
@@ -82,15 +93,54 @@ def test_a_file_of_the_earlier_rules_says_which_criteria_read_otherwise() -> Non
         "counts: 1 of its criteria selects other rows of this data, said above Validate's tabs."
     ]
     (notice,) = _notices(at)
-    assert notice.startswith("The configuration loaded states no version of its rules")
+    assert notice.startswith(
+        "Criteria loaded from a configuration that states no version of its rules may have been written before"
+    )
     assert (
         "`Not pregnant` (inclusion) excludes 3 more rows: to keep the rows whose value is missing, as before, write "
         "it `df['pregnant'].isna() | (df['pregnant'] != 'Yes')`" in notice
     )
+    # it said "the analysis population keeps 2 of the 6 rows" with nothing ticked: every row was kept
     assert notice.endswith(
-        "With all of its criteria, the analysis population keeps 2 of the 6 rows now, 5 as the file was written."
+        "None of these is ticked: the analysis population is the same under either reading."
     )
-    assert "rules_version" not in at.session_state["merged"]  # a file's version, never merged
+    assert "rules_version" not in at.session_state["config"]  # a file's version, never merged
+    at.session_state["tick"] = [PREGNANT]
+    at.run()
+    (notice,) = _notices(at)
+    assert notice.endswith(
+        "With the criteria ticked, the analysis population keeps 2 of the 6 rows now, 5 under the earlier reading."
+    )
+    assert at.session_state["sidebar_keeps"] == 2  # "now" as the sidebar counts
+
+
+def test_a_criterion_corrected_as_advised_is_no_longer_said() -> None:
+    """The notice read a copy of the file: corrected as it advised, the criterion was still said to read otherwise."""
+    at = _open(RULES)
+    at.session_state["edit"] = (
+        "study_inclusion",
+        "Not pregnant",
+        {"expression": "df['pregnant'].isna() | (df['pregnant'] != 'Yes')"},
+    )
+    at.run()
+    assert not _notices(at) and "rules_earlier" not in at.session_state
+
+
+def test_the_criteria_of_two_earlier_files_are_both_said() -> None:
+    """A second file replaced the first in the notice, whose criteria the session still held as they were loaded."""
+    at = _open(RULES)
+    second = {
+        "mask_families": {
+            "clinical_anomalies": {
+                "operator": "any",
+                "Not negative": {"expression": "~(df['pregnant'] == 'No')"},
+            }
+        }
+    }
+    at.session_state["second"] = json.dumps(second)
+    at.run()
+    (notice,) = _notices(at)
+    assert "`Not pregnant` (inclusion)" in notice and "`Not negative` (exclusion)" in notice
 
 
 def test_an_exclusion_criterion_is_told_how_to_exclude_them_again() -> None:
@@ -107,7 +157,7 @@ def test_an_exclusion_criterion_is_told_how_to_exclude_them_again() -> None:
     }
     (notice,) = _notices(_open(rules))
     assert notice.startswith(
-        "The configuration loaded was written before a missing value changed how it counts"
+        "Criteria loaded from a configuration written before a missing value changed how it counts"
     )
     assert (
         "`Not negative` (exclusion) excludes 3 fewer rows: to exclude the rows whose value is missing, as before, "

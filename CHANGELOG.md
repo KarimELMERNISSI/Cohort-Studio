@@ -812,13 +812,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   exclusion criterion needs); any other is said to check. It counts in rows, and no longer speaks of "rules of
   version 1".
 - **The study's own count.** A criterion's count is not the study's: "not pregnant" excludes every man whose pregnancy
-  is not recorded, whom "women" excluded already. The notice now ends with the rows all the file's criteria keep
-  together, now and as the file was written.
+  is not recorded, whom "women" excluded already. The notice now ends with the rows the ticked criteria keep, now (as
+  the sidebar counts them) and under the earlier reading; with none of its criteria ticked, it says that the analysis
+  population is the same either way (it counted every criterion of the file, ticked or not, and said "as the file was
+  written" of a file that states no version).
 - **Where the notice is said.** It sat below the fold of the sidebar, went when the page was left, and said nothing
   when no data were loaded yet. The sidebar now gives one line; the notice above Validate's tabs says which criteria
   select other rows and what to write for each, once the data are loaded (a file uploaded before them is said when
-  they come), until it is dismissed. A file stating no version (downloaded before the version was recorded) is said
-  to be possibly of the earlier rules, not certainly.
+  they come), until it is dismissed. A file stating no version (downloaded before the version was recorded) is said to
+  be possibly of the earlier rules, not certainly. The notice reads the criteria the session took from the file, as
+  the session holds them, not a copy of the file: a criterion corrected as it advises, or removed, leaves it, the
+  criteria of a second earlier file join those of the first, and its counts are those of the data loaded now.
 
 ### Internal structure: one catalogue of criterion kinds (M5b)
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
@@ -531,8 +531,13 @@ def rules_changes(df: pd.DataFrame, config: Mapping[str, Any] | None) -> list[Ru
     """The criteria of ``config`` that exclude other rows of ``df`` now than under the rules of version 1, where a test
     written with != or ~ was true on a missing value: for a study written then, what the new reading changes. Only an
     expression is read otherwise; a criterion that cannot be evaluated is left out (its error is said elsewhere)."""
+    return criteria_changes(df, catalogue(config))
+
+
+def criteria_changes(df: pd.DataFrame, criteria: Iterable[Criterion]) -> list[RulesChange]:
+    """:func:`rules_changes` of the given criteria (those of a configuration loaded from an earlier file)."""
     changes = []
-    for c in catalogue(config):
+    for c in criteria:
         before = earlier_mask(df, c.name, c.definition)
         if before is None:
             continue
@@ -551,18 +556,30 @@ def rules_changes(df: pd.DataFrame, config: Mapping[str, Any] | None) -> list[Ru
     return changes
 
 
-def rules_population(df: pd.DataFrame, config: Mapping[str, Any] | None) -> tuple[int, int]:
-    """The rows every criterion of ``config`` keeps in ``df``, read now and under the rules of version 1: a row stays
-    when no criterion excludes it, as in the analysis population. A criterion that cannot be evaluated is left out of
-    both counts (its error is said elsewhere)."""
+def rules_population(
+    df: pd.DataFrame,
+    config: Mapping[str, Any] | None,
+    *,
+    only: Collection[str] | None = None,
+    earlier: Collection[str] | None = None,
+) -> tuple[int, int]:
+    """The rows the criteria of ``config`` keep in ``df``, read now and under the rules of version 1: a row stays
+    when no criterion excludes it, as in the analysis population. ``only``: the ids of the criteria counted (the ticked
+    ones), every criterion by default; ``earlier``: those read under version 1 for the second count (those of an
+    earlier file), every one by default. A criterion that cannot be evaluated is left out of both counts (its error is
+    said elsewhere)."""
     gone_now = pd.Series(False, index=df.index)
     gone_then = pd.Series(False, index=df.index)
     for c in catalogue(config):
+        if only is not None and c.id not in only:
+            continue
         try:
             now = criterion_mask(df, c.name, c.definition)
         except CriterionError:
             continue
-        before = earlier_mask(df, c.name, c.definition)
+        before = (
+            earlier_mask(df, c.name, c.definition) if earlier is None or c.id in earlier else None
+        )
         then = now if before is None else before
         gone_now |= now if c.kind == EXCLUSION else ~now
         gone_then |= then if c.kind == EXCLUSION else ~then
@@ -817,6 +834,7 @@ __all__ = [
     "catalogue",
     "configuration_for_sharing",
     "configuration_problems",
+    "criteria_changes",
     "rules_changes",
     "rules_population",
     "RulesChange",

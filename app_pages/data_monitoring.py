@@ -2,7 +2,7 @@
 import copy
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from io import BytesIO
 from typing import Any
 
@@ -32,11 +32,11 @@ from core.population import (
     catalogue,
     configuration_for_sharing,
     configuration_problems,
+    criteria_changes,
     criterion_id,
     family_masks,
     family_words,
     merge_families,
-    rules_changes,
     rules_population,
 )
 from core.registry import as_code
@@ -1212,8 +1212,10 @@ def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[
         if problems:
             return False, [refusal_text(problems)]
         written = new_config.pop("rules_version", None)  # a file of the study, not a setting to merge
-        line = _earlier_rules_line(written, new_config.get("mask_families"))  # before the merge takes them
-        notices = _merge_uploaded(config, new_config) + ([line] if line else [])
+        uploaded = copy.deepcopy(new_config.get("mask_families"))  # the merge takes them
+        notices = _merge_uploaded(config, new_config)
+        line = _earlier_rules_line(written, uploaded, config)  # those the session took
+        notices += [line] if line else []
     except json.JSONDecodeError:
         return False, ["Invalid JSON file. Please upload a valid configuration file."]
     except Exception as exc:  # a file this version cannot read is refused, never an error page
@@ -1221,8 +1223,9 @@ def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[
     return True, ["Configuration loaded and merged successfully!", *notices]
 
 
-# a configuration uploaded under the first rules, or stating none: its version and criteria, kept until the notice
-# above Validate's tabs is dismissed, so that a file uploaded before the data is said once they come (ui.keys)
+# the criteria the session took from a configuration of the first rules, or stating none: for each (by its id), the
+# version its file stated and its kind and definition as loaded, kept while the session's criterion is that one, so that
+# the notice above Validate's tabs says what each selects now, a file uploaded before the data once they come (ui.keys)
 RULES_EARLIER = "rules_earlier"
 
 
@@ -1234,16 +1237,53 @@ def _version(written: Any) -> int:
         return 1
 
 
-def _earlier_rules_line(written: Any, families: Any) -> str | None:
+def _as_loaded(c: Any, entry: Any) -> bool:
+    """Whether the session's criterion ``c`` is still the one loaded (its kind and definition)."""
+    return isinstance(entry, dict) and c.kind == entry.get("kind") and c.definition == entry.get("definition")
+
+
+def _taken_earlier(written: Any, uploaded: Any, config: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The criteria of a file of the first rules, or stating none, that the session took: a criterion the session
+    held keeps its own definition when the file's differs (:func:`_merge_uploaded`), and is not the file's."""
+    if _version(written) >= RULES_VERSION or not isinstance(uploaded, dict) or not uploaded:
+        return {}
+    held = {c.id: c for c in catalogue(config)}
+    taken: dict[str, dict[str, Any]] = {}
+    for c in catalogue({"mask_families": uploaded}):
+        entry = {"written": written, "kind": c.kind, "definition": copy.deepcopy(c.definition)}
+        if c.id in held and _as_loaded(held[c.id], entry):
+            taken[c.id] = entry
+    return taken
+
+
+def _held_earlier(config: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The criteria of RULES_EARLIER the session still holds as they were loaded; a criterion changed (corrected as
+    the notice advised) or removed since is dropped, and the key with the last one."""
+    pending = st.session_state.get(RULES_EARLIER)
+    if not isinstance(pending, dict):
+        return {}
+    session = {c.id: c for c in catalogue(config)}
+    held = {cid: e for cid, e in pending.items() if cid in session and _as_loaded(session[cid], e)}
+    if held != pending:
+        if held:
+            st.session_state[RULES_EARLIER] = held
+        else:
+            st.session_state.pop(RULES_EARLIER, None)
+    return held
+
+
+def _earlier_rules_line(written: Any, uploaded: Any, config: Mapping[str, Any]) -> str | None:
     """
-    The sidebar's line for a configuration written under the first rules, or stating no version: its version and
-    criteria are kept (RULES_EARLIER) for the notice above Validate's tabs (:func:`_earlier_rules_notice`), which says
-    what each criterion selects now. None for a file of today's rules, without criteria, or whose criteria select the
-    same rows of the loaded data.
+    The sidebar's line for a configuration written under the first rules, or stating no version: the criteria the
+    session took from it are kept (RULES_EARLIER) for the notice above Validate's tabs (:func:`_earlier_rules_notice`),
+    which says what each selects now. None for a file of today's rules, none of whose criteria the session took, or
+    whose criteria select the same rows of the loaded data.
     """
-    if _version(written) >= RULES_VERSION or not isinstance(families, dict) or not families:
+    taken = _taken_earlier(written, uploaded, config)
+    if not taken:
         return None
-    st.session_state[RULES_EARLIER] = {"written": written, "families": copy.deepcopy(families)}
+    pending = st.session_state.get(RULES_EARLIER)
+    st.session_state[RULES_EARLIER] = {**(pending if isinstance(pending, dict) else {}), **taken}
     opening = (
         "This file states no version of its rules: it may have been written before a missing value changed how it "
         "counts"
@@ -1253,7 +1293,7 @@ def _earlier_rules_line(written: Any, families: Any) -> str | None:
     base = get_state().base
     if base is None:
         return f"{opening}. Once the data are loaded, Validate says above its tabs which of its criteria select other rows."
-    n = len(rules_changes(base, {"mask_families": families}))
+    n = len(criteria_changes(base, [c for c in catalogue(config) if c.id in taken]))
     if not n:
         return None
     them = f"{n} of its criteria select" if n != 1 else "1 of its criteria selects"
@@ -1261,16 +1301,19 @@ def _earlier_rules_line(written: Any, families: Any) -> str | None:
 
 
 def _earlier_rules_notice() -> None:
-    """Above Validate's tabs, the notice of a configuration of the first rules (:func:`_rules_notice`), once data are
-    loaded and until dismissed; computed again only when the data change."""
-    pending = st.session_state.get(RULES_EARLIER)
+    """Above Validate's tabs, the notice of the criteria loaded from a configuration of the first rules
+    (:func:`_rules_notice`), once data are loaded, while the session holds them as loaded, and until dismissed;
+    computed again when the data, the criteria or the ticks change."""
     state = get_state()
-    if not isinstance(pending, dict) or state.base is None:
+    if state.base is None:
         return
-    key = json.dumps(pending, sort_keys=True, default=str)
-    said = state.session.memo(
-        "rules_earlier", key, lambda: _rules_notice(pending.get("written"), pending.get("families"))
-    )
+    config = state.config
+    held = _held_earlier(config)
+    if not held:
+        return
+    ticked = tuple(state.ticked)
+    key = json.dumps([held, config.get("mask_families"), ticked], sort_keys=True, default=str)
+    said = state.session.memo("rules_earlier", key, lambda: _rules_notice(held, config, ticked))
     if not said:
         return
     st.warning(said[0], icon=":material/history:")
@@ -1282,34 +1325,44 @@ def _earlier_rules_notice() -> None:
     )
 
 
-def _rules_notice(written: Any, families: Any) -> list[str]:
+def _rules_notice(held: Mapping[str, Any], config: Mapping[str, Any], ticked: Sequence[str]) -> list[str]:
     """
-    A file written under the first rules (a test written with != or ~ true on a missing value), or before they were
-    recorded: the criteria that select other rows of the loaded data now, each with how many more or fewer rows it
-    excludes, and what to write for each (:func:`_rules_change_said`); then the rows all its criteria keep together,
-    now and as the file was written, since a criterion's own count is not the study's. Nothing for a file of today's
-    rules, or without data.
+    The criteria the session took from a file written under the first rules (a test written with != or ~ true on a
+    missing value), or before they were recorded, that select other rows of the loaded data now: each with how many
+    more or fewer rows it excludes, and what to write for it (:func:`_rules_change_said`); then the rows the ticked
+    criteria keep, now (as the sidebar counts them) and under the earlier reading of those criteria, since a
+    criterion's own count is not the study's. Nothing without data, or when none reads otherwise.
     """
     base = get_state().base
-    if _version(written) >= RULES_VERSION or base is None or not isinstance(families, dict):
+    if base is None or not held:
         return []
-    config = {"mask_families": families}
-    changes = rules_changes(base, config)
+    changes = criteria_changes(base, [c for c in catalogue(config) if c.id in held])
     if not changes:
         return []
     said = "; ".join(_rules_change_said(base, c) for c in changes)
-    now, then = rules_population(base, config)
+    stated = {held[c.criterion.id].get("written") is not None for c in changes}
     opening = (
-        "The configuration loaded states no version of its rules: it may have been written before a missing value "
-        "changed how it counts"
-        if written is None
-        else "The configuration loaded was written before a missing value changed how it counts"
+        "Criteria loaded from a configuration written before a missing value changed how it counts"
+        if stated == {True}
+        else "Criteria loaded from a configuration that states no version of its rules may have been written before "
+        "a missing value changed how it counts"
+        if stated == {False}
+        else "Criteria loaded from configurations written before a missing value changed how it counts, or stating "
+        "no version,"
     )
+    changed = {c.criterion.id for c in changes}
+    if changed & set(ticked):
+        now, then = rules_population(base, config, only=set(ticked), earlier=set(held))
+        population = (
+            f"With the criteria ticked, the analysis population keeps {now:,} of the {len(base):,} rows now, "
+            f"{then:,} under the earlier reading."
+        )
+    else:
+        population = "None of these is ticked: the analysis population is the same under either reading."
     return [
         f"{opening}: a test written with != or ~ was then true on a missing value, and is now unknown, so the "
-        "criterion neither meets nor fires there. Read now, these "
-        f"criteria select other rows of this data: {said}. With all of its criteria, the analysis population keeps "
-        f"{now:,} of the {len(base):,} rows now, {then:,} as the file was written."
+        f"criterion neither meets nor fires there. Read now, these criteria select other rows of this data: {said}. "
+        + population
     ]
 
 
