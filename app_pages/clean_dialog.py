@@ -12,25 +12,52 @@ from typing import Any
 
 import streamlit as st
 
-from app_pages.clean_categories import category_editor, clean_candidates, take_done
+from app_pages.clean_categories import (
+    category_editor,
+    clean_candidates,
+    discard_choices,
+    take_done,
+    unapplied_choices,
+)
 from core.registry import as_code
 from enrich.recode import MAX_VALUES, recoded_columns
 from ui.components.levels import CLEAN_WHERE, level_warning
 from ui.state import get_state
 
 
-@st.dialog("Clean a variable's values", width="large")
+# closed by its own buttons only: Escape, a click outside or a keystroke that left the dialog's focus closed it, with
+# what was being typed in its table and nothing said of the choices kept
+@st.dialog("Clean a variable's values", width="large", dismissible=False)
 def _dialog(column: str) -> None:
-    """Data > Clean's editor of ``column``: Apply writes its copy and closes the dialog (the editor's own rerun)."""
+    """Data > Clean's editor of ``column``: its add button writes the copy and closes the dialog (the editor's own
+    rerun); Close keeps the choices not yet applied, as Data > Clean does, and Discard drops them."""
     state = get_state()
     if state.base is None or column not in state.base.columns:
         st.caption(f"{as_code(column)} is no longer a column of the data.")
+        if st.button("Close", key="clean_dialog_close"):
+            st.rerun()
         return
     st.caption(
-        f"As on {CLEAN_WHERE}: the clean values of {as_code(column)} go into a copy beside it, the original kept. "
-        "Apply writes the copy and closes this window; the analysis can then group by the copy."
+        f"The clean values of {as_code(column)} go into a copy beside it, the original kept: the button that adds it, "
+        "below, writes it and closes this window, and the analysis can then use the copy. Your choices are kept until "
+        f"you apply them, here or on {CLEAN_WHERE}."
     )
     category_editor(state, state.base, column, host="dialog")
+    waiting = unapplied_choices(state, state.base, column)
+    with st.container(horizontal=True):
+        if st.button(
+            "Close, keeping my choices" if waiting else "Close",
+            key=f"clean_dialog_close::{column}",
+            icon=":material/close:",
+        ):
+            st.rerun()
+        if waiting and st.button(
+            f"Discard my choices ({waiting} value{'s' if waiting != 1 else ''})",
+            key=f"clean_dialog_discard::{column}",
+            icon=":material/undo:",
+        ):
+            discard_choices(state, state.base, column)
+            st.rerun(scope="fragment")
 
 
 def _use(group_key: str, copy: str) -> None:
@@ -82,6 +109,7 @@ def clean_actions(
     groupable: Collection[str] | None = None,
     imputed: bool = False,
     told: bool = False,
+    use: str = "Group by",
 ) -> None:
     """
     What can be done here about a variable whose values are written several ways: clean it in a dialog (Data > Clean's
@@ -90,7 +118,8 @@ def clean_actions(
     list of variables, such as a model's covariates, where the copy takes the variable's place). ``groupable``: the
     variables the page offers, when not every column; ``imputed``: they are the imputed datasets' (the pooled
     comparison), which a copy written after the imputation is not in; ``told``: the warning above already says whether
-    a copy cleans the variable (the groups' warning), else a copy that misses a later change of it is said here.
+    a copy cleans the variable (the groups' warning), else whether a copy cleans it is said here; ``use``: the words of
+    the grouping widget's button ("Compare by" beside Survival & regression's field of that name).
     """
     state = get_state()
     base = state.base
@@ -101,6 +130,8 @@ def clean_actions(
     for done in take_done(source):  # what Apply did in the dialog, said once, under this variable
         st.success(done, icon=":material/check:")
     if copy and copy != name and follows:
+        if not told:  # the plan's advice describes the remedy: this says it is done
+            st.caption(f"{as_code(source)} is cleaned into {as_code(copy)}: use the copy.")
         if groupable is not None and copy not in groupable:
             st.caption(
                 f"{as_code(copy)} cleans {as_code(source)}, but was written after the imputation: run the imputation "
@@ -111,7 +142,7 @@ def clean_actions(
             )
         elif group_key:
             st.button(
-                f"Group by {as_code(copy)}, its clean copy",
+                f"{use} {as_code(copy)}, its clean copy",
                 key=f"clean_use::{group_key}",
                 icon=":material/swap_horiz:",
                 on_click=_use,

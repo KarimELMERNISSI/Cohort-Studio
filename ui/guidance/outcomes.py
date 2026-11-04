@@ -236,8 +236,9 @@ def _distinct(advice: Iterable[Advice]) -> tuple[Advice, ...]:
 
 def _spellings(col: str, values: pd.Series) -> Advice | None:
     """One value written several ways (spaces, capitals): each is a level of its own, as the lists show them, until the
-    variable is cleaned on Data > Clean, into a copy the analysis then uses."""
-    from ui.components.levels import CLEAN_WHERE, alike_levels
+    variable is cleaned into a copy beside it, which the analysis then uses. The page says below it what can be done,
+    by the variable's state (app_pages.clean_dialog.clean_actions: clean it here, use its copy, clean it again)."""
+    from ui.components.levels import alike_levels
 
     alike = alike_levels(sorted(values.dropna().astype(str).unique()))
     if not alike:
@@ -245,9 +246,9 @@ def _spellings(col: str, values: pd.Series) -> Advice | None:
     shown = "; ".join(_some(found, 3) for found in alike[:3])
     return Advice(
         "caution",
-        f"{as_code(col)} holds one value written several ways ({shown}): each is a group of its own. Clean it "
-        f"first on {CLEAN_WHERE}, into a copy beside it ({as_code(f'{col}_clean')} unless you name it otherwise), "
-        "and use the copy here.",
+        f"{as_code(col)} holds one value written several ways ({shown}): each is a group of its own until the "
+        f"variable is cleaned into a copy beside it ({as_code(f'{col}_clean')} unless you name it otherwise), which "
+        "the analysis then uses.",
         column=str(col),
     )
 

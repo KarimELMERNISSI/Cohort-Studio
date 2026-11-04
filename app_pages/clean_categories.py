@@ -359,6 +359,60 @@ def _pick_by_pattern(column: str, keys: dict[str, str], counts: dict[str, int]) 
     choices["picked"] = found
 
 
+def _find_values(
+    column: str,
+    scope: str,
+    keys: dict[str, str],
+    counts: dict[str, int],
+    choices: dict[str, Any],
+    *,
+    inline: bool,
+) -> None:
+    """A messy column's values holding a text (or a pattern), picked at once in Values (the search runs apart, timed):
+    in a popover beside Values on the Clean page, closed by Pick them; inline in a dialog, its field and Pick them on
+    one row."""
+    help_text = "Pick the values that hold a text, to map them or set them to missing at once."
+
+    def form() -> None:
+        with st.form(f"clean_find::{scope}::{column}", border=False, enter_to_submit=True):
+            with st.container(horizontal=inline, vertical_alignment="bottom"):
+                st.text_input(
+                    "Find values containing" if inline else "Values containing",
+                    key=keys["pattern"],
+                    persist_state="page",
+                    max_chars=MAX_LENGTH,
+                    placeholder="kidney",
+                    help=(help_text + " " if inline else "")
+                    + "Text found anywhere in a value as written; * stands for any text. Tick Regular expression to "
+                    "write a pattern: ^ starts a value, $ ends it, | separates two (CKD|kidney).",
+                )
+                st.checkbox(
+                    "Regular expression", value=False, key=keys["regex"], persist_state="page"
+                )
+                st.checkbox("Ignore case", value=True, key=keys["case"], persist_state="page")
+                st.form_submit_button(
+                    "Pick them",
+                    key=f"clean_pattern_pick::{scope}::{column}",
+                    type="primary",
+                    on_click=_pick_by_pattern,
+                    args=(column, keys, counts),
+                )
+        if why := choices.get("pattern_error"):  # said here, where it is corrected
+            st.caption(plain(why))
+
+    if inline:
+        form()
+        return
+    with st.popover(
+        "Find values",
+        icon=":material/search:",
+        key=keys["pattern_open"],
+        on_change="rerun",  # its state kept, so that "Pick them" can close it
+        help=help_text,
+    ):
+        form()
+
+
 _NAMED = 6  # the values a search picked, named under the row
 
 
@@ -651,38 +705,13 @@ def category_editor(
         )
         values = sorted(counts, key=sort_key) if order == A_TO_Z else list(counts)
         clean_values = sorted({c for c, _, _ in shown.values() if c}, key=sort_key)
+        if host != "page":
+            # in a dialog, drawn inline: a popover closed by the search left the keyboard's focus outside the dialog,
+            # whose next keystroke closed it with what was being typed in the table
+            _find_values(column, scope, keys, counts, choices, inline=True)
         with st.container(horizontal=True, vertical_alignment="bottom"):
-            # a messy column: the values holding a text (or a pattern), picked at once (the search runs apart, timed)
-            with st.popover(
-                "Find values",
-                icon=":material/search:",
-                key=keys["pattern_open"],
-                on_change="rerun",  # its state kept, so that "Pick them" can close it
-                help="Pick the values that hold a text, to map them or set them to missing at once.",
-            ):
-                with st.form(f"clean_find::{scope}::{column}", border=False, enter_to_submit=True):
-                    st.text_input(
-                        "Values containing",
-                        key=keys["pattern"],
-                        persist_state="page",
-                        max_chars=MAX_LENGTH,
-                        placeholder="kidney",
-                        help="Text found anywhere in a value as written; * stands for any text. Tick Regular "
-                        "expression to write a pattern: ^ starts a value, $ ends it, | separates two (CKD|kidney).",
-                    )
-                    st.checkbox(
-                        "Regular expression", value=False, key=keys["regex"], persist_state="page"
-                    )
-                    st.checkbox("Ignore case", value=True, key=keys["case"], persist_state="page")
-                    st.form_submit_button(
-                        "Pick them",
-                        key=f"clean_pattern_pick::{scope}::{column}",
-                        type="primary",
-                        on_click=_pick_by_pattern,
-                        args=(column, keys, counts),
-                    )
-                if why := choices.get("pattern_error"):  # said here, where it is corrected
-                    st.caption(plain(why))
+            if host == "page":
+                _find_values(column, scope, keys, counts, choices, inline=False)
             picked = st.multiselect(
                 "Values",
                 sorted(counts, key=sort_key),
@@ -1364,6 +1393,39 @@ def _choice_label(c: Candidate) -> str:
     if c.spaced:
         said.append(f"{c.spaced} with extra spaces")
     return f"{c.column} · {', '.join(said)}"
+
+
+def _fresh(state, df: pd.DataFrame, column: str) -> dict[str, Any]:
+    """The choices a variable starts from: its last recode's (cleaning again starts from them), else none."""
+    steps = state.transformation_manager.history
+    cleaned_into = recoded_columns(steps).get(column, "")
+    return choices_of(
+        last_record(
+            steps, column, cleaned_into if cleaned_into in df.columns else f"{column}_clean"
+        )
+    )
+
+
+def unapplied_choices(state, df: pd.DataFrame, column: str) -> int:
+    """How many values of ``column`` hold a choice not yet applied, made on the Clean page or in a dialog: 0 for
+    none."""
+    held = (st.session_state.get(STORE) or {}).get(column)
+    if not isinstance(held, dict):
+        return 0
+    fresh = _fresh(state, df, column)
+    return _dropped(held, fresh) if _unapplied(held, fresh) else 0
+
+
+def discard_choices(state, df: pd.DataFrame, column: str) -> None:
+    """The choices of ``column`` not yet applied dropped: it starts again from its last recode, its widgets drawn
+    again under new keys."""
+    store = st.session_state.setdefault(STORE, {})
+    held = store.get(column) or {}
+    store[column] = {
+        **_fresh(state, df, column),
+        "revision": held.get("revision", -1) + 1,
+        "shown": {},
+    }
 
 
 def take_done(column: str | None = None) -> list[str]:

@@ -1447,6 +1447,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   exists (it still said to clean `sex`). A copy that a later step left behind (an imputation, the rows of a merge) is
   no longer offered in its variable's place, where the rows changed since would have left the analysis unsaid: the
   warning, or Survival & regression's plan, says so and offers "Clean `sex` again here".
+- **The dialog keeps what is typed in it.** It closes only through its own buttons. After Find values, a keystroke
+  could close it with what was being typed in its table (Find values is now a field in the dialog, not a popover), and
+  Escape or the cross kept its choices unannounced: "Close, keeping my choices" says they wait, here and on Data >
+  Clean, until applied, and "Discard my choices" drops them. The groups' warning and Survival & regression's plan say
+  what the button below them does, and no longer send the user to Data > Clean, a page that dropped the analysis
+  page's grouping; in the plan, the copy is offered with "Compare by", its field's name, and said to be the variable's
+  once written. What Apply did is said under its own variable.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

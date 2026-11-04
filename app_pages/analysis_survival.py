@@ -183,6 +183,7 @@ def _render_plan(
                     list_key=None if compared else keys[1],
                     groupable=candidates,
                     imputed=imputed,
+                    use="Compare by",  # the field's own name
                 )
         if note:
             st.caption(note)

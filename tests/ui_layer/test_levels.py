@@ -13,7 +13,8 @@ from ingest.loaders import read_path
 from ui.components.levels import alike_levels, show_level
 from ui.state import TUTORIAL_COHORT_PATH
 
-CLEAN = "clean {0} on Data > Clean > Categories: its clean values go into a copy beside it, {1} unless you name it"
+# what the warning ends with, the button below it doing it: it named Data > Clean, a page that drops the grouping
+CLEAN = "To merge them, clean {0} into a copy beside it ({1} unless you name it otherwise), then group by the copy."
 
 
 def test_a_hidden_space_is_shown_and_no_two_levels_read_the_same() -> None:
@@ -129,13 +130,14 @@ def test_once_a_copy_cleans_the_variable_the_warning_names_it() -> None:
     """Choosing `sex` once `sex_clean` was written still said "clean sex on Data > Clean > Categories"."""
     assert _copy_warning("sex").endswith("`sex` is cleaned into `sex_clean`: group by `sex_clean`.")
     assert _copy_warning("sex", follows=False).endswith(
-        "`sex_clean` cleans `sex` as it was before a later step changed it: clean `sex` again on Data > Clean > "
-        "Categories, then group by the copy."
+        "`sex_clean` cleans `sex` as it was before a later step changed it: clean `sex` again, then group by the copy."
     )
     assert _copy_warning("sex_clean").endswith(
-        "`sex_clean` is the clean copy of `sex`, and its cleaning kept these apart: to merge them, clean `sex` again "
-        "on Data > Clean > Categories."
+        "`sex_clean` is the clean copy of `sex`, and its cleaning kept these apart: to merge them, clean `sex` again."
     )
+    assert "Data > Clean" not in _copy_warning(
+        "sex", follows=False
+    )  # the button below does it here
 
 
 def _crafted_script() -> None:

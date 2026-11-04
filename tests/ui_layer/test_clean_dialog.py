@@ -104,7 +104,11 @@ def test_a_variable_is_cleaned_where_it_is_analysed_in_a_dialog() -> None:
     assert any("differ only by spaces" in w.value for w in at.warning)
     at.button(key="clean_open::t_group_col::site").click().run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    assert any("As on Data > Clean > Categories" in c.value for c in at.caption)
+    assert any(
+        "Your choices are kept until you apply them, here or on Data > Clean > Categories."
+        in c.value
+        for c in at.caption
+    )
     keys = {b.key for b in at.button}
     assert (
         "clean_apply::dialog::site" in keys
@@ -294,3 +298,70 @@ def test_what_apply_did_is_said_under_its_own_variable() -> None:
     ]
     assert order == ["end of site", "success", "end of sex"]
     assert "clean_done" not in at.session_state  # said once
+
+
+def _editor_script(discard: bool = False) -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.clean_categories import (
+        _choices,
+        category_editor,
+        discard_choices,
+        unapplied_choices,
+    )
+    from core.state import DatasetRef
+    from enrich.recode import give, level_counts
+    from ui.state import get_state
+
+    st.session_state.setdefault("username", "dialog_user")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        frame = pd.DataFrame({"site": ["Metz", "Metz ", "metz", "Esch", "Ettelbruck"] * 8})
+        state.set_dataset(
+            frame,
+            DatasetRef(name="sites", origin="upload", file_hash="sites"),
+            source_bytes=frame.to_csv(index=False).encode("utf-8"),
+            source_name="sites.csv",
+        )
+    base = state.base
+    if "chosen" not in st.session_state:  # a choice made in the dialog, not yet applied
+        st.session_state["chosen"] = True
+        give(_choices("site"), level_counts(base["site"]), "Ettelbruck", "Ettelbruck (Nord)")
+    st.session_state["waiting"] = unapplied_choices(state, base, "site")
+    if discard:
+        discard_choices(state, base, "site")
+        st.session_state["after"] = unapplied_choices(state, base, "site")
+    category_editor(
+        state, base, "site", host="dialog"
+    )  # the dialog's editor, drawn here (AppTest replays no dialog)
+
+
+def test_in_the_dialog_find_values_is_drawn_inline_and_picks_the_values() -> None:
+    """A popover closed by the search left the keyboard's focus outside the dialog, whose next keystroke closed it with
+    what was being typed in the table: in the dialog, the search is a field and Pick them on one row."""
+    at = AppTest.from_function(_editor_script, default_timeout=60)
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    (field,) = [t for t in at.text_input if t.label == "Find values containing"]
+    assert not [p for p in at.get("popover") if "Find values" in str(getattr(p, "label", ""))]
+    field.input("Ettel")
+    (pick,) = [b for b in at.button if b.label == "Pick them"]
+    pick.click().run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    (values,) = [m for m in at.multiselect if m.label == "Values"]
+    assert values.value == ["Ettelbruck"]
+
+
+def test_the_dialog_s_choices_not_yet_applied_are_counted_and_can_be_discarded() -> None:
+    """Escape or the cross kept them unannounced: they came back on reopening and in Data > Clean's table, where the
+    next Apply wrote them. Close now says they are kept, and Discard drops them."""
+    at = AppTest.from_function(_editor_script, default_timeout=60)
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert at.session_state["waiting"] == 1
+    gone = AppTest.from_function(_editor_script, kwargs={"discard": True}, default_timeout=60)
+    gone.run()
+    assert not gone.exception, [str(e.value)[:300] for e in gone.exception]
+    assert gone.session_state["waiting"] == 1 and gone.session_state["after"] == 0

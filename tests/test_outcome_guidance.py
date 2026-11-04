@@ -236,12 +236,14 @@ def test_one_value_written_several_ways_is_named_before_the_cox_model_fails() ->
     caution = _advice(plan, "caution")
     assert any(t.startswith("`sex` holds one value written several ways") for t in caution)
     assert any("`F␣`" in t for t in caution)  # "F " reads as the lists show it, not as "F"
-    # cleaned on the Clean page, into a copy: an Enrich formula kept "f" and "female" apart
+    # cleaned into a copy (an Enrich formula kept "f" and "female" apart), by the button the page draws below: the
+    # advice names no page, which a user would leave the analysis for
     assert any(
-        "Clean it first on Data > Clean > Categories, into a copy beside it (`sex_clean` unless you name it "
-        "otherwise), and use the copy here." in t
+        "each is a group of its own until the variable is cleaned into a copy beside it (`sex_clean` unless you name "
+        "it otherwise), which the analysis then uses." in t
         for t in caution
     )
+    assert not any("Data > Clean" in t for t in caution)
     assert not any(".str." in t for t in caution)
     assert any(t.startswith("`sex`: no event at") and "monotone likelihood" in t for t in caution)
     assert any(t.startswith("`sex`: fewer than 10 events at") for t in _advice(plan, "info"))
