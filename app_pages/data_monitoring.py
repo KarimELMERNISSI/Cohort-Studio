@@ -1,4 +1,5 @@
 # pages/data_monitoring.py
+import copy
 import json
 import os
 from collections.abc import Mapping
@@ -1210,14 +1211,75 @@ def read_uploaded_config(config: dict[str, Any], file: Any) -> tuple[bool, list[
         )
         if problems:
             return False, [refusal_text(problems)]
-        written = new_config.pop("rules_version", 1)  # a file of the study, not a setting to merge
-        changed = _rules_notice(written, new_config.get("mask_families"))
-        notices = _merge_uploaded(config, new_config) + changed
+        written = new_config.pop("rules_version", None)  # a file of the study, not a setting to merge
+        line = _earlier_rules_line(written, new_config.get("mask_families"))  # before the merge takes them
+        notices = _merge_uploaded(config, new_config) + ([line] if line else [])
     except json.JSONDecodeError:
         return False, ["Invalid JSON file. Please upload a valid configuration file."]
     except Exception as exc:  # a file this version cannot read is refused, never an error page
         return False, [f"This configuration was not loaded ({type(exc).__name__})."]
     return True, ["Configuration loaded and merged successfully!", *notices]
+
+
+# a configuration uploaded under the first rules, or stating none: its version and criteria, kept until the notice
+# above Validate's tabs is dismissed, so that a file uploaded before the data is said once they come (ui.keys)
+RULES_EARLIER = "rules_earlier"
+
+
+def _version(written: Any) -> int:
+    """The rules' version a file states: 1 when it states none or no number (written before it was recorded)."""
+    try:
+        return int(written)
+    except (TypeError, ValueError):
+        return 1
+
+
+def _earlier_rules_line(written: Any, families: Any) -> str | None:
+    """
+    The sidebar's line for a configuration written under the first rules, or stating no version: its version and
+    criteria are kept (RULES_EARLIER) for the notice above Validate's tabs (:func:`_earlier_rules_notice`), which says
+    what each criterion selects now. None for a file of today's rules, without criteria, or whose criteria select the
+    same rows of the loaded data.
+    """
+    if _version(written) >= RULES_VERSION or not isinstance(families, dict) or not families:
+        return None
+    st.session_state[RULES_EARLIER] = {"written": written, "families": copy.deepcopy(families)}
+    opening = (
+        "This file states no version of its rules: it may have been written before a missing value changed how it "
+        "counts"
+        if written is None
+        else "This file was written before a missing value changed how it counts"
+    )
+    base = get_state().base
+    if base is None:
+        return f"{opening}. Once the data are loaded, Validate says above its tabs which of its criteria select other rows."
+    n = len(rules_changes(base, {"mask_families": families}))
+    if not n:
+        return None
+    them = f"{n} of its criteria select" if n != 1 else "1 of its criteria selects"
+    return f"{opening}: {them} other rows of this data, said above Validate's tabs."
+
+
+def _earlier_rules_notice() -> None:
+    """Above Validate's tabs, the notice of a configuration of the first rules (:func:`_rules_notice`), once data are
+    loaded and until dismissed; computed again only when the data change."""
+    pending = st.session_state.get(RULES_EARLIER)
+    state = get_state()
+    if not isinstance(pending, dict) or state.base is None:
+        return
+    key = json.dumps(pending, sort_keys=True, default=str)
+    said = state.session.memo(
+        "rules_earlier", key, lambda: _rules_notice(pending.get("written"), pending.get("families"))
+    )
+    if not said:
+        return
+    st.warning(said[0], icon=":material/history:")
+    st.button(
+        "Dismiss this notice",
+        key="rules_earlier_dismiss",
+        type="tertiary",
+        on_click=lambda: st.session_state.pop(RULES_EARLIER, None),
+    )
 
 
 def _rules_notice(written: Any, families: Any) -> list[str]:
@@ -1229,11 +1291,7 @@ def _rules_notice(written: Any, families: Any) -> list[str]:
     rules, or without data.
     """
     base = get_state().base
-    try:
-        version = int(written)
-    except (TypeError, ValueError):
-        version = 1
-    if version >= RULES_VERSION or base is None or not isinstance(families, dict):
+    if _version(written) >= RULES_VERSION or base is None or not isinstance(families, dict):
         return []
     config = {"mask_families": families}
     changes = rules_changes(base, config)
@@ -1241,9 +1299,15 @@ def _rules_notice(written: Any, families: Any) -> list[str]:
         return []
     said = "; ".join(_rules_change_said(base, c) for c in changes)
     now, then = rules_population(base, config)
+    opening = (
+        "The configuration loaded states no version of its rules: it may have been written before a missing value "
+        "changed how it counts"
+        if written is None
+        else "The configuration loaded was written before a missing value changed how it counts"
+    )
     return [
-        "This file was written before a missing value changed how it counts: a test written with != or ~ was then "
-        "true on a missing value, and is now unknown, so the criterion neither meets nor fires there. Read now, these "
+        f"{opening}: a test written with != or ~ was then true on a missing value, and is now unknown, so the "
+        "criterion neither meets nor fires there. Read now, these "
         f"criteria select other rows of this data: {said}. With all of its criteria, the analysis population keeps "
         f"{now:,} of the {len(base):,} rows now, {then:,} as the file was written."
     ]
@@ -1917,6 +1981,7 @@ def app():
                 st.sidebar.error(messages[0])
             
     
+    _earlier_rules_notice()  # a configuration of the first rules: what its criteria select now
     hint = st.container()
     lazy_tabs("validate", VALIDATE_TABS, key=TAB_KEY)
     # above the tabs, what Clean would fix: the text columns that look like dates (by the shape of their values) and

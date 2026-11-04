@@ -114,6 +114,13 @@ KEYS: tuple[Key, ...] = (
         note="the open tab of Validate: only that tab runs",
     ),
     Key(
+        "rules_earlier",
+        "app_pages.data_monitoring",
+        "session",
+        note="a configuration uploaded under the first rules, or stating none: its version and criteria, kept until "
+        "the notice above Validate's tabs is dismissed (a file uploaded before the data is said once they come)",
+    ),
+    Key(
         "clean_tab",
         "app_pages.data_cleaning",
         "page",

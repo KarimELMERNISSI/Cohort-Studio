@@ -805,6 +805,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The study's own count.** A criterion's count is not the study's: "not pregnant" excludes every man whose pregnancy
   is not recorded, whom "women" excluded already. The notice now ends with the rows all the file's criteria keep
   together, now and as the file was written.
+- **Where the notice is said.** It sat below the fold of the sidebar, went when the page was left, and said nothing
+  when no data were loaded yet. The sidebar now gives one line; the notice above Validate's tabs says which criteria
+  select other rows and what to write for each, once the data are loaded (a file uploaded before them is said when
+  they come), until it is dismissed. A file stating no version (downloaded before the version was recorded) is said
+  to be possibly of the earlier rules, not certainly.
 
 ### Internal structure: one catalogue of criterion kinds (M5b)
 
