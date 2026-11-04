@@ -394,7 +394,7 @@ The application keeps what it stores under `DATA_ROOT`, one workspace per user: 
 
 ## Verification & Test Suite
 
-More than 1,500 automated tests cover the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, Parquet persistence, lineage and replay, the connector families, what leaves the server for an AI provider, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite on every push:
+More than 2,500 automated tests cover the statistics engine (reference values from R and the literature), the import engine, per-user workspaces and the expression sandbox, Parquet persistence, lineage and replay, the connector families, what leaves the server for an AI provider, and every page through Streamlit's headless AppTest; a layering test and source-level quality gates guard the architecture. CI runs ruff, pyright and the suite on every push:
 
 ```bash
 # Install the development tools (pytest, ruff, pyright) and every optional group once

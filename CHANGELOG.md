@@ -1131,6 +1131,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The DOI is in `CITATION.cff` (GitHub's *Cite this repository*), the README (a badge and the BibTeX entry) and the
   site's APA and BibTeX citations. A test keeps it the same everywhere.
 
+### Documentation: the number of tests
+
+- The README and the site's "Tested on every push" card say "more than 2,500 automated tests" (2,552 today),
+  where they said more than 1,500 and more than 800.
+
 ### Dependency updates: DuckDB 2, the Anthropic SDK 2, pandas 3.1 and seven others
 
 - Updated in `uv.lock`, as Dependabot proposed:
