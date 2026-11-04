@@ -21,6 +21,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **A two-group difference** took the groups in the order their rows came: +6.64 in the file's order, -6.64 sorted by
   the group, and the dossier did not say which was subtracted. The first group in sorted order is the reference, and
   the results and the dossier say "mean difference (Intervention - Control)".
+- **A study replayed in another environment:** the replay finds the tables a trace names by the fingerprints the trace
+  recorded. Another pandas or numpy hashing the same table otherwise made a draft's population read on another table,
+  and a fill replayed one value short.
 
 ### Statistics: results corrected (follow-up programme M5)
 

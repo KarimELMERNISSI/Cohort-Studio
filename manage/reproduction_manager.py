@@ -549,10 +549,10 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     return df, None
 
 
-def _freeze_population(df, step, index, paths, warnings):
+def _freeze_population(df, step, index, paths, warnings, result=None):
     block = step.get("population") or {}
     if block.get("criteria"):
-        rows = _population_rows(df, block, index, warnings)
+        rows = _population_rows(df, block, index, warnings, result.population_frames if result else None)
     elif block.get("included"):
         rows = pd.Index(ranges_to_ids(block["included"]))
     else:
@@ -583,8 +583,9 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
     "outlier_clipping": _outlier_clipping,
     "mi_impute": _mi_impute,
 }
-# The handlers that report on the replay result: the imputed datasets, and what each imputation did (StepRecord)
-_REPORTING = frozenset({"imputation", "targeted_imputation", "mi_impute"})
+# The handlers given the replay result: the imputed datasets and what each imputation did (StepRecord), and the tables
+# a freeze's population names
+_REPORTING = frozenset({"imputation", "targeted_imputation", "mi_impute", "freeze_population"})
 
 
 def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, paths: PathResolver | None,
@@ -634,13 +635,19 @@ def apply_steps(
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
-    # the tables the recorded populations were evaluated on, kept while a step names one (_population_rows)
+    # the tables the recorded populations were evaluated on, kept while a step names one (_population_rows): under the
+    # fingerprints the trace recorded, which name them whatever this machine computes (another pandas or numpy may hash
+    # the same table otherwise, and a population then read on another table filled other rows), and under the ones
+    # computed here
     named = {str(fp) for step in steps if (fp := (step.get("population") or {}).get("data_fp"))}
     result.population_frames.update({fp: f for fp, f in (frames or {}).items() if fp in named})
     if named and (initial := frame_fingerprint(current)) in named:
         result.population_frames[initial] = current
     for offset, step in enumerate(steps):
         i = start + offset
+        recorded_in = str((step.get("data") or {}).get("fp_in") or "")
+        if recorded_in in named and recorded_in not in result.population_frames:
+            result.population_frames[recorded_in] = current
         description = step.get("description", step.get("function"))
         if progress_callback:
             progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
@@ -683,6 +690,8 @@ def apply_steps(
                 )
         if actual in named:
             result.population_frames[str(actual)] = current
+        if expected and str(expected) in named:
+            result.population_frames[str(expected)] = current
     result.population_frames.clear()
     result.df = current
     result.single_imputed = restrict_cells(result.single_imputed, current)

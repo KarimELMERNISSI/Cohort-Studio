@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TUTORIAL = ROOT / "assets" / "tutorial"
@@ -114,12 +115,16 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
     )
 
 
-def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> None:
+@pytest.mark.parametrize("elsewhere", [False, True], ids=["here", "another-environment"])
+def test_a_draft_replays_on_the_population_it_was_staged_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, elsewhere: bool
+) -> None:
     """
     Every fill of an Enrich draft is scoped to the population of the data before the draft, and so is its replay,
     even when a fill makes a ticked criterion fire: a weight filled from a mistyped BMI (360 kg) must not take its row
     out of the next fill. The replay evaluated each step's criteria on the table as filled so far, filled one value
-    less and diverged.
+    less and diverged. Elsewhere, another pandas or numpy hashing the same table to other digests: the tables are
+    found by the fingerprints the trace recorded, and the replay fills as recorded.
     """
     from core.population import catalogue
     from core.session import DataSession
@@ -182,6 +187,16 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(tmp_path: Path) -> N
         and session.base["bmi_x2"].tolist()[1] == 320.0
     )
 
+    if elsewhere:
+        import manage.reproduction_manager as engine
+
+        here = engine.frame_fingerprint
+        monkeypatch.setattr(engine, "frame_fingerprint", lambda df: "elsewhere-" + here(df))
     replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
-    assert replay.reproducible and not replay.warnings, replay.warnings
     assert replay.df["bmi_x2"].tolist()[1] == 320.0 and not replay.population_frames
+    if elsewhere:  # only the fingerprints differ: no population read on another table
+        assert not any(
+            "keeps other rows" in w or "filled on replay" in w for w in replay.warnings
+        ), replay.warnings
+    else:
+        assert replay.reproducible and not replay.warnings, replay.warnings
