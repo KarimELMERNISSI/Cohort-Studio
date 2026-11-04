@@ -148,6 +148,65 @@ brackets.
   the one action that removes rows: it asks for confirmation, it is one step of the trace, saved versions are not
   changed, and the criteria are then unticked.
 
+## Data > Clean
+
+Data > Clean fixes how values are written. Rows are never removed here, and each fix is one step of the trace, which
+the replay redoes.
+
+### Categories
+
+The tab lists the text variables of 2 to 200 values, those with values to check first. Free text and identifiers
+(more than 200 values) are not listed: correct them with a formula on **Data > Enrich > Create New Variables**, for
+example one ending in `.str.strip()` to trim spaces.
+
+- **What is offered, never applied.** A value written with extra spaces takes its spelling with the spaces collapsed
+  (`Metz␣` is `Metz`; `␣` marks a hidden space). Everything else is offered under *Check before changing*, in groups:
+  - *Written another way*: capitals, variants (accents, British and American spellings) and one-letter codes of a
+    longer value (*Female → F*); **Tick all** ticks the group;
+  - *Case may name a category*: values that differ only by capitals, which in codes can be two categories (Kell's K
+    and k, Rh's CcDee and ccdee), ticked one by one;
+  - *Close to a more frequent value*: a likely typo, with both counts;
+  - *Codes that may mean missing* (`?`, `unknown`, `NA`), each asked what missing means there;
+  - *Proposed by the AI engine*, when you ask it (below).
+
+  Ticking fills the table; the data change only when the copy is added.
+- **The table** gives each value as written its clean value, or sets it to missing with what missing means there
+  (unknown or not done, not applicable, declined). **Find values** picks at once the values that hold a text (`*`
+  stands for any text; tick *Regular expression* for a pattern such as `CKD|kidney`); then **Map** them to one clean
+  value, **Set to missing**, or **Keep as written**. *Order* sorts A to Z, case and spaces set aside, or by rows. The
+  chart shows the values after (or before) cleaning, each with its rows.
+- **Grouping is said.** Merging two categories is a grouping, not a correction: the page asks why under the table
+  ("Why group `m` with `M`?") before it adds the copy, and the methods say it.
+- **The copy.** **Add `sex_clean` (`sex` kept)** writes the clean values into a new column right after the original,
+  which is kept; cleaning again offers **Write `sex_clean` again**, starting from the choices recorded. A copy follows
+  its variable while no later step changes the variable's values; after an imputation or the rows of a merge, the page
+  says that the variable changed since and offers to write the copy again.
+- **Ask the AI engine** (with an engine running) proposes merges such as synonyms or translations. A preview shows
+  exactly what is sent: the variable's name and its values as written, without their counts and never a row; a cloud
+  recipient receives only values held by at least 5 rows, and nothing from free text or identifiers. Its proposals
+  join the offers, each checked by you.
+- **Where it is analysed.** Under a list of groups (two-group tests, the pooled comparison, the power analysis) and in
+  Survival & regression's plan, a variable whose values differ only by spaces or capitals is offered **Clean `site`
+  here**: the same editor opens in a window, so that the analysis page keeps its choices. Once the copy is added, the
+  page offers to group by it, or to use it in the variable's place; a copy behind its variable is cleaned again first.
+  The window closes through its own buttons: **Close, keeping my choices**, or **Discard my choices**.
+
+The Data Quality Dashboard scores a variable cleaned into a copy that follows it through the copy (see *Uniformity*
+below).
+
+### Dates
+
+The tab lists the text columns that look like dates, each read with one format detected from the shape of its values:
+day and month in either order, two-digit years with a pivot year, Excel serial numbers only when you accept them.
+When no value shows whether the day or the month comes first, the order of the import's day-first setting is
+proposed, or the one that spreads the dates over the months (dates completed to the 1st); the page says what each
+reading gives. The table counts, for each column, the values that cannot be read, the partial dates (a month and a
+year: never completed, left missing), the ambiguous ones, two-digit years, dates with a time, dates before 1900 and
+after the extraction date, with the earliest and the latest. Placeholder dates (01/01/1900, 31/12/9999 ...) are set to
+missing while their box is ticked. **Convert** turns the columns into dates in place, one step of the trace that
+records each column's format, which the replay reads again the same way. The columns already dates are checked the
+same way.
+
 ---
 
 ## Outlier Detection & Handling

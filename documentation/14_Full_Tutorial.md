@@ -46,7 +46,7 @@ The global score is about **98/100** (*excellent*). Hover the segments of the ri
 - **Domain Validity 99.83%**: the 8 plausibility rules make 9,593 checks on the rows that hold their values (the
   height rule skips the 55 rows without `height_cm`); 16 fail, on 16 rows.
 - **Uniformity**: the `sex` column mixes codes (*male*, *Female*, *f*, *M* with a trailing space, ...) and 8 `site`
-  values end with a space. You will clean both in step 3. Until then, the lists of groups on Analyze show such a
+  values end with a space. You will clean both in step 2.6. Until then, the lists of groups on Analyze show such a
   space as ␣ (*Luxembourg␣*), and warn that these groups differ only by spaces or capitals.
 - **Completeness**: the cells missing in `hba1c_pct`, `nt_probnp_pg_ml`, `sbp_6m`, `ldl_mmol_l` and `height_cm`, and in
   three variables computed from others: `bmi_kg_m2`, `egfr_ml_min_1_73m2` and `hf_phenotype` (see 2.5).
@@ -129,6 +129,25 @@ The dashboard's missing-data views show these documented patterns:
 
 Finally, save a version with **Save** in the sidebar. Validate is now ticked on the Start page.
 
+### 2.6 Clean the categories
+
+On **Data > Clean**, the *Categories* tab lists the text variables with values to check. Each fix writes a copy
+beside the variable; the original is kept.
+
+1. Choose **`site`**. Four of its eight values are sites written with a trailing space (`Metz␣`): they take their
+   spelling without it, with nothing to check. Click **Add site_clean (site kept)**: *Added site_clean beside site:
+   4 values instead of 8.*
+2. Choose **`sex`**. Under *Check before changing*, *Written another way* offers **Female → F**, **MALE → male**,
+   **female → Female** and **male → M**: click **Tick all 4**. *Case may name a category* offers **f → F** and
+   **m → M**: in some codes, capitals name two categories (Kell's K and k), so these are ticked one by one; here they
+   mean the same sex, so tick both. Merging categories is a grouping: answer the two questions under the table,
+   *Why group m with M?* and *Why group f with F?* (for example "the same code in lower case"). The chart shows
+   **F 493** and **M 713**. Click **Add sex_clean (sex kept)**: *Added sex_clean beside sex: 2 values instead of 10.*
+
+Each is one step of the trace. Back on **Data > Validate**, the dashboard's *Uniformity* reads **100%**: `site` and
+`sex` are scored through their copies. On Analyze, a list of groups that still differ by spaces or capitals offers to
+clean the variable there, in a window, without leaving the page.
+
 ---
 
 ## Step 3 - Enrich the cohort
@@ -154,8 +173,6 @@ its source columns, with its statistics on the analysis population, before **Con
 
 | New variable | Formula |
 | --- | --- |
-| `site_clean` | `site.str.strip()` |
-| `sex_clean` | `np.where(sex.str.strip().str.lower().str.startswith('f'), 'F', 'M')` |
 | `egfr_6m` (CKD-EPI 2021, at the 6-month visit) | `np.where(age >= 18, 142 * np.minimum(creatinine_6m_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** np.where(sex_clean == 'F', -0.241, -0.302) * np.maximum(creatinine_6m_umol_l / 88.4 / np.where(sex_clean == 'F', 0.7, 0.9), 1) ** -1.2 * 0.9938 ** age * np.where(sex_clean == 'F', 1.012, 1.0), np.nan)` |
 
 The BMI and the eGFR at enrolment are already in the file, with gaps: step 3.3 declares how they are computed rather
@@ -165,8 +182,8 @@ With the AI engine on, you can also start from **AI Variable Suggestions (RAG)**
 *eGFR*, read the formula and its source, and **Apply to Editor** puts it in the editor, to check against the formula
 above before you compute it.
 
-`site_clean` has the 4 sites again, and `sex_clean` only *F* and *M*. `egfr_6m` averages about 68 mL/min/1.73 m2 in
-the 778 patients with a 6-month visit; `np.where(age >= 18, ..., np.nan)` keeps this adult equation away from
+`egfr_6m` uses `sex_clean`, written in step 2.6. It averages about 68 mL/min/1.73 m2 in the 778 patients with a
+6-month visit; `np.where(age >= 18, ..., np.nan)` keeps this adult equation away from
 minors. Apply the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the
 data changed, so check the quality once more (step 2.1).
 

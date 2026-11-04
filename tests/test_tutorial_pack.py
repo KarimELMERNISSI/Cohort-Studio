@@ -130,29 +130,42 @@ def test_inclusion_criteria(cohort: pd.DataFrame, config: dict) -> None:
     assert int(soft.sum()) == 16
 
 
+def _cleaned(values: pd.Series) -> pd.Series:
+    """A variable cleaned as step 2.6 cleans it on Data > Clean > Categories: spaces folded, every offer ticked."""
+    from enrich.recode import level_counts, new_choices, plan, recode, suggest, tick
+
+    counts = level_counts(values)
+    choices = new_choices()
+    for offer in suggest(counts).offers:
+        tick(choices, counts, offer)
+    mapping = {k: v for k, v in choices["mapping"].items() if v != ""}
+    return recode(values, plan(counts, mapping, kept=choices["kept"]))
+
+
+def test_step_2_6_cleans_site_and_sex_as_the_chapter_says(cohort: pd.DataFrame) -> None:
+    """The copies the chapter's step 2.6 adds on Data > Clean: 4 sites from 8 values, F 493 and M 713 from 10."""
+    site = _cleaned(cohort["site"])
+    assert sorted(site.unique()) == ["Esch-sur-Alzette", "Ettelbruck", "Luxembourg", "Metz"]
+    assert cohort["site"].nunique() == 8 and "4 values instead of 8" in CHAPTER
+    sex = _cleaned(cohort["sex"])
+    assert sex.value_counts().to_dict() == {"M": 713, "F": 493}
+    assert cohort["sex"].nunique() == 10 and "2 values instead of 10" in CHAPTER
+    assert "**F 493** and **M 713**" in CHAPTER
+
+
 def test_chapter_formulas_work_in_the_enrich_evaluator(analysis_set: pd.DataFrame) -> None:
     followup = pd.read_csv(TUTORIAL / "tutorial_followup_labs.csv")
     df = analysis_set.merge(followup, on="patient_id", how="left")  # step 3.1
-    formulas = {
-        "site_clean": "site.str.strip()",
-        "sex_clean": "np.where(sex.str.strip().str.lower().str.startswith('f'), 'F', 'M')",
-        "egfr_6m": EGFR.replace("creatinine_umol_l", "creatinine_6m_umol_l"),
-    }
-    for name, formula in formulas.items():
-        ok, result, _ = evaluate_formula_safely(formula, name, df.copy(), return_series=True)
-        assert ok, (name, result)
-        df[name] = result
-        assert f"`{formula}`" in CHAPTER, name
-    assert sorted(df["site_clean"].unique()) == [
-        "Esch-sur-Alzette",
-        "Ettelbruck",
-        "Luxembourg",
-        "Metz",
-    ]
-    assert set(df["sex_clean"]) == {"F", "M"}
-    egfr_6m = pd.to_numeric(df["egfr_6m"])
+    df["sex_clean"] = _cleaned(df["sex"])  # step 2.6
+    formula = EGFR.replace("creatinine_umol_l", "creatinine_6m_umol_l")
+    ok, result, _ = evaluate_formula_safely(formula, "egfr_6m", df.copy(), return_series=True)
+    assert ok, result
+    assert f"`{formula}`" in CHAPTER
+    egfr_6m = pd.to_numeric(result)
     assert int(egfr_6m.notna().sum()) == 778 and round(float(egfr_6m.mean())) == 68
-    assert "`egfr_6m` averages about 68 mL/min/1.73 m2 in\nthe 778 patients" in CHAPTER
+    assert (
+        "It averages about 68 mL/min/1.73 m2 in the 778 patients with a\n6-month visit" in CHAPTER
+    )
 
 
 def test_the_derived_variables_agree_but_in_the_planted_errors(

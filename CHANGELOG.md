@@ -1471,6 +1471,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   written several ways. The Hypothesis tests plan names the groups that hold one value ("one value in f, m ...: leave
   them out of the groups"), where it said "fewer than two groups with two or more values" beside two groups of
   hundreds.
+- **The handbook and the tutorial clean on Data > Clean.** The Data Validation chapter, which the Clean page's
+  Handbook link opens, describes Clean: the Categories tab (what is offered and never applied, Find values, the table,
+  the grouping question, the copy and when it follows its variable, the AI engine's preview, cleaning where a variable
+  is analysed) and the Dates tab. The tutorial cleans `site` and `sex` there (step 2.6: 4 values instead of 8, F 493
+  and M 713), where it wrote Enrich formulas, and the dashboard's Uniformity then reads 100%.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
