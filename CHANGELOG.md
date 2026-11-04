@@ -343,7 +343,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   participant data of its sessions, which its user no longer reaches. The sign-in logs it, and
   `dev_scripts/move_workspaces.py` lists it: merge it into the account's folder after review (both may hold files
   of one name: keep both), or delete it under the study's retention rule; until then, a request to erase that user's
-  data must cover it.
+  data must cover it. A folder of another listed account is never such a folder: local accounts sign in by their
+  exact name and are not looked at, and the script marks a listed account's folder whose name differs by case alone
+  "another account's folder: never merge it" (two local accounts, `alice` and `Alice`, could exist before
+  2026-10-20).
 
 ### Usability
 

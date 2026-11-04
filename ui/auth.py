@@ -84,7 +84,13 @@ def _move_earlier_workspace(iam, username: str) -> None:
                 if left
                 else ""
             )
-        cased = [folder.name for folder in case_folders(username)]
+        # an identity provider whose spelling of a name changed (Better Auth); a local account signs in by its exact
+        # name, so a folder of its name in another case is another account's, never its own
+        cased = (
+            []
+            if iam.provider_type == IAMProviderType.LOCAL
+            else [folder.name for folder in case_folders(username)]
+        )
         if (
             cased
         ):  # another case of the name, on a file system that tells case apart: never moved here

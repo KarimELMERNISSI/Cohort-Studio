@@ -53,7 +53,7 @@ def plan(names: list[str]) -> list[tuple[str, str, str]]:
                     "move" if earlier is not None else reason,
                 )
             )
-        cased = case_folders(name)
+        cased = case_folders(name, names)
         if cased:
             rows.append(
                 (
@@ -61,6 +61,15 @@ def plan(names: list[str]) -> list[tuple[str, str, str]]:
                     ", ".join(folder.name for folder in cased),
                     f"its name in another case: merge it into {safe_dirname(name)} by hand, after review (both may "
                     "hold files of one name: keep both), or delete it under the study's retention rule",
+                )
+            )
+        others = [folder for folder in case_folders(name) if folder not in cased]
+        if others:  # a listed account's own folder, its name differing by case alone
+            rows.append(
+                (
+                    name,
+                    ", ".join(folder.name for folder in others),
+                    "another account's folder (its name differs by case alone): never merge it",
                 )
             )
     return rows

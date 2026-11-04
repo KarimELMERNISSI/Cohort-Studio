@@ -20,7 +20,7 @@ import re
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -158,15 +158,17 @@ def _read_code(folder: str) -> str | None:
     return "".join(out)
 
 
-def case_folders(username: str | None) -> list[Path]:
+def case_folders(username: str | None, accounts: Collection[str] = ()) -> list[Path]:
     """
     The folders under ``users/`` of a name that differs from ``username`` by case only, the account's own folder set
     apart: an identity provider's account signed in before with its name typed in another case (Better Auth, before
     the sign-in kept the provider's spelling), on a file system that tells case apart (Linux, the Docker image); where
     it does not, both spellings were always one folder. They hold that account's files, and are left for an
-    administrator to merge into its folder (dev_scripts/move_workspaces.py).
+    administrator to merge into its folder (dev_scripts/move_workspaces.py). A folder of a listed account
+    (``accounts``) is that account's, never this one's: two local accounts were once told apart by case alone.
     """
     name = (username or "").strip()
+    others = {str(a) for a in accounts if str(a) != name}
     users = data_root() / "users"
     if not name or not users.is_dir():
         return []
@@ -176,7 +178,12 @@ def case_folders(username: str | None) -> list[Path]:
         if folder.name == own.name or not folder.is_dir() or folder.is_symlink():
             continue
         decoded = _decoded(folder.name)
-        if decoded is None or decoded == name or decoded.casefold() != name.casefold():
+        if (
+            decoded is None
+            or decoded == name
+            or decoded.casefold() != name.casefold()
+            or decoded in others
+        ):
             continue
         if own.exists() and os.path.samefile(
             folder, own

@@ -421,3 +421,32 @@ def test_a_folder_of_the_name_in_another_case_is_found_where_case_is_told_apart(
     assert case_folders("alice@example.org") == ([earlier] if cases_apart else [])
     assert case_folders("Alice@Example.org") == []  # its own folder
     assert case_folders("bob@example.org") == []
+
+
+def test_another_account_s_folder_is_never_offered_to_merge(root: Path) -> None:
+    """Two local accounts, alice and Alice (told apart by case alone before 2026-10-20, on Linux): each sign-in named the
+    other's folder as its own "to merge into its folder", and the script planned both merges."""
+    import importlib.util
+
+    from core.workspace import case_folders
+
+    users = root / "users"
+    for name in ("alice", "Alice"):
+        (users / safe_dirname(name) / "datasets").mkdir(parents=True, exist_ok=True)
+    cases_apart = len(list(users.iterdir())) == 2
+    assert case_folders("alice", ["alice", "Alice"]) == []
+    assert case_folders("Alice", ["alice", "Alice"]) == []
+    spec = importlib.util.spec_from_file_location(
+        "move_workspaces",
+        Path(__file__).resolve().parents[2] / "dev_scripts" / "move_workspaces.py",
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    verdicts = [verdict for _, _, verdict in script.plan(["alice", "Alice"])]
+    assert not any("merge it into" in v for v in verdicts)
+    if cases_apart:
+        assert (
+            verdicts
+            == ["another account's folder (its name differs by case alone): never merge it"] * 2
+        )
