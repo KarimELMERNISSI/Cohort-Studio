@@ -190,14 +190,27 @@ TABS = (
 TAB_KEY = "epi_tab"
 
 
+TRANSFORM_ATTR = "analysis_transformation"  # (name, the columns it changed), on the frame _transformed gives
+
+
+def _transform_of(df: pd.DataFrame) -> tuple[str, tuple[str, ...]]:
+    """The transformation the Analysis tab applied to ``df`` and the columns it changed: part of each result's
+    settings, so that a result computed on other values is never shown or stored as current."""
+    name, columns = df.attrs.get(TRANSFORM_ATTR) or ("None (Raw Data)", ())
+    return str(name), tuple(map(str, columns))
+
+
 def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> pd.DataFrame:
     """
     The data of the Analysis tab, its numeric variables transformed as chosen above the tabs. Computed in that tab
-    only (M5b): the other tabs analyse the data as they are.
+    only (M5b): the other tabs analyse the data as they are. The frame says which transformation changed which
+    columns (``TRANSFORM_ATTR``): Log1p leaves a column with a negative value as it is.
     """
     df_analysis = df.copy()
+    df_analysis.attrs[TRANSFORM_ATTR] = ("None (Raw Data)", ())
     if transformation == "None (Raw Data)":
         return df_analysis
+    changed: list[str] = []
     if numeric_cols:
         if transformation == "Log Transformation (Log1p)":
             # Check for negative values
@@ -208,6 +221,7 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
                     if float(df_analysis[col].min()) >= 0:
                         df_analysis[col] = np.log1p(df_analysis[col])
                         cols_to_transform.append(col)
+                        changed.append(col)
                     else:
                         skipped_cols.append(col)
             
@@ -218,6 +232,7 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
             for col in numeric_cols:
                 if pd.api.types.is_numeric_dtype(df_analysis[col]) and float(df_analysis[col].std()) > 0:
                     df_analysis[col] = (df_analysis[col] - df_analysis[col].mean()) / df_analysis[col].std()
+                    changed.append(col)
                     
         elif transformation == "Min-Max Normalization":
             for col in numeric_cols:
@@ -226,8 +241,10 @@ def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> p
                     max_val = df_analysis[col].max()
                     if float(max_val) > float(min_val):
                         df_analysis[col] = (df_analysis[col] - min_val) / (max_val - min_val)
-    
+                        changed.append(col)
+
     st.info(f"**{transformation}** applied to numeric variables for the analysis below.")
+    df_analysis.attrs[TRANSFORM_ATTR] = (transformation, tuple(changed))
     return df_analysis
 
 
@@ -385,6 +402,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         st.warning("Please select at least 2 groups to perform a comparison.")
         return
 
+    transform = _transform_of(df)  # read before any filtering: a result's settings name it
     # Filter Dataframe based on selected groups
     df_analysis_filtered = df[df[group_col].isin(selected_groups)].copy()
 
@@ -422,7 +440,8 @@ def run_univariate_analysis(df, analyzer, transformed=False):
     if not run_now and not (cached and cached.get("signature") == signature):
         st.info("Choose the grouping variable and the variables to test, then click Run analysis.")
         return
-    if run_now or cached is None or cached.get("signature") != signature:
+    fresh = run_now or cached is None or cached.get("signature") != signature
+    if fresh:
         results = []
         progress_bar = st.progress(0)
         for i, target in enumerate(target_cols):
@@ -443,9 +462,12 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         mark_step("analyse", f"group comparison of {len(target_cols)} variable(s) by {group_col}")
     else:
         results = cached["results"]
-    # kept in the result store too, stamped, so that it can go into the study dossier
-    stored_config = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method)
-    if status("univariate", config=stored_config) != CURRENT:
+    # kept in the result store too, stamped, so that it can go into the study dossier: stored again whenever a run
+    # computes new results (the same settings on other values: a transformation, an imputation, a clip), and its
+    # settings name the transformation, so that a run on raw values never stands for one on transformed values
+    stored_config = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method,
+                     transform)
+    if fresh or status("univariate", config=stored_config) != CURRENT:
         remember("univariate", {"results": results, "group": group_col, "correction": correction_method},
                  config=stored_config, n_analysed=len(df_analysis_filtered), columns=[group_col, *target_cols])
 
@@ -815,7 +837,8 @@ def run_multivariate_analysis(df, analyzer):
     with col_btn2:
         st.caption("Fits an OLS model and computes the Type II table and the adjusted (least-squares) means.")
 
-    config = (target_col, group_col, tuple(covariates))
+    # the transformation is part of the settings: switched after a run, the result on the other values is not shown
+    config = (target_col, group_col, tuple(covariates), _transform_of(df))
     if run_button:
         from biostats.linear import ancova
 

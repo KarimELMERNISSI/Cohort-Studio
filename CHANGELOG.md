@@ -6,6 +6,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Results corrected before the study package (M8, first steps)
+
+- **The Analysis tab's transformation** (Hypothesis tests & epidemiology): switched to Log1p after a run, the ANCOVA
+  on the raw values was still shown under "Log1p applied", and a Log1p run of the group comparison was shown while the
+  dossier kept the raw run, labelled current. The transformation, and the columns it changed, are now part of each
+  result's settings, and the group comparison is stored whenever a run computes new results.
+
 ### Statistics: results corrected (follow-up programme M5)
 
 - **Rate ratio** (Analyze > Hypothesis tests > Paired, rates & stratified).
