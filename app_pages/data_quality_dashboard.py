@@ -15,7 +15,16 @@ import utils.visualization_utils as vu
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.criteria import criterion_columns
 from core.registry import as_code
-from explore.data_quality_auditor import DERIVED_CATEGORY, NO_RULE
+from explore.data_quality_auditor import (
+    CLEAN_AGAIN,
+    CLEAN_LINK,
+    COPY_KEEPS,
+    DERIVED_CATEGORY,
+    FORMULA,
+    FORMULA_LINK,
+    NO_RULE,
+    TO_CLEAN,
+)
 from explore.quality_score import (
     DEFAULT_WEIGHTS,
     DIMENSION_HELP,
@@ -26,6 +35,7 @@ from explore.quality_score import (
     score_text,
     weighted_score,
 )
+from ui import nav
 from ui.components import page_link
 from ui.components.criteria import criterion_cards
 from ui.components.levels import CLEAN_WHERE
@@ -58,6 +68,33 @@ def _selected_dimension(event) -> str | None:
         return str(custom[0])
     label = point.get("y") if isinstance(point, dict) else None
     return str(label) if label is not None else None
+
+
+# where a text column that Clean does not list (free text, an identifier) is corrected: a formula
+FORMULA_WHERE = nav.where("enrich", "variables")
+
+
+def _uniformity_links(auditor) -> None:
+    """Where the text columns Uniformity flags are corrected: Data > Clean for those it lists (and for a variable whose
+    copy needs cleaning again), a formula on Enrich for free text and identifiers."""
+    kinds = getattr(auditor, "uniformity_kinds", None) or {}
+    if any(kinds.get(kind) for kind in (TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS)):
+        page_link("clean", CLEAN_LINK, icon=":material/cleaning_services:", tab="categories")
+    if kinds.get(FORMULA):
+        page_link("enrich", FORMULA_LINK, icon=":material/calculate:", tab="variables")
+
+
+def _uniformity_cleaned(auditor) -> None:
+    """The variables left out of the Uniformity score: each is cleaned into a copy that follows it, scored in its
+    place."""
+    cleaned = getattr(auditor, "uniformity_cleaned", None) or []
+    if cleaned:
+        pairs = ", ".join(f"{as_code(column)} into {as_code(copy)}" for column, copy in cleaned)
+        st.caption(
+            f"Scored through their clean copies, the originals kept beside them: {pairs}."
+            if len(cleaned) > 1
+            else f"Scored through its clean copy, the original kept beside it: {pairs}."
+        )
 
 
 @st.fragment
@@ -302,8 +339,7 @@ def render_dashboard(df, config):
                             page_link("enrich", "Open the derived variables", icon=":material/calculate:",
                                       tab="derived_variables")
                         elif item['category'] == "Uniformity":
-                            page_link("clean", "Clean categories", icon=":material/cleaning_services:",
-                                      tab="categories")
+                            _uniformity_links(auditor)
             
             with col_best_practices:
                 st.markdown("### Data Quality Best Practices")
@@ -1314,9 +1350,15 @@ def render_dashboard(df, config):
             if "Uniformity" in metrics:
                 st.metric("Uniformity Score", f"{metrics['Uniformity']}%")
                 if metrics['Uniformity'] < 100:
-                    st.warning(f"Inconsistent text formatting detected: clean these columns on {CLEAN_WHERE}, "
-                               "each into a copy beside it.")
-                    page_link("clean", "Clean categories", icon=":material/cleaning_services:", tab="categories")
+                    kinds = getattr(auditor, "uniformity_kinds", None) or {}
+                    where = []
+                    if any(kinds.get(kind) for kind in (TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS)):
+                        where.append(f"clean the variables {CLEAN_WHERE} lists, each into a copy beside it")
+                    if kinds.get(FORMULA):
+                        where.append(f"correct free text and identifiers with a formula on {FORMULA_WHERE}")
+                    st.warning("Inconsistent text formatting detected" + (": " + "; ".join(where) if where else "")
+                               + ".")
+                    _uniformity_links(auditor)
 
                     if hasattr(auditor, 'uniformity_details') and auditor.uniformity_details:
                         st.markdown("### Uniformity Issues")
@@ -1330,3 +1372,4 @@ def render_dashboard(df, config):
                         """)
                 else:
                     st.success("Text data is uniform.")
+                _uniformity_cleaned(auditor)

@@ -1425,6 +1425,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   a variable it compares by or adjusts for: cleaned in the dialog, then "Use `sex_clean`, its clean copy, instead of
   `sex`" takes the variable's place in "Compare by" or "Adjust for" (under a multiple imputation, only a copy the
   imputed datasets hold).
+- **Once a variable is cleaned, the quality score and the warnings follow its copy.** A variable cleaned on Data >
+  Clean into a copy that still follows it no longer counts against the dashboard's Uniformity score: the copy is
+  scored in its place (cleaned, the tutorial cohort's `site` and `sex` take Uniformity from 92.5% to 100%), and the
+  Uniformity panel names each pair. The advice says what each flagged column needs, and the dashboard links there:
+  Clean for a variable it lists; cleaning again for one whose copy was written before a later step changed it; its
+  original cleaned again for a copy that kept some values apart; a formula on Data > Enrich > Create New Variables for
+  free text or an identifier (more than 200 values), which Clean does not list and the advice sent there all the same.
+  The warning under a list of groups says "`sex` is cleaned into `sex_clean`: group by `sex_clean`" once the copy
+  exists (it still said to clean `sex`). A copy that a later step left behind (an imputation, the rows of a merge) is
+  no longer offered in its variable's place, where the rows changed since would have left the analysis unsaid: the
+  warning, or Survival & regression's plan, says so and offers "Clean `sex` again here".
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.

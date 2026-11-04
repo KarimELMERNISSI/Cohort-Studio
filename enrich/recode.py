@@ -52,7 +52,7 @@ import unicodedata
 from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 import pandas as pd
 from rapidfuzz.distance import OSA
@@ -1429,6 +1429,26 @@ def follows(record: Mapping[str, Any] | None, df: pd.DataFrame, column: str) -> 
     return bool(again[target].equals(df[target]))
 
 
+class CleanCopy(NamedTuple):
+    """A column's clean copy (Data > Clean): its name, and whether it follows the column as it is (:func:`follows`)."""
+
+    copy: str
+    follows: bool = True
+
+
+def clean_copies(
+    df: pd.DataFrame, records: Mapping[str, Mapping[str, Any]]
+) -> dict[str, CleanCopy]:
+    """Each column of ``df`` whose last recode (``records``: :func:`recoded_records`) wrote a copy that is still a
+    column -> that copy, and whether it follows the column as it is."""
+    out: dict[str, CleanCopy] = {}
+    for source, record in records.items():
+        target = str(record.get("target") or "")
+        if source in df.columns and target and target in df.columns:
+            out[source] = CleanCopy(target, follows(record, df, source))
+    return out
+
+
 def last_record(
     steps: Iterable[Mapping[str, Any]], source: str, target: str
 ) -> dict[str, Any] | None:
@@ -1600,6 +1620,7 @@ __all__ = [
     "UNKNOWN",
     "VARIANT",
     "Candidate",
+    "CleanCopy",
     "Offer",
     "Suggestions",
     "ai_offers",
@@ -1607,6 +1628,7 @@ __all__ = [
     "candidates",
     "changes",
     "choices_of",
+    "clean_copies",
     "clean_value",
     "documented",
     "fold",

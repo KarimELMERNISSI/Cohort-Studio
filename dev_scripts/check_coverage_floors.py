@@ -37,12 +37,13 @@ from pathlib import Path
 # at 82.9 with those of Domain Validity's severity and rows on recorded values (M6, 2026-10-31).
 # app_pages to 64 at 66.0 with the tests of the Categories page's table, AI popover and corrected records (M6,
 # 2026-11-02).
+# explore to 82 at 84.2 with the tests of Uniformity's cleaned copies and of what each flagged column needs (2026-11-04).
 FLOORS: dict[str, float] = {
     "app_pages": 64.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 87.0,
-    "explore": 80.0,
+    "explore": 82.0,
     "graph": 92.0,
     "ingest": 89.0,
     "manage": 77.0,

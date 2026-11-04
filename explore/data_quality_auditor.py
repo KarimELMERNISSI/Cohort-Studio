@@ -12,6 +12,7 @@ from core.derived import from_config
 from core.population import family_checks, family_masks, family_operator
 from core.registry import as_code
 from enrich.derived import CANNOT, DISAGREES, MIN_ROWS, MOSTLY, TOO_FEW, check_derived
+from enrich.recode import MAX_VALUES, CleanCopy, level_counts
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,14 @@ DERIVED_CATEGORY = "Derived variables"
 
 
 NO_RULE = "no plausibility rule is declared"  # why Domain Validity is N/A when no rule is declared
+
+# what a text column the Uniformity check flags needs (DataQualityAuditor.uniformity_kinds), which the dashboard links
+# to: cleaned on Data > Clean, which lists it (2 to MAX_VALUES values); cleaned again, its copy written before a later
+# step changed it; its source cleaned again, a copy whose cleaning kept such values apart; or a formula on Enrich (free
+# text, an identifier, or a single value, which Clean does not list)
+TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS, FORMULA = "clean", "clean again", "copy", "formula"
+# the labels of the dashboard's links below that advice, which the advice names as they read
+CLEAN_LINK, FORMULA_LINK = "Clean categories", "Create New Variables"
 
 
 # a line failing SEVERE_FAILS checks or more, with an exact lower bound of SEVERE_BOUND for the share of its checks that
@@ -66,12 +75,19 @@ class DataQualityAuditor:
     """
 
     def __init__(
-        self, df: pd.DataFrame, config: Any | None = None, imputed: Mapping[str, Any] | None = None
+        self,
+        df: pd.DataFrame,
+        config: Any | None = None,
+        imputed: Mapping[str, Any] | None = None,
+        cleaned: Mapping[str, CleanCopy] | None = None,
     ) -> None:
         self.df: pd.DataFrame = df
         self.config = config
         # the cells an imputation filled (row ids per column): a derived variable's check does not compare them
         self.imputed = imputed
+        # each column cleaned into a copy on Data > Clean -> that copy (enrich.recode.clean_copies): a copy that follows
+        # its column is scored in its place, the original kept beside it not counted against Uniformity
+        self.cleaned: dict[str, CleanCopy] = dict(cleaned or {})
         self.metrics: dict[str, float] = {}
         self.advice: list[dict[str, str]] = []
         self.clinical_anomalies_df = None
@@ -88,6 +104,8 @@ class DataQualityAuditor:
         self.domain_family = ""  # that line's name on the page ("every rule together")
         self.domain_imputed_rows = 0  # rows that break a rule only through an imputed value
         self.uniformity_details: list[dict[str, str]] = []
+        self.uniformity_cleaned: list[tuple[str, str]] = []  # (column, copy) left out of the Uniformity score
+        self.uniformity_kinds: dict[str, list[str]] = {}  # TO_CLEAN, ...: the flagged columns each needs
         # Per dimension: the columns, rows or rules behind the points it loses (see DETAIL_COLUMNS).
         self.details: dict[str, pd.DataFrame] = {}
 
@@ -377,8 +395,10 @@ class DataQualityAuditor:
         Checks for string uniformity issues:
         - Leading/trailing whitespace.
         - Inconsistent capitalization (e.g., 'Male' vs 'male').
+        A column cleaned into a copy that follows it (``cleaned``) is left out: the copy is scored in its place.
         """
         self.uniformity_details = []
+        self.uniformity_cleaned = []
         object_cols = self.df.select_dtypes(include=['object', 'string']).columns
         if len(object_cols) == 0:
             return 100.0
@@ -387,6 +407,10 @@ class DataQualityAuditor:
         total_checks = 0
         
         for col in object_cols:
+            kept = self.cleaned.get(str(col))
+            if kept is not None and kept.follows:
+                self.uniformity_cleaned.append((str(col), kept.copy))
+                continue
             series = self.df[col].dropna().astype(str)
             if len(series) == 0:
                 continue
@@ -433,6 +457,67 @@ class DataQualityAuditor:
 
         score = (1 - (issues_count / total_checks)) * 100
         return round(score, 2)
+
+    def _uniformity_kind(self, column: Any) -> str:
+        """What a column the Uniformity check flags needs: TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS or FORMULA."""
+        if any(kept.copy == str(column) for kept in self.cleaned.values()):
+            return COPY_KEEPS
+        if str(column) in self.cleaned:  # a copy that follows its column leaves the column out of the score
+            return CLEAN_AGAIN
+        return TO_CLEAN if 2 <= len(level_counts(self.df[column])) <= MAX_VALUES else FORMULA
+
+    def _uniformity_steps(self) -> str:
+        """The advice's sentences on what each flagged column needs (``uniformity_kinds``). Cleaned on the Clean page,
+        into a copy beside each (an Enrich formula kept "f" and "female" apart); free text and identifiers, which it
+        does not list, by a formula. The dashboard links to both below the advice, by their names in the navigation."""
+
+        def names(columns: list[str]) -> str:
+            shown = [as_code(c) for c in columns[:3]]
+            more = len(columns) - len(shown)
+            return ", ".join(shown) + (f" and {more} more" if more else "")
+
+        kinds = self.uniformity_kinds
+        text = ""
+        if found := kinds.get(TO_CLEAN):
+            one = len(found) == 1
+            text += (
+                f" Check {names(found)}, then clean {'it' if one else 'each'} into a copy beside it, the original "
+                f"kept: {CLEAN_LINK}, below."
+            )
+        if found := kinds.get(CLEAN_AGAIN):
+            if len(found) == 1:
+                text += (
+                    f" {as_code(found[0])} was cleaned into {as_code(self.cleaned[found[0]].copy)} before a later "
+                    f"step changed it: clean it again ({CLEAN_LINK}, below)."
+                )
+            else:
+                text += (
+                    f" {names(found)} were cleaned into copies before a later step changed them: clean them again "
+                    f"({CLEAN_LINK}, below)."
+                )
+        if found := kinds.get(COPY_KEEPS):
+            sources = {kept.copy: column for column, kept in self.cleaned.items()}
+            if len(found) == 1:
+                source = as_code(sources[found[0]])
+                text += (
+                    f" {as_code(found[0])}, the clean copy of {source}, keeps some of these values apart: to merge "
+                    f"them, clean {source} again ({CLEAN_LINK}, below)."
+                )
+            else:
+                text += (
+                    f" {names(found)} are clean copies that keep some of these values apart: to merge them, clean "
+                    f"their originals again ({CLEAN_LINK}, below)."
+                )
+        if found := kinds.get(FORMULA):
+            wide = all(len(level_counts(self.df[c])) > MAX_VALUES for c in found if c in self.df.columns)
+            what = "free text or an identifier" if len(found) == 1 else "free text or identifiers"
+            text += (
+                f" Clean lists text variables of 2 to {MAX_VALUES} values, not {names(found)}"
+                + (f" ({what})" if wide else "")
+                + f": write a corrected copy with a formula on {FORMULA_LINK}, below (one ending in "
+                "`.str.strip()` trims the spaces)."
+            )
+        return text
 
     # --- Advanced Completeness Analysis ---
 
@@ -683,15 +768,12 @@ class DataQualityAuditor:
             })
 
         # 6. Uniformity Advice
+        self.uniformity_kinds = {}
+        for d in self.uniformity_details:
+            self.uniformity_kinds.setdefault(self._uniformity_kind(d["Column"]), []).append(str(d["Column"]))
         if self.metrics.get("Uniformity", 100) < 100:
             msg = "Some text columns hold values with stray spaces, or one value written with different capitals."
-            if getattr(self, "uniformity_details", None):
-                names = [as_code(d["Column"]) for d in self.uniformity_details[:3]]
-                more = len(self.uniformity_details) - len(names)
-                msg += f" Check {', '.join(names)}" + (f" and {more} more" if more else "") + "."
-            # cleaned on the Clean page, into a copy beside each (an Enrich formula kept "f" and "female" apart):
-            # the dashboard links to it below the advice, by its name in the navigation
-            msg += " Clean each into a copy beside it, the original kept: Clean categories, below."
+            msg += self._uniformity_steps()
 
             self.advice.append({
                 "category": "Uniformity",

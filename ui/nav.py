@@ -80,7 +80,10 @@ PAGES: tuple[PageDef, ...] = (
         "Data",
         ":material/auto_fix_high:",
         chapter="03_Data_Enrichment",
-        tabs=(("derived_variables", ("Handle Missing Data", "Derived variables")),),
+        tabs=(
+            ("derived_variables", ("Handle Missing Data", "Derived variables")),
+            ("variables", ("Create New Variables",)),  # its formulas (Variable Computation)
+        ),
     ),
     PageDef(
         "explore",
@@ -206,6 +209,14 @@ def tab_query(key: str, tab: str | None) -> dict[str, str] | None:
     return {TAB_PARAM: tab}
 
 
+def where(key: str, tab: str) -> str:
+    """A page's tab as the navigation names it (Data > Clean > Categories), for a sentence that sends the user there:
+    renamed with the page, never left behind."""
+    definition = page(key)
+    label = dict(definition.tabs)[tab][-1]
+    return " > ".join(part for part in (definition.section, definition.title, label) if part)
+
+
 def visible_pages(is_admin: bool) -> list[PageDef]:
     return [p for p in PAGES if is_admin or not p.admin]
 
@@ -235,4 +246,5 @@ __all__ = [
     "page_path",
     "tab_query",
     "visible_pages",
+    "where",
 ]

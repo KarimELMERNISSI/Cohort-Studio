@@ -941,15 +941,17 @@ class AppState:
     ) -> tuple[DataQualityAuditor, dict[str, Any], list[dict[str, str]]]:
         """
         The quality audit of every row (the Validate dashboard): the auditor, its metrics and its advice. It is kept
-        until the data, the criteria definitions, the declared derived variables or the validity method change; the
-        page only reads the auditor. One audit is kept per session, with the rows that break a plausibility rule
-        (``clinical_anomalies_df``).
+        until the data, the criteria definitions, the declared derived variables, the variables cleaned into copies
+        (Data > Clean) or the validity method change; the page only reads the auditor. One audit is kept per session,
+        with the rows that break a plausibility rule (``clinical_anomalies_df``).
         """
         import copy
         import hashlib
+        import json
 
         from core.derived import CONFIG_KEY
         from core.lineage import canonical_json
+        from enrich.recode import clean_copies, recoded_records
         from explore.data_quality_auditor import DataQualityAuditor
 
         session = self.session
@@ -962,9 +964,13 @@ class AppState:
         rules = canonical_json(config.get("mask_families") or {})
         derived = canonical_json(config.get(CONFIG_KEY) or {})  # checked by the advice
         settings = dict(params or {})
+        # each variable's last clean copy: the record says whether the copy follows it, which only the data change
+        recodes = recoded_records(self.transformation_manager.history)
+        cleaned = json.dumps(recodes, sort_keys=True, default=str)
         key = (
             hashlib.sha256(rules.encode("utf-8")).hexdigest(),
             hashlib.sha256(derived.encode("utf-8")).hexdigest(),
+            hashlib.sha256(cleaned.encode("utf-8")).hexdigest(),
             str(method),
             canonical_json(settings),
         )
@@ -976,6 +982,7 @@ class AppState:
                 base.copy(deep=False),
                 config=copy.deepcopy(config),
                 imputed=self.imputed_cells(base=True),
+                cleaned=clean_copies(base, recodes),
             )
             metrics = auditor.run_audit(validity_method=method, validity_params=settings)
             return auditor, metrics, list(auditor.advice)

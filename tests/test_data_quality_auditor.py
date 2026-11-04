@@ -319,8 +319,85 @@ def test_the_uniformity_advice_points_to_the_clean_page_and_quotes_names_as_code
     )
     assert "`site`" in message and "`[x](https://example.org)`" in message and "`unit`" not in message
     assert message.count("](https://example.org)") == 1  # only inside the code span
-    assert message.endswith("Clean each into a copy beside it, the original kept: Clean categories, below.")
+    assert message.endswith(
+        "then clean each into a copy beside it, the original kept: Clean categories, below."
+    )
     assert "normaliz" not in message and "**" not in message
+
+
+def _sites(mapping: dict[str, str], follows: bool = True) -> DataQualityAuditor:
+    """``site`` cleaned into ``site_clean`` by ``mapping`` (Data > Clean's copy), the auditor told of the copy."""
+    from enrich.recode import CleanCopy, recode_column
+
+    frame = pd.DataFrame({"site": ["Metz", "Metz ", "metz", "Esch"] * 10})
+    cleaned, _ = recode_column(frame, "site", "site_clean", mapping)
+    auditor = DataQualityAuditor(cleaned, cleaned={"site": CleanCopy("site_clean", follows)})
+    auditor.run_audit()
+    return auditor
+
+
+def _uniformity_advice(auditor: DataQualityAuditor) -> str:
+    (advice,) = [a for a in auditor.advice if a["category"] == "Uniformity"]
+    return advice["message"]
+
+
+def test_a_variable_cleaned_into_a_copy_that_follows_it_is_scored_through_the_copy() -> None:
+    """The advice sent the user to clean `site`, then, once `site_clean` held its clean values, still counted the
+    original kept beside it against the score, and still told them to clean it."""
+    from enrich.recode import recode_column
+
+    frame = pd.DataFrame({"site": ["Metz", "Metz ", "metz", "Esch"] * 10})
+    copy, _ = recode_column(frame, "site", "site_clean", {"Metz ": "Metz", "metz": "Metz"})
+    told_nothing = DataQualityAuditor(copy)
+    told_nothing.run_audit()
+    assert told_nothing.metrics["Uniformity"] == 50.0  # the original flagged, its copy not
+    auditor = _sites({"Metz ": "Metz", "metz": "Metz"})
+    assert auditor.metrics["Uniformity"] == 100.0
+    assert auditor.uniformity_cleaned == [("site", "site_clean")]
+    assert not [a for a in auditor.advice if a["category"] == "Uniformity"]
+
+
+def test_a_copy_written_before_a_later_change_of_its_variable_is_cleaned_again() -> None:
+    from explore.data_quality_auditor import CLEAN_AGAIN
+
+    auditor = _sites({"Metz ": "Metz", "metz": "Metz"}, follows=False)
+    assert auditor.metrics["Uniformity"] == 50.0  # the original holds values its copy has not had
+    assert auditor.uniformity_kinds == {CLEAN_AGAIN: ["site"]}
+    assert (
+        "`site` was cleaned into `site_clean` before a later step changed it: clean it again (Clean categories, "
+        "below)." in _uniformity_advice(auditor)
+    )
+
+
+def test_a_copy_that_keeps_values_apart_sends_to_its_variable() -> None:
+    """Clean does not list its own copies: the advice names the variable to clean again."""
+    from explore.data_quality_auditor import COPY_KEEPS
+
+    auditor = _sites({"Metz ": "Metz"})  # spaces merged, capitals kept apart
+    assert auditor.uniformity_kinds == {COPY_KEEPS: ["site_clean"]}
+    assert (
+        "`site_clean`, the clean copy of `site`, keeps some of these values apart: to merge them, clean `site` "
+        "again (Clean categories, below)." in _uniformity_advice(auditor)
+    )
+
+
+def test_free_text_is_sent_to_a_formula_not_to_clean() -> None:
+    """Clean lists 200 values at most: a column of comments, or an identifier, was sent there, and Clean said
+    nothing of it."""
+    from explore.data_quality_auditor import FORMULA, TO_CLEAN
+
+    comments = [f"Seen on visit {i}" + (" " if i % 7 == 0 else "") for i in range(400)]
+    frame = pd.DataFrame({"comment": comments, "site": ["Metz", "Metz "] * 200})
+    auditor = DataQualityAuditor(frame)
+    auditor.run_audit()
+    assert auditor.uniformity_kinds == {FORMULA: ["comment"], TO_CLEAN: ["site"]}
+    message = _uniformity_advice(auditor)
+    assert "Check `site`, then clean it into a copy beside it, the original kept: Clean categories, below." in message
+    assert message.endswith(
+        "Clean lists text variables of 2 to 200 values, not `comment` (free text or an identifier): write a "
+        "corrected copy with a formula on Create New Variables, below (one ending in `.str.strip()` trims the "
+        "spaces)."
+    )
 
 
 def test_the_completeness_advice_quotes_a_column_name_as_code() -> None:

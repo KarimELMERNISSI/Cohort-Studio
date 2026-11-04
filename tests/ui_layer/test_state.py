@@ -377,3 +377,85 @@ def test_the_quality_audit_runs_once_per_data_and_detection_settings(
         a for a in at.session_state["probe"]["advice"] if a["category"] == "Derived variables"
     ]
     assert len(advice) == 1 and "`bmi_kg_m2`" in advice[0]["message"]
+
+
+def _cleaned_dashboard_script() -> None:
+    import streamlit as st
+
+    from app_pages.data_quality_dashboard import render_dashboard
+    from core.fingerprint import frame_fingerprint
+    from enrich.recode import recode_column
+    from ui.state import get_state
+
+    state = get_state()
+    if "seeded" not in st.session_state:
+        st.session_state["seeded"] = True
+        state.load_tutorial_cohort()
+    if st.session_state.pop("action", None) == "clean":  # as Data > Clean's Apply writes each copy
+        for column, clean in (
+            ("site", lambda v: " ".join(v.split())),
+            ("sex", lambda v: v.strip()[:1].upper()),
+        ):
+            values = state.base[column].dropna().astype(str).unique()
+            mapping = {v: clean(v) for v in values if clean(v) != v}
+            new, _ = recode_column(state.base, column, f"{column}_clean", mapping)
+            params = {
+                "source": column,
+                "target": f"{column}_clean",
+                "mapping": mapping,
+                "source_fp": frame_fingerprint(state.base[[column]]),
+            }
+            state.commit_change(new, "recode_levels", params, f"Recoded {column}")
+    render_dashboard(state.base, st.session_state["config"])
+
+
+def test_a_variable_cleaned_into_a_copy_is_scored_through_it_on_the_dashboard(
+    data_root: Path,
+) -> None:
+    """Once Data > Clean had written `site_clean` and `sex_clean`, the dashboard still counted `site` and `sex`
+    against Uniformity and still sent the user to clean them."""
+    at = AppTest.from_function(_cleaned_dashboard_script, default_timeout=180)
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+
+    def uniformity() -> str:
+        return next(m.value for m in at.metric if m.label == "Uniformity Score")
+
+    assert uniformity() == "92.5%"
+    assert any(c.value == "-> Clean categories" for c in at.caption)
+    at.session_state["action"] = "clean"
+    at.run()
+    assert not at.exception, [str(e.value) for e in at.exception]
+    assert uniformity() == "100.0%"
+    assert any(
+        c.value
+        == "Scored through their clean copies, the originals kept beside them: `site` into `site_clean`, `sex` into "
+        "`sex_clean`."
+        for c in at.caption
+    )
+    assert not any(c.value == "-> Clean categories" for c in at.caption)
+
+
+def _links_script(kinds: dict) -> None:
+    from types import SimpleNamespace
+
+    from app_pages.data_quality_dashboard import _uniformity_links
+
+    _uniformity_links(SimpleNamespace(uniformity_kinds=kinds))
+
+
+def test_free_text_is_linked_to_the_formulas_and_the_rest_to_clean() -> None:
+    from explore.data_quality_auditor import COPY_KEEPS, FORMULA, TO_CLEAN
+
+    def links(kinds: dict) -> list[str]:
+        at = AppTest.from_function(_links_script, kwargs={"kinds": kinds}, default_timeout=60)
+        at.run()
+        assert not at.exception, [str(e.value) for e in at.exception]
+        return [c.value for c in at.caption]  # a link outside the navigation (bare mode)
+
+    assert links({FORMULA: ["comment"]}) == ["-> Create New Variables"]
+    assert links({TO_CLEAN: ["site"], FORMULA: ["comment"]}) == [
+        "-> Clean categories",
+        "-> Create New Variables",
+    ]
+    assert links({COPY_KEEPS: ["site_clean"]}) == ["-> Clean categories"]

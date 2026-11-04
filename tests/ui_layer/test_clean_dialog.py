@@ -8,19 +8,35 @@ covers it.)
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from streamlit.testing.v1 import AppTest
+
+import utils.data_paths as dp
 
 SITES = ["Metz", "Metz ", "metz", "Esch"] * 10
 
 
+@pytest.fixture(autouse=True)
+def _data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A loaded dataset writes its user's workspace: in a temporary folder, never in the data folder."""
+    monkeypatch.setattr(dp, "DATA_ROOT", str(tmp_path))
+
+
 def _script(
-    values: list[str], with_copy: bool = False, pooled: bool = False, direct: bool = False
+    values: list[str],
+    with_copy: bool = False,
+    pooled: bool = False,
+    direct: bool = False,
+    stale: bool = False,
 ) -> None:
     import pandas as pd
     import streamlit as st
 
     from app_pages.analysis_config import render_analysis_configuration
     from app_pages.clean_dialog import group_warning
+    from core.fingerprint import frame_fingerprint
     from core.state import DatasetRef
     from enrich.recode import recode_column
     from ingest.analyzer import DataAnalyzer
@@ -40,12 +56,17 @@ def _script(
         if with_copy:  # the copy that Apply writes
             mapping = {"Metz ": "Metz", "metz": "Metz"}
             new, _ = recode_column(state.base, "site", "site_clean", mapping)
-            state.commit_change(
-                new,
-                "recode_levels",
-                {"source": "site", "target": "site_clean", "mapping": mapping},
-                "Recoded site into site_clean",
-            )
+            params = {
+                "source": "site",
+                "target": "site_clean",
+                "mapping": mapping,
+                "source_fp": frame_fingerprint(state.base[["site"]]),
+            }
+            state.commit_change(new, "recode_levels", params, "Recoded site into site_clean")
+            if stale:  # a later step changed a row of site that the copy has not had (an imputation, a merge's rows)
+                later = state.base.copy()
+                later.loc[later.index[-1], "site"] = "metz"  # was Esch: the copy still says Esch
+                state.commit_change(later, "external_write", {}, "Changed a site")
     df = state.base
     if direct:  # the helper alone: a page would not offer so many groups
         group_warning("site", sorted(df["site"].unique()), group_key="t_group_col")
@@ -103,6 +124,21 @@ def test_once_a_copy_cleans_it_the_warning_offers_to_group_by_the_copy() -> None
     )  # the copy's groups are one each
 
 
+def test_the_warning_names_the_copy_and_a_copy_behind_its_variable_is_cleaned_again() -> None:
+    """Choosing `site` once `site_clean` was written still said "clean site on Data > Clean > Categories"."""
+    at = _open(with_copy=True, direct=True)
+    assert any(
+        "`site` is cleaned into `site_clean`: group by `site_clean`." in w.value for w in at.warning
+    )
+    assert "clean_use::t_group_col" in {b.key for b in at.button}
+    stale = _open(with_copy=True, direct=True, stale=True)
+    assert any("as it was before a later step changed it" in w.value for w in stale.warning)
+    keys = {b.key for b in stale.button}
+    assert "clean_use::t_group_col" not in keys  # its copy lacks the later change: not offered
+    (opener,) = [b for b in stale.button if b.key == "clean_open::t_group_col::site"]
+    assert opener.label == "Clean `site` again here"
+
+
 def test_the_pooled_comparison_says_a_copy_needs_the_imputation_again() -> None:
     at = _open(with_copy=True, pooled=True)
     assert any(
@@ -127,12 +163,13 @@ def test_a_variable_clean_does_not_list_is_said_so() -> None:
     assert "clean_open::t_group_col::site" not in {b.key for b in at.button}
 
 
-def _plan_script(with_copy: bool = False) -> None:
+def _plan_script(with_copy: bool = False, stale: bool = False) -> None:
     import numpy as np
     import pandas as pd
     import streamlit as st
 
     from app_pages.analysis_survival import _render_plan
+    from core.fingerprint import frame_fingerprint
     from core.state import DatasetRef
     from enrich.recode import recode_column
     from ui.guidance.outcomes import plan_time_to_event
@@ -161,12 +198,18 @@ def _plan_script(with_copy: bool = False) -> None:
         if with_copy:
             mapping = {"F ": "F", "f": "F", "m": "M"}
             new, _ = recode_column(state.base, "sex", "sex_clean", mapping)
-            state.commit_change(
-                new,
-                "recode_levels",
-                {"source": "sex", "target": "sex_clean", "mapping": mapping},
-                "Recoded sex into sex_clean",
-            )
+            params = {
+                "source": "sex",
+                "target": "sex_clean",
+                "mapping": mapping,
+                "source_fp": frame_fingerprint(state.base[["sex"]]),
+            }
+            state.commit_change(new, "recode_levels", params, "Recoded sex into sex_clean")
+            if stale:  # a later step changed a row of sex that the copy has not had
+                later = state.base.copy()
+                first = later.index[later["sex"] == "M"][0]
+                later.loc[first, "sex"] = "f"  # the copy still says M
+                state.commit_change(later, "external_write", {}, "Changed a sex")
     st.session_state.setdefault("surv_group", "arm")
     st.session_state.setdefault("surv_adjust", ["sex"])
     df = state.base
@@ -189,3 +232,23 @@ def test_the_survival_plan_offers_to_clean_a_covariate_then_to_use_its_copy() ->
     assert not with_copy.exception, [str(e.value)[:300] for e in with_copy.exception]
     assert with_copy.session_state["surv_adjust"] == ["sex_clean"]
     assert not any("written several ways" in m.value for m in with_copy.markdown)
+
+
+def test_the_survival_plan_says_a_copy_is_behind_its_variable_and_offers_to_clean_it_again() -> (
+    None
+):
+    """A copy a later step left behind was offered in the variable's place: the rows changed since left the model."""
+    at = AppTest.from_function(
+        _plan_script, kwargs={"with_copy": True, "stale": True}, default_timeout=60
+    )
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert any(
+        c.value
+        == "`sex_clean` was written before a later step changed `sex`: clean `sex` again, then use the copy."
+        for c in at.caption
+    )
+    keys = {b.key for b in at.button}
+    assert "clean_use::surv_adjust::sex" not in keys
+    (opener,) = [b for b in at.button if b.key == "clean_open::surv_adjust::sex"]
+    assert opener.label == "Clean `sex` again here"

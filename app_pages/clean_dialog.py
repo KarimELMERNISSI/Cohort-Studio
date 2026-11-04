@@ -44,6 +44,21 @@ def _use_in_list(list_key: str, name: str, copy: str) -> None:
     ]
 
 
+def _copy_of(state: Any, name: str) -> tuple[str, str, bool]:
+    """The variable ``name`` stands for (itself, or the variable whose clean copy it is), that variable's copy ("" when
+    none is a column) and whether the copy follows it as it is (Clean's list: one computation, shared)."""
+    base = state.base
+    if base is None:
+        return name, "", True
+    recoded = recoded_columns(state.transformation_manager.history)  # source -> its last copy
+    source = next((s for s, copy in recoded.items() if copy == name), name)
+    copy = recoded.get(source, "")
+    if not copy or copy not in base.columns or source not in base.columns:
+        return name, "", True
+    listed = next((c for c in clean_candidates(state) if c.column == source), None)
+    return source, copy, listed.follows if listed is not None else True
+
+
 def group_warning(
     column: Any,
     values: Iterable[Any],
@@ -52,10 +67,11 @@ def group_warning(
     groupable: Collection[str] | None = None,
     imputed: bool = False,
 ) -> None:
-    """The warning under a list of groups (ui.components.levels.level_warning), then what can be done here
-    (:func:`clean_actions`)."""
-    if level_warning(column, values):
-        clean_actions(column, group_key=group_key, groupable=groupable, imputed=imputed)
+    """The warning under a list of groups (ui.components.levels.level_warning), which names the variable's clean copy
+    once one is written, then what can be done here (:func:`clean_actions`)."""
+    source, copy, follows = _copy_of(get_state(), str(column))
+    if level_warning(column, values, source=source, copy=copy, follows=follows):
+        clean_actions(column, group_key=group_key, groupable=groupable, imputed=imputed, told=True)
 
 
 def clean_actions(
@@ -65,34 +81,33 @@ def clean_actions(
     list_key: str | None = None,
     groupable: Collection[str] | None = None,
     imputed: bool = False,
+    told: bool = False,
 ) -> None:
     """
     What can be done here about a variable whose values are written several ways: clean it in a dialog (Data > Clean's
-    editor, the source opened when the analysis reads a copy), or, once a copy cleans it, group by the copy
-    (``group_key``: the page's grouping widget, set to the copy; ``list_key``: a list of variables, such as a model's
-    covariates, where the copy takes the variable's place). ``groupable``: the variables the page offers, when not
-    every column; ``imputed``: they are the imputed datasets' (the pooled comparison), which a copy
-    written after the imputation is not in.
+    editor, the source opened when the analysis reads a copy, or when its copy misses a later change of it), or, once a
+    copy follows it, group by the copy (``group_key``: the page's grouping widget, set to the copy; ``list_key``: a
+    list of variables, such as a model's covariates, where the copy takes the variable's place). ``groupable``: the
+    variables the page offers, when not every column; ``imputed``: they are the imputed datasets' (the pooled
+    comparison), which a copy written after the imputation is not in; ``told``: the warning above already says whether
+    a copy cleans the variable (the groups' warning), else a copy that misses a later change of it is said here.
     """
     state = get_state()
     base = state.base
     if base is None:
         return
     name = str(column)
-    recoded = recoded_columns(state.transformation_manager.history)  # source -> its copy
-    source = next(
-        (s for s, copy in recoded.items() if copy == name), name
-    )  # grouped by a copy: its source
-    copy = recoded.get(source, "")
+    source, copy, follows = _copy_of(state, name)
     if done := st.session_state.pop(DONE, None):  # what Apply did in the dialog, said once
         st.success(done, icon=":material/check:")
-    if copy and copy != name and copy in base.columns:
+    if copy and copy != name and follows:
         if groupable is not None and copy not in groupable:
             st.caption(
                 f"{as_code(copy)} cleans {as_code(source)}, but was written after the imputation: run the imputation "
-                "again to compare the groups of the copy."
+                f"again to {'compare the groups of the copy' if group_key else 'use the copy'}."
                 if imputed
-                else f"{as_code(copy)} cleans {as_code(source)}, but this analysis does not offer it as a grouping."
+                else f"{as_code(copy)} cleans {as_code(source)}, but this analysis does not offer it"
+                + (" as a grouping." if group_key else ".")
             )
         elif group_key:
             st.button(
@@ -111,6 +126,12 @@ def clean_actions(
                 args=(list_key, name, copy),
             )
         return
+    if copy and copy != name and not told:
+        # behind its variable: the rows a later step changed are not in it, and grouping by it would drop them
+        st.caption(
+            f"{as_code(copy)} was written before a later step changed {as_code(source)}: clean {as_code(source)} "
+            "again, then use the copy."
+        )
     if source not in {c.column for c in clean_candidates(state)}:
         st.caption(
             f"{CLEAN_WHERE} lists text variables of 2 to {MAX_VALUES} values: {as_code(source)} is not one, so it "
@@ -118,7 +139,7 @@ def clean_actions(
         )
         return
     if st.button(
-        f"Clean {as_code(source)} here",
+        f"Clean {as_code(source)} {'again ' if copy else ''}here",
         key=f"clean_open::{group_key or list_key or 'here'}::{source}",
         icon=":material/cleaning_services:",
     ):

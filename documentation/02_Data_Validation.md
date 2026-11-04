@@ -245,6 +245,17 @@ Detects specific string formatting issues in text columns:
 - **Whitespace**: Leading or trailing spaces.
 - **Capitalization**: Inconsistent casing (e.g., "Male" vs "male").
 
+A variable cleaned on **Data > Clean > Categories** is scored through its copy, as long as the copy still follows it:
+the original, kept beside it, no longer counts against the score, and the Uniformity panel names each pair. The advice
+says what each flagged column needs:
+
+- a variable Clean lists (2 to 200 values): clean it into a copy beside it;
+- a variable whose copy was written before a later step changed it (an imputation, the rows of a merge): clean it
+  again;
+- a copy whose cleaning kept some values apart (*F* and *f*): clean its original again to merge them;
+- free text or an identifier (more than 200 values), which Clean does not list: write a corrected copy with a formula
+  on **Data > Enrich > Create New Variables** (a formula ending in `.str.strip()` trims the spaces).
+
 ## Data Quality Dashboard
 
 The Data Quality Score aggregates results from all validation checks into a single overview:

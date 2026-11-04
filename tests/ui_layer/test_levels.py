@@ -107,6 +107,37 @@ def test_another_grouping_variable_starts_with_all_its_groups() -> None:
     assert CLEAN.format("`sex`", "`sex_clean`") in at.warning[0].value
 
 
+def _copy_script(source: str, copy: str, follows: bool, column: str) -> None:
+    from ui.components.levels import level_warning
+
+    level_warning(column, ["F", "f", "M"], source=source, copy=copy, follows=follows)
+
+
+def _copy_warning(column: str, *, follows: bool = True) -> str:
+    at = AppTest.from_function(
+        _copy_script,
+        kwargs={"source": "sex", "copy": "sex_clean", "follows": follows, "column": column},
+        default_timeout=60,
+    )
+    at.run()
+    assert not at.exception
+    (warning,) = at.warning
+    return warning.value
+
+
+def test_once_a_copy_cleans_the_variable_the_warning_names_it() -> None:
+    """Choosing `sex` once `sex_clean` was written still said "clean sex on Data > Clean > Categories"."""
+    assert _copy_warning("sex").endswith("`sex` is cleaned into `sex_clean`: group by `sex_clean`.")
+    assert _copy_warning("sex", follows=False).endswith(
+        "`sex_clean` cleans `sex` as it was before a later step changed it: clean `sex` again on Data > Clean > "
+        "Categories, then group by the copy."
+    )
+    assert _copy_warning("sex_clean").endswith(
+        "`sex_clean` is the clean copy of `sex`, and its cleaning kept these apart: to merge them, clean `sex` again "
+        "on Data > Clean > Categories."
+    )
+
+
 def _crafted_script() -> None:
     from ui.components.levels import level_warning
 
