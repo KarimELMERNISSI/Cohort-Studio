@@ -796,7 +796,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   (version 1), not the data; a population now records the version of the rules it was read under. A population that
   kept more than 20,000 rows holds the rows its criteria excluded instead, and the table's other rows are used; one
   that holds neither stops the replay at a step that changes the data on it (a freeze, an imputation), rather than
-  read its criteria under the new rules.
+  read its criteria under the new rules. So is a population of this version whose criteria keep other rows of the very
+  table it was recorded on (its fingerprint): the same definitions on the same data, so a spelling is read otherwise
+  since (a test's `fillna(True)` on a float column), and the replay says so, where it said that the data differed.
 - **A study configuration written before** says so when it is loaded: the configuration downloaded records the
   version of its rules (`rules_version`), and one uploaded without it, or of an earlier version, names the criteria
   that select other rows of the loaded data now, with how many more or fewer rows each excludes, a family counted

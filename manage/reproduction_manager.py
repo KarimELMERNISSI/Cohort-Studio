@@ -172,7 +172,9 @@ def _population_rows(
     to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
     a plausibility rule's bound must not take its row out of the next fill. A population recorded under other rules
     is taken from the rows the step holds; when it holds none, a step that changes the data on it is refused, and
-    one that only checks it (``checks_only``) reads its criteria now, with a warning.
+    one that only checks it (``checks_only``) reads its criteria now, with a warning. So is one recorded under these
+    rules whose criteria keep other rows of the very table it was recorded on (its fingerprint): the same definitions
+    on the same table, so the rules are read otherwise now, whatever their version says.
     """
     criteria = criteria_from_trace(block)
     if not criteria:
@@ -202,9 +204,20 @@ def _population_rows(
     if not result.ok:
         raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
     if recorded == RULES_VERSION and block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
+        recorded_on = str(block.get("data_fp") or "")
+        # the table it was recorded on: kept by the replay, or the one it is read on (a freeze is given no other)
+        same_table = bool(recorded_on) and (recorded_on in (frames or {}) or frame_fingerprint(frame) == recorded_on)
+        kept = _recorded_rows(block, frame) if same_table else None
+        if kept is not None:
+            warnings.append(
+                f"step {index + 1}: the analysis population's criteria keep other rows of the table it was recorded "
+                "on than they kept then: the same definitions are read otherwise now. The rows it kept then are used"
+            )
+            return df.index.intersection(kept)
         warnings.append(
-            f"step {index + 1}: the analysis population re-evaluated on the replayed data keeps other rows "
-            "than when the step was recorded"
+            f"step {index + 1}: the analysis population re-evaluated on the "
+            + ("recorded table" if same_table else "replayed data")
+            + " keeps other rows than when the step was recorded"
         )
     return result.included if frame is df else df.index.intersection(result.included)
 

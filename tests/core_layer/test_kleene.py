@@ -232,6 +232,52 @@ def test_a_population_recorded_under_the_earlier_rules_replays_with_the_rows_it_
     assert checked.error is None and "which may keep other rows" in checked.warnings[0]
 
 
+def test_a_population_read_otherwise_on_the_table_it_was_recorded_on_replays_with_the_rows_it_kept() -> (
+    None
+):
+    """A study recorded under version 2 before a spelling's reading changed (a test's fillna(True) on a float column:
+    1,110 rows of the tutorial cohort then, 1,171 since): the same definitions on the same table, so the reading
+    changed, not the data. The replay keeps the rows the step holds and says why; on other data, it reads the criteria
+    again and says that the data differ."""
+    from core.fingerprint import ensure_row_ids, frame_fingerprint, ids_fingerprint, ids_to_ranges
+    from core.population import active_criteria, catalogue, evaluate_population
+    from manage.reproduction_manager import apply_steps
+
+    frame = ensure_row_ids(DF.copy())
+    config = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "Not withdrawn": {"expression": "df['s'] != 'withdrawn'"},
+            }
+        }
+    }
+    criteria = active_criteria(config, [c.id for c in catalogue(config)])
+    block = evaluate_population(frame, criteria, data_fp=frame_fingerprint(frame)).to_trace()
+    assert block["rules_version"] == 2
+    then = block | {"included": ids_to_ranges([0, 1, 2]), "rows_fp": ids_fingerprint([0, 1, 2])}
+
+    def freeze(population: dict):
+        step = {
+            "function": "freeze_population",
+            "params": {},
+            "description": "freeze",
+            "population": population,
+        }
+        result = apply_steps(frame, [step])
+        assert result.error is None and result.df is not None
+        return result.warnings, list(result.df.index)
+
+    warnings, rows = freeze(then)
+    assert rows == [0, 1, 2] and len(warnings) == 1
+    assert (
+        "the same definitions are read otherwise now. The rows it kept then are used" in warnings[0]
+    )
+    warnings, rows = freeze(then | {"data_fp": "another table"})
+    assert rows == [0, 2] and "re-evaluated on the replayed data keeps other rows" in warnings[0]
+    assert freeze(block) == ([], [0, 2])  # read as recorded: nothing to say
+
+
 def test_an_expression_that_says_what_a_missing_value_gives_is_read_as_written() -> None:
     """A text test's na= and a missing value in an isin list are the expression deciding, as fillna is."""
     assert _fires("~df['s'].str.contains('with', na=False)") == [0, 1, 2]
