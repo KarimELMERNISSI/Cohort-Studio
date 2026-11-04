@@ -63,6 +63,10 @@ def _app(content: str, with_data: bool = True) -> None:
         )
     if (ticks := st.session_state.pop("tick", None)) is not None:  # the sidebar's ticks
         state.set_ticked(ticks)
+    if st.session_state.pop(
+        "tutorial", False
+    ):  # the tutorial cohort with its configuration, from Start
+        state.load_tutorial_cohort()
     if (edit := st.session_state.pop("edit", None)) is not None:  # a criterion edited in its tab
         family, name, definition = edit
         state.config["mask_families"][family][name] = definition
@@ -187,3 +191,24 @@ def test_a_file_of_today_s_rules_says_nothing_of_them() -> None:
     at = _open({**RULES, "rules_version": 2})
     loaded, messages = at.session_state["uploaded"]
     assert loaded and messages[1:] == [] and not _notices(at)
+
+
+def test_the_tutorial_s_own_file_is_never_said_to_be_an_earlier_one() -> None:
+    """The tutorial's configuration, downloaded from Start and loaded on Validate, stated no version: it was said to
+    have maybe been written before a missing value changed how it counts."""
+    from ui.state import TUTORIAL_CONFIG_PATH
+
+    at = _open(json.loads(TUTORIAL_CONFIG_PATH.read_text(encoding="utf-8")))
+    loaded, messages = at.session_state["uploaded"]
+    assert loaded and not any("missing value changed how it counts" in m for m in messages)
+    assert "rules_earlier" not in at.session_state
+
+
+def test_loading_the_tutorial_clears_the_notice_of_an_earlier_file() -> None:
+    """Its configuration replaces the session's: the notice still described the earlier file's criteria."""
+    at = _open(RULES)
+    assert _notices(at)
+    at.session_state["tutorial"] = True
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert not _notices(at) and "rules_earlier" not in at.session_state

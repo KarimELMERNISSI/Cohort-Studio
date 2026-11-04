@@ -1,5 +1,6 @@
 {
   "description": "CohortStudio tutorial study configuration: plausibility rules (the family clinical_anomalies, named Implausible values in the application) and inclusion criteria for assets/tutorial/tutorial_cohort.csv. Load it on Data > Validate (sidebar: Load Existing Config) or with the tutorial cohort from the Start page.",
+  "rules_version": 2,
   "mask_families": {
     "clinical_anomalies": {
       "operator": "any",

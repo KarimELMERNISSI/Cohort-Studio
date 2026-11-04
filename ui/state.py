@@ -135,7 +135,8 @@ def tutorial_config() -> dict:
     config = create_empty_config()
     loaded = json.loads(TUTORIAL_CONFIG_PATH.read_text(encoding="utf-8"))
     for key, value in loaded.items():
-        if key != "folder_names":  # machine-specific: keep this installation's folders
+        # machine-specific: keep this installation's folders; the version of its rules is the file's, not a setting
+        if key not in ("folder_names", "rules_version"):
             config[key] = value
     return config
 
@@ -1266,6 +1267,8 @@ class AppState:
         )
         if with_config:
             st.session_state["config"] = tutorial_config()
+            # its criteria replace the session's: none is any longer one loaded from an earlier file
+            st.session_state.pop("rules_earlier", None)
             self._install_views()
         return ref
 

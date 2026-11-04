@@ -33,8 +33,8 @@ TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS, FORMULA = "clean", "clean again", "copy", "fo
 CLEAN_LINK, FORMULA_LINK = "Clean categories", "Create New Variables"
 
 
-# a line failing SEVERE_FAILS checks or more, with an exact lower bound of SEVERE_BOUND for the share of its checks that
-# fail, makes the Domain Validity advice "high", whatever the pooled score
+# a line failing SEVERE_FAILS checks or more, the lower end of the exact (Clopper-Pearson) 95 % interval for the share of
+# its checks that fail at SEVERE_BOUND or more, makes the Domain Validity advice "high", whatever the pooled score
 SEVERE_FAILS = 3
 SEVERE_BOUND = 0.05
 

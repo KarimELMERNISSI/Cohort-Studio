@@ -117,6 +117,7 @@ KEYS: tuple[Key, ...] = (
         "rules_earlier",
         "app_pages.data_monitoring",
         "session",
+        readers=("ui.state",),  # cleared when the tutorial's configuration replaces the session's
         note="the criteria the session took from a configuration uploaded under the first rules, or stating none: "
         "by id, the version its file stated and the kind and definition loaded, kept while the session holds each "
         "as loaded and until the notice above Validate's tabs is dismissed (a file uploaded before the data is said "

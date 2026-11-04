@@ -827,7 +827,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   they come), until it is dismissed. A file stating no version (downloaded before the version was recorded) is said to
   be possibly of the earlier rules, not certainly. The notice reads the criteria the session took from the file, as
   the session holds them, not a copy of the file: a criterion corrected as it advises, or removed, leaves it, the
-  criteria of a second earlier file join those of the first, and its counts are those of the data loaded now.
+  criteria of a second earlier file join those of the first, and its counts are those of the data loaded now. The
+  tutorial's configuration states the version of its rules, so that its own file, loaded on Validate, is never said to
+  be an earlier one, and loading the tutorial cohort with its configuration clears the notice.
 
 ### Internal structure: one catalogue of criterion kinds (M5b)
 
