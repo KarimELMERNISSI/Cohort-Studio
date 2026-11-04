@@ -64,6 +64,10 @@ def _use(group_key: str, copy: str) -> None:
     st.session_state[group_key] = copy
 
 
+def _drop_from_list(list_key: str, name: str) -> None:
+    st.session_state[list_key] = [c for c in st.session_state.get(list_key) or [] if c != name]
+
+
 def _use_in_list(list_key: str, name: str, copy: str) -> None:
     chosen = list(st.session_state.get(list_key) or [])
     st.session_state[list_key] = [
@@ -97,6 +101,8 @@ def group_warning(
     """The warning under a list of groups (ui.components.levels.level_warning), which names the variable's clean copy
     once one is written, then what can be done here (:func:`clean_actions`)."""
     source, copy, follows = _copy_of(get_state(), str(column))
+    for done in take_done(source):  # what Apply did, said even when it left no groups to warn of
+        st.success(done, icon=":material/check:")
     if level_warning(column, values, source=source, copy=copy, follows=follows):
         clean_actions(column, group_key=group_key, groupable=groupable, imputed=imputed, told=True)
 
@@ -110,6 +116,7 @@ def clean_actions(
     imputed: bool = False,
     told: bool = False,
     use: str = "Group by",
+    compare_key: str | None = None,
 ) -> None:
     """
     What can be done here about a variable whose values are written several ways: clean it in a dialog (Data > Clean's
@@ -119,7 +126,8 @@ def clean_actions(
     variables the page offers, when not every column; ``imputed``: they are the imputed datasets' (the pooled
     comparison), which a copy written after the imputation is not in; ``told``: the warning above already says whether
     a copy cleans the variable (the groups' warning), else whether a copy cleans it is said here; ``use``: the words of
-    the grouping widget's button ("Compare by" beside Survival & regression's field of that name).
+    the grouping widget's button ("Compare by" beside Survival & regression's field of that name); ``compare_key``: the
+    comparison's widget beside the list, where the copy may be already (then the variable leaves the list).
     """
     state = get_state()
     base = state.base
@@ -147,6 +155,14 @@ def clean_actions(
                 icon=":material/swap_horiz:",
                 on_click=_use,
                 args=(group_key, copy),
+            )
+        elif list_key and compare_key and st.session_state.get(compare_key) == copy:
+            st.button(  # compared by the copy already: adjusting for its variable too reads one thing twice
+                f"Remove {as_code(name)} from the list: {as_code(copy)}, its clean copy, is the comparison",
+                key=f"clean_drop::{list_key}::{name}",
+                icon=":material/remove:",
+                on_click=_drop_from_list,
+                args=(list_key, name),
             )
         elif list_key:
             st.button(

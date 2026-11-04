@@ -365,3 +365,54 @@ def test_the_dialog_s_choices_not_yet_applied_are_counted_and_can_be_discarded()
     gone.run()
     assert not gone.exception, [str(e.value)[:300] for e in gone.exception]
     assert gone.session_state["waiting"] == 1 and gone.session_state["after"] == 0
+
+
+def _whole_script() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.clean_dialog import group_warning
+    from core.state import DatasetRef
+    from ui.state import get_state
+
+    st.session_state.setdefault("username", "dialog_user")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        frame = pd.DataFrame({"site": ["Metz", "Esch"] * 10})
+        state.set_dataset(
+            frame,
+            DatasetRef(name="whole", origin="upload", file_hash="whole"),
+            source_bytes=frame.to_csv(index=False).encode("utf-8"),
+            source_name="whole.csv",
+        )
+    group_warning("site", sorted(state.base["site"].unique()), group_key="t_group_col")
+
+
+def test_what_apply_did_is_said_when_it_leaves_no_groups_to_warn_of() -> None:
+    """Apply made the copy whole, so the warning went with its actions, and "Wrote `site_clean` ..." was never said."""
+    at = AppTest.from_function(_whole_script, default_timeout=60)
+    at.session_state["clean_done"] = {
+        "site": "Wrote `site_clean` beside `site`: 2 values instead of 3."
+    }
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert [s.value for s in at.success] == [
+        "Wrote `site_clean` beside `site`: 2 values instead of 3."
+    ]
+    assert not at.warning and "clean_done" not in at.session_state
+
+
+def test_a_covariate_whose_copy_is_the_comparison_is_offered_to_leave_the_list() -> None:
+    """Compared by `sex_clean` and adjusted for `sex`, the plan offered to put the copy in "Adjust for" too, where it is
+    compared already."""
+    at = AppTest.from_function(_plan_script, kwargs={"with_copy": True}, default_timeout=60)
+    at.session_state["surv_group"] = "sex_clean"
+    at.session_state["surv_adjust"] = ["sex"]
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    keys = {b.key for b in at.button}
+    assert "clean_use::surv_adjust::sex" not in keys
+    at.button(key="clean_drop::surv_adjust::sex").click().run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert at.session_state["surv_adjust"] == []

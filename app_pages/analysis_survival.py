@@ -27,6 +27,7 @@ from app_pages.analysis_survival_results import (
     show_logistic,
     show_time_to_event,
 )
+from app_pages.clean_categories import take_done
 from app_pages.clean_dialog import clean_actions
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import EVENT_WORDS, compare_survival, cox_regression
@@ -184,7 +185,11 @@ def _render_plan(
                     groupable=candidates,
                     imputed=imputed,
                     use="Compare by",  # the field's own name
+                    compare_key=keys[0],
                 )
+        if keys is not None:
+            for done in take_done():  # what Apply did, whose advice went with what it cleaned
+                st.success(done, icon=":material/check:")
         if note:
             st.caption(note)
 

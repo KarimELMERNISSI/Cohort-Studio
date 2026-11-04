@@ -1459,7 +1459,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   Clean, until applied, and "Discard my choices" drops them. The groups' warning and Survival & regression's plan say
   what the button below them does, and no longer send the user to Data > Clean, a page that dropped the analysis
   page's grouping; in the plan, the copy is offered with "Compare by", its field's name, and said to be the variable's
-  once written. What Apply did is said under its own variable.
+  once written. What Apply did is said under its own variable, and said too when it leaves no groups to warn of; a
+  covariate whose clean copy is the comparison already is offered to leave the list, not to be read twice.
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
