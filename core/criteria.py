@@ -47,7 +47,10 @@ from core.registry import Catalogue
 # What a rule selects, as this module reads and evaluates the definitions. A study definition's fingerprint holds it
 # (core.protocol): a change to what the same definition selects is a new number, which changes the fingerprint of
 # every study with criteria, as their rows may change. 2: an expression is read in three-valued logic (a missing value
-# no longer meets a test written with "!=" or "~").
+# no longer meets a test written with "!=" or "~"). Version 2 also covers the spellings read so since, unreleased (a
+# test's fillna and an isin list holding a missing value on every dtype, their keyword spellings, (test).eq(False), two
+# tests compared): a study recorded under an earlier reading of version 2 replays with the rows it kept on its own
+# table (manage.reproduction_manager). The next number comes with the study package (M8), which carries its rows.
 RULES_VERSION = 2
 # the rewritten expression holds a call per test: its own limit on nodes, the user's expression keeping the policy's
 _THREE_VALUED = dataclasses.replace(DEFAULT_POLICY, max_nodes=DEFAULT_POLICY.max_nodes * 3)
