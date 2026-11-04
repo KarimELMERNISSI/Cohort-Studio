@@ -37,6 +37,13 @@ def _use(group_key: str, copy: str) -> None:
     st.session_state[group_key] = copy
 
 
+def _use_in_list(list_key: str, name: str, copy: str) -> None:
+    chosen = list(st.session_state.get(list_key) or [])
+    st.session_state[list_key] = [
+        copy if c == name else c for c in chosen if c != copy or name not in chosen
+    ]
+
+
 def group_warning(
     column: Any,
     values: Iterable[Any],
@@ -55,14 +62,16 @@ def clean_actions(
     column: Any,
     *,
     group_key: str | None = None,
+    list_key: str | None = None,
     groupable: Collection[str] | None = None,
     imputed: bool = False,
 ) -> None:
     """
     What can be done here about a variable whose values are written several ways: clean it in a dialog (Data > Clean's
     editor, the source opened when the analysis reads a copy), or, once a copy cleans it, group by the copy
-    (``group_key``: the page's grouping widget, set to the copy). ``groupable``: the variables the page offers to group
-    by, when not every column; ``imputed``: they are the imputed datasets' (the pooled comparison), which a copy
+    (``group_key``: the page's grouping widget, set to the copy; ``list_key``: a list of variables, such as a model's
+    covariates, where the copy takes the variable's place). ``groupable``: the variables the page offers, when not
+    every column; ``imputed``: they are the imputed datasets' (the pooled comparison), which a copy
     written after the imputation is not in.
     """
     state = get_state()
@@ -93,6 +102,14 @@ def clean_actions(
                 on_click=_use,
                 args=(group_key, copy),
             )
+        elif list_key:
+            st.button(
+                f"Use {as_code(copy)}, its clean copy, instead of {as_code(name)}",
+                key=f"clean_use::{list_key}::{name}",
+                icon=":material/swap_horiz:",
+                on_click=_use_in_list,
+                args=(list_key, name, copy),
+            )
         return
     if source not in {c.column for c in clean_candidates(state)}:
         st.caption(
@@ -102,7 +119,7 @@ def clean_actions(
         return
     if st.button(
         f"Clean {as_code(source)} here",
-        key=f"clean_open::{group_key or source}",
+        key=f"clean_open::{group_key or list_key or 'here'}::{source}",
         icon=":material/cleaning_services:",
     ):
         _dialog(source)

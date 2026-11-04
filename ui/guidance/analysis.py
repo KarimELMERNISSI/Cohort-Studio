@@ -173,6 +173,8 @@ STRATEGY_NONPARAMETRIC = "Force Non-Parametric (Mann-Whitney/Kruskal)"
 class Advice:
     level: str  # "ok" | "info" | "caution" | "violated" (as status chips)
     text: str
+    # a variable whose values are written several ways: the page offers to clean it (app_pages.clean_dialog)
+    column: str | None = None
 
 
 @dataclass(frozen=True)

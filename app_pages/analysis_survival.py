@@ -14,6 +14,7 @@ curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -26,6 +27,7 @@ from app_pages.analysis_survival_results import (
     show_logistic,
     show_time_to_event,
 )
+from app_pages.clean_dialog import clean_actions
 from biostats.regression import count_regression, logistic_regression
 from biostats.survival import EVENT_WORDS, compare_survival, cox_regression
 from ui.components import error_card, glossary_popover, page_link, status_chip
@@ -146,8 +148,17 @@ def _compare_and_adjust(
     return compare, adjust
 
 
-def _render_plan(plan: ModelPlan, *, note: str = "") -> None:
-    """What Run will do, checked on the data (while Guidance is on): a status, each step's rows, the advice."""
+def _render_plan(
+    plan: ModelPlan,
+    *,
+    note: str = "",
+    keys: tuple[str, str] | None = None,
+    candidates: Sequence[str] | None = None,
+    imputed: bool = False,
+) -> None:
+    """What Run will do, checked on the data (while Guidance is on): a status, each step's rows, the advice. ``keys``:
+    the outcome's "Compare by" and "Adjust for" widgets, through which a variable whose values are written several
+    ways is cleaned here, then replaced by its copy (app_pages.clean_dialog.clean_actions)."""
     with st.container(border=True):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.markdown("**Before you run: the plan**")
@@ -161,8 +172,25 @@ def _render_plan(plan: ModelPlan, *, note: str = "") -> None:
             st.markdown(f"- {step.text} ({counts})")
         for item in plan.advice:
             st.markdown(f"{_ICON.get(item.level, '')} {item.text}")
+            if item.column and keys is not None:
+                compared = item.column == st.session_state.get(keys[0])
+                clean_actions(
+                    item.column,
+                    group_key=keys[0] if compared else None,
+                    list_key=None if compared else keys[1],
+                    groupable=candidates,
+                    imputed=imputed,
+                )
         if note:
             st.caption(note)
+
+
+def _offered(candidates: Sequence[str], mi) -> dict[str, Any]:
+    """What a variable's clean copy can replace it with: the candidates, those of the imputed datasets under a multiple
+    imputation (a copy written after it is not in them)."""
+    if mi is None:
+        return {"candidates": list(candidates), "imputed": False}
+    return {"candidates": [c for c in candidates if c in mi.base.columns], "imputed": True}
 
 
 def _failed(what: str, exc: Exception) -> None:
@@ -336,8 +364,9 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
         persist_state="page",
         help=HELP["analyses"],
     )
+    cands = _candidates(df, numeric, groups, (time_col, event_col))
     compare, adjust = _compare_and_adjust(
-        _candidates(df, numeric, groups, (time_col, event_col)),
+        cands,
         keys=("surv_group", "surv_adjust"),
         help_compare=HELP["compare_time"],
     )
@@ -364,7 +393,7 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
             return planned, note
 
         planned, note = _kept("sr_plan_time_to_event", choices, plan)
-        _render_plan(planned, note=note)
+        _render_plan(planned, note=note, keys=("surv_group", "surv_adjust"), **_offered(cands, mi))
     pooled = mi is not None
     km_key, km_config = (
         ("survival_mi", (time_col, event_col, group or NONE, token))
@@ -429,8 +458,9 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
         persist_state="page",
         help=HELP["event_level"],
     )
+    cands = _candidates(df, numeric, groups, (outcome,))
     compare, adjust = _compare_and_adjust(
-        _candidates(df, numeric, groups, (outcome,)),
+        cands,
         keys=("logit_compare", "logit_adjust"),
         help_compare=HELP["compare"],
     )
@@ -442,7 +472,9 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
             (outcome, event_level, compare, tuple(adjust), token),
             lambda: plan_binary(frame, outcome, event_level, compare, adjust),
         )
-        _render_plan(planned, note=note)
+        _render_plan(
+            planned, note=note, keys=("logit_compare", "logit_adjust"), **_offered(cands, mi)
+        )
     pooled = mi is not None
     key, config = (
         ("logistic_mi", (outcome, event_level, tuple(covs), token))
@@ -518,8 +550,9 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
         help=HELP["family"],
     )
     exposure_col = chosen(exposure)
+    cands = _candidates(df, numeric, groups, (count_col, exposure_col or ""))
     compare, adjust = _compare_and_adjust(
-        _candidates(df, numeric, groups, (count_col, exposure_col or "")),
+        cands,
         keys=("count_compare", "count_adjust"),
         help_compare=HELP["compare"],
     )
@@ -531,7 +564,9 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
             (count_col, exposure, compare, tuple(adjust), family, token),
             lambda: plan_count(frame, count_col, exposure, compare, adjust, family),
         )
-        _render_plan(planned, note=note)
+        _render_plan(
+            planned, note=note, keys=("count_compare", "count_adjust"), **_offered(cands, mi)
+        )
     pooled = mi is not None
     key, config = (
         ("count_mi", (count_col, exposure, family, tuple(covs), token))

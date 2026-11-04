@@ -233,6 +233,7 @@ def _spellings(col: str, values: pd.Series) -> Advice | None:
         f"{as_code(col)} holds one value written several ways ({shown}): each is a group of its own. Clean it "
         f"first on {CLEAN_WHERE}, into a copy beside it ({as_code(f'{col}_clean')} unless you name it otherwise), "
         "and use the copy here.",
+        column=str(col),
     )
 
 

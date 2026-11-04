@@ -81,7 +81,7 @@ def test_a_variable_is_cleaned_where_it_is_analysed_in_a_dialog() -> None:
     """The warning sent the user to another page, which drops this page's choices: it opens Clean's editor here."""
     at = _open()
     assert any("differ only by spaces" in w.value for w in at.warning)
-    at.button(key="clean_open::t_group_col").click().run()
+    at.button(key="clean_open::t_group_col::site").click().run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     assert any("As on Data > Clean > Categories" in c.value for c in at.caption)
     keys = {b.key for b in at.button}
@@ -92,7 +92,7 @@ def test_a_variable_is_cleaned_where_it_is_analysed_in_a_dialog() -> None:
 
 def test_once_a_copy_cleans_it_the_warning_offers_to_group_by_the_copy() -> None:
     at = _open(with_copy=True)
-    assert "clean_open::t_group_col" not in {
+    assert "clean_open::t_group_col::site" not in {
         b.key for b in at.button
     }  # cleaned already: nothing to open
     at.button(key="clean_use::t_group_col").click().run()
@@ -124,4 +124,68 @@ def test_a_variable_clean_does_not_list_is_said_so() -> None:
     assert any(
         "lists text variables of 2 to 200 values: `site` is not one" in c.value for c in at.caption
     )
-    assert "clean_open::t_group_col" not in {b.key for b in at.button}
+    assert "clean_open::t_group_col::site" not in {b.key for b in at.button}
+
+
+def _plan_script(with_copy: bool = False) -> None:
+    import numpy as np
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.analysis_survival import _render_plan
+    from core.state import DatasetRef
+    from enrich.recode import recode_column
+    from ui.guidance.outcomes import plan_time_to_event
+    from ui.state import get_state
+
+    st.session_state.setdefault("username", "plan_user")
+    st.session_state.setdefault("user_role", "researcher")
+    state = get_state()
+    if state.base is None:
+        rng = np.random.default_rng(3)
+        n = 120
+        frame = pd.DataFrame(
+            {
+                "days": rng.integers(10, 900, n),
+                "death": rng.integers(0, 2, n),
+                "arm": rng.choice(["A", "B"], n),
+                "sex": rng.choice(["F", "F ", "f", "M", "m"], n),
+            }
+        )
+        state.set_dataset(
+            frame,
+            DatasetRef(name="plan", origin="upload", file_hash="plan"),
+            source_bytes=frame.to_csv(index=False).encode("utf-8"),
+            source_name="plan.csv",
+        )
+        if with_copy:
+            mapping = {"F ": "F", "f": "F", "m": "M"}
+            new, _ = recode_column(state.base, "sex", "sex_clean", mapping)
+            state.commit_change(
+                new,
+                "recode_levels",
+                {"source": "sex", "target": "sex_clean", "mapping": mapping},
+                "Recoded sex into sex_clean",
+            )
+    st.session_state.setdefault("surv_group", "arm")
+    st.session_state.setdefault("surv_adjust", ["sex"])
+    df = state.base
+    covariates = [st.session_state["surv_group"], *st.session_state["surv_adjust"]]
+    plan = plan_time_to_event(df, "days", "death", "arm", covariates, group=True)
+    _render_plan(plan, keys=("surv_group", "surv_adjust"), candidates=list(df.columns))
+
+
+def test_the_survival_plan_offers_to_clean_a_covariate_then_to_use_its_copy() -> None:
+    """The plan said "Clean it first on Data > Clean" with nothing to click: a covariate written several ways is
+    cleaned here, then its copy takes its place in "Adjust for"."""
+    at = AppTest.from_function(_plan_script, default_timeout=60)
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert any("`sex` holds one value written several ways" in m.value for m in at.markdown)
+    assert "clean_open::surv_adjust::sex" in {b.key for b in at.button}
+    with_copy = AppTest.from_function(_plan_script, kwargs={"with_copy": True}, default_timeout=60)
+    with_copy.run()
+    with_copy.button(key="clean_use::surv_adjust::sex").click().run()
+    assert not with_copy.exception, [str(e.value)[:300] for e in with_copy.exception]
+    assert with_copy.session_state["surv_adjust"] == ["sex_clean"]
+    assert not any("written several ways" in m.value for m in with_copy.markdown)

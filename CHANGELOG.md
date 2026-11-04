@@ -1421,7 +1421,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   analysis page keeps its choices; Apply writes the copy and closes it, and the warning then offers "Group by
   `site_clean`", which sets the page's grouping. The pooled comparison says instead that a copy written after the
   imputation needs it run again, and a variable that Clean does not list (more than 200 values) is said so. Grouped
-  by a copy whose values still differ, the dialog opens its source.
+  by a copy whose values still differ, the dialog opens its source. Survival & regression's plan does the same for
+  a variable it compares by or adjusts for: cleaned in the dialog, then "Use `sex_clean`, its clean copy, instead of
+  `sex`" takes the variable's place in "Compare by" or "Adjust for" (under a multiple imputation, only a copy the
+  imputed datasets hold).
 - **Dates:** Validate's Date checks tab is now Clean's *Dates* tab; its links keep working. Validate's line above its
   tabs counts the text columns that look like dates and the variables with values to look at, with a link to each
   tab.
