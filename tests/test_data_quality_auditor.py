@@ -319,9 +319,7 @@ def test_the_uniformity_advice_points_to_the_clean_page_and_quotes_names_as_code
     )
     assert "`site`" in message and "`[x](https://example.org)`" in message and "`unit`" not in message
     assert message.count("](https://example.org)") == 1  # only inside the code span
-    assert message.endswith(
-        "Clean them on Data > Clean > Categories, each into a copy beside it; the original is kept."
-    )
+    assert message.endswith("Clean each into a copy beside it, the original kept: Clean categories, below.")
     assert "normaliz" not in message and "**" not in message
 
 

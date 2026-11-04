@@ -86,6 +86,7 @@ from enrich.recode import (
     values_fp,
 )
 from manage.ai_payload import (
+    MIN_COUNT,
     category_values,
     host_of,
     on_this_machine,
@@ -1097,7 +1098,8 @@ def _ask_ai(column: str, scope: str, counts: dict[str, int], offers: tuple[Offer
     said here, every proposal accounted for. Never for free text: the button stays, disabled, and says why.
     """
     popover = f"clean_ai_open::{scope}::{column}"
-    if free_text(counts):
+    # the payload's own rule (manage.ai_payload.MIN_COUNT): offered here only what would be sent
+    if free_text(counts, min_count=MIN_COUNT):
         st.popover(
             "Ask the AI engine",
             type="tertiary",
@@ -1179,13 +1181,16 @@ def _preview(engine, column: str, scope: str, counts: dict[str, int], popover: s
     sent, held = _payload(engine, counts, model)
     to, _ = _receiver(engine, model)
     rare = (
-        f" {held:,} value{'s' if held != 1 else ''} held by fewer than 5 rows {'are' if held != 1 else 'is'} not sent; "
-        "rows are counted, not people: a value written on 5 visits of one person is sent."
+        f" {held:,} value{'s' if held != 1 else ''} held by fewer than {MIN_COUNT} rows "
+        f"{'are' if held != 1 else 'is'} not sent; rows are counted, not people: a value written on {MIN_COUNT} visits "
+        "of one person is sent."
         if held
         else ""
     )
     if not sent:
-        st.caption(f"No value is held by 5 rows or more: nothing can be sent to {plain(to)}.")
+        st.caption(
+            f"No value is held by {MIN_COUNT} rows or more: nothing can be sent to {plain(to)}."
+        )
         return
     st.caption(
         f"Send to {plain(to)}: the name {as_code(column)} and these {len(sent):,} values, as written, A to Z; no "

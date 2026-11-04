@@ -28,6 +28,7 @@ from explore.quality_score import (
 )
 from ui.components import page_link
 from ui.components.criteria import criterion_cards
+from ui.components.levels import CLEAN_WHERE
 from ui.components.text import plain
 from ui.progress import mark_step, record_quality_check
 from ui.quality_charts import (
@@ -1313,8 +1314,8 @@ def render_dashboard(df, config):
             if "Uniformity" in metrics:
                 st.metric("Uniformity Score", f"{metrics['Uniformity']}%")
                 if metrics['Uniformity'] < 100:
-                    st.warning("Inconsistent text formatting detected: clean these columns on Data > Clean > "
-                               "Categories, each into a copy beside it.")
+                    st.warning(f"Inconsistent text formatting detected: clean these columns on {CLEAN_WHERE}, "
+                               "each into a copy beside it.")
                     page_link("clean", "Clean categories", icon=":material/cleaning_services:", tab="categories")
 
                     if hasattr(auditor, 'uniformity_details') and auditor.uniformity_details:

@@ -17,6 +17,7 @@ from typing import Any
 import streamlit as st
 
 from core.registry import as_code
+from ui import nav
 
 # what a browser hides: spaces at either end, runs of spaces, and whitespace other than a plain space
 _HIDDEN = re.compile(r"^\s+|\s+$|\s{2,}|[^\S ]")
@@ -46,8 +47,15 @@ def alike_levels(values: Iterable[Any]) -> list[list[Any]]:
     return [found for found in groups.values() if len(found) > 1]
 
 
+def _where(key: str, tab: str) -> str:
+    """A page's tab as the navigation names it (Data > Clean > Categories): renamed with the page, never left behind."""
+    page = nav.page(key)
+    label = dict(page.tabs)[tab][-1]
+    return " > ".join(part for part in (page.section, page.title, label) if part)
+
+
 # where a variable's values written several ways are cleaned
-CLEAN_WHERE = "Data > Clean > Categories"
+CLEAN_WHERE = _where("clean", "categories")
 
 
 def level_warning(column: Any, values: Iterable[Any]) -> None:

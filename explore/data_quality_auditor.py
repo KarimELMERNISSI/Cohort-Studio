@@ -689,8 +689,9 @@ class DataQualityAuditor:
                 names = [as_code(d["Column"]) for d in self.uniformity_details[:3]]
                 more = len(self.uniformity_details) - len(names)
                 msg += f" Check {', '.join(names)}" + (f" and {more} more" if more else "") + "."
-            # cleaned on the Clean page, into a copy beside each (an Enrich formula kept "f" and "female" apart)
-            msg += " Clean them on Data > Clean > Categories, each into a copy beside it; the original is kept."
+            # cleaned on the Clean page, into a copy beside each (an Enrich formula kept "f" and "female" apart):
+            # the dashboard links to it below the advice, by its name in the navigation
+            msg += " Clean each into a copy beside it, the original kept: Clean categories, below."
 
             self.advice.append({
                 "category": "Uniformity",
