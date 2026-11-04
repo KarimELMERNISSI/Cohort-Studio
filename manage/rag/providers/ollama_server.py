@@ -20,19 +20,33 @@ TIMEOUT = (
 )
 
 
-def _ask(base_url: str | None, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+# why a server said nothing (NoAnswer.reason): nothing listens at the address, no answer in time, or an answer that
+# says nothing (an error, not JSON, an "ai" extra missing)
+UNREACHABLE, LATE, NO_ANSWER = "unreachable", "late", "no answer"
+
+
+def _asked(
+    base_url: str | None, method: str, path: str, body: dict[str, Any] | None = None
+) -> tuple[Any, str | None]:
+    """The server's answer, else None and why (UNREACHABLE, LATE or NO_ANSWER)."""
     try:
         import httpx  # the "ai" extra
     except ImportError:
-        return None
+        return None, NO_ANSWER
     url = (base_url or DEFAULT_HOST).rstrip("/") + path
     try:
         with httpx.Client(timeout=TIMEOUT) as client:
             response = client.request(method, url, json=body)
-        return response.json() if response.status_code == 200 else None
-    except Exception as exc:  # unreachable, refused, not JSON: nothing is known
+        return (response.json(), None) if response.status_code == 200 else (None, NO_ANSWER)
+    except Exception as exc:  # unreachable, refused, late, not JSON: nothing is known
         logger.debug("The Ollama server did not say where its models run (%s)", type(exc).__name__)
-        return None
+        if isinstance(exc, httpx.TimeoutException):
+            return None, LATE
+        return None, UNREACHABLE if isinstance(exc, httpx.ConnectError) else NO_ANSWER
+
+
+def _ask(base_url: str | None, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    return _asked(base_url, method, path, body)[0]
 
 
 def _remote(entry: Any) -> str | None:
@@ -43,7 +57,12 @@ def _remote(entry: Any) -> str | None:
 
 
 class NoAnswer(Exception):
-    """The Ollama server did not say where it runs a model: unreachable, an error, or no answer in time."""
+    """The Ollama server did not say where it runs a model: ``reason`` UNREACHABLE (nothing listens at the address),
+    LATE (no answer in time) or NO_ANSWER (an answer that says nothing)."""
+
+    def __init__(self, model: str, reason: str = NO_ANSWER) -> None:
+        super().__init__(model)
+        self.reason = reason
 
 
 def remote_host(base_url: str | None, model: str | None) -> str | None:
@@ -62,9 +81,9 @@ def runs_at(base_url: str | None, model: str | None) -> str | None:
     copy of a cloud model would then be sent every value, as to a model on this machine."""
     if not model:
         return None
-    answer = _ask(base_url, "POST", "/api/show", {"model": model})
+    answer, why = _asked(base_url, "POST", "/api/show", {"model": model})
     if answer is None:
-        raise NoAnswer(model)
+        raise NoAnswer(model, why or NO_ANSWER)
     return _remote(answer)
 
 

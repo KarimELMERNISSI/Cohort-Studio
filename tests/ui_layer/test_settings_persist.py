@@ -467,14 +467,17 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     shown = [m.value for m in signed_in.markdown]
     assert any("Where this model runs is not known" in v for v in shown), shown[-6:]
     assert not any("Local: no data leaves this server" in v for v in shown)
-    assert any(
-        "The Ollama server did not say where it runs this model" in c.value
+    model = signed_in.selectbox(key="rag_ollama_model_select").value
+    assert any(  # the model named (it said "this model" above the field that names it)
+        f"The Ollama server did not say where it runs `{model}`." in c.value
         for c in signed_in.caption
     )
     # nor does the Data sharing card say that the data stay here
     assert not any("The local provider keeps" in c.value for c in signed_in.caption)
     assert any(
-        "Where the Ollama server runs this model is not known" in c.value for c in signed_in.caption
+        f"Where the Ollama server runs `{model}` is not known. Nothing is sent until it says where; if it runs it "
+        "elsewhere (ollama.com), you are asked to confirm here first." in c.value
+        for c in signed_in.caption
     )
     # at an address on the network, what the address says is known all the same: the badge, http, the recipient
     signed_in.text_input(key="rag_ollama_base_url").input("http://127.0.0.2:11434").run()
@@ -486,4 +489,16 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     assert any(
         "Ollama at 127.0.0.2, on your network, then receives the prompts" in c for c in captions
     )
+
+    def unreachable(base_url, model):
+        raise server.NoAnswer(model, server.UNREACHABLE)
+
+    # nothing listening at the address: said so, never "did not say"
+    monkeypatch.setattr(server, "runs_at", unreachable)
+    sidebar._runs_at.clear()
+    signed_in.text_input(key="rag_ollama_base_url").input("http://127.0.0.2:11998").run()
+    assert any(
+        "The Ollama server did not answer at `127.0.0.2:11998`" in c.value
+        for c in signed_in.caption
+    ), [c.value for c in signed_in.caption][-6:]
     sidebar._runs_at.clear()

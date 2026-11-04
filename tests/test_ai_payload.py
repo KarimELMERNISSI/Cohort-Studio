@@ -280,5 +280,18 @@ def test_the_ollama_server_says_which_models_it_runs_elsewhere(monkeypatch: pyte
     finally:
         server.shutdown()
     assert remote_host("http://127.0.0.1:9", "gpt-oss:120b") is None  # no server: nothing known for Settings
-    with pytest.raises(NoAnswer):  # and a decision on what is sent never reads a silence as "it runs here"
+    with pytest.raises(NoAnswer) as silence:  # and a decision on what is sent never reads a silence as "it runs here"
         runs_at("http://127.0.0.1:9", "gpt-oss:120b")
+    from manage.rag.providers.ollama_server import UNREACHABLE
+
+    assert silence.value.reason == UNREACHABLE  # nothing listens there: Settings says "did not answer at"
+
+
+def test_names_with_near_names_on_visits_are_still_an_identifier() -> None:
+    """A name misspelt once (a near-name) counts as that name, as a category's typos do: the names of 40 people on 6
+    visits, five of them misspelt once, still read as an identifier, and none is sent."""
+    names = [f"Person {chr(65 + i // 26)}{chr(97 + i % 26)}" for i in range(40)]
+    rows = [name for name in names for _ in range(6)]
+    rows += [name.replace("Person", "Persn") for name in names[:5]]  # one typo each, on one more visit
+    (info,) = column_profile(pd.DataFrame({"name": rows}))
+    assert info["top_values"] == {}

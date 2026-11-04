@@ -306,3 +306,43 @@ def test_send_asks_nothing_when_the_ollama_server_does_not_say_where_it_runs_the
         )
         for c in at.caption
     )
+
+
+def _previewed() -> AppTest:
+    """The page with the AI popover open: its preview made, Send not yet clicked."""
+    at = AppTest.from_function(_app, kwargs={"frame": FRAME, "ai": AI}, default_timeout=180)
+    at.run()
+    popover = "clean_ai_open::" + str(_one(at.button, "clean_map::").key).split("::", 1)[1]
+    at.session_state[popover] = True
+    at.run()
+    _ok(at)
+    return at
+
+
+def test_send_asks_nothing_when_the_engine_changed_since_the_preview() -> None:
+    """The preview said what goes where: an engine changed since (another model, another recipient) sends nothing,
+    and the user is told to open the preview again."""
+    at = _previewed()
+    at.session_state[
+        "rag_manager"
+    ].llm.config.model_name = "llama3.2"  # a model of this machine since
+    _one(at.button, "clean_ai_send::").click().run()
+    _ok(at)
+    assert at.session_state["rag_manager"].sent == []
+    assert "changed since the preview" in at.session_state["clean_ai"]["diagnosis"]["refused"]
+
+
+def test_send_asks_nothing_when_the_server_now_runs_the_model_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Asked again at Send, the Ollama server names another place than when the engine started (a model replaced under
+    its name): nothing is sent, and the engine is to be started again."""
+    import manage.rag.providers.ollama_server as server
+
+    at = _previewed()
+    monkeypatch.setattr(server, "runs_at", lambda base_url, model: "https://elsewhere.example")
+    _one(at.button, "clean_ai_send::").click().run()
+    _ok(at)
+    assert at.session_state["rag_manager"].sent == []
+    refused = at.session_state["clean_ai"]["diagnosis"]["refused"]
+    assert "runs the model elsewhere than when the AI engine started" in refused

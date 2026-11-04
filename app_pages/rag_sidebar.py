@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 import streamlit as st
 
-from core.registry import Selection
+from core.registry import Selection, as_code
 from core.workspace import remove_pdf, safe_filename
 from manage.ai_payload import (
     cloud_model,
@@ -261,9 +261,10 @@ def _provider_card() -> dict:
 
             try:
                 cfg["remote_host"] = _runs_at(cfg["base_url"] or "", str(cfg["model"] or ""))
-            except NoAnswer:  # the list's own mark when it has one (the box is then offered), else not known
+            except NoAnswer as exc:  # the list's own mark when it has one (the box is then offered), else not known
                 cfg["remote_host"] = elsewhere.get(str(cfg["model"] or ""))
                 silent = cfg["remote_host"] is None
+                cfg["silence"] = getattr(exc, "reason", "")
         cfg["where_unknown"] = silent  # read by the Data sharing card: never said to keep the data here
         cfg["embedding"] = col_embed.selectbox(
             "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST,
@@ -285,15 +286,25 @@ def _provider_card() -> dict:
                         _address_badge(cfg["base_url"])
                 elif silent:  # said as not known, never as "Local": the start asks again, and starts on an answer
                     st.badge("Where this model runs is not known", icon=":material/help:", color="gray")
-                    st.caption(
-                        "The Ollama server did not say where it runs this model. An engine started with it asks again, "
-                        "and starts only once the server answers."
-                    )
+                    st.caption(_silence(cfg) + " An engine started with it asks again, and starts only once the "
+                               "server answers.")
                     if not on_this_machine(cfg["base_url"]):  # what the address says is known all the same
                         _address_badge(cfg["base_url"])
                 else:
                     _address_badge(cfg["base_url"])
     return cfg
+
+
+def _silence(cfg: dict) -> str:
+    """Why a server's answer on where it runs the chosen model is missing, the model and the address named."""
+    from manage.rag.providers.ollama_server import UNREACHABLE
+
+    model = as_code(str(cfg.get("model") or "the model"))
+    url = str(cfg.get("base_url") or "")
+    address = (urlparse(url).netloc if "//" in url else url) or "localhost:11434"
+    if cfg.get("silence") == UNREACHABLE:
+        return f"The Ollama server did not answer at {as_code(address)}: where it runs {model} is not known."
+    return f"The Ollama server did not say where it runs {model}."
 
 
 def _seed_model(
@@ -552,9 +563,10 @@ def _consent_card(cfg: dict, vector: dict | None = None) -> bool:
         store = (vector or {}).get("qdrant_url") if on_qdrant else None
         elsewhere = bool(store) and not on_this_machine(store)  # a Qdrant server on the private network
         if not recipients and cfg.get("where_unknown"):  # the server did not say where it runs the model
+            model = as_code(str(cfg.get("model") or "the model"))
             said = (
-                "Where the Ollama server runs this model is not known: an engine started with it asks the server "
-                "again, and sends nothing until it answers."
+                f"Where the Ollama server runs {model} is not known. Nothing is sent until it says where; if it runs "
+                "it elsewhere (ollama.com), you are asked to confirm here first."
             )
             if not on_this_machine(url):
                 said += (
