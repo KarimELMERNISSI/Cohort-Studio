@@ -101,12 +101,56 @@ def test_a_column_of_names_codes_or_dates_on_visits_sends_no_value() -> None:
     assert "P-00" not in sent and "Participant" not in sent and "-01-01" not in sent
 
 
+def _born(people: int, visits: np.ndarray) -> pd.DataFrame:
+    """Birth dates of ``people`` 397 days apart from 1930, each on its rows (``visits``), as numbers: yyyymmdd and days
+    since 1960 (SAS; an Excel serial counts days too)."""
+    born = pd.date_range("1930-01-01", periods=people, freq="397D")
+    days = (born - pd.Timestamp("1960-01-01")).days.to_numpy()
+    return pd.DataFrame(
+        {
+            "dob": np.repeat(born.strftime("%Y%m%d").astype(int), visits),
+            "birth_sas": np.repeat(days, visits),
+            "value_since_1960": np.repeat(days, visits),  # a name that does not say it
+        }
+    )
+
+
+def test_a_birth_date_held_as_a_number_never_leaves_through_its_percentiles() -> None:
+    """On visits, one person's rows sit side by side once sorted: 4 of the 5 percentiles of a birth date written
+    yyyymmdd, 40 people on 1 to 8 visits, were participants' own birth dates, and those of a count of days the same."""
+    rng = np.random.default_rng(1)
+    df = _born(40, rng.integers(1, 9, 40))
+    df["sbp"] = rng.normal(132, 18, len(df)).round(1)
+    profile = {p["name"]: p for p in column_profile(df)}
+    assert profile["dob"] == {"name": "dob", "type": "Date", "range": "1930 to 1972"}  # read as a date
+    assert profile["birth_sas"] == {"name": "birth_sas", "type": "Numeric"}  # named as one
+    # a count of days whose name does not say so: rounded to one step, two digits of the largest (near 1960 too)
+    stats = profile["value_since_1960"]["stats"]
+    assert stats == {"p5": -10000.0, "p25": -7000.0, "p50": -3000.0, "p75": 0.0, "p95": 4000.0}
+    assert not set(stats.values()) & set(df["value_since_1960"].astype(float))
+    assert all(v % 10 == 0 for v in profile["sbp"]["stats"].values())  # 100 to 160: the scale and the unit
+    few = {p["name"]: p for p in column_profile(_born(8, np.full(8, 6)))}  # 10 values or fewer
+    assert few["dob"]["type"] == "Date" and few["birth_sas"] == {"name": "birth_sas", "type": "Numeric"}
+    death = column_profile(pd.DataFrame({"death": [0, 1] * 30}))  # a flag, whatever its name
+    assert death[0]["top_values"] == {"0": 30, "1": 30}
+
+
+def test_names_on_the_visits_of_30_people_or_fewer_are_counted_by_their_rows() -> None:
+    """What the notice says: rows are counted, not people, until the dataset says which column names a participant.
+    A name on the 6 visits of each of 25 people is a value of 6 rows; with more than 30 people, none is sent."""
+    (few,) = column_profile(pd.DataFrame({"name": np.repeat([f"Person {i:02d}" for i in range(25)], 6)}))
+    assert len(few["top_values"]) == 5 and set(few["top_values"].values()) == {6}
+    (many,) = column_profile(pd.DataFrame({"name": np.repeat([f"Person {i:02d}" for i in range(31)], 6)}))
+    assert many["top_values"] == {}
+
+
 def test_statistics_outside_the_notice_are_dropped() -> None:
     # an imported or edited variable map may hold anything: only the percentiles are kept (an allow-list)
     assert safe_stats({"min": 31.5, "max": 912.0, "mean": 88.4}) == {}
     assert safe_stats({"minimum": 18, "maximum": 97}) == {} and safe_stats({"0%": 18, "100%": 97}) == {}
     kept = safe_stats({"p5": 60.0, "p50": 88.0, "p95": 130.0, "max": 912.0})
-    assert kept == {"p5": 60.0, "p50": 88.0, "p95": 130.0}
+    assert kept == {"p5": 60.0, "p50": 90.0, "p95": 130.0}  # rounded as column_profile rounds them
+    assert safe_stats({"p50": "88", "p95": True}) == {}  # a percentile that is no number
     assert safe_stats("min 31.5, max 912") == {} and safe_stats(None) == {}
     # the frequent values of column_profile: values shared by fewer than 5 rows are not sent
     assert frequent_values({"II": 80, "III": 40, "Mrs Dupont": 1}) == {"II": 80, "III": 40}

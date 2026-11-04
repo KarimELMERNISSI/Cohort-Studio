@@ -438,16 +438,20 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
         lines += [
             (
                 "- **About your data, a summary of each column:** its name and type; the 5th, 25th, 50th, 75th and "
-                "95th percentiles of numeric columns of more than 10 values (never the minimum or the maximum); the "
+                "95th percentiles of numeric columns of more than 10 values, rounded to two significant digits of the "
+                "largest (never the minimum or the maximum, and none for a number named as a date, such as `dob`); the "
                 "most frequent values of the other columns with their counts, only values shared by at least 5 rows, "
-                "and none for free text or a column of names, codes or dates on visits; the first and last year of "
-                "date columns. Rows are counted, not people: a value written on 5 visits of one person is sent."
+                "and none for free text or a column of more than 30 values, most of them rare (names, codes or dates "
+                "on the visits of more than 30 people); the first and last year of date columns, and of numbers "
+                "written as dates (19620115). Rows are counted, not people: a value written on 5 visits of one person "
+                "is sent, and so is a name in a study of 30 people or fewer."
             ),
             "- **No row of your dataset.**",
             (
                 "- **Data > Clean, when you ask the AI engine:** the name of the variable and its values as written, "
                 "only values held by at least 5 rows (rows, not people, as above), without their counts; never free "
-                "text or a column of names, codes or dates on visits."
+                "text or a column of more than 30 values, most of them rare (names, codes or dates on the visits of "
+                "more than 30 people)."
             ),
             (
                 "- **What you write and choose:** your descriptions and criteria, the text of the PDFs you index "

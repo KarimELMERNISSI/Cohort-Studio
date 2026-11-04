@@ -3,8 +3,10 @@ What the AI features may send about a dataset to a cloud provider: a summary of 
 
 The column renaming, the variable taxonomy, the unit hints of Enrich and the suggested criteria of Validate all
 describe the columns with :func:`column_profile`, and the data-sharing notice of Settings lists exactly this:
-- numeric columns: the 5th, 25th, 50th, 75th and 95th percentiles; never the minimum or the maximum, which can
-  single out one participant;
+- numeric columns: the 5th, 25th, 50th, 75th and 95th percentiles, rounded to two significant digits of the largest
+  (enough to tell a unit); never the minimum or the maximum, which can single out one participant. On visits, a percentile can be one
+  person's value: a birth date written as a number (19620115) is read as a date, and a number named as a date (``dob``,
+  ``date_of_death``) keeps its name and type only;
 - other columns: their most frequent values with their counts, only values shared by at least ``MIN_COUNT`` rows;
 - date columns: the first and the last year.
 
@@ -21,7 +23,9 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import math
 import os
+import re
 import socket
 from collections.abc import Iterable, Mapping
 from typing import Any
@@ -42,6 +46,12 @@ PERCENTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 # can single out one participant: no percentile is sent
 MIN_QUANTILE_ROWS = 21
 FEW_LEVELS = 10  # a numeric column with this many distinct values or fewer is described by its values
+# the words of a column name that say it may hold dates (``dob``, ``date_of_death``, ``birth_sas``, ``visit_dt``): kept as
+# a number (days since 1960, an Excel serial), its values and percentiles would be people's dates. A birth weight loses
+# its percentiles too, the price of never sending a birth date
+DATE_WORDS = frozenset(
+    {"date", "dates", "dob", "dod", "dt", "datetime", "birth", "birthdate", "birthday", "deathdate"}
+)
 PERCENTILE_KEYS = tuple(f"p{round(q * 100)}" for q in PERCENTILES)
 # the keys of a taxonomy entry that describe the variable, not its values: only these reach a prompt (an imported or
 # edited map may hold anything in the others)
@@ -76,12 +86,47 @@ def _frequent_values(series: pd.Series) -> dict[str, int]:
     return {str(value): int(n) for value, n in counts.items() if n >= MIN_COUNT}
 
 
+def _rounded(stats: Mapping[str, float]) -> dict[str, float]:
+    """
+    A column's percentiles rounded to one step, two significant digits of the largest (100.3, 131.6 and 162.1 give 100,
+    130 and 160): its scale and unit, never a value of one row, which on visits a percentile can be (one person's rows
+    sit side by side once sorted). One step for all, so that a number near 0 keeps no more digits than the others: in
+    days since 1960, -10,412 and -140 give -10,000 and 0, not a birth date in 1959.
+    """
+    top = max((abs(v) for v in stats.values() if math.isfinite(v)), default=0.0)
+    if top == 0:
+        return {key: 0.0 if math.isfinite(v) else v for key, v in stats.items()}
+    step = 10.0 ** (math.floor(math.log10(top)) - 1)
+    return {
+        key: float(f"{round(v / step) * step:.12g}") + 0.0 if math.isfinite(v) else v for key, v in stats.items()
+    }
+
+
+def _named_as_date(name: object) -> bool:
+    """Whether a column's name says that it holds dates: one of its words (split at ``_``, spaces, digits and
+    capitals) is in DATE_WORDS."""
+    words = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])", str(name))
+    return any(word.lower() in DATE_WORDS for word in words)
+
+
+def _written_dates(series: pd.Series) -> pd.Series | None:
+    """The values of a numeric column read as dates when each is a whole number written yyyymmdd (19620115) that is a
+    date of the calendar; None otherwise."""
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    if values.empty or not bool((values % 1 == 0).all()) or not bool(values.between(1000_01_01, 2999_12_31).all()):
+        return None
+    dates = pd.to_datetime(values.astype("int64").astype(str), format="%Y%m%d", errors="coerce")
+    return None if bool(dates.isna().any()) else dates
+
+
 def column_profile(
     df: pd.DataFrame, columns: Iterable[str] | None = None, *, date_columns: Iterable[str] = ()
 ) -> list[dict[str, Any]]:
     """
     One summary per column (``name``, ``type`` and ``stats``, ``top_values`` or ``range``). ``date_columns`` are read
-    as dates even when they hold text (only their years are sent).
+    as dates even when they hold text (only their years are sent); so is a number written yyyymmdd. A number named as a
+    date (:data:`DATE_WORDS`) keeps its name and type only. Percentiles are rounded to two significant digits of the
+    largest (:func:`_rounded`).
     """
     as_dates = set(date_columns)
     profiles: list[dict[str, Any]] = []
@@ -91,11 +136,21 @@ def column_profile(
         series = df[col].dropna()
         if col in as_dates and not pd.api.types.is_datetime64_any_dtype(series):
             series = pd.to_datetime(series, errors="coerce", format="mixed", dayfirst=True).dropna()
+        if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
+            written = _written_dates(series)
+            series = written if written is not None else series
         info: dict[str, Any] = {"name": str(col)}
         if pd.api.types.is_datetime64_any_dtype(series):
             info["type"] = "Date"
             if not series.empty:
                 info["range"] = f"{series.min().year} to {series.max().year}"
+        elif (
+            pd.api.types.is_numeric_dtype(series)
+            and not pd.api.types.is_bool_dtype(series)
+            and int(series.nunique()) > 2  # a 0/1 flag is no date
+            and _named_as_date(col)
+        ):
+            info["type"] = "Numeric"  # a date kept as a number: its values and percentiles would be people's dates
         elif pd.api.types.is_bool_dtype(series) or (
             pd.api.types.is_numeric_dtype(series) and int(series.nunique()) <= FEW_LEVELS
         ):
@@ -105,7 +160,7 @@ def column_profile(
             info["type"] = "Numeric"
             if len(series) >= MIN_QUANTILE_ROWS:
                 quantiles = series.astype(float).quantile(list(PERCENTILES))
-                info["stats"] = {f"p{round(q * 100)}": round(float(v), 6) for q, v in quantiles.items()}
+                info["stats"] = _rounded({f"p{round(q * 100)}": float(v) for q, v in quantiles.items()})
         else:
             info["type"] = "Categorical"
             info["top_values"] = _frequent_values(series)
@@ -166,11 +221,19 @@ def column_kinds(
 def safe_stats(stats: Any) -> dict[str, Any]:
     """
     What a prompt may carry of a variable's statistics: the percentiles of :func:`column_profile`, nothing else (an
-    allow-list). The minimum, maximum, mean, "0%" or "100%" of an imported or edited map are dropped.
+    allow-list), rounded as it rounds them. The minimum, maximum, mean, "0%" or "100%" of an
+    imported or edited map are dropped, and so is a percentile that is not a number; a map built before percentiles
+    were rounded is rounded here.
     """
     if not isinstance(stats, Mapping):
         return {}
-    return {key: stats[key] for key in PERCENTILE_KEYS if key in stats}
+    return _rounded(
+        {
+            key: float(stats[key])
+            for key in PERCENTILE_KEYS
+            if isinstance(stats.get(key), int | float) and not isinstance(stats.get(key), bool)
+        }
+    )
 
 
 def frequent_values(values: Any) -> dict[str, int]:

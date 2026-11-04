@@ -1452,12 +1452,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Settings > AI engine says that rows are counted, not people:** the column summaries and Clean's values are sent
   when 5 rows hold them, so a value written on 5 visits of one person is sent; the notice beside the consent box now
   says so, as Clean's preview did.
-- **The column summaries send no value of a column of names, codes or dates on visits.** Data insight, the criteria
-  assistant, the column renaming and Enrich's unit hints sent the five most frequent values of each text column with
-  their counts, so five names, participant codes or birth dates of a table of visits, where Clean reads the same
-  columns as identifiers and sends nothing. A column that Clean's test reads as free text, mostly rare values or an
-  identifier is now summarised by its name and type only. The consent notice says so, and that the percentiles are
-  those of numeric columns of more than 10 values (fewer are described by their values).
+- **The column summaries send no value of a column of names, codes or dates on the visits of more than 30 people.**
+  Data insight, the criteria assistant, the column renaming and Enrich's unit hints sent the five most frequent values
+  of each text column with their counts, so five names, participant codes or birth dates of a table of visits, where
+  Clean reads the same columns as identifiers and sends nothing. A column that Clean's test reads as free text, mostly
+  rare values or an identifier is now summarised by its name and type only. With 30 people or fewer, a name is counted
+  by its rows like any value until the dataset says which column names a participant, and the consent notice says so,
+  and that the percentiles are those of numeric columns of more than 10 values (fewer are described by their values).
+- **No birth date leaves through a percentile.** On visits, one person's rows sit side by side once sorted, so a
+  percentile can be that person's value: 4 of the 5 percentiles of a birth date written as a number (19620115), 40
+  people on 1 to 8 visits, were participants' own birth dates, and a count of days since 1960 the same. A number
+  written yyyymmdd is now read as a date (its first and last year), a number named as a date (`dob`, `date_of_death`)
+  keeps its name and type only, and every percentile is rounded to two significant digits of its column's largest
+  (sbp: 100 to 160), a variable map saved before included. The consent notice says so.
 
 ### Data > Clean: values found by a text or a regular expression
 

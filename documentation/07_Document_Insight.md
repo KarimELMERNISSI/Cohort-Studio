@@ -41,11 +41,16 @@ text of your documents and the column summaries, and the page shows its host:
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria, the derived variables it finds) is a summary of each column, never a row:
 - **every column:** its name and type;
-- **numeric columns:** the 5th, 25th, 50th, 75th and 95th percentiles, never the minimum or the maximum, which can
-  single out one participant, and none for a column of fewer than 21 values (its extreme percentiles would be
-  computed from them);
-- **other columns:** their most frequent values with their counts, only values shared by at least 5 rows;
-- **date columns:** the first and the last year.
+- **numeric columns of more than 10 values:** the 5th, 25th, 50th, 75th and 95th percentiles, rounded to two
+  significant digits of the largest (sbp: 100 to 160), never the minimum or the maximum, which can single out one
+  participant, and none for a column of fewer than 21 values (its extreme percentiles would be computed from them).
+  On visits, one person's rows sit side by side once sorted, so an exact percentile can be that person's value: hence
+  the rounding, and a number named as a date (`dob`, `date_of_death`) keeps its name and type only;
+- **other columns, and numbers of 10 values or fewer:** their most frequent values with their counts, only values
+  shared by at least 5 rows; none for free text, nor for a column of more than 30 values most of them rare, such as
+  names, participant codes or dates on the visits of more than 30 people. Rows are counted, not people: a value written
+  on 5 visits of one person is sent, and so is a name in a study of 30 people or fewer;
+- **date columns, and numbers written as dates (19620115):** the first and the last year.
 
 Your descriptions and criteria, the text of the PDFs you index and your chat messages are sent as you write them; a
 passage of a PDF goes with the PDF's name, and a question in Document insight with the names of the PDFs it is about,

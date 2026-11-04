@@ -100,7 +100,8 @@ def test_what_is_sent_is_names_kinds_units_and_quantiles() -> None:
         }
     )
     ranges = typical_ranges(frame)
-    assert set(ranges) == {"creatinine"} and ranges["creatinine"].startswith("6")
+    # one step for the column's percentiles, two digits of the largest: the unit shows (umol/L, not mg/dL)
+    assert ranges == {"creatinine": "70 to 110 (median 90)"}
     engine = _engine(json.dumps({"candidates": []}))
     found, error = engine.suggest_derived_variables(
         list(frame.columns),
