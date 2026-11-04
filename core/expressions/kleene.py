@@ -5,10 +5,11 @@ is False, "unknown or True" is True; and a criterion fires where its expression 
 fires a criterion, written with "!=" or "~" too: "~(df['height_cm'] >= 100)" fired on every missing height, and
 "df['status'] != 'withdrawn'" on every missing status.
 
-One reading, however the test is spelt: the methods ``eq ne lt le gt ge`` are the comparisons, ``np.logical_not``,
+One reading, however the test is spelt: the methods ``eq ne lt le gt ge`` are the comparisons (the value by
+position or as ``other=``; ``axis=`` changes nothing for a Series), ``np.logical_not``,
 ``logical_and``, ``logical_or`` and ``logical_xor`` are ``~ & | ^``, a test compared with True or False is the test or
-its negation, and ``between`` is its two comparisons (unknown where the value or a bound is missing, unless the other
-comparison is False). An expression that says itself what a missing value gives decides it, whatever the
+its negation, and ``between`` (its bounds by position or as ``left=``, ``right=``, ``inclusive=``) is its two
+comparisons (unknown where the value or a bound is missing, unless the other comparison is False). An expression that says itself what a missing value gives decides it, whatever the
 column's dtype: a test's ``fillna(True)`` or ``fillna(False)`` fills the test's unknowns, and an ``isin`` list holding
 a missing value (None, np.nan, pd.NA, pd.NaT) finds the missing values (``isin(the others) | isna()``); inside any
 other call (np.where, astype, a sum) and in a text test's ``na=`` it is read as Python reads it.
@@ -175,6 +176,25 @@ def _holds_missing(node: ast.expr) -> bool:
     )
 
 
+def _argument(
+    args: list[ast.expr], given: dict[str | None, ast.expr], names: tuple[str, ...]
+) -> list[ast.expr] | None:
+    """A call's arguments in the order ``names`` takes them, by position then by keyword (between(1, right=3)); None
+    when a keyword is not among ``names``, comes twice, or leaves a gap before a later one."""
+    if len(args) > len(names) or any(k not in names for k in given):
+        return None
+    found: list[ast.expr | None] = [*args, *[None] * (len(names) - len(args))]
+    for i, name in enumerate(names):
+        if name in given:
+            if found[i] is not None:
+                return None
+            found[i] = given[name]
+    filled = [a for a in found if a is not None]
+    if found[: len(filled)] != filled:  # a gap: between(1, inclusive="both") lacks its right bound
+        return None
+    return filled
+
+
 def _fill_flag(node: ast.Call) -> ast.expr | None:
     """The True or False a ``fillna`` call gives, written as its one argument (``value=`` too); None otherwise."""
     if len(node.args) == 1 and not node.keywords:
@@ -213,22 +233,19 @@ def _negated(node: ast.expr) -> ast.expr:
 def _method(node: ast.Call, name: str, owner: ast.expr) -> ast.expr | None:
     """A Series's comparison or test, rewritten; None when it says itself what a missing value gives, or is not one."""
     if name in _METHODS:
-        if (
-            len(node.args) == 1 and not node.keywords
-        ):  # fill_value=, level=, axis=: the call decides
-            return _call(COMPARE, owner, ast.Constant(_METHODS[name]), node.args[0])
+        # the value compared with, by position or as other=; axis= changes nothing for a Series. fill_value= and
+        # level= say themselves what a missing value gives: read as written
+        given = {k.arg: k.value for k in node.keywords if k.arg != "axis"}
+        other = _argument(node.args, given, ("other",))
+        if other is not None and len(node.args) + len(given) == 1:
+            return _call(COMPARE, owner, ast.Constant(_METHODS[name]), other[0])
         return None
     if name == "between":
         given = {k.arg: k.value for k in node.keywords}
-        if (
-            2 <= len(node.args) <= 3
-            and set(given) <= {"inclusive"}
-            and not (len(node.args) == 3 and given)
-        ):
-            inclusive = node.args[2] if len(node.args) == 3 else given.get("inclusive")
-            return _call(
-                BETWEEN, owner, node.args[0], node.args[1], inclusive or ast.Constant("both")
-            )
+        bounds = _argument(node.args, given, ("left", "right", "inclusive"))
+        if bounds is not None and len(bounds) >= 2:
+            inclusive = bounds[2] if len(bounds) == 3 else ast.Constant("both")
+            return _call(BETWEEN, owner, bounds[0], bounds[1], inclusive)
         return _call(TESTED, owner, node)
     if name == "isin":
         if node.args and _holds_missing(node.args[0]):

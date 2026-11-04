@@ -766,9 +766,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Now:** an expression is read in three-valued logic, as SQL's `WHERE` reads it: a comparison or a test of a value
   (`isin`, `between`, the tests of `.str`) on a missing value is unknown, "not unknown" is unknown, and a rule fires
   where its expression is true only. One reading however the test is spelt: `.ne()`, `.ge()` and the other comparison
-  methods, `np.logical_not` and its siblings, `(test) == False`, and `between` with a missing bound (unknown unless
-  the other comparison is false). `.isna()` still finds the missing values, and `df['x'].isna() | (...)` fires on
-  them; an expression that gives a missing value a value itself decides it, whatever the column's dtype: a test's
+  methods (`.ge(other=100)` too), `np.logical_not` and its siblings, `(test) == False`, and `between` (its bounds
+  given by keyword too) with a missing bound (unknown unless the other comparison is false). `.isna()` still finds
+  the missing values, and `df['x'].isna() | (...)` fires on them; an expression that gives a missing value a value itself decides it, whatever the column's dtype: a test's
   `.fillna(True)` or `.fillna(False)` fills its unknowns (`(df['status'] != 'withdrawn').fillna(False)` fired on the
   missing statuses of a text column, and `(df['egfr'] >= 30).fillna(True)` kept the missing values of an Int64 column
   only), and an `isin` list holding a missing value finds the missing values (`np.nan` found a float's, not an

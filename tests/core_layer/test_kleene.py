@@ -54,10 +54,11 @@ def test_unknown_or_true_is_true_and_a_rule_may_ask_for_missing_values() -> None
 
 
 def test_a_test_inside_a_call_is_read_as_python_reads_it() -> None:
-    """np.where, fillna and astype decide what a missing value gives there."""
+    """np.where, fillna and astype decide what a missing value gives there, and so does a comparison's fill_value."""
     assert _fires("np.where(df['h'] > 100, 1, 0) == 1") == [2, 3]
     assert _fires("df['h'].fillna(0) < 100") == [0, 1]
     assert _fires("(df['h'] > 100).astype(int) == 0") == [0, 1]
+    assert _fires("df['h'].lt(100, fill_value=0)") == [0, 1]
 
 
 def test_an_expression_is_still_checked_as_written() -> None:
@@ -86,6 +87,11 @@ def test_an_expression_is_still_checked_as_written() -> None:
         ("(df['h'] > 100) & (df['s'] != 'y')", "np.logical_and(df['h'] > 100, df['s'].ne('y'))"),
         ("(df['h'] > 100) | (df['s'] == 'x')", "np.logical_or(df['h'].gt(100), df['s'].eq('x'))"),
         ("(df['h'] > 100) ^ (df['s'] == 'x')", "np.logical_xor(df['h'] > 100, df['s'] == 'x')"),
+        # by keyword too: they fired on the missing height
+        ("~(df['h'] >= 100)", "~df['h'].ge(other=100)"),
+        ("~(df['h'] >= 100)", "~df['h'].ge(100, axis=0)"),
+        ("~df['h'].between(100, 200)", "~df['h'].between(left=100, right=200)"),
+        ("~df['h'].between(100, 200)", "~df['h'].between(100, right=200, inclusive='both')"),
     ],
 )
 def test_one_reading_however_the_test_is_spelt(written: str, spelt: str) -> None:
