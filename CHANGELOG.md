@@ -242,7 +242,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     nothing when it does not answer or names another place than at the start: a copy of a cloud model would
     otherwise read as a model of this machine, and be sent every value. The page says "Nothing was sent" for its own
     refusals, apart from the engine's errors. The sign-in page says that data stay on the server unless an AI engine
-    that sends them elsewhere is chosen.
+    that sends them elsewhere is chosen. Settings no longer draws such a server as "Local: no data leaves this
+    server" beside the model, for a minute: it says that where the model runs is not known (or marks the model run
+    elsewhere when the server's list says so), and asks again on the next run.
   - The notice says that the confirmation is the user's, for one browser tab, and does not replace the approvals of
     a data-protection framework, and that what was sent stays with the provider. "Mistral AI (cloud, EU)" claimed
     a location the app cannot check: it reads "Mistral AI (cloud)".
@@ -1411,8 +1413,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   categories, read as an identifier, and "Ask the AI engine" was disabled where it helps most.
 - **Now:** a value of 1 to 4 rows that misspells a value held by 5 rows or more (the same word written another way,
   or a typo's edits away) counts as that value, so a messy column's typos count as the categories they misspell.
-  Every other value counts as its own, however rare: a column of names, participant codes or dates on visits still
-  reads as an identifier, and is never sent.
+  Every other value counts as its own, however rare: a column of names, participant codes or dates on visits of more
+  than 30 people still reads as an identifier, and is never sent (30 people or fewer are counted as rows until the
+  dataset says which column names a participant).
 - **Settings > AI engine says that rows are counted, not people:** the column summaries and Clean's values are sent
   when 5 rows hold them, so a value written on 5 visits of one person is sent; the notice beside the consent box now
   says so, as Clean's preview did.

@@ -443,3 +443,32 @@ def test_settings_moves_an_earlier_server_index_and_names_an_unrecorded_one(
     app.run()
     assert any("cmp_persist_user_chunks_ff00ff00" in c.value for c in app.caption)
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
+
+
+def test_a_silent_ollama_server_is_never_drawn_as_local(
+    signed_in: AppTest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings read a silence as "runs here" and drew "Local: no data leaves this server" beside the model, for a
+    minute, where the engine's start then refused: it says that where the model runs is not known."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    import app_pages.rag_sidebar as sidebar
+    import manage.rag.providers.ollama_server as server
+
+    def silent(base_url, model):
+        raise server.NoAnswer(model)
+
+    monkeypatch.setattr(server, "runs_at", silent)
+    monkeypatch.setattr(server, "remote_models", lambda base_url: {})
+    sidebar._runs_at.clear()
+    sidebar._remote_models.clear()
+    _visit(signed_in, "settings")
+    signed_in.selectbox(key="rag_provider_select").select("ollama").run()
+    assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
+    shown = [m.value for m in signed_in.markdown]
+    assert any("Where this model runs is not known" in v for v in shown), shown[-6:]
+    assert not any("Local: no data leaves this server" in v for v in shown)
+    assert any(
+        "The Ollama server did not say where it runs this model" in c.value
+        for c in signed_in.caption
+    )
+    sidebar._runs_at.clear()

@@ -94,12 +94,13 @@ def _discover_ollama_models(base_url: str) -> list[str]:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _remote_host(base_url: str, model: str) -> str | None:
+def _runs_at(base_url: str, model: str) -> str | None:
     """Where the Ollama server runs a model when not itself (a cloud model, a copy of one), asked at most once a
-    minute per endpoint and model, as the engine asks it when it starts."""
-    from manage.rag.providers.ollama_server import remote_host
+    minute per endpoint and model, as the engine asks it when it starts. A silence raises NoAnswer, which is never
+    kept (a call that raises is not cached): Settings never states where a model runs from a server that did not say."""
+    from manage.rag.providers.ollama_server import runs_at
 
-    return remote_host(base_url, model)
+    return runs_at(base_url, model)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -254,8 +255,15 @@ def _provider_card() -> dict:
             format_func=model_label,
             on_change=preferences.save_from, args=(chat_key, "ai_chat_model"), kwargs={"provider": provider},
         )
+        silent = False  # an Ollama server that did not say where it runs the model
         if provider == "ollama":  # as the engine asks when it starts: a copy of a cloud model reads local by name
-            cfg["remote_host"] = _remote_host(cfg["base_url"] or "", str(cfg["model"] or ""))
+            from manage.rag.providers.ollama_server import NoAnswer
+
+            try:
+                cfg["remote_host"] = _runs_at(cfg["base_url"] or "", str(cfg["model"] or ""))
+            except NoAnswer:  # the list's own mark when it has one (the box is then offered), else not known
+                cfg["remote_host"] = elsewhere.get(str(cfg["model"] or ""))
+                silent = cfg["remote_host"] is None
         cfg["embedding"] = col_embed.selectbox(
             "Embedding model", embed_options, index=0, key=embed_key, help=embed_help, persist_state=PERSIST,
             on_change=preferences.save_from, args=(embed_key, "ai_embedding_model"), kwargs={"provider": embed_owner},
@@ -274,6 +282,12 @@ def _provider_card() -> dict:
                     )
                     if not on_this_machine(cfg["base_url"]):  # the server at the address receives it too
                         _address_badge(cfg["base_url"])
+                elif silent:  # said as not known, never as "Local": the start asks again, and starts on an answer
+                    st.badge("Where this model runs is not known", icon=":material/help:", color="gray")
+                    st.caption(
+                        "The Ollama server did not say where it runs this model. The engine asks again when it starts, "
+                        "and starts only once the server answers."
+                    )
                 else:
                     _address_badge(cfg["base_url"])
     return cfg
