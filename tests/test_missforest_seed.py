@@ -29,15 +29,13 @@ def _frame() -> pd.DataFrame:
 
 
 def test_one_thread_and_four_impute_the_same_values() -> None:
-    from enrich.data_imputation import MissForestTransformer
+    from enrich import data_imputation as edi
 
-    frame = _frame()
-    one = MissForestTransformer(categorical_cols=["arm"], n_jobs=1, random_state=11).fit_transform(
-        frame.copy()
-    )
-    four = MissForestTransformer(categorical_cols=["arm"], n_jobs=4, random_state=11).fit_transform(
-        frame.copy()
-    )
+    def imputed(threads: int) -> pd.DataFrame:
+        model = edi.MissForestTransformer(categorical_cols=["arm"], n_jobs=threads, random_state=11)
+        return model.fit_transform(_frame())
+
+    one, four = imputed(1), imputed(4)
     pd.testing.assert_frame_equal(one, four)
     assert not one.isna().any().any()
 
@@ -46,8 +44,8 @@ def test_the_step_records_the_seed_and_the_replay_draws_with_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Another process seed (CMP_RANDOM_SEED) at the replay: the recorded one is used, and the values are the same."""
-    import enrich.data_imputation as edi
-    import enrich.imputation_service as service
+    from enrich import data_imputation as edi
+    from enrich import imputation_service as service
 
     frame = _frame()
     recorded = service.impute_rows(frame, numerical="MissForest", categorical="MissForest")
@@ -81,17 +79,14 @@ def test_the_replay_passes_the_recorded_seed(monkeypatch: pytest.MonkeyPatch) ->
         engine._imputation(_frame(), step, 0, None, [])
     assert seen["random_state"] == 77
     seen.clear()
-    with pytest.raises(
-        RuntimeError
-    ):  # a step recorded before the seed was kept: the process's, as before
+    # a step recorded before the seed was kept: the process's, as before
+    with pytest.raises(RuntimeError):
         engine._imputation(_frame(), {"function": "imputation", "params": {}}, 0, None, [])
     assert seen["random_state"] is None
 
 
 def test_no_seed_is_recorded_without_missforest() -> None:
-    from enrich.imputation_service import impute_rows
+    from enrich import imputation_service as service
 
-    assert (
-        "random_state"
-        not in impute_rows(_frame(), numerical="Median", categorical="Most_Frequent").params
-    )
+    params = service.impute_rows(_frame(), numerical="Median", categorical="Most_Frequent").params
+    assert "random_state" not in params
