@@ -665,6 +665,7 @@ def test_a_qdrant_server_outside_the_network_needs_the_confirmation(monkeypatch,
     from manage.vectorstores import VECTOR_STORES
 
     _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setenv("CMP_QDRANT_URL", CLOUD_QDRANT)  # a server the deployment offers: confirmed all the same
     opened: list[str] = []
 
     def stand_in(engine, **kwargs):  # an embedded index in place of the server, recorded
@@ -697,6 +698,7 @@ def test_lancedb_asked_for_never_falls_to_an_unconfirmed_qdrant_server(monkeypat
     from manage.vectorstores import VECTOR_STORES
 
     _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setenv("CMP_QDRANT_URL", CLOUD_QDRANT)  # a server the deployment offers: confirmed all the same
     monkeypatch.setattr(
         VECTOR_STORES, "availability", lambda name: Availability(name != "lancedb", "not installed")
     )
@@ -818,6 +820,7 @@ def test_the_running_engine_names_each_recipient_by_its_role() -> None:
 def test_an_address_without_a_scheme_is_opened_as_the_client_reads_it(monkeypatch, tmp_path) -> None:
     """With a key, the client reaches an address written without a scheme over https: the engine names it so."""
     _fake_connectors(monkeypatch, tmp_path)
+    monkeypatch.setenv("CMP_QDRANT_URL", CLOUD_QDRANT)  # a server the deployment offers: confirmed all the same
     opened = _stand_in(monkeypatch, tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()

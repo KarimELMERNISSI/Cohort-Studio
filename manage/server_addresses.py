@@ -1,5 +1,6 @@
 """
-The addresses of the servers a user may choose in Settings, by kind (``OLLAMA_ADDRESSES``: the Ollama services): the
+The addresses of the servers a user may choose in Settings, by kind (``OLLAMA_ADDRESSES``, the Ollama services;
+``QDRANT_ADDRESSES``, the Qdrant servers): the
 deployment's and those an administrator added in Settings, kept for the whole server in
 ``<DATA_ROOT>/server/<kind>_addresses.json``.
 
@@ -32,6 +33,8 @@ from utils.settings import get_settings, server_address
 logger = logging.getLogger(__name__)
 
 VERSION = 1
+# the end of an AI engine's stop reason for an address an administrator removed: Settings asks for another choice
+ADDRESS_REMOVED = "removed from CohortStudio's list"
 MAX_ADDED = 50  # an administrator's list, not a directory
 MAX_BYTES = 64 * 1024  # a list of 50 addresses holds a few kilobytes: a larger file is not read
 
@@ -56,6 +59,8 @@ class AddressList:
     kind: str  # the file's name: "ollama"
     label: str  # in the log: "Ollama"
     deployment_addresses: Callable[[], list[str]]
+    # an address added must say http or https: one written without would read http, and its key cross in clear
+    scheme_required: bool = False
 
     @property
     def path(self) -> Path:
@@ -141,6 +146,10 @@ class AddressList:
         """
         if not by.is_admin:
             raise NotAllowed("only an administrator adds an address")
+        if self.scheme_required and "://" not in str(address or ""):
+            raise ValueError(
+                "write https:// (a server outside your network, such as Qdrant Cloud) or http:// first"
+            )
         offered = server_address(address)
         who = (account or by.username)[:200]
         with path_lock(self.path):
@@ -195,7 +204,22 @@ def _ollama_deployment() -> list[str]:
     return get_settings().ai.ollama_address_list()
 
 
+def _qdrant_deployment() -> list[str]:
+    return get_settings().vector_store.qdrant_address_list()
+
+
 # The Ollama services (chat, embeddings): OLLAMA_BASE_URL first, then CMP_OLLAMA_ADDRESSES, then those added
 OLLAMA_ADDRESSES = AddressList("ollama", "Ollama", _ollama_deployment)
+# The Qdrant servers that keep the index (no server: the embedded mode): CMP_QDRANT_URL, then those added
+QDRANT_ADDRESSES = AddressList("qdrant", "Qdrant", _qdrant_deployment, scheme_required=True)
 
-__all__ = ["MAX_ADDED", "MAX_BYTES", "OLLAMA_ADDRESSES", "Added", "AddressList", "NotAllowed"]
+__all__ = [
+    "ADDRESS_REMOVED",
+    "MAX_ADDED",
+    "MAX_BYTES",
+    "OLLAMA_ADDRESSES",
+    "QDRANT_ADDRESSES",
+    "Added",
+    "AddressList",
+    "NotAllowed",
+]

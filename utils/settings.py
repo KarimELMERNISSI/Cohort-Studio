@@ -165,10 +165,23 @@ def server_address(value: str | None) -> str:
         raise ValueError("an address's host is written with letters, digits, '.', '-' or '_'")
     if not _PATH.fullmatch(parts.path):
         raise ValueError("an address's path is written with letters, digits and / . - _ ~")
+    # "//" or a "." or ".." segment: a client that joins the path onto the address (qdrant-client) would reach the host
+    # written after it, while the list, the badge and the confirmation name the first one
+    if "//" in parts.path or any(segment in (".", "..") for segment in parts.path.split("/")):
+        raise ValueError("an address's path has no empty, '.' or '..' segment")
     netloc = f"[{host}]" if ":" in host else host  # an IPv6 address keeps its brackets
     if port is not None:
         netloc += f":{port}"
     return f"{scheme}://{netloc}{parts.path.rstrip('/')}"
+
+
+def qdrant_address(value: str, api_key: object = None) -> str:
+    """A Qdrant server's address as offered, read as qdrant-client reads it: written without a scheme, https when it is
+    given an API key, else http (manage.vectorstores.qdrant_index.explicit_address); then :func:`server_address`."""
+    text = str(value or "").strip()
+    if text and "://" not in text:  # as the client reads a scheme: "qdrant.lan:6333//" has none
+        text = f"{'https' if api_key else 'http'}://{text}"
+    return server_address(text)
 
 
 class AISection(_Names):
@@ -224,7 +237,14 @@ class VectorStoreSection(_Names):
     @field_validator("qdrant_url")
     @classmethod
     def _address(cls, value: str | None) -> str | None:
-        return _no_credentials(value)
+        if value:
+            server_address(value)  # refused at start-up as Settings would refuse it
+        return value
+
+    def qdrant_address_list(self) -> list[str]:
+        """The deployment's Qdrant server (CMP_QDRANT_URL) as offered (https when written without a scheme and the
+        server's key is set, as the client reads it); none when it is not set."""
+        return [qdrant_address(self.qdrant_url, self.qdrant_api_key)] if self.qdrant_url else []
 
 
 class GraphSection(_Names):

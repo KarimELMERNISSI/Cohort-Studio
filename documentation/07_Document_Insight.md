@@ -41,12 +41,12 @@ text of your documents and the column summaries, and the page shows its host:
 **You choose the Ollama address from the server's list**; you do not type it: on a shared server, a typed address
 would let anyone make the server send requests to a machine of its network. The deployment sets the list
 (`OLLAMA_BASE_URL`, then `CMP_OLLAMA_ADDRESSES`); an administrator adds and removes addresses for every user under
-**Manage addresses**, below the choice. If your Ollama server is not listed, ask an administrator to add it. Without
-sign-in, whoever opens the page is the administrator: run CohortStudio that way only on your own machine, bound to it
-(`--server.address=127.0.0.1`). An address is `http` or `https`, written in ASCII (an international name in its `xn--`
-form), a host, an optional port and path, with no user name, password or query. Each session starts on the first
-address of the list. An address you chose that is then removed is replaced by the first one, and Settings says so; an
-AI engine started on it stops at its next use.
+**Manage Ollama addresses**, below the choice. If your Ollama server is not listed, ask a CohortStudio administrator
+to add it. Without sign-in, whoever opens the page is the administrator: run CohortStudio that way only on your own
+machine, bound to it (`--server.address=127.0.0.1`). An address is `http` or `https`, written in ASCII (an
+international name in its `xn--` form), a host, an optional port and path, with no user name, password or query. Each
+session starts on the first address of the list. An address you chose that is then removed is replaced by the first
+one, and Settings says so; an AI engine started on it stops at its next use.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria, the derived variables it finds) is a summary of each column, never a row:
@@ -96,21 +96,31 @@ name (never the folder it is in), and keeps them after the engine stops; it also
 Its collection gets a random name, never your account's, and a search sends it the names of the PDFs only. On this
 machine or your network it needs no confirmation, as for an Ollama there; **outside your network** (Qdrant Cloud, say)
 it needs your confirmation, in the same box as the AI provider, and nothing reaches it before (**Test the connection**
-asks it for its list of collections, with the key you typed, and nothing else). The administrator's key
-(`CMP_QDRANT_API_KEY`) goes to the administrator's server only, and an empty address means the embedded Qdrant. An
-index that an earlier version built on a server is named after your account and gives the folder of each PDF: it is
+asks it for its list of collections, with the key you typed, or the deployment's key for the deployment's server, and
+nothing else; it says what failed in words, a refused key, no answer or a reply that is not Qdrant's, never what the
+address answered).
+
+**You choose the Qdrant server from the server's list**, as the Ollama address: **Embedded in your workspace (no
+server)** first, then the deployment's server (`CMP_QDRANT_URL`, chosen at first when set), then those an
+administrator adds under **Manage Qdrant servers**, in the Vector database card, written with `https://` or `http://`.
+If your server is not listed, ask a CohortStudio administrator to add its address as the card writes it: an index you
+built there is then used again, without rebuilding. A server you chose that is then removed is replaced by the
+embedded Qdrant, and the card says so; your index stays on that server, nothing more is sent there, and the card names
+it with its collection, for that server's administrator to delete. Type the key of a server that asks for one in
+**Qdrant API key**, in each session; the deployment's key (`CMP_QDRANT_API_KEY`) goes to the deployment's server only.
+An index that an earlier version built on a server is named after your account and gives the folder of each PDF: it is
 never reused, the card says so, and the next **Initialise / reindex** rebuilds it, which deletes the old one.
 
 ### Choosing the vector database
 
 Settings > AI engine > **Vector database** offers two engines; the app recommends one for your machine and says why
-(CPU cores, memory, free disk, size of your library, and whether a Qdrant server is available):
+(CPU cores, memory, free disk, size of your library, and whether you chose a Qdrant server):
 
 | Engine | Choose it when |
 | --- | --- |
 | **LanceDB** (default) | You work on one machine. Nothing to install or run; vectors stay on disk, so memory use stays low even for large libraries. |
 | **Qdrant**, embedded | Your library is small to medium (up to about 20 000 chunks) and you prefer Qdrant; every vector is held in memory. |
-| **Qdrant**, server | Several people use the app or the library is very large. Enter the server URL (and API key if secured); each user gets their own collection. |
+| **Qdrant**, server | Several people use the app or the library is very large. Choose the server in the list (an administrator adds one under **Manage Qdrant servers**) and type its API key if it asks for one; each user gets their own collection. |
 
 With *Reuse the existing index* on, the index is reused only when it holds the documents selected: after a
 document is added or removed, **Initialise / reindex** rebuilds it. Changing the engine or the embedding model needs a

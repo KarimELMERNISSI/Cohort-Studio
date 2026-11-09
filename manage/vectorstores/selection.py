@@ -23,7 +23,7 @@ from pathlib import Path
 
 from core.registry import AUTO, Selection
 from manage.vectorstores import VECTOR_STORES
-from utils.settings import Settings, SettingsError, get_settings
+from utils.settings import Settings, SettingsError, get_settings, qdrant_address
 
 from .base import BaseVectorIndex, VectorEngine, VectorStoreError
 from .lancedb_index import ANN_THRESHOLD
@@ -66,15 +66,20 @@ class VectorStoreSettings:
         return asked.strip() or None
 
     def key_for(self, url: str | None) -> str | None:
-        """The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only: it is never sent to an
-        address a user typed."""
-        if url and self.qdrant_url and _same_address(url, self.qdrant_url):
+        """The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only, however it is written:
+        it is never sent to an address an administrator added."""
+        if url and self.qdrant_url and _same_address(url, self.qdrant_url, self.qdrant_api_key):
             return self.qdrant_api_key
         return None
 
 
-def _same_address(first: str, second: str) -> bool:
-    return first.strip().rstrip("/").lower() == second.strip().rstrip("/").lower()
+def _same_address(first: str, second: str, api_key: str | None = None) -> bool:
+    """One server, written two ways: as offered in Settings (utils.settings.qdrant_address, each read as the client
+    reads it with the server's key), else as written."""
+    try:
+        return qdrant_address(first, api_key) == qdrant_address(second, api_key)
+    except ValueError:
+        return first.strip().rstrip("/").lower() == second.strip().rstrip("/").lower()
 
 
 @dataclass(frozen=True)
@@ -212,7 +217,7 @@ def qdrant_embedded_warnings(
     if chunks > EMBEDDED_QDRANT_LIMIT:
         notes.append(
             f"About {chunks:,} chunks is above the ~{EMBEDDED_QDRANT_LIMIT:,} chunks embedded mode suits: "
-            "run a Qdrant server (docker run -p 6333:6333 qdrant/qdrant) and set CMP_QDRANT_URL, or use LanceDB."
+            "choose a Qdrant server above (an administrator adds one), or use LanceDB."
         )
     available = machine.available_gb or machine.memory_gb
     if available is not None and size_mb > available * 1_000 * 0.25:

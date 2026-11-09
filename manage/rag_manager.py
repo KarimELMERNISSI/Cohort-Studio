@@ -41,6 +41,7 @@ from manage.rag.providers import (
     embedding_providers,
     server_key,
 )
+from manage.server_addresses import ADDRESS_REMOVED
 
 # Import prompt functions
 from prompts import (
@@ -115,6 +116,7 @@ try:
 except ImportError as e:
     RAG_AVAILABLE = False
     MISSING_LIBS_ERROR = str(e)
+
 
 
 
@@ -292,17 +294,28 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             used.append(embedding_base_url)
         return any(not OLLAMA_ADDRESSES.offered(url or DEFAULT_HOST) for url in used)
 
+    @staticmethod
+    def _qdrant_off_list(url: str | None) -> bool:
+        """Whether a Qdrant server (None: the embedded mode, in the workspace) is not one the server offers now."""
+        from manage.server_addresses import QDRANT_ADDRESSES
+
+        return bool(url) and not QDRANT_ADDRESSES.offered(url)
+
     def stop_if_address_withdrawn(self) -> bool:
         """
-        An engine started on an Ollama address the server no longer offers (an administrator removed it) stops before
-        anything more is sent there; returns whether it stopped. The session's pages call it once per run (ui.services).
+        An engine started on an Ollama address or a Qdrant server the server no longer offers (an administrator removed
+        it) stops before anything more is sent there; returns whether it stopped. The session's pages call it once per
+        run (ui.services).
         """
         if not self.holds_connections():
             return False
-        if not self._off_list(self.provider, self.base_url, self.embedding_provider, self.embedding_base_url):
-            return False
-        self.stop("its Ollama address is no longer offered on this server: choose one in Settings > AI engine")
-        return True
+        if self._off_list(self.provider, self.base_url, self.embedding_provider, self.embedding_base_url):
+            self.stop(f"its Ollama address was {ADDRESS_REMOVED}")
+            return True
+        if self._qdrant_off_list(getattr(self, "qdrant_url", None)):
+            self.stop(f"its Qdrant server was {ADDRESS_REMOVED}")
+            return True
+        return False
 
     def withdraw_consent(self, *recipients: str) -> bool:
         """
@@ -495,8 +508,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # other, and a value forged around it stops here
         if self._off_list(provider_clean, base_url, embed_provider, own_embedding_url):
             return False, (
-                "This Ollama address is not one this server offers: choose one in Settings > AI engine, or ask an "
-                "administrator to add it."
+                "This Ollama address is not in CohortStudio's list: choose one in Settings > AI engine, or ask a "
+                "CohortStudio administrator to add it."
+            )
+        if self._qdrant_off_list(store_url):
+            return False, (
+                "This Qdrant server is not in CohortStudio's list: choose one in the Vector database card, or ask "
+                "a CohortStudio administrator to add it."
             )
         # an Ollama server says which of its models it runs elsewhere (a copy of a cloud model reads local by name)
         remote = None

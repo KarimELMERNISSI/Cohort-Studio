@@ -87,10 +87,14 @@ def test_a_researcher_chooses_from_the_server_s_list_and_is_told_whom_to_ask() -
     assert not [
         b for b in at.button if b.key == f"{KEY}_add"
     ]  # the administrators' list is not shown
-    assert "Ask an administrator of this server to add its address." in _texts(at)
+    assert (
+        "Your Ollama server is not listed? Ask a CohortStudio administrator to add it."
+        in _texts(at)
+    )
     box.select(LISTED[1]).run()
     _ok(at)
-    assert "Your network: data goes to 127.0.0.2" in _texts(at)
+    shown = _texts(at)
+    assert "Your network" in shown and "Data goes to `127.0.0.2`." in shown
 
 
 def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path: Path) -> None:
@@ -98,7 +102,7 @@ def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path
     _add(admin, "HTTP://10.0.0.5:11434/")
     assert admin.selectbox(key=KEY).value == "http://10.0.0.5:11434"  # offered, and chosen here
     assert (
-        "Added for every user of this server, and chosen here: `http://10.0.0.5:11434`."
+        "Added to the Ollama addresses of every user, and chosen here: `http://10.0.0.5:11434`."
         in _texts(admin)
     )
     assert admin.text_input(key=f"{KEY}_new").value == ""
@@ -111,7 +115,10 @@ def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path
     assert researcher.selectbox(key=KEY).options == [*LISTED, "http://10.0.0.5:11434"]
 
     _add(admin, "localhost:11434")  # the deployment's: nothing is added, and the page says so
-    assert "Already offered: `http://localhost:11434`, now chosen here." in _texts(admin)
+    assert (
+        "Already among the Ollama addresses: `http://localhost:11434`, now chosen here."
+        in _texts(admin)
+    )
     admin.selectbox(key=KEY).select("http://10.0.0.5:11434").run()
 
     admin.button(key=f"{KEY}_remove_0").click().run()
@@ -119,7 +126,7 @@ def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path
     box = admin.selectbox(key=KEY)
     assert "http://10.0.0.5:11434" not in box.options and box.value == LISTED[0]
     shown = _texts(admin)
-    assert "Removed for every user: `http://10.0.0.5:11434`." in shown
+    assert "Removed from the Ollama addresses of every user: `http://10.0.0.5:11434`." in shown
     assert "This page now uses `http://localhost:11434`." in shown
     admin.button(key=f"{KEY}_add_back").click().run()  # a slip, undone at once
     _ok(admin)
@@ -137,7 +144,7 @@ def test_a_choice_removed_by_an_administrator_is_named_with_the_one_used_instead
     _ok(researcher)
     assert researcher.selectbox(key=KEY).value == LISTED[0]
     assert (
-        "The address you chose, `http://10.0.0.5:11434`, is no longer offered: `http://localhost:11434` is used."
+        "The Ollama address you chose, `http://10.0.0.5:11434`, is no longer offered: `http://localhost:11434` is used."
         in _texts(researcher)
     )
     researcher.selectbox(key=KEY).select(LISTED[1]).run()  # another choice: the notice goes

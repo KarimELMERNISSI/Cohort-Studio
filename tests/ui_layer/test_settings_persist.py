@@ -246,8 +246,9 @@ def test_a_saved_cloud_provider_starts_nothing_and_no_secret_is_saved(
     app.text_input(key="rag_gemini_api_key").input("AIza-CANARY-KEY-0123456789").run()
     app.selectbox(key="rag_gemini_model_select").select("gemini-flash-lite-latest").run()
     app.checkbox(key="rag_consent::gemini").check().run()
-    if any(t.key == "rag_qdrant_api_key" for t in app.text_input):
-        app.text_input(key="rag_qdrant_api_key").input("QDRANT-CANARY-KEY").run()
+    boxes = [t.key for t in app.text_input if (t.key or "").startswith("rag_qdrant_api_key::")]
+    if boxes:  # a key box of the Qdrant server chosen
+        app.text_input(key=boxes[0]).input("QDRANT-CANARY-KEY").run()
     saved = _saved(tmp_path)
     assert '"ai_provider": "gemini"' in saved and "gemini-flash-lite-latest" in saved
     assert "CANARY" not in saved and "consent" not in saved
@@ -289,17 +290,26 @@ def _prefs(tmp_path: Path, text: str, username: str = "persist_user") -> None:
 
 
 def test_no_address_and_no_qdrant_key_is_saved(app: AppTest, tmp_path: Path) -> None:
-    """An address decides where the data go and can carry credentials: the Ollama address is chosen among the
-    server's, never typed (manage.server_addresses), and no address is kept as a preference."""
+    """An address decides where the data go and can carry credentials: the Ollama and Qdrant addresses are chosen from
+    the server's lists, never typed (manage.server_addresses), and neither they nor a key are kept as preferences."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
-    assert not [box for box in app.text_input if box.key == "rag_ollama_base_url"]
+    from core.workspace import UserScope
+    from manage.server_addresses import QDRANT_ADDRESSES
+
+    QDRANT_ADDRESSES.add("http://canary-host:6333", by=UserScope.for_user("an_admin", "admin"))
+    assert not [
+        box for box in app.text_input if box.key in ("rag_ollama_base_url", "rag_qdrant_url")
+    ]
     assert app.selectbox(key="rag_ollama_base_url").options == ["http://localhost:11434"]
     app.segmented_control(key="rag_vector_engine").set_value("qdrant").run()
-    app.text_input(key="rag_qdrant_url").input("http://CANARY-HOST:6333").run()
-    app.text_input(key="rag_qdrant_api_key").input("QDRANT-CANARY-KEY").run()
+    assert not [box for box in app.text_input if box.key == "rag_qdrant_url"]
+    app.selectbox(key="rag_qdrant_url").select("http://canary-host:6333").run()
+    app.text_input(key="rag_qdrant_api_key::http://canary-host:6333").input(
+        "QDRANT-CANARY-KEY"
+    ).run()
     saved = _saved(tmp_path)
     assert '"vector_store": "qdrant"' in saved
-    assert "CANARY" not in saved and "11434" not in saved
+    assert "CANARY" not in saved and "canary-host" not in saved and "11434" not in saved
 
 
 def test_a_saved_choice_this_server_cannot_use_is_named(
@@ -390,7 +400,7 @@ def test_a_preselected_cloud_provider_starts_nothing(
 def test_a_qdrant_server_outside_the_network_gets_its_own_confirmation(
     app: AppTest, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The data-sharing card is drawn above the vector database's: it names the server typed there, at once. Showing
+    """The data-sharing card is drawn above the vector database's: it names the server chosen there, at once. Showing
     the page asks the server nothing (the connection test alone does, when clicked)."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
     pytest.importorskip("qdrant_client", reason="the Qdrant engine is in the optional 'ai' extra")
@@ -399,13 +409,22 @@ def test_a_qdrant_server_outside_the_network_gets_its_own_confirmation(
     monkeypatch.setattr(
         qdrant_index, "_client", lambda **kwargs: pytest.fail("Settings asked the Qdrant server")
     )
+    from core.workspace import UserScope
+    from manage.server_addresses import QDRANT_ADDRESSES
+
+    for address in (
+        "https://abc.cloud.qdrant.io:6333",
+        "http://qdrant:6333",
+        "http://qdrant.lan:6333",
+    ):
+        QDRANT_ADDRESSES.add(address, by=UserScope.for_user("an_admin", "admin"))
     app.segmented_control(key="rag_vector_engine").set_value("qdrant").run()
-    app.text_input(key="rag_qdrant_url").input("https://abc.cloud.qdrant.io:6333").run()
+    app.selectbox(key="rag_qdrant_url").select("https://abc.cloud.qdrant.io:6333").run()
     box = next(c for c in app.checkbox if (c.key or "").startswith("rag_consent::"))
     assert box.key == "rag_consent::qdrant@abc.cloud.qdrant.io" and box.value is False
     assert "Qdrant at abc.cloud.qdrant.io" in box.label
     assert any("your vector database" in w.value for w in app.warning)
-    app.text_input(key="rag_qdrant_url").input("http://qdrant:6333").run()  # on the private network
+    app.selectbox(key="rag_qdrant_url").select("http://qdrant:6333").run()  # on the private network
     assert not any((c.key or "").startswith("rag_consent::") for c in app.checkbox)
     assert any(
         "kept on the Qdrant server at qdrant, on your network" in c.value for c in app.caption
@@ -414,9 +433,8 @@ def test_a_qdrant_server_outside_the_network_gets_its_own_confirmation(
         "every prompt, document" in c.value for c in app.caption
     )  # the documents are not all here
     assert any("uses http" in c.value for c in app.caption)
-    app.text_input(key="rag_qdrant_url").input(
-        "qdrant.lan:6333"
-    ).run()  # no scheme: the client uses http
+    # added without a scheme: offered as the client reads it, over http
+    app.selectbox(key="rag_qdrant_url").select("http://qdrant.lan:6333").run()
     assert any("uses http" in c.value for c in app.caption)
     assert not app.exception, [str(e.value)[:300] for e in app.exception]
 
@@ -491,7 +509,8 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     signed_in.selectbox(key="rag_ollama_base_url").select("http://127.0.0.2:11434").run()
     assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
     shown = [m.value for m in signed_in.markdown]
-    assert any("Your network: data goes to 127.0.0.2" in v for v in shown), shown[-6:]
+    assert any("Your network" in v for v in shown), shown[-6:]
+    assert any("Data goes to `127.0.0.2`." in c.value for c in signed_in.caption)
     captions = [c.value for c in signed_in.caption]
     assert any("This address uses http" in c for c in captions)
     assert any(

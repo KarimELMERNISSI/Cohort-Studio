@@ -26,9 +26,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
+import ssl
 import threading
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -53,6 +56,7 @@ DEFAULT_PORT = 6333  # the client's, for an address that gives none
 # a name no collection has (a new one's is a random UUID's): this workspace has built nothing on the server
 NO_INDEX = SERVER_PREFIX + "0" * 32
 _CLIENTS: dict[tuple[str, str, str], Any] = {}
+logger = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 
 
@@ -68,7 +72,10 @@ def _client(*, path: Path | None = None, url: str | None = None, api_key: str | 
                 path.mkdir(parents=True, exist_ok=True)
                 client = QdrantClient(path=str(path))
             else:
-                client = QdrantClient(url=url, api_key=api_key or None, timeout=10)
+                # no version check: it is one more request with the key, whose reply's text goes to stderr
+                client = QdrantClient(
+                    url=url, api_key=api_key or None, timeout=10, check_compatibility=False
+                )
             _CLIENTS[key] = client
         return client
 
@@ -79,6 +86,47 @@ def _read(pointer: Path) -> str:
         return pointer.read_text(encoding="utf-8").strip() if pointer.exists() else ""
     except OSError:
         return ""
+
+
+_NOT_QDRANT = {"JSONDecodeError", "ValidationError"}  # a reply that is not Qdrant's
+_NO_ANSWER = {
+    "ResponseHandlingException",
+    "ConnectError",
+    "ConnectTimeout",
+    "ReadTimeout",
+    "TimeoutException",
+}
+
+
+def _said(exc: BaseException) -> str:
+    """
+    What went wrong, in words, never what the server answered (qdrant-client quotes the first bytes of a reply in its
+    error, whatever service answered at the address): a refused key, a refusal, an error status, a reply that is not
+    Qdrant's, no answer, a failed https connection. The exception's class goes to the log only.
+    """
+    chain: list[BaseException] = []
+    seen: BaseException | None = exc
+    while seen is not None and len(chain) < 8:
+        chain.append(seen)
+        seen = seen.__cause__ or seen.__context__
+    logger.info("A Qdrant request failed (%s)", " <- ".join(type(e).__name__ for e in chain))
+    names = {type(e).__name__ for e in chain}
+    status = next(
+        (code for e in chain if isinstance(code := getattr(e, "status_code", None), int)), None
+    )
+    if status == 401:
+        return "the server refused the API key (HTTP status 401): check the key"
+    if status == 403:
+        return "this key may not list the collections (HTTP status 403)"
+    if status is not None:
+        return f"the server answered with an error (HTTP status {status})"
+    if any(isinstance(e, ssl.SSLError) for e in chain):
+        return "the https connection failed: the server may take http only"
+    if names & _NOT_QDRANT:
+        return "something answers at this address, but not as a Qdrant server: check the address and port"
+    if names & _NO_ANSWER or any(isinstance(e, ConnectionError | TimeoutError) for e in chain):
+        return "no answer: the server is down, or the address or port is wrong"
+    return "the request failed (the server log names the error)"
 
 
 def explicit_address(url: str | None, api_key: str | None = None) -> str | None:
@@ -139,6 +187,18 @@ def adopt_earlier_index(directory: Path) -> None:
     (directory / MANIFEST_NAME).unlink(missing_ok=True)
     if _read(directory / POINTER_NAME).startswith(SERVER_PREFIX):
         (directory / POINTER_NAME).unlink(missing_ok=True)
+
+
+def server_indexes(directory: Path) -> list[tuple[str, str, IndexManifest]]:
+    """The indexes this workspace built on Qdrant servers, as (the server, the collection, the manifest), read from the
+    servers' folders in the workspace only: no request is made."""
+    found = []
+    for folder in sorted((directory / SERVERS).glob("*")):
+        manifest = IndexManifest.load(folder)
+        built = _built_on_server(manifest)
+        if manifest is not None and built is not None:
+            found.append((built[0], built[1], manifest))
+    return found
 
 
 def unrecorded_collection(directory: Path) -> str | None:
@@ -249,6 +309,20 @@ class QdrantIndex(BaseVectorIndex):
         active = self.active_collection
         return active == self.collection or active.startswith(f"{self.collection}_")
 
+    @contextmanager
+    def _asking(self):
+        """A request to the store: a failure is said in words (:func:`_said`), never by the reply."""
+        try:
+            yield
+        except VectorStoreError:
+            raise
+        except Exception as exc:
+            raise VectorStoreError(f"Qdrant error at {self._place}: {_said(exc)}") from exc
+
+    @property
+    def _place(self) -> str:
+        return self.url or "the embedded Qdrant, in your workspace"
+
     @property
     def location(self) -> str:
         return f"{self.url} ({self.active_collection})" if self.url else str(self.path)
@@ -259,15 +333,21 @@ class QdrantIndex(BaseVectorIndex):
                 return _client(url=self.url, api_key=self.api_key)
             return _client(path=self.path)
         except Exception as exc:
-            raise VectorStoreError(f"Qdrant could not be opened at {self.location}: {exc}") from exc
+            raise VectorStoreError(
+                f"Qdrant could not be opened at {self._place}: {_said(exc)}"
+            ) from exc
 
     def ping(self) -> tuple[bool, str]:
-        """Reachability of the server (or the local folder)."""
+        """Whether the server answers as Qdrant with this key, and otherwise what failed, in words (the caller names
+        the address): it is asked for its list of collections, not counted (with the server's key, every user's)."""
         try:
-            collections = self._client().get_collections().collections
-            return True, f"Qdrant reachable ({len(collections)} collection(s))."
+            client = (
+                _client(url=self.url, api_key=self.api_key) if self.url else _client(path=self.path)
+            )
+            client.get_collections()
+            return True, "Qdrant answered with this key"
         except Exception as exc:
-            return False, f"Qdrant is not reachable at {self.location}: {exc}"
+            return False, _said(exc)
 
     @property
     def active_collection(self) -> str:
@@ -284,14 +364,14 @@ class QdrantIndex(BaseVectorIndex):
         return self.collection
 
     def exists(self) -> bool:
-        try:
+        with self._asking():
             return bool(self._client().collection_exists(self.active_collection))
-        except VectorStoreError:
-            raise
-        except Exception as exc:
-            raise VectorStoreError(f"Qdrant error at {self.location}: {exc}") from exc
 
     def reset(self, dim: int) -> None:
+        with self._asking():
+            self._reset(dim)
+
+    def _reset(self, dim: int) -> None:
         from qdrant_client import models
 
         client = self._client()
@@ -314,6 +394,10 @@ class QdrantIndex(BaseVectorIndex):
     def add(self, rows: list[ChunkRow]) -> None:
         if not rows:
             return
+        with self._asking():
+            self._upsert(rows)
+
+    def _upsert(self, rows: list[ChunkRow]) -> None:
         from qdrant_client import models
 
         self._client().upsert(
@@ -335,6 +419,10 @@ class QdrantIndex(BaseVectorIndex):
         )
 
     def query(self, vector: list[float], k: int, sources: list[str] | None = None) -> list[Hit]:
+        with self._asking():
+            return self._query(vector, k, sources)
+
+    def _query(self, vector: list[float], k: int, sources: list[str] | None = None) -> list[Hit]:
         from qdrant_client import models
 
         query_filter = None
@@ -377,7 +465,8 @@ class QdrantIndex(BaseVectorIndex):
     def count(self) -> int:
         if not self.exists():
             return 0
-        return int(self._client().count(self.active_collection, exact=True).count)
+        with self._asking():
+            return int(self._client().count(self.active_collection, exact=True).count)
 
 
 __all__ = [
@@ -388,6 +477,7 @@ __all__ = [
     "explicit_address",
     "release_clients",
     "server_folder",
+    "server_indexes",
     "unrecorded_collection",
     "user_collection",
 ]

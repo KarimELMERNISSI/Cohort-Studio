@@ -11,6 +11,7 @@ because other pages read them from the session.
 """
 
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -40,7 +41,13 @@ from manage.rag.providers import (
     provider_setting,
     server_key,
 )
-from manage.server_addresses import OLLAMA_ADDRESSES, NotAllowed
+from manage.server_addresses import (
+    ADDRESS_REMOVED,
+    OLLAMA_ADDRESSES,
+    QDRANT_ADDRESSES,
+    AddressList,
+    NotAllowed,
+)
 from manage.vectorstores import (
     VECTOR_STORES,
     IndexManifest,
@@ -57,6 +64,7 @@ from manage.vectorstores.qdrant_index import (
     adopt_earlier_index,
     explicit_address,
     server_folder,
+    server_indexes,
     unrecorded_collection,
 )
 from ui import preferences
@@ -154,18 +162,21 @@ def _running() -> dict:
 
 
 def _address_badge(url: str, carried: str = "the prompts and documents") -> None:
-    """Where an address (an Ollama's, a Qdrant server's) sends the data."""
-    host = host_of(url) or "this machine"
+    """Where an address (an Ollama's, a Qdrant server's) sends the data: the kind of place in a badge, the host in a
+    caption that wraps (in a badge, a Qdrant Cloud host was cut before its region, which says where the data go)."""
     if on_this_machine(url):
         st.badge("Local: no data leaves this server", icon=":material/lock:", color="green")
-    elif outside_private_network(url):
-        st.badge(f"Outside your network: data goes to {host}", icon=":material/public:", color="red")
+        return
+    if outside_private_network(url):
+        st.badge("Outside your network", icon=":material/public:", color="red")
     else:
-        st.badge(f"Your network: data goes to {host}", icon=":material/lan:", color="orange")
+        st.badge("Your network", icon=":material/lan:", color="orange")
     text = url.strip()
     scheme = urlparse(text).scheme.lower() if "//" in text else ""  # none given: the client uses http
-    if not on_this_machine(url) and scheme in ("", "http"):
-        st.caption(f"This address uses http: {carried} cross the network unencrypted.")
+    said = f"Data goes to {_shown(host_of(url) or text)}."
+    if scheme in ("", "http"):
+        said += f" This address uses http: {carried} cross the network unencrypted."
+    st.caption(said)
 
 
 def _is_admin() -> bool:
@@ -185,37 +196,109 @@ def _shown(address: str) -> str:
     return as_code(address, limit=ADDRESS_MAX_LENGTH)
 
 
-def _ollama_address(key: str, label: str, help_text: str) -> str:
+@dataclass(frozen=True)
+class _Place:
+    """What Settings needs to offer one kind of server's addresses, its sentences written in full: its list, the
+    settings that set the deployment's (the first address's, then the others'), the option that uses no server (Qdrant's
+    embedded mode), and what is said."""
+
+    addresses: AddressList
+    variables: tuple[str, ...]
+    list_name: str  # "Ollama addresses": the button "Manage Ollama addresses", and the messages
+    chosen_noun: str  # "The Ollama address you chose, ..., is no longer offered"
+    server_noun: str  # "Your Ollama server is not listed?"
+    caption: str  # at the top of the administrators' list
+    example: str
+    no_server: str | None = None
+    empty: str = ""  # the administrators' list when nothing is listed
+    left_behind: str = ""  # what stays on a server once removed, said at its removal
+
+
+OLLAMA_PLACE = _Place(
+    OLLAMA_ADDRESSES,
+    ("OLLAMA_BASE_URL", "CMP_OLLAMA_ADDRESSES"),
+    list_name="Ollama addresses",
+    chosen_noun="Ollama address",
+    server_noun="Ollama server",
+    caption="Users choose the Ollama address from this list; only an administrator adds one. Add only an Ollama service "
+    "you trust with the prompts and documents sent to it.",
+    example="http://ollama.example.org:11434",
+)
+QDRANT_PLACE = _Place(
+    QDRANT_ADDRESSES,
+    ("CMP_QDRANT_URL",),
+    list_name="Qdrant servers",
+    chosen_noun="Qdrant server",
+    server_noun="Qdrant server",
+    caption="Users choose a Qdrant server from this list, or the embedded Qdrant; only an administrator adds one. Add "
+    "only a Qdrant server you trust with the passages of the PDFs indexed there, with their names, and the vector of "
+    "each search. A server that asks for an API key: each user types it under **Qdrant API key**, in each session, "
+    "and no key is kept here; a shared server with a key belongs in the deployment's settings (`CMP_QDRANT_URL`, "
+    "`CMP_QDRANT_API_KEY`), where its key stays on this server.",
+    example="https://qdrant.example.org:6333",
+    no_server="Embedded in your workspace (no server)",
+    empty="No Qdrant server is listed yet: users have the embedded Qdrant only.",
+    left_behind=" The indexes users built there stay on that server: each user's card names the collection left "
+    "there, for that server's administrator to delete.",
+)
+
+
+def _options(place: _Place) -> list[str]:
+    return ([""] if place.no_server else []) + place.addresses.listed()
+
+
+def _named(value: str) -> str:
+    """A choice in a sentence: the address as code, or the server-free option."""
+    return _shown(value) if value else "the embedded Qdrant, in your workspace"
+
+
+def _short(address: str, limit: int = 44) -> str:
+    """An address in a narrow list, cut in its middle past ``limit`` characters: its end (a Qdrant Cloud host's region
+    and port) stays readable."""
+    if len(address) <= limit:
+        return address
+    keep = (limit - 1) // 2
+    return f"{address[:keep]}…{address[-keep:]}"
+
+
+def _address_choice(key: str, label: str, help_text: str, place: _Place) -> str:
     """
-    The Ollama address chosen from the server's list (manage.server_addresses), never typed: the server sends no request
-    to an address a user writes, which on a shared server could reach a machine of its network. A value the list does
-    not hold is never used: an address chosen, then removed by an administrator, is named with the one used instead;
-    one the browser forged is replaced by the first. The caller draws the administrator's list (``_manage_addresses``)
-    below the choice and its badge.
+    A server's address chosen from the server's list (manage.server_addresses), never typed: the server sends no
+    request to an address a user writes, which on a shared server could reach a machine of its network. A value the
+    list does not hold is never used: an address chosen, then removed by an administrator, is named with the one used
+    instead; one the browser forged is replaced by the first option. The caller draws the administrators' list
+    (``_manage_addresses``) below the choice and its badge.
     """
-    options = OLLAMA_ADDRESSES.listed()
+    options = _options(place)
     prior = st.session_state.get(key)
-    if prior and prior not in options:  # removed since it was chosen: named until another is chosen
+    if prior is not None and prior not in options:  # removed since it was chosen: named until another is chosen
         st.session_state[f"{key}_dropped"] = str(prior)
     chosen = st.selectbox(
         label,
         options,
         index=0,
         key=key,
+        format_func=lambda value: _short(value) if value else place.no_server or "",
         help=help_text
-        + (" Add another under Manage addresses, below." if _is_admin() else " Only an administrator adds one."),
+        + (
+            f" Add another under Manage {place.list_name}, below."
+            if _is_admin()
+            else " Only a CohortStudio administrator adds one."
+        ),
         filter_mode=None,  # a list to choose from: nothing is typed here
         on_change=_forget,
         args=(f"{key}_dropped",),
         persist_state=PERSIST,
     )
-    if chosen not in options:  # the widget's value comes from the browser: only an address offered goes on
+    if chosen not in options:  # the widget's value comes from the browser: only an option offered goes on
         chosen = options[0]
     dropped = st.session_state.get(f"{key}_dropped")
     if dropped:
-        st.caption(f"The address you chose, {_shown(dropped)}, is no longer offered: {_shown(chosen)} is used.")
+        st.caption(
+            f"The {place.chosen_noun} you chose, {_shown(dropped)}, is no longer offered: {_named(chosen)} is used."
+        )
     if not _is_admin():
-        st.caption("Your Ollama server is not listed? Ask an administrator of this server to add its address.")
+        st.caption(f"Your {place.server_noun} is not listed? Ask a CohortStudio administrator to add it.")
     return str(chosen)
 
 
@@ -227,102 +310,102 @@ def _day(moment: str) -> str:
     return f"{when.day} {when:%b %Y}"
 
 
-def _manage_addresses(key: str) -> None:
+def _manage_addresses(key: str, place: _Place) -> None:
     """
-    An administrator's list of the Ollama addresses every user may choose, below the choice and its badge: add one
+    The administrators' list of a server's addresses every user may choose, below the choice and its badge: add one
     (offered at once, and chosen here; Enter adds), remove one added here; the deployment's are changed in its settings.
     The form and its outcome come first, the list after, in a box of its own height, so that the popover keeps one size.
     """
     if not _is_admin():
         return
-    with st.popover("Manage addresses", icon=":material/edit:"):
-        st.caption(
-            "Users choose the Ollama address from this list; only an administrator adds one. Add only an Ollama service "
-            "you trust with the prompts and documents sent to it."
-        )
-        if OLLAMA_ADDRESSES.unreadable():
+    with st.popover(f"Manage {place.list_name}", icon=":material/edit:"):
+        st.caption(place.caption)
+        if place.addresses.unreadable():
             st.warning(
                 "The list of added addresses cannot be read (see the server log): only the deployment's are offered. "
-                "Repair or remove its file before adding one."
+                f"Repair or remove `server/{place.addresses.kind}_addresses.json`, in the data folder, before adding one."
             )
         with st.form(f"{key}_add_form", border=False, enter_to_submit=True):
             box, button = st.columns([4, 1], vertical_alignment="bottom")
-            box.text_input(
-                "Address to add",
-                key=f"{key}_new",
-                placeholder="http://ollama.example.org:11434",
-                max_chars=ADDRESS_MAX_LENGTH,
-            )
+            box.text_input("Address to add", key=f"{key}_new", placeholder=place.example, max_chars=ADDRESS_MAX_LENGTH)
             button.form_submit_button(
-                "Add", key=f"{key}_add", icon=":material/add:", on_click=_add_address, args=(key,)
+                "Add", key=f"{key}_add", icon=":material/add:", on_click=_add_address, args=(key, place)
             )
         said = st.session_state.pop(f"{key}_said", None)
         if said:
             {"ok": st.success, "info": st.info, "error": st.error}[said[0]](said[1])
         removed = st.session_state.pop(f"{key}_removed", None)
         if removed:
-            st.button("Add it back", key=f"{key}_add_back", on_click=_add_back, args=(key, removed))
+            st.button("Add it back", key=f"{key}_add_back", on_click=_add_back, args=(key, place, removed))
+        deployed, added = place.addresses.deployment(), place.addresses.added()
         with st.container(height=180, border=False):
-            for n, address in enumerate(OLLAMA_ADDRESSES.deployment()):
-                variable = "OLLAMA_BASE_URL" if n == 0 else "CMP_OLLAMA_ADDRESSES"
+            if not deployed and not added and place.empty:
+                st.caption(place.empty)
+            for n, address in enumerate(deployed):
+                variable = place.variables[0] if n == 0 else place.variables[-1]
                 st.markdown(f"{_shown(address)} · set by the deployment (`{variable}`)")
-            for n, item in enumerate(OLLAMA_ADDRESSES.added()):
+            for n, item in enumerate(added):
                 text, button = st.columns([4, 1], vertical_alignment="center")
                 when = _day(item.added_at)
                 text.markdown(
                     f"{_shown(item.address)} · added by {plain(item.added_by, limit=64)}"
                     + (f", {when}" if when else "")
                 )
-                button.button("Remove", key=f"{key}_remove_{n}", on_click=_remove_address, args=(key, item.address))
+                button.button(
+                    "Remove", key=f"{key}_remove_{n}", on_click=_remove_address, args=(key, place, item.address)
+                )
 
 
-def _add_address(key: str) -> None:
+def _add_address(key: str, place: _Place) -> None:
     """Add's callback (Enter in the box too): the address typed is stored for every user (an administrator only), then
     chosen here as the list holds it; one already offered is only chosen."""
     scope = get_current_scope()
     try:
         if scope is None:
             raise NotAllowed("only an administrator adds an address")
-        before = OLLAMA_ADDRESSES.listed()
-        offered = OLLAMA_ADDRESSES.add(str(st.session_state.get(f"{key}_new") or ""), by=scope, account=_account())
+        before = place.addresses.listed()
+        offered = place.addresses.add(str(st.session_state.get(f"{key}_new") or ""), by=scope, account=_account())
     except (ValueError, PermissionError) as exc:  # the message never holds the address
         st.session_state[f"{key}_said"] = ("error", f"Not added: {exc}.")
         return
     st.session_state[f"{key}_new"] = ""
-    held = [address for address in OLLAMA_ADDRESSES.listed() if address == offered]
+    held = [address for address in place.addresses.listed() if address == offered]
     if held:
         st.session_state[key] = held[0]
         st.session_state.pop(f"{key}_dropped", None)
     st.session_state[f"{key}_said"] = (
-        ("info", f"Already offered: {_shown(offered)}, now chosen here.")
+        ("info", f"Already among the {place.list_name}: {_shown(offered)}, now chosen here.")
         if offered in before
-        else ("ok", f"Added for every user of this server, and chosen here: {_shown(offered)}.")
+        else ("ok", f"Added to the {place.list_name} of every user, and chosen here: {_shown(offered)}.")
     )
 
 
-def _add_back(key: str, address: str) -> None:
+def _add_back(key: str, place: _Place, address: str) -> None:
     """Add it back's callback: the address just removed, added again."""
     st.session_state[f"{key}_new"] = address
-    _add_address(key)
+    _add_address(key, place)
 
 
-def _remove_address(key: str, address: str) -> None:
+def _remove_address(key: str, place: _Place, address: str) -> None:
     """Remove's callback: every user's AI engine on the address stops at its next use (ui.services); this page moves to
-    the first address when it had chosen this one, and says so."""
+    the first option when it had chosen this one, and says so."""
     scope = get_current_scope()
     try:
-        removed = scope is not None and OLLAMA_ADDRESSES.remove(address, by=scope, account=_account())
+        removed = scope is not None and place.addresses.remove(address, by=scope, account=_account())
     except PermissionError as exc:
         st.session_state[f"{key}_said"] = ("error", f"Not removed: {exc}.")
         return
     if not removed:
-        st.session_state[f"{key}_said"] = ("info", f"{_shown(address)} is not in the list any more.")
+        st.session_state[f"{key}_said"] = ("info", f"{_shown(address)} is not among the {place.list_name} any more.")
         return
-    said = f"Removed for every user: {_shown(address)}. An AI engine started on it stops at its next use."
+    said = (
+        f"Removed from the {place.list_name} of every user: {_shown(address)}. An AI engine started on it stops at its "
+        "next use." + place.left_behind
+    )
     if st.session_state.get(key) == address:
-        first = OLLAMA_ADDRESSES.listed()[0]
+        first = _options(place)[0]
         st.session_state[key] = first
-        said += f" This page now uses {_shown(first)}."
+        said += f" This page now uses {_named(first)}."
     st.session_state[f"{key}_said"] = ("ok", said)
     st.session_state[f"{key}_removed"] = address
 
@@ -356,11 +439,11 @@ def _provider_card() -> dict:
         info = declared(provider)  # its key, its models (manage.rag.providers)
         where = None  # an Ollama's: where the data goes, drawn once the model is known
         if provider == "ollama":
-            cfg["base_url"] = _ollama_address(
-                "rag_ollama_base_url", "Ollama address", "The Ollama services this server offers."
+            cfg["base_url"] = _address_choice(
+                "rag_ollama_base_url", "Ollama address", "The Ollama services this server offers.", OLLAMA_PLACE
             )
             where = st.container()  # where the data goes, once the model is known: a cloud model runs elsewhere
-            _manage_addresses("rag_ollama_base_url")  # below the address's badge
+            _manage_addresses("rag_ollama_base_url", OLLAMA_PLACE)  # below the address's badge
             chat_options = _discover_ollama_models(cfg["base_url"]) or list(info.chat_models)
             embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
@@ -516,13 +599,14 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     )
     cfg["embedding_provider"] = embed_provider
     if embed_provider == "ollama":
-        cfg["embedding_base_url"] = _ollama_address(
+        cfg["embedding_base_url"] = _address_choice(
             "rag_claude_ollama_base_url",
             "Ollama address (embeddings)",
             "The Ollama services this server offers, to embed the documents.",
+            OLLAMA_PLACE,
         )
         _address_badge(cfg["embedding_base_url"])
-        _manage_addresses("rag_claude_ollama_base_url")
+        _manage_addresses("rag_claude_ollama_base_url", OLLAMA_PLACE)
         return list(declared(embed_provider).embedding_models), "Local embedding model (pull it first: 'ollama pull <model>')."
     info = declared(embed_provider)
     typed = st.text_input(
@@ -654,8 +738,8 @@ def _notice(recipients: list[str], cfg: dict, vector: dict | None = None) -> str
     if store in recipients:
         lines.append(
             f"- **{provider_label(store)}, your vector database:** the text of the PDFs you index (each passage with "
-            "its PDF's name, never the folder it is in) and its vectors, kept there until the index is rebuilt on "
-            "that server, and the vector of each search."
+            "its PDF's name, never the folder it is in) and its vectors, kept there until the index is rebuilt or "
+            "deleted on that server, and the vector of each search."
         )
     return (
         "\n".join(lines)
@@ -880,8 +964,9 @@ def _vector_card(selected_files: list[str] | None) -> dict:
     machine = _machine(str(base_dir))
     with st.container(border=True):
         st.subheader("Vector database", icon=":material/database:", anchor=False)
-        st.session_state.setdefault("rag_qdrant_url", settings.qdrant_url or "")
-        server_url = (st.session_state.get("rag_qdrant_url") or "").strip()
+        st.session_state.setdefault("rag_qdrant_url", (QDRANT_ADDRESSES.deployment() or [""])[0])
+        prior = st.session_state.get("rag_qdrant_url")
+        server_url = prior if prior in _options(QDRANT_PLACE) else ""  # a removed server is no server
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))
         # the saved engine when it can run here, else the server's, else the one recommended for this machine
         chosen = connector_selector(
@@ -922,37 +1007,38 @@ def _vector_card(selected_files: list[str] | None) -> dict:
 
         qdrant_url = qdrant_key = None
         if engine == VectorEngine.QDRANT:
-            server_url = st.text_input(
-                "Qdrant server URL",
-                key="rag_qdrant_url",
-                placeholder="http://localhost:6333 (empty: embedded in your workspace)",
-                help="Leave empty for embedded Qdrant in your workspace. A server (Docker, self-hosted or Qdrant Cloud) "
-                "is shared by every session, with one collection per user. Default: CMP_QDRANT_URL.",
-                icon=":material/dns:",
-                persist_state=PERSIST,
-            ).strip()
-            qdrant_url = server_url  # empty: embedded, as the field says (never the server's setting then)
+            server_url = _address_choice(
+                "rag_qdrant_url",
+                "Qdrant server",
+                "Embedded keeps the index in your workspace. A server (Docker, self-hosted or Qdrant Cloud) is shared "
+                "by every user, each with a collection of their own.",
+                QDRANT_PLACE,
+            )
+            qdrant_url = server_url  # empty: embedded, as the option says (never the server's setting then)
+            if server_url:  # listed with its scheme: the badge never depends on the key
+                _address_badge(server_url, "the passages of your PDFs and the API key")
+            _manage_addresses("rag_qdrant_url", QDRANT_PLACE)  # below the address's badge
             if server_url:
                 qdrant_key = st.text_input(
-                    "Qdrant API key", value="", type="password", key="rag_qdrant_api_key", icon=":material/key:",
-                    help="Only for secured servers. Never stored; empty uses CMP_QDRANT_API_KEY for the server's own "
-                    "address (CMP_QDRANT_URL) only.",
+                    "Qdrant API key", value="", type="password", key=f"rag_qdrant_api_key::{server_url}",
+                    icon=":material/key:",
+                    help="Only for a server that asks for one. Kept for this session only. Left empty, the deployment's "
+                    "server uses the deployment's key; another server gets none.",
                     persist_state=PERSIST,
-                ) or settings.key_for(server_url)  # the server's key never goes to an address a user typed
-                qdrant_url = explicit_address(server_url, qdrant_key)  # the scheme the client gives one without
-                _address_badge(qdrant_url, "the passages of your PDFs and the API key")
+                ) or settings.key_for(server_url)  # the server's key goes to its own address (CMP_QDRANT_URL) only
+                qdrant_url = explicit_address(server_url, qdrant_key)
                 scope = get_current_scope()
                 # its own folder in the workspace (an earlier version's index moved there): no request is made
                 server = QdrantIndex.open(
                     base_dir / "qdrant", username=scope.username if scope else None, url=qdrant_url,
                     api_key=qdrant_key,
                 )
-                if st.button(
-                    "Test the connection", key="rag_qdrant_ping", icon=":material/network_check:",
-                    help="Asks the server for its list of collections, with the key above: none of your data.",
-                ):
-                    ok, message = server.ping()
-                    (st.success if ok else st.error)(message)
+                if st.button("Test the connection", key="rag_qdrant_ping", icon=":material/network_check:"):
+                    ok, said = server.ping()  # its list of collections, with the key above
+                    if ok:
+                        st.success(f"Connected to {_shown(server_url)}: {said}. None of your data was sent.")
+                    else:
+                        st.error(f"Not connected to {_shown(server_url)}: {said}. None of your data was sent.")
                 if server.named_after_account:  # read from the workspace: no request is made
                     st.info(
                         "Your index on the Qdrant server was built by an earlier version: its collection is named "
@@ -966,6 +1052,18 @@ def _vector_card(selected_files: list[str] | None) -> dict:
                     st.caption(f":orange[:material/warning:] {note}")
         for warning in advice.warnings:
             st.warning(warning, icon=":material/storage:")
+        stranded = [
+            (url, collection, built)
+            for url, collection, built in server_indexes(base_dir / "qdrant")
+            if not QDRANT_ADDRESSES.offered(url)  # removed by an administrator, or never listed: nothing is sent there
+        ]
+        for url, collection, built in stranded:
+            st.caption(
+                f"Your index ({built.chunks:,} chunks, built {_day(built.built_at)}) is on {_shown(url)}, which this "
+                "list does not offer. To use it again, ask a CohortStudio administrator to add that address, as "
+                f"written here; if it should go instead, ask whoever runs that server to delete the collection "
+                f"{_shown(collection)}."
+            )
         if leftover := unrecorded_collection(base_dir / "qdrant"):
             st.caption(
                 f"An earlier version left a collection named after your account, {preferences.shown(leftover)}, "
@@ -979,6 +1077,11 @@ def _vector_card(selected_files: list[str] | None) -> dict:
             st.caption(
                 f":material/inventory_2: Index: {manifest.chunks:,} chunks from {len(manifest.documents)} document(s), "
                 f"embedded with {manifest.embedding} ({manifest.dim} dimensions), built {manifest.built_at[:16].replace('T', ' ')}."
+            )
+        elif stranded:
+            st.caption(
+                f":material/inventory_2: No index here yet: Initialise / reindex builds one here; your index on "
+                f"{_shown(stranded[0][0])} is not used."
             )
         else:
             st.caption(":material/inventory_2: No index for this engine yet: initialise the engine to build it.")
@@ -1002,7 +1105,10 @@ def _engine_card(
         elif getattr(manager, "stop_reason", None):
             st.badge("Stopped", icon=":material/block:", color="red")
             st.caption(
-                f"The engine stopped because {manager.stop_reason}: nothing more is sent from this tab. To resume, "
+                f"The engine stopped because {manager.stop_reason}: nothing more is sent there. Choose another one "
+                "above, then Initialise / reindex."
+                if ADDRESS_REMOVED in str(manager.stop_reason)
+                else f"The engine stopped because {manager.stop_reason}: nothing more is sent from this tab. To resume, "
                 "tick the box again, then Initialise / reindex."
             )
         else:

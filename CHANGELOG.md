@@ -6,24 +6,35 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
-### Security: the Ollama address is chosen from the server's list, never typed
+### Security: the Ollama and Qdrant addresses are chosen from the server's lists, never typed
 
 - Settings > AI engine offers the Ollama addresses the server allows, in a list that cannot be typed in, instead of a
   box where any address could be written. On a shared server, a typed address let any signed-in user make the server
   send requests (the model list, a model's details, the chats, the embeddings of the whole library) to a machine of
   its network.
 - `OLLAMA_BASE_URL` is offered first, as before; `CMP_OLLAMA_ADDRESSES` (comma-separated) adds others. An
-  administrator adds addresses for every user, and removes them, under **Manage addresses** below the choice (Enter
-  adds; a removal can be undone at once). Without sign-in, whoever opens the page is the administrator: run that way
-  only bound to this machine (`--server.address=127.0.0.1`). The address that embeds Claude's documents is chosen the
-  same way. **Upgrading a shared server:** list the addresses your researchers used, in `CMP_OLLAMA_ADDRESSES` or
-  under Manage addresses.
-- An address is `http` or `https`, written in ASCII, a host, an optional port and path, with no user name, password or
-  query. `OLLAMA_BASE_URL` and `CMP_OLLAMA_ADDRESSES` follow the same rule at start-up: a wrong one stops it, named
-  without its value (an address written with a full-width "@" was quoted whole, password included).
-- No request goes to an address the list does not hold: a value forged around the list is replaced by the first
-  address, and the engine refuses to start on one. When an administrator removes an address, every AI engine started
-  on it stops at its next use, and a session that had chosen it is told which address replaces it.
+  administrator adds addresses for every user, and removes them, under **Manage Ollama addresses** below the choice
+  (Enter adds; a removal can be undone at once). Without sign-in, whoever opens the page is the administrator: run
+  that way only bound to this machine (`--server.address=127.0.0.1`). The address that embeds Claude's documents is
+  chosen the same way. **Upgrading a shared server:** list the Ollama addresses your researchers used (in
+  `CMP_OLLAMA_ADDRESSES` or under Manage Ollama addresses) and the Qdrant servers (under Manage Qdrant servers, in the
+  Vector database card; `CMP_QDRANT_URL` holds one).
+- The Qdrant server is chosen the same way: the embedded Qdrant first, then `CMP_QDRANT_URL` (chosen at first when
+  set; read as the client reads it, https when written without a scheme and the server's key is set), then those an
+  administrator adds, written with `https://` or `http://`. The deployment's key still goes to its own server only,
+  recognised however it is written, and a key typed for one server is never sent to another. **Test the connection**
+  says what failed in words (a refused key, no answer, a reply that is not Qdrant's), and neither it, building the
+  index nor a search shows what an address answered any more: the client's error quoted the first bytes of the reply,
+  whatever service answered there. An index of yours on a server no longer offered stays on that server: the card says
+  how to use it again (an administrator adds that address) or whom to ask to delete its collection.
+- An address is `http` or `https`, written in ASCII, a host, an optional port and a path with no empty, `.` or `..`
+  segment (a client would follow one to another host), with no user name, password or query. `OLLAMA_BASE_URL`,
+  `CMP_OLLAMA_ADDRESSES` and `CMP_QDRANT_URL` follow the same rule at start-up: a wrong one stops it, named without
+  its value (an address written with a full-width "@" was quoted whole, password included).
+- No request goes to an address the list does not hold: a value forged around the list is replaced by the first option
+  (for Qdrant, the embedded Qdrant), and the engine refuses to start on one. When an administrator removes an address,
+  every AI engine started on it stops at its next use, and a session that had chosen it is told which address replaces
+  it.
 
 ### Results corrected before the study package (M8, first steps)
 

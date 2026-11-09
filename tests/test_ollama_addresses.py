@@ -269,7 +269,7 @@ def test_an_engine_refuses_and_stops_on_an_address_the_server_does_not_offer() -
     addresses.remove("http://10.0.0.5:11434", by=ADMIN)
     assert engine.stop_if_address_withdrawn()
     assert not engine.initialized and engine.llm is None
-    assert "no longer offered" in engine.stop_reason
+    assert "was removed from CohortStudio's list" in engine.stop_reason
 
 
 def test_the_engine_s_start_asks_nothing_of_an_address_not_offered(
@@ -285,5 +285,5 @@ def test_the_engine_s_start_asks_nothing_of_an_address_not_offered(
     started, message = engine.initialize_system(
         provider="ollama", base_url="http://169.254.169.254:80"
     )
-    assert not started and "not one this server offers" in message
+    assert not started and "not in CohortStudio's list" in message
     assert asked == [] and not engine.initialized
