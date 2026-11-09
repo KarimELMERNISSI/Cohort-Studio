@@ -315,11 +315,18 @@ def test_a_merge_names_a_file_replaced_since_under_its_name(tmp_path: Path) -> N
     assert any("the file found is not the one merged (its checksum differs): labs.csv" in w for w in other.warnings)
 
 
-def test_the_enrich_page_records_the_checksum_of_the_file_it_merged(tmp_path: Path) -> None:
-    from app_pages.data_enrichment import _file_hash
+def test_the_enrich_page_records_the_checksum_of_the_bytes_it_read(tmp_path: Path) -> None:
+    """The checksum is of the bytes the page read (an upload, or the file entered by its path), carried by the table
+    into the merge's params as its parse options are; it was computed again from the file's name, which for a file
+    entered by its path named a file of the working folder."""
+    from app_pages.data_enrichment import FILE_HASH, _record_checksum
     from core.state import file_checksum
 
+    data = b"id;potassium\n1;4,1\n2;4,6\n"
     labs = tmp_path / "labs.csv"
-    labs.write_text("id,potassium\n1,4.1\n", encoding="utf-8")
-    assert _file_hash(str(labs)) == file_checksum(labs.read_bytes())
-    assert _file_hash(str(tmp_path / "gone.csv")) is None and _file_hash(None) is None
+    labs.write_bytes(data)
+    table = _record_checksum(load_dataframe(str(labs)), data)
+    assert table.attrs[FILE_HASH] == file_checksum(data)
+    kept = table[["potassium"]]  # the columns the page keeps for the merge
+    assert kept.attrs[FILE_HASH] == file_checksum(data) and kept.attrs.get("parse_options")
+    assert _record_checksum({"__multi_sheet__": True}, data) == {"__multi_sheet__": True}  # a workbook's choice

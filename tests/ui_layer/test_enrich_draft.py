@@ -749,3 +749,43 @@ def test_an_imputation_declining_the_derived_variables_can_be_refitted(data_root
     assert "Refit on the current population" in _labels(at)
     at.button(key="draft_rebase").click().run()
     assert at.session_state["probe"]["status"] == "ok"
+
+
+def _path_read_script() -> None:
+    import streamlit as st
+
+    from app_pages.data_enrichment import FILE_HASH, handle_enrichment_data_upload
+
+    df, read = handle_enrichment_data_upload()
+    if df is not None:
+        st.session_state["read"] = (
+            df.attrs.get(FILE_HASH),
+            str(read),
+            [str(c) for c in df.columns],
+        )
+
+
+def test_a_file_entered_by_its_path_is_recorded_as_the_file_read(data_root: Path) -> None:
+    """The merge recorded the name typed in the box beside the path, and the checksum came from a file of that name in
+    the server's working folder: the file read is recorded, with the checksum of the very bytes parsed."""
+    from core.state import file_checksum
+
+    folder = data_root / "users" / "path_user"
+    folder.mkdir(parents=True)
+    data = b"pid;hb\n1;12,1\n2;13,4\n"
+    (folder / "labs_v2.csv").write_bytes(data)
+    at = AppTest.from_function(_path_read_script, default_timeout=180)
+    at.session_state["username"] = "path_user"
+    at.session_state["user_authenticated"] = True
+    at.session_state["user_role"] = "researcher"
+    at.run()
+    at.radio(key="enrichment_data_method").set_value("Enter File Path").run()
+    at.text_input(key="enrichment_data_name").set_value(
+        "labs.csv"
+    ).run()  # another name in the name box
+    at.text_input(key="enrichment_data_path").set_value("labs_v2.csv").run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    checksum, read, columns = at.session_state["read"]
+    assert checksum == file_checksum(data)
+    assert Path(read).name == "labs_v2.csv" and Path(read).parent.name == "path_user"
+    assert columns == ["pid", "hb"]

@@ -40,6 +40,12 @@ def _with_options(result: LoadResult) -> pd.DataFrame:
     return result.df
 
 
+def load_bytes(data: bytes, name: str, options: ParseOptions | None = None) -> pd.DataFrame:
+    """The table in ``data``, a file's bytes already read (``name`` gives its kind), read as a file of that name is
+    read by path (a workbook gives its first sheet): what is checksummed is then what is parsed."""
+    return _with_options(read_table(data, name, options))
+
+
 def load_dataframe(uploaded_file: Any, options: ParseOptions | None = None) -> pd.DataFrame | dict | None:
     """
     DataFrame from a Streamlit upload or a file path, read with ``options`` (the ones the user chose in

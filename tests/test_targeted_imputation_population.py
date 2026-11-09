@@ -188,10 +188,11 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(
     )
 
     if elsewhere:
-        import manage.reproduction_manager as engine
+        from core.fingerprint import frame_fingerprint as here
 
-        here = engine.frame_fingerprint
-        monkeypatch.setattr(engine, "frame_fingerprint", lambda df: "elsewhere-" + here(df))
+        monkeypatch.setattr(
+            "manage.reproduction_manager.frame_fingerprint", lambda df: "elsewhere-" + here(df)
+        )
     replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.df["bmi_x2"].tolist()[1] == 320.0 and not replay.population_frames
     if elsewhere:  # only the fingerprints differ: no population read on another table

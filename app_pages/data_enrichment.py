@@ -61,7 +61,7 @@ from ui.state import get_state
 from utils.data_paths import get_traces_dir
 from utils.export_utils import to_excel
 from utils.logging_config import single_line
-from utils.multipage import _load_excel_with_selection, get_file_hash, load_dataframe
+from utils.multipage import _load_excel_with_selection, get_file_hash, load_bytes, load_dataframe
 from utils.optional import available_methods, method_available, missing_methods_message
 
 
@@ -223,6 +223,7 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
                     df = result
                 
                 if df is not None:
+                    _record_checksum(df, uploaded_file.getvalue())
                     current_file_hash = get_file_hash(uploaded_file)
                     
                     if 'last_enrichment_file_hash' not in st.session_state or \
@@ -249,10 +250,12 @@ def handle_enrichment_data_upload() -> pd.DataFrame | str | None:
             try:
                 path = _workspace_path(file_path_input)
                 with open(path, "rb") as handle:
-                    options = csv_options(handle.read(), path, key="enrichment_path_read")
-                df = load_dataframe(path, options)
+                    data = handle.read()
+                options = csv_options(data, path, key="enrichment_path_read")
+                # the bytes checksummed are the ones parsed; the step records the file read, not the name box
+                df = _record_checksum(load_bytes(data, os.path.basename(path), options), data)
                 st.success("Enrichment dataset successfully loaded from provided path.")
-                return df, file_name
+                return df, path
             except Exception as e:
                 st.error(f"Error loading file: {plain(e, limit=500)}")
                 return None, None
@@ -412,15 +415,21 @@ def _date_formats(main_df: pd.DataFrame, enrichment_df: pd.DataFrame) -> dict:
     return eed.date_key_formats(main_df, enrichment_df, recorded, dayfirst=dayfirst)
 
 
-def _file_hash(path) -> str | None:
-    """The checksum of the file a merge read (``sha256:<hex>``), recorded with the step: a file of the same name read
-    again later (a corrected export uploaded since) is then named by the replay, never merged silently."""
+FILE_HASH = "file_hash"  # an enrichment table's attrs: the checksum of the bytes it was read from
+
+
+def _record_checksum(df, data: bytes):
+    """
+    The checksum of the bytes an enrichment table was read from (``sha256:<hex>``: an upload, or the file entered by
+    its path), carried by the table (its attrs, as its parse options) into the merge's params: a file found later
+    under the recorded name that holds other bytes (a corrected export uploaded since) is then named by the replay,
+    never merged silently.
+    """
     from core.state import file_checksum
 
-    try:
-        return file_checksum(Path(path).read_bytes()) if path else None
-    except OSError:
-        return None
+    if isinstance(df, pd.DataFrame):
+        df.attrs[FILE_HASH] = file_checksum(data)
+    return df
 
 
 def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enrichment_file_path: str) -> pd.DataFrame | None:
@@ -529,7 +538,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
-                        "file_hash": _file_hash(enrichment_file_path),
+                        "file_hash": enrichment_df.attrs.get(FILE_HASH),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,
@@ -600,7 +609,7 @@ def configure_enrichment(main_df: pd.DataFrame, enrichment_df: pd.DataFrame, enr
                     snapshot_path = save_snapshot(enriched_df, "enrichment")
                     params = {
                         "enrichment_file_path": get_state().recorded_path(enrichment_file_path),
-                        "file_hash": _file_hash(enrichment_file_path),
+                        "file_hash": enrichment_df.attrs.get(FILE_HASH),
                         "parse_options": enrichment_df.attrs.get("parse_options"),
                         "strategy": strategy,
                         "conflict_resolution": conflict_resolution,

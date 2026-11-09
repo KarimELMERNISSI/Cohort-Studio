@@ -24,9 +24,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **A study replayed in another environment:** the replay finds the tables a trace names by the fingerprints the trace
   recorded. Another pandas or numpy hashing the same table otherwise made a draft's population read on another table,
   and a fill replayed one value short.
-- **A merge records the checksum of the file it read**, and the replay names a file found under the same name that is
-  not the one merged (a corrected export uploaded since). Row-id fingerprints are computed over little-endian integers
-  on every platform (unchanged on this one).
+- **A merge records the checksum of the bytes it read** (an upload, or a file entered by its path, parsed from those
+  very bytes), and the replay names a file found under the same name that is not the one merged (a corrected export
+  uploaded since). A file entered by its path is recorded as the file read, no longer under the name typed in the box
+  beside it. Row-id fingerprints are computed over little-endian integers on every platform (unchanged on this one).
 
 ### Statistics: results corrected (follow-up programme M5)
 
