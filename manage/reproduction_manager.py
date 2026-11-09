@@ -50,6 +50,7 @@ from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
 from ingest.dates import smart_parse_dates
 from manage.paths import PathResolver, read_version
+from utils.logging_config import single_line, without_values
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ def load_source(
     try:
         df = _read_any(resolved, parse_options, paths)
     except Exception as exc:
-        return None, f"Failed to load source dataset ({source}): {exc}"
+        return None, f"Failed to load source dataset ({source}): {without_values(exc)}"
     if df is None:
         return None, f"Failed to load source dataset ({source})"
     return ensure_row_ids(df), None  # the row ids a fresh load gives (AppState.set_dataset)
@@ -673,7 +674,10 @@ def apply_steps(
             current, missing, replayed = skipped.args[0], None, False
             result.not_replayable.append(i)
         except Exception as exc:
-            message = f"Error during step {i + 1} ({step.get('function')}): {exc}"
+            # without the values the error quotes (a cell of the data), in the result and in the log; an unknown id is
+            # the trace's, never the data's, and is named with the valid ones
+            said = single_line(exc) if isinstance(exc, UnknownIdError) else without_values(exc)
+            message = f"Error during step {i + 1} ({step.get('function')}): {said}"
             logger.error(message)
             result.error, result.steps_applied = message, offset
             result.population_frames.clear()

@@ -5,6 +5,9 @@ New variables derived from existing ones: statistics, scaling, dimensionality re
 calls it again with the parameters the page recorded, so both produce the same columns with the same names.
 """
 
+from collections.abc import Mapping
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import (
@@ -47,6 +50,52 @@ def _unique_names(new_columns: dict, existing) -> dict:
         taken.add(candidate)
         renamed[candidate] = values
     return renamed
+
+
+# the parameters of a transformation the trace report prints as they are: a method's settings, no value of the data
+_REPORTED = (
+    "transformation_type",
+    "transformation",
+    "columns",
+    "naming_pattern",
+    "n_components",
+    "perplexity",
+    "learning_rate",
+    "n_neighbors",
+    "min_dist",
+    "n_clusters",
+    "eps",
+    "min_samples",
+)
+
+
+def report_params(params: Mapping[str, Any]) -> dict[str, Any]:
+    """
+    A transformation's parameters as the trace report prints them: the keys of ``_REPORTED``, and for an ordinal
+    encoding how many categories each column has, never ``category_orders`` (every value of the column, in its order: a
+    value held by one row, a name, would travel with the report). A key another version writes is never printed raw.
+    """
+    shown = {key: params[key] for key in _REPORTED if key in params}
+    orders = params.get("category_orders")
+    if isinstance(orders, Mapping):
+        shown["categories"] = {str(column): len(values or ()) for column, values in orders.items()}
+    return shown
+
+
+def added_columns(step: Mapping[str, Any], limit: int | None = 8) -> str:
+    """
+    The columns a step added, as the trace report and the dossier name them: a one-hot encoding's are named after the
+    categories of the data, so they are counted ("4 columns, one per category of site"); others are named, ``limit``
+    at most.
+    """
+    added = [str(c) for c in ((step.get("data") or {}).get("columns_added") or [])]
+    params = step.get("params") or {}
+    if step.get("function") == "variable_transformation" and params.get("transformation") == "One-Hot Encoding":
+        columns = ", ".join(str(c) for c in params.get("columns") or [])
+        return f"{len(added)} column{'s' if len(added) != 1 else ''}, one per category of {columns}"
+    if limit is not None and len(added) > limit:
+        return f"{', '.join(added[:limit])}..."
+    return ", ".join(added)
 
 
 def apply_variable_transformation(dataframe, params):

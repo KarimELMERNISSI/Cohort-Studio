@@ -11,6 +11,8 @@ from core.lineage import verify_trace
 from core.population import family_words
 from core.steps import step_title
 from enrich.recode import report_params
+from enrich.transformation_logic import added_columns
+from enrich.transformation_logic import report_params as transformation_params
 
 
 class TraceDocumenter:
@@ -134,9 +136,8 @@ class TraceDocumenter:
                 f"columns {data.get('cols_in', 0)} -> {data.get('cols_out', 0)} · "
                 f"fingerprint {str(data.get('fp_in') or '-')[:8]} -> {str(data['fp_out'])[:8]}"
             )
-            added = data.get("columns_added") or []
-            if added:
-                line += f" · added: {', '.join(added[:8])}{'...' if len(added) > 8 else ''}"
+            if data.get("columns_added"):  # an encoding's columns are counted: they name the data's categories
+                line += f" · added: {added_columns(step)}"
             run = doc.add_paragraph().add_run(line)
             run.font.size = Pt(9)
         if step.get("replayable") is False:
@@ -169,6 +170,8 @@ class TraceDocumenter:
         # Parameters Table
         if step.get("function") == "recode_levels" and isinstance(params, dict):
             params = report_params(params)  # the choices counted, never named: the trace keeps them for the replay
+        elif step.get("function") == "variable_transformation" and isinstance(params, dict):
+            params = transformation_params(params)  # an encoding's categories counted, never named
         if params:
             p = doc.add_paragraph()
             p.add_run("Parameters:").bold = True

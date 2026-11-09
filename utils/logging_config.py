@@ -47,6 +47,22 @@ def single_line(value: object) -> str:
     return str(value).replace("\r", "\\r").replace("\n", "\\n")
 
 
+# a quoted string (not an apostrophe inside a word, as in "the file's"), and a path of two parts or more (not a URL's)
+_QUOTED_TEXT = re.compile(r"(?<![A-Za-z0-9])'[^'\n]*'(?![A-Za-z0-9])|\"[^\"\n]*\"")
+_PATH_TEXT = re.compile(r"(?<![\w:/.])(?:[A-Za-z]:)?(?:[\\/][^\\/\s'\"():;,]+){2,}")
+
+
+def without_values(text: object) -> str:
+    """
+    An error's text for a record that travels (a replay's error, the log): every quoted string, which may be a cell of
+    the data ("could not convert string to float: 'Jean Dupont'"), becomes "…", and a path its file name (an absolute
+    path names the account); on one line.
+    """
+    said = _QUOTED_TEXT.sub('"…"', str(text))
+    said = _PATH_TEXT.sub(lambda m: m.group(0).replace("\\", "/").rsplit("/", 1)[-1], said)
+    return single_line(said)
+
+
 class RedactSecrets(logging.Filter):
     """Rewrites each record without API keys, its traceback included."""
 

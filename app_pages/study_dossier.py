@@ -18,6 +18,7 @@ from core.population import family_words
 from core.state import checksum_text
 from core.steps import DOCUMENT, LOAD, POPULATION, step_title
 from core.steps import ids as step_ids
+from enrich.transformation_logic import added_columns
 from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
 from ui.results import (
@@ -134,8 +135,8 @@ def _data_steps(trace: dict) -> list[tuple[str, str]]:
         formula = params.get("formula") or params.get("expression")
         if formula:
             text += f" (formula: {formula})"
-        if data.get("columns_added"):
-            text += f"; added: {', '.join(data['columns_added'])}"
+        if data.get("columns_added"):  # an encoding's columns are counted: they name the data's categories
+            text += f"; added: {added_columns(step, limit=None)}"
         out.append((step_title(function), text))
     return out
 

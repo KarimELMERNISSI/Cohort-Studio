@@ -197,9 +197,21 @@ def _survival_blocks(res: Any) -> ResultBlocks:
         blocks.lines.append(
             f"Log-rank test: chi2 = {_num(res.logrank_statistic)}, df = {res.logrank_df}, {_peq(res.logrank_p)}"
         )
-    blocks.figure = km_png([(c.label, c.times, c.survival) for c in res.curves])
+    # a small group's curve steps at its participants' event times: drawn only where its median is shown
+    drawn = [c for c in res.curves if _shown(c.n)]
+    if drawn:
+        blocks.figure = km_png([(c.label, c.times, c.survival) for c in drawn])
+    if len(drawn) < len(res.curves):
+        blocks.lines.append(_not_drawn(len(res.curves) - len(drawn)))
     blocks.warnings.extend(res.warnings)
     return blocks
+
+
+def _not_drawn(count: int) -> str:
+    return (
+        f"{count} group{'s' if count != 1 else ''} of fewer than {DOSSIER_MIN_N} "
+        f"{'are' if count != 1 else 'is'} not drawn."
+    )
 
 
 def _pooled_frame(result: Any) -> pd.DataFrame:
@@ -248,11 +260,15 @@ def _pooled_blocks(res: Any) -> ResultBlocks:
                     "Group": label,
                     "Median survival (pooled curve)": _median(medians.get(label)) if shown else SMALL,
                     "Median 95% CI (pooled band)": interval if shown else SMALL,
-                    "Survival at last time": _num(curve["survival"].iloc[-1]),
+                    "Survival at last time": _num(curve["survival"].iloc[-1]) if shown else SMALL,
                 }
             )
         blocks.tables.append(("Kaplan-Meier, pooled (log(-log) scale)", pd.DataFrame(rows)))
-        blocks.figure = km_png([(label, c["time"], c["survival"]) for label, c in curves.items()])
+        drawn = {label: c for label, c in curves.items() if _shown(sizes.get(label))}
+        if drawn:
+            blocks.figure = km_png([(label, c["time"], c["survival"]) for label, c in drawn.items()])
+        if len(drawn) < len(curves):
+            blocks.lines.append(_not_drawn(len(curves) - len(drawn)))
     else:
         frame = _pooled_frame(res)
         if not frame.empty:

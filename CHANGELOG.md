@@ -63,6 +63,21 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   with is recorded with the imputation step and used by the replay (a step recorded before draws with the process's
   seed, as before). A new MissForest run gives other values than an earlier version's.
 
+### Privacy: what today's documents leave out (M8, first steps)
+
+- The Transformation Report and the study dossier no longer name an encoded variable's categories: a one-hot
+  encoding's columns are counted ("4 columns, one per category of site"), and an ordinal encoding's order of
+  categories, every value of the column, is never printed (its number of categories is). A value held by one row, a
+  name, travelled with both documents.
+- The dossier's Kaplan-Meier figure draws only the groups whose medians it shows (10 participants or more), and says
+  how many it leaves out: a smaller group's curve steps at its participants' event times. The pooled table withholds
+  such a group's survival at the last time too.
+- A stratified analysis's warning counts its small strata ("1 of 3 strata has fewer than 5 subjects in a group"),
+  never names them: a stratum's value (a site, a clinic) was copied into the dossier.
+- A replay error no longer quotes values of the data ("could not convert string to float: '...'"), in its message or
+  in the log: every quoted text becomes "…", and a path its file name. An id of the trace this version does not know
+  (a step, an approach) is still named, with the valid ones.
+
 ### Statistics: results corrected (follow-up programme M5)
 
 - **Rate ratio** (Analyze > Hypothesis tests > Paired, rates & stratified).

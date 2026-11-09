@@ -255,6 +255,7 @@ def mantel_haenszel(
     exposure_level = str(exposure_level) if exposure_level is not None else exp_levels[1]
     event_level = str(event_level) if event_level is not None else out_levels[1]
     tables, rows, warnings = [], [], []
+    small = 0  # strata with fewer than 5 subjects in a group
     for stratum, part in frame.groupby(stratum_col, sort=True):
         e = part[exposure_col] == exposure_level
         y = part[outcome_col] == event_level
@@ -280,8 +281,11 @@ def mantel_haenszel(
                 else float("nan"),
             }
         )
-        if min(a + b, c + d) < 5:
-            warnings.append(f"stratum {stratum}: fewer than 5 subjects in a group")
+        small += min(a + b, c + d) < 5
+    if small:  # counted, never named: a stratum's value is the data's (a site, a clinic), copied into the dossier
+        warnings.append(
+            f"{small} of {len(tables)} strata {'has' if small == 1 else 'have'} fewer than 5 subjects in a group"
+        )
     if len(tables) < 2:
         raise ValueError("at least two strata are required")
     st = StratifiedTable(tables)
