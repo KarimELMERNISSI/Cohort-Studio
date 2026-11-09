@@ -1019,6 +1019,16 @@ the credentials of an address (``http://user:password@host``), and the value of 
 
 ``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry.
 
+### def `without_values` (logging_config.py)
+
+- **Arguments**: `text: object`
+
+- **Returns**: `str`
+
+An error's text for a record that travels (a replay's error, the log): every quoted string, which may be a cell of
+the data ("could not convert string to float: 'Jean Dupont'"), becomes "…", and a path its file name (an absolute
+path names the account); on one line.
+
 ### def `configure_logging` (logging_config.py)
 
 - **Arguments**: `level: ComplexType`
@@ -1343,6 +1353,15 @@ Encoding of ``file_content`` (UTF-8, then Windows-1252, then charset-normalizer)
 
 The table, carrying the options it was parsed with (recorded by the step that uses it, for the replay).
 
+### def `load_bytes` (multipage.py)
+
+- **Arguments**: `data: bytes, name: str, options: ComplexType`
+
+- **Returns**: `pd.DataFrame`
+
+The table in ``data``, a file's bytes already read (``name`` gives its kind), read as a file of that name is
+read by path (a workbook gives its first sheet): what is checksummed is then what is parsed.
+
 ### def `load_dataframe` (multipage.py)
 
 - **Arguments**: `uploaded_file: Any, options: ComplexType`
@@ -1503,6 +1522,12 @@ No description available.
 - **_address**(`cls, value: str`) -> `str`
   > No description available.
 
+- **_addresses**(`cls, value: str`) -> `str`
+  > No description available.
+
+- **ollama_address_list**(`self`) -> `list[str]`
+  > The deployment's Ollama addresses, each once: OLLAMA_BASE_URL first, then CMP_OLLAMA_ADDRESSES in order.
+
 - **key**(`self, variable: ComplexType`) -> `ComplexType`
   > The server's API key held by the setting ``variable`` (GOOGLE_API_KEY...: each AI provider declares its own,
   > manage.rag.providers), or None; a setting that is not a key gives None.
@@ -1515,6 +1540,10 @@ No description available.
 
 - **_address**(`cls, value: ComplexType`) -> `ComplexType`
   > No description available.
+
+- **qdrant_address_list**(`self`) -> `list[str]`
+  > The deployment's Qdrant server (CMP_QDRANT_URL) as offered (https when written without a scheme and the
+  > server's key is set, as the client reads it); none when it is not set.
 
 ### class `GraphSection` (settings.py)
 
@@ -1532,6 +1561,15 @@ No description available.
 
 No description available.
 
+### def `_parsed` (settings.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `None`
+
+``urlparse(value)``, whose own error can quote the address (a full-width "@" leaves a password in it): refused
+with a message that never does.
+
 ### def `_no_credentials` (settings.py)
 
 - **Arguments**: `value: ComplexType`
@@ -1539,6 +1577,27 @@ No description available.
 - **Returns**: `ComplexType`
 
 An address without a user name or password: it is shown to every user in Settings, and logged.
+
+### def `server_address` (settings.py)
+
+- **Arguments**: `value: ComplexType`
+
+- **Returns**: `str`
+
+The address of a server Settings offers (an Ollama service), as offered: ``http`` or ``https``, a host, an optional
+port and path, "http://" when no scheme is written (as Ollama's client reads it), the scheme and the host in lower
+case, no "/" at the end. Refused with a ValueError whose message never holds the value (an address may carry a
+password): a character outside ASCII (an international name is written in its ``xn--`` form), a space, a user name
+or password, a query or fragment, another scheme, no host, a port out of range, more than 200 characters.
+
+### def `qdrant_address` (settings.py)
+
+- **Arguments**: `value: str, api_key: object`
+
+- **Returns**: `str`
+
+A Qdrant server's address as offered, read as qdrant-client reads it: written without a scheme, https when it is
+given an API key, else http (manage.vectorstores.qdrant_index.explicit_address); then :func:`server_address`.
 
 ### def `_validate` (settings.py)
 

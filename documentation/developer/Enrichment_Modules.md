@@ -13,7 +13,7 @@ No description available.
 
 **Methods:**
 
-- **__init__**(`self, categorical_cols, debug, progress_bar`) -> `None`
+- **__init__**(`self, categorical_cols, debug, progress_bar, random_state, n_jobs`) -> `None`
   > A transformer wrapper for MissForest imputation for both numerical and categorical data.
   >
   >
@@ -163,7 +163,7 @@ Assign every column to exactly one group: (numerical, categorical, passthrough).
 
 ### def `get_imputer` (data_imputation.py)
 
-- **Arguments**: `numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, data, remainder_columns, remainder_strategy, remainder_threshold, total_steps, progress_placeholder, debug`
+- **Arguments**: `numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, data, remainder_columns, remainder_strategy, remainder_threshold, total_steps, progress_placeholder, debug, random_state`
 
 - **Returns**: `None`
 
@@ -951,7 +951,7 @@ excluded patients neither inform nor receive imputed values; ``fill_with_formula
 imputation of one column. The replay engine calls the same functions._
 
 **Imports**:
-`logging`, `collections.abc.Collection`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.data_imputation`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.formulas.usable_values`
+`logging`, `collections.abc.Collection`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.data_imputation`, `biostats._types.RANDOM_STATE`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.formulas.usable_values`
 
 ### class `ImputationOutcome` (imputation_service.py)
 
@@ -984,7 +984,7 @@ Returns:
 
 ### def `apply_imputer` (imputation_service.py)
 
-- **Arguments**: `data, numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, remainder_columns, remainder_strategy, remainder_threshold, progress_placeholder, debug`
+- **Arguments**: `data, numerical_imputation_method, categorical_imputation_method, cat_encoder, num_scaler, remainder_columns, remainder_strategy, remainder_threshold, progress_placeholder, debug, random_state`
 
 - **Returns**: `None`
 
@@ -1018,7 +1018,8 @@ Impute the missing values of ``rows`` (row ids; every row when None) with an imp
 Rows outside ``rows`` are returned untouched. One-hot encoding, scaling and dropping remainder columns
 change the columns of the table; they are refused when only part of the rows is imputed. The ``set_aside``
 columns (declared derived variables, computed afterwards from the imputed values) are neither imputed nor used to
-impute the others: the imputer never sees them, and they come back as they were.
+impute the others: the imputer never sees them, and they come back as they were. MissForest draws with
+``random_state`` (the process's CMP_RANDOM_SEED when None), which the params record: the replay draws the same.
 
 ### def `round_half_away` (imputation_service.py)
 
@@ -1086,18 +1087,31 @@ the values an exact formula computed from imputed ones, single-imputed as they a
 
 ## patterns.py
 
-_The values a regular expression picks (Data > Clean > Categories), Python's own syntax, searched anywhere in each value
-as written (``^`` and ``$`` anchor it), case ignored unless asked. The pattern is tried in a separate Python process
-with a time limit: a pattern that backtracks without end (``(a+)+$`` on a long value) stops there, and never holds the
-server, which every user shares (Python's matcher keeps the interpreter while it runs). The values travel to that
-process and back on its own pipes; nothing is written._
+_The values a search picks (Data > Clean > Categories): text found anywhere in each value as written, ``*`` standing for
+any text, or a regular expression (Python's syntax: ``^`` and ``$`` anchor it), case ignored unless asked. A dot, a
+bracket or a question mark typed as text is that character: "n.a." finds n.a. only, never "infa" in Myocardial
+infarction.
+
+The search runs in a separate Python process with a time limit: a pattern that backtracks without end (``(a+)+$`` on a
+long value) stops there, and never holds the server, which every user shares (Python's matcher keeps the interpreter
+while it runs). The limit counts from the moment the process is ready, so a busy server's slow start is no fault of the
+pattern; the start has a limit of its own. The values travel to that process and back on its own pipes, the process
+gets no environment (the server's settings stay out of it); nothing is written._
 
 **Imports**:
-`__future__.annotations`, `json`, `re`, `subprocess`, `sys`, `collections.abc.Sequence`
+`__future__.annotations`, `json`, `re`, `subprocess`, `threading`, `collections.abc.Sequence`
 
 ### class `PatternError` (patterns.py)
 
-A pattern that picks nothing it could: why, in plain words.
+A search that picks nothing it could: why, in plain words.
+
+### def `_compiled` (patterns.py)
+
+- **Arguments**: `text: str, regex: bool, ignore_case: bool`
+
+- **Returns**: `str`
+
+The pattern the process compiles: text escaped, its ``*`` any text; a regular expression as typed.
 
 ### def `matching` (patterns.py)
 
@@ -1105,8 +1119,9 @@ A pattern that picks nothing it could: why, in plain words.
 
 - **Returns**: `list[str]`
 
-The values ``pattern`` finds, in their order. Raises :class:`PatternError` for an empty, overlong or invalid
-pattern, or one that takes longer than ``timeout`` seconds on these values.
+The values the search finds, in their order: ``pattern`` as text found anywhere in a value (``*`` any text), or
+with ``regex`` a regular expression. Raises :class:`PatternError` for an empty, overlong or invalid pattern, one
+that takes longer than ``timeout`` seconds once its process is ready, or a process that cannot start.
 
 ---
 
@@ -1163,7 +1178,7 @@ separate two terms (Dysphasia and Dysphagia, Prednisone and Prednisolone): each 
 Nothing here reads an outcome: the values and their rows only._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `json`, `re`, `unicodedata`, `collections.defaultdict`, `collections.abc.Collection`, `collections.abc.Iterable`, `collections.abc.Mapping`, `collections.abc.MutableMapping`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `rapidfuzz.distance.OSA`, `core.fingerprint.frame_fingerprint`
+`__future__.annotations`, `hashlib`, `json`, `re`, `unicodedata`, `collections.defaultdict`, `collections.abc.Collection`, `collections.abc.Iterable`, `collections.abc.Mapping`, `collections.abc.MutableMapping`, `dataclasses.dataclass`, `typing.Any`, `typing.NamedTuple`, `pandas`, `rapidfuzz.distance.OSA`, `core.fingerprint.frame_fingerprint`
 
 ### class `Offer` (recode.py)
 
@@ -1176,6 +1191,10 @@ No description available.
 ### class `Candidate` (recode.py)
 
 A text column the Categories tab lists.
+
+### class `CleanCopy` (recode.py)
+
+A column's clean copy (Data > Clean): its name, and whether it follows the column as it is (:func:`follows`).
 
 ### def `_spaced` (recode.py)
 
@@ -1313,6 +1332,17 @@ A comparison key that says a value was not recorded, is awaited or not known (``
 
 Whether a column writes case as part of its codes: a capital right after a lower-case letter (CcDee, HFmrEF,
 mg/dL), or a letter beside its other case (Cc, Kk).
+
+### def `case_coded` (recode.py)
+
+- **Arguments**: `levels: Iterable[Any], cased: Iterable[Any]`
+
+- **Returns**: `bool`
+
+Whether capitals may name categories among a variable's ``levels``: it writes case in its codes (a capital
+right after a lower-case letter, a letter beside its other case: CcDee, HFmrEF, Kk), or levels that differ only by
+capitals (``cased``) are single letters (Kell's K and k). Data > Clean then asks why before merging them, never
+merges them by itself (``_case_safe``).
 
 ### def `_case_safe` (recode.py)
 
@@ -1627,11 +1657,45 @@ becomes and what missing means, so that the record always gives the preview. Rai
 
 - **Returns**: `dict[ComplexType]`
 
-The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): two
-spellings merged that no offer relation joins (``_one_category``: a case variant taken as one word, a variant, a
-one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III, Unstable angina into Stable
-angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why. Clean value -> the
-spellings it merges.
+The clean values that group categories, whoever proposed the merge (the user, an offer, the AI engine): a spelling
+a choice sends there that no offer relation joins to the clean value (``_one_category``: a case variant taken as
+one word, a variant, a one-letter code and its word, a close spelling in a typo's rows). NYHA IV into III,
+Unstable angina into Stable angina, Stroke into Hypertension, Femme into Female, CCDee into CcDee: each says why.
+Clean value -> the spellings it merges.
+
+Each spelling is tested against the clean value it ends at (through a chain too), never against another one: the
+clean value's own spelling when the column holds it, else, for a new name, the group's most held spelling. Two of
+the page's offers for one word (hypertension, capitals; Hypertenson, a close spelling) are then one category,
+merged in one step or two; a new name given to one category's spellings is a relabel, and two categories under one
+new name a grouping.
+
+### def `grouped_apart` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Of each grouping (:func:`groupings`), the spellings no offer relation joins to its clean value: what its
+question names (Why group Hypotension with Hypertension?), the spellings of the clean value apart.
+
+### def `grouping_anchors` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Of each grouping (:func:`groupings`), the spelling it is anchored on: its clean value when the column holds it,
+else, for a new name, its most held spelling, a category of its own that its question names beside the new name
+(Why group Hypotension with Hypertension, as BP disorder?), never among the spellings merged.
+
+### def `_grouped` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], mapping: Mapping[ComplexType], kept: Collection[str]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each clean value that groups categories -> (the spellings it merges, those no offer relation joins to it, the
+spelling they are tested against).
 
 ### def `changes` (recode.py)
 
@@ -1649,9 +1713,12 @@ The values a recode changes, counted by kind and meaning: ``{"by_kind": {kind: [
 
 - **Returns**: `dict[ComplexType]`
 
-The step's parameters as the trace report prints them: the choices counted, never named (the trace keeps them for
-the replay), and each grouping with its reason, naming its values only when each held 5 rows or more. The
-fingerprints are left out: one of a single column can be tested against a guessed cell.
+The step's parameters as the trace report prints them: its columns and its counts, the choices counted, never named
+(the trace keeps them for the replay), and each grouping with its reason, naming its values only when each held 5
+rows or more. Only the keys of ``_REPORTED`` are printed as they are, so that a key another version writes is never
+printed raw; never the fingerprints (one of a single column can be tested against a guessed cell). A recode of
+another fold rule, which the replay refuses, holds the choices of another version in other shapes: its columns and
+how many values it recoded are printed, nothing per value.
 
 ### def `free_text` (recode.py)
 
@@ -1660,11 +1727,21 @@ fingerprints are left out: one of a single column can be tested against a guesse
 - **Returns**: `bool`
 
 Values the AI engine is never asked about: free text (long, or several words each), mostly rare values (those
-held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), or an identifier: among the values
-held by ``min_count`` rows or more, those a cloud recipient would be sent, many, the typical one a small share of
-their rows (names on visits, numbers). Read on their median, without the codes for missing, so that one frequent
-placeholder hides none; the rare values are not among them, so that the typos of a messy categorical column beside
-a few frequent categories (half its values held by 1 to 4 rows) no longer make it read as an identifier.
+held by fewer than ``min_count`` rows, the sharing rule's, cover half the rows), more than :data:`MAX_VALUES`
+values, or an identifier (``_identifier``: names, codes or dates on visits).
+
+### def `_identifier` (recode.py)
+
+- **Arguments**: `counts: Mapping[ComplexType], min_count: int`
+
+- **Returns**: `bool`
+
+Whether a column reads as an identifier: more than 30 values, the typical one (the median) under 5 % of their
+rows, the codes for missing set aside, so that one frequent placeholder hides none. A value of fewer than
+``min_count`` rows that is a spelling of a value held by ``min_count`` rows or more (the same key, or a typo's edits:
+``_relation``) counts as that value: the typos of a messy categorical column are its categories misspelt. Every
+other value counts as its own, however rare: a name, a code or a date that misspells nothing is what a column of
+people on visits holds, and the reason the column is never sent (its frequent values would be: rows, not people).
 
 ### def `_ai_refused` (recode.py)
 
@@ -1769,6 +1846,36 @@ At most ``limit`` characters, cut after a whole word.
 
 Each column recoded in a trace's steps -> the copy its last recode wrote.
 
+### def `recoded_records` (recode.py)
+
+- **Arguments**: `steps: Iterable[Mapping[ComplexType]]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each column recoded in a trace's steps -> the parameters of its last recode, which say whether its copy still
+follows it (:func:`follows`).
+
+### def `follows` (recode.py)
+
+- **Arguments**: `record: ComplexType, df: pd.DataFrame, column: str`
+
+- **Returns**: `bool`
+
+Whether a recode's copy follows the column as it is: False when a later step changed rows of it since (an
+imputation, a merge's rows) that the copy does not have yet; True when the record keeps no fingerprint of it
+(written before it was recorded), when the column is unchanged, or when the record's recode of the column as it is
+gives the copy as it is (a freeze removed rows from both; a change of type kept the values). The values'
+fingerprint would not do: a row moved from one value to another keeps the same values.
+
+### def `clean_copies` (recode.py)
+
+- **Arguments**: `df: pd.DataFrame, records: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+Each column of ``df`` whose last recode (``records``: :func:`recoded_records`) wrote a copy that is still a
+column -> that copy, and whether it follows the column as it is.
+
 ### def `last_record` (recode.py)
 
 - **Arguments**: `steps: Iterable[Mapping[ComplexType]], source: str, target: str`
@@ -1817,7 +1924,7 @@ The number columns holding 2 to 10 distinct values (1/2 codes): not listed, and 
 
 ### def `candidates` (recode.py)
 
-- **Arguments**: `df: pd.DataFrame, recoded: ComplexType`
+- **Arguments**: `df: pd.DataFrame, recoded: ComplexType, records: ComplexType`
 
 - **Returns**: `list[Candidate]`
 
@@ -1825,7 +1932,8 @@ The text and categorical columns with 2 to :data:`MAX_VALUES` values as written,
 (source -> copy) left out: those with values to check first, then those with extra spaces only, then the cleaned
 ones, then the others, each in the dataset's order. The count of values to check holds every offer the page makes,
 variants and close spellings included (rapidfuzz keeps the two-by-two comparison to milliseconds); the values
-written with extra spaces, which the fold collapses with nothing to check, are counted apart.
+written with extra spaces, which the fold collapses with nothing to check, are counted apart. ``records`` (source
+-> its last recode's parameters, :func:`recoded_records`) say whether each copy still follows its source.
 
 ---
 
@@ -1837,7 +1945,7 @@ _New variables derived from existing ones: statistics, scaling, dimensionality r
 calls it again with the parameters the page recorded, so both produce the same columns with the same names._
 
 **Imports**:
-`numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats.reduction.fit_famd`, `biostats.reduction.fit_pca`, `core.expressions.safe_format`
+`collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `sklearn.preprocessing.LabelEncoder`, `sklearn.preprocessing.MinMaxScaler`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.OrdinalEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats.reduction.fit_famd`, `biostats.reduction.fit_pca`, `core.expressions.safe_format`
 
 ### def `_unique_names` (transformation_logic.py)
 
@@ -1846,6 +1954,26 @@ calls it again with the parameters the page recorded, so both produce the same c
 - **Returns**: `dict`
 
 A name already in the table, or already given to another new column, gets the first free suffix _1, _2...
+
+### def `report_params` (transformation_logic.py)
+
+- **Arguments**: `params: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+A transformation's parameters as the trace report prints them: the keys of ``_REPORTED``, and for an ordinal
+encoding how many categories each column has, never ``category_orders`` (every value of the column, in its order: a
+value held by one row, a name, would travel with the report). A key another version writes is never printed raw.
+
+### def `added_columns` (transformation_logic.py)
+
+- **Arguments**: `step: Mapping[ComplexType], limit: ComplexType`
+
+- **Returns**: `str`
+
+The columns a step added, as the trace report and the dossier name them: a one-hot encoding's are named after the
+categories of the data, so they are counted ("4 columns, one per category of site"); others are named, ``limit``
+at most.
 
 ### def `apply_variable_transformation` (transformation_logic.py)
 

@@ -6,8 +6,10 @@ _What the AI features may send about a dataset to a cloud provider: a summary of
 
 The column renaming, the variable taxonomy, the unit hints of Enrich and the suggested criteria of Validate all
 describe the columns with :func:`column_profile`, and the data-sharing notice of Settings lists exactly this:
-- numeric columns: the 5th, 25th, 50th, 75th and 95th percentiles; never the minimum or the maximum, which can
-  single out one participant;
+- numeric columns: the 5th, 25th, 50th, 75th and 95th percentiles, rounded to two significant digits of the largest
+  (enough to tell a unit); never the minimum or the maximum, which can single out one participant. On visits, a percentile can be one
+  person's value: a birth date written as a number (19620115) is read as a date, and a number named as a date (``dob``,
+  ``date_of_death``) keeps its name and type only;
 
 - other columns: their most frequent values with their counts, only values shared by at least ``MIN_COUNT`` rows;
 
@@ -22,7 +24,7 @@ the cloud providers, and an Ollama or a Qdrant server outside this machine and t
 user's confirmation._
 
 **Imports**:
-`__future__.annotations`, `ipaddress`, `logging`, `os`, `socket`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `core.workspace.file_name_of`, `enrich.recode.free_text`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
+`__future__.annotations`, `ipaddress`, `logging`, `math`, `os`, `re`, `socket`, `collections.abc.Iterable`, `collections.abc.Mapping`, `typing.Any`, `urllib.parse.urlparse`, `pandas`, `core.workspace.file_name_of`, `enrich.recode.free_text`, `enrich.recode.level_counts`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`
 
 ### def `_frequent_values` (ai_payload.py)
 
@@ -30,7 +32,38 @@ user's confirmation._
 
 - **Returns**: `dict[ComplexType]`
 
-No description available.
+The most frequent values, each held by MIN_COUNT rows or more; none for a column read as free text or as an
+identifier (names, codes or dates on visits), as Data > Clean reads it (enrich.recode.free_text): the summary then
+keeps the column's name and type only.
+
+### def `_rounded` (ai_payload.py)
+
+- **Arguments**: `stats: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+A column's percentiles rounded to one step, two significant digits of the largest (100.3, 131.6 and 162.1 give 100,
+130 and 160): its scale and unit, never a value of one row, which on visits a percentile can be (one person's rows
+sit side by side once sorted). One step for all, so that a number near 0 keeps no more digits than the others: in
+days since 1960, -10,412 and -140 give -10,000 and 0, not a birth date in 1959.
+
+### def `_named_as_date` (ai_payload.py)
+
+- **Arguments**: `name: object`
+
+- **Returns**: `bool`
+
+Whether a column's name says that it holds dates: one of its words (split at ``_``, spaces, digits and
+capitals) is in DATE_WORDS.
+
+### def `_written_dates` (ai_payload.py)
+
+- **Arguments**: `series: pd.Series`
+
+- **Returns**: `ComplexType`
+
+The values of a numeric column read as dates when each is a whole number written yyyymmdd (19620115) that is a
+date of the calendar; None otherwise.
 
 ### def `column_profile` (ai_payload.py)
 
@@ -39,7 +72,9 @@ No description available.
 - **Returns**: `list[dict[ComplexType]]`
 
 One summary per column (``name``, ``type`` and ``stats``, ``top_values`` or ``range``). ``date_columns`` are read
-as dates even when they hold text (only their years are sent).
+as dates even when they hold text (only their years are sent); so is a number written yyyymmdd. A number named as a
+date (:data:`DATE_WORDS`) keeps its name and type only. Percentiles are rounded to two significant digits of the
+largest (:func:`_rounded`).
 
 ### def `_two_digits` (ai_payload.py)
 
@@ -78,7 +113,9 @@ with a number.
 - **Returns**: `dict[ComplexType]`
 
 What a prompt may carry of a variable's statistics: the percentiles of :func:`column_profile`, nothing else (an
-allow-list). The minimum, maximum, mean, "0%" or "100%" of an imported or edited map are dropped.
+allow-list), rounded as it rounds them. The minimum, maximum, mean, "0%" or "100%" of an
+imported or edited map are dropped, and so is a percentile that is not a number; a map built before percentiles
+were rounded is rounded here.
 
 ### def `frequent_values` (ai_payload.py)
 
@@ -1826,6 +1863,24 @@ route._
 **Imports**:
 `__future__.annotations`, `logging`, `typing.Any`
 
+### class `NoAnswer` (ollama_server.py)
+
+The Ollama server did not say where it runs a model: ``reason`` UNREACHABLE (nothing listens at the address),
+LATE (no answer in time) or NO_ANSWER (an answer that says nothing).
+
+**Methods:**
+
+- **__init__**(`self, model: str, reason: str`) -> `None`
+  > No description available.
+
+### def `_asked` (ollama_server.py)
+
+- **Arguments**: `base_url: ComplexType, method: str, path: str, body: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The server's answer, else None and why (UNREACHABLE, LATE or NO_ANSWER).
+
 ### def `_ask` (ollama_server.py)
 
 - **Arguments**: `base_url: ComplexType, method: str, path: str, body: ComplexType`
@@ -1849,7 +1904,19 @@ No description available.
 - **Returns**: `ComplexType`
 
 The address that runs ``model`` for this Ollama server when the server does not run it itself (a cloud model,
-or a copy of one), as ``/api/show`` answers; None when the server runs it, or cannot say.
+or a copy of one), as ``/api/show`` answers; None when the server runs it, or cannot say (for what Settings
+shows: a decision on what is sent reads :func:`runs_at`).
+
+### def `runs_at` (ollama_server.py)
+
+- **Arguments**: `base_url: ComplexType, model: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Where the server runs ``model``: the address that runs it when the server does not run it itself, None when it
+does (an Ollama older than the cloud models answers without saying: it runs every model itself). Raises
+:class:`NoAnswer` when the server does not answer in time, so that "it runs here" is never read in a silence: a
+copy of a cloud model would then be sent every value, as to a model on this machine.
 
 ### def `remote_models` (ollama_server.py)
 
@@ -1990,19 +2057,29 @@ _The user's preferences: the choices made in Settings, kept for the next session
 
 A preference is not a setting. A setting is the server's (utils.settings, read from the environment); a preference is
 the user's choice among what the server allows: the day-first reading of dates on import, the AI engine and its
-models, the graph renderer, the vector database. No key, password, consent or address is ever stored: a cloud provider
-saved here starts nothing until the user confirms again in the session (audit E6), and the address of a model
-server (Ollama, Qdrant), which decides where the data go, is entered again in each session.
+models, the graph renderer, the vector database, and the Ollama address and the Qdrant server chosen among those the
+server offers (manage.server_addresses: never one a user typed). No key, password or consent is ever stored: a cloud
+provider saved here starts nothing until the user confirms again in the session (audit E6), and a kept address that
+the server no longer offers is named and not used.
 
 The file is ``<workspace>/preferences.json``, read whole and written whole, atomically, under a lock. A missing or
 unreadable file gives no preference; a field that is not valid is left out, and the others are kept._
 
 **Imports**:
-`__future__.annotations`, `json`, `logging`, `pathlib.Path`, `typing.Annotated`, `typing.Any`, `pydantic.BaseModel`, `pydantic.ConfigDict`, `pydantic.Field`, `pydantic.StringConstraints`, `pydantic.ValidationError`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.write_atomic`
+`__future__.annotations`, `json`, `logging`, `pathlib.Path`, `typing.Annotated`, `typing.Any`, `pydantic.AfterValidator`, `pydantic.BaseModel`, `pydantic.ConfigDict`, `pydantic.Field`, `pydantic.StringConstraints`, `pydantic.ValidationError`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.write_atomic`, `utils.settings.server_address`
 
 ### class `Preferences` (preferences.py)
 
 The choices kept for the next session. Every field is optional: unset, the setting or the default applies.
+
+### def `_listed_form` (preferences.py)
+
+- **Arguments**: `value: str`
+
+- **Returns**: `str`
+
+An address as Settings offers it ("" for the embedded Qdrant): a hand-edited one with credentials, a query or
+another spelling is not read (the field's name is logged, never its value).
 
 ### def `preferences_path` (preferences.py)
 
@@ -2247,7 +2324,7 @@ such an index's manifest and pointer to its server's folder (the manifest names 
 never reused there, and the next rebuild on its server deletes it._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `json`, `re`, `threading`, `uuid`, `pathlib.Path`, `typing.Any`, `urllib.parse.urlparse`, `core.registry.Availability`, `base.MANIFEST_NAME`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorEngine`, `base.VectorStoreError`
+`__future__.annotations`, `hashlib`, `json`, `logging`, `re`, `ssl`, `threading`, `uuid`, `contextlib.contextmanager`, `pathlib.Path`, `typing.Any`, `urllib.parse.urlparse`, `core.registry.Availability`, `base.MANIFEST_NAME`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.IndexManifest`, `base.VectorEngine`, `base.VectorStoreError`
 
 ### class `QdrantIndex` (qdrant_index.py)
 
@@ -2283,6 +2360,12 @@ No description available.
   > Whether the index in use on a server was built by an earlier version, under the account's name (read from
   > the workspace: no request is made). It is never reused: its rebuild deletes it.
 
+- **_asking**(`self`) -> `None`
+  > A request to the store: a failure is said in words (:func:`_said`), never by the reply.
+
+- **_place**(`self`) -> `str`
+  > No description available.
+
 - **location**(`self`) -> `str`
   > No description available.
 
@@ -2290,7 +2373,8 @@ No description available.
   > No description available.
 
 - **ping**(`self`) -> `tuple[ComplexType]`
-  > Reachability of the server (or the local folder).
+  > Whether the server answers as Qdrant with this key, and otherwise what failed, in words (the caller names
+  > the address): it is asked for its list of collections, not counted (with the server's key, every user's).
 
 - **active_collection**(`self`) -> `str`
   > Collection holding the current index: the one the pointer names; else the base name of the earliest indexes
@@ -2303,10 +2387,19 @@ No description available.
 - **reset**(`self, dim: int`) -> `None`
   > No description available.
 
+- **_reset**(`self, dim: int`) -> `None`
+  > No description available.
+
 - **add**(`self, rows: list[ChunkRow]`) -> `None`
   > No description available.
 
+- **_upsert**(`self, rows: list[ChunkRow]`) -> `None`
+  > No description available.
+
 - **query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
+  > No description available.
+
+- **_query**(`self, vector: list[float], k: int, sources: ComplexType`) -> `list[Hit]`
   > No description available.
 
 - **count**(`self`) -> `int`
@@ -2327,6 +2420,16 @@ One client per folder (local mode allows a single client) or per server and key.
 - **Returns**: `str`
 
 The collection a pointer file names ("" when there is none).
+
+### def `_said` (qdrant_index.py)
+
+- **Arguments**: `exc: BaseException`
+
+- **Returns**: `str`
+
+What went wrong, in words, never what the server answered (qdrant-client quotes the first bytes of a reply in its
+error, whatever service answered at the address): a refused key, a refusal, an error status, a reply that is not
+Qdrant's, no answer, a failed https connection. The exception's class goes to the log only.
 
 ### def `explicit_address` (qdrant_index.py)
 
@@ -2372,6 +2475,15 @@ for an embedded index.
 An earlier version kept one manifest and one pointer for every place, in ``directory``, both written by the last
 build. One built on a server moves to that server's folder (the manifest names the server), so that a build
 elsewhere neither loses it nor is taken for it. Reads and writes the workspace only.
+
+### def `server_indexes` (qdrant_index.py)
+
+- **Arguments**: `directory: Path`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+The indexes this workspace built on Qdrant servers, as (the server, the collection, the manifest), read from the
+servers' folders in the workspace only: no request is made.
 
 ### def `unrecorded_collection` (qdrant_index.py)
 
@@ -2754,7 +2866,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.OLLAMA`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.OLLAMA`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `manage.server_addresses.ADDRESS_REMOVED`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -2842,6 +2954,18 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **stop**(`self, reason: str`) -> `None`
   > Stops the engine: its connections to the providers are dropped, so nothing more can be sent to them. The
   > document index stays on disk, and the next initialisation reuses it.
+
+- **_off_list**(`provider: ComplexType, base_url: ComplexType, embedding_provider: ComplexType, embedding_base_url: ComplexType`) -> `bool`
+  > Whether an Ollama address the engine uses (its chat's, or the separate embeddings') is not one the server
+  > offers now; an engine given no address uses Ollama's default, which must be offered too.
+
+- **_qdrant_off_list**(`url: ComplexType`) -> `bool`
+  > Whether a Qdrant server (None: the embedded mode, in the workspace) is not one the server offers now.
+
+- **stop_if_address_withdrawn**(`self`) -> `bool`
+  > An engine started on an Ollama address or a Qdrant server the server no longer offers (an administrator removed
+  > it) stops before anything more is sent there; returns whether it stopped. The session's pages call it once per
+  > run (ui.services).
 
 - **withdraw_consent**(`self`) -> `bool`
   > The user withdraws the confirmation of ``recipients`` (all of them when none is named): every confirmation
@@ -3175,6 +3299,14 @@ Whether a group's median goes into the dossier (a result pooled before the sizes
 
 No description available.
 
+### def `_not_drawn` (report_tables.py)
+
+- **Arguments**: `count: int`
+
+- **Returns**: `str`
+
+No description available.
+
 ### def `_pooled_frame` (report_tables.py)
 
 - **Arguments**: `result: Any`
@@ -3234,7 +3366,7 @@ replayable, and their recorded snapshot is used when there is one. A replay is *
 step was replayed and matched._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
 
 ### class `StepRecord` (reproduction_manager.py)
 
@@ -3295,7 +3427,30 @@ The source dataset of a trace: the recorded artifact (newer traces) or the origi
 Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
 evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
 to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
-a plausibility rule's bound must not take its row out of the next fill.
+a plausibility rule's bound must not take its row out of the next fill. A population recorded under other rules
+is taken from the rows the step holds; when it holds none, a step that changes the data on it is refused, and
+one that only checks it (``checks_only``) reads its criteria now, with a warning. So is one recorded under these
+rules whose criteria keep other rows of the very table it was recorded on (its fingerprint): the same definitions
+on the same table, so the rules are read otherwise now, whatever their version says.
+
+### def `_recorded_rows` (reproduction_manager.py)
+
+- **Arguments**: `block: Mapping[ComplexType], frame: pd.DataFrame`
+
+- **Returns**: `ComplexType`
+
+The rows a recorded population kept, from its step: the rows it kept, or (a large population holds only these)
+the table's rows less those its criteria excluded, since a row leaves the population when any ticked criterion
+excludes it; None when the step holds neither.
+
+### def `_rules_version` (reproduction_manager.py)
+
+- **Arguments**: `block: Mapping[ComplexType]`
+
+- **Returns**: `int`
+
+The version of how a recorded population's rules were read: 1 when the block names none (written before the
+version was recorded), 0 when it names one that is no number.
 
 ### def `_snapshot` (reproduction_manager.py)
 
@@ -3395,8 +3550,8 @@ No description available.
 - **Returns**: `None`
 
 The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
-under another rule (an earlier version of Data > Clean) is refused: the column is cleaned again. Differences are
-said by their number, never by a value.
+under another rule (another version of Data > Clean, earlier or later) is refused: the column is cleaned again; so
+is a record without what the replay checks. Differences are said by their number, never by a value.
 
 ### def `_apply_filter` (reproduction_manager.py)
 
@@ -3424,7 +3579,7 @@ Re-run a multiple imputation on its population and check the imputed cells again
 
 ### def `_freeze_population` (reproduction_manager.py)
 
-- **Arguments**: `df, step, index, paths, warnings`
+- **Arguments**: `df, step, index, paths, warnings, result`
 
 - **Returns**: `None`
 
@@ -3583,7 +3738,7 @@ _Choosing and opening a vector database for the user's machine and needs.
 - :func:`open_index` opens the selected engine in the user's workspace._
 
 **Imports**:
-`__future__.annotations`, `ctypes`, `os`, `platform`, `shutil`, `sys`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `core.registry.AUTO`, `core.registry.Selection`, `manage.vectorstores.VECTOR_STORES`, `utils.settings.Settings`, `utils.settings.SettingsError`, `utils.settings.get_settings`, `base.BaseVectorIndex`, `base.VectorEngine`, `base.VectorStoreError`, `lancedb_index.ANN_THRESHOLD`
+`__future__.annotations`, `ctypes`, `os`, `platform`, `shutil`, `sys`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `core.registry.AUTO`, `core.registry.Selection`, `manage.vectorstores.VECTOR_STORES`, `utils.settings.Settings`, `utils.settings.SettingsError`, `utils.settings.get_settings`, `utils.settings.qdrant_address`, `base.BaseVectorIndex`, `base.VectorEngine`, `base.VectorStoreError`, `lancedb_index.ANN_THRESHOLD`
 
 ### class `VectorStoreSettings` (selection.py)
 
@@ -3599,8 +3754,8 @@ No description available.
   > (CMP_QDRANT_URL) when none is asked for.
 
 - **key_for**(`self, url: ComplexType`) -> `ComplexType`
-  > The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only: it is never sent to an
-  > address a user typed.
+  > The server's API key (CMP_QDRANT_API_KEY), for its own address (CMP_QDRANT_URL) only, however it is written:
+  > it is never sent to an address an administrator added.
 
 ### class `MachineProfile` (selection.py)
 
@@ -3612,11 +3767,12 @@ No description available.
 
 ### def `_same_address` (selection.py)
 
-- **Arguments**: `first: str, second: str`
+- **Arguments**: `first: str, second: str, api_key: ComplexType`
 
 - **Returns**: `bool`
 
-No description available.
+One server, written two ways: as offered in Settings (utils.settings.qdrant_address, each read as the client
+reads it with the server's key), else as written.
 
 ### def `_memory_bytes` (selection.py)
 
@@ -3683,6 +3839,146 @@ through, and the selection says why.
 - **Returns**: `BaseVectorIndex`
 
 Open the engine's index in ``base_dir/<engine>`` (on a server when the engine has one and a URL is given).
+
+---
+
+## server_addresses.py
+
+_The addresses of the servers a user may choose in Settings, by kind (``OLLAMA_ADDRESSES``, the Ollama services;
+``QDRANT_ADDRESSES``, the Qdrant servers): the
+deployment's and those an administrator added in Settings, kept for the whole server in
+``<DATA_ROOT>/server/<kind>_addresses.json``.
+
+A user chooses among them and never types one: the server then sends no request to an address someone wrote, which on
+a shared server could reach a machine of its network (CodeQL ``py/full-ssrf``). An administrator adds and removes
+addresses; the deployment's are changed in the deployment. Every address follows
+:func:`utils.settings.server_address` (http or https, ASCII, a host, no user name or password, no query), and a request
+goes only to an address :meth:`AddressList.offered` holds (an engine checks it again before it starts, and stops when
+its address is removed).
+
+Each file holds the addresses added, the account that added each one and when, and its optional name (free text every
+user sees: no "@" nor "://", and no two alike); it is read whole and written whole,
+atomically, under a lock. A missing, unreadable or oversized file, or an entry that is not an address, adds nothing:
+the deployment's addresses are still offered. Who added, renamed or removed an address is logged too (never a name's
+text), since the file forgets an address once removed. The file outlives a deleted account: it is one of the server's stores of account names._
+
+**Imports**:
+`__future__.annotations`, `json`, `logging`, `collections.abc.Callable`, `dataclasses.asdict`, `dataclasses.dataclass`, `dataclasses.replace`, `datetime.UTC`, `datetime.datetime`, `pathlib.Path`, `core.workspace.UserScope`, `core.workspace.data_root`, `core.workspace.path_lock`, `core.workspace.write_atomic`, `utils.logging_config.single_line`, `utils.settings.get_settings`, `utils.settings.server_address`
+
+### class `NotAllowed` (server_addresses.py)
+
+Only an administrator changes a list.
+
+### class `Added` (server_addresses.py)
+
+An address an administrator added: the address as offered, the account that added it, when (UTC), and the
+short name it may be given ("GPU server, Biostatistics").
+
+### class `AddressList` (server_addresses.py)
+
+The addresses offered for one kind of server: the deployment's (``deployment_addresses``), then those added.
+
+**Methods:**
+
+- **path**(`self`) -> `Path`
+  > No description available.
+
+- **deployment**(`self`) -> `list[str]`
+  > The deployment's addresses, each once, in their order.
+
+- **added**(`self`) -> `list[Added]`
+  > The addresses administrators added, in the order they were added; none when the file is missing or cannot
+  > be read (logged without its content).
+
+- **unreadable**(`self`) -> `bool`
+  > Whether the file exists and cannot be read as a list: Settings says so, and nothing is added until it is
+  > repaired or removed (an Add would otherwise write a list holding that address alone).
+
+- **_read**(`self`) -> `tuple[ComplexType]`
+  > The addresses added, and whether the file could be read (a missing file holds none, and can).
+
+- **listed**(`self`) -> `list[str]`
+  > Every address offered, each once: the deployment's first, then those administrators added.
+
+- **names**(`self`) -> `dict[ComplexType]`
+  > The names administrators gave the addresses they added, by address.
+
+- **offered**(`self, address: ComplexType`) -> `bool`
+  > Whether ``address`` (as offered, or written otherwise) is one of the addresses offered now.
+
+- **add**(`self, address: str`) -> `str`
+  > Add ``address`` to the addresses offered, for every user of the server, with an optional short ``name``;
+  > returns it as offered. An address already added is not added twice: a name given then becomes its name (one
+  > the deployment sets takes none, and keeps none). ``account`` is the administrator's sign-in name (``by``'s
+  > folder name otherwise). Raises NotAllowed when ``by`` is not an administrator, and ValueError, whose message
+  > never holds the address, when it is not an address, the list is full, or the name may not be one
+  > (``_checked_name``).
+
+- **rename**(`self, address: str, name: ComplexType`) -> `bool`
+  > Give an address an administrator added a new ``name``, for every user ("" removes its name); False when the
+  > list holds no such address (one the deployment sets takes no name). Raises NotAllowed when ``by`` is not an
+  > administrator, and ValueError when the name may not be one (``_checked_name``) or the list cannot be read.
+
+- **_log_rename**(`self, who: str, address: str`) -> `None`
+  > No description available.
+
+- **remove**(`self, address: str`) -> `bool`
+  > Remove an address an administrator added; False when the list holds no such address (one the deployment
+  > sets is changed in the deployment). Raises NotAllowed when ``by`` is not an administrator.
+
+- **_write**(`self, items: list[Added]`) -> `None`
+  > No description available.
+
+### def `address_name` (server_addresses.py)
+
+- **Arguments**: `value: ComplexType`
+
+- **Returns**: `str`
+
+A name for an address, on one line: its white space collapsed, its invisible and blank characters dropped, at
+most ``NAME_MAX_LENGTH`` characters (it is shown as text, never as a format); "" when no letter or digit is
+left.
+
+### def `_names_a_place` (server_addresses.py)
+
+- **Arguments**: `name: str`
+
+- **Returns**: `bool`
+
+A name that reads as another address ("://"), or names a person's e-mail ("@"): every user sees it.
+
+### def `_shown_name` (server_addresses.py)
+
+- **Arguments**: `value: object`
+
+- **Returns**: `str`
+
+A name read back from the file: cleaned again, and dropped when it reads as an address or a person's e-mail.
+
+### def `_checked_name` (server_addresses.py)
+
+- **Arguments**: `name: ComplexType, items: list[Added], address: str`
+
+- **Returns**: `str`
+
+``name`` as an address takes it ("" for none). ValueError when it reads as another address or names a person,
+or when another address of the list already has it (whatever its case): a user tells the addresses apart by it.
+
+### def `_ollama_deployment` (server_addresses.py)
+
+- **Arguments**: ``
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_qdrant_deployment` (server_addresses.py)
+
+- **Arguments**: ``
+
+- **Returns**: `list[str]`
+
+No description available.
 
 ---
 
@@ -3935,7 +4231,7 @@ kept.
 _No module description._
 
 **Imports**:
-`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.population.family_words`, `core.steps.step_title`, `enrich.recode.report_params`
+`json`, `os`, `datetime.datetime`, `docx.Document`, `docx.enum.text.WD_ALIGN_PARAGRAPH`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.lineage.verify_trace`, `core.population.family_words`, `core.steps.step_title`, `enrich.recode.report_params`, `enrich.transformation_logic.added_columns`, `enrich.transformation_logic.report_params`
 
 ### class `TraceDocumenter` (trace_documenter.py)
 

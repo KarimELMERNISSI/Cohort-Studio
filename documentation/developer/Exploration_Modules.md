@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.criteria.describe_definition`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.criteria.describe_definition`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`, `enrich.recode.MAX_VALUES`, `enrich.recode.CleanCopy`, `enrich.recode.level_counts`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 
@@ -277,7 +277,7 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 
 **Methods:**
 
-- **__init__**(`self, df: pd.DataFrame, config: ComplexType, imputed: ComplexType`) -> `None`
+- **__init__**(`self, df: pd.DataFrame, config: ComplexType, imputed: ComplexType, cleaned: ComplexType`) -> `None`
   > No description available.
 
 - **compute_completeness**(`self`) -> `float`
@@ -331,6 +331,15 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
   > Checks for string uniformity issues:
   > - Leading/trailing whitespace.
   > - Inconsistent capitalization (e.g., 'Male' vs 'male').
+  > A column cleaned into a copy that follows it (``cleaned``) is left out: the copy is scored in its place.
+
+- **_uniformity_kind**(`self, column: Any`) -> `str`
+  > What a column the Uniformity check flags needs: TO_CLEAN, CLEAN_AGAIN, COPY_KEEPS or FORMULA.
+
+- **_uniformity_steps**(`self`) -> `str`
+  > The advice's sentences on what each flagged column needs (``uniformity_kinds``). Cleaned on the Clean page,
+  > into a copy beside each (an Enrich formula kept "f" and "female" apart); free text and identifiers, which it
+  > does not list, by a formula. The dashboard links to both below the advice, by their names in the navigation.
 
 - **compute_nullity_correlation**(`self`) -> `None`
   > Calculates the correlation between the missingness of variables.
@@ -374,8 +383,8 @@ Audits a pandas DataFrame to assess data quality across multiple dimensions:
 - **Returns**: `bool`
 
 A line (a rule's, a family's, the rows', or the pooled one) that fails often enough to make the advice high, by
-one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and an exact (Clopper-Pearson) 95 %
-lower bound of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
+one rule that rises with the evidence: SEVERE_FAILS failing checks or more, and the lower end of the exact
+(Clopper-Pearson) 95 % interval of SEVERE_BOUND or more for the share that fails. 3 failures among 10 checks are high (bound 6.7 %),
 10 among 100 are not (4.9 %); 2 among 2, or 1 among 4, are no evidence of a rule failing often.
 
 ### def `failing_score` (data_quality_auditor.py)

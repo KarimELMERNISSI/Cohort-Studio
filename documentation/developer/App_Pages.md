@@ -40,7 +40,7 @@ _AI quality page (administrators): RAG evaluation and embedding health._
 _Analysis configuration widgets of the Analyze page (moved out of utils so the engine side stays UI-free)._
 
 **Imports**:
-`streamlit`, `biostats.multiplicity.UI_OPTIONS`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`
+`streamlit`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.UI_OPTIONS`, `ui.components.levels.show_level`, `ui.guidance.analysis.HELP`
 
 ### def `grouping_options` (analysis_config.py)
 
@@ -244,7 +244,7 @@ Group comparison, per variable:
 Rank tests and Fisher's exact test have no pooling rule: the page gives the reason and the alternative._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.linear.welch_means`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `app_pages.clean_dialog.group_warning`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.linear.welch_means`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### class `Pooled` (analysis_pooled.py)
 
@@ -384,7 +384,7 @@ With multiply imputed data (``mi``), every analysis is run on the m imputed data
 curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules and a D1 test per factor._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.curve_rows`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.EVENT_WORDS`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `pandas`, `streamlit`, `app_pages.analysis_survival_results.PH_TEST_IMPUTATIONS`, `app_pages.analysis_survival_results.Comparison`, `app_pages.analysis_survival_results.curve_rows`, `app_pages.analysis_survival_results.show_count`, `app_pages.analysis_survival_results.show_logistic`, `app_pages.analysis_survival_results.show_time_to_event`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats.regression.count_regression`, `biostats.regression.logistic_regression`, `biostats.survival.EVENT_WORDS`, `biostats.survival.compare_survival`, `biostats.survival.cox_regression`, `enrich.recode.MAX_VALUES`, `ui.components.error_card`, `ui.components.glossary_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.text.plain`, `ui.guidance.outcomes.BINARY`, `ui.guidance.outcomes.COUNT`, `ui.guidance.outcomes.FAMILIES`, `ui.guidance.outcomes.HELP`, `ui.guidance.outcomes.NONE`, `ui.guidance.outcomes.OUTCOME`, `ui.guidance.outcomes.OUTCOME_TYPES`, `ui.guidance.outcomes.TIME_TO_EVENT`, `ui.guidance.outcomes.ModelPlan`, `ui.guidance.outcomes.chosen`, `ui.guidance.outcomes.covariates_of`, `ui.guidance.outcomes.plan_binary`, `ui.guidance.outcomes.plan_count`, `ui.guidance.outcomes.plan_time_to_event`, `ui.progress.mark_step`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_group_candidates` (analysis_survival.py)
 
@@ -392,7 +392,9 @@ curve, the log-rank test by D2, hazard, odds and rate ratios with Rubin's rules 
 
 - **Returns**: `list[str]`
 
-No description available.
+The variables a model can compare by or adjust for: 2 to ``max_levels`` values (a number, 3 at most). A text
+variable's values are counted with spaces and capitals set aside, as Data > Clean merges its spellings: the
+tutorial's `sex`, written 10 ways, holds 4 values so, and is offered, its plan then offering to clean it.
 
 ### def `_variables` (analysis_survival.py)
 
@@ -442,7 +444,18 @@ The second row of every outcome: what is compared, and what it is adjusted for.
 
 - **Returns**: `None`
 
-What Run will do, checked on the data (while Guidance is on): a status, each step's rows, the advice.
+What Run will do, checked on the data (while Guidance is on): a status, each step's rows, the advice. ``keys``:
+the outcome's "Compare by" and "Adjust for" widgets, through which a variable whose values are written several
+ways is cleaned here, then replaced by its copy (app_pages.clean_dialog.clean_actions).
+
+### def `_offered` (analysis_survival.py)
+
+- **Arguments**: `candidates: Sequence[str], mi`
+
+- **Returns**: `dict[ComplexType]`
+
+What a variable's clean copy can replace it with: the candidates, those of the imputed datasets under a multiple
+imputation (a copy written after it is not in them).
 
 ### def `_failed` (analysis_survival.py)
 
@@ -805,7 +818,7 @@ none follows the user to another dataset. The table is drawn from the store: it 
 again from the store whenever the store and what the browser shows of its edits differ._
 
 **Imports**:
-`__future__.annotations`, `hashlib`, `html`, `json`, `collections.defaultdict`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.patterns.MAX_LENGTH`, `enrich.patterns.PatternError`, `enrich.patterns.matching`, `enrich.recode.AI`, `enrich.recode.CAPITALS`, `enrich.recode.CASE`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.ai_offers`, `enrich.recode.ai_tally`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.documented`, `enrich.recode.free_text`, `enrich.recode.give`, `enrich.recode.groupings`, `enrich.recode.keep_result`, `enrich.recode.last_record`, `enrich.recode.letters_apart`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.swaps`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `manage.ai_payload.category_values`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.services.engine_model`, `ui.services.running_engine`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `hashlib`, `html`, `json`, `collections.defaultdict`, `collections.abc.Mapping`, `typing.Any`, `pandas`, `plotly.graph_objects`, `streamlit`, `core.fingerprint.frame_fingerprint`, `core.registry.as_code`, `enrich.patterns.MAX_LENGTH`, `enrich.patterns.PatternError`, `enrich.patterns.matching`, `enrich.recode.AI`, `enrich.recode.CAPITALS`, `enrich.recode.CASE`, `enrich.recode.CHOSEN`, `enrich.recode.CLOSE`, `enrich.recode.FIRST_LETTER`, `enrich.recode.FOLD`, `enrich.recode.GROUPING`, `enrich.recode.MAX_VALUES`, `enrich.recode.MEANINGS`, `enrich.recode.MISSING_CODE`, `enrich.recode.OFFER_KINDS`, `enrich.recode.RESULT`, `enrich.recode.SPACES`, `enrich.recode.SPELLING`, `enrich.recode.VARIANT`, `enrich.recode.Candidate`, `enrich.recode.Offer`, `enrich.recode.ai_offers`, `enrich.recode.ai_tally`, `enrich.recode.candidates`, `enrich.recode.changes`, `enrich.recode.choices_of`, `enrich.recode.documented`, `enrich.recode.follows`, `enrich.recode.free_text`, `enrich.recode.give`, `enrich.recode.grouped_apart`, `enrich.recode.grouping_anchors`, `enrich.recode.groupings`, `enrich.recode.keep_result`, `enrich.recode.last_record`, `enrich.recode.letters_apart`, `enrich.recode.level_counts`, `enrich.recode.new_choices`, `enrich.recode.numeric_codes`, `enrich.recode.outcome`, `enrich.recode.plan`, `enrich.recode.recode_column`, `enrich.recode.recoded_columns`, `enrich.recode.recoded_records`, `enrich.recode.recorded`, `enrich.recode.replaceable`, `enrich.recode.resolve`, `enrich.recode.sort_key`, `enrich.recode.suggest`, `enrich.recode.swaps`, `enrich.recode.tick`, `enrich.recode.ticked`, `enrich.recode.unset_missing`, `enrich.recode.untick`, `enrich.recode.values_fp`, `manage.ai_payload.MIN_COUNT`, `manage.ai_payload.category_values`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.quality_charts.chart_config`, `ui.services.engine_model`, `ui.services.running_engine`, `ui.state.get_state`, `ui.theme.OKABE_ITO`
 
 ### def `_rows` (clean_categories.py)
 
@@ -854,6 +867,23 @@ No description available.
 - **Returns**: `str`
 
 The values as written and their rows: the choices made on them start again once they change.
+
+### def `_choice_state` (clean_categories.py)
+
+- **Arguments**: `choices: dict[ComplexType]`
+
+- **Returns**: `str`
+
+The choices a user makes in the editor, as one text: a choice made changes it.
+
+### def `_dropped` (clean_categories.py)
+
+- **Arguments**: `held: dict[ComplexType], fresh: dict[ComplexType]`
+
+- **Returns**: `int`
+
+How many values held a choice that starting again drops: a clean value, a fold put back, what missing means,
+an answer "a result".
 
 ### def `_unapplied` (clean_categories.py)
 
@@ -933,17 +963,29 @@ cleared after use.
 
 - **Returns**: `None`
 
-The values a regular expression finds, picked in Values (for Map, Set to missing or Keep as written), and the
-pattern's popover closed; what was picked, or why nothing, is said under the row.
+The values a search finds, picked in Values (for Map, Set to missing or Keep as written), and its popover
+closed; when nothing is found, Values stays as it was. A search that cannot be made keeps the popover open and says
+why inside it. What was picked is named under the row while Values holds it.
+
+### def `_find_values` (clean_categories.py)
+
+- **Arguments**: `column: str, scope: str, keys: dict[ComplexType], counts: dict[ComplexType], choices: dict[ComplexType]`
+
+- **Returns**: `None`
+
+A messy column's values holding a text (or a pattern), picked at once in Values (the search runs apart, timed):
+in a popover beside Values on the Clean page, closed by Pick them; inline in a dialog, its field and Pick them on
+one row.
 
 ### def `_picked_words` (clean_categories.py)
 
-- **Arguments**: `said: dict[ComplexType]`
+- **Arguments**: `found: list[str], counts: Mapping[ComplexType]`
 
 - **Returns**: `str`
 
-What a pattern picked, for a caption: how many, and the first of them in bold, as the offers show values (Values
-scrolls sideways once it holds a few, so the row names them, to be checked before Map); or why nothing.
+What a search picked, for the line under the row while Values holds it: how many values and rows, the first six
+in bold with their rows, the largest first (Values scrolls sideways once it holds a few: the line names them, to be
+checked before Map or Set to missing); or that nothing was found.
 
 ### def `_shown` (clean_categories.py)
 
@@ -978,16 +1020,29 @@ The offers in their groups, each with "Tick all"; ticking fills the table, never
 - **Returns**: `None`
 
 The editor of one variable's values: the offers, what each value becomes, a preview, and Apply. ``header``:
-the container beside the variable's choice that holds the new column's name.
+the container beside the variable's choice that holds the new column's name. ``host``: where it is drawn, the Clean
+page or an analysis page's dialog (app_pages.clean_dialog); the choices are the variable's, wherever they were
+made, but each host's widgets have keys of their own, so that the table's memory of its edits never crosses.
 
-### def `_grouping_question` (clean_categories.py)
+### def `_named` (clean_categories.py)
 
-- **Arguments**: `clean: str, parts: list[str]`
+- **Arguments**: `values: list[str]`
 
 - **Returns**: `str`
 
-Why values are grouped: those joining a value that keeps its name are grouped with it (Why group Esch and
-Luxembourg with Metz?); otherwise, as the new name (Why group Stroke and Hypertension as Cardiovascular?).
+Values in a sentence: the first six, then how many more.
+
+### def `_grouping_question` (clean_categories.py)
+
+- **Arguments**: `clean: str, parts: list[str], apart: list[str], anchor: str`
+
+- **Returns**: `str`
+
+Why values are grouped, naming first those that are no spelling of the value the group is anchored on (Why group
+Hypotension with Hypertension?), the anchor's spellings merged with them said apart, so that one answer is never
+read as the reason for both. The anchor is the clean value when the column holds it (Why group Esch and Luxembourg
+with Metz?); for a new name, the group's most held value, a category of its own, named with the new name and never
+among the spellings (Why group Hypotension with Hypertension, as BP disorder?).
 
 ### def `_blocked` (clean_categories.py)
 
@@ -1041,7 +1096,8 @@ said here, every proposal accounted for. Never for free text: the button stays, 
 
 - **Returns**: `str`
 
-What came back, every proposal accounted for: shown below, on a value already offered above, or set aside.
+What came back, every proposal accounted for: shown below, on a value the rules already offer (their groups
+come after the AI engine's), or set aside.
 
 ### def `_preview` (clean_categories.py)
 
@@ -1077,6 +1133,16 @@ it beside the heading under a spinner (a callback's spinner is drawn above the p
 The request Send asked for: the previewed values, to the recipient previewed, once the rule run again on the
 engine that runs now gives the same values and the same recipient (an engine changed since the preview sends
 nothing), and only to a recipient a box of Settings > AI engine confirmed; its answer into the store.
+
+### def `_runs_elsewhere_now` (clean_categories.py)
+
+- **Arguments**: `engine, model: str`
+
+- **Returns**: `str`
+
+An Ollama engine's server asked again, at Send, where it runs the model (3 seconds at most): why nothing is
+sent when it does not say, or names another place than when the engine started (a model replaced under its
+name since); "" when it says the same, or the engine is no Ollama.
 
 ### def `_recipients` (clean_categories.py)
 
@@ -1114,6 +1180,51 @@ choice, recorded with the step.
 A variable in the list: what it holds to check, and apart the values with extra spaces, which the fold
 collapses with nothing to check.
 
+### def `_fresh` (clean_categories.py)
+
+- **Arguments**: `state, df: pd.DataFrame, column: str`
+
+- **Returns**: `dict[ComplexType]`
+
+The choices a variable starts from: its last recode's (cleaning again starts from them), else none.
+
+### def `unapplied_choices` (clean_categories.py)
+
+- **Arguments**: `state, df: pd.DataFrame, column: str`
+
+- **Returns**: `int`
+
+How many values of ``column`` hold a choice not yet applied, made on the Clean page or in a dialog: 0 for
+none.
+
+### def `discard_choices` (clean_categories.py)
+
+- **Arguments**: `state, df: pd.DataFrame, column: str`
+
+- **Returns**: `None`
+
+The choices of ``column`` not yet applied dropped: it starts again from its last recode, its widgets drawn
+again under new keys.
+
+### def `take_done` (clean_categories.py)
+
+- **Arguments**: `column: ComplexType`
+
+- **Returns**: `list[str]`
+
+What the last Apply did, said once after the rerun: its message for ``column`` (under that variable on an
+analysis page, where another variable's warning may be drawn first), or every message (the Clean page).
+
+### def `clean_candidates` (clean_categories.py)
+
+- **Arguments**: `state`
+
+- **Returns**: `list[Candidate]`
+
+The variables Clean lists for the data as they are, with their copies and whether each copy follows its source:
+one computation, kept until the data or the copies change, which Validate's line above its tabs reads too (the two
+pages share the memo, so neither may fill it with less).
+
 ### def `render_categories` (clean_categories.py)
 
 - **Arguments**: ``
@@ -1121,6 +1232,85 @@ collapses with nothing to check.
 - **Returns**: `None`
 
 The Categories tab: a variable and the new column's name on one row, then its editor.
+
+---
+
+## clean_dialog.py
+
+_A variable cleaned where it is analysed (Data > Clean, from the analysis warnings). Groups that differ only by spaces or
+capitals are each analysed apart (ui.components.levels.level_warning); the warning offers to clean the variable in a
+dialog that holds Data > Clean's own editor, since a page switch would drop the analysis page's choices (its widgets
+keep their values while the user stays on the page), and, once a copy cleans it, to group by the copy._
+
+**Imports**:
+`__future__.annotations`, `collections.abc.Collection`, `collections.abc.Iterable`, `typing.Any`, `streamlit`, `app_pages.clean_categories.category_editor`, `app_pages.clean_categories.clean_candidates`, `app_pages.clean_categories.discard_choices`, `app_pages.clean_categories.take_done`, `app_pages.clean_categories.unapplied_choices`, `core.registry.as_code`, `enrich.recode.MAX_VALUES`, `enrich.recode.recoded_columns`, `ui.components.levels.CLEAN_WHERE`, `ui.components.levels.level_warning`, `ui.state.get_state`
+
+### def `_dialog` (clean_dialog.py)
+
+- **Arguments**: `column: str`
+
+- **Returns**: `None`
+
+Data > Clean's editor of ``column``: its add button writes the copy and closes the dialog (the editor's own
+rerun); Close keeps the choices not yet applied, as Data > Clean does, and Discard drops them.
+
+### def `_use` (clean_dialog.py)
+
+- **Arguments**: `group_key: str, copy: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_drop_from_list` (clean_dialog.py)
+
+- **Arguments**: `list_key: str, name: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_use_in_list` (clean_dialog.py)
+
+- **Arguments**: `list_key: str, name: str, copy: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_copy_of` (clean_dialog.py)
+
+- **Arguments**: `state: Any, name: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+The variable ``name`` stands for (itself, or the variable whose clean copy it is), that variable's copy ("" when
+none is a column) and whether the copy follows it as it is (Clean's list: one computation, shared).
+
+### def `group_warning` (clean_dialog.py)
+
+- **Arguments**: `column: Any, values: Iterable[Any]`
+
+- **Returns**: `None`
+
+The warning under a list of groups (ui.components.levels.level_warning), which names the variable's clean copy
+once one is written, then what can be done here (:func:`clean_actions`).
+
+### def `clean_actions` (clean_dialog.py)
+
+- **Arguments**: `column: Any`
+
+- **Returns**: `None`
+
+What can be done here about a variable whose values are written several ways: clean it in a dialog (Data > Clean's
+editor, the source opened when the analysis reads a copy, or when its copy misses a later change of it), or, once a
+copy follows it, group by the copy (``group_key``: the page's grouping widget, set to the copy; ``list_key``: a
+list of variables, such as a model's covariates, where the copy takes the variable's place). ``groupable``: the
+variables the page offers, when not every column; ``imputed``: they are the imputed datasets' (the pooled
+comparison), which a copy written after the imputation is not in; ``told``: the warning above already says whether
+a copy cleans the variable (the groups' warning), else whether a copy cleans it is said here; ``use``: the words of
+the grouping widget's button ("Compare by" beside Survival & regression's field of that name); ``compare_key``: the
+comparison's widget beside the list, where the copy may be already (then the variable leaves the list).
 
 ---
 
@@ -1149,7 +1339,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.detect`, `ingest.dates.recorded_formats`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.preferences.import_dayfirst`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
+`html`, `io`, `json`, `logging`, `os`, `re`, `pathlib.Path`, `numpy`, `pandas`, `streamlit`, `matplotlib.pyplot`, `rapidfuzz.fuzz`, `biostats.reduction`, `enrich.external_data`, `app_pages.enrichment_derived.render_derived_variables`, `app_pages.enrichment_mi.render_multiple_imputation`, `core.population.PopulationResult`, `core.population.catalogue`, `core.registry.as_code`, `enrich.derived.recomputed`, `enrich.formulas.CARET_IS_NOT_A_POWER`, `enrich.formulas.NOT_ROW_WISE`, `enrich.formulas.FormulaTrial`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.extract_constant_value`, `enrich.formulas.far_outside`, `enrich.formulas.formula_from_model`, `enrich.formulas.numeric_summary`, `enrich.formulas.other_rows`, `enrich.formulas.read_formula`, `enrich.formulas.try_formula`, `enrich.formulas.validate_and_extract_columns_ast`, `enrich.formulas.validate_variable_name`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.formula_inputs`, `enrich.imputation_service.left_missing`, `enrich.transformation_logic.RANDOM_STATE`, `enrich.transformation_logic.apply_variable_transformation`, `graph.builders.formula.build_formula_graph`, `graph.model.RenderOptions`, `graph.renderers.graphviz.GraphvizGraphRenderer`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.detect`, `ingest.dates.recorded_formats`, `ingest.loaders.UPLOAD_TYPES`, `manage.ai_payload.column_kinds`, `manage.ai_payload.column_profile`, `manage.snapshots.folders`, `manage.snapshots.save`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.csv_options.csv_options`, `ui.components.staging.render_draft_banner`, `ui.components.text.plain`, `ui.graph_view.current_theme`, `ui.graph_view.render_graph`, `ui.preferences.import_dayfirst`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.export_utils.to_excel`, `utils.logging_config.single_line`, `utils.multipage._load_excel_with_selection`, `utils.multipage.get_file_hash`, `utils.multipage.load_bytes`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`, `utils.optional.method_available`, `utils.optional.missing_methods_message`
 
 ### def `_workspace_path` (data_enrichment.py)
 
@@ -1245,6 +1435,17 @@ Whether the merge ran (it returns the dataset unchanged when it could not), said
 How the file's columns named as the dataset's date columns are read (enrich.external_data.date_key_formats): the
 shape of their own values, the order of day and month from the format Date checks recorded for the dataset's
 column, else the import's setting. Date checks commits its conversions: the trace holds them, the draft never.
+
+### def `_record_checksum` (data_enrichment.py)
+
+- **Arguments**: `df, data: bytes`
+
+- **Returns**: `None`
+
+The checksum of the bytes an enrichment table was read from (``sha256:<hex>``: an upload, or the file entered by
+its path), carried by the table (its attrs, as its parse options) into the merge's params: a file found later
+under the recorded name that holds other bytes (a corrected export uploaded since) is then named by the replay,
+never merged silently.
 
 ### def `configure_enrichment` (data_enrichment.py)
 
@@ -1589,7 +1790,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`json`, `os`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.registry.as_code`, `enrich.recode.candidates`, `enrich.recode.recoded_columns`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`copy`, `json`, `os`, `collections.abc.Mapping`, `collections.abc.Sequence`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.clean_categories.clean_candidates`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `core.criteria.RULES_VERSION`, `core.criteria.criterion_columns`, `core.criteria.criterion_unknown`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.EXCLUSION`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criteria_changes`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.population.rules_population`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -1894,6 +2095,84 @@ An uploaded configuration file merged into ``config`` (:func:`_merge_uploaded`):
 tell. A file that cannot be read, or whose rules or operators would be read one way here and another there, is
 refused with why.
 
+### def `_version` (data_monitoring.py)
+
+- **Arguments**: `written: Any`
+
+- **Returns**: `int`
+
+The rules' version a file states: 1 when it states none or no number (written before it was recorded).
+
+### def `_as_loaded` (data_monitoring.py)
+
+- **Arguments**: `c: Any, entry: Any`
+
+- **Returns**: `bool`
+
+Whether the session's criterion ``c`` is still the one loaded (its kind and definition).
+
+### def `_taken_earlier` (data_monitoring.py)
+
+- **Arguments**: `written: Any, uploaded: Any, config: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The criteria of a file of the first rules, or stating none, that the session took: a criterion the session
+held keeps its own definition when the file's differs (:func:`_merge_uploaded`), and is not the file's.
+
+### def `_held_earlier` (data_monitoring.py)
+
+- **Arguments**: `config: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The criteria of RULES_EARLIER the session still holds as they were loaded; a criterion changed (corrected as
+the notice advised) or removed since is dropped, and the key with the last one.
+
+### def `_earlier_rules_line` (data_monitoring.py)
+
+- **Arguments**: `written: Any, uploaded: Any, config: Mapping[ComplexType]`
+
+- **Returns**: `ComplexType`
+
+The sidebar's line for a configuration written under the first rules, or stating no version: the criteria the
+session took from it are kept (RULES_EARLIER) for the notice above Validate's tabs (:func:`_earlier_rules_notice`),
+which says what each selects now. None for a file of today's rules, none of whose criteria the session took, or
+whose criteria select the same rows of the loaded data.
+
+### def `_earlier_rules_notice` (data_monitoring.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Above Validate's tabs, the notice of the criteria loaded from a configuration of the first rules
+(:func:`_rules_notice`), once data are loaded, while the session holds them as loaded, and until dismissed;
+computed again when the data, the criteria or the ticks change.
+
+### def `_rules_notice` (data_monitoring.py)
+
+- **Arguments**: `held: Mapping[ComplexType], config: Mapping[ComplexType], ticked: Sequence[str]`
+
+- **Returns**: `list[str]`
+
+The criteria the session took from a file written under the first rules (a test written with != or ~ true on a
+missing value), or before they were recorded, that select other rows of the loaded data now: each with how many
+more or fewer rows it excludes, and what to write for it (:func:`_rules_change_said`); then the rows the ticked
+criteria keep, now (as the sidebar counts them) and under the earlier reading of those criteria, since a
+criterion's own count is not the study's. Nothing without data, or when none reads otherwise.
+
+### def `_rules_change_said` (data_monitoring.py)
+
+- **Arguments**: `df: pd.DataFrame, change: Any`
+
+- **Returns**: `str`
+
+One criterion of :func:`_rules_notice`: how many more or fewer rows it excludes and, for an expression of one
+column changed one way only, the expression that brings back the rows whose value is missing as before: kept by
+an inclusion criterion, excluded by an exclusion criterion (``isna() | (...)`` does either, by the criterion's
+kind). Any other criterion is said to check.
+
 ### def `_on_config_upload` (data_monitoring.py)
 
 - **Arguments**: ``
@@ -1928,6 +2207,34 @@ No description available.
 - **Returns**: `None`
 
 Display the results of the enrichment process.
+
+### def `_share` (data_monitoring.py)
+
+- **Arguments**: `part: int, whole: int`
+
+- **Returns**: `str`
+
+A share of rows as a percentage; "under 1%" rather than "0%" for rows that are there (2 of 1,206), and "over 99%"
+rather than "100%" for rows that are not all (1,205 of 1,206).
+
+### def `unknown_advice` (data_monitoring.py)
+
+- **Arguments**: `df: pd.DataFrame, name: str, definition: dict[ComplexType]`
+
+- **Returns**: `ComplexType`
+
+What an inclusion criterion does where it is unknown for want of a value: it excludes those rows (a missing value
+meets no condition, written with != or ~ too: "not pregnant" excludes the men whose pregnancy is not recorded).
+The words, and the expression that keeps them (None for a kind other than an expression); None when the criterion
+is known on every row.
+
+### def `_say_unknown` (data_monitoring.py)
+
+- **Arguments**: `df: pd.DataFrame, name: str, definition: dict[ComplexType], st_container`
+
+- **Returns**: `None`
+
+The advice of :func:`unknown_advice`, said before the criterion is added.
 
 ### def `add_study_inclusion_mask` (data_monitoring.py)
 
@@ -2023,7 +2330,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`html`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.data_quality_auditor.NO_RULE`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.points_text`, `explore.quality_score.score_text`, `explore.quality_score.weighted_score`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.text.plain`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.dimension_color`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
+`html`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `scipy.cluster.hierarchy`, `statsmodels.stats.multitest`, `streamlit`, `scipy.spatial.distance.squareform`, `utils.analysis_utils`, `utils.visualization_utils`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.registry.as_code`, `explore.data_quality_auditor.CLEAN_AGAIN`, `explore.data_quality_auditor.CLEAN_LINK`, `explore.data_quality_auditor.COPY_KEEPS`, `explore.data_quality_auditor.DERIVED_CATEGORY`, `explore.data_quality_auditor.FORMULA`, `explore.data_quality_auditor.FORMULA_LINK`, `explore.data_quality_auditor.NO_RULE`, `explore.data_quality_auditor.TO_CLEAN`, `explore.quality_score.DEFAULT_WEIGHTS`, `explore.quality_score.DIMENSION_HELP`, `explore.quality_score.DIMENSIONS`, `explore.quality_score.interpretation`, `explore.quality_score.ordered`, `explore.quality_score.points_text`, `explore.quality_score.score_text`, `explore.quality_score.weighted_score`, `ui.nav`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.levels.CLEAN_WHERE`, `ui.components.text.plain`, `ui.progress.mark_step`, `ui.progress.record_quality_check`, `ui.quality_charts.chart_config`, `ui.quality_charts.dimension_color`, `ui.quality_charts.history_figure`, `ui.quality_charts.loss_figure`, `ui.quality_charts.ring_figure`, `ui.state.get_state`
 
 ### def `_selected_dimension` (data_quality_dashboard.py)
 
@@ -2032,6 +2339,24 @@ _No module description._
 - **Returns**: `ComplexType`
 
 Dimension of the bar clicked in the "points lost" chart, if any.
+
+### def `_uniformity_links` (data_quality_dashboard.py)
+
+- **Arguments**: `auditor`
+
+- **Returns**: `None`
+
+Where the text columns Uniformity flags are corrected: Data > Clean for those it lists (and for a variable whose
+copy needs cleaning again), a formula on Enrich for free text and identifiers.
+
+### def `_uniformity_cleaned` (data_quality_dashboard.py)
+
+- **Arguments**: `auditor`
+
+- **Returns**: `None`
+
+The variables left out of the Uniformity score: each is cleaned into a copy that follows it, scored in its
+place.
 
 ### def `_score_breakdown` (data_quality_dashboard.py)
 
@@ -2500,7 +2825,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.level_warning`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -2544,6 +2869,15 @@ Reference-group / event-level / design selectors; recomputes the 2x2 analysis wi
 
 Labelled 2x2 table, measures of association (comparison vs reference) and guidance.
 
+### def `_transform_of` (epidemiology.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `tuple[ComplexType]`
+
+The transformation the Analysis tab applied to ``df`` and the columns it changed: part of each result's
+settings, so that a result computed on other values is never shown or stored as current.
+
 ### def `_transformed` (epidemiology.py)
 
 - **Arguments**: `df: pd.DataFrame, numeric_cols: list, transformation: str`
@@ -2551,7 +2885,8 @@ Labelled 2x2 table, measures of association (comparison vs reference) and guidan
 - **Returns**: `pd.DataFrame`
 
 The data of the Analysis tab, its numeric variables transformed as chosen above the tabs. Computed in that tab
-only (M5b): the other tabs analyse the data as they are.
+only (M5b): the other tabs analyse the data as they are. The frame says which transformation changed which
+columns (``TRANSFORM_ATTR``): Log1p leaves a column with a negative value as it is.
 
 ### def `app` (epidemiology.py)
 
@@ -3005,7 +3340,13 @@ provider and models, data sharing and document library on the left; retrieval, t
 because other pages read them from the session._
 
 **Imports**:
-`os`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.cloud_model`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.get_settings`
+`os`, `dataclasses.dataclass`, `datetime.datetime`, `pathlib.Path`, `urllib.parse.urlparse`, `streamlit`, `core.registry.Selection`, `core.registry.as_code`, `core.workspace.remove_pdf`, `core.workspace.safe_filename`, `manage.ai_payload.cloud_model`, `manage.ai_payload.host_of`, `manage.ai_payload.on_this_machine`, `manage.ai_payload.outside_private_network`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.iam.authz.is_admin_role`, `manage.rag.ConnectorFactory`, `manage.rag.ProviderConfig`, `manage.rag.ProviderType`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.declared`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.file_readers`, `manage.rag.providers.provider_setting`, `manage.rag.providers.server_key`, `manage.server_addresses.ADDRESS_REMOVED`, `manage.server_addresses.NAME_MAX_LENGTH`, `manage.server_addresses.OLLAMA_ADDRESSES`, `manage.server_addresses.QDRANT_ADDRESSES`, `manage.server_addresses.Added`, `manage.server_addresses.AddressList`, `manage.server_addresses.NotAllowed`, `manage.server_addresses.address_name`, `manage.vectorstores.VECTOR_STORES`, `manage.vectorstores.IndexManifest`, `manage.vectorstores.MachineProfile`, `manage.vectorstores.VectorEngine`, `manage.vectorstores.VectorStoreSettings`, `manage.vectorstores.estimate_chunks`, `manage.vectorstores.probe_machine`, `manage.vectorstores.qdrant_embedded_warnings`, `manage.vectorstores.recommend`, `manage.vectorstores.qdrant_index.QdrantIndex`, `manage.vectorstores.qdrant_index.adopt_earlier_index`, `manage.vectorstores.qdrant_index.explicit_address`, `manage.vectorstores.qdrant_index.server_folder`, `manage.vectorstores.qdrant_index.server_indexes`, `manage.vectorstores.qdrant_index.unrecorded_collection`, `ui.preferences`, `ui.components.confirm`, `ui.components.connector_selector.connector_selector`, `ui.components.connector_selector.explain_choice`, `ui.components.text.plain`, `ui.services.ai_engine`, `ui.session_scope.get_current_scope`, `utils.data_paths.get_vectors_dir`, `utils.settings.ADDRESS_MAX_LENGTH`
+
+### class `_Place` (rag_sidebar.py)
+
+What Settings needs to offer one kind of server's addresses, its sentences written in full: its list, the
+settings that set the deployment's (the first address's, then the others'), the option that uses no server (Qdrant's
+embedded mode), and what is said.
 
 ### def `_documents_dir` (rag_sidebar.py)
 
@@ -3023,14 +3364,15 @@ The signed-in user's document library (audit E4); the legacy shared folder outsi
 
 Ollama model list, probed at most once a minute per endpoint (audit E11).
 
-### def `_remote_host` (rag_sidebar.py)
+### def `_runs_at` (rag_sidebar.py)
 
 - **Arguments**: `base_url: str, model: str`
 
 - **Returns**: `ComplexType`
 
 Where the Ollama server runs a model when not itself (a cloud model, a copy of one), asked at most once a
-minute per endpoint and model, as the engine asks it when it starts.
+minute per endpoint and model, as the engine asks it when it starts. A silence raises NoAnswer, which is never
+kept (a call that raises is not cached): Settings never states where a model runs from a server that did not say.
 
 ### def `_remote_models` (rag_sidebar.py)
 
@@ -3081,7 +3423,193 @@ The provider and chat model of the engine that runs (empty when it does not run)
 
 - **Returns**: `None`
 
-Where an address (an Ollama's, a Qdrant server's) sends the data.
+Where an address (an Ollama's, a Qdrant server's) sends the data: the kind of place in a badge, the host in a
+caption that wraps (in a badge, a Qdrant Cloud host was cut before its region, which says where the data go).
+
+### def `_is_admin` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_account` (rag_sidebar.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+The signed-in account's name, as the user signs in (the workspace folder may be a code of it).
+
+### def `_forget` (rag_sidebar.py)
+
+- **Arguments**: `name: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_remember` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place`
+
+- **Returns**: `None`
+
+Keep the address chosen in ``key`` for the next session: only one the list holds ("" for the embedded Qdrant).
+An on_change runs before the page, while the session holds the browser's raw value: a forged one is never kept.
+
+### def `_chosen` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place`
+
+- **Returns**: `None`
+
+A choice's on_change: the note of a removed choice goes, and the new one is kept for the next session.
+
+### def `_shown` (rag_sidebar.py)
+
+- **Arguments**: `address: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_options` (rag_sidebar.py)
+
+- **Arguments**: `place: _Place`
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_named` (rag_sidebar.py)
+
+- **Arguments**: `value: str, names: ComplexType`
+
+- **Returns**: `str`
+
+A choice in a sentence: its name first, when an administrator gave one, then the address as code; or the
+server-free option.
+
+### def `_labelled` (rag_sidebar.py)
+
+- **Arguments**: `value: str, names: dict[ComplexType]`
+
+- **Returns**: `str`
+
+An option of the list: its name, when an administrator gave one, then the address (cut in its middle).
+
+### def `_seed_choice` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place`
+
+- **Returns**: `None`
+
+A choice's first value in a session: the one kept from the last session while the list holds it. A kept one the
+list no longer holds is named, and the first option is kept in its place, as a removal within a session does (for
+Qdrant, the embedded one, never the deployment's server). Else the deployment's first address (Qdrant: its server,
+else the embedded Qdrant).
+
+### def `_short` (rag_sidebar.py)
+
+- **Arguments**: `address: str, limit: int`
+
+- **Returns**: `str`
+
+An address in a narrow list, cut in its middle past ``limit`` characters: its end (a Qdrant Cloud host's region
+and port) stays readable.
+
+### def `_address_choice` (rag_sidebar.py)
+
+- **Arguments**: `key: str, label: str, help_text: str, place: _Place`
+
+- **Returns**: `str`
+
+A server's address chosen from the server's list (manage.server_addresses), never typed: the server sends no
+request to an address a user writes, which on a shared server could reach a machine of its network. A value the
+list does not hold is never used: an address chosen, then removed by an administrator, is named with the one used
+instead; one the browser forged is replaced by the first option. The caller draws the administrators' list
+(``_manage_addresses``) below the choice and its badge.
+
+### def `_day` (rag_sidebar.py)
+
+- **Arguments**: `moment: str`
+
+- **Returns**: `str`
+
+A date in a row, never broken across two lines ("9 Nov 2026", its spaces no-break ones).
+
+### def `_manage_addresses` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place`
+
+- **Returns**: `None`
+
+The administrators' list of a server's addresses every user may choose, below the choice and its badge: add one
+(offered at once, and chosen here; Enter adds), rename or remove one added here; the deployment's are changed in its
+settings.
+The form and its outcome come first, the list after, in a box of its own height, so that the popover keeps one size.
+
+### def `_rename_form` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place, item: Added`
+
+- **Returns**: `None`
+
+The row of the address being renamed: a box holding its name (left empty, no name), saved with Enter.
+
+### def `_start_rename` (rag_sidebar.py)
+
+- **Arguments**: `key: str, item: Added`
+
+- **Returns**: `None`
+
+Rename's callback: the row turns into a box holding the address's name.
+
+### def `_rename_address` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place, item: Added`
+
+- **Returns**: `None`
+
+Save's callback: the new name, for every user ("" removes it); the address this page uses is left as it is.
+
+### def `_choose` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place, address: str`
+
+- **Returns**: `None`
+
+Choose ``address`` on this page, and keep it for the next session, when the list holds it.
+
+### def `_add_address` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place`
+
+- **Returns**: `None`
+
+Add's callback (Enter in either box too): the address typed is stored for every user (an administrator only), and
+chosen here. One already listed is left chosen or not: a name typed for one added here renames it, and one the
+deployment sets takes no name.
+
+### def `_add_back` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place, removed: tuple[ComplexType]`
+
+- **Returns**: `None`
+
+Add it back's callback: the address just removed, added again with its name; chosen again only on the page that
+had it chosen, as it was.
+
+### def `_remove_address` (rag_sidebar.py)
+
+- **Arguments**: `key: str, place: _Place, address: str`
+
+- **Returns**: `None`
+
+Remove's callback: every user's AI engine on the address stops at its next use (ui.services); this page moves to
+the first option when it had chosen this one, and says so.
 
 ### def `_provider_card` (rag_sidebar.py)
 
@@ -3090,6 +3618,14 @@ Where an address (an Ollama's, a Qdrant server's) sends the data.
 - **Returns**: `dict`
 
 Provider, connection and model choice; returns the engine configuration.
+
+### def `_silence` (rag_sidebar.py)
+
+- **Arguments**: `cfg: dict`
+
+- **Returns**: `str`
+
+Why a server's answer on where it runs the chosen model is missing, the model and the address named.
 
 ### def `_seed_model` (rag_sidebar.py)
 
@@ -3380,7 +3916,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -3572,7 +4108,7 @@ of its own since M6: above Validate's tabs, the conversion read those columns wh
 whichever tab was wanted._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Collection`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.AS_DATES`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.preferences.import_dayfirst`, `ui.state.get_state`
+`__future__.annotations`, `calendar`, `collections.abc.Collection`, `datetime.date`, `typing.Any`, `pandas`, `streamlit`, `core.registry.as_code`, `ingest.dates.AS_DATES`, `ingest.dates.CHOSEN`, `ingest.dates.DATE_FORMATS`, `ingest.dates.METHOD`, `ingest.dates.PLACEHOLDERS`, `ingest.dates.DateReport`, `ingest.dates.Detection`, `ingest.dates.convert`, `ingest.dates.date_report`, `ingest.dates.detect`, `ingest.dates.placeholders_found`, `ingest.dates.read_dates`, `ingest.dates.set_to_missing`, `ui.components.no_dataset`, `ui.preferences.import_dayfirst`, `ui.state.get_state`
 
 ### def `_loaded_on` (validate_dates.py)
 
@@ -3638,7 +4174,7 @@ No description available.
 
 - **Returns**: `str`
 
-No description available.
+Where a reading puts the dates: every one in a month it names, or over how many months.
 
 ### def `_why` (validate_dates.py)
 
@@ -3671,7 +4207,8 @@ reading found; a column that may hold planned dates is not counted after the ext
 
 - **Returns**: `str`
 
-No description available.
+A date as no reader takes for the other order, 1 Jan 2024: the Earliest and Latest columns sit beside the order
+being chosen, and 01/12/2024 reads as 1 December one way and 12 January the other.
 
 ### def `_placeholders` (validate_dates.py)
 
