@@ -11,10 +11,11 @@ addresses; the deployment's are changed in the deployment. Every address follows
 goes only to an address :meth:`AddressList.offered` holds (an engine checks it again before it starts, and stops when
 its address is removed).
 
-Each file holds the addresses added, the account that added each one and when; it is read whole and written whole,
+Each file holds the addresses added, the account that added each one and when, and its optional name (free text every
+user sees: no "@" nor "://", and no two alike); it is read whole and written whole,
 atomically, under a lock. A missing, unreadable or oversized file, or an entry that is not an address, adds nothing:
-the deployment's addresses are still offered. Who added or removed an address is logged too, since the file forgets
-an address once removed. The file outlives a deleted account: it is one of the server's stores of account names.
+the deployment's addresses are still offered. Who added, renamed or removed an address is logged too (never a name's
+text), since the file forgets an address once removed. The file outlives a deleted account: it is one of the server's stores of account names.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -45,11 +46,58 @@ class NotAllowed(PermissionError):
 
 @dataclass(frozen=True)
 class Added:
-    """An address an administrator added: the address as offered, the account that added it, when (UTC)."""
+    """An address an administrator added: the address as offered, the account that added it, when (UTC), and the
+    short name it may be given ("GPU server, Biostatistics")."""
 
     address: str
     added_by: str
     added_at: str
+    name: str = ""
+
+
+NAME_MAX_LENGTH = (
+    40  # the list shows the name, then the address: a longer name hides the address at 1280 px
+)
+
+# printable, yet blank: the Hangul fillers, the halfwidth filler, the empty Braille pattern
+_BLANK = frozenset("\u115f\u1160\u3164\uffa0\u2800")
+
+
+def address_name(value: str | None) -> str:
+    """A name for an address, on one line: its white space collapsed, its invisible and blank characters dropped, at
+    most ``NAME_MAX_LENGTH`` characters (it is shown as text, never as a format); "" when no letter or digit is
+    left."""
+    text = "".join(
+        c for c in str(value or "") if (c.isprintable() or c.isspace()) and c not in _BLANK
+    )
+    named = " ".join(text.split())[:NAME_MAX_LENGTH]
+    return named if any(c.isalnum() for c in named) else ""
+
+
+def _names_a_place(name: str) -> bool:
+    """A name that reads as another address ("://"), or names a person's e-mail ("@"): every user sees it."""
+    return "://" in name or "@" in name
+
+
+def _shown_name(value: object) -> str:
+    """A name read back from the file: cleaned again, and dropped when it reads as an address or a person's e-mail."""
+    named = address_name(value if isinstance(value, str) else "")
+    return "" if _names_a_place(named) else named
+
+
+def _checked_name(name: str | None, items: list[Added], address: str) -> str:
+    """``name`` as an address takes it ("" for none). ValueError when it reads as another address or names a person,
+    or when another address of the list already has it (whatever its case): a user tells the addresses apart by it."""
+    named = address_name(name)
+    if named and _names_a_place(named):
+        raise ValueError(
+            'a name may not hold "@" or "://" (name the service, never a person or another address)'
+        )
+    if named and any(
+        item.name.casefold() == named.casefold() for item in items if item.address != address
+    ):
+        raise ValueError("another address in the list already has that name")
+    return named
 
 
 @dataclass(frozen=True)
@@ -122,6 +170,7 @@ class AddressList:
                         address,
                         str(entry.get("added_by") or "")[:200],
                         str(entry.get("added_at") or "")[:40],
+                        _shown_name(entry.get("name")),
                     )
                 )
         return found[:MAX_ADDED], True
@@ -130,6 +179,10 @@ class AddressList:
         """Every address offered, each once: the deployment's first, then those administrators added."""
         return list(dict.fromkeys([*self.deployment(), *(item.address for item in self.added())]))
 
+    def names(self) -> dict[str, str]:
+        """The names administrators gave the addresses they added, by address."""
+        return {item.address: item.name for item in self.added() if item.name}
+
     def offered(self, address: str | None) -> bool:
         """Whether ``address`` (as offered, or written otherwise) is one of the addresses offered now."""
         try:
@@ -137,12 +190,16 @@ class AddressList:
         except ValueError:
             return False
 
-    def add(self, address: str, *, by: UserScope, account: str | None = None) -> str:
+    def add(
+        self, address: str, *, by: UserScope, account: str | None = None, name: str | None = None
+    ) -> str:
         """
-        Add ``address`` to the addresses offered, for every user of the server; returns it as offered (an address
-        already offered is not added twice). ``account`` is the administrator's sign-in name (``by``'s folder name
-        otherwise). Raises NotAllowed when ``by`` is not an administrator, and ValueError, whose message never holds
-        the address, when it is not an address or the list is full.
+        Add ``address`` to the addresses offered, for every user of the server, with an optional short ``name``;
+        returns it as offered. An address already added is not added twice: a name given then becomes its name (one
+        the deployment sets takes none, and keeps none). ``account`` is the administrator's sign-in name (``by``'s
+        folder name otherwise). Raises NotAllowed when ``by`` is not an administrator, and ValueError, whose message
+        never holds the address, when it is not an address, the list is full, or the name may not be one
+        (``_checked_name``).
         """
         if not by.is_admin:
             raise NotAllowed("only an administrator adds an address")
@@ -158,11 +215,21 @@ class AddressList:
                 raise ValueError(
                     "the list of added addresses cannot be read (see the server log): repair or remove its file first"
                 )
-            if offered in self.deployment() or any(item.address == offered for item in current):
+            if offered in self.deployment():
+                return offered
+            named = _checked_name(name, current, offered)
+            held = [n for n, item in enumerate(current) if item.address == offered]
+            if held:
+                if named and current[held[0]].name != named:  # named again: its new name
+                    current[held[0]] = replace(current[held[0]], name=named)
+                    self._write(current)
+                    self._log_rename(who, offered)
                 return offered
             if len(current) >= MAX_ADDED:
                 raise ValueError(f"the list holds {MAX_ADDED} addresses: remove one first")
-            current.append(Added(offered, who, datetime.now(UTC).isoformat(timespec="seconds")))
+            current.append(
+                Added(offered, who, datetime.now(UTC).isoformat(timespec="seconds"), named)
+            )
             self._write(current)
         logger.info(
             "%s address added to the list by the administrator %s: %s",
@@ -171,6 +238,42 @@ class AddressList:
             single_line(offered),
         )
         return offered
+
+    def rename(
+        self, address: str, name: str | None, *, by: UserScope, account: str | None = None
+    ) -> bool:
+        """
+        Give an address an administrator added a new ``name``, for every user ("" removes its name); False when the
+        list holds no such address (one the deployment sets takes no name). Raises NotAllowed when ``by`` is not an
+        administrator, and ValueError when the name may not be one (``_checked_name``) or the list cannot be read.
+        """
+        if not by.is_admin:
+            raise NotAllowed("only an administrator renames an address")
+        who = (account or by.username)[:200]
+        with path_lock(self.path):
+            current, readable = self._read()
+            if not readable:
+                raise ValueError(
+                    "the list of added addresses cannot be read (see the server log): repair or remove its file first"
+                )
+            held = [n for n, item in enumerate(current) if item.address == address]
+            if not held:
+                return False
+            named = _checked_name(name, current, address)
+            if current[held[0]].name == named:
+                return True
+            current[held[0]] = replace(current[held[0]], name=named)
+            self._write(current)
+        self._log_rename(who, address)
+        return True
+
+    def _log_rename(self, who: str, address: str) -> None:
+        logger.info(  # the event and the account, never the name's text
+            "%s address renamed by the administrator %s: %s",
+            self.label,
+            single_line(who),
+            single_line(address),
+        )
 
     def remove(self, address: str, *, by: UserScope, account: str | None = None) -> bool:
         """Remove an address an administrator added; False when the list holds no such address (one the deployment
@@ -217,9 +320,11 @@ __all__ = [
     "ADDRESS_REMOVED",
     "MAX_ADDED",
     "MAX_BYTES",
+    "NAME_MAX_LENGTH",
     "OLLAMA_ADDRESSES",
     "QDRANT_ADDRESSES",
     "Added",
     "AddressList",
     "NotAllowed",
+    "address_name",
 ]

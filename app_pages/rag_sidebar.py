@@ -43,10 +43,13 @@ from manage.rag.providers import (
 )
 from manage.server_addresses import (
     ADDRESS_REMOVED,
+    NAME_MAX_LENGTH,
     OLLAMA_ADDRESSES,
     QDRANT_ADDRESSES,
+    Added,
     AddressList,
     NotAllowed,
+    address_name,
 )
 from manage.vectorstores import (
     VECTOR_STORES,
@@ -192,6 +195,28 @@ def _forget(name: str) -> None:
     st.session_state.pop(name, None)
 
 
+# the preference that keeps each address choice for the next session (manage.preferences)
+_PREFERENCES = {
+    "rag_ollama_base_url": "ollama_address",
+    "rag_claude_ollama_base_url": "ollama_embedding_address",
+    "rag_qdrant_url": "qdrant_server",
+}
+
+
+def _remember(key: str, place: "_Place") -> None:
+    """Keep the address chosen in ``key`` for the next session: only one the list holds ("" for the embedded Qdrant).
+    An on_change runs before the page, while the session holds the browser's raw value: a forged one is never kept."""
+    value = st.session_state.get(key)
+    if isinstance(value, str) and value in _options(place):
+        preferences.save(**{_PREFERENCES[key]: value})
+
+
+def _chosen(key: str, place: "_Place") -> None:
+    """A choice's on_change: the note of a removed choice goes, and the new one is kept for the next session."""
+    _forget(f"{key}_dropped")
+    _remember(key, place)
+
+
 def _shown(address: str) -> str:
     return as_code(address, limit=ADDRESS_MAX_LENGTH)
 
@@ -209,6 +234,7 @@ class _Place:
     server_noun: str  # "Your Ollama server is not listed?"
     caption: str  # at the top of the administrators' list
     example: str
+    name_example: str
     no_server: str | None = None
     empty: str = ""  # the administrators' list when nothing is listed
     left_behind: str = ""  # what stays on a server once removed, said at its removal
@@ -223,6 +249,7 @@ OLLAMA_PLACE = _Place(
     caption="Users choose the Ollama address from this list; only an administrator adds one. Add only an Ollama service "
     "you trust with the prompts and documents sent to it.",
     example="http://ollama.example.org:11434",
+    name_example="GPU server, Biostatistics",
 )
 QDRANT_PLACE = _Place(
     QDRANT_ADDRESSES,
@@ -236,6 +263,7 @@ QDRANT_PLACE = _Place(
     "and no key is kept here; a shared server with a key belongs in the deployment's settings (`CMP_QDRANT_URL`, "
     "`CMP_QDRANT_API_KEY`), where its key stays on this server.",
     example="https://qdrant.example.org:6333",
+    name_example="Qdrant Cloud, Frankfurt",
     no_server="Embedded in your workspace (no server)",
     empty="No Qdrant server is listed yet: users have the embedded Qdrant only.",
     left_behind=" The indexes users built there stay on that server: each user's card names the collection left "
@@ -247,9 +275,40 @@ def _options(place: _Place) -> list[str]:
     return ([""] if place.no_server else []) + place.addresses.listed()
 
 
-def _named(value: str) -> str:
-    """A choice in a sentence: the address as code, or the server-free option."""
-    return _shown(value) if value else "the embedded Qdrant, in your workspace"
+def _named(value: str, names: dict[str, str] | None = None) -> str:
+    """A choice in a sentence: its name first, when an administrator gave one, then the address as code; or the
+    server-free option."""
+    if not value:
+        return "the embedded Qdrant, in your workspace"
+    name = (names or {}).get(value)
+    return f"{plain(name, limit=NAME_MAX_LENGTH)} ({_shown(value)})" if name else _shown(value)
+
+
+def _labelled(value: str, names: dict[str, str]) -> str:
+    """An option of the list: its name, when an administrator gave one, then the address (cut in its middle)."""
+    return f"{names[value]} · {_short(value)}" if value in names else _short(value)
+
+
+def _seed_choice(key: str, place: _Place) -> None:
+    """
+    A choice's first value in a session: the one kept from the last session while the list holds it. A kept one the
+    list no longer holds is named, and the first option is kept in its place, as a removal within a session does (for
+    Qdrant, the embedded one, never the deployment's server). Else the deployment's first address (Qdrant: its server,
+    else the embedded Qdrant).
+    """
+    if key in st.session_state:
+        return
+    options = _options(place)
+    saved = getattr(preferences.current(), _PREFERENCES[key], None)
+    if saved is not None and saved in options:
+        st.session_state[key] = saved
+        return
+    if saved:  # kept, then removed: named once, the first option kept in its place
+        st.session_state[f"{key}_dropped"] = (str(saved), True)
+        st.session_state[key] = options[0]
+        _remember(key, place)
+        return
+    st.session_state[key] = (place.addresses.deployment() or options)[0]
 
 
 def _short(address: str, limit: int = 44) -> str:
@@ -269,16 +328,18 @@ def _address_choice(key: str, label: str, help_text: str, place: _Place) -> str:
     instead; one the browser forged is replaced by the first option. The caller draws the administrators' list
     (``_manage_addresses``) below the choice and its badge.
     """
+    _seed_choice(key, place)
     options = _options(place)
+    names = place.addresses.names()
     prior = st.session_state.get(key)
     if prior is not None and prior not in options:  # removed since it was chosen: named until another is chosen
-        st.session_state[f"{key}_dropped"] = str(prior)
+        st.session_state[f"{key}_dropped"] = (str(prior), False)
     chosen = st.selectbox(
         label,
         options,
         index=0,
         key=key,
-        format_func=lambda value: _short(value) if value else place.no_server or "",
+        format_func=lambda value: _labelled(value, names) if value else place.no_server or "",
         help=help_text
         + (
             f" Add another under Manage {place.list_name}, below."
@@ -286,16 +347,18 @@ def _address_choice(key: str, label: str, help_text: str, place: _Place) -> str:
             else " Only a CohortStudio administrator adds one."
         ),
         filter_mode=None,  # a list to choose from: nothing is typed here
-        on_change=_forget,
-        args=(f"{key}_dropped",),
+        on_change=_chosen,
+        args=(key, place),
         persist_state=PERSIST,
     )
     if chosen not in options:  # the widget's value comes from the browser: only an option offered goes on
         chosen = options[0]
     dropped = st.session_state.get(f"{key}_dropped")
-    if dropped:
+    if dropped:  # (the address, whether it was kept from the last session); its name went with it
+        address, kept = dropped
         st.caption(
-            f"The {place.chosen_noun} you chose, {_shown(dropped)}, is no longer offered: {_named(chosen)} is used."
+            f"The {place.chosen_noun} {'kept from your last session' if kept else 'you chose'}, {_shown(address)}, is "
+            f"no longer offered: this page uses {_named(str(chosen), names)}."
         )
     if not _is_admin():
         st.caption(f"Your {place.server_noun} is not listed? Ask a CohortStudio administrator to add it.")
@@ -303,17 +366,19 @@ def _address_choice(key: str, label: str, help_text: str, place: _Place) -> str:
 
 
 def _day(moment: str) -> str:
+    """A date in a row, never broken across two lines ("9 Nov 2026", its spaces no-break ones)."""
     try:
         when = datetime.fromisoformat(moment)
     except ValueError:
         return ""
-    return f"{when.day} {when:%b %Y}"
+    return chr(0xA0).join((str(when.day), f"{when:%b}", f"{when:%Y}"))
 
 
 def _manage_addresses(key: str, place: _Place) -> None:
     """
     The administrators' list of a server's addresses every user may choose, below the choice and its badge: add one
-    (offered at once, and chosen here; Enter adds), remove one added here; the deployment's are changed in its settings.
+    (offered at once, and chosen here; Enter adds), rename or remove one added here; the deployment's are changed in its
+    settings.
     The form and its outcome come first, the list after, in a box of its own height, so that the popover keeps one size.
     """
     if not _is_admin():
@@ -326,6 +391,15 @@ def _manage_addresses(key: str, place: _Place) -> None:
                 f"Repair or remove `server/{place.addresses.kind}_addresses.json`, in the data folder, before adding one."
             )
         with st.form(f"{key}_add_form", border=False, enter_to_submit=True):
+            # the name first: the address pasted last, Enter sends both
+            st.text_input(
+                "Name (optional)",
+                key=f"{key}_name",
+                placeholder=place.name_example,
+                max_chars=NAME_MAX_LENGTH,
+                help="Name the service, never a person: every user sees it before the address, and the badge, not the "
+                "name, says where the data go. To change it later, use Rename on its row.",
+            )
             box, button = st.columns([4, 1], vertical_alignment="bottom")
             box.text_input("Address to add", key=f"{key}_new", placeholder=place.example, max_chars=ADDRESS_MAX_LENGTH)
             button.form_submit_button(
@@ -345,69 +419,159 @@ def _manage_addresses(key: str, place: _Place) -> None:
                 variable = place.variables[0] if n == 0 else place.variables[-1]
                 st.markdown(f"{_shown(address)} · set by the deployment (`{variable}`)")
             for n, item in enumerate(added):
-                text, button = st.columns([4, 1], vertical_alignment="center")
+                if st.session_state.get(f"{key}_renaming") == item.address:
+                    _rename_form(key, place, item)
+                    continue
+                text, rename, remove = st.columns([3, 1, 1], vertical_alignment="center")
                 when = _day(item.added_at)
                 text.markdown(
-                    f"{_shown(item.address)} · added by {plain(item.added_by, limit=64)}"
+                    (f"**{plain(item.name, limit=NAME_MAX_LENGTH)}** · " if item.name else "")
+                    + f"{_shown(item.address)} · added by {plain(item.added_by, limit=64)}"
                     + (f", {when}" if when else "")
                 )
-                button.button(
+                rename.button("Rename", key=f"{key}_rename_{n}", on_click=_start_rename, args=(key, item))
+                remove.button(
                     "Remove", key=f"{key}_remove_{n}", on_click=_remove_address, args=(key, place, item.address)
                 )
 
 
-def _add_address(key: str, place: _Place) -> None:
-    """Add's callback (Enter in the box too): the address typed is stored for every user (an administrator only), then
-    chosen here as the list holds it; one already offered is only chosen."""
+def _rename_form(key: str, place: _Place, item: Added) -> None:
+    """The row of the address being renamed: a box holding its name (left empty, no name), saved with Enter."""
+    with st.form(f"{key}_rename_form", border=False, enter_to_submit=True):
+        st.text_input(
+            f"New name for {_shown(item.address)} (empty: no name)",
+            key=f"{key}_rename_name",
+            placeholder=place.name_example,
+            max_chars=NAME_MAX_LENGTH,
+        )
+        with st.container(horizontal=True):
+            st.form_submit_button(
+                "Save", key=f"{key}_rename_save", type="primary", on_click=_rename_address, args=(key, place, item)
+            )
+            st.form_submit_button("Cancel", key=f"{key}_rename_cancel", on_click=_forget, args=(f"{key}_renaming",))
+
+
+def _start_rename(key: str, item: Added) -> None:
+    """Rename's callback: the row turns into a box holding the address's name."""
+    st.session_state[f"{key}_renaming"] = item.address
+    st.session_state[f"{key}_rename_name"] = item.name
+
+
+def _rename_address(key: str, place: _Place, item: Added) -> None:
+    """Save's callback: the new name, for every user ("" removes it); the address this page uses is left as it is."""
     scope = get_current_scope()
     try:
         if scope is None:
+            raise NotAllowed("only an administrator renames an address")
+        held = place.addresses.rename(
+            item.address, str(st.session_state.get(f"{key}_rename_name") or ""), by=scope, account=_account()
+        )
+    except (ValueError, PermissionError) as exc:  # the box keeps what was typed
+        st.session_state[f"{key}_said"] = ("error", f"Not renamed: {exc}.")
+        return
+    _forget(f"{key}_renaming")
+    names = place.addresses.names()
+    if not held:
+        said = ("info", f"{_shown(item.address)} is not among the {place.list_name} any more.")
+    elif item.address in names:
+        said = ("ok", f"Renamed in every user's list: {_named(item.address, names)}.")
+    else:
+        said = ("ok", f"Its name is removed from every user's list: {_shown(item.address)}.")
+    st.session_state[f"{key}_said"] = said
+
+
+def _choose(key: str, place: _Place, address: str) -> None:
+    """Choose ``address`` on this page, and keep it for the next session, when the list holds it."""
+    if address in _options(place):
+        st.session_state[key] = address
+        st.session_state.pop(f"{key}_dropped", None)
+        _remember(key, place)
+
+
+def _add_address(key: str, place: _Place) -> None:
+    """
+    Add's callback (Enter in either box too): the address typed is stored for every user (an administrator only), and
+    chosen here. One already listed is left chosen or not: a name typed for one added here renames it, and one the
+    deployment sets takes no name.
+    """
+    scope = get_current_scope()
+    name = str(st.session_state.get(f"{key}_name") or "")
+    try:
+        if scope is None:
             raise NotAllowed("only an administrator adds an address")
-        before = place.addresses.listed()
-        offered = place.addresses.add(str(st.session_state.get(f"{key}_new") or ""), by=scope, account=_account())
+        before, named_before = place.addresses.listed(), place.addresses.names()
+        offered = place.addresses.add(
+            str(st.session_state.get(f"{key}_new") or ""), by=scope, account=_account(), name=name
+        )
     except (ValueError, PermissionError) as exc:  # the message never holds the address
         st.session_state[f"{key}_said"] = ("error", f"Not added: {exc}.")
         return
     st.session_state[f"{key}_new"] = ""
-    held = [address for address in place.addresses.listed() if address == offered]
-    if held:
-        st.session_state[key] = held[0]
-        st.session_state.pop(f"{key}_dropped", None)
+    st.session_state[f"{key}_name"] = ""
+    names = place.addresses.names()
+    if offered not in before:
+        _choose(key, place, offered)
+        said = ("ok", f"Added to the {place.list_name} of every user, and chosen here: {_named(offered, names)}.")
+    elif names.get(offered) != named_before.get(offered):
+        said = ("ok", f"Renamed in every user's list: {_named(offered, names)}.")
+    elif address_name(name) and offered in place.addresses.deployment():
+        said = (
+            "info",
+            f"Not named: {_shown(offered)} is set by the deployment, and only an address added here takes a name.",
+        )
+    else:
+        said = ("info", f"Already among the {place.list_name}: {_named(offered, names)}.")
+    st.session_state[f"{key}_said"] = said
+
+
+def _add_back(key: str, place: _Place, removed: tuple[str, str, bool]) -> None:
+    """Add it back's callback: the address just removed, added again with its name; chosen again only on the page that
+    had it chosen, as it was."""
+    address, name, was_chosen = removed
+    scope = get_current_scope()
+    try:
+        if scope is None:
+            raise NotAllowed("only an administrator adds an address")
+        offered = place.addresses.add(address, by=scope, account=_account(), name=name)
+    except (ValueError, PermissionError) as exc:
+        st.session_state[f"{key}_said"] = ("error", f"Not added back: {exc}.")
+        return
+    if was_chosen:
+        _choose(key, place, offered)
+    shown = _named(offered, place.addresses.names())
     st.session_state[f"{key}_said"] = (
-        ("info", f"Already among the {place.list_name}: {_shown(offered)}, now chosen here.")
-        if offered in before
-        else ("ok", f"Added to the {place.list_name} of every user, and chosen here: {_shown(offered)}.")
+        "ok",
+        f"Added back to the {place.list_name} of every user{', and chosen here again' if was_chosen else ''}: {shown}.",
     )
-
-
-def _add_back(key: str, place: _Place, address: str) -> None:
-    """Add it back's callback: the address just removed, added again."""
-    st.session_state[f"{key}_new"] = address
-    _add_address(key, place)
 
 
 def _remove_address(key: str, place: _Place, address: str) -> None:
     """Remove's callback: every user's AI engine on the address stops at its next use (ui.services); this page moves to
     the first option when it had chosen this one, and says so."""
     scope = get_current_scope()
+    name = place.addresses.names().get(address, "")
     try:
         removed = scope is not None and place.addresses.remove(address, by=scope, account=_account())
     except PermissionError as exc:
         st.session_state[f"{key}_said"] = ("error", f"Not removed: {exc}.")
         return
+    if st.session_state.get(f"{key}_renaming") == address:
+        _forget(f"{key}_renaming")
     if not removed:
         st.session_state[f"{key}_said"] = ("info", f"{_shown(address)} is not among the {place.list_name} any more.")
         return
     said = (
-        f"Removed from the {place.list_name} of every user: {_shown(address)}. An AI engine started on it stops at its "
-        "next use." + place.left_behind
+        f"Removed from the {place.list_name} of every user: {_named(address, {address: name})}. An AI engine started "
+        "on it stops at its next use." + place.left_behind
     )
-    if st.session_state.get(key) == address:
+    was_chosen = st.session_state.get(key) == address
+    if was_chosen:
         first = _options(place)[0]
         st.session_state[key] = first
-        said += f" This page now uses {_named(first)}."
+        _remember(key, place)
+        said += f" This page now uses {_named(first, place.addresses.names())}."
     st.session_state[f"{key}_said"] = ("ok", said)
-    st.session_state[f"{key}_removed"] = address
+    st.session_state[f"{key}_removed"] = (address, name, was_chosen)  # for Add it back
 
 
 # ----------------------------------------------------------------------------- cards
@@ -964,7 +1128,7 @@ def _vector_card(selected_files: list[str] | None) -> dict:
     machine = _machine(str(base_dir))
     with st.container(border=True):
         st.subheader("Vector database", icon=":material/database:", anchor=False)
-        st.session_state.setdefault("rag_qdrant_url", (QDRANT_ADDRESSES.deployment() or [""])[0])
+        _seed_choice("rag_qdrant_url", QDRANT_PLACE)
         prior = st.session_state.get("rag_qdrant_url")
         server_url = prior if prior in _options(QDRANT_PLACE) else ""  # a removed server is no server
         advice = recommend(machine, chunks=chunks, dim=dim, qdrant_server=bool(server_url))

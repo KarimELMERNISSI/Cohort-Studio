@@ -115,11 +115,10 @@ def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path
     assert researcher.selectbox(key=KEY).options == [*LISTED, "http://10.0.0.5:11434"]
 
     _add(admin, "localhost:11434")  # the deployment's: nothing is added, and the page says so
+    assert "Already among the Ollama addresses: `http://localhost:11434`." in _texts(admin)
     assert (
-        "Already among the Ollama addresses: `http://localhost:11434`, now chosen here."
-        in _texts(admin)
-    )
-    admin.selectbox(key=KEY).select("http://10.0.0.5:11434").run()
+        admin.selectbox(key=KEY).value == "http://10.0.0.5:11434"
+    )  # nothing chosen by an Add that adds nothing
 
     admin.button(key=f"{KEY}_remove_0").click().run()
     _ok(admin)
@@ -131,6 +130,11 @@ def test_an_administrator_adds_an_address_for_every_user_and_removes_it(tmp_path
     admin.button(key=f"{KEY}_add_back").click().run()  # a slip, undone at once
     _ok(admin)
     assert admin.selectbox(key=KEY).options[-1] == "http://10.0.0.5:11434"
+    assert admin.selectbox(key=KEY).value == "http://10.0.0.5:11434"  # the page, as it was
+    assert (
+        "Added back to the Ollama addresses of every user, and chosen here again: `http://10.0.0.5:11434`."
+        in _texts(admin)
+    )
 
 
 def test_a_choice_removed_by_an_administrator_is_named_with_the_one_used_instead() -> None:
@@ -144,8 +148,8 @@ def test_a_choice_removed_by_an_administrator_is_named_with_the_one_used_instead
     _ok(researcher)
     assert researcher.selectbox(key=KEY).value == LISTED[0]
     assert (
-        "The Ollama address you chose, `http://10.0.0.5:11434`, is no longer offered: `http://localhost:11434` is used."
-        in _texts(researcher)
+        "The Ollama address you chose, `http://10.0.0.5:11434`, is no longer offered: this page uses "
+        "`http://localhost:11434`." in _texts(researcher)
     )
     researcher.selectbox(key=KEY).select(LISTED[1]).run()  # another choice: the notice goes
     assert "is no longer offered" not in _texts(researcher)
@@ -197,3 +201,126 @@ def test_a_forged_choice_is_never_asked_anything() -> None:
     _ok(at)
     assert forged_address not in " ".join(ASKED)
     assert at.selectbox(key=KEY).value == LISTED[0]
+    kept = Path(dp.DATA_ROOT) / "users" / "researcher_user" / "preferences.json"
+    assert "169.254" not in (kept.read_text(encoding="utf-8") if kept.exists() else "")  # nor kept
+    at.selectbox(key=KEY).select(LISTED[1]).run()
+    assert LISTED[1] in kept.read_text(encoding="utf-8")  # where a listed one is kept
+
+
+def test_the_address_chosen_is_kept_for_the_next_session() -> None:
+    first = _settings("researcher", "keeping_user")
+    first.selectbox(key=KEY).select(LISTED[1]).run()
+    _ok(first)
+    later = _settings("researcher", "keeping_user")  # another session of the same account
+    assert later.selectbox(key=KEY).value == LISTED[1]
+
+
+def test_a_kept_address_removed_since_is_named_and_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _settings("researcher", "keeping_user")
+    first.selectbox(key=KEY).select(LISTED[1]).run()
+    monkeypatch.setenv("CMP_OLLAMA_ADDRESSES", "")  # the deployment no longer lists it
+    later = _settings("researcher", "keeping_user")
+    assert later.selectbox(key=KEY).value == LISTED[0]
+    assert (
+        f"The Ollama address kept from your last session, `{LISTED[1]}`, is no longer offered: this page uses "
+        f"`{LISTED[0]}`." in _texts(later)
+    )
+    third = _settings("researcher", "keeping_user")  # the first address, kept in its place: no note
+    assert third.selectbox(key=KEY).value == LISTED[0]
+    assert "is no longer offered" not in _texts(third)
+
+
+def test_a_named_address_shows_its_name_in_the_list(tmp_path: Path) -> None:
+    admin = _settings("admin")
+    admin.text_input(key=f"{KEY}_new").input("http://10.0.0.5:11434")
+    admin.text_input(key=f"{KEY}_name").input("GPU server, Biostatistics")
+    admin.button(key=f"{KEY}_add").click().run()
+    _ok(admin)
+    assert (
+        "Added to the Ollama addresses of every user, and chosen here: GPU server, Biostatistics "
+        "(`http://10.0.0.5:11434`)." in _texts(admin)
+    )
+    assert "GPU server, Biostatistics · http://10.0.0.5:11434" in admin.selectbox(key=KEY).options
+    assert admin.text_input(key=f"{KEY}_name").value == ""
+    assert "**GPU server, Biostatistics** · `http://10.0.0.5:11434`" in _texts(admin)
+    admin.text_input(key=f"{KEY}_name").input(
+        "gpu server, biostatistics"
+    )  # the same name, whatever its case
+    _add(admin, "http://10.0.0.6:11434")
+    assert "Not added: another address in the list already has that name." in _texts(admin)
+
+
+def test_a_rename_changes_the_name_only() -> None:
+    """Naming an address, by Rename or by adding it again, never moves this page to it, nor the next sessions."""
+    admin = _settings("admin")
+    _add(admin, "http://10.0.0.5:11434")  # added, and chosen here
+    admin.selectbox(key=KEY).select(LISTED[0]).run()
+    admin.text_input(key=f"{KEY}_name").input("GPU server")
+    _add(admin, "http://10.0.0.5:11434")  # added again, with a name
+    assert "Renamed in every user's list: GPU server (`http://10.0.0.5:11434`)." in _texts(admin)
+    assert admin.selectbox(key=KEY).value == LISTED[0]
+
+    admin.button(key=f"{KEY}_rename_0").click().run()  # Rename: the row holds its name, to edit
+    assert admin.text_input(key=f"{KEY}_rename_name").value == "GPU server"
+    admin.text_input(key=f"{KEY}_rename_name").input("Epidemiology GPU")
+    admin.button(key=f"{KEY}_rename_save").click().run()
+    _ok(admin)
+    assert "Renamed in every user's list: Epidemiology GPU (`http://10.0.0.5:11434`)." in _texts(
+        admin
+    )
+    assert "Epidemiology GPU · http://10.0.0.5:11434" in admin.selectbox(key=KEY).options
+    assert admin.selectbox(key=KEY).value == LISTED[0]
+    assert not [
+        t for t in admin.text_input if t.key == f"{KEY}_rename_name"
+    ]  # the row is a row again
+
+    admin.button(key=f"{KEY}_rename_0").click().run()
+    admin.button(key=f"{KEY}_rename_cancel").click().run()  # Cancel: unchanged
+    assert "Epidemiology GPU · http://10.0.0.5:11434" in admin.selectbox(key=KEY).options
+    admin.button(key=f"{KEY}_rename_0").click().run()
+    admin.text_input(key=f"{KEY}_rename_name").input("")
+    admin.button(key=f"{KEY}_rename_save").click().run()  # left empty: no name
+    _ok(admin)
+    assert "Its name is removed from every user's list: `http://10.0.0.5:11434`." in _texts(admin)
+    assert "http://10.0.0.5:11434" in admin.selectbox(key=KEY).options
+    assert _settings("admin").selectbox(key=KEY).value == LISTED[0]  # the next session too
+
+
+def test_a_name_for_the_deployment_s_address_is_refused_and_nothing_is_chosen() -> None:
+    admin = _settings("admin")
+    admin.selectbox(key=KEY).select(LISTED[1]).run()
+    admin.text_input(key=f"{KEY}_name").input("This machine")
+    _add(admin, "localhost:11434")
+    assert (
+        "Not named: `http://localhost:11434` is set by the deployment, and only an address added here takes a name."
+        in _texts(admin)
+    )
+    assert admin.selectbox(key=KEY).value == LISTED[1]
+
+
+def test_remove_names_the_address_and_add_it_back_restores_it_as_it_was() -> None:
+    admin = _settings("admin")
+    admin.text_input(key=f"{KEY}_name").input("GPU server")
+    _add(admin, "http://10.0.0.5:11434")  # chosen here
+    admin.selectbox(key=KEY).select(LISTED[1]).run()  # this page then uses another
+    admin.text_input(key=f"{KEY}_name").input("A refused add's name")
+    _add(admin, "ftp://10.0.0.6")  # refused: both boxes keep what was typed
+    admin.button(key=f"{KEY}_remove_0").click().run()
+    _ok(admin)
+    assert (
+        "Removed from the Ollama addresses of every user: GPU server (`http://10.0.0.5:11434`)."
+        in _texts(admin)
+    )
+    assert admin.selectbox(key=KEY).value == LISTED[1]
+    admin.button(key=f"{KEY}_add_back").click().run()
+    _ok(admin)
+    assert (
+        "Added back to the Ollama addresses of every user: GPU server (`http://10.0.0.5:11434`)."
+        in _texts(admin)
+    )
+    assert (
+        "GPU server · http://10.0.0.5:11434" in admin.selectbox(key=KEY).options
+    )  # its name, not the boxes'
+    assert admin.selectbox(key=KEY).value == LISTED[1]  # left where it was

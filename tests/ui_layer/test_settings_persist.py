@@ -289,9 +289,11 @@ def _prefs(tmp_path: Path, text: str, username: str = "persist_user") -> None:
     (folder / "preferences.json").write_text(text, encoding="utf-8")
 
 
-def test_no_address_and_no_qdrant_key_is_saved(app: AppTest, tmp_path: Path) -> None:
-    """An address decides where the data go and can carry credentials: the Ollama and Qdrant addresses are chosen from
-    the server's lists, never typed (manage.server_addresses), and neither they nor a key are kept as preferences."""
+def test_no_key_is_saved_and_an_address_only_as_chosen_from_the_list(
+    app: AppTest, tmp_path: Path
+) -> None:
+    """A key stays in the session; an address is kept for the next session only as chosen among those the server
+    offers (manage.server_addresses), never as typed: no box takes one."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
     from core.workspace import UserScope
     from manage.server_addresses import QDRANT_ADDRESSES
@@ -308,8 +310,11 @@ def test_no_address_and_no_qdrant_key_is_saved(app: AppTest, tmp_path: Path) -> 
         "QDRANT-CANARY-KEY"
     ).run()
     saved = _saved(tmp_path)
-    assert '"vector_store": "qdrant"' in saved
-    assert "CANARY" not in saved and "canary-host" not in saved and "11434" not in saved
+    assert (
+        '"vector_store": "qdrant"' in saved
+        and '"qdrant_server": "http://canary-host:6333"' in saved
+    )
+    assert "QDRANT-CANARY-KEY" not in saved
 
 
 def test_a_saved_choice_this_server_cannot_use_is_named(

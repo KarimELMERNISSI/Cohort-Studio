@@ -86,7 +86,7 @@ KEYS: tuple[Key, ...] = (
         "rag_qdrant_url",
         "app_pages.rag_sidebar",
         "page",
-        note="Settings: the Qdrant server's address, seeded from the server's setting",
+        note="Settings: the Qdrant server's address, seeded from the user's kept choice, else the server's setting",
     ),
     Key(
         "config",

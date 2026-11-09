@@ -27,6 +27,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   index nor a search shows what an address answered any more: the client's error quoted the first bytes of the reply,
   whatever service answered there. An index of yours on a server no longer offered stays on that server: the card says
   how to use it again (an administrator adds that address) or whom to ask to delete its collection.
+- The Ollama address and the Qdrant server you choose are kept for your next session, as the model is: only one the
+  list holds, and one removed since is named once and replaced, as within a session, by the first one (for Qdrant, the
+  embedded one, never the deployment's server). An administrator can give an added address a short name ("GPU server,
+  Biostatistics"), shown before it in the list (a service's, never a person's: no "@" nor "://", and no two alike),
+  and change or remove it with Rename on its row. Naming an address never moves a page to it, and Add it back restores
+  a removed address with its name.
 - An address is `http` or `https`, written in ASCII, a host, an optional port and a path with no empty, `.` or `..`
   segment (a client would follow one to another host), with no user name, password or query. `OLLAMA_BASE_URL`,
   `CMP_OLLAMA_ADDRESSES` and `CMP_QDRANT_URL` follow the same rule at start-up: a wrong one stops it, named without

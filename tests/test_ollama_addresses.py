@@ -14,7 +14,7 @@ import pytest
 
 import utils.data_paths as dp
 from core.workspace import UserScope
-from manage.server_addresses import MAX_ADDED, MAX_BYTES, NotAllowed
+from manage.server_addresses import MAX_ADDED, MAX_BYTES, NAME_MAX_LENGTH, NotAllowed
 from manage.server_addresses import OLLAMA_ADDRESSES as addresses
 from utils.settings import SettingsError, get_settings, server_address
 
@@ -287,3 +287,97 @@ def test_the_engine_s_start_asks_nothing_of_an_address_not_offered(
     )
     assert not started and "not in CohortStudio's list" in message
     assert asked == [] and not engine.initialized
+
+
+def test_an_administrator_names_an_address_and_names_it_again(_server: Path) -> None:
+    """A Qdrant Cloud host is a long code: a short name tells the addresses apart in the list."""
+    addresses.add("http://10.0.0.5:11434", by=ADMIN, name="  GPU   server,\u200b Biostatistics ")
+    assert addresses.names() == {"http://10.0.0.5:11434": "GPU server, Biostatistics"}
+    addresses.add("http://10.0.0.5:11434", by=ADMIN, name="GPU server, Epidemiology")  # named again
+    addresses.add("http://10.0.0.5:11434", by=ADMIN)  # no name given: kept
+    assert addresses.names() == {"http://10.0.0.5:11434": "GPU server, Epidemiology"}
+    addresses.add(
+        "http://localhost:11434", by=ADMIN, name="This machine"
+    )  # the deployment's: no name
+    assert "http://localhost:11434" not in addresses.names()
+    saved = json.loads((_server / "server" / "ollama_addresses.json").read_text(encoding="utf-8"))
+    assert saved["added"][0]["name"] == "GPU server, Epidemiology"
+    addresses.add("http://10.0.0.6:11434", by=ADMIN, name="x" * 200)
+    assert len(addresses.names()["http://10.0.0.6:11434"]) == NAME_MAX_LENGTH == 40
+
+
+@pytest.mark.parametrize(
+    "named",
+    ["Dr J. Smith (j.smith@lab.example)", "http://localhost:11434 (this machine, no data leaves)"],
+)
+def test_a_name_names_the_service_never_a_person_or_another_address(named: str) -> None:
+    with pytest.raises(ValueError, match="never a person or another address"):
+        addresses.add("http://10.0.0.5:11434", by=ADMIN, name=named)
+    assert addresses.listed() == ["http://localhost:11434"]
+    addresses.add("http://10.0.0.5:11434", by=ADMIN, name="\u3164\u2800")  # blank: no name
+    assert addresses.names() == {}
+
+
+def test_a_rename_is_logged_without_its_text(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    addresses.add("http://10.0.0.5:11434", by=ADMIN, name="GPU server")
+    addresses.add(
+        "http://10.0.0.5:11434", by=ADMIN, account="a.martin@lab.example", name="Epidemiology GPU"
+    )
+    addresses.rename(
+        "http://10.0.0.5:11434", "Cardiology GPU", by=ADMIN, account="b.lee@lab.example"
+    )
+    for who in ("a.martin@lab.example", "b.lee@lab.example"):
+        assert (
+            f"Ollama address renamed by the administrator {who}: http://10.0.0.5:11434"
+            in caplog.text
+        )
+    assert "Epidemiology GPU" not in caplog.text and "Cardiology GPU" not in caplog.text
+
+
+def test_a_rename_gives_a_new_name_or_none_and_no_two_addresses_share_one(_server: Path) -> None:
+    """Users tell the addresses apart by their names: Rename changes one without typing the address again."""
+    addresses.add("http://10.0.0.5:11434", by=ADMIN, name="GPU server")
+    addresses.add("http://10.0.0.6:11434", by=ADMIN)
+    assert addresses.rename("http://10.0.0.5:11434", "Epidemiology GPU", by=ADMIN)
+    assert addresses.names() == {"http://10.0.0.5:11434": "Epidemiology GPU"}
+    for refused in (
+        lambda: addresses.rename(
+            "http://10.0.0.6:11434", "epidemiology  GPU", by=ADMIN
+        ),  # whatever its case
+        lambda: addresses.add("http://10.0.0.7:11434", by=ADMIN, name="EPIDEMIOLOGY GPU"),
+    ):
+        with pytest.raises(ValueError, match="another address in the list already has that name"):
+            refused()
+    assert addresses.listed() == [
+        "http://localhost:11434",
+        "http://10.0.0.5:11434",
+        "http://10.0.0.6:11434",
+    ]
+    with pytest.raises(ValueError, match="never a person"):
+        addresses.rename("http://10.0.0.6:11434", "j.smith@lab.example", by=ADMIN)
+    assert addresses.rename("http://10.0.0.5:11434", "", by=ADMIN)  # left empty: no name
+    assert addresses.names() == {}
+    assert not addresses.rename(
+        "http://localhost:11434", "This machine", by=ADMIN
+    )  # the deployment's: none
+    assert not addresses.rename("http://10.0.0.9:11434", "Gone", by=ADMIN)  # not listed
+    with pytest.raises(NotAllowed):
+        addresses.rename("http://10.0.0.6:11434", "Mine", by=RESEARCHER)
+    assert addresses.names() == {}
+
+
+def test_a_preference_holds_an_address_only_as_settings_offers_it(_server: Path) -> None:
+    from manage.preferences import load_preferences, update_preferences
+
+    scope = UserScope.for_user("research_user", "researcher")
+    assert update_preferences(scope, ollama_address=f"http://u:{CANARY}@10.0.0.5:11434") is None
+    assert (
+        update_preferences(scope, ollama_address="http://10.0.0.5:11434/") is None
+    )  # another spelling
+    assert update_preferences(scope, ollama_address="http://10.0.0.5:11434") is not None
+    path = _server / "users" / "research_user" / "preferences.json"
+    path.write_text(
+        json.dumps({"qdrant_server": f"http://u:{CANARY}@q.lan:6333"}), encoding="utf-8"
+    )
+    assert load_preferences(scope).qdrant_server is None  # a hand-edited one is not read

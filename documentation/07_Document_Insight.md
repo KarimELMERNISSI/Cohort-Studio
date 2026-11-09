@@ -42,11 +42,14 @@ text of your documents and the column summaries, and the page shows its host:
 would let anyone make the server send requests to a machine of its network. The deployment sets the list
 (`OLLAMA_BASE_URL`, then `CMP_OLLAMA_ADDRESSES`); an administrator adds and removes addresses for every user under
 **Manage Ollama addresses**, below the choice. If your Ollama server is not listed, ask a CohortStudio administrator
-to add it. Without sign-in, whoever opens the page is the administrator: run CohortStudio that way only on your own
+to add it. Your choice is kept for your next session; one removed since is named once, and the first address is kept
+in its place. An administrator can give an address they add a short name, shown before it in the list, and change or
+remove it with **Rename** on its row: it names the service, never a person, and the badge, not the name, says where
+the data go. Without sign-in, whoever opens the page is the administrator: run CohortStudio that way only on your own
 machine, bound to it (`--server.address=127.0.0.1`). An address is `http` or `https`, written in ASCII (an
-international name in its `xn--` form), a host, an optional port and path, with no user name, password or query. Each
-session starts on the first address of the list. An address you chose that is then removed is replaced by the first
-one, and Settings says so; an AI engine started on it stops at its next use.
+international name in its `xn--` form), a host, an optional port and path, with no user name, password or query. A
+session with no kept choice starts on the first address. An address you chose that is then removed is replaced by the
+first one, and Settings says so; an AI engine started on it stops at its next use.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria, the derived variables it finds) is a summary of each column, never a row:

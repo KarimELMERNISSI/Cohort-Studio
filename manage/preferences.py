@@ -3,10 +3,10 @@ The user's preferences: the choices made in Settings, kept for the next session 
 
 A preference is not a setting. A setting is the server's (utils.settings, read from the environment); a preference is
 the user's choice among what the server allows: the day-first reading of dates on import, the AI engine and its
-models, the graph renderer, the vector database. No key, password, consent or address is ever stored: a cloud provider
-saved here starts nothing until the user confirms again in the session (audit E6), and the address of a model
-server, which decides where the data go, is chosen again in each session among the addresses the server offers
-(Ollama's and Qdrant's: manage.server_addresses).
+models, the graph renderer, the vector database, and the Ollama address and the Qdrant server chosen among those the
+server offers (manage.server_addresses: never one a user typed). No key, password or consent is ever stored: a cloud
+provider saved here starts nothing until the user confirms again in the session (audit E6), and a kept address that
+the server no longer offers is named and not used.
 
 The file is ``<workspace>/preferences.json``, read whole and written whole, atomically, under a lock. A missing or
 unreadable file gives no preference; a field that is not valid is left out, and the others are kept.
@@ -19,9 +19,17 @@ import logging
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+)
 
 from core.workspace import UserScope, path_lock, write_atomic
+from utils.settings import server_address
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +39,17 @@ VERSION = 1
 # hold up the page or be carried in the session)
 MAX_BYTES = 64 * 1024
 Name = Annotated[str, StringConstraints(max_length=200)]
+
+
+def _listed_form(value: str) -> str:
+    """An address as Settings offers it ("" for the embedded Qdrant): a hand-edited one with credentials, a query or
+    another spelling is not read (the field's name is logged, never its value)."""
+    if value and server_address(value) != value:
+        raise ValueError("not an address as Settings offers it")
+    return value
+
+
+Address = Annotated[str, StringConstraints(max_length=200), AfterValidator(_listed_form)]
 
 
 class Preferences(BaseModel):
@@ -47,6 +66,11 @@ class Preferences(BaseModel):
     ai_claude_embedding_provider: Name | None = None
     graph_renderer: Name | None = None
     vector_store: Name | None = None
+    # an address chosen among those the server offers (manage.server_addresses); "" for the Qdrant server: the embedded
+    # Qdrant, chosen. A kept address the server no longer offers is named in Settings and not used
+    ollama_address: Address | None = None
+    ollama_embedding_address: Address | None = None  # the Ollama that embeds Claude's documents
+    qdrant_server: Address | None = None
 
 
 # the fields kept by provider: a change to one provider's model keeps the others'

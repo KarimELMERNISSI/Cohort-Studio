@@ -120,10 +120,13 @@ could send data. `tests/test_quality_gates.py` holds this (`test_pages_never_bui
   `.env.example` lists exactly its variables (`tests/test_settings.py`). `.streamlit/secrets.toml` is not read; its
   presence is logged. `core` and `biostats` never read the settings: they receive values as parameters.
 - **Preferences** are the non-secret choices made in Settings: the day-first default, the AI provider and its models,
-  the vector database, the graph renderer. `manage/preferences.py` keeps them per user in
-  `<workspace>/preferences.json` (`load_preferences`, `update_preferences`; written whole and atomically), and
-  `ui/preferences.py` seeds the session after sign-in (`seed_session`). A preference never holds a key, a password, a
-  consent or an address (`tests/test_preferences.py`). Details: *Settings, preferences and API keys*, below.
+  the vector database, the Ollama address and the Qdrant server, the graph renderer. `manage/preferences.py` keeps
+  them per user in `<workspace>/preferences.json` (`load_preferences`, `update_preferences`; written whole and
+  atomically), and `ui/preferences.py` seeds the session after sign-in (`seed_session`). A preference never holds a
+  key, a password or a consent, and an address only as chosen among those the server offers
+  (`tests/test_preferences.py`; `tests/ui_layer/test_settings_persist.py` and
+  `tests/ui_layer/test_ollama_address_choice.py` for the addresses). Details: *Settings, preferences and API keys*,
+  below.
 
 ### Session state
 
@@ -654,14 +657,15 @@ checks the loading in a subprocess. `st.secrets` is not read; a `.streamlit/secr
 reads `get_settings().ai.key(variable)` for the variable the provider declares (`GOOGLE_API_KEY`, `OPENAI_API_KEY`,
 `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). A key typed in Settings > AI engine is kept for the session only.
 
-**Preferences.** The user's choices in Settings (the AI provider and models, the vector database, the graph engine,
-the day-first default) are kept for the next session in `<workspace>/preferences.json` (`manage/preferences.py`,
-written whole and atomically). `ui/preferences.py` seeds the session after sign-in, once per user, only for the keys
-the session has not set, and the controls save them from their `on_change` callbacks. A preference never holds a
-key, a password, a consent or an address (an Ollama or Qdrant address decides where the data go: each is chosen
-again in each session from the server's list); a choice the server no longer offers is not used, and the page names it. The file is read only if
-it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on one
-`DATA_ROOT`: the last write wins).
+**Preferences.** The user's choices in Settings (the AI provider and models, the vector database, the Ollama address
+and the Qdrant server, the graph engine, the day-first default) are kept for the next session in
+`<workspace>/preferences.json` (`manage/preferences.py`, written whole and atomically). `ui/preferences.py` seeds the
+session after sign-in, once per user, only for the keys the session has not set, and the controls save them from their
+`on_change` callbacks. A preference never holds a key, a password or a consent; it holds the Ollama address and the
+Qdrant server only as chosen among those the server offers (`manage.server_addresses`, never typed: `_PREFERENCES` in
+`app_pages/rag_sidebar.py`); a choice the server no longer offers is not used, and the page names it. The file is read
+only if it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on
+one `DATA_ROOT`: the last write wins).
 
 **Which connector is used.** The AI provider, the vector database and the graph engine are chosen with one control,
 `ui.components.connector_selector`, on the kit (`core/registry.py` `ConnectorRegistry.select`): the session's choice
@@ -680,17 +684,19 @@ embedded mode; `key_for` gives the server's key to that address only, however it
 names a failure by its kind and status, never by the reply. `OLLAMA_ADDRESSES` offers the deployment's addresses
 (`OLLAMA_BASE_URL` first, then `CMP_OLLAMA_ADDRESSES`), then those an administrator added
 (`<DATA_ROOT>/server/ollama_addresses.json`, and `qdrant_addresses.json` beside it: two stores of account names, which
-outlive a deleted account; written atomically under a lock, each with the account that added it and when; the account
-is also logged, since the file forgets an address removed). A user never types an address, so that the server sends no
-request to an address someone wrote (CodeQL `py/full-ssrf`): the Settings list cannot be typed in, an administrator's
-typed address only goes into that file (Add's callback), and every request uses an address read back from it or from
-the settings. The value of the list is checked against it again (a forged one is replaced by the first address), the
-engine refuses to start on an address not offered (`RAGManager.initialize_system`), and an engine whose address was
-removed stops at the next run of its session (`ui.services.stop_engine_off_list`, from `main.py`).
-`utils.settings.server_address` is the one rule for an address (ASCII, http or https, a host, no user name, password,
-query or fragment; its messages never quote the value), applied at start-up to the three variables and to each address
-added. A file that cannot be read offers the deployment's addresses only, says so to administrators, and is not
-overwritten by an Add.
+outlive a deleted account; written atomically under a lock, each with the account that added it and when, and an
+optional name (free text every user sees: at most 40 characters, no "@" nor "://", no two alike; changed with
+`AddressList.rename`, which never changes a page's choice; gone with its address); the account that adds, renames or
+removes one is also logged, never a name, since the file forgets an address removed). A user never types an address,
+so that the server sends no request to an address someone wrote (CodeQL `py/full-ssrf`): the Settings list cannot be
+typed in, an administrator's typed address only goes into that file (Add's callback), and every request uses an
+address read back from it or from the settings. The value of the list is checked against it again (a forged one is
+replaced by the first address), the engine refuses to start on an address not offered
+(`RAGManager.initialize_system`), and an engine whose address was removed stops at the next run of its session
+(`ui.services.stop_engine_off_list`, from `main.py`). `utils.settings.server_address` is the one rule for an address
+(ASCII, http or https, a host, no user name, password, query or fragment; its messages never quote the value), applied
+at start-up to the three variables and to each address added. A file that cannot be read offers the deployment's
+addresses only, says so to administrators, and is not overwritten by an Add.
 
 **An unknown connector name stops start-up.** `CMP_IAM_PROVIDER` accepts `local`, `better_auth` (or `betterauth`,
 `better-auth`, `remote`) and `disabled` (or `none`, `off`, `bypass`); `CMP_AI_PROVIDER`, `CMP_VECTOR_STORE` and

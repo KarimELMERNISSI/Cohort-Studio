@@ -157,3 +157,41 @@ def test_removing_a_server_says_its_indexes_stay_there() -> None:
     at.button(key=f"{KEY}_remove_0").click().run()
     _ok(at)
     assert "The indexes users built there stay on that server" in _texts(at)
+
+
+def test_the_embedded_qdrant_chosen_is_kept_for_the_next_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a deployment's server, a new session starts there, unless the user chose the embedded Qdrant before."""
+    monkeypatch.setenv("CMP_QDRANT_URL", "qdrant.lan:6333")
+    first = _vector_card("researcher")
+    assert first.selectbox(key=KEY).value == "http://qdrant.lan:6333"
+    first.selectbox(key=KEY).select("").run()
+    later = _vector_card("researcher")
+    assert later.selectbox(key=KEY).value == ""
+
+
+def test_a_kept_server_removed_since_gives_the_embedded_qdrant_kept_in_its_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Across sessions as within one: the researcher had chosen away from the deployment's server, and later sessions
+    never move there unasked."""
+    from core.workspace import UserScope
+    from manage.server_addresses import QDRANT_ADDRESSES
+
+    admin = UserScope.for_user("an_admin", "admin")
+    monkeypatch.setenv("CMP_QDRANT_URL", "http://qdrant.lan:6333")
+    QDRANT_ADDRESSES.add(SERVER, by=admin)
+    first = _vector_card("researcher")
+    first.selectbox(key=KEY).select(SERVER).run()
+    QDRANT_ADDRESSES.remove(SERVER, by=admin)
+    later = _vector_card("researcher")
+    assert later.selectbox(key=KEY).value == ""
+    assert (
+        f"The Qdrant server kept from your last session, `{SERVER}`, is no longer offered: this page uses the "
+        "embedded Qdrant, in your workspace." in _texts(later)
+    )
+    QDRANT_ADDRESSES.add(SERVER, by=admin)  # listed again, say for another machine: not resumed
+    again = _vector_card("researcher")
+    assert again.selectbox(key=KEY).value == ""  # nor the deployment's server
+    assert "is no longer offered" not in _texts(again)  # named once

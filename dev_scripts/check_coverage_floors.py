@@ -40,8 +40,10 @@ from pathlib import Path
 # explore to 82 at 84.2 with the tests of Uniformity's cleaned copies and of what each flagged column needs (2026-11-04).
 # ui to 87 at 89.0 with the tests of the warnings' words, Settings' silent server and the plans (2026-11-04).
 # manage to 79 at 81.1 with the tests of the server address lists and the Qdrant store's errors (2026-11-09).
+# app_pages to 66 at 68.1 with the tests of the kept and named addresses and of the dossier's survival blocks
+# (2026-11-09).
 FLOORS: dict[str, float] = {
-    "app_pages": 64.0,
+    "app_pages": 66.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 87.0,
