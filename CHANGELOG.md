@@ -58,6 +58,10 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   very bytes), and the replay names a file found under the same name that is not the one merged (a corrected export
   uploaded since). A file entered by its path is recorded as the file read, no longer under the name typed in the box
   beside it. Row-id fingerprints are computed over little-endian integers on every platform (unchanged on this one).
+- **MissForest imputation gives the same values on any machine:** its LightGBM learners run in their deterministic
+  mode whatever the number of processors (they were built to use every processor without it), and the seed it draws
+  with is recorded with the imputation step and used by the replay (a step recorded before draws with the process's
+  seed, as before). A new MissForest run gives other values than an earlier version's.
 
 ### Statistics: results corrected (follow-up programme M5)
 

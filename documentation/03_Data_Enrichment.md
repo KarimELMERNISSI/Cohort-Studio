@@ -170,7 +170,7 @@ Apply statistical or ML-based strategies to all missing values simultaneously.
 | **Most Frequent** | Statistical | Replace with the mode (categorical columns). |
 | **KNN** | ML | Impute using K-nearest neighbours. |
 | **Chained equations** (shown as "MICE") | ML | Single imputation by chained equations (scikit-learn IterativeImputer, one deterministic pass). It is **not** multiple imputation: the uncertainty of the imputation is not propagated to later tests. |
-| **MissForest** | ML | Iterative tree-based imputation (missForest algorithm with LightGBM learners) for mixed data types; models are fitted on originally observed rows only. |
+| **MissForest** | ML | Iterative tree-based imputation (missForest algorithm with LightGBM learners) for mixed data types; models are fitted on originally observed rows only. Seeded, the seed recorded with the step: a replay gives the same values on any machine. |
 
 #### Global Imputation Options
 

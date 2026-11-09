@@ -21,7 +21,8 @@ from utils.miss_forest.missforest import MissForest
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
 class MissForestTransformer(TransformerMixin):
-    def __init__(self, categorical_cols=None, debug=False, progress_bar=None, **kwargs):
+    def __init__(self, categorical_cols=None, debug=False, progress_bar=None, random_state=None, n_jobs=None,
+                 **kwargs):
         """
         A transformer wrapper for MissForest imputation for both numerical and categorical data.
 
@@ -43,9 +44,16 @@ class MissForestTransformer(TransformerMixin):
             raise ImportError(
                 "MissForest needs LightGBM, in the optional 'ml' extra: install it with `uv sync --extra ml`."
             ) from exc
+        # the same values on any machine: LightGBM's deterministic mode, whatever the number of threads (they were
+        # built for every processor without it, over the package's own deterministic learners), and the seed the step
+        # records (``random_state``; the process's CMP_RANDOM_SEED when none is given). ``n_jobs``: tests only
+        self.random_state = RANDOM_STATE if random_state is None else int(random_state)
+        learner = {"verbosity": -1, "random_state": self.random_state, "deterministic": True, "force_row_wise": True}
+        if n_jobs is not None:
+            learner["n_jobs"] = int(n_jobs)
         self.imputer = MissForest(
-            clf=LGBMClassifier(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),
-            rgr=LGBMRegressor(verbosity=-1, n_jobs=-1, random_state=RANDOM_STATE),
+            clf=LGBMClassifier(**learner),
+            rgr=LGBMRegressor(**learner),
             initial_guess='median',
             max_iter=self.total_steps,
             early_stopping=True,
@@ -344,7 +352,8 @@ def get_imputer(numerical_imputation_method='mean',
                 remainder_threshold=0.5,
                 total_steps=10,
                 progress_placeholder=None,
-                debug=False):
+                debug=False,
+                random_state=None):
     """
     Returns the appropriate imputer based on the specified imputation methods for numerical and categorical columns.
 
@@ -398,7 +407,7 @@ def get_imputer(numerical_imputation_method='mean',
 
     # If MissForest is chosen for both numerical and categorical imputation
     if numerical_imputation_method == categorical_imputation_method == 'missforest':
-        imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps)
+        imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
 
         # Handle scaling and encoding
         transformers = []
@@ -452,14 +461,14 @@ def get_imputer(numerical_imputation_method='mean',
 
         num_imputer = IterativeImputer(random_state=RANDOM_STATE)
     elif numerical_imputation_method == 'missforest':
-        num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
+        num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
     else:
         raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', 'mice', or 'missforest'.")
 
     if categorical_imputation_method == 'most_frequent':
         cat_imputer = SimpleImputer(strategy='most_frequent')
     elif categorical_imputation_method == 'missforest':
-        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=True, progress_bar=progress_placeholder, total_steps=total_steps)
+        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=True, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
     else:
         raise ValueError("Unsupported categorical imputation method. Choose 'most_frequent' or 'missforest'.")
 

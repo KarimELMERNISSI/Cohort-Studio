@@ -354,6 +354,8 @@ def _imputation(df, step, index, paths, warnings, result=None):
         remainder_threshold=params.get("remainder_threshold", 0.3),
         # derived variables kept out, computed afterwards by the targeted imputations that follow
         set_aside=params.get("set_aside") or (),
+        # MissForest's seed as recorded (none in a step recorded before it was kept: the process's, as before)
+        random_state=params.get("random_state"),
     )
     if result is not None:
         methods = (outcome.params["numerical_imputation_method"], outcome.params["categorical_imputation_method"])

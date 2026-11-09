@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 import enrich.data_imputation as edi
+from biostats._types import RANDOM_STATE
 from enrich.formulas import evaluate_formula_safely, read_formula, usable_values
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ def match_null_mask_to_encoded_columns(initial_null_mask, output_cols, original_
 
 def apply_imputer(data, numerical_imputation_method='mean', categorical_imputation_method='most_frequent',
                   cat_encoder=False, num_scaler=False, remainder_columns=None, remainder_strategy='passthrough',
-                  remainder_threshold=0.5, progress_placeholder=None, debug=False):
+                  remainder_threshold=0.5, progress_placeholder=None, debug=False, random_state=None):
     """
     Applies an imputer to a pandas DataFrame, with options for numerical and categorical imputations, 
     and handling of remainder columns. Also tracks imputed values.
@@ -104,7 +105,8 @@ def apply_imputer(data, numerical_imputation_method='mean', categorical_imputati
             remainder_strategy=remainder_strategy,
             remainder_threshold=remainder_threshold,
             progress_placeholder=progress_placeholder,
-            debug=debug
+            debug=debug,
+            random_state=random_state,
         )
 
         # Fit and transform the data
@@ -179,14 +181,18 @@ def impute_rows(
     remainder_threshold: float = 0.3,
     progress_placeholder: Any = None,
     set_aside: Sequence[str] = (),
+    random_state: int | None = None,
 ) -> ImputationOutcome:
     """Impute the missing values of ``rows`` (row ids; every row when None) with an imputer fitted on them.
 
     Rows outside ``rows`` are returned untouched. One-hot encoding, scaling and dropping remainder columns
     change the columns of the table; they are refused when only part of the rows is imputed. The ``set_aside``
     columns (declared derived variables, computed afterwards from the imputed values) are neither imputed nor used to
-    impute the others: the imputer never sees them, and they come back as they were.
+    impute the others: the imputer never sees them, and they come back as they were. MissForest draws with
+    ``random_state`` (the process's CMP_RANDOM_SEED when None), which the params record: the replay draws the same.
     """
+    forest = "missforest" in (numerical.lower(), categorical.lower())
+    seed = (RANDOM_STATE if random_state is None else int(random_state)) if forest else None
     index = frame.index if rows is None else pd.Index(rows)
     partial = len(index) != len(frame)
     # with only part of the rows imputed, the other rows would be left in another encoding or scale
@@ -207,6 +213,7 @@ def impute_rows(
         remainder_strategy=remainder_strategy,
         remainder_threshold=remainder_threshold,
         progress_placeholder=progress_placeholder,
+        random_state=seed,
     )
     if not partial:
         out = imputed.assign(**{name: frame[name] for name in aside})
@@ -239,6 +246,8 @@ def impute_rows(
     }
     if aside:
         params["set_aside"] = aside
+    if seed is not None:  # the seed MissForest drew with: replayed as recorded
+        params["random_state"] = seed
     return ImputationOutcome(frame=out, params=params, columns=columns, mask=mask)
 
 
