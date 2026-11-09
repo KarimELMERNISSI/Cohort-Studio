@@ -129,6 +129,7 @@ def test_an_ollama_outside_the_private_network_needs_the_confirmation(monkeypatc
     docs.mkdir()
     manager = rm.RAGManager(documents_dir=str(docs), provider="ollama")
     outside = "https://ollama.example.com"
+    monkeypatch.setenv("CMP_OLLAMA_ADDRESSES", outside)  # offered by the server: still confirmed by each session
     ok, message = manager.initialize_system(
         provider="ollama", base_url=outside, model_name="m", vector_engine="lancedb"
     )

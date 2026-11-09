@@ -54,7 +54,7 @@ class BaseAIProvider:
 
 class Ollama(BaseAIProvider):
     name = "ollama"
-    display_name = "Ollama (open-source, at the address you give)"
+    display_name = "Ollama (open-source, at an address this server offers)"
     label = "Ollama"
     cloud = False
     sdk = "httpx"

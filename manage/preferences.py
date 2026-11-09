@@ -5,7 +5,8 @@ A preference is not a setting. A setting is the server's (utils.settings, read f
 the user's choice among what the server allows: the day-first reading of dates on import, the AI engine and its
 models, the graph renderer, the vector database. No key, password, consent or address is ever stored: a cloud provider
 saved here starts nothing until the user confirms again in the session (audit E6), and the address of a model
-server (Ollama, Qdrant), which decides where the data go, is entered again in each session.
+server, which decides where the data go, is chosen again in each session (Ollama's, among the addresses the server
+offers: manage.server_addresses) or entered again (Qdrant's).
 
 The file is ``<workspace>/preferences.json``, read whole and written whole, atomically, under a lock. A missing or
 unreadable file gives no preference; a field that is not valid is left out, and the others are kept.

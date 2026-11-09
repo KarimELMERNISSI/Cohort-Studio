@@ -122,6 +122,24 @@ def drop_ai_engine(reason: str) -> None:
     _stop(st.session_state.pop(ENGINE_KEY, None), reason)
 
 
+def stop_engine_off_list() -> None:
+    """
+    Once per run, before the page uses the AI engine: an engine started on an Ollama address the server no longer
+    offers (an administrator removed it) stops, so that nothing more is sent there; Settings says why. Nothing is
+    built, and a session without an engine is left as it is.
+    """
+    stop = getattr(st.session_state.get(ENGINE_KEY), "stop_if_address_withdrawn", None)
+    if callable(stop):
+        try:
+            stop()
+        except (
+            Exception
+        ) as exc:  # the address list could not be read: the engine keeps its last state
+            logger.warning(
+                "The AI engine's Ollama address could not be checked (%s)", type(exc).__name__
+            )
+
+
 def _holds_anothers(scope: Any, found: Any, held: dict[str, Any]) -> bool:
     """Whether the session holds services, a store or an AI engine built for another user than ``scope``'s. An owner
     of None (built before a sign-in, or put there by a test) is no other user."""
@@ -157,4 +175,5 @@ __all__ = [
     "end_session",
     "services",
     "shared",
+    "stop_engine_off_list",
 ]

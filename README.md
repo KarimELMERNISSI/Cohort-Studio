@@ -359,6 +359,8 @@ CMP_IAM_PROVIDER=local
 # and require an explicit confirmation in the app before any data is sent.
 CMP_AI_PROVIDER=auto
 OLLAMA_BASE_URL=http://localhost:11434
+# Other Ollama addresses users may choose in Settings, after OLLAMA_BASE_URL; administrators add others there
+CMP_OLLAMA_ADDRESSES=
 GOOGLE_API_KEY=
 OPENAI_API_KEY=
 MISTRAL_API_KEY=

@@ -30,13 +30,23 @@ or Claude asks the provider which models the key may use: the key is sent, none 
 
 Nothing leaves the server with an Ollama on this machine running its own model; an Ollama cloud model (tagged
 cloud, or a copy of one) runs on ollama.com, which receives what it is sent, after the same confirmation as a cloud
-provider.An Ollama on another machine receives the prompts, the
+provider. An Ollama on another machine receives the prompts, the
 text of your documents and the column summaries, and the page shows its host:
 - **on your network** (a private address, a Docker service name, a .local, .lan or .internal name): no
   confirmation is asked;
 - **outside your network** (a public address or name): it may be anywhere, so it needs your confirmation, as a
   cloud provider does;
 - an address in **http** crosses the network unencrypted, and the page says so.
+
+**You choose the Ollama address from the server's list**; you do not type it: on a shared server, a typed address
+would let anyone make the server send requests to a machine of its network. The deployment sets the list
+(`OLLAMA_BASE_URL`, then `CMP_OLLAMA_ADDRESSES`); an administrator adds and removes addresses for every user under
+**Manage addresses**, below the choice. If your Ollama server is not listed, ask an administrator to add it. Without
+sign-in, whoever opens the page is the administrator: run CohortStudio that way only on your own machine, bound to it
+(`--server.address=127.0.0.1`). An address is `http` or `https`, written in ASCII (an international name in its `xn--`
+form), a host, an optional port and path, with no user name, password or query. Each session starts on the first
+address of the list. An address you chose that is then removed is replaced by the first one, and Settings says so; an
+AI engine started on it stops at its next use.
 
 **What a cloud provider receives about your dataset** (column renaming, the variable map, unit hints, suggested
 criteria, the derived variables it finds) is a summary of each column, never a row:

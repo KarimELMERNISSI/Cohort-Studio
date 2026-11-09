@@ -289,15 +289,17 @@ def _prefs(tmp_path: Path, text: str, username: str = "persist_user") -> None:
 
 
 def test_no_address_and_no_qdrant_key_is_saved(app: AppTest, tmp_path: Path) -> None:
-    """An address decides where the data go and can carry credentials: it is entered again in each session."""
+    """An address decides where the data go and can carry credentials: the Ollama address is chosen among the
+    server's, never typed (manage.server_addresses), and no address is kept as a preference."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
-    app.text_input(key="rag_ollama_base_url").input("http://user:CANARY-PASS@127.0.0.1:9").run()
+    assert not [box for box in app.text_input if box.key == "rag_ollama_base_url"]
+    assert app.selectbox(key="rag_ollama_base_url").options == ["http://localhost:11434"]
     app.segmented_control(key="rag_vector_engine").set_value("qdrant").run()
     app.text_input(key="rag_qdrant_url").input("http://CANARY-HOST:6333").run()
     app.text_input(key="rag_qdrant_api_key").input("QDRANT-CANARY-KEY").run()
     saved = _saved(tmp_path)
     assert '"vector_store": "qdrant"' in saved
-    assert "CANARY" not in saved and "127.0.0.1" not in saved
+    assert "CANARY" not in saved and "11434" not in saved
 
 
 def test_a_saved_choice_this_server_cannot_use_is_named(
@@ -454,6 +456,12 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     import app_pages.rag_sidebar as sidebar
     import manage.rag.providers.ollama_server as server
 
+    # the addresses a user may choose: the deployment's list (manage.server_addresses)
+    monkeypatch.setenv(
+        "CMP_OLLAMA_ADDRESSES",
+        "http://localhost:11434, http://127.0.0.2:11434, http://127.0.0.2:11998",
+    )
+
     def silent(base_url, model):
         raise server.NoAnswer(model)
 
@@ -480,7 +488,7 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
         for c in signed_in.caption
     )
     # at an address on the network, what the address says is known all the same: the badge, http, the recipient
-    signed_in.text_input(key="rag_ollama_base_url").input("http://127.0.0.2:11434").run()
+    signed_in.selectbox(key="rag_ollama_base_url").select("http://127.0.0.2:11434").run()
     assert not signed_in.exception, [str(e.value)[:300] for e in signed_in.exception]
     shown = [m.value for m in signed_in.markdown]
     assert any("Your network: data goes to 127.0.0.2" in v for v in shown), shown[-6:]
@@ -496,7 +504,7 @@ def test_a_silent_ollama_server_is_never_drawn_as_local(
     # nothing listening at the address: said so, never "did not say"
     monkeypatch.setattr(server, "runs_at", unreachable)
     sidebar._runs_at.clear()
-    signed_in.text_input(key="rag_ollama_base_url").input("http://127.0.0.2:11998").run()
+    signed_in.selectbox(key="rag_ollama_base_url").select("http://127.0.0.2:11998").run()
     assert any(
         "The Ollama server did not answer at `127.0.0.2:11998`" in c.value
         for c in signed_in.caption

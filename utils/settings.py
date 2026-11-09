@@ -96,10 +96,19 @@ class IAMSection(_Names):
     admin_password_file: str | None = Field(None, validation_alias="CMP_ADMIN_PASSWORD_FILE")
 
 
+def _parsed(value: str):
+    """``urlparse(value)``, whose own error can quote the address (a full-width "@" leaves a password in it): refused
+    with a message that never does."""
+    try:
+        return urlparse(value)
+    except ValueError:
+        raise ValueError("an address is not written as a web address") from None
+
+
 def _no_credentials(value: str | None) -> str | None:
     """An address without a user name or password: it is shown to every user in Settings, and logged."""
     if value:
-        parts = urlparse(value)
+        parts = _parsed(value)
         if parts.username or parts.password:
             raise ValueError(
                 "an address must not hold a user name or password: give the credentials another way"
@@ -107,16 +116,90 @@ def _no_credentials(value: str | None) -> str | None:
     return value
 
 
+ADDRESS_MAX_LENGTH = 200  # an address, never a document
+_HOST = re.compile(
+    r"[A-Za-z0-9._-]+"
+)  # a name (a Docker service's may hold "_") or an IPv4 address
+_IPV6 = re.compile(r"[0-9a-f:.]+")
+_PATH = re.compile(r"[A-Za-z0-9._~!$&'()*+,;=:@/%-]*")  # the characters of a path (RFC 3986)
+
+
+def server_address(value: str | None) -> str:
+    """
+    The address of a server Settings offers (an Ollama service), as offered: ``http`` or ``https``, a host, an optional
+    port and path, "http://" when no scheme is written (as Ollama's client reads it), the scheme and the host in lower
+    case, no "/" at the end. Refused with a ValueError whose message never holds the value (an address may carry a
+    password): a character outside ASCII (an international name is written in its ``xn--`` form), a space, a user name
+    or password, a query or fragment, another scheme, no host, a port out of range, more than 200 characters.
+    """
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("an address is needed")
+    if len(text) > ADDRESS_MAX_LENGTH:
+        raise ValueError(f"an address has at most {ADDRESS_MAX_LENGTH} characters")
+    if not text.isascii():
+        raise ValueError(
+            "an address is written in ASCII characters (an international name in its xn-- form)"
+        )
+    if any(c.isspace() or not c.isprintable() for c in text):
+        raise ValueError("an address holds no space")
+    if "://" not in text:
+        text = "http://" + text
+    parts = _parsed(text)
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError("an address starts with http:// or https://")
+    _no_credentials(text)
+    if parts.query or parts.fragment or parts.params:
+        raise ValueError("an address has no query (?) or fragment (#)")
+    try:
+        port = parts.port
+    except ValueError:
+        port = -1
+    if port is not None and not 0 < port < 65536:
+        raise ValueError("an address's port is a number from 1 to 65535")
+    host = (parts.hostname or "").lower()
+    if not host:
+        raise ValueError("an address names a host")
+    if not (_IPV6.fullmatch(host) if ":" in host else _HOST.fullmatch(host)):
+        raise ValueError("an address's host is written with letters, digits, '.', '-' or '_'")
+    if not _PATH.fullmatch(parts.path):
+        raise ValueError("an address's path is written with letters, digits and / . - _ ~")
+    netloc = f"[{host}]" if ":" in host else host  # an IPv6 address keeps its brackets
+    if port is not None:
+        netloc += f":{port}"
+    return f"{scheme}://{netloc}{parts.path.rstrip('/')}"
+
+
 class AISection(_Names):
     # the provider Settings preselects (manage.rag.providers.default_provider): a cloud one receives no data until the
     # session confirms. Not printed: a mistyped value can be a pasted key, which the log redaction does not know
     provider: str = Field("auto", validation_alias="CMP_AI_PROVIDER", repr=False)
+    # the Ollama address offered first, and the one an engine started without an address uses
     ollama_base_url: str = Field("http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
+    # Other Ollama addresses Settings offers, comma-separated, after OLLAMA_BASE_URL. A user chooses among them and
+    # never types one, so that the server sends no request to an address a user writes; an administrator adds others
+    # in Settings (manage.server_addresses)
+    ollama_addresses: str = Field("", validation_alias="CMP_OLLAMA_ADDRESSES")
 
     @field_validator("ollama_base_url")
     @classmethod
     def _address(cls, value: str) -> str:
-        return _no_credentials(value) or value
+        server_address(value)  # refused at start-up as Settings would refuse it
+        return value
+
+    @field_validator("ollama_addresses")
+    @classmethod
+    def _addresses(cls, value: str) -> str:
+        for part in value.split(","):
+            if part.strip():
+                server_address(part)
+        return value
+
+    def ollama_address_list(self) -> list[str]:
+        """The deployment's Ollama addresses, each once: OLLAMA_BASE_URL first, then CMP_OLLAMA_ADDRESSES in order."""
+        others = [server_address(part) for part in self.ollama_addresses.split(",") if part.strip()]
+        return list(dict.fromkeys([server_address(self.ollama_base_url), *others]))
 
     google_api_key: SecretStr | None = Field(None, validation_alias="GOOGLE_API_KEY")
     openai_api_key: SecretStr | None = Field(None, validation_alias="OPENAI_API_KEY")

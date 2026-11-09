@@ -11,6 +11,7 @@ because other pages read them from the session.
 """
 
 import os
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -28,6 +29,7 @@ from manage.ai_payload import (
     server_recipient,
     store_recipient,
 )
+from manage.iam.authz import is_admin_role
 from manage.rag import ConnectorFactory, ProviderConfig, ProviderType
 from manage.rag.providers import (
     AI_PROVIDERS,
@@ -38,6 +40,7 @@ from manage.rag.providers import (
     provider_setting,
     server_key,
 )
+from manage.server_addresses import OLLAMA_ADDRESSES, NotAllowed
 from manage.vectorstores import (
     VECTOR_STORES,
     IndexManifest,
@@ -63,7 +66,7 @@ from ui.components.text import plain
 from ui.services import ai_engine
 from ui.session_scope import get_current_scope
 from utils.data_paths import get_vectors_dir
-from utils.settings import get_settings
+from utils.settings import ADDRESS_MAX_LENGTH
 
 # .env is loaded once, at start-up (main.py): the keys are in the environment from the first page on
 # The choices are kept for the whole session: Streamlit drops the value of a widget whose page is not shown, so a
@@ -165,6 +168,165 @@ def _address_badge(url: str, carried: str = "the prompts and documents") -> None
         st.caption(f"This address uses http: {carried} cross the network unencrypted.")
 
 
+def _is_admin() -> bool:
+    return is_admin_role(st.session_state.get("user_role"))
+
+
+def _account() -> str:
+    """The signed-in account's name, as the user signs in (the workspace folder may be a code of it)."""
+    return str(st.session_state.get("username") or "")
+
+
+def _forget(name: str) -> None:
+    st.session_state.pop(name, None)
+
+
+def _shown(address: str) -> str:
+    return as_code(address, limit=ADDRESS_MAX_LENGTH)
+
+
+def _ollama_address(key: str, label: str, help_text: str) -> str:
+    """
+    The Ollama address chosen from the server's list (manage.server_addresses), never typed: the server sends no request
+    to an address a user writes, which on a shared server could reach a machine of its network. A value the list does
+    not hold is never used: an address chosen, then removed by an administrator, is named with the one used instead;
+    one the browser forged is replaced by the first. The caller draws the administrator's list (``_manage_addresses``)
+    below the choice and its badge.
+    """
+    options = OLLAMA_ADDRESSES.listed()
+    prior = st.session_state.get(key)
+    if prior and prior not in options:  # removed since it was chosen: named until another is chosen
+        st.session_state[f"{key}_dropped"] = str(prior)
+    chosen = st.selectbox(
+        label,
+        options,
+        index=0,
+        key=key,
+        help=help_text
+        + (" Add another under Manage addresses, below." if _is_admin() else " Only an administrator adds one."),
+        filter_mode=None,  # a list to choose from: nothing is typed here
+        on_change=_forget,
+        args=(f"{key}_dropped",),
+        persist_state=PERSIST,
+    )
+    if chosen not in options:  # the widget's value comes from the browser: only an address offered goes on
+        chosen = options[0]
+    dropped = st.session_state.get(f"{key}_dropped")
+    if dropped:
+        st.caption(f"The address you chose, {_shown(dropped)}, is no longer offered: {_shown(chosen)} is used.")
+    if not _is_admin():
+        st.caption("Your Ollama server is not listed? Ask an administrator of this server to add its address.")
+    return str(chosen)
+
+
+def _day(moment: str) -> str:
+    try:
+        when = datetime.fromisoformat(moment)
+    except ValueError:
+        return ""
+    return f"{when.day} {when:%b %Y}"
+
+
+def _manage_addresses(key: str) -> None:
+    """
+    An administrator's list of the Ollama addresses every user may choose, below the choice and its badge: add one
+    (offered at once, and chosen here; Enter adds), remove one added here; the deployment's are changed in its settings.
+    The form and its outcome come first, the list after, in a box of its own height, so that the popover keeps one size.
+    """
+    if not _is_admin():
+        return
+    with st.popover("Manage addresses", icon=":material/edit:"):
+        st.caption(
+            "Users choose the Ollama address from this list; only an administrator adds one. Add only an Ollama service "
+            "you trust with the prompts and documents sent to it."
+        )
+        if OLLAMA_ADDRESSES.unreadable():
+            st.warning(
+                "The list of added addresses cannot be read (see the server log): only the deployment's are offered. "
+                "Repair or remove its file before adding one."
+            )
+        with st.form(f"{key}_add_form", border=False, enter_to_submit=True):
+            box, button = st.columns([4, 1], vertical_alignment="bottom")
+            box.text_input(
+                "Address to add",
+                key=f"{key}_new",
+                placeholder="http://ollama.example.org:11434",
+                max_chars=ADDRESS_MAX_LENGTH,
+            )
+            button.form_submit_button(
+                "Add", key=f"{key}_add", icon=":material/add:", on_click=_add_address, args=(key,)
+            )
+        said = st.session_state.pop(f"{key}_said", None)
+        if said:
+            {"ok": st.success, "info": st.info, "error": st.error}[said[0]](said[1])
+        removed = st.session_state.pop(f"{key}_removed", None)
+        if removed:
+            st.button("Add it back", key=f"{key}_add_back", on_click=_add_back, args=(key, removed))
+        with st.container(height=180, border=False):
+            for n, address in enumerate(OLLAMA_ADDRESSES.deployment()):
+                variable = "OLLAMA_BASE_URL" if n == 0 else "CMP_OLLAMA_ADDRESSES"
+                st.markdown(f"{_shown(address)} · set by the deployment (`{variable}`)")
+            for n, item in enumerate(OLLAMA_ADDRESSES.added()):
+                text, button = st.columns([4, 1], vertical_alignment="center")
+                when = _day(item.added_at)
+                text.markdown(
+                    f"{_shown(item.address)} · added by {plain(item.added_by, limit=64)}"
+                    + (f", {when}" if when else "")
+                )
+                button.button("Remove", key=f"{key}_remove_{n}", on_click=_remove_address, args=(key, item.address))
+
+
+def _add_address(key: str) -> None:
+    """Add's callback (Enter in the box too): the address typed is stored for every user (an administrator only), then
+    chosen here as the list holds it; one already offered is only chosen."""
+    scope = get_current_scope()
+    try:
+        if scope is None:
+            raise NotAllowed("only an administrator adds an address")
+        before = OLLAMA_ADDRESSES.listed()
+        offered = OLLAMA_ADDRESSES.add(str(st.session_state.get(f"{key}_new") or ""), by=scope, account=_account())
+    except (ValueError, PermissionError) as exc:  # the message never holds the address
+        st.session_state[f"{key}_said"] = ("error", f"Not added: {exc}.")
+        return
+    st.session_state[f"{key}_new"] = ""
+    held = [address for address in OLLAMA_ADDRESSES.listed() if address == offered]
+    if held:
+        st.session_state[key] = held[0]
+        st.session_state.pop(f"{key}_dropped", None)
+    st.session_state[f"{key}_said"] = (
+        ("info", f"Already offered: {_shown(offered)}, now chosen here.")
+        if offered in before
+        else ("ok", f"Added for every user of this server, and chosen here: {_shown(offered)}.")
+    )
+
+
+def _add_back(key: str, address: str) -> None:
+    """Add it back's callback: the address just removed, added again."""
+    st.session_state[f"{key}_new"] = address
+    _add_address(key)
+
+
+def _remove_address(key: str, address: str) -> None:
+    """Remove's callback: every user's AI engine on the address stops at its next use (ui.services); this page moves to
+    the first address when it had chosen this one, and says so."""
+    scope = get_current_scope()
+    try:
+        removed = scope is not None and OLLAMA_ADDRESSES.remove(address, by=scope, account=_account())
+    except PermissionError as exc:
+        st.session_state[f"{key}_said"] = ("error", f"Not removed: {exc}.")
+        return
+    if not removed:
+        st.session_state[f"{key}_said"] = ("info", f"{_shown(address)} is not in the list any more.")
+        return
+    said = f"Removed for every user: {_shown(address)}. An AI engine started on it stops at its next use."
+    if st.session_state.get(key) == address:
+        first = OLLAMA_ADDRESSES.listed()[0]
+        st.session_state[key] = first
+        said += f" This page now uses {_shown(first)}."
+    st.session_state[f"{key}_said"] = ("ok", said)
+    st.session_state[f"{key}_removed"] = address
+
+
 # ----------------------------------------------------------------------------- cards
 
 def _provider_card() -> dict:
@@ -194,15 +356,11 @@ def _provider_card() -> dict:
         info = declared(provider)  # its key, its models (manage.rag.providers)
         where = None  # an Ollama's: where the data goes, drawn once the model is known
         if provider == "ollama":
-            cfg["base_url"] = st.text_input(
-                "Ollama endpoint",
-                value=get_settings().ai.ollama_base_url,
-                key="rag_ollama_base_url",
-                help="URL of the local or network Ollama service.",
-                icon=":material/dns:",
-                persist_state=PERSIST,
+            cfg["base_url"] = _ollama_address(
+                "rag_ollama_base_url", "Ollama address", "The Ollama services this server offers."
             )
             where = st.container()  # where the data goes, once the model is known: a cloud model runs elsewhere
+            _manage_addresses("rag_ollama_base_url")  # below the address's badge
             chat_options = _discover_ollama_models(cfg["base_url"]) or list(info.chat_models)
             embed_options = list(info.embedding_models)
             chat_key, embed_key = "rag_ollama_model_select", "rag_ollama_embed_select"
@@ -358,15 +516,13 @@ def _claude_embedding_block(cfg: dict) -> tuple[list[str], str]:
     )
     cfg["embedding_provider"] = embed_provider
     if embed_provider == "ollama":
-        cfg["embedding_base_url"] = st.text_input(
-            "Ollama endpoint (embeddings)",
-            value=get_settings().ai.ollama_base_url,
-            key="rag_claude_ollama_base_url",
-            help="URL of the local or network Ollama service that embeds the documents.",
-            icon=":material/dns:",
-            persist_state=PERSIST,
+        cfg["embedding_base_url"] = _ollama_address(
+            "rag_claude_ollama_base_url",
+            "Ollama address (embeddings)",
+            "The Ollama services this server offers, to embed the documents.",
         )
         _address_badge(cfg["embedding_base_url"])
+        _manage_addresses("rag_claude_ollama_base_url")
         return list(declared(embed_provider).embedding_models), "Local embedding model (pull it first: 'ollama pull <model>')."
     info = declared(embed_provider)
     typed = st.text_input(

@@ -276,6 +276,34 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         self._drop_connections()
         self.stop_reason = reason
 
+    @staticmethod
+    def _off_list(
+        provider: str | None, base_url: str | None, embedding_provider: str | None, embedding_base_url: str | None
+    ) -> bool:
+        """Whether an Ollama address the engine uses (its chat's, or the separate embeddings') is not one the server
+        offers now; an engine given no address uses Ollama's default, which must be offered too."""
+        # ollama_server's default (the connector's): its module imports httpx only to send, so this runs without the
+        # "ai" extra too
+        from manage.rag.providers.ollama_server import DEFAULT_HOST
+        from manage.server_addresses import OLLAMA_ADDRESSES
+
+        used = [base_url] if provider == OLLAMA else []
+        if embedding_provider == OLLAMA and embedding_provider != provider:
+            used.append(embedding_base_url)
+        return any(not OLLAMA_ADDRESSES.offered(url or DEFAULT_HOST) for url in used)
+
+    def stop_if_address_withdrawn(self) -> bool:
+        """
+        An engine started on an Ollama address the server no longer offers (an administrator removed it) stops before
+        anything more is sent there; returns whether it stopped. The session's pages call it once per run (ui.services).
+        """
+        if not self.holds_connections():
+            return False
+        if not self._off_list(self.provider, self.base_url, self.embedding_provider, self.embedding_base_url):
+            return False
+        self.stop("its Ollama address is no longer offered on this server: choose one in Settings > AI engine")
+        return True
+
     def withdraw_consent(self, *recipients: str) -> bool:
         """
         The user withdraws the confirmation of ``recipients`` (all of them when none is named): every confirmation
@@ -463,6 +491,13 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # scheme is the one the client reads (https with a key)
         store_key = qdrant_api_key or store_settings.key_for(server)
         store_url = explicit_address(server, store_key) if engine == VectorEngine.QDRANT else None
+        # only an Ollama address the server offers is asked anything (manage.server_addresses): Settings offers no
+        # other, and a value forged around it stops here
+        if self._off_list(provider_clean, base_url, embed_provider, own_embedding_url):
+            return False, (
+                "This Ollama address is not one this server offers: choose one in Settings > AI engine, or ask an "
+                "administrator to add it."
+            )
         # an Ollama server says which of its models it runs elsewhere (a copy of a cloud model reads local by name)
         remote = None
         if provider_clean == OLLAMA:
