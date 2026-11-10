@@ -701,7 +701,7 @@ def test_the_trace_names_each_column_s_last_copy_and_its_choices() -> None:
 
 
 def test_the_step_replays_the_fold_and_says_when_the_column_holds_values_it_did_not_see() -> None:
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     sex = ["F"] * 30 + ["F ", "Female"] + ["M"] * 30
     counts = level_counts(pd.Series(sex))
@@ -768,7 +768,7 @@ def test_a_corrected_record_is_no_change_of_the_data_and_the_replay_checks_it() 
     redoes it and finds the table it recorded."""
     from core.progress import changes_data, data_revision
     from core.session import DataSession
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     class Trace:
         def __init__(self) -> None:
@@ -813,7 +813,7 @@ def test_a_corrected_record_is_no_change_of_the_data_and_the_replay_checks_it() 
 def test_a_recode_of_an_earlier_version_is_refused_by_the_replay(fold_id: str | None) -> None:
     """Only the fold rule of today is kept: a recode recorded under another (30 October 2026), or before the fold rule,
     is refused with a word, never replayed under a rule it did not use."""
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": [], "fold": fold_id}
     step = {
@@ -830,7 +830,7 @@ def test_a_recode_of_an_earlier_version_is_refused_by_the_replay(fold_id: str | 
 def test_a_recode_recorded_without_what_the_replay_checks_is_refused_with_a_word() -> None:
     """A record of today's fold rule that lacks its counts (written by hand, or cut) is refused by name, never with a
     bare key name for an error."""
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     params = {"source": "sex", "target": "sex_clean", "mapping": {}, "kept": [], "fold": FOLD}
     replayed = apply_steps(

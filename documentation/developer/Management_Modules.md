@@ -1255,6 +1255,287 @@ One exclusion in words, for captions.
 
 ---
 
+## engine.py
+
+_The replay engine: replays a transformation trace headlessly (no Streamlit).
+
+One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
+source dataset (or a pre-loaded frame) up to an optional step index. It reads the files a trace names
+through the resolver it is given (:class:`manage.paths.PathResolver`: the user's workspace and the files
+chosen in the UI, or a command line's files); given none, it reads no file. :func:`execute_trace_pipeline`
+keeps the historical ``(df, error)`` signature.
+
+Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
+replay checks each replayed step against it and reports the first *divergence*; steps that cannot be
+recomputed (an adopted multiple imputation, a table replaced outside the app) are listed as not
+replayable, and their recorded snapshot is used when there is one. A replay is *reproducible* when every
+step was replayed and matched._
+
+**Imports**:
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
+
+### class `StepRecord` (engine.py)
+
+What a recomputed step did on the replayed data, in the trace's terms (its settings and description): an
+imputation's counts and rows depend on the data, so a redone Enrich draft step is recorded with these.
+
+### class `ReplayResult` (engine.py)
+
+No description available.
+
+**Methods:**
+
+- **reproducible**(`self`) -> `bool`
+  > Every step replayed, and every recorded fingerprint matched.
+
+### class `_NotReplayable` (engine.py)
+
+A step the engine cannot recompute; carries the frame to continue from.
+
+### def `_resolve` (engine.py)
+
+- **Arguments**: `path: ComplexType, paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The file a recorded path stands for; None without a resolver (a replay given none reads no file).
+
+### def `_version` (engine.py)
+
+- **Arguments**: `name: str, paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A saved version a trace names, from the datasets folder only (PathResolver.dataset).
+
+### def `_read_any` (engine.py)
+
+- **Arguments**: `path: str, parse_options: ComplexType, paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions.
+
+### def `load_source` (engine.py)
+
+- **Arguments**: `trace_data: dict[ComplexType], paths: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+The source dataset of a trace: the recorded artifact (newer traces) or the original path/name.
+
+### def `_population_rows` (engine.py)
+
+- **Arguments**: `df: pd.DataFrame, block: dict[ComplexType], index: int, warnings: list[str], frames: ComplexType`
+
+- **Returns**: `pd.Index`
+
+Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
+evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
+to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
+a plausibility rule's bound must not take its row out of the next fill. A population recorded under other rules
+is taken from the rows the step holds; when it holds none, a step that changes the data on it is refused, and
+one that only checks it (``checks_only``) reads its criteria now, with a warning. So is one recorded under these
+rules whose criteria keep other rows of the very table it was recorded on (its fingerprint): the same definitions
+on the same table, so the rules are read otherwise now, whatever their version says.
+
+### def `_recorded_rows` (engine.py)
+
+- **Arguments**: `block: Mapping[ComplexType], frame: pd.DataFrame`
+
+- **Returns**: `ComplexType`
+
+The rows a recorded population kept, from its step: the rows it kept, or (a large population holds only these)
+the table's rows less those its criteria excluded, since a row leaves the population when any ticked criterion
+excludes it; None when the step holds neither.
+
+### def `_rules_version` (engine.py)
+
+- **Arguments**: `block: Mapping[ComplexType]`
+
+- **Returns**: `int`
+
+The version of how a recorded population's rules were read: 1 when the block names none (written before the
+version was recorded), 0 when it names one that is no number.
+
+### def `_snapshot` (engine.py)
+
+- **Arguments**: `step: dict[ComplexType], paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_enrichment` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_with_inputs` (engine.py)
+
+- **Arguments**: `step: dict[ComplexType]`
+
+- **Returns**: `ComplexType`
+
+A targeted imputation's params with the variables of its formula other than its target ("inputs"), which
+earlier versions did not record: a value an exact formula computed from a single-imputed one, or from none, is
+single-imputed (core.session.sort_filled).
+
+### def `_scoped_rows` (engine.py)
+
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, warnings: list[str], result: ComplexType`
+
+- **Returns**: `ComplexType`
+
+The rows an imputation is fitted on and fills: the population recorded with the step, as when it was applied;
+None (every row) when none was recorded, as by earlier versions, or when no criterion was ticked.
+
+### def `_imputation` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings, result`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_targeted_imputation` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings, result`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_variable_transformation` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_variable_computation` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_data_type_conversion` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_missing_value_handling` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_rename_columns` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_recode_levels` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
+under another rule (another version of Data > Clean, earlier or later) is refused: the column is cleaned again; so
+is a record without what the replay checks. Differences are said by their number, never by a value.
+
+### def `_apply_filter` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_population_definition` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_mi_impute` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings, result`
+
+- **Returns**: `None`
+
+Re-run a multiple imputation on its population and check the imputed cells against the recorded hash.
+
+### def `_freeze_population` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings, result`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_outlier_clipping` (engine.py)
+
+- **Arguments**: `df, step, index, paths, warnings`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_apply_step` (engine.py)
+
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, paths: ComplexType, warnings: list[str], result: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo.
+
+### def `apply_steps` (engine.py)
+
+- **Arguments**: `df: pd.DataFrame, steps: list[dict[ComplexType]]`
+
+- **Returns**: `ReplayResult`
+
+Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
+the files the steps name (none read without it). ``frames``:
+tables a step's population may name by fingerprint although the replay does not pass through them (a draft
+redone one change at a time names the dataset it was built on).
+
+### def `run_trace` (engine.py)
+
+- **Arguments**: `trace_data: dict[ComplexType]`
+
+- **Returns**: `ReplayResult`
+
+Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame.
+
+### def `execute_trace_pipeline` (engine.py)
+
+- **Arguments**: `trace_data: dict[ComplexType], progress_callback: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+Historical signature: ``(result_dataframe, error_message)``.
+
+---
+
 ## factory.py
 
 _Connector Factory for RAG LLMs and Embeddings.
@@ -3346,287 +3627,6 @@ No description available.
 - **Returns**: `ResultBlocks`
 
 The report blocks of one stored result (unknown types give a short text).
-
----
-
-## reproduction_manager.py
-
-_Reproduction engine: replays a transformation trace headlessly (no Streamlit).
-
-One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
-source dataset (or a pre-loaded frame) up to an optional step index. It reads the files a trace names
-through the resolver it is given (:class:`manage.paths.PathResolver`: the user's workspace and the files
-chosen in the UI, or a command line's files); given none, it reads no file. :func:`execute_trace_pipeline`
-keeps the historical ``(df, error)`` signature.
-
-Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
-replay checks each replayed step against it and reports the first *divergence*; steps that cannot be
-recomputed (an adopted multiple imputation, a table replaced outside the app) are listed as not
-replayable, and their recorded snapshot is used when there is one. A replay is *reproducible* when every
-step was replayed and matched._
-
-**Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
-
-### class `StepRecord` (reproduction_manager.py)
-
-What a recomputed step did on the replayed data, in the trace's terms (its settings and description): an
-imputation's counts and rows depend on the data, so a redone Enrich draft step is recorded with these.
-
-### class `ReplayResult` (reproduction_manager.py)
-
-No description available.
-
-**Methods:**
-
-- **reproducible**(`self`) -> `bool`
-  > Every step replayed, and every recorded fingerprint matched.
-
-### class `_NotReplayable` (reproduction_manager.py)
-
-A step the engine cannot recompute; carries the frame to continue from.
-
-### def `_resolve` (reproduction_manager.py)
-
-- **Arguments**: `path: ComplexType, paths: ComplexType`
-
-- **Returns**: `ComplexType`
-
-The file a recorded path stands for; None without a resolver (a replay given none reads no file).
-
-### def `_version` (reproduction_manager.py)
-
-- **Arguments**: `name: str, paths: ComplexType`
-
-- **Returns**: `ComplexType`
-
-A saved version a trace names, from the datasets folder only (PathResolver.dataset).
-
-### def `_read_any` (reproduction_manager.py)
-
-- **Arguments**: `path: str, parse_options: ComplexType, paths: ComplexType`
-
-- **Returns**: `ComplexType`
-
-Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions.
-
-### def `load_source` (reproduction_manager.py)
-
-- **Arguments**: `trace_data: dict[ComplexType], paths: ComplexType`
-
-- **Returns**: `tuple[ComplexType]`
-
-The source dataset of a trace: the recorded artifact (newer traces) or the original path/name.
-
-### def `_population_rows` (reproduction_manager.py)
-
-- **Arguments**: `df: pd.DataFrame, block: dict[ComplexType], index: int, warnings: list[str], frames: ComplexType`
-
-- **Returns**: `pd.Index`
-
-Rows of ``df`` kept by the population recorded in a step (criteria re-evaluated as they were), on the table it was
-evaluated on when ``frames`` holds it (by its fingerprint), else on ``df``. Every step of an Enrich draft is scoped
-to the population of the data before the draft, which a fill of the same draft can change: a weight filled above
-a plausibility rule's bound must not take its row out of the next fill. A population recorded under other rules
-is taken from the rows the step holds; when it holds none, a step that changes the data on it is refused, and
-one that only checks it (``checks_only``) reads its criteria now, with a warning. So is one recorded under these
-rules whose criteria keep other rows of the very table it was recorded on (its fingerprint): the same definitions
-on the same table, so the rules are read otherwise now, whatever their version says.
-
-### def `_recorded_rows` (reproduction_manager.py)
-
-- **Arguments**: `block: Mapping[ComplexType], frame: pd.DataFrame`
-
-- **Returns**: `ComplexType`
-
-The rows a recorded population kept, from its step: the rows it kept, or (a large population holds only these)
-the table's rows less those its criteria excluded, since a row leaves the population when any ticked criterion
-excludes it; None when the step holds neither.
-
-### def `_rules_version` (reproduction_manager.py)
-
-- **Arguments**: `block: Mapping[ComplexType]`
-
-- **Returns**: `int`
-
-The version of how a recorded population's rules were read: 1 when the block names none (written before the
-version was recorded), 0 when it names one that is no number.
-
-### def `_snapshot` (reproduction_manager.py)
-
-- **Arguments**: `step: dict[ComplexType], paths: ComplexType`
-
-- **Returns**: `ComplexType`
-
-No description available.
-
-### def `_enrichment` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_with_inputs` (reproduction_manager.py)
-
-- **Arguments**: `step: dict[ComplexType]`
-
-- **Returns**: `ComplexType`
-
-A targeted imputation's params with the variables of its formula other than its target ("inputs"), which
-earlier versions did not record: a value an exact formula computed from a single-imputed one, or from none, is
-single-imputed (core.session.sort_filled).
-
-### def `_scoped_rows` (reproduction_manager.py)
-
-- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, warnings: list[str], result: ComplexType`
-
-- **Returns**: `ComplexType`
-
-The rows an imputation is fitted on and fills: the population recorded with the step, as when it was applied;
-None (every row) when none was recorded, as by earlier versions, or when no criterion was ticked.
-
-### def `_imputation` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings, result`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_targeted_imputation` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings, result`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_variable_transformation` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_variable_computation` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_data_type_conversion` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_missing_value_handling` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_rename_columns` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_recode_levels` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-The recode redone: the fold rule recomputed on the values read, the recorded choices over it. A recode recorded
-under another rule (another version of Data > Clean, earlier or later) is refused: the column is cleaned again; so
-is a record without what the replay checks. Differences are said by their number, never by a value.
-
-### def `_apply_filter` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_population_definition` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_mi_impute` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings, result`
-
-- **Returns**: `None`
-
-Re-run a multiple imputation on its population and check the imputed cells against the recorded hash.
-
-### def `_freeze_population` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings, result`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_outlier_clipping` (reproduction_manager.py)
-
-- **Arguments**: `df, step, index, paths, warnings`
-
-- **Returns**: `None`
-
-No description available.
-
-### def `_apply_step` (reproduction_manager.py)
-
-- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, paths: ComplexType, warnings: list[str], result: ComplexType`
-
-- **Returns**: `tuple[ComplexType]`
-
-Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo.
-
-### def `apply_steps` (reproduction_manager.py)
-
-- **Arguments**: `df: pd.DataFrame, steps: list[dict[ComplexType]]`
-
-- **Returns**: `ReplayResult`
-
-Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
-the files the steps name (none read without it). ``frames``:
-tables a step's population may name by fingerprint although the replay does not pass through them (a draft
-redone one change at a time names the dataset it was built on).
-
-### def `run_trace` (reproduction_manager.py)
-
-- **Arguments**: `trace_data: dict[ComplexType]`
-
-- **Returns**: `ReplayResult`
-
-Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame.
-
-### def `execute_trace_pipeline` (reproduction_manager.py)
-
-- **Arguments**: `trace_data: dict[ComplexType], progress_callback: ComplexType`
-
-- **Returns**: `tuple[ComplexType]`
-
-Historical signature: ``(result_dataframe, error_message)``.
 
 ---
 

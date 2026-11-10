@@ -134,7 +134,7 @@ def test_the_trace_report_titles_every_step() -> None:
 def test_the_replay_handles_every_kind_by_its_declared_mode() -> None:
     import inspect
 
-    from manage import reproduction_manager as rm
+    from manage.replay import engine as rm
 
     assert set(rm._HANDLED) == steps.ids(replay=RECOMPUTE)
     # the handlers given the replay result (what each imputation did): handled kinds that take it
@@ -161,7 +161,7 @@ def test_the_replay_handles_every_kind_by_its_declared_mode() -> None:
 
 
 def test_an_old_trace_with_legacy_steps_replays_without_an_unknown_step() -> None:
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     df = pd.DataFrame({"a": [1.0, None, 3.0, 4.0], "b": ["x", "y", "z", "w"]})
     old = [

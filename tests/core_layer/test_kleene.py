@@ -165,7 +165,7 @@ def test_a_population_recorded_under_the_earlier_rules_replays_with_the_rows_it_
     rows, and says that the rules changed, not the data. Recorded under today's rules, its criteria are read again."""
     from core.fingerprint import ensure_row_ids, ids_to_ranges
     from core.population import active_criteria, catalogue, evaluate_population
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = ensure_row_ids(DF.copy())
     config = {
@@ -241,7 +241,7 @@ def test_a_population_read_otherwise_on_the_table_it_was_recorded_on_replays_wit
     again and says that the data differ."""
     from core.fingerprint import ensure_row_ids, frame_fingerprint, ids_fingerprint, ids_to_ranges
     from core.population import active_criteria, catalogue, evaluate_population
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = ensure_row_ids(DF.copy())
     config = {

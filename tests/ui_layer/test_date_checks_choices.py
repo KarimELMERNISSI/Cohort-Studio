@@ -16,7 +16,7 @@ from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
 from ingest.dates import PLACEHOLDERS
-from manage.reproduction_manager import apply_steps
+from manage.replay.engine import apply_steps
 
 T = pd.Timestamp
 

@@ -23,7 +23,7 @@ storage) are not ordered yet.
 - **R3** Nothing below ui reaches Streamlit, through any chain of imports. Graph renderers import it inside their
   ``render`` method only, and a Streamlit component package (yFiles) inside ``translate`` too.
 - **R4** The AI providers' SDKs are imported only in ``manage/rag/providers``.
-- **R5** The headless entry points (``manage_users``; ``manage.replay`` from M8) reach neither Streamlit nor the
+- **R5** The headless entry points (``manage_users``, ``manage.replay`` and its engine) reach neither Streamlit nor the
   packages of the ``ai`` extra.
 
 The graph is read from the source:
@@ -92,8 +92,9 @@ UTILS_GROUPS = {
     "utils.visualization_utils": "explore",
 }
 ENTRY_POINTS = ("main", "manage_users")  # above every layer
-# R5; manage.replay arrives with M8, which reads traces outside the app as the replay does today
-HEADLESS = ("manage_users", "manage.replay", "manage.reproduction_manager", "manage.services")
+# R5, on each name that runs outside the app: ``python -m manage.replay`` runs its ``__main__``, which no import of the
+# package reaches, so the study package's modules join this list as M8 adds them; a listed name must exist
+HEADLESS = ("manage_users", "manage.replay", "manage.replay.engine", "manage.services")
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
 # Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws
@@ -466,8 +467,9 @@ def test_r4_ai_sdks_only_in_the_providers() -> None:
 
 @pytest.mark.parametrize("entry", HEADLESS)
 def test_r5_headless_entry_points_reach_neither_streamlit_nor_ai(entry: str) -> None:
-    if entry not in modules():
-        pytest.skip(f"{entry} does not exist yet")
+    assert entry in modules(), (
+        f"R5 lists {entry}, which does not exist: a renamed module must keep its rule"
+    )
     for match in (_streamlit, _ai):
         chain = _chain(entry, match)
         assert chain is None, f"R5: {entry} reaches {chain[0]}: {' -> '.join(chain)}"

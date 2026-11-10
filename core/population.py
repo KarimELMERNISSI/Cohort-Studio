@@ -700,7 +700,7 @@ class PopulationResult:
 
     def to_trace(self, *, inline_limit: int = _INLINE_IDS) -> dict[str, Any]:
         """JSON-able record of the population for the transformation trace, with the version of how its rules were
-        read (a replay under other rules uses the rows recorded: ``manage.reproduction_manager``)."""
+        read (a replay under other rules uses the rows recorded: ``manage.replay.engine``)."""
         block: dict[str, Any] = {
             "fingerprint": self.fingerprint,
             "data_fp": self.data_fp,

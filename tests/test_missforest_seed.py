@@ -62,7 +62,7 @@ def test_the_step_records_the_seed_and_the_replay_draws_with_it(
 
 
 def test_the_replay_passes_the_recorded_seed(monkeypatch: pytest.MonkeyPatch) -> None:
-    from manage import reproduction_manager as engine
+    from manage.replay import engine
 
     seen: dict = {}
 

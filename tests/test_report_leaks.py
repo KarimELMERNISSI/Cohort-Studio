@@ -33,7 +33,7 @@ def test_a_small_stratum_is_counted_never_named() -> None:
 def test_a_replay_error_quotes_no_value_of_the_data(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    from manage import reproduction_manager as engine
+    from manage.replay import engine
 
     def failing(*args, **kwargs):
         raise ValueError(f"could not convert string to float: '{CANARY}'")

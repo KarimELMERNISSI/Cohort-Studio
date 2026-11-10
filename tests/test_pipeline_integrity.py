@@ -25,7 +25,7 @@ def test_ticked_criteria_drive_imputation_and_the_trace_replays_the_analysed_tab
     from enrich.imputation_service import impute_rows
     from ingest.loaders import read_table
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from manage.transformation_manager import TransformationManager
 
     source = tmp_path / "tutorial_cohort.csv"

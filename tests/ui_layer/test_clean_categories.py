@@ -29,7 +29,7 @@ from enrich.recode import (
     UNKNOWN,
     report_params,
 )
-from manage.reproduction_manager import apply_steps
+from manage.replay.engine import apply_steps
 
 # F␣ folds into F; f, a code's case variant, is offered; n.a. asks what it means; unknown reads as unknown
 SEX = ["F"] * 30 + ["M"] * 30 + ["F ", "f", "Female", "unknown", "n.a.", "n.a."]

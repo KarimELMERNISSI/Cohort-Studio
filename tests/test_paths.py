@@ -19,7 +19,7 @@ from streamlit.testing.v1 import AppTest
 import utils.data_paths as dp
 from core.workspace import UserScope, resolve_within
 from manage.paths import PathResolver, normalize_path, read_version
-from manage.reproduction_manager import apply_steps, run_trace
+from manage.replay.engine import apply_steps, run_trace
 
 
 @pytest.fixture
@@ -238,7 +238,7 @@ def _replay_in_a_session() -> None:
     import streamlit as st
 
     from app_pages.reproduce_analysis import _resolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
 
     st.session_state["username"] = st.session_state.get("as_user", "alice")
     for key, source in st.session_state["sources"].items():

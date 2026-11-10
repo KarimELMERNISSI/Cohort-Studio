@@ -362,7 +362,7 @@ def test_the_steps_replay_to_the_same_cells(tmp_path) -> None:
     from core.state import ParseOptions
     from ingest.loaders import read_table
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from manage.transformation_manager import TransformationManager
 
     source = tmp_path / "anthropometry.csv"
@@ -463,7 +463,7 @@ def test_an_imputation_with_its_derived_variables_recomputed_replays(tmp_path) -
     from enrich.imputation_service import describe_imputation, impute_rows
     from ingest.loaders import read_table
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from manage.transformation_manager import TransformationManager
 
     source = tmp_path / "anthropometry.csv"

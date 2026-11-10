@@ -130,7 +130,7 @@ def test_derive_alone_needs_no_imputation() -> None:
 
 
 def test_the_replay_computes_the_same_cells() -> None:
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = _cohort()
     steps = _steps(frame)
@@ -198,7 +198,7 @@ def test_a_variable_of_a_formula_outside_the_model_is_watched() -> None:
 
 
 def test_an_unknown_approach_stops_the_replay_and_a_declined_one_imputes() -> None:
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = _cohort()
     steps = _steps(frame)

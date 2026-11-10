@@ -21,7 +21,7 @@ from core.criteria import describe_definition
 from core.fingerprint import ensure_row_ids
 from core.lineage import canonical_json
 from core.population import active_criteria, catalogue, evaluate_population
-from manage.reproduction_manager import apply_steps
+from manage.replay.engine import apply_steps
 
 TUTORIAL = Path(__file__).resolve().parents[2] / "assets" / "tutorial"
 

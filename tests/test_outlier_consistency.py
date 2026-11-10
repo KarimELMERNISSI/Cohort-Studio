@@ -15,7 +15,7 @@ import pytest
 from app_pages.data_monitoring import OutlierHandler
 from biostats.outliers import detect_outliers
 from explore.data_quality_auditor import DataQualityAuditor
-from manage.reproduction_manager import _outlier_clipping
+from manage.replay.engine import _outlier_clipping
 
 TUTORIAL = Path(__file__).resolve().parents[1] / "assets" / "tutorial" / "tutorial_cohort.csv"
 LABS = ["nt_probnp_pg_ml", "creatinine_umol_l", "hba1c_pct", "sbp_baseline"]

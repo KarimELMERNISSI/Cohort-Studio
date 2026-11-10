@@ -7,7 +7,7 @@ import pandas as pd
 import sklearn
 
 from biostats.mi import ImputationSpec, impute
-from manage.reproduction_manager import apply_steps
+from manage.replay.engine import apply_steps
 
 
 def _data(n: int = 200, seed: int = 4) -> pd.DataFrame:

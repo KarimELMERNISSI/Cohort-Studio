@@ -20,7 +20,7 @@ from app_pages import data_cleaning as clean
 from app_pages import validate_dates
 from core.fingerprint import frame_fingerprint
 from ingest.dates import PLACEHOLDERS
-from manage.reproduction_manager import apply_steps
+from manage.replay.engine import apply_steps
 from ui import nav
 
 MAIN = str(Path(__file__).resolve().parents[2] / "main.py")

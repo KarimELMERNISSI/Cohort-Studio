@@ -546,7 +546,7 @@ def _unused(check: DerivedCheck) -> str | None:
 
 
 def _fill(frame: pd.DataFrame, fill: ExactFill, rows: pd.Index | None) -> tuple[pd.DataFrame, int]:
-    """One fill, as its step records it and the replay computes it (manage.reproduction_manager)."""
+    """One fill, as its step records it and the replay computes it (manage.replay.engine)."""
     from enrich.imputation_service import fill_with_formula
 
     return fill_with_formula(

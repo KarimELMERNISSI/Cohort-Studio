@@ -1,5 +1,5 @@
 """
-Reproduction engine: replays a transformation trace headlessly (no Streamlit).
+The replay engine: replays a transformation trace headlessly (no Streamlit).
 
 One engine for every caller (audit E10): :func:`run_trace` executes the recorded steps against the
 source dataset (or a pre-loaded frame) up to an optional step index. It reads the files a trace names

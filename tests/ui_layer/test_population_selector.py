@@ -217,7 +217,7 @@ def test_a_single_imputation_recomputes_the_declared_derived_variables(app: AppT
 
     from core.state import ParseOptions
     from ingest.loaders import read_table
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from ui.state import TUTORIAL_COHORT_PATH
 
     source = read_table(

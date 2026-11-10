@@ -15,7 +15,7 @@ Each kind declares:
 
 A step id is stored in every trace, so it is never renamed: a kind that no page records any more stays registered
 as legacy, and old traces still read and replay. A new kind of step is one registration below, plus a handler in
-``manage/reproduction_manager.py`` when the replay recomputes it; ``tests/core_layer/test_steps.py`` checks both.
+``manage/replay/engine.py`` when the replay recomputes it; ``tests/core_layer/test_steps.py`` checks both.
 """
 
 from __future__ import annotations

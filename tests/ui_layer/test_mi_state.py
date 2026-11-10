@@ -48,7 +48,7 @@ def _script() -> None:
         state.set_mi(impute(state.analysis_frame(), spec))
     elif action == "replay":
         from manage.paths import PathResolver
-        from manage.reproduction_manager import run_trace
+        from manage.replay.engine import run_trace
 
         trace = state.transformation_manager.get_trace()
         steps = [s["function"] for s in trace["steps"]]

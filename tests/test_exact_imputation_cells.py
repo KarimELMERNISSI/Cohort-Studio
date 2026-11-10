@@ -65,7 +65,7 @@ def test_a_value_computed_from_a_single_imputed_one_is_single_imputed() -> None:
 
 
 def test_the_replay_sorts_the_cells_of_a_trace_recorded_without_the_variables() -> None:
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = pd.DataFrame(
         {

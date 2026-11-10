@@ -465,7 +465,7 @@ class AppState:
         """Redo the draft's changes on the current dataset (the draft was built on older data), or refit its
         population-scoped imputations on the current population. Only replayable changes can be redone; a redone
         imputation is recorded as what it did on the current data (its rows, counts and description)."""
-        from manage.reproduction_manager import apply_steps
+        from manage.replay.engine import apply_steps
 
         session = self.session
         draft = session.draft

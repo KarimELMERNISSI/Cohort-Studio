@@ -9,7 +9,7 @@ from core.lineage import verify_trace
 from core.workspace import safe_filename
 from ingest.loaders import UPLOAD_TYPES
 from manage.paths import PathResolver, normalize_path
-from manage.reproduction_manager import run_trace
+from manage.replay.engine import run_trace
 
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
@@ -546,7 +546,7 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             st.warning(f"Failed to load snapshot: {plain(e, limit=500)}. Falling back to replay.")
             # Fallback to replay
     
-    # 2. Full replay through the single engine (manage.reproduction_manager, audit E10)
+    # 2. Full replay through the single engine (manage.replay.engine, audit E10)
     overrides = dict(st.session_state.get('resolved_paths', {}))
     source_dataset = trace_data.get('source_dataset')
     # a trace is user-supplied JSON: its paths are looked up in the workspace only (manage.paths), never as typed

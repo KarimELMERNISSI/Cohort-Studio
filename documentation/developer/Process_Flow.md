@@ -133,7 +133,7 @@ Implements Retrieval-Augmented Generation to query scientific documents.
 
 ### 3.5 Traceability & Reproduction
 
-**Files**: `manage/transformation_manager.py`, `manage/trace_documenter.py`, `manage/reproduction_manager.py`,
+**Files**: `manage/transformation_manager.py`, `manage/trace_documenter.py`, `manage/replay/engine.py`,
 `app_pages/reproduce_analysis.py`
 
 Ensures all user actions are recorded and reproducible.

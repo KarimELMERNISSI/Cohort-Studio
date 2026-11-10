@@ -1,5 +1,5 @@
 """
-Unit Tests for Reproduction Manager (manage/reproduction_manager.py).
+Tests of the replay engine (manage/replay/engine.py).
 
 Tests deterministic pipeline execution, progress callbacks, multi-step replay,
 and error handling.
@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 from manage.paths import PathResolver
-from manage.reproduction_manager import apply_steps, execute_trace_pipeline
+from manage.replay.engine import apply_steps, execute_trace_pipeline
 
 
 @pytest.fixture
@@ -166,7 +166,7 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        with patch("manage.reproduction_manager.apply_variable_transformation") as mock_transform:
+        with patch("manage.replay.engine.apply_variable_transformation") as mock_transform:
             mock_transform.return_value = pd.DataFrame(
                 {"log_systolic": [4.78, 4.94, 4.90, 4.70, 5.07]}
             )
@@ -190,7 +190,7 @@ class TestReproductionPipelineExecution:
         }
 
         with patch(
-            "manage.reproduction_manager.impute_rows",
+            "manage.replay.engine.impute_rows",
             side_effect=ValueError("Corrupt imputation matrix"),
         ):
             df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
@@ -227,7 +227,7 @@ class TestReplayVerification:
     def test_a_recorded_session_replays_to_the_same_table(self, tmp_path: Path) -> None:
         from core.fingerprint import frame_fingerprint
         from enrich.imputation_service import fill_with_formula
-        from manage.reproduction_manager import run_trace
+        from manage.replay.engine import run_trace
 
         tm, session = self._recorded(tmp_path)
         session.commit(
@@ -252,7 +252,7 @@ class TestReplayVerification:
     def test_a_divergence_is_reported_at_its_step(self, tmp_path: Path) -> None:
         import copy
 
-        from manage.reproduction_manager import run_trace
+        from manage.replay.engine import run_trace
 
         tm, session = self._recorded(tmp_path)
         session.commit(
@@ -268,7 +268,7 @@ class TestReplayVerification:
         assert not result.reproducible and "differs" in " ".join(result.warnings)
 
     def test_steps_that_cannot_be_recomputed_are_listed(self, tmp_path: Path) -> None:
-        from manage.reproduction_manager import run_trace
+        from manage.replay.engine import run_trace
 
         tm, session = self._recorded(tmp_path)
         session.stage(

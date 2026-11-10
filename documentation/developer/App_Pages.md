@@ -3807,7 +3807,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.reproduction_manager.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.components.text.plain`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.replay.engine.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.components.text.plain`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 

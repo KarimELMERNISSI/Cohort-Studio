@@ -36,8 +36,9 @@ the test) until a milestone moves them. The groups of `manage` are not ordered a
 - **R3:** nothing below `ui` reaches Streamlit, through any chain of imports. A graph renderer imports it inside its
   `render` method only (and yFiles' component package inside `translate`).
 - **R4:** the AI providers' SDKs are imported only in `manage/rag/providers`.
-- **R5:** the headless entry points (`manage_users`, `manage.reproduction_manager`, `manage.services`, and
-  `manage.replay` from M8) reach neither Streamlit nor the packages of the `ai` extra.
+- **R5:** the headless entry points (`manage_users`, `manage.replay` and `manage.replay.engine`, `manage.services`)
+  reach neither Streamlit nor the packages of the `ai` extra. Each name that runs outside the app is listed, since
+  `python -m manage.replay` runs a `__main__` no import of the package reaches; a listed name must exist.
 
 **How `tests/test_layering.py` holds them.** It reads the import graph from the source: an import inside a function
 counts, one under `if TYPE_CHECKING:` does not. R1 and R2 use the imports as written; R3 and R5 follow what runs,
@@ -222,7 +223,7 @@ Test: add the name to the family's `test_the_stored_names_never_change`; the fam
    given when they apply. `title` is its heading in the trace report (`step_title`, read by
    `manage/trace_documenter.py`).
 2. Record it through `AppState` (`commit_change`, `stage` or `note`), never with `add_step` (a quality gate).
-3. A step that the replay recomputes gets its handler in `_HANDLED`, in `manage/reproduction_manager.py`.
+3. A step that the replay recomputes gets its handler in `_HANDLED`, in `manage/replay/engine.py`.
 4. Never rename an id: a kind that nothing records any more is registered with `legacy=True`.
 
 Test: `tests/core_layer/test_steps.py` (every step written is registered, the report titles every kind, the replay
@@ -448,7 +449,7 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 - Step-by-step table with function, parameters, and description.
 - Downloadable via Streamlit's file download button.
 
-### Replay (`manage/reproduction_manager.py`)
+### Replay (`manage/replay/engine.py`)
 
 `run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
 recorded fingerprint. It reads the files a trace names through the resolver it is given (`manage/paths.PathResolver`):
@@ -474,7 +475,7 @@ bookkeeping read the catalogue.
 To add a kind of step:
 
 1. Register a `StepKind` in `core/steps.py`.
-2. If the replay recomputes it, add its handler to `_HANDLED` in `manage/reproduction_manager.py`.
+2. If the replay recomputes it, add its handler to `_HANDLED` in `manage/replay/engine.py`.
 3. Never rename an id; register a kind that nothing records any more with `legacy=True`, so old traces still read.
 
 `TransformationManager.add_step` logs a step recorded under an unregistered name. With `CMP_STRICT_STATE=1` (the test

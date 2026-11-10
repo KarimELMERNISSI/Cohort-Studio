@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 
 import enrich.external_data as eed
-from manage.reproduction_manager import _read_any
+from manage.replay.engine import _read_any
 from utils.multipage import _load_excel_with_selection, load_dataframe
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,7 +149,7 @@ def _record(
 def _replays(tm, session) -> None:
     from core.fingerprint import frame_fingerprint
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
 
     result = run_trace(json.loads(json.dumps(tm.get_trace(), default=str)), paths=PathResolver.unconfined())
     assert result.error is None and result.reproducible, result.warnings
@@ -173,7 +173,7 @@ def test_a_missing_identifier_replays_as_it_was_merged(tmp_path: Path, missing_k
 def test_a_merge_the_file_no_longer_allows_stops_the_replay_at_its_step(tmp_path: Path) -> None:
     """A "unique" step whose file now repeats an identifier: the replay said "Unknown variable" one step later."""
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
 
     labs = tmp_path / "labs.csv"
     labs.write_text("id,potassium\n1,4.1\n2,3.9\n3,5.2\n", encoding="utf-8")
@@ -299,7 +299,7 @@ def test_a_merge_names_a_file_replaced_since_under_its_name(tmp_path: Path) -> N
     replay without a word. It records the file's checksum, and the replay names a file that is not the one merged."""
     from core.state import file_checksum
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
 
     labs = tmp_path / "labs.csv"
     labs.write_text("id,potassium\n1,4.1\n2,4.6\n3,5.2\n", encoding="utf-8")

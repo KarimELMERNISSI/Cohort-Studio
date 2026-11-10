@@ -60,7 +60,7 @@ def test_the_choice_survives_a_transformation_and_twice_replays(enrich: AppTest)
 
     from core.workspace import UserScope
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
 
     trace = at.session_state["transformation_manager"].get_trace()
     functions = [s["function"] for s in trace["steps"]]

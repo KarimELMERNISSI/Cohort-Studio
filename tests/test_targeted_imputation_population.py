@@ -29,7 +29,7 @@ def test_a_formula_fills_the_population_only_and_its_aggregates_see_no_one_else(
 
 def test_the_replay_reports_what_an_imputation_did() -> None:
     # a redone Enrich draft step is recorded with what it did on the current data (architecture review)
-    from manage.reproduction_manager import apply_steps
+    from manage.replay.engine import apply_steps
 
     frame = pd.DataFrame({"sbp": [None, 120.0, None, None], "base": [1.0, 2.0, 3.0, 4.0]})
     params = {"target_variable": "sbp", "formula": "base * 10", "filled_count": 9, "exact": True}
@@ -63,7 +63,7 @@ def test_the_targeted_imputation_replays_on_the_population_it_was_recorded_with(
     from enrich.imputation_service import fill_with_formula
     from ingest.loaders import read_table
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from manage.transformation_manager import TransformationManager
 
     source = tmp_path / "tutorial_cohort.csv"
@@ -132,7 +132,7 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(
     from enrich.imputation_service import fill_with_formula
     from ingest.loaders import read_table
     from manage.paths import PathResolver
-    from manage.reproduction_manager import run_trace
+    from manage.replay.engine import run_trace
     from manage.transformation_manager import TransformationManager
 
     source = tmp_path / "weights.csv"
@@ -191,7 +191,7 @@ def test_a_draft_replays_on_the_population_it_was_staged_on(
         from core.fingerprint import frame_fingerprint as here
 
         monkeypatch.setattr(
-            "manage.reproduction_manager.frame_fingerprint", lambda df: "elsewhere-" + here(df)
+            "manage.replay.engine.frame_fingerprint", lambda df: "elsewhere-" + here(df)
         )
     replay = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
     assert replay.df["bmi_x2"].tolist()[1] == 320.0 and not replay.population_frames
