@@ -553,12 +553,17 @@ Get the RAG evaluation logs directory path.
 
 ## environment.py
 
-_The software a dataset was loaded and analysed with: CohortStudio's version and commit, Python and the key libraries.
-It is recorded in the trace when a dataset is loaded (the ``initial_load`` step) and printed in the study dossier,
-so that a reader knows which versions produced the results._
+_The software a dataset was loaded and analysed with: CohortStudio's version, its full commit and a fingerprint of its
+code, the lock file's checksum, Python and the key libraries. It is recorded in the trace when a dataset is loaded (the
+``initial_load`` step) and printed in the study dossier, so that a reader knows which versions produced the results.
+
+A commit names the code only when the code is the commit's: a source checkout with local changes, or an image built
+without one, runs code no commit names. The *code fingerprint* names the code that ran, whatever its origin: a SHA-256
+over CohortStudio's own Python sources, read with LF line endings (a Windows checkout may hold CRLF), which a
+verification recomputes (M8)._
 
 **Imports**:
-`__future__.annotations`, `platform`, `tomllib`, `importlib.metadata.PackageNotFoundError`, `importlib.metadata.version`, `pathlib.Path`
+`__future__.annotations`, `hashlib`, `platform`, `re`, `tomllib`, `functools.cache`, `importlib.metadata.PackageNotFoundError`, `importlib.metadata.version`, `pathlib.Path`
 
 ### def `app_version` (environment.py)
 
@@ -568,13 +573,58 @@ so that a reader knows which versions produced the results._
 
 CohortStudio's version: the installed package, else pyproject.toml (a source checkout).
 
+### def `_commit` (environment.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_git_dirs` (environment.py)
+
+- **Arguments**: `root: Path`
+
+- **Returns**: `tuple[ComplexType]`
+
+The checkout's git folder and the folder its refs are kept in: the same, except in a worktree, whose ``.git``
+is a file naming its own folder ("gitdir: ..."), which names the common one ("commondir").
+
 ### def `git_commit` (environment.py)
 
 - **Arguments**: `root: Path`
 
 - **Returns**: `ComplexType`
 
-The short commit of a source checkout (read from .git, without running git), or None.
+The full commit of a source checkout (read from .git, without running git; a worktree's too), else the one an
+image was built from (its ``BUILD_COMMIT`` file), else None.
+
+### def `_normalised` (environment.py)
+
+- **Arguments**: `path: Path`
+
+- **Returns**: `bytes`
+
+No description available.
+
+### def `code_fingerprint` (environment.py)
+
+- **Arguments**: `root: Path`
+
+- **Returns**: `ComplexType`
+
+SHA-256 over CohortStudio's own Python sources (its packages and entry points): each file named by its path from
+``root`` with forward slashes, its length and its bytes with LF line endings, in the order of the paths. None when
+none is found. Computed once per process (about half a second).
+
+### def `lock_checksum` (environment.py)
+
+- **Arguments**: `root: Path`
+
+- **Returns**: `ComplexType`
+
+SHA-256 of ``uv.lock``, the exact versions the installation was resolved to, with LF line endings; None
+without it (an installed package).
 
 ### def `environment` (environment.py)
 
@@ -582,7 +632,8 @@ The short commit of a source checkout (read from .git, without running git), or 
 
 - **Returns**: `dict[ComplexType]`
 
-CohortStudio, its commit (when known), Python and the versions of the key libraries that are installed.
+CohortStudio, its commit and code fingerprint and lock checksum (when known), Python and the versions of the key
+libraries that are installed.
 
 ### def `environment_text` (environment.py)
 
@@ -590,7 +641,8 @@ CohortStudio, its commit (when known), Python and the versions of the key librar
 
 - **Returns**: `str`
 
-The environment in one line, for reports: "CohortStudio 2.4.1 (commit abc1234), Python 3.14.3, numpy 2.4, ...".
+The environment in one line, for reports: "CohortStudio 2.4.1 (commit abc1234, code 9f3c2a1b), Python 3.14.3,
+numpy 2.4, ...".
 
 ---
 

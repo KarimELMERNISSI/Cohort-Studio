@@ -103,6 +103,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   name also names the study; a name that keeps no letter of its own takes part of its file's checksum into its
   study. The trace download's help no longer suggests replaying it elsewhere: it holds row numbers and values of the
   data.
+- **The software a dataset is analysed with names the code exactly.** The trace and the study dossier record
+  CohortStudio's full commit (7 characters were kept), a fingerprint of its own code (SHA-256 over its Python sources,
+  line endings read as LF) and the lock file's checksum. The fingerprint names the code that ran when no commit can: a
+  checkout with local changes, an image built without its commit. A Docker image records its commit from the build
+  argument `BUILD_COMMIT` (`build_docker.bat`, Compose and CI pass it); the dossier's line reads "CohortStudio 2.4.1
+  (commit 0e88a92, code eaf86db4), Python …".
 - The replay engine is now `manage/replay/engine.py` (it was `manage/reproduction_manager.py`): a script that imported
   the old name must import the new one.
 - One list of the files a trace makes the replay read (`files_needed`, with `locate`) serves the replay and the

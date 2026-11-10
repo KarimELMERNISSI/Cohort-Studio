@@ -4,6 +4,7 @@ services:
       context: .
       args:
         WITH_YFILES: "0"   # "1" adds the optional proprietary graph engine (online runtime, usage analytics)
+        BUILD_COMMIT: "${BUILD_COMMIT:-}"   # the commit built: BUILD_COMMIT=$(git rev-parse HEAD) docker compose build
     image: cohortstudio:latest
     container_name: cohortstudio
     ports:

@@ -157,7 +157,7 @@ dossier name it by its number. The data have their own counter, the *data revisi
 
 | Section | Contents |
 | --- | --- |
-| 1. Provenance | Dataset, source file and hash, parse options, data fingerprint, the study definition and its revision, trace and integrity, software versions |
+| 1. Provenance | Dataset, source file and hash, parse options, data fingerprint, the study definition and its revision, trace and integrity, software versions (with CohortStudio's commit and a fingerprint of its code) |
 | 2. Analysis population | Participant flow figure (STROBE item 13), exclusions with the criteria behind them, definition of every criterion |
 | 3. Data handling | The recorded steps that changed the data, with their formulas |
 | 4. Missing data | Missing values per variable, values filled by single imputation, the multiple imputation (settings, methods, status, methods paragraph) |

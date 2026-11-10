@@ -315,7 +315,7 @@ cryptography) ship no wheel for Intel Macs.
 
 ```bash
 # Build and start (Docker Compose v2); data, accounts and traces live in ./data
-docker compose up -d --build
+BUILD_COMMIT=$(git rev-parse HEAD) docker compose up -d --build
 
 # First start: the log shows a one-time setup token; the login page asks for it to create the administrator
 docker compose logs cohortstudio
@@ -324,7 +324,7 @@ docker compose logs cohortstudio
 Without Compose:
 
 ```bash
-docker build -t cohortstudio:latest .
+docker build --build-arg BUILD_COMMIT=$(git rev-parse HEAD) -t cohortstudio:latest .
 cp .env.example .env       # then fill in what you use
 docker run -d -p 8501:8501 -v ${PWD}/data:/app/data --env-file .env --name cohortstudio cohortstudio:latest
 docker logs cohortstudio   # the one-time setup token
@@ -333,8 +333,9 @@ docker logs cohortstudio   # the one-time setup token
 The container runs as uid 1000: on a Linux host, run `chown -R 1000:1000 data` once before the first start.
 
 The image installs every optional group except the proprietary graph-yfiles engine (the build argument
-`WITH_YFILES=1` adds it). CI builds it on every push, starts a fresh container and checks its health endpoint and
-the first-run setup.
+`WITH_YFILES=1` adds it). `BUILD_COMMIT` records the commit the image is built from (the image holds no `.git`), so
+that a trace and the study dossier name it; without it they name the code by its fingerprint only. CI builds it on
+every push, starts a fresh container and checks its health endpoint, the first-run setup and the commit it names.
 
 ---
 

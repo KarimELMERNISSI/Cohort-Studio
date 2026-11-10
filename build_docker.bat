@@ -1,6 +1,8 @@
 @echo off
 echo Building Docker Container...
-docker build -t cohortstudio .
+set BUILD_COMMIT=
+for /f %%c in ('git rev-parse HEAD 2^>nul') do set BUILD_COMMIT=%%c
+docker build --build-arg BUILD_COMMIT=%BUILD_COMMIT% -t cohortstudio .
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Docker build failed. Please ensure Docker Desktop is running.

@@ -33,6 +33,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY . .
 
+# The commit the image is built from (the image holds no .git): utils/environment.py reads it, so that a trace names
+# the code its results were computed with. Pass it with --build-arg BUILD_COMMIT=$(git rev-parse HEAD).
+ARG BUILD_COMMIT=""
+RUN if [ -n "$BUILD_COMMIT" ]; then echo "$BUILD_COMMIT" > BUILD_COMMIT; fi
+
 # Run as an unprivileged user; /app/data is the mount point for DATA_ROOT (per-user workspaces).
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p /app/data \

@@ -145,7 +145,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Build the image
-        run: docker build -t cohortstudio:ci .
+        run: docker build --build-arg BUILD_COMMIT=${{ github.sha }} -t cohortstudio:ci .
 
       - name: Start a fresh container
         run: docker run -d --name cohortstudio -p 8501:8501 cohortstudio:ci
@@ -165,6 +165,10 @@ jobs:
       - name: A new setup token from the command line in the container
         run: |
           docker exec cohortstudio python manage_users.py setup-token | grep -q "One-time setup token:"
+
+      - name: The image names the commit it was built from
+        run: |
+          test "$(docker exec cohortstudio python -c 'from utils.environment import git_commit; print(git_commit())')" = "${{ github.sha }}"
 
       - name: Container log
         if: always()
