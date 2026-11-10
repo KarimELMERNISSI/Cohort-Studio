@@ -3807,7 +3807,7 @@ _Reproduce page: traces, artifacts, replay and reports._
 _No module description._
 
 **Imports**:
-`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.replay.engine.run_trace`, `manage.trace_documenter.TraceDocumenter`, `ui.components.text.plain`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
+`difflib`, `json`, `os`, `pandas`, `streamlit`, `core.lineage.verify_trace`, `core.workspace.safe_filename`, `ingest.loaders.UPLOAD_TYPES`, `manage.paths.PathResolver`, `manage.paths.normalize_path`, `manage.replay.engine.NeededFile`, `manage.replay.engine.files_needed`, `manage.replay.engine.locate`, `manage.replay.engine.run_trace`, `manage.replay.engine.trace_problems`, `manage.trace_documenter.TraceDocumenter`, `ui.components.text.plain`, `ui.progress.current_trace_session`, `ui.progress.mark_step`, `ui.services.services`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `utils.data_paths.get_traces_dir`, `utils.data_paths.get_uploads_dir`
 
 ### def `_uploads_dir` (reproduce_analysis.py)
 
@@ -3840,6 +3840,24 @@ No description available.
 - **Returns**: `PathResolver`
 
 Where the files a trace names are looked for: the user's workspace (the session's services, manage.paths).
+
+### def `_located` (reproduce_analysis.py)
+
+- **Arguments**: `needed: NeededFile`
+
+- **Returns**: `ComplexType`
+
+The file of this workspace that stands for a file the trace needs, found as the replay finds it, with the files
+chosen on this page for recorded paths (manage.replay.engine.locate).
+
+### def `_missing_files` (reproduce_analysis.py)
+
+- **Arguments**: `trace_data: dict`
+
+- **Returns**: `dict[ComplexType]`
+
+The files the replay needs and this workspace lacks, by recorded path: the source and each merge's file (a
+snapshot is optional: without it, its step is skipped with a warning). A file read twice is asked for once.
 
 ### def `_resolve_user_path` (reproduce_analysis.py)
 

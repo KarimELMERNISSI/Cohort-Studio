@@ -7,6 +7,8 @@ finds each file in the places the session may read:
 - the files the user chose for recorded paths on the Reproduce page (``named``), first, in the same places;
 - the user's workspace (``scope``): the recorded path when it lies inside it, else the file's name in its folders;
 - for a command line (M8), only the files named on it, found by their names (:meth:`PathResolver.for_files`);
+- for a study package (M8), only its members, each found by the very string the trace records for it, never by a
+  name: a received trace must not reach the recipient's own files (:meth:`PathResolver.for_package`);
 - for tests and scripts (:meth:`PathResolver.unconfined`): the recorded path when it exists, else the file's name in
   the shared folders of the data root.
 
@@ -45,6 +47,8 @@ def read_version(path: str) -> pd.DataFrame | None:
     except FileNotFoundError:
         return None
     except Exception:
+        if any(c in path for c in "*?[]{}"):  # DuckDB would read the path as a pattern of files
+            return None
         import duckdb
 
         try:
@@ -63,11 +67,28 @@ class PathResolver:
     named: Mapping[str, str] = field(default_factory=dict)
     files: tuple[str, ...] | None = None  # only these files, found by their names; () reads none
     shared: bool = False  # without a user: the shared folders of the data root (unconfined())
+    # a study package's members: each recorded path, and each saved version's name, to the member extracted for it
+    members: Mapping[str, str] | None = None
+    versions: Mapping[str, str] | None = None
 
     @classmethod
     def for_files(cls, files: Iterable[str | Path]) -> PathResolver:
         """Only these files, found by their names (a command line's): nothing else is read."""
         return cls(files=tuple(str(Path(f).resolve()) for f in files))
+
+    @classmethod
+    def for_package(
+        cls, files: Mapping[str, str], versions: Mapping[str, str] | None = None
+    ) -> PathResolver:
+        """A study package's files: each string the trace records (``manage.replay.engine.files_needed``) to the member
+        extracted for it, and each saved version's name to its member (only a trace that names a version without
+        recording its path needs one). Nothing else is read, and nothing is found by a
+        name, so that a received trace never reaches the recipient's own files. A member keeps its file's extension,
+        by which the replay reads it (a snapshot or a saved version: ``.parquet``)."""
+        return cls(
+            members={recorded: str(Path(m).resolve()) for recorded, m in files.items()},
+            versions={name: str(Path(m).resolve()) for name, m in (versions or {}).items()},
+        )
 
     @classmethod
     def unconfined(cls) -> PathResolver:
@@ -83,6 +104,8 @@ class PathResolver:
         """The file to read for a path a trace records, or None when the session may read none."""
         if not isinstance(recorded, str) or not recorded:
             return None
+        if self.members is not None:
+            return _member(self.members.get(recorded))
         chosen = self._chosen(recorded)
         if chosen is not None:
             return chosen
@@ -132,6 +155,8 @@ class PathResolver:
             return None
         if os.path.basename(normalize_path(name)) != name:
             return None
+        if self.members is not None:
+            return _member((self.versions or {}).get(name))
         if self.files is not None:
             return self._named_file(f"{name}.parquet")
         if self.scope is not None:
@@ -179,6 +204,11 @@ class PathResolver:
         from utils.data_paths import get_data_root, get_traces_dir, get_uploads_dir
 
         return [get_data_root(), get_uploads_dir(), get_traces_dir()]
+
+
+def _member(path: str | None) -> str | None:
+    """A package's member, when it was extracted: never another file."""
+    return path if path and os.path.isfile(path) else None
 
 
 __all__ = ["PathResolver", "normalize_path", "read_version"]

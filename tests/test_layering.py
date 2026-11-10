@@ -92,9 +92,10 @@ UTILS_GROUPS = {
     "utils.visualization_utils": "explore",
 }
 ENTRY_POINTS = ("main", "manage_users")  # above every layer
-# R5, on each name that runs outside the app: ``python -m manage.replay`` runs its ``__main__``, which no import of the
-# package reaches, so the study package's modules join this list as M8 adds them; a listed name must exist
+# R5, on each name that runs outside the app (a listed name must exist): ``python -m manage.replay`` runs its
+# ``__main__``, which no import of the package reaches, so every module under a headless package is checked by name
 HEADLESS = ("manage_users", "manage.replay", "manage.replay.engine", "manage.services")
+HEADLESS_PACKAGES = ("manage.replay",)
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
 # Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws
@@ -465,7 +466,12 @@ def test_r4_ai_sdks_only_in_the_providers() -> None:
     )
 
 
-@pytest.mark.parametrize("entry", HEADLESS)
+def _headless() -> list[str]:
+    under = sorted(m for m in modules() if any(m.startswith(f"{p}.") for p in HEADLESS_PACKAGES))
+    return list(dict.fromkeys([*HEADLESS, *under]))
+
+
+@pytest.mark.parametrize("entry", _headless())
 def test_r5_headless_entry_points_reach_neither_streamlit_nor_ai(entry: str) -> None:
     assert entry in modules(), (
         f"R5 lists {entry}, which does not exist: a renamed module must keep its rule"

@@ -84,6 +84,22 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   in the log: every quoted text becomes "…", and a path its file name. An id of the trace this version does not know
   (a step, an approach) is still named, with the valid ones.
 
+### The replay, made ready for the study package (M8, Phase 1)
+
+- The replay engine is now `manage/replay/engine.py` (it was `manage/reproduction_manager.py`): a script that imported
+  the old name must import the new one.
+- One list of the files a trace makes the replay read (`files_needed`, with `locate`) serves the replay and the
+  Reproduce page. The page no longer asks for the saved version a study was begun from when the workspace holds it,
+  asks once for a file two merges read (naming both steps), finds the source by the path it was loaded from when its
+  recorded copy is gone, and refuses a file that is not a trace with the reason, rather than stopping on it (so does
+  the replay). The saved version a source stands for is the one its load recorded, never a table that happens to bear
+  the dataset's base name. An older trace that names a saved version and records a load path no longer found reads
+  the saved version.
+- **A replay that took a step from its recorded table is no longer called reproduced.** A step the engine cannot
+  recompute (data replaced outside the app, the single imputation adopted from the former panel) is still taken from
+  the table recorded with it, and the page says so ("1 step(s) taken from their recorded tables: not reproduced"),
+  where it said "Reproduced exactly".
+
 ### Statistics: results corrected (follow-up programme M5)
 
 - **Rate ratio** (Analyze > Hypothesis tests > Paired, rates & stratified).

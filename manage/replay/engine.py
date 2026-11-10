@@ -8,10 +8,13 @@ chosen in the UI, or a command line's files); given none, it reads no file. :fun
 keeps the historical ``(df, error)`` signature.
 
 Traces recorded since schema 2 carry, for every step, the fingerprint of the table it produced. The
-replay checks each replayed step against it and reports the first *divergence*; steps that cannot be
-recomputed (an adopted multiple imputation, a table replaced outside the app) are listed as not
-replayable, and their recorded snapshot is used when there is one. A replay is *reproducible* when every
-step was replayed and matched.
+replay checks each replayed step against it and reports the first *divergence*. A step that cannot be
+recomputed (an adopted multiple imputation, a table replaced outside the app) is taken from its recorded
+table when there is one (``from_snapshot``), else listed as not replayable. A replay is *reproducible*
+when every step was recomputed (or only documents) and matched.
+
+:func:`files_needed` lists every file a replay may read and :func:`locate` finds one, in the order the
+replay itself looks: the Reproduce page asks for the missing ones, and the study package carries them.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -58,6 +61,29 @@ logger = logging.getLogger(__name__)
 SKIPPED_STEPS = step_ids(replay=DOCUMENT)
 # Steps the engine cannot recompute: their snapshot is used when one was recorded
 NOT_REPLAYABLE = step_ids(replay=SNAPSHOT)
+# How a replay passed a step: recomputed from its settings; it only documents (the table goes on unchanged); taken
+# from the table recorded with it; recomputed in part only (not fully recorded); skipped (no way to redo it)
+StepMode = Literal["recomputed", "documented", "snapshot", "in_part", "skipped"]
+
+
+@dataclass(frozen=True)
+class StepSeen:
+    """
+    What a replay saw of one step it passed, given to ``on_step``: the step, the tables before and after it (the
+    replay's own: read them, keep only what is computed from them), how it was passed, the fingerprint of the table
+    after it as computed here, and the one the trace recorded. An exception raised by the hook ends the replay.
+    """
+
+    index: int
+    step: Mapping[str, Any]
+    before: pd.DataFrame
+    after: pd.DataFrame
+    mode: StepMode
+    fingerprint: str | None
+    expected: str | None
+
+
+StepHook = Callable[[StepSeen], None]
 
 
 @dataclass(frozen=True)
@@ -84,6 +110,9 @@ class ReplayResult:
     not_replayable: list[int] = field(
         default_factory=list
     )  # step indexes that could not be recomputed
+    from_snapshot: list[int] = field(
+        default_factory=list
+    )  # steps taken from the table recorded with them
     verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
     imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
     mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
@@ -103,18 +132,20 @@ class ReplayResult:
 
     @property
     def reproducible(self) -> bool:
-        """Every step replayed, and every recorded fingerprint matched."""
+        """Every step recomputed (or only documenting), and every recorded fingerprint matched: a step taken from
+        its recorded table was not reproduced."""
         return (
             self.error is None
             and self.missing_file is None
             and self.divergence is None
             and not self.not_replayable
+            and not self.from_snapshot
             and not self.mi_divergence
         )
 
 
 class _NotReplayable(Exception):
-    """A step the engine cannot recompute; carries the frame to continue from."""
+    """A step the engine cannot recompute; carries the frame to continue from and how it was passed."""
 
 
 def _resolve(path: str | None, paths: PathResolver | None) -> str | None:
@@ -144,33 +175,217 @@ def _read_any(
 def load_source(
     trace_data: dict[str, Any], paths: PathResolver | None = None
 ) -> tuple[pd.DataFrame | None, str | None]:
-    """The source dataset of a trace: the recorded artifact (newer traces) or the original path/name."""
-    source = trace_data.get("source_dataset")
-    steps = trace_data.get("steps", [])
-    parse_options = None
-    if steps and steps[0].get("function") == "initial_load":
-        params = steps[0].get("params", {}) or {}
-        # a trace is user-supplied JSON: its paths are looked up in the workspace only (_resolve), never as typed
-        if (not source or _resolve(str(source), paths) is None) and params.get("source_path"):
-            source = params["source_path"]
-        if params.get("parse_options"):
-            parse_options = ParseOptions.from_dict(params["parse_options"])
-    if not source:
+    """The source dataset of a trace, as ``files_needed`` names it and ``locate`` finds it: the recorded artifact
+    (newer traces), else the path it was loaded from, else the saved version the load recorded. A trace is
+    user-supplied JSON: each recorded path is looked up through ``paths`` only, never read as written."""
+    source = next((f for f in files_needed(trace_data) if f.step is None), None)
+    if source is None:
         return None, "Trace missing 'source_dataset' field."
-    resolved = _resolve(str(source), paths)
-    if resolved is None:
-        if not os.path.splitext(str(source))[1]:  # a saved version's name rather than a file
-            df = _version(str(source), paths)
-            if df is not None:
-                return ensure_row_ids(df), None
-        return None, f"Source file not found: {source}"
+    found = _locate(source, paths)
+    if found is None:
+        return None, f"Source file not found: {source.recorded[-1]}"
+    recorded, resolved, version = found
+    if version:
+        table = read_version(resolved)
+        if table is None:
+            return None, f"Failed to load source dataset ({recorded})"
+        return ensure_row_ids(table), None
+    options = _loaded(trace_data).get("parse_options")
+    parse_options = (
+        ParseOptions.from_dict(options) if isinstance(options, Mapping) and options else None
+    )
     try:
         df = _read_any(resolved, parse_options, paths)
     except Exception as exc:
-        return None, f"Failed to load source dataset ({source}): {without_values(exc)}"
+        return None, f"Failed to load source dataset ({recorded}): {without_values(exc)}"
     if df is None:
-        return None, f"Failed to load source dataset ({source})"
+        return None, f"Failed to load source dataset ({recorded})"
     return ensure_row_ids(df), None  # the row ids a fresh load gives (AppState.set_dataset)
+
+
+# ---------------------------------------------------------------------------------------------- the files of a trace
+
+# Stored ids (the study package's list of files): never renamed. ROLE_WORDS says them in a sentence.
+FileRole = Literal["source", "saved_version", "replayed_state", "enrichment", "snapshot"]
+ROLE_WORDS: dict[str, str] = {
+    "source": "the source file",
+    "saved_version": "a saved version",
+    "replayed_state": "a state replayed from another trace",
+    "enrichment": "a merged file",
+    "snapshot": "a step's recorded table",
+}
+
+
+@dataclass(frozen=True)
+class NeededFile:
+    """
+    A file a replay of a trace may read: what it is to the replay, the step that reads it (None: the source, read
+    before the first step), the paths the trace records for it in the order the replay tries them, then the names of
+    the saved versions it looks up (the source only; :meth:`manage.paths.PathResolver.dataset`), and the checksum the
+    step recorded for the file, when it did. A snapshot is optional: without it, its step is skipped with a warning.
+    """
+
+    role: FileRole
+    step: int | None
+    recorded: tuple[str, ...]
+    versions: tuple[str, ...] = ()
+    checksum: str | None = None
+
+
+def _given(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _settings(step: object) -> Mapping[str, Any]:
+    params = step.get("params") if isinstance(step, Mapping) else None
+    return params if isinstance(params, Mapping) else {}
+
+
+def _loaded(trace: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The settings of the trace's load (its first step, ``initial_load``)."""
+    steps = trace.get("steps")
+    first = steps[0] if isinstance(steps, list) and steps else None
+    return (
+        _settings(first)
+        if isinstance(first, Mapping) and first.get("function") == "initial_load"
+        else {}
+    )
+
+
+def _snapshot_path(step: Mapping[str, Any]) -> str | None:
+    """The recorded table read in place of a step the engine cannot recompute (a ``.parquet`` file); None for a step
+    it recomputes or that only documents, whose recorded table is never read."""
+    function = str(step.get("function"))
+    if function in SKIPPED_STEPS or not (
+        function in NOT_REPLAYABLE or step.get("replayable") is False
+    ):
+        return None
+    path = _given(step.get("output_dataset_path"))
+    return path if path and path.endswith(".parquet") else None
+
+
+def _version_names(
+    parent: Mapping[str, Any], loaded: Mapping[str, Any], recorded: tuple[str, ...]
+) -> tuple[str, ...]:
+    """The saved versions a source is looked up as, from what the load recorded: the version it was loaded from
+    (``parent.dataset``), else the dataset's name and version, else (a trace that records neither) each recorded name
+    without an extension that is not the dataset's name."""
+    if _given(parent.get("dataset")):
+        return (parent["dataset"],)
+    name, number = _given(loaded.get("dataset_name")), loaded.get("version")
+    if name and isinstance(number, int) and not isinstance(number, bool):
+        return (f"{name}_v{number}",)
+    return tuple(r for r in recorded if not os.path.splitext(r)[1] and r != name)
+
+
+def trace_problems(trace: object) -> list[str]:
+    """
+    What keeps ``trace`` from being a trace this engine replays: a JSON object whose steps are a list of objects, each
+    naming its kind, every record the replay reads an object (the settings, the population, the data, the reading
+    options), a merged file named by a string. Empty when it is one. The messages quote nothing of the file: a trace
+    is user-supplied. :func:`run_trace` refuses a trace with a problem, saying the first.
+    """
+    if not isinstance(trace, Mapping):
+        return ["it is not a JSON object"]
+    steps = trace.get("steps")
+    if not isinstance(steps, list):
+        return ["it has no list of steps"]
+    problems: list[str] = []
+    if trace.get("source_dataset") is not None and not isinstance(trace.get("source_dataset"), str):
+        problems.append("its source dataset is not a file name")
+    if trace.get("parent") is not None and not isinstance(trace.get("parent"), Mapping):
+        problems.append("its parent is not an object")
+    for n, step in enumerate(steps, start=1):
+        if not isinstance(step, Mapping):
+            problems.append(f"step {n} is not an object")
+            continue
+        if not isinstance(step.get("function"), str) or not step.get("function"):
+            problems.append(f"step {n} names no step kind")
+            continue
+        for name, words in (
+            ("params", "settings"),
+            ("population", "population"),
+            ("data", "data record"),
+        ):
+            if step.get(name) is not None and not isinstance(step.get(name), Mapping):
+                problems.append(
+                    f"step {n}'s {words} are not an object"
+                    if name == "params"
+                    else f"step {n}'s {words} is not an object"
+                )
+        params = _settings(step)
+        if params.get("enrichment_file_path") is not None and not isinstance(
+            params["enrichment_file_path"], str
+        ):
+            problems.append(f"step {n}'s merged file is not a file name")
+        options = params.get("parse_options")
+        if options:
+            try:
+                ParseOptions.from_dict(options)
+            except Exception:  # whatever a hand-made record holds
+                problems.append(f"step {n}'s reading options cannot be read")
+    return problems
+
+
+def files_needed(trace: Mapping[str, Any]) -> list[NeededFile]:
+    """
+    Every file a replay of ``trace`` may read, in the order it reads them: the source dataset (its recorded copy, then
+    the path it was loaded from, then the saved version the load recorded; a state replayed from another trace is a
+    role of its own, which no file of the trace's names), each merge's file (read through its recorded path only), and
+    the recorded table of each step the engine cannot recompute. The Reproduce page asks for the missing ones; the
+    study package carries them, and reads nothing else (:meth:`manage.paths.PathResolver.for_package`). It never
+    raises on a JSON object: what it cannot read, it does not list (``trace_problems`` says why).
+    """
+    steps = trace.get("steps") if isinstance(trace.get("steps"), list) else []
+    needed: list[NeededFile] = []
+    parent = trace.get("parent") if isinstance(trace.get("parent"), Mapping) else {}
+    loaded = _loaded(trace)
+    source = tuple(
+        dict.fromkeys(
+            s for s in (_given(trace.get("source_dataset")), _given(loaded.get("source_path"))) if s
+        )
+    )
+    if source and parent.get("upto_step") is not None:
+        needed.append(NeededFile("replayed_state", None, source))
+    elif source:
+        versions = _version_names(parent, loaded, source)
+        checksum = None if versions else _given(loaded.get("file_hash"))
+        needed.append(
+            NeededFile("saved_version" if versions else "source", None, source, versions, checksum)
+        )
+    for index, step in enumerate(steps):
+        if not isinstance(step, Mapping):
+            continue
+        params = _settings(step)
+        merged = _given(params.get("enrichment_file_path"))
+        if step.get("function") == "enrichment" and merged:
+            needed.append(
+                NeededFile("enrichment", index, (merged,), checksum=_given(params.get("file_hash")))
+            )
+        snapshot = _snapshot_path(step)
+        if snapshot:
+            needed.append(NeededFile("snapshot", index, (snapshot,)))
+    return needed
+
+
+def _locate(needed: NeededFile, paths: PathResolver | None) -> tuple[str, str, bool] | None:
+    """The file that stands for ``needed``, in the replay's order: (what the trace names it, the file, whether it is a
+    saved version); None when none is found."""
+    for recorded in needed.recorded:
+        resolved = _resolve(recorded, paths)
+        if resolved:
+            return recorded, resolved, False
+    for name in needed.versions:
+        found = paths.dataset(name) if paths is not None else None
+        if found:
+            return name, found, True
+    return None
+
+
+def locate(needed: NeededFile, paths: PathResolver | None) -> str | None:
+    """The file of this machine that stands for ``needed``, found as the replay finds it; None when none is."""
+    found = _locate(needed, paths)
+    return found[1] if found else None
 
 
 def _population_rows(
@@ -275,7 +490,7 @@ def _rules_version(block: Mapping[str, Any]) -> int:
 
 
 def _snapshot(step: dict[str, Any], paths: PathResolver | None) -> pd.DataFrame | None:
-    path = _resolve(step.get("output_dataset_path"), paths)
+    path = _resolve(_snapshot_path(step), paths)
     if path and path.endswith(".parquet") and os.path.exists(path):
         return ensure_row_ids(pd.read_parquet(path))
     return None
@@ -663,40 +878,43 @@ def _apply_step(
     paths: PathResolver | None,
     warnings: list[str],
     result: ReplayResult | None = None,
-) -> tuple[pd.DataFrame, str | None]:
-    """Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo."""
+) -> tuple[pd.DataFrame, str | None, StepMode]:
+    """Apply one recorded step; returns (df, missing_path, how it was passed). Raises _NotReplayable for a step it
+    cannot redo, with the frame to go on from and its mode (in part, or skipped)."""
     func_name = str(step.get("function"))
 
     if func_name in SKIPPED_STEPS:
-        return df, None
+        return df, None, "documented"
 
     if func_name in NOT_REPLAYABLE or step.get("replayable") is False:
         snapshot = _snapshot(step, paths)
         if snapshot is not None:
             warnings.append(
-                f"step {index + 1} ({func_name}) cannot be recomputed: its recorded snapshot was used"
+                f"step {index + 1} ({func_name}) cannot be recomputed: its recorded table was used"
             )
-            return snapshot, None
+            return snapshot, None, "snapshot"
         handler = _HANDLED.get(func_name)
         if handler is not None:  # recorded in part only (e.g. a filter that also clipped values)
             warnings.append(
                 f"step {index + 1} ({func_name}) was replayed only in part: it was not fully recorded"
             )
             partial, _ = handler(df, step, index, paths, warnings)
-            raise _NotReplayable(partial)
+            raise _NotReplayable(partial, "in_part")
         warnings.append(
             f"step {index + 1} ({func_name}) cannot be recomputed and has no snapshot: skipped"
         )
-        raise _NotReplayable(df)
+        raise _NotReplayable(df, "skipped")
 
     handler = _HANDLED.get(func_name)
     if handler is None:
         warnings.append(f"step {index + 1}: unknown step '{func_name}' skipped")
         logger.warning("Skipping unknown pipeline step: %s", func_name)
-        raise _NotReplayable(df)
+        raise _NotReplayable(df, "skipped")
     if func_name in _REPORTING:
-        return handler(df, step, index, paths, warnings, result)
-    return handler(df, step, index, paths, warnings)
+        out, missing = handler(df, step, index, paths, warnings, result)
+    else:
+        out, missing = handler(df, step, index, paths, warnings)
+    return out, missing, "recomputed"
 
 
 def apply_steps(
@@ -707,11 +925,14 @@ def apply_steps(
     start: int = 0,
     progress_callback: Callable[[int, str], None] | None = None,
     frames: Mapping[str, pd.DataFrame] | None = None,
+    on_step: StepHook | None = None,
 ) -> ReplayResult:
     """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
     the files the steps name (none read without it). ``frames``:
     tables a step's population may name by fingerprint although the replay does not pass through them (a draft
-    redone one change at a time names the dataset it was built on)."""
+    redone one change at a time names the dataset it was built on). ``on_step(StepSeen)`` is called after each step
+    the replay passes (not on the one it stops at), so that a caller takes each step's shape, profile or fingerprint
+    in the same pass (the study package's checks)."""
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
@@ -731,12 +952,11 @@ def apply_steps(
         description = step.get("description", step.get("function"))
         if progress_callback:
             progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
-        replayed = True
         before = current
         try:
-            current, missing = _apply_step(current, step, i, paths, result.warnings, result)
+            current, missing, mode = _apply_step(current, step, i, paths, result.warnings, result)
         except _NotReplayable as skipped:
-            current, missing, replayed = skipped.args[0], None, False
+            current, missing, mode = skipped.args[0], None, skipped.args[1]
             result.not_replayable.append(i)
         except Exception as exc:
             # without the values the error quotes (a cell of the data), in the result and in the log; an unknown id is
@@ -762,10 +982,14 @@ def apply_steps(
             result.population_frames.clear()
             return result
         expected = (step.get("data") or {}).get("fp_out")
-        verified = bool(expected and replayed)
-        actual = frame_fingerprint(current) if verified or named else None
-        if verified:
-            result.verified_steps += 1
+        # a table taken from its recording is checked against it (a file swapped since), never counted as reproduced
+        checked = bool(expected) and mode in ("recomputed", "documented", "snapshot")
+        actual = frame_fingerprint(current) if checked or named or on_step is not None else None
+        if mode == "snapshot":
+            result.from_snapshot.append(i)
+        if checked:
+            if mode != "snapshot":
+                result.verified_steps += 1
             if actual != expected and result.divergence is None:
                 result.divergence = (i, str(expected), str(actual))
                 result.warnings.append(
@@ -775,6 +999,12 @@ def apply_steps(
             result.population_frames[str(actual)] = current
         if expected and str(expected) in named:
             result.population_frames[str(expected)] = current
+        if on_step is not None:
+            on_step(
+                StepSeen(
+                    i, step, before, current, mode, actual, str(expected) if expected else None
+                )
+            )
     result.population_frames.clear()
     result.df = current
     result.single_imputed = restrict_cells(result.single_imputed, current)
@@ -792,8 +1022,14 @@ def run_trace(
     source_df: pd.DataFrame | None = None,
     paths: PathResolver | None = None,
     progress_callback: Callable[[int, str], None] | None = None,
+    on_step: StepHook | None = None,
 ) -> ReplayResult:
-    """Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame."""
+    """Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame; ``on_step``
+    as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``) is refused, with
+    the first reason as the error."""
+    problems = trace_problems(trace_data)
+    if problems:
+        return ReplayResult(df=None, error=f"Not a trace this version can replay: {problems[0]}")
     steps = list(trace_data.get("steps", []))
     if upto is not None:
         steps = steps[: upto + 1]
@@ -802,7 +1038,9 @@ def run_trace(
         source_df, error = load_source(trace_data, paths)
         if error:
             return ReplayResult(df=None, error=error)
-    return apply_steps(source_df, steps, paths=paths, progress_callback=progress_callback)
+    return apply_steps(
+        source_df, steps, paths=paths, progress_callback=progress_callback, on_step=on_step
+    )
 
 
 def execute_trace_pipeline(
@@ -819,10 +1057,19 @@ def execute_trace_pipeline(
 __all__ = [
     "NOT_REPLAYABLE",
     "SKIPPED_STEPS",
+    "ROLE_WORDS",
+    "FileRole",
+    "NeededFile",
     "ReplayResult",
+    "StepHook",
+    "StepMode",
     "StepRecord",
+    "StepSeen",
     "apply_steps",
     "execute_trace_pipeline",
+    "files_needed",
     "load_source",
+    "locate",
     "run_trace",
+    "trace_problems",
 ]

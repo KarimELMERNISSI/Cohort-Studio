@@ -72,7 +72,7 @@ Replay a trace to reproduce the exact sequence of transformations.
 A full replay says when the replayed table is exactly the one that was recorded, reports the first step where it
 differs, and lists the steps it cannot recompute (the single imputation adopted from the former
 multiple-imputation panel, data replaced outside the app); for those it uses the recorded snapshot when there is
-one. A multiple imputation (`mi_impute`) is re-run from its recorded settings and checked against the
+one, and says so: a replay that took a step from its recorded table is not called reproduced. A multiple imputation (`mi_impute`) is re-run from its recorded settings and checked against the
 fingerprint of its imputed cells. A full replay also finds the cells filled by single imputations, so results
 on the replayed data carry the same warning; a fast replay from snapshots does not know them. The replayed state becomes the session dataset, linked to
 the trace it was replayed from.
@@ -86,8 +86,12 @@ workspace** only:
 - Otherwise the file is looked up by name in your workspace's uploads, trace artifacts, snapshots and datasets
   folders, so a trace recorded on another system (for example Windows paths read in Docker) finds its files once
   they are in your workspace.
-- A missing source or merged file is listed under **Missing Resources**: upload it, pick it from an artifact
-  folder, or enter a path inside your workspace. Paths outside your workspace are refused.
+- A missing source or merged file is listed under **Missing Resources**, once even when two merges read it (the
+  entry names both steps): upload it, pick it from an artifact folder, or enter a path inside your workspace. Paths
+  outside your workspace are refused. A saved version your workspace holds is found by its name, and the source by
+  the path it was loaded from when its recorded copy is gone.
+- A file that is not a trace (its steps are not a list of recorded steps) is refused with the reason, before anything
+  reads it.
 
 ### Step-by-Step Execution
 - Each step of the list shows its description, function name, time and saved snapshot; **Reproduce to Step N**

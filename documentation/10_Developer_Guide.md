@@ -453,7 +453,25 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 
 `run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
 recorded fingerprint. It reads the files a trace names through the resolver it is given (`manage/paths.PathResolver`):
-the user's workspace in the app, only the named files for a command line; given none, it reads no file.
+the user's workspace in the app, only the named files for a command line, only a study package's members
+(`PathResolver.for_package`, each by the string the trace records, never by a name); given none, it reads no file.
+The package `manage/replay/` imports nothing in its `__init__`, so that the study package's command line starts
+without loading the engine.
+
+- `trace_problems(trace)` says what keeps a file from being a trace (its steps a list of objects, each naming its
+  kind, every record the replay reads an object), before anything reads it; `run_trace` refuses such a file with the
+  first reason, and so does the Reproduce page.
+- `files_needed(trace)` lists every file a replay may read, as `NeededFile`s: the role (a stored id: `source`,
+  `saved_version`, `replayed_state`, `enrichment`, `snapshot`; `ROLE_WORDS` says them in a sentence), the step, the
+  paths the trace records in the order the replay tries them, the saved versions it then looks up (taken from what the
+  load recorded: the version it was loaded from, or the dataset's name and version), and the checksum the step
+  recorded. `locate(needed, paths)` finds one as the replay does. `load_source` reads the source through them, the
+  Reproduce page asks for the missing files from them, and the study package carries those files; a test checks that
+  a replay asks its resolver for nothing else (`tests/test_replay_files.py`).
+- `on_step`, given to `run_trace` or `apply_steps`, receives a `StepSeen` after each step the replay passes: the
+  tables before and after, how the step was passed (`recomputed`, `documented`, `snapshot`, `in_part`, `skipped`),
+  the fingerprint computed here and the one recorded. A step taken from its recorded table is listed in
+  `ReplayResult.from_snapshot` and leaves the replay not reproducible.
 
 ### Kinds of trace step (`core/steps.py`)
 

@@ -9,7 +9,7 @@ from core.lineage import verify_trace
 from core.workspace import safe_filename
 from ingest.loaders import UPLOAD_TYPES
 from manage.paths import PathResolver, normalize_path
-from manage.replay.engine import run_trace
+from manage.replay.engine import NeededFile, files_needed, locate, run_trace, trace_problems
 
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
@@ -41,6 +41,39 @@ def _artifacts_dir() -> str:
 def _resolver() -> PathResolver:
     """Where the files a trace names are looked for: the user's workspace (the session's services, manage.paths)."""
     return services().paths
+
+
+def _located(needed: NeededFile) -> str | None:
+    """The file of this workspace that stands for a file the trace needs, found as the replay finds it, with the files
+    chosen on this page for recorded paths (manage.replay.engine.locate)."""
+    return locate(needed, _resolver().with_named(st.session_state.get('resolved_paths', {})))
+
+
+_SOURCE_WORDS = {
+    "source": "Source Dataset",
+    "saved_version": "Source Dataset (a saved version)",
+    "replayed_state": "Source Dataset (a state replayed from another trace: replay that trace, or upload the table)",
+}
+
+
+def _missing_files(trace_data: dict) -> dict[str, dict]:
+    """The files the replay needs and this workspace lacks, by recorded path: the source and each merge's file (a
+    snapshot is optional: without it, its step is skipped with a warning). A file read twice is asked for once."""
+    missing: dict[str, dict] = {}
+    for needed in files_needed(trace_data):
+        if needed.role == "snapshot" or _located(needed):
+            continue
+        path = needed.recorded[0]
+        if needed.step is None:
+            missing[path] = {"type": "source", "path": path, "description": _SOURCE_WORDS[needed.role], "steps": []}
+            continue
+        item = missing.setdefault(path, {"type": "enrichment", "path": path, "steps": []})
+        item["steps"].append(needed.step + 1)
+        numbers = ", ".join(str(n) for n in item["steps"])
+        merged = f"Enrichment File (Step{'s' if len(item['steps']) > 1 else ''} {numbers})"
+        # the source file merged again: one entry, which names both uses
+        item["description"] = f"Source Dataset, also merged (Step {numbers})" if item["type"] == "source" else merged
+    return missing
 
 
 def _resolve_user_path(text: str | None) -> str | None:
@@ -149,8 +182,8 @@ def app():
                 
 
 
-    if trace_data is not None and not (isinstance(trace_data, dict) and isinstance(trace_data.get("steps"), list)):
-        st.error("This file is not a CohortStudio trace: it has no list of steps.")
+    if trace_data is not None and (problems := trace_problems(trace_data)):
+        st.error(f"This file is not a CohortStudio trace: {problems[0]}.")
         return
     if trace_data:
         # Checked on the trace as recorded, before file paths are resolved for this machine below
@@ -169,35 +202,17 @@ def app():
         
         # Update steps if previously resolved
         for step in trace_data.get('steps', []):
-            if step['function'] == 'enrichment':
-                    original = step['params'].get('enrichment_file_path')
-                    if original in st.session_state['resolved_paths']:
-                        step['params']['enrichment_file_path'] = st.session_state['resolved_paths'][original]
+            params = step.get('params')
+            if step['function'] == 'enrichment' and isinstance(params, dict):
+                original = params.get('enrichment_file_path')
+                if original in st.session_state['resolved_paths']:
+                    params['enrichment_file_path'] = st.session_state['resolved_paths'][original]
 
     if trace_data:
-            
-        # --- PRE-FLIGHT CHECK ---
-        # Use a dict to ensure unique paths and prevent duplicate widget keys
-        missing_files_map = {}
-        
-        # Check source
-        source_dataset = trace_data.get('source_dataset')
-        if source_dataset and not _resolver().resolve(source_dataset):
-             missing_files_map[source_dataset] = {'type': 'source', 'path': source_dataset, 'description': 'Source Dataset'}
 
-        # Check enrichment steps
-        steps = trace_data.get('steps', [])
-        for i, step in enumerate(steps):
-             if step['function'] == 'enrichment':
-                 enrich_path = step['params'].get('enrichment_file_path')
-                 if enrich_path and not _resolver().resolve(enrich_path):
-                      if enrich_path not in missing_files_map:
-                          missing_files_map[enrich_path] = {'type': 'enrichment', 'path': enrich_path, 'description': f"Enrichment File (Step {i+1})"}
-                      else:
-                          # Start appending usage info if reused
-                          if "Steps" not in missing_files_map[enrich_path]['description']:
-                               missing_files_map[enrich_path]['description'] += f", {i+1}"
-        
+        # --- PRE-FLIGHT CHECK: the files the replay needs (manage.replay.engine.files_needed) ---
+        # by recorded path, so that a file two merges use is asked for once (and its widget keys are unique)
+        missing_files_map = _missing_files(trace_data)
         missing_files = list(missing_files_map.values())
         
         if missing_files:
@@ -316,8 +331,9 @@ def app():
                              elif item['type'] == 'enrichment':
                                  # Need to find which steps used this path and update them
                                  for step in trace_data.get('steps', []):
-                                     if step['function'] == 'enrichment' and step['params'].get('enrichment_file_path') == item['path']:
-                                         step['params']['enrichment_file_path'] = candidate
+                                     params = step.get('params')
+                                     if step['function'] == 'enrichment' and isinstance(params, dict) and params.get('enrichment_file_path') == item['path']:
+                                         params['enrichment_file_path'] = candidate
                                          trace_data_updated = True
                              
                              if trace_data_updated:
@@ -491,7 +507,7 @@ def app():
                 with col2:
                     # a description names columns and values, which a file can fill with markup: drawn as text
                     st.markdown(f"**{plain(step.get('description', 'Operation'), limit=500)}**")
-                    st.caption(f"Function: `{step['function']}` | Time: {step['timestamp']}")
+                    st.caption(f"Function: `{step['function']}` | Time: {plain(str(step.get('timestamp') or ''), limit=40)}")
                     
                     # Show available data links (Artifacts)
                     artifacts = []
@@ -548,14 +564,11 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
     
     # 2. Full replay through the single engine (manage.replay.engine, audit E10)
     overrides = dict(st.session_state.get('resolved_paths', {}))
-    source_dataset = trace_data.get('source_dataset')
-    # a trace is user-supplied JSON: its paths are looked up in the workspace only (manage.paths), never as typed
-    if (not source_dataset or _resolver().resolve(str(source_dataset)) is None) and steps:
-        first_step = steps[0]
-        candidate_path = (first_step.get('params') or {}).get('source_path') if first_step.get('function') == 'initial_load' else None
-        if candidate_path and _resolver().resolve(candidate_path):
-            source_dataset = candidate_path
-    resolved_source = _resolver().resolve(source_dataset) if source_dataset else None
+    # a trace is user-supplied JSON: its paths are looked up in the workspace only (manage.paths), never as typed; the
+    # source as the engine reads it (its recorded copy, the path it was loaded from, or a saved version)
+    source = next((needed for needed in files_needed(trace_data) if needed.step is None), None)
+    source_dataset = source.recorded[0] if source else None
+    resolved_source = _located(source) if source else None
     if source_dataset and not resolved_source:
         st.warning(f"Could not find source dataset at: `{source_dataset}`")
         st.info("The file path differs on this machine. Locate the file inside your workspace or upload it.")
@@ -620,8 +633,10 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
             f"Reproduced exactly: the replayed table matches the {result.verified_steps} recorded fingerprints.",
             icon=":material/verified:",
         )
-    elif result.not_replayable:
-        st.info(f"{len(result.not_replayable)} step(s) could not be recomputed; see the warnings above.")
+    elif result.not_replayable or result.from_snapshot:
+        taken = f"{len(result.from_snapshot)} step(s) taken from their recorded tables" if result.from_snapshot else ""
+        skipped = f"{len(result.not_replayable)} step(s) could not be recomputed" if result.not_replayable else ""
+        st.info(f"{'; '.join(x for x in (skipped, taken) if x)}: not reproduced, see the warnings above.")
     get_state().install_replay(result.df, trace_data, upto=target_step_index, mode="full replay",
                                single_imputed=result.single_imputed, exact_imputed=result.exact_imputed)
     st.success(f"Successfully reproduced state at Step {target_step_index + 1} (full replay, {result.steps_applied} step(s))")
