@@ -83,6 +83,12 @@ KEYS: tuple[Key, ...] = (
         "ui.preferences.import_dayfirst, day first until the user chooses",
     ),
     Key(
+        "study_strip_said",
+        "ui.components.study",
+        "page",
+        note="the study definition strip's message, by strip, shown once after Save, Load or Delete revision",
+    ),
+    Key(
         "rag_qdrant_url",
         "app_pages.rag_sidebar",
         "page",

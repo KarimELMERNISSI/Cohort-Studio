@@ -84,8 +84,25 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   in the log: every quoted text becomes "…", and a path its file name. An id of the trace this version does not know
   (a step, an approach) is still named, with the valid ones.
 
-### The replay, made ready for the study package (M8, Phase 1)
+### Making room for the study package (M8, Phase 1)
 
+- **A revision of the study definition is saved from the Study dossier.** A strip at the top of the page names the
+  study (the dataset's name: every version saved under it belongs to it) and says *no revision saved*, *changed since
+  revision n* (with what changed), *labels changed since revision n* or *revision n, saved* on a date.
+  - **Save revision n** keeps the criteria with their descriptions, which of them are ticked, the follow-up and the
+    declared derived variables with their notes, as written, in the workspace. A revision is never changed afterwards;
+    a corrected description is saved as the next revision, and an unchanged definition saves none.
+  - **Delete revision n** removes one, after a confirmation, its number never given again: a text typed in it is
+    removed that way.
+  - **Load revision n** is offered when the session holds no criteria and the latest revision does (a saved version
+    loaded again the next day), where the strip would otherwise have offered to save an empty definition.
+  - The trace records each revision (a new step, *Study Definition Saved*) by its numbers and fingerprint only, never
+    its contents nor a checksum covering its descriptions; the trace report and the Word dossier name it by its
+    number. The data's own counter is now called the *data revision* wherever it is shown.
+- A dataset's name folds its accents (`Étude données.csv` is `Etude_donnees`, where it was `tude_donn_es`), since the
+  name also names the study; a name that keeps no letter of its own takes part of its file's checksum into its
+  study. The trace download's help no longer suggests replaying it elsewhere: it holds row numbers and values of the
+  data.
 - The replay engine is now `manage/replay/engine.py` (it was `manage/reproduction_manager.py`): a script that imported
   the old name must import the new one.
 - One list of the files a trace makes the replay read (`files_needed`, with `locate`) serves the replay and the

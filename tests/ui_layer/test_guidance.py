@@ -39,6 +39,7 @@ CHECKED_FILES = [
     ROOT / "ui" / "import_flow.py",
     ROOT / "ui" / "shell.py",
     ROOT / "ui" / "components" / "__init__.py",
+    ROOT / "ui" / "components" / "study.py",
 ]
 
 

@@ -152,6 +152,11 @@ _register(
 )
 _register(StepKind("rename_columns", "Columns Renamed", ANALYSE, RECOMPUTE, changes_data=False))
 _register(StepKind("save_version", "Version Saved", REPORT, DOCUMENT, changes_data=False))
+# a revision of the study definition saved (core.protocol.snapshot_params: its numbers and fingerprints, never its body);
+# it changes no data and ticks no step of the Start page
+_register(
+    StepKind("protocol_snapshot", "Study Definition Saved", OTHER, DOCUMENT, changes_data=False)
+)
 # a page replaced the data without going through AppState (strict mode refuses it)
 _register(
     StepKind(

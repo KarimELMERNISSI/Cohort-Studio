@@ -1374,6 +1374,81 @@ class AppState:
                     msg += f" Its multiple imputation was not saved ({current.kind}: {current.reason})."
         return ok, msg, saved
 
+    # ------------------------------------------------------------------ the study definition (core.protocol)
+
+    def study_id(self) -> str | None:
+        """The study the session's dataset belongs to: its name as a study id, the same for every version saved under
+        that name (``cohort_v3`` is ``cohort``); None without a dataset. A name that keeps no letter of its own (the
+        fallback ``dataset``) takes the start of its source's checksum, so that two such files are two studies."""
+        from core.protocol import study_id_for
+
+        ref = self.dataset
+        if ref is None:
+            return None
+        if ref.name == "dataset" and ref.file_hash:
+            return study_id_for(f"dataset_{str(ref.file_hash)[-8:]}")
+        return study_id_for(ref.name)
+
+    def protocol_body(self) -> dict[str, Any]:
+        """The study definition the session holds now: the criteria, the ticks, the follow-up and the declared derived
+        variables (``core.protocol.body_of``)."""
+        from core.protocol import body_of
+
+        return body_of(self.config, self.ticked)
+
+    def latest_revision(self):
+        """The study's latest saved revision, or None when none is saved (or readable). ValueError without a signed-in
+        user: the revisions live in the user's workspace."""
+        study = self.study_id()
+        if study is None:
+            return None
+        store = self.services.protocols
+        saved = store.revisions(study)
+        return store.revision(study, saved[-1].number) if saved else None
+
+    def save_protocol_revision(self):
+        """
+        Save the session's study definition as its study's next revision, linked to the latest one, and record it in
+        the trace (``protocol_snapshot``: its numbers and fingerprints, never its body). Returns the revision.
+        Raises ``manage.protocol_store.ProtocolUnchanged`` when the definition is the latest revision's,
+        ``ProtocolFileError`` when it cannot be written, and ValueError without a dataset or a signed-in user.
+        """
+        from core.protocol import ProtocolMeta, StudyProtocol, snapshot_params
+
+        study = self.study_id()
+        if study is None:
+            raise ValueError("load a dataset first")
+        saved = self.services.protocols.save_revision(
+            StudyProtocol(self.protocol_body(), ProtocolMeta(study_id=study))
+        )
+        if not self.note(
+            "protocol_snapshot",
+            snapshot_params(saved),
+            f"Study definition: revision {saved.meta.revision} saved",
+        ):
+            logger.warning(
+                "Study %s: revision %s saved, not recorded in the trace", study, saved.meta.revision
+            )
+        return saved
+
+    def load_protocol_revision(self, revision) -> None:
+        """Put a saved revision's study definition into the session: its criteria, derived variables and follow-up
+        replace the session's, and its ticks become the session's. Criteria are filters: no row changes."""
+        from core.protocol import with_body
+
+        st.session_state["config"] = with_body(self.config, revision.body)
+        st.session_state.pop(
+            "rules_earlier", None
+        )  # its criteria are no longer those of an earlier file
+        population = revision.body.get("population") or {}
+        self.set_ticked(list(population.get("ticked") or ()))
+
+    def delete_protocol_revision(self, number: int) -> bool:
+        """Delete a revision of the session's study from the workspace (its number is never given again); the
+        session's definition is unchanged. ProtocolFileError when it cannot be deleted."""
+        study = self.study_id()
+        return bool(study) and self.services.protocols.delete_revision(study, number)
+
     def _save_lineage(self, saved: str, ref: DatasetRef | None) -> None:
         from datetime import datetime
 
@@ -1420,12 +1495,15 @@ class AppState:
         except OSError as exc:
             logger.warning("Lineage sidecar of %s not written: %s", saved, exc)
 
-    def note(self, step: str, params: dict[str, Any] | None, description: str) -> None:
-        """A trace step that documents something without changing the data (parse report, export...)."""
+    def note(self, step: str, params: dict[str, Any] | None, description: str) -> bool:
+        """A trace step that documents something without changing the data (parse report, export...); whether it was
+        recorded (a session without a trace records none)."""
         tm = self.transformation_manager
         if tm.session_id:
             with contextlib.suppress(Exception):
                 tm.add_step(step, params or {}, description)
+                return True
+        return False
 
     # ------------------------------------------------------------------ misc
 

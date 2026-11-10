@@ -60,6 +60,8 @@ GLOSSARY: dict[str, str] = {
     "ANCOVA": "Compares group means after adjusting for continuous covariates.",
     "Z-score": "Number of standard deviations a value lies from the mean of a reference population.",
     "Trace": "The recorded sequence of every operation applied to a dataset, used to reproduce an analysis.",
+    "Study definition": "What a study decides apart from its data: the inclusion and exclusion criteria, which of them are ticked, the follow-up and the derived variables. It is saved as numbered revisions.",
+    "Revision": "A saved copy of the study definition, numbered and never changed; a later change is saved as the next revision, and a revision can be deleted. The data have their own counter, the data revision.",
     "Kaplan-Meier curve": "The survival probability over time estimated from censored follow-up; censored subjects leave the risk set without counting as events.",
     "Log-rank test": "Compares survival curves between groups across the whole follow-up; sensitive to proportional differences, not to crossing curves.",
     "Hazard ratio (HR)": "Ratio of instantaneous event rates between groups from a Cox model; assumes the ratio is constant over time (proportional hazards).",

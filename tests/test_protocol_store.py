@@ -144,8 +144,58 @@ def test_an_unchanged_body_is_no_revision(store: WorkspaceProtocolStore) -> None
     store.save_revision(_protocol())
     with pytest.raises(ProtocolUnchanged, match="unchanged since revision 1"):
         store.save_revision(_protocol())
-    with pytest.raises(ProtocolUnchanged):  # a label is not a decision
-        store.save_revision(_protocol(description="Reworded."))
+    # a corrected label is a revision of its own (a name typed in a description must be correctable), whose
+    # fingerprint is the latest's: it differs in its labels only
+    relabelled = store.save_revision(_protocol(description="Reworded."))
+    assert relabelled.meta.revision == 2 and relabelled.hash == store.revision("cohort", 1).hash
+
+
+def test_a_revision_is_deleted_and_its_number_never_given_again(
+    store: WorkspaceProtocolStore,
+) -> None:
+    store.save_revision(_protocol("df['age'] > 110"))
+    second = store.save_revision(_protocol("df['age'] > 120", description="Checked by J. Smith"))
+    assert store.next_number("cohort") == 3
+    assert store.delete_revision("cohort", 2) and not store.delete_revision("cohort", 2)
+    assert [r.number for r in store.revisions("cohort")] == [1]
+    assert not list((store.root / "cohort" / "revisions").glob("r0002-*.json"))
+    assert "J. Smith" not in "".join(
+        p.read_text(encoding="utf-8") for p in (store.root / "cohort").rglob("*.json")
+    )
+    assert store.next_number("cohort") == 3  # the number stays taken
+    assert (
+        store.save_revision(_protocol("df['age'] > 130")).meta.revision == 3 != second.meta.revision
+    )
+
+
+def test_an_unreadable_revision_is_counted_and_its_number_kept(
+    store: WorkspaceProtocolStore,
+) -> None:
+    store.save_revision(_protocol("df['age'] > 110"))
+    store.save_revision(_protocol("df['age'] > 120"))
+    (path,) = (store.root / "cohort" / "revisions").glob("r0002-*.json")
+    path.write_text("{", encoding="utf-8")  # changed outside CohortStudio
+    assert store.unreadable("cohort") == [2] and store.next_number("cohort") == 3
+    (
+        store.root / "cohort" / "revisions" / "r0004.number"
+    ).touch()  # a save that failed after taking its number
+    assert store.next_number("cohort") == 5 and store.unreadable("cohort") == [2]
+
+
+def test_a_folder_that_cannot_be_listed_names_no_path(
+    store: WorkspaceProtocolStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from manage.protocol_store import ProtocolFileError
+
+    store.save_revision(_protocol())
+
+    def refused(self):
+        raise PermissionError(13, "Access is denied", str(self))
+
+    monkeypatch.setattr(Path, "iterdir", refused)
+    with pytest.raises(ProtocolFileError) as raised:
+        store.revisions("cohort")
+    assert str(store.root) not in str(raised.value) and "PermissionError" in str(raised.value)
 
 
 def test_a_revision_is_never_rewritten_nor_its_number_given_twice(

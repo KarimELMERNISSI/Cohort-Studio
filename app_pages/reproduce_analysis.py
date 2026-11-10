@@ -459,8 +459,9 @@ def app():
                 file_name=selected_trace_file,
                 mime="application/json",
                 icon=":material/download:",
-                help="The trace as recorded, to keep with the study or replay elsewhere. Uploaded above, its "
-                "integrity is checked again.",
+                help="The trace as recorded, to keep with the study. It holds what the steps recorded, row numbers "
+                "and values of your data included: treat it as the data are treated. Uploaded above, its integrity is "
+                "checked again.",
             )
 
         # Download Report Button

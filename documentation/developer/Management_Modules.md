@@ -2545,7 +2545,9 @@ do, in any process, and which stays when the revision is deleted: a number is ne
 and its history are kept in one process (the application's).
 
 A copy in the history holds what the working copy held when another session replaced it: a text corrected since (a
-name typed into a rule) stays there until :meth:`ProtocolStore.discard_history` deletes the copies, or for 30 days._
+name typed into a rule) stays there until :meth:`ProtocolStore.discard_history` deletes the copies, or for 30 days. A
+revision holds its rules' descriptions and its notes as written: a correction is saved as the next revision (it
+differs in its labels only), and :meth:`ProtocolStore.delete_revision` removes the revision that held the text._
 
 **Imports**:
 `__future__.annotations`, `contextlib`, `hashlib`, `itertools`, `json`, `logging`, `os`, `re`, `time`, `abc.ABC`, `abc.abstractmethod`, `dataclasses.dataclass`, `dataclasses.replace`, `datetime.datetime`, `pathlib.Path`, `core.protocol.StudyProtocol`, `core.protocol.is_study_id`, `core.protocol.next_revision`, `core.workspace.UserScope`, `core.workspace.path_lock`, `core.workspace.resolve_within`, `core.workspace.write_atomic`, `utils.environment.app_version`
@@ -2604,7 +2606,17 @@ Where the study definitions are kept.
   > One revision, none when it does not exist or cannot be read.
 
 - **save_revision**(`self, protocol: StudyProtocol`) -> `StudyProtocol`
-  > Save the body as the next revision and return it; ProtocolUnchanged when it repeats the latest.
+  > Save the body as the next revision and return it; ProtocolUnchanged when it repeats the latest as written
+  > (a corrected label is a revision).
+
+- **next_number**(`self, study_id: str`) -> `int`
+  > The number the next revision will take.
+
+- **unreadable**(`self, study_id: str`) -> `list[int]`
+  > The numbers of revisions that exist and cannot be read.
+
+- **delete_revision**(`self, study_id: str, number: int`) -> `bool`
+  > Delete one revision, its number never given again; False when there is none.
 
 ### class `WorkspaceProtocolStore` (protocol_store.py)
 
@@ -2652,8 +2664,9 @@ The study definitions as JSON files in the user's workspace (``protocols``).
 - **discard_history**(`self, study_id: str`) -> `int`
   > No description available.
 
-- **_numbers**(`self, folder: Path`) -> `list[int]`
-  > The numbers taken: by a revision's file, readable or not, or by its ``.number`` file.
+- **_numbers**(`self, folder: Path, study_id: str`) -> `list[int]`
+  > The numbers taken: by a revision's file, readable or not, or by its ``.number`` file. ProtocolFileError,
+  > naming no path, when the folder cannot be listed.
 
 - **_take_number**(`self, folder: Path, first: int`) -> `int`
   > The first number from ``first`` that no save has taken, taken by creating its ``.number`` file: only one
@@ -2667,6 +2680,18 @@ The study definitions as JSON files in the user's workspace (``protocols``).
 
 - **revisions**(`self, study_id: str`) -> `list[RevisionInfo]`
   > No description available.
+
+- **next_number**(`self, study_id: str`) -> `int`
+  > The number the next revision of the study will take: one after every number taken, a revision that cannot
+  > be read and a save that failed after taking its number included.
+
+- **unreadable**(`self, study_id: str`) -> `list[int]`
+  > The numbers whose revision file exists but cannot be read (changed outside CohortStudio, or damaged).
+
+- **delete_revision**(`self, study_id: str, number: int`) -> `bool`
+  > Delete revision ``number`` of the study: its file goes, its ``.number`` file stays, so that the number is never
+  > given again. False when there is no such revision. ProtocolFileError, naming no path, when it cannot be
+  > deleted. A revision is never changed; deleting one is how a text typed in it is removed.
 
 - **save_revision**(`self, protocol: StudyProtocol`) -> `StudyProtocol`
   > No description available.
@@ -4395,6 +4420,15 @@ No description available.
 
 - **_add_footer**(`self, doc`) -> `None`
   > No description available.
+
+### def `revision_params` (trace_documenter.py)
+
+- **Arguments**: `params: dict`
+
+- **Returns**: `dict`
+
+What the report says of a saved revision of the study definition: its study and number, and the one it
+follows; never its fingerprints, which stay in the trace (a document names a revision by its number).
 
 ---
 

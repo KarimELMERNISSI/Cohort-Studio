@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
@@ -117,8 +118,10 @@ class DatasetRef:
 
 
 def dataset_base_name(filename: str) -> str:
-    """A clean dataset name from a file name: ``My Cohort (2024).xlsx`` -> ``My_Cohort_2024``."""
+    """A clean dataset name from a file name: ``My Cohort (2024).xlsx`` -> ``My_Cohort_2024``; accents are folded
+    first (``Étude données.csv`` -> ``Etude_donnees``), since the name also names the study (core.protocol)."""
     stem = re.sub(r"\.[A-Za-z0-9]+$", "", filename or "").strip()
+    stem = unicodedata.normalize("NFKD", stem).encode("ascii", "ignore").decode("ascii")
     stem = re.sub(r"[^A-Za-z0-9]+", "_", stem).strip("_")
     return stem or "dataset"
 

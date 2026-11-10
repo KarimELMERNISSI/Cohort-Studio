@@ -57,7 +57,7 @@ class ResultStamp:
     def caption(self) -> str:
         parts = [
             f"Computed on {self.dataset_label}",
-            f"revision {self.revision}",
+            f"data revision {self.revision}",  # the data's own counter: a revision is the study definition's
             f"population: {self.population_label}",
         ]
         if self.n_analysed is not None:
@@ -229,7 +229,7 @@ def recall(key: str, *, config: Any, notice: bool = True) -> Any | None:
         stamp = _store()[key].stamp
         if state == STALE_DATA:
             st.warning(
-                "The data changed since this result was computed (revision "
+                "The data changed since this result was computed (data revision "
                 f"{stamp.revision}); it is no longer shown. Run the analysis again.",
                 icon=":material/update:",
             )

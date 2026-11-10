@@ -52,7 +52,7 @@ trace to that parent, restores the ticked criteria, and warns when the file was 
   and its integrity).
 - Select a specific trace to inspect its steps: description, function, time and saved snapshot. The parameters of
   each step are in the Word report.
-- **Download the trace (JSON)** of the selected session, to keep it with the study or replay it on another machine.
+- **Download the trace (JSON)** of the selected session, to keep it with the study. It holds what the steps recorded, row numbers and values of your data included: treat it as the data are treated.
   The file is the trace as recorded, so its integrity check still passes there.
 - Open a trace file from elsewhere with **Upload Trace File (.json)**. Its integrity is checked when it is opened.
 
@@ -127,8 +127,29 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
 **Reproduce > Study dossier** documents the analyses of the current dataset in one Word document.
 
+**The study definition.** A strip at the top of the page names the study your dataset belongs to (its name: every
+version saved under that name belongs to it, and a file imported or saved under another name starts another study)
+and says whether its definition is saved as a revision: *no revision saved*, *changed since revision n* (and what
+changed: the criteria, which of them are ticked, the follow-up, the derived variables), *labels changed since
+revision n* (a description or a note only), or *revision n, saved* on a date. The definition is what the study
+decides apart from the data: the criteria with their descriptions, which of them are ticked, the follow-up and the
+declared derived variables with their notes. It holds no data and no result.
+
+- **Save revision n** keeps the definition as it is now, as written, in your workspace: check that no description or
+  note names a person. A revision is never changed afterwards. A changed definition, a corrected description
+  included, is saved as the next revision; an unchanged one saves nothing.
+- **Delete revision n** removes a revision from your workspace, with the descriptions and notes it holds, after a
+  confirmation; its number is never given again, and the session's definition is unchanged. A description the trace
+  recorded for a ticked criterion stays in the trace.
+- **Load revision n** is offered when the session holds no criteria and the latest revision does (the next day, a
+  saved version loaded again): the revision's criteria, which of them are ticked, the follow-up and the derived
+  variables become the session's. Criteria are filters: no row changes.
+
+The trace records each revision by its number and fingerprint, never its contents; the trace report and the Word
+dossier name it by its number. The data have their own counter, the *data revision*, shown with each result.
+
 1. On the analysis pages, click **Add to the study dossier** under a result. Each set of settings is a separate
-   item, kept with what it was computed on (data, revision, population, N analysed).
+   item, kept with what it was computed on (data, data revision, population, N analysed).
 2. The Study dossier page draws the participant flow with a box for each analysis of the dossier (N analysed, or
    the imputed datasets pooled) and lists the results. A result computed on data that changed since, or on
    another population, is marked stale.
@@ -136,7 +157,7 @@ Generate a `.docx` report from any trace file using the **TraceDocumenter**.
 
 | Section | Contents |
 | --- | --- |
-| 1. Provenance | Dataset, source file and hash, parse options, data fingerprint, trace and integrity, software versions |
+| 1. Provenance | Dataset, source file and hash, parse options, data fingerprint, the study definition and its revision, trace and integrity, software versions |
 | 2. Analysis population | Participant flow figure (STROBE item 13), exclusions with the criteria behind them, definition of every criterion |
 | 3. Data handling | The recorded steps that changed the data, with their formulas |
 | 4. Missing data | Missing values per variable, values filled by single imputation, the multiple imputation (settings, methods, status, methods paragraph) |

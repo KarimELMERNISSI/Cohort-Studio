@@ -84,7 +84,7 @@ def record_quality_check(metrics: Mapping[str, float | None]) -> list[dict]:
     checks: list[dict] = list(store["checks"])
     entry = {
         "revision": revision,
-        "label": labels[revision] if revision < len(labels) else f"revision {revision}",
+        "label": labels[revision] if revision < len(labels) else f"data revision {revision}",
         "metrics": {k: v for k, v in metrics.items() if v is not None},
         "at": datetime.now().isoformat(timespec="seconds"),
     }

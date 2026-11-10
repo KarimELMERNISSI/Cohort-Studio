@@ -38,6 +38,7 @@ STORED_IDS = {
     "freeze_population",
     "rename_columns",
     "save_version",
+    "protocol_snapshot",
     "external_write",
     "apply_filter",
     "missing_value_handling",
@@ -147,6 +148,7 @@ def test_the_replay_handles_every_kind_by_its_declared_mode() -> None:
             "initial_load",
             "parse_report",
             "save_version",
+            "protocol_snapshot",
         }
     )
     assert (
@@ -210,6 +212,7 @@ def test_the_sets_the_modules_kept_are_derived_unchanged() -> None:
         "parse_report",
         "population_definition",
         "save_version",
+        "protocol_snapshot",
         "mi_impute",
         "freeze_population",
     }

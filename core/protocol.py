@@ -379,6 +379,23 @@ def diff_lines(old: Mapping[str, Any], new: Mapping[str, Any]) -> list[str]:
     return list(difflib.unified_diff(lines(old), lines(new), lineterm="", n=2))[2:]
 
 
+def snapshot_params(protocol: StudyProtocol) -> dict[str, Any]:
+    """
+    The params of the trace's ``protocol_snapshot`` step for a saved revision: the study's id, the revision's number
+    and the one it follows, its fingerprint (which leaves the labels out), the schema. Never its body, title,
+    description or notes, nor the checksums that cover them: free text a sealed trace could never correct or erase,
+    and an unsalted hash of it would confirm a guess of it. The revision's file holds them, and can be deleted.
+    """
+    meta = protocol.meta
+    return {
+        "study_id": meta.study_id,
+        "revision": meta.revision,
+        "parent_revision": meta.parent_revision,
+        "protocol_hash": protocol.hash,
+        "schema": SCHEMA,
+    }
+
+
 def next_revision(
     latest: StudyProtocol | None,
     body: Mapping[str, Any],
@@ -416,6 +433,7 @@ __all__ = [
     "is_study_id",
     "next_revision",
     "protocol_hash",
+    "snapshot_params",
     "study_id_for",
     "with_body",
 ]

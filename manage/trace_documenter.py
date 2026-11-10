@@ -15,6 +15,17 @@ from enrich.transformation_logic import added_columns
 from enrich.transformation_logic import report_params as transformation_params
 
 
+def revision_params(params: dict) -> dict:
+    """What the report says of a saved revision of the study definition: its study and number, and the one it
+    follows; never its fingerprints, which stay in the trace (a document names a revision by its number)."""
+    follows = params.get("parent_revision")
+    return {
+        "study": str(params.get("study_id") or ""),
+        "revision": params.get("revision"),
+        "follows": f"revision {follows}" if follows else "none (the first revision)",
+    }
+
+
 class TraceDocumenter:
     def __init__(self, trace_source):
         """
@@ -172,6 +183,8 @@ class TraceDocumenter:
             params = report_params(params)  # the choices counted, never named: the trace keeps them for the replay
         elif step.get("function") == "variable_transformation" and isinstance(params, dict):
             params = transformation_params(params)  # an encoding's categories counted, never named
+        elif step.get("function") == "protocol_snapshot" and isinstance(params, dict):
+            params = revision_params(params)  # a document names a revision by its number, never by its hash
         if params:
             p = doc.add_paragraph()
             p.add_run("Parameters:").bold = True

@@ -18,7 +18,9 @@ do, in any process, and which stays when the revision is deleted: a number is ne
 and its history are kept in one process (the application's).
 
 A copy in the history holds what the working copy held when another session replaced it: a text corrected since (a
-name typed into a rule) stays there until :meth:`ProtocolStore.discard_history` deletes the copies, or for 30 days.
+name typed into a rule) stays there until :meth:`ProtocolStore.discard_history` deletes the copies, or for 30 days. A
+revision holds its rules' descriptions and its notes as written: a correction is saved as the next revision (it
+differs in its labels only), and :meth:`ProtocolStore.delete_revision` removes the revision that held the text.
 """
 
 from __future__ import annotations
@@ -149,7 +151,20 @@ class ProtocolStore(ABC):
 
     @abstractmethod
     def save_revision(self, protocol: StudyProtocol) -> StudyProtocol:
-        """Save the body as the next revision and return it; ProtocolUnchanged when it repeats the latest."""
+        """Save the body as the next revision and return it; ProtocolUnchanged when it repeats the latest as written
+        (a corrected label is a revision)."""
+
+    @abstractmethod
+    def next_number(self, study_id: str) -> int:
+        """The number the next revision will take."""
+
+    @abstractmethod
+    def unreadable(self, study_id: str) -> list[int]:
+        """The numbers of revisions that exist and cannot be read."""
+
+    @abstractmethod
+    def delete_revision(self, study_id: str, number: int) -> bool:
+        """Delete one revision, its number never given again; False when there is none."""
 
 
 class WorkspaceProtocolStore(ProtocolStore):
@@ -170,7 +185,11 @@ class WorkspaceProtocolStore(ProtocolStore):
             raise ValueError(
                 f"{study_id!r} is not a study id (lower-case letters, digits, '_' and '-')"
             )
-        return resolve_within(self.root, study_id)
+        try:
+            return resolve_within(self.root, study_id)
+        except ValueError:  # its message names the folders: logged and told without them
+            logger.warning("Study %s: its folder leads outside the workspace", study_id)
+            raise ValueError("this study's folder cannot be used") from None
 
     def _read(self, path: Path, study_id: str) -> bytes | None:
         try:
@@ -324,15 +343,20 @@ class WorkspaceProtocolStore(ProtocolStore):
                 raise _file_error(study_id, "history", exc, "deleted") from None
         return len(names)
 
-    def _numbers(self, folder: Path) -> list[int]:
-        """The numbers taken: by a revision's file, readable or not, or by its ``.number`` file."""
-        if not folder.is_dir():
-            return []
+    def _numbers(self, folder: Path, study_id: str = "") -> list[int]:
+        """The numbers taken: by a revision's file, readable or not, or by its ``.number`` file. ProtocolFileError,
+        naming no path, when the folder cannot be listed."""
+        try:
+            if not folder.is_dir():
+                return []
+            names = [p.name for p in folder.iterdir()]
+        except OSError as exc:
+            raise _file_error(study_id, "revisions", exc, "read") from None
         return sorted(
             {
                 int(m[1])
-                for p in folder.iterdir()
-                if (m := _REVISION.fullmatch(p.name) or _NUMBER.fullmatch(p.name))
+                for name in names
+                if (m := _REVISION.fullmatch(name) or _NUMBER.fullmatch(name))
             }
         )
 
@@ -371,7 +395,7 @@ class WorkspaceProtocolStore(ProtocolStore):
 
     def revisions(self, study_id: str) -> list[RevisionInfo]:
         out = []
-        for number in self._numbers(self._folder(study_id) / "revisions"):
+        for number in self._numbers(self._folder(study_id) / "revisions", study_id):
             protocol = self.revision(study_id, number)
             if protocol is not None:
                 out.append(
@@ -381,11 +405,44 @@ class WorkspaceProtocolStore(ProtocolStore):
                 )
         return out
 
+    def next_number(self, study_id: str) -> int:
+        """The number the next revision of the study will take: one after every number taken, a revision that cannot
+        be read and a save that failed after taking its number included."""
+        return max(self._numbers(self._folder(study_id) / "revisions", study_id), default=0) + 1
+
+    def unreadable(self, study_id: str) -> list[int]:
+        """The numbers whose revision file exists but cannot be read (changed outside CohortStudio, or damaged)."""
+        folder = self._folder(study_id) / "revisions"
+        return [
+            n
+            for n in self._numbers(folder, study_id)
+            if self._revision_file(folder, n) is not None and self.revision(study_id, n) is None
+        ]
+
+    def delete_revision(self, study_id: str, number: int) -> bool:
+        """
+        Delete revision ``number`` of the study: its file goes, its ``.number`` file stays, so that the number is never
+        given again. False when there is no such revision. ProtocolFileError, naming no path, when it cannot be
+        deleted. A revision is never changed; deleting one is how a text typed in it is removed.
+        """
+        folder = self._folder(study_id) / "revisions"
+        with path_lock(folder):
+            path = self._revision_file(folder, number)
+            if path is None:
+                return False
+            try:
+                (folder / f"r{number:04d}.number").touch(exist_ok=True)
+                path.unlink()
+            except OSError as exc:
+                raise _file_error(study_id, "revision", exc, "deleted") from None
+        logger.info("Study %s: revision %s deleted", study_id, number)
+        return True
+
     def save_revision(self, protocol: StudyProtocol) -> StudyProtocol:
         study_id = protocol.meta.study_id
         folder = self._folder(study_id) / "revisions"
         with path_lock(folder):
-            numbers = self._numbers(folder)
+            numbers = self._numbers(folder, study_id)
             latest = next(
                 (
                     found
@@ -394,7 +451,9 @@ class WorkspaceProtocolStore(ProtocolStore):
                 ),
                 None,
             )
-            if latest is not None and latest.hash == protocol.hash:  # as this version reads both
+            # unchanged only when written alike: a corrected description or note is saved, as a revision that
+            # differs in its labels only (its fingerprint is the latest's)
+            if latest is not None and latest.checksum == protocol.checksum:
                 raise ProtocolUnchanged(
                     f"the study definition is unchanged since revision {latest.meta.revision}"
                 )

@@ -21,6 +21,7 @@ from core.steps import ids as step_ids
 from enrich.transformation_logic import added_columns
 from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
+from ui.components.study import status_text, study_status, study_strip
 from ui.results import (
     CURRENT,
     STALE_CODE,
@@ -96,6 +97,7 @@ def _provenance_rows(state, trace: dict) -> list[tuple[str, str]]:
         ("Data fingerprint", identity.data_fp if identity else "n/a"),
         ("Revision of the data", str(identity.revision) if identity else "n/a"),
         ("Analysis population", identity.population_label if identity else "n/a"),
+        ("Study definition", status_text(study_status())),
         ("Trace", str(trace.get("session_id") or "n/a")),
         ("Trace head", str(trace.get("head_hash") or "n/a")),
         (
@@ -290,6 +292,7 @@ def app() -> None:
     if not state.has_data:
         no_dataset()
         return
+    study_strip(key="dossier_study")
     items = report_items()
     current = [item for item in items if report_status(item) == CURRENT]
 
